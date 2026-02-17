@@ -119,6 +119,8 @@ This TODO application is a traditional monolithic Java 13 Spring Boot applicatio
 
 6. **Implement API versioning strategy** (Weeks 11-12) — Add /v1/ URL prefix, implement backward compatibility, create versioned OpenAPI specs.
 
+![plan](sprint-plan.svg)
+
 ---
 
 ## Recommended Self-Paced Learning Materials
