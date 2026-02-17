@@ -13,13 +13,14 @@
    - [Phase 1 — Quick Wins (Days 1–30)](#phase-1--quick-wins-days-130)
    - [Phase 2 — Foundation (Months 1–3)](#phase-2--foundation-months-13)
    - [Phase 3 — Agent Enablement (Months 3–6)](#phase-3--agent-enablement-months-36)
-4. [Detailed Findings](#detailed-findings)
+4. [Recommended Self-Paced Learning Materials](#recommended-self-paced-learning-materials)
+5. [Detailed Findings](#detailed-findings)
    - [Infrastructure & Platform](#infrastructure--platform)
    - [Application Architecture](#application-architecture)
    - [Data Foundations](#data-foundations)
    - [Identity, Security & Governance](#identity-security--governance)
    - [Operations & Observability](#operations--observability)
-5. [Appendix: Evidence Index](#appendix-evidence-index)
+6. [Appendix: Evidence Index](#appendix-evidence-index)
 
 ---
 
@@ -70,45 +71,91 @@ This TODO application is a traditional monolithic Java 13 Spring Boot applicatio
 
 ## Readiness Roadmap
 
+**Cross-dependency note**: Many tasks have prerequisites. Dependencies are explicitly called out below.
+
 ### Phase 1 — Quick Wins (Days 1–30)
 
-1. **Add Secrets Manager integration** — Eliminate hardcoded credentials from Terraform and application config. Move all secrets to AWS Secrets Manager with proper IAM policies.
+1. **Add Secrets Manager integration** — Eliminate hardcoded credentials from Terraform and application config. Move all secrets to AWS Secrets Manager with proper IAM policies. *No dependencies*.
 
-2. **Implement API Gateway with throttling** — Replace direct ALB exposure with API Gateway. Configure burst/rate limits, request validation, and Cognito authorizer at gateway level.
+2. **Integrate Bedrock Titan Embeddings** — Replace mock hash-based embeddings with real Bedrock Titan Embeddings v2 API calls for production-grade semantic search. *No dependencies*.
 
-3. **Add structured business metrics** — Emit custom CloudWatch metrics for TODO operations (create/update/delete counts, search latency, user activity). Enable data-driven decision making.
+3. **Add structured business metrics** — Emit custom CloudWatch metrics for TODO operations (create/update/delete counts, search latency, user activity). Enable data-driven decision making. *No dependencies*.
 
-4. **Enable CloudWatch anomaly detection** — Configure CloudWatch anomaly detection alarms on ALB 5xx errors, target response time (p99), and unhealthy host count.
+4. **Enable CloudWatch anomaly detection** — Configure CloudWatch anomaly detection alarms on ALB 5xx errors, target response time (p99), and unhealthy host count. *No dependencies*.
 
-5. **Integrate Bedrock Titan Embeddings** — Replace mock hash-based embeddings with real Bedrock Titan Embeddings v2 API calls for production-grade semantic search.
+5. **Implement API Gateway with throttling** — Replace direct ALB exposure with API Gateway. Configure burst/rate limits, request validation, and Cognito authorizer at gateway level. *No dependencies*.
 
 ### Phase 2 — Foundation (Months 1–3)
 
-1. **Migrate to ECS Fargate** — Containerize application, create ECS cluster with Fargate tasks, implement auto-scaling based on CPU/memory/request count. Remove EC2 instance management burden.
+**DEPENDENCY CHAIN**: Containerization → ECS Migration → Managed Databases
 
-2. **Replace self-managed databases** — Migrate MySQL to RDS Aurora with multi-AZ, automated backups, and encryption at rest. Migrate ElasticSearch to Amazon OpenSearch Service with k-NN plugin.
+1. **Create Dockerfile** (Week 1) — **PREREQUISITE for ECS migration**. Multi-stage Docker build for Spring Boot app. Test locally with docker-compose. This must complete before ECS work can begin.
 
-3. **Build full CI/CD pipeline** — GitHub Actions workflow with automated testing, Docker build, ECR push, ECS deployment with blue/green strategy. Include rollback capability.
+2. **Migrate to ECS Fargate** (Weeks 2-4) — **DEPENDS ON: Dockerfile**. Containerize application, create ECS cluster with Fargate tasks, implement auto-scaling based on CPU/memory/request count. Remove EC2 instance management burden.
 
-4. **Implement async messaging with SQS** — Decouple long-running operations (embedding generation, bulk operations) into async SQS queues with Lambda or ECS task consumers.
+3. **Replace self-managed databases** (Weeks 5-7) — Can run in parallel with ECS migration. Migrate MySQL to RDS Aurora with multi-AZ, automated backups, and encryption at rest. Migrate ElasticSearch to Amazon OpenSearch Service with k-NN plugin.
 
-5. **Add comprehensive test coverage** — Write integration tests for all CRUD operations, authentication flows, and search functionality. Target 70%+ coverage.
+4. **Build full CI/CD pipeline** (Weeks 8-10) — **DEPENDS ON: Dockerfile**. GitHub Actions workflow with automated testing, Docker build, ECR push, ECS deployment with blue/green strategy. Include rollback capability.
 
-6. **Implement retry and circuit breaker patterns** — Add Resilience4j for all external calls (MySQL, OpenSearch, Bedrock). Configure exponential backoff and circuit breakers.
+5. **Implement async messaging with SQS** (Weeks 11-12) — Decouple long-running operations (embedding generation, bulk operations) into async SQS queues with Lambda or ECS task consumers.
+
+6. **Add comprehensive test coverage** (ongoing) — Write integration tests for all CRUD operations, authentication flows, and search functionality. Target 70%+ coverage. Can start in parallel with other work.
+
+7. **Implement retry and circuit breaker patterns** (Weeks 11-12) — Add Resilience4j for all external calls (MySQL, OpenSearch, Bedrock). Configure exponential backoff and circuit breakers.
 
 ### Phase 3 — Agent Enablement (Months 3–6)
 
-1. **Implement Step Functions workflow orchestration** — Move complex multi-step operations (e.g., bulk TODO processing, approval workflows) to Step Functions state machines.
+**DEPENDENCY CHAIN**: Async Infrastructure → Agent Framework → Knowledge Base
 
-2. **Add distributed tracing with X-Ray** — Instrument all service calls with AWS X-Ray SDK. Enable end-to-end trace ID propagation across services.
+1. **Implement Step Functions workflow orchestration** (Weeks 1-2) — **DEPENDS ON: SQS from Phase 2**. Move complex multi-step operations (e.g., bulk TODO processing, approval workflows) to Step Functions state machines.
 
-3. **Build Bedrock Knowledge Base** — Create Bedrock Knowledge Base backed by OpenSearch for RAG. Implement automated document ingestion and embedding refresh pipeline.
+2. **Add distributed tracing with X-Ray** (Week 3) — Instrument all service calls with AWS X-Ray SDK. Enable end-to-end trace ID propagation across services.
 
-4. **Implement agent framework integration** — Add support for Claude via Bedrock, integrate with LangChain or Strands Agents SDK. Create agent-callable APIs for TODO operations.
+3. **Build Bedrock Knowledge Base** (Weeks 4-5) — **DEPENDS ON: OpenSearch Service from Phase 2, Bedrock Embeddings from Phase 1**. Create Bedrock Knowledge Base backed by OpenSearch for RAG. Implement automated document ingestion and embedding refresh pipeline.
 
-5. **Add human-in-the-loop approval workflow** — Implement Step Functions with manual approval tasks for high-risk operations (bulk delete, admin actions).
+4. **Implement agent framework integration** (Weeks 6-8) — **DEPENDS ON: Knowledge Base**. Add support for Claude via Bedrock, integrate with LangChain4j or Spring AI. Create agent-callable APIs for TODO operations.
 
-6. **Implement API versioning strategy** — Add /v1/ URL prefix, implement backward compatibility, create versioned OpenAPI specs.
+5. **Add human-in-the-loop approval workflow** (Weeks 9-10) — **DEPENDS ON: Step Functions**. Implement Step Functions with manual approval tasks for high-risk operations (bulk delete, admin actions).
+
+6. **Implement API versioning strategy** (Weeks 11-12) — Add /v1/ URL prefix, implement backward compatibility, create versioned OpenAPI specs.
+
+---
+
+## Recommended Self-Paced Learning Materials
+
+### Modernizing to Containers
+Since this assessment identified EC2-based compute as a critical gap, these courses will help you containerize the application and migrate to ECS or EKS:
+- [Introduction to Containers](https://skillbuilder.aws/learn/CUCA1DK47V/introduction-to-containers/XJ58VC1FF5) — Foundational container concepts before diving into orchestration
+- [AWS Modernization Pathways - Move to Containers with Amazon ECS](https://skillbuilder.aws/learning-plan/CDA8Y4JRRR/aws-modernization-pathways-move-to-containers-with-amazon-ecs-includes-labs/1UB9AW4KYN) — End-to-end ECS migration path with hands-on labs, recommended for this Java Spring Boot application
+- [AWS Modernization Pathways - Move to Containers with Amazon EKS](https://skillbuilder.aws/learning-plan/GNYBZ9X9EM/aws-modernization-pathways-move-to-containers-with-amazon-eks-includes-labs/1HB9MKXD2N) — Alternative if you need Kubernetes features
+- [Amazon EKS Primer](https://skillbuilder.aws/learn/Z521GMBP1J/amazon-eks-primer/NGM5AF9K72) — Quick overview of EKS capabilities
+- [EKS Workshop](https://www.eksworkshop.com/) — Hands-on labs for Kubernetes on AWS
+
+### Modernizing to Managed Databases
+The assessment found MySQL and ElasticSearch running on EC2. These courses cover migrating to RDS Aurora and OpenSearch Service:
+- [AWS Modernization Pathways: Move to Managed Databases](https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC/aws-modernization-pathways-move-to-managed-databases-includes-labs/2S2QZKG9DV) — Comprehensive migration strategy
+- [Selecting your Data Migration Strategy with AWS](https://skillbuilder.aws/learn/RKGP54WJPP/selecting-your-data-migration-strategy-with-aws/D38U3CZEYR) — Choose the right approach for your data migration
+- [Introduction to Building with AWS Databases](https://skillbuilder.aws/learn/HYKKWEN9ZS/introduction-to-building-with-aws-databases/V7RVH2KY91) — Database fundamentals on AWS
+- [Migrating RDS MySQL to Aurora (Lab)](https://skillbuilder.aws/learn/RZF2GBUUWX/migrating-rds-mysql-to-aurora-with-read-replica/SMG825PXTK) — Hands-on lab directly relevant to your MySQL migration
+
+### Modernizing to Managed Analytics
+The ElasticSearch to OpenSearch migration falls under analytics modernization:
+- [AWS Modernization Pathways: Move to Managed Analytics](https://skillbuilder.aws/learning-plan/RWZA84NMVV/aws-modernization-pathways-move-to-managed-analytics--includes-labs/9BAKK2QQQU) — Covers OpenSearch Service and other analytics services
+
+### Modernizing to Modern DevOps
+The assessment found no CI/CD pipeline. These courses address the automation gap:
+- [AWS Modernization Pathways: Move to Modern DevOps](https://skillbuilder.aws/learning-plan/1FGEQKGPQD/aws-modernization-pathways-move-to-modern-devops-includes-labs/MNQZ2KPVCK) — Full DevOps transformation path
+- [Getting Started with DevOps on AWS](https://skillbuilder.aws/learn/R4B13K95YQ/getting-started-with-devops-on-aws/38NHHYRV1R) — DevOps fundamentals
+- [AWS CloudFormation Getting Started](https://skillbuilder.aws/learn/RH22P2RXU4/aws-cloudformation-getting-started/KEK5BT6HSE) — Useful since you already have Terraform experience
+- [Create a CI/CD Pipeline to Deploy to AWS Fargate](https://skillbuilder.aws/learn/H61B17Z8R7/create-a-cicd-pipeline-to-deploy-your-app-to-aws-fargate/T66BGGGHV5) — Directly relevant for Phase 2 roadmap item
+- [Automate EKS Deployments with GitOps using ArgoCD and GitHub Actions](https://skillbuilder.aws/learn/D9U7XMXP31/aws-partnercast--tech-talks--automate-eks-deployments-with-gitops-using-argocd-and-github-actions--technical/Z4M9Z8FY88) — GitOps patterns for Kubernetes
+
+### Modernizing to AI
+These courses address the embedding and agentic gaps identified in the assessment:
+- [AWS Modernization Pathways: Move to AI](https://skillbuilder.aws/learning-plan/VDFEE4ACCV/aws-modernization-pathways-move-to-ai-pathways-includes-labs/P3DAWPTN63) — Comprehensive AI modernization path
+- [Amazon Bedrock Getting Started](https://skillbuilder.aws/learn/63KTRM86DQ/amazon-bedrock-getting-started/SC2Y3HMAUE) — Essential for replacing mock embeddings with Bedrock Titan Embeddings
+- [Introduction to Agentic AI on AWS](https://skillbuilder.aws/learn/DNBD5MT8ZD/introduction-to-agentic-ai-on-aws/WAKAFK6UFY) — Core concepts for building agentic systems
+- [Introduction to Generative AI – Art of the Possible](https://skillbuilder.aws/learn/ZEVZZ1D4AS/introduction-to-generative-ai--art-of-the-possible/Y7MTGJCW1U) — Strategic overview of GenAI capabilities
 
 ---
 
