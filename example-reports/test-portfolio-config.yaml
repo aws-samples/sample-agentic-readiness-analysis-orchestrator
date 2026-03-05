@@ -1,0 +1,109 @@
+portfolio_name: "ecommerce-platform-test"
+
+# Transformation definition names as published in your AWS Transform registry
+transformation_definitions:
+  individual_assessment: "agentic-readiness-assessment"
+  portfolio_assessment: "portfolio-agentic-readiness-assessment"
+
+# Global transformation preferences for the entire portfolio
+global_transformation_preferences:
+  prefer_technologies: ["lambda", "dynamodb", "api-gateway", "eventbridge", "sqs"]
+  modernization_approach: "moderate"
+  budget_constraints: "moderate"
+  timeline_constraints: "normal"
+
+repositories:
+  # Monolith - Unishop application (before decomposition)
+  - name: "unishop-monolith"
+    repository_url: "https://github.com/aws-samples/unishop-monolith-to-microservices.git"
+    path: "./services/unishop-monolith-to-microservices/MonoToMicroLegacy"
+    priority: "P0"
+    description: "Legacy monolithic e-commerce application"
+    transformation_preferences:
+      # This is a monolith that we want to assess for decomposition
+      modernization_approach: "aggressive"
+      # Don't force it to stay as monolith - we want recommendations
+      avoid_microservices_decomposition: false
+      prefer_patterns: ["api-gateway", "event-driven"]
+  
+  # Microservices Repository - Event-driven serverless microservices
+  - name: "aws-microservices"
+    repository_url: "https://github.com/awsrun/aws-microservices.git"
+    path: "./services/aws-microservices"
+    priority: "P0"
+    description: "Event-driven microservices (product, basket, ordering) with Lambda, DynamoDB, EventBridge, SQS"
+    tags: ["microservices", "serverless", "event-driven"]
+    transformation_preferences:
+      prefer_technologies: ["lambda", "dynamodb", "eventbridge", "sqs"]
+      prefer_patterns: ["event-driven", "saga", "async-messaging"]
+      modernization_approach: "moderate"
+  
+  # Microservice 4 - Payment Service (conservative approach)
+  - name: "payment-service"
+    # No repository_url - will need to be created or cloned manually
+    path: "./services/payment-service"
+    priority: "P0"
+    description: "Payment processing and transaction management"
+    transformation_preferences:
+      modernization_approach: "conservative"
+      prefer_technologies: ["lambda", "rds"]
+      database_constraints:
+        avoid_migration: true
+        keep_current_database: true
+      avoid_patterns: ["event-sourcing"]
+      # Payment service needs strict consistency
+      prefer_patterns: ["synchronous-api", "acid-transactions"]
+  
+  # Microservice 5 - Notification Service
+  - name: "notification-service"
+    # No repository_url - local placeholder service
+    path: "./services/notification-service"
+    priority: "P2"
+    description: "Email and SMS notifications"
+    transformation_preferences:
+      prefer_technologies: ["lambda", "sns", "sqs", "ses"]
+      prefer_patterns: ["event-driven", "pub-sub"]
+      modernization_approach: "aggressive"
+  
+  # Microservice 6 - Books API (CDK-based serverless API)
+  - name: "books-api"
+    repository_url: "https://github.com/aws-samples/aws-serverless-books-api-sample.git"
+    path: "./services/books-api"
+    priority: "P1"
+    description: "Serverless REST API with CDK infrastructure"
+    tags: ["serverless", "cdk", "api", "dynamodb"]
+    transformation_preferences:
+      prefer_technologies: ["lambda", "dynamodb", "api-gateway", "cdk"]
+      prefer_patterns: ["rest-api", "iac", "serverless"]
+      modernization_approach: "moderate"
+
+# Optional: Manual dependency declarations (if not detected automatically)
+dependency_overrides:
+  - source: "aws-microservices"
+    target: "payment-service"
+    type: "synchronous"
+    description: "Ordering microservice calls payment service for transaction processing"
+  
+  - source: "aws-microservices"
+    target: "notification-service"
+    type: "asynchronous"
+    description: "Microservices trigger notifications via events"
+  
+  - source: "unishop-monolith"
+    target: "aws-microservices"
+    type: "none"
+    description: "Monolith will be decomposed, no runtime dependency"
+  
+  - source: "books-api"
+    target: "notification-service"
+    type: "asynchronous"
+    description: "Books API sends notifications for new book additions"
+
+# Optional: Exclusions
+exclusions:
+  paths:
+    - "*/node_modules/*"
+    - "*/test/*"
+    - "*/.git/*"
+    - "*/build/*"
+    - "*/dist/*"

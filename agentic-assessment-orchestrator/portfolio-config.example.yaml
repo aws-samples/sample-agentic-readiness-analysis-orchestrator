@@ -1,0 +1,205 @@
+# Portfolio Assessment Configuration Example
+# This file defines which repositories to assess and how to configure the portfolio transformation
+
+portfolio_name: "ecommerce-platform"
+description: "Core e-commerce platform services including storefront, checkout, inventory, and fulfillment"
+version: "1.0"
+assessment_date: "2024-03-15"
+
+# Transformation definition names as published in your AWS Transform registry
+# These must match the names you used when publishing the definitions
+transformation_definitions:
+  individual_assessment: "early-access-aws-agentic-assessment"
+  portfolio_assessment: "portfolio-agentic-assessment"
+
+# List of repositories to include in portfolio assessment
+# Minimum 2 repositories required
+# Note: Service-level transformation_preferences override global_transformation_preferences
+repositories:
+  - name: "storefront-web"
+    repository_url: "https://github.com/your-org/storefront-web.git"  # Optional: Kiro will clone if path doesn't exist
+    path: "./services/storefront-web"
+    priority: "P0"  # Critical service
+    tags: ["frontend", "customer-facing", "web"]
+    owner_team: "Frontend Platform"
+    business_criticality: "critical"
+    transformation_preferences:
+      # Keep as monolith - don't break into microservices
+      avoid_microservices_decomposition: true
+      keep_as_monolith: true
+      modernization_approach: "conservative"
+      custom_constraints:
+        - "Must maintain backward compatibility with mobile apps"
+        - "No breaking changes to public API"
+    
+  - name: "checkout-service"
+    repository_url: "https://github.com/your-org/checkout-service.git"
+    path: "./services/checkout-service"
+    priority: "P0"
+    tags: ["backend", "payment", "critical-path"]
+    owner_team: "Checkout Team"
+    business_criticality: "critical"
+    transformation_preferences:
+      # Avoid Kubernetes and container orchestration
+      avoid_technologies: ["kubernetes", "k8s", "helm"]
+      deployment_constraints:
+        avoid_orchestration: true
+        prefer_vm_based: true
+      compliance_requirements: ["PCI-DSS", "SOC2"]
+      timeline_constraints: "urgent"
+      custom_constraints:
+        - "Must complete migration within 6 months"
+    
+  - name: "inventory-service"
+    repository_url: "https://github.com/your-org/inventory-service.git"
+    path: "./services/inventory-service"
+    priority: "P1"
+    tags: ["backend", "data", "inventory"]
+    owner_team: "Inventory Team"
+    business_criticality: "high"
+    transformation_preferences:
+      # Keep current database, avoid migration
+      database_constraints:
+        avoid_migration: true
+        keep_current_database: true
+        avoid_managed_services: false  # Can use RDS but keep same DB engine
+      modernization_approach: "moderate"
+      budget_constraints: "strict"
+    
+  - name: "product-catalog"
+    repository_url: "https://github.com/your-org/product-catalog.git"
+    path: "./services/product-catalog"
+    priority: "P1"
+    tags: ["backend", "data", "catalog"]
+    owner_team: "Catalog Team"
+    business_criticality: "high"
+    transformation_preferences:
+      # Prefer specific technologies and patterns
+      prefer_technologies: ["ecs", "fargate", "dynamodb"]
+      prefer_patterns: ["rest-api", "openapi", "caching"]
+      avoid_patterns: ["event-sourcing", "cqrs"]
+      modernization_approach: "aggressive"
+      timeline_constraints: "flexible"
+    
+  - name: "order-fulfillment"
+    repository_url: "https://github.com/your-org/order-fulfillment.git"
+    path: "./services/order-fulfillment"
+    priority: "P1"
+    tags: ["backend", "fulfillment", "logistics"]
+    owner_team: "Fulfillment Team"
+    business_criticality: "high"
+    
+  - name: "user-service"
+    repository_url: "https://github.com/your-org/user-service.git"
+    path: "./services/user-service"
+    priority: "P0"
+    tags: ["backend", "auth", "user-management"]
+    owner_team: "Identity Team"
+    business_criticality: "critical"
+    
+  - name: "notification-service"
+    repository_url: "https://github.com/your-org/notification-service.git"
+    path: "./services/notification-service"
+    priority: "P2"
+    tags: ["backend", "messaging", "notifications"]
+    owner_team: "Platform Team"
+    business_criticality: "medium"
+    transformation_preferences:
+      # Avoid containers entirely, prefer serverless
+      avoid_technologies: ["docker", "containers"]
+      prefer_technologies: ["lambda", "sqs", "sns", "eventbridge"]
+      deployment_constraints:
+        avoid_containers: true
+        avoid_orchestration: true
+      prefer_patterns: ["event-driven", "serverless"]
+      modernization_approach: "aggressive"
+      budget_constraints: "flexible"
+    
+  - name: "analytics-pipeline"
+    repository_url: "https://github.com/your-org/analytics-pipeline.git"
+    path: "./services/analytics-pipeline"
+    priority: "P2"
+    tags: ["data", "analytics", "ml"]
+    owner_team: "Data Team"
+    business_criticality: "medium"
+
+# Transformation configuration options
+transformation_options:
+  output_path: "./portfolio-agentic-readiness-report.md"
+  cross_cutting_threshold: 3  # Gaps in 3+ services = cross-cutting concern
+  min_services: 2
+  include_optional_sections: true
+  validation_strictness: "moderate"  # strict | moderate | lenient
+  log_level: "INFO"  # DEBUG | INFO | WARNING | ERROR
+
+# Global transformation preferences (apply to all services by default)
+# Service-level preferences override these global settings
+global_transformation_preferences:
+  # Avoid Kubernetes across the entire portfolio
+  avoid_technologies: ["kubernetes", "k8s", "helm"]
+  # Prefer AWS-native services
+  prefer_technologies: ["ecs", "fargate", "lambda"]
+  # Conservative modernization approach by default
+  modernization_approach: "moderate"
+  # Avoid breaking services into microservices unless explicitly needed
+  avoid_microservices_decomposition: false
+  # Prefer REST APIs over complex patterns
+  prefer_patterns: ["rest-api", "openapi"]
+  avoid_patterns: ["event-sourcing", "cqrs"]
+  # Global deployment constraints
+  deployment_constraints:
+    avoid_orchestration: true  # No Kubernetes/EKS
+    prefer_vm_based: false
+  # Portfolio-wide compliance
+  compliance_requirements: ["SOC2"]
+  budget_constraints: "moderate"
+  timeline_constraints: "normal"
+
+# Optional: Manual dependency declarations
+# Use this when auto-detection fails or for documenting implicit dependencies
+dependency_overrides:
+  - source: "storefront-web"
+    target: "product-catalog"
+    type: "sync"
+    description: "Storefront calls Product Catalog REST API for product listings"
+    
+  - source: "storefront-web"
+    target: "user-service"
+    type: "sync"
+    description: "Storefront authenticates users via User Service"
+    
+  - source: "checkout-service"
+    target: "inventory-service"
+    type: "sync"
+    description: "Checkout validates inventory availability before order placement"
+    
+  - source: "order-fulfillment"
+    target: "notification-service"
+    type: "async"
+    description: "Fulfillment publishes order status events to notification queue"
+
+# Optional: Exclusions
+exclusions:
+  services:
+    - "legacy-monolith"  # Exclude deprecated services
+    - "test-harness"
+  path_patterns:
+    - "**/archived/**"
+    - "**/test/**"
+    - "**/deprecated/**"
+
+# Optional: Additional metadata
+metadata:
+  organization: "E-Commerce Division"
+  contact_email: "platform-team@example.com"
+  aws_account_ids:
+    - "123456789012"
+    - "234567890123"
+  regions:
+    - "us-east-1"
+    - "us-west-2"
+    - "eu-west-1"
+  custom_fields:
+    cost_center: "CC-1234"
+    compliance_tier: "PCI-DSS"
+    sla_tier: "gold"
