@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ecommerce
+      MYSQL_USER: ecommerce_user
+      MYSQL_PASSWORD: ecommerce_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  monolith:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - ./index.php:/var/www/html/index.php
+    environment:
+      DB_HOST: mysql
+      DB_NAME: ecommerce
+      DB_USER: ecommerce_user
+      DB_PASS: ecommerce_pass
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/products"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  mysql_data:

@@ -18,7 +18,7 @@ Each criterion is scored on a 1–4 scale. The output is a detailed Markdown rep
 ## Entry Criteria
 - The repository contains source code files (e.g., .java, .js, .ts, .py, .go, .cs)
 - The repository is accessible and readable at the specified path
-- Write permissions exist to create the agentic-readiness-report.md output file
+- Write permissions exist to create the output directory and report file
 
 ## Implementation Steps
 
@@ -289,9 +289,82 @@ For each of the following criteria, examine the relevant files, determine a find
 - WHY: Agentic transformation requires organizational alignment around who owns agent quality, reliability, and safety in production. Without clear observability ownership, agentic systems will be deployed without adequate monitoring and accountability for failures will be unclear. Organizations with a shared responsibility model and SLO-driven culture can extend those practices to agentic workloads — defining agent-level SLOs (task success rate, hallucination rate, tool error rate) and assigning ownership across platform and product teams.
 - Agent-ready (score 4): Observability-as-a-product mindset with dedicated platform engineering, SLO-driven culture, and clear ownership of service-level and agent-level SLOs.
 
-### Step 7: Generate the agentic-readiness-report.md Report
+### Step 7: Map to AWS Modernization Pathways
 
-Create the file `agentic-readiness-report.md` in the repository root with exactly this structure:
+Based on the scores and findings from Steps 2-6, determine which AWS Modernization Pathways apply to this application. Multiple pathways can apply simultaneously because modern applications comprise multiple interconnected components — each requiring its own modernization approach.
+
+**Pathway Trigger Rules:**
+
+Evaluate each pathway independently. A pathway is triggered when ANY of its trigger conditions are met:
+
+**Move to Cloud Native (Containers and Serverless):**
+- Trigger: APP-Q4 score < 4 (monolith detected) OR INF-Q1 score < 3 (EC2-heavy compute) OR APP-Q3 score < 3 (sync-heavy communication) OR APP-Q10 score < 3 (no async for long-running operations)
+- Focus: Decompose monolith applications into loosely coupled distributed architectures using microservices
+- Representative AWS Services: Lambda, API Gateway, Step Functions, EventBridge
+- Aligns with: Phase 2 (Foundation) and Phase 3 (Agent Enablement) roadmap activities
+
+**Move to Containers:**
+- Trigger: INF-Q1 score < 3 (no ECS/EKS/Fargate detected) OR APP-Q4 score < 4 (monolith needing containerization as first step) OR no Dockerfile/container definitions found in discovery
+- Focus: Containerize existing workloads and adopt fully managed container orchestration services
+- Representative AWS Services: ECS, EKS, Fargate, ECR
+- Aligns with: Phase 1 (Quick Wins) for Dockerfile creation, Phase 2 (Foundation) for orchestration
+
+**Move to Open Source:**
+- Trigger: DATA-Q11 score < 3 (proprietary SQL/stored procedures detected) OR INF-Q2 findings mention commercial database engines (Oracle, SQL Server, or other commercial licenses)
+- Focus: Move away from commercial workloads/licenses to open source for flexibility and reduced cost
+- Representative AWS Services: RDS open source engines (PostgreSQL, MySQL, MariaDB), EKS, Amazon Linux
+- Aligns with: Phase 2 (Foundation) for database migration planning
+
+**Move to Managed Databases:**
+- Trigger: INF-Q2 score < 4 (self-managed databases detected) OR DATA-Q2 score < 4 (self-hosted vector DB) OR DATA-Q10 score < 4 (EOL or unpinned database engine versions)
+- Focus: Adopt fully managed purpose-built cloud native databases for scalability and reduced operational burden
+- Representative AWS Services: Aurora, RDS, DynamoDB, DocumentDB, ElastiCache, OpenSearch Service
+- Aligns with: Phase 2 (Foundation) for migration, Phase 1 (Quick Wins) for version pinning
+
+**Move to Managed Analytics:**
+- Trigger: INF-Q8 score < 3 (self-managed Kafka/streaming) OR DATA-Q4 score < 3 (data source sprawl with no unified access) OR no managed analytics services detected in discovery
+- Focus: Adopt fully managed, cost-optimized data lake and real-time analytics
+- Representative AWS Services: Redshift, Kinesis, MSK Serverless, Athena, Lake Formation
+- Aligns with: Phase 2 (Foundation) for streaming migration, Phase 3 for analytics optimization
+
+**Move to Modern DevOps:**
+- Trigger: INF-Q5 score < 3 (low IaC coverage) OR INF-Q6 score < 3 (no CI/CD automation) OR OPS-Q9 score < 3 (no canary/blue-green deployments) OR OPS-Q10 score < 3 (no integration tests) OR OPS-Q1 score < 3 (no distributed tracing)
+- Focus: Adopt modern philosophies, practices, and tools for high-velocity application delivery
+- Representative AWS Services: CodeCommit, CodeBuild, CodePipeline, CodeDeploy, CloudFormation, CDK, X-Ray, CloudWatch
+- Aligns with: Phase 1 (Quick Wins) for IaC and CI/CD, Phase 2 for advanced deployment strategies
+
+**Move to AI:**
+- Trigger: APP-Q13 score < 3 (no agent frameworks) OR DATA-Q1 score < 3 (no vector database) OR DATA-Q3 score < 3 (no RAG implementation) OR OPS-Q3 score < 3 (no eval framework) OR OPS-Q6 score < 3 (no LLM cost tracking)
+- Focus: Leverage AWS AI services to transform applications with AI capabilities, bridging traditional modernization and AI-driven computing
+- Representative AWS Services: Amazon Bedrock, Amazon Bedrock AgentCore, Amazon Q, SageMaker
+- Aligns with: Phase 3 (Agent Enablement) primarily, Phase 2 for data foundations (vector DB, RAG)
+
+**For each triggered pathway, record:**
+- Pathway name
+- Trigger criteria met (which specific scores/findings triggered it)
+- Priority: High (score < 2 on trigger criteria), Medium (score 2-2.9), Low (score 3-3.4)
+- Key activities required (derived from the gap recommendations in the triggered criteria)
+- Estimated effort level: High, Medium, or Low (based on number and severity of related gaps)
+- Dependencies on other pathways (e.g., Move to Containers may be prerequisite for Move to Cloud Native)
+- Relevant learning materials module (maps directly to the learning materials catalog)
+
+**Parallel Execution Assessment:**
+- Identify which pathways can execute in parallel (no dependencies between them)
+- Identify which pathways have sequential dependencies (e.g., containerize before decomposing to microservices)
+- Note that a single application commonly pursues 3-5 pathways simultaneously
+
+### Step 8: Generate the Agentic Readiness Report
+
+**Output Location:**
+- Create a directory named `agentic-readiness-assessment` in the repository root if it doesn't already exist
+- Create the report file with the naming pattern: `{project-name}-agentic-readiness-report.md`
+  - `{project-name}` should be derived from the repository name or a user-provided project identifier
+  - Example: For a project named "payment-service", create `payment-service-agentic-readiness-report.md`
+- Full path example: `agentic-readiness-assessment/payment-service-agentic-readiness-report.md`
+
+**Report Structure:**
+
+Create the report file with exactly this structure:
 
 ```markdown
 # Agentic Readiness Assessment Report
@@ -309,14 +382,15 @@ Create the file `agentic-readiness-report.md` in the repository root with exactl
    - Phase 1 — Quick Wins (Days 1–30)
    - Phase 2 — Foundation (Months 1–3)
    - Phase 3 — Agent Enablement (Months 3–6)
-4. Recommended Self-Paced Learning Materials
-5. Detailed Findings
+4. Recommended Modernization Pathways
+5. Recommended Self-Paced Learning Materials
+6. Detailed Findings
    - Infrastructure & Platform
    - Application Architecture
    - Data Foundations
    - Identity, Security & Governance
    - Operations & Observability
-6. Appendix: Evidence Index
+7. Appendix: Evidence Index
 
 ---
 
@@ -418,6 +492,52 @@ Status emojis: use ✅ for scores >= 3.5, 🟡 for scores >= 2.5, 🟠 for score
 - Continue service extraction based on business priorities and agent use case requirements
 - Implement domain-specific agent tools per service boundary
 - Establish service-level SLOs and observability for agent-driven workflows
+
+---
+
+## Recommended Modernization Pathways
+
+Based on the assessment findings, the following AWS Modernization Pathways are recommended for this application. Multiple pathways can execute in parallel because modern applications comprise multiple interconnected components — each requiring its own modernization approach.
+
+### Pathway Summary
+
+| Pathway | Triggered | Priority | Key Trigger Criteria | Est. Effort |
+|---------|-----------|----------|---------------------|-------------|
+| Move to Cloud Native | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
+| Move to Containers | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
+| Move to Open Source | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
+| Move to Managed Databases | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
+| Move to Managed Analytics | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
+| Move to Modern DevOps | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
+| Move to AI | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
+
+### Parallel Execution Plan
+
+<Describe which pathways can execute in parallel and which have sequential dependencies. For example, Move to Containers may be a prerequisite for Move to Cloud Native.>
+
+**Parallel Track 1**: <pathways that can run concurrently>
+**Parallel Track 2**: <pathways that can run concurrently>
+**Sequential Dependencies**: <pathway A must complete before pathway B>
+
+<For each triggered pathway, include a subsection:>
+
+### Move to <Pathway Name>
+
+- **Priority**: High/Medium/Low
+- **Trigger Criteria Met**:
+  - <criterion ID>: Score X/4 — <brief finding>
+  - <criterion ID>: Score X/4 — <brief finding>
+- **Current State**: <summary of current state based on findings>
+- **Target State**: <what agent-ready looks like for this pathway>
+- **Key Activities**:
+  1. <activity from roadmap>
+  2. <activity from roadmap>
+- **Dependencies**: <other pathways that must complete first, or "None">
+- **Estimated Effort**: High/Medium/Low
+- **Roadmap Phase Alignment**: Phase 1/2/3
+- **Relevant Learning Materials**: Module X — <module name>
+
+<Repeat for each triggered pathway>
 
 ---
 
@@ -588,7 +708,7 @@ Strictly follow these rules at all times:
 - **Calibrate scores honestly**: A score of 4 means genuinely agent-ready, not just "has something." A score of 3 means meaningfully partial. Do not inflate scores.
 - **IaC is ground truth**: Trust IaC definitions over README descriptions. What is deployed is what is defined in the IaC.
 - **Do not modify any source code**: This is a read-only assessment. Only create the output report file.
-- **Do not skip criteria**: All 42 criteria must be evaluated and scored in the report.
+- **Do not skip criteria**: All 56 criteria must be evaluated and scored in the report.
 - **Microservices decomposition guidance**: If APP-Q4 score < 4 (monolith detected), include the "Microservices Decomposition Strategy" section in the roadmap with:
   - Recommended approach (Option B or C) based on modularity assessment
   - LoE estimates for each option
@@ -596,17 +716,20 @@ Strictly follow these rules at all times:
   - Specific starting points and first service extraction candidates
   - Integration of decomposition activities into Phase 1, 2, and 3 guidance
 - **Customer choice**: Present options, not prescriptions. The customer decides between parallel track (Option B) or conditional/adaptive (Option C) based on their business priorities and risk tolerance.
+- **Modernization Pathways**: All 7 AWS Modernization Pathways must be evaluated against the trigger criteria. Only include triggered pathways in the detailed subsections. A pathway is triggered when ANY of its trigger conditions are met. Multiple pathways executing in parallel is the norm, not the exception.
 
 ## Validation / Exit Criteria
 
-1. The file `agentic-readiness-report.md` is created in the repository root directory
-2. The report contains an Executive Summary with an overall numeric score
-3. The report contains a score table with all five categories scored
-4. The report contains a Top Priorities section with exactly 5 critical gaps
-5. The report contains a Readiness Roadmap with three phases
-6. The report contains a Recommended Self-Paced Learning Materials section with relevant links
-7. The report contains Detailed Findings with all criteria scored 
-8. Every finding references specific files or explicitly states what was not found
-9. The report contains an Appendix: Evidence Index listing up to 20 key files examined
-10. The report is formatted in valid Markdown with clear sections and readable structure
-11. No source code files in the repository were modified
+1. The directory `agentic-readiness-assessment` is created in the repository root (or already exists)
+2. The report file `{project-name}-agentic-readiness-report.md` is created in the `agentic-readiness-assessment` directory
+3. The report contains an Executive Summary with an overall numeric score
+4. The report contains a score table with all five categories scored
+5. The report contains a Top Priorities section with exactly 5 critical gaps
+6. The report contains a Readiness Roadmap with three phases
+7. The report contains a Recommended Modernization Pathways section with pathway trigger evaluation for all 7 pathways
+8. The report contains a Recommended Self-Paced Learning Materials section with relevant links
+9. The report contains Detailed Findings with all criteria scored 
+10. Every finding references specific files or explicitly states what was not found
+11. The report contains an Appendix: Evidence Index listing up to 20 key files examined
+12. The report is formatted in valid Markdown with clear sections and readable structure
+13. No source code files in the repository were modified

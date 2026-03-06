@@ -1,0 +1,110 @@
+portfolio_name: "ecommerce-platform-test"
+
+# Transformation definition names as published in your AWS Transform registry
+transformation_definitions:
+  individual_assessment: "agentic-readiness-assessment"
+  portfolio_assessment: "portfolio-agentic-readiness-assessment"
+
+# Global transformation preferences for the entire portfolio
+global_transformation_preferences:
+  prefer_technologies: ["lambda", "dynamodb", "api-gateway", "eventbridge", "sqs", "eks"]
+  modernization_approach: "moderate"
+  budget_constraints: "moderate"
+  timeline_constraints: "normal"
+
+repositories:
+  # Monolith - Unishop application (before decomposition)
+  - name: "unishop-monolith"
+    repository_url: "https://github.com/aws-samples/unishop-monolith-to-microservices.git"
+    path: "./services/unishop-monolith-to-microservices/MonoToMicroLegacy"
+    priority: "P0"
+    description: "Legacy monolithic e-commerce application"
+    transformation_preferences:
+      # This is a monolith that we want to assess for decomposition
+      modernization_approach: "aggressive"
+      # Don't force it to stay as monolith - we want recommendations
+      avoid_microservices_decomposition: false
+      prefer_patterns: ["api-gateway", "event-driven"]
+  
+  # Microservices Repository - Event-driven serverless microservices
+  - name: "aws-microservices"
+    repository_url: "https://github.com/awsrun/aws-microservices.git"
+    path: "./services/aws-microservices"
+    priority: "P0"
+    description: "Event-driven microservices (product, basket, ordering) with Lambda, DynamoDB, EventBridge, SQS"
+    tags: ["microservices", "serverless", "event-driven"]
+    transformation_preferences:
+      prefer_technologies: ["lambda", "dynamodb", "eventbridge", "sqs"]
+      prefer_patterns: ["event-driven", "saga", "async-messaging"]
+      modernization_approach: "moderate"
+  
+  # Local Monolith - PHP application for containerized modernization
+  - name: "local-monolith"
+    path: "./monolith"
+    priority: "P0"
+    description: "Local PHP monolith application targeting EKS-based containerized deployment"
+    tags: ["monolith", "php", "containers", "eks"]
+    transformation_preferences:
+      prefer_technologies: ["eks", "ecr", "alb", "rds"]
+      prefer_patterns: ["container-orchestration", "microservices"]
+      avoid_technologies: ["lambda", "serverless"]
+      modernization_approach: "aggressive"
+      avoid_microservices_decomposition: false
+      deployment_constraints:
+        avoid_containers: false
+        avoid_orchestration: false
+        prefer_vm_based: false
+
+  # Microservice 6 - Books API (CDK-based serverless API)
+  - name: "books-api"
+    repository_url: "https://github.com/aws-samples/aws-serverless-books-api-sample.git"
+    path: "./services/books-api"
+    priority: "P1"
+    description: "Serverless REST API with CDK infrastructure"
+    tags: ["serverless", "cdk", "api", "dynamodb"]
+    transformation_preferences:
+      prefer_technologies: ["lambda", "dynamodb", "api-gateway", "cdk"]
+      prefer_patterns: ["rest-api", "iac", "serverless"]
+      modernization_approach: "moderate"
+
+# Optional: Manual dependency declarations (if not detected automatically)
+dependency_overrides:
+  - source: "unishop-monolith"
+    target: "aws-microservices"
+    type: "none"
+    description: "Monolith will be decomposed into microservices, no runtime dependency - migration target"
+
+  - source: "unishop-monolith"
+    target: "local-monolith"
+    type: "none"
+    description: "Both monoliths are independent legacy apps targeted for modernization, no runtime dependency"
+
+  - source: "aws-microservices"
+    target: "books-api"
+    type: "asynchronous"
+    description: "Microservices ordering flow triggers book catalog updates via EventBridge events"
+
+  - source: "books-api"
+    target: "aws-microservices"
+    type: "synchronous"
+    description: "Books API queries product microservice for catalog data via REST"
+
+  - source: "local-monolith"
+    target: "aws-microservices"
+    type: "none"
+    description: "Local PHP monolith is independent, targeted for containerized modernization on EKS"
+
+  - source: "local-monolith"
+    target: "books-api"
+    type: "none"
+    description: "No runtime dependency, both are separate modernization tracks"
+
+# Optional: Exclusions
+exclusions:
+  paths:
+    - "*/node_modules/*"
+    - "*/test/*"
+    - "*/.git/*"
+    - "*/build/*"
+    - "*/dist/*"
+    
