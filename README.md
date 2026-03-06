@@ -280,6 +280,11 @@ atx custom def get -n agentic-readiness-assessment
 | 2 | 🟠 Needs Work | Significant gaps |
 | 1 | ❌ Not Present | Missing or inadequate |
 
+## Roadmap
+
+1. **Custom output formats** — Allow transformation definitions to produce reports in configurable formats (JSON, CSV, SARIF) beyond Markdown, so teams can feed results into their existing dashboards and tooling
+2. **Interactive HTML dashboard** — Auto-generate a visual portfolio dashboard from the assessment reports. A hand-built prototype lives at `example-reports/agentic-readiness-assessment/dashboard.html` — open it in a browser to see what this could look like
+
 ## Related Resources
 
 - [AWS Transform Documentation](https://docs.aws.amazon.com/transform/)

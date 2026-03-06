@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Readiness — ecommerce-platform-test</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #232733; --border: #2d3140;
+    --text: #e4e6f0; --text2: #9ca0b0; --accent: #6c5ce7; --accent2: #a29bfe;
+    --green: #00cec9; --yellow: #fdcb6e; --orange: #e17055; --red: #d63031;
+    --blue: #0984e3; --pink: #fd79a8; --teal: #00b894;
+    --radius: 16px; --shadow: 0 8px 32px rgba(0,0,0,.4);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:var(--bg); color:var(--text); overflow-x:hidden; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  /* Animated gradient background */
+  .bg-glow { position:fixed; top:-50%; left:-50%; width:200%; height:200%; background:radial-gradient(circle at 30% 40%, rgba(108,92,231,.08) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(0,206,201,.06) 0%, transparent 50%); animation:bgFloat 20s ease-in-out infinite; z-index:0; pointer-events:none; }
+  @keyframes bgFloat { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-2%,2%)} }
+
+  .container { max-width:1440px; margin:0 auto; padding:24px 32px; position:relative; z-index:1; }
+
+  /* Header */
+  .header { text-align:center; padding:48px 0 32px; }
+  .header .badge { display:inline-block; background:linear-gradient(135deg, var(--accent), var(--blue)); padding:6px 16px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:16px; }
+  .header h1 { font-size:42px; font-weight:800; background:linear-gradient(135deg, var(--text), var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px; }
+  .header .subtitle { color:var(--text2); font-size:15px; font-weight:400; }
+
+  /* Navigation */
+  .nav { display:flex; justify-content:center; gap:8px; margin:32px 0; flex-wrap:wrap; }
+  .nav-btn { background:var(--surface); border:1px solid var(--border); color:var(--text2); padding:10px 20px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:500; transition:all .25s; }
+  .nav-btn:hover, .nav-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); transform:translateY(-1px); }
+
+  /* Sections */
+  .section { display:none; animation:fadeIn .4s ease; }
+  .section.active { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Score Ring */
+  .score-hero { display:flex; align-items:center; justify-content:center; gap:64px; padding:48px 0; flex-wrap:wrap; }
+  .score-ring-wrap { position:relative; width:220px; height:220px; }
+  .score-ring-wrap canvas { width:220px!important; height:220px!important; }
+  .score-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
+  .score-center .num { font-size:48px; font-weight:800; color:var(--text); }
+  .score-center .label { font-size:13px; color:var(--text2); margin-top:2px; }
+  .score-meta { display:flex; flex-direction:column; gap:16px; }
+  .score-meta-item { display:flex; align-items:center; gap:12px; }
+  .score-meta-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .score-meta-text { font-size:14px; color:var(--text2); }
+  .score-meta-text strong { color:var(--text); font-weight:600; }
+
+  /* Cards */
+  .grid { display:grid; gap:20px; }
+  .grid-2 { grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); }
+  .grid-3 { grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); }
+  .grid-4 { grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid-5 { grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; transition:all .3s; }
+  .card:hover { border-color:var(--accent); box-shadow:var(--shadow), 0 0 20px rgba(108,92,231,.1); transform:translateY(-2px); }
+  .card-title { font-size:13px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:16px; }
+  .card-value { font-size:32px; font-weight:800; }
+  .card-sub { font-size:12px; color:var(--text2); margin-top:4px; }
+
+  /* Service Cards */
+  .svc-card { cursor:pointer; position:relative; overflow:hidden; }
+  .svc-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:var(--radius) var(--radius) 0 0; }
+  .svc-card.red::before { background:var(--red); }
+  .svc-card.orange::before { background:var(--orange); }
+  .svc-card.yellow::before { background:var(--yellow); }
+  .svc-card.green::before { background:var(--green); }
+  .svc-name { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .svc-desc { font-size:12px; color:var(--text2); margin-bottom:16px; line-height:1.5; }
+  .svc-score { font-size:36px; font-weight:800; margin-bottom:4px; }
+  .svc-bar-row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .svc-bar-label { font-size:11px; color:var(--text2); width:100px; flex-shrink:0; }
+  .svc-bar-track { flex:1; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+  .svc-bar-fill { height:100%; border-radius:3px; transition:width 1s ease; }
+  .svc-priority { display:inline-block; padding:3px 10px; border-radius:6px; font-size:11px; font-weight:700; margin-top:12px; }
+  .svc-priority.p0 { background:rgba(214,48,49,.15); color:var(--red); }
+  .svc-priority.p1 { background:rgba(253,203,110,.15); color:var(--yellow); }
+
+  /* Category Bars */
+  .cat-row { display:flex; align-items:center; gap:16px; padding:16px 0; border-bottom:1px solid var(--border); }
+  .cat-row:last-child { border-bottom:none; }
+  .cat-label { width:200px; font-size:14px; font-weight:500; flex-shrink:0; }
+  .cat-bar-wrap { flex:1; display:flex; align-items:center; gap:12px; }
+  .cat-bar-track { flex:1; height:12px; background:var(--surface2); border-radius:6px; overflow:hidden; position:relative; }
+  .cat-bar-fill { height:100%; border-radius:6px; transition:width 1.2s cubic-bezier(.4,0,.2,1); position:relative; }
+  .cat-score { font-size:14px; font-weight:700; width:60px; text-align:right; flex-shrink:0; }
+  .cat-status { font-size:16px; width:24px; text-align:center; flex-shrink:0; }
+
+  /* Dependency Graph */
+  .dep-graph { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:32px; margin:24px 0; }
+  .dep-graph svg { width:100%; height:auto; }
+  .dep-node { cursor:pointer; transition:all .3s; }
+  .dep-node:hover { filter:brightness(1.2); }
+
+  /* Roadmap Timeline */
+  .timeline { position:relative; padding:32px 0; }
+  .timeline::before { content:''; position:absolute; left:50%; top:0; bottom:0; width:2px; background:linear-gradient(to bottom, var(--accent), var(--green)); transform:translateX(-50%); }
+  .tl-item { display:flex; align-items:flex-start; margin:32px 0; position:relative; }
+  .tl-item:nth-child(odd) { flex-direction:row; }
+  .tl-item:nth-child(even) { flex-direction:row-reverse; }
+  .tl-content { width:45%; }
+  .tl-dot { width:20px; height:20px; border-radius:50%; border:3px solid var(--accent); background:var(--bg); position:absolute; left:50%; transform:translateX(-50%); z-index:2; }
+  .tl-phase { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--accent2); margin-bottom:8px; }
+  .tl-title { font-size:18px; font-weight:700; margin-bottom:8px; }
+  .tl-desc { font-size:13px; color:var(--text2); line-height:1.6; }
+  .tl-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .tl-tag { padding:4px 10px; border-radius:6px; font-size:11px; font-weight:600; background:rgba(108,92,231,.15); color:var(--accent2); }
+
+  /* Pathway Cards */
+  .pathway-card { position:relative; overflow:hidden; }
+  .pathway-card .pw-icon { font-size:32px; margin-bottom:12px; }
+  .pathway-card .pw-name { font-size:16px; font-weight:700; margin-bottom:8px; }
+  .pathway-card .pw-pct { font-size:28px; font-weight:800; color:var(--accent2); }
+  .pathway-card .pw-services { font-size:12px; color:var(--text2); margin-top:4px; }
+  .pathway-card .pw-effort { display:inline-block; padding:3px 10px; border-radius:6px; font-size:11px; font-weight:600; margin-top:12px; }
+  .pw-effort.high { background:rgba(214,48,49,.15); color:var(--red); }
+  .pw-effort.medium { background:rgba(253,203,110,.15); color:var(--yellow); }
+  .pw-effort.low { background:rgba(0,206,201,.15); color:var(--green); }
+
+  /* Gaps Table */
+  .gap-table { width:100%; border-collapse:collapse; }
+  .gap-table th { text-align:left; padding:12px 16px; font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid var(--border); }
+  .gap-table td { padding:12px 16px; font-size:13px; border-bottom:1px solid var(--border); }
+  .gap-table tr:hover td { background:var(--surface2); }
+  .gap-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+
+  /* Detail Panel */
+  .detail-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.6); z-index:100; backdrop-filter:blur(4px); }
+  .detail-overlay.open { display:flex; align-items:center; justify-content:center; animation:fadeIn .3s; }
+  .detail-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); width:90%; max-width:900px; max-height:85vh; overflow-y:auto; padding:40px; position:relative; }
+  .detail-close { position:absolute; top:16px; right:16px; background:var(--surface2); border:none; color:var(--text); width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+  .detail-close:hover { background:var(--red); }
+  .detail-panel h2 { font-size:24px; font-weight:800; margin-bottom:8px; }
+  .detail-panel .detail-desc { color:var(--text2); font-size:14px; margin-bottom:24px; line-height:1.6; }
+  .detail-panel .detail-score-big { font-size:56px; font-weight:900; text-align:center; margin:16px 0; }
+  .detail-panel .detail-cats { margin:24px 0; }
+  .detail-panel .detail-priorities { margin:24px 0; }
+  .detail-panel .detail-priorities li { padding:8px 0; font-size:13px; line-height:1.6; color:var(--text2); border-bottom:1px solid var(--border); }
+  .detail-panel .detail-priorities li strong { color:var(--text); }
+  .detail-panel .detail-meta { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:24px; }
+  .detail-panel .detail-meta-item { background:var(--surface2); padding:12px 16px; border-radius:10px; }
+  .detail-panel .detail-meta-item .dm-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+  .detail-panel .detail-meta-item .dm-value { font-size:14px; font-weight:600; margin-top:4px; }
+
+  /* Responsive */
+  @media(max-width:768px) {
+    .container { padding:16px; }
+    .header h1 { font-size:28px; }
+    .score-hero { flex-direction:column; gap:32px; }
+    .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; }
+    .timeline::before { left:20px; }
+    .tl-item,.tl-item:nth-child(even) { flex-direction:column; padding-left:48px; }
+    .tl-content { width:100%; }
+    .tl-dot { left:20px; }
+    .cat-row { flex-direction:column; gap:8px; }
+    .cat-label { width:100%; }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:8px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--text2); }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<div class="container">
+
+<!-- Header -->
+<div class="header">
+  <div class="badge">AWS Transform — Agentic Readiness</div>
+  <h1>ecommerce-platform-test</h1>
+  <div class="subtitle">Portfolio Assessment · 4 Services · March 6, 2026</div>
+</div>
+
+<!-- Navigation -->
+<div class="nav">
+  <button class="nav-btn active" onclick="showSection('overview')">Overview</button>
+  <button class="nav-btn" onclick="showSection('services')">Services</button>
+  <button class="nav-btn" onclick="showSection('categories')">Categories</button>
+  <button class="nav-btn" onclick="showSection('dependencies')">Dependencies</button>
+  <button class="nav-btn" onclick="showSection('pathways')">Modernization Pathways</button>
+  <button class="nav-btn" onclick="showSection('roadmap')">Roadmap</button>
+  <button class="nav-btn" onclick="showSection('risks')">Risks & Gaps</button>
+</div>
+
+<!-- ==================== OVERVIEW SECTION ==================== -->
+<div id="sec-overview" class="section active">
+  <!-- Score Hero -->
+  <div class="score-hero">
+    <div class="score-ring-wrap">
+      <canvas id="scoreRing"></canvas>
+      <div class="score-center">
+        <div class="num" id="heroScore">0</div>
+        <div class="label">of 4.0</div>
+      </div>
+    </div>
+    <div class="score-meta">
+      <div class="score-meta-item"><div class="score-meta-dot" style="background:var(--red)"></div><div class="score-meta-text"><strong>1 service</strong> — Not Ready (&lt;1.5)</div></div>
+      <div class="score-meta-item"><div class="score-meta-dot" style="background:var(--orange)"></div><div class="score-meta-text"><strong>3 services</strong> — Needs Work (1.5–2.4)</div></div>
+      <div class="score-meta-item"><div class="score-meta-dot" style="background:var(--yellow)"></div><div class="score-meta-text"><strong>0 services</strong> — Partial (2.5–3.4)</div></div>
+      <div class="score-meta-item"><div class="score-meta-dot" style="background:var(--green)"></div><div class="score-meta-text"><strong>0 services</strong> — Agent-Ready (3.5–4.0)</div></div>
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="grid grid-4" style="margin-bottom:24px">
+    <div class="card">
+      <div class="card-title">Services Assessed</div>
+      <div class="card-value" style="color:var(--accent2)">4</div>
+      <div class="card-sub">2 monoliths · 2 serverless</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Agent-Ready</div>
+      <div class="card-value" style="color:var(--red)">0%</div>
+      <div class="card-sub">No service ready for agents</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Critical Dependencies</div>
+      <div class="card-value" style="color:var(--orange)">1</div>
+      <div class="card-sub">Circular: microservices ↔ books</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Modernization Timeline</div>
+      <div class="card-value" style="color:var(--green)">9 mo</div>
+      <div class="card-sub">4 phases · 2-3 parallel tracks</div>
+    </div>
+  </div>
+
+  <!-- Category Overview -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-title">Category Readiness</div>
+    <div id="catBars"></div>
+  </div>
+
+  <!-- Tech Stack -->
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">Technology Landscape</div>
+      <canvas id="techChart" height="220"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">Deployment Maturity</div>
+      <canvas id="deployChart" height="220"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SERVICES SECTION ==================== -->
+<div id="sec-services" class="section">
+  <div class="grid grid-2" id="serviceCards"></div>
+</div>
+
+<!-- ==================== CATEGORIES SECTION ==================== -->
+<div id="sec-categories" class="section">
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-title">Category Comparison Across Services</div>
+    <canvas id="radarChart" height="400"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-title">Heatmap — Score by Service × Category</div>
+    <canvas id="heatmapChart" height="260"></canvas>
+  </div>
+</div>
+
+<!-- ==================== DEPENDENCIES SECTION ==================== -->
+<div id="sec-dependencies" class="section">
+  <div class="dep-graph">
+    <div class="card-title" style="margin-bottom:24px">Service Dependency Architecture</div>
+    <svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+      <!-- Defs -->
+      <defs>
+        <marker id="arrowSync" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#e17055"/></marker>
+        <marker id="arrowAsync" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#00cec9"/></marker>
+        <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+
+      <!-- Connections -->
+      <line x1="580" y1="120" x2="580" y2="280" stroke="#e17055" stroke-width="2" stroke-dasharray="8,4" marker-end="url(#arrowSync)" opacity=".7"/>
+      <text x="592" y="200" fill="#e17055" font-size="11" font-weight="600">SYNC (REST)</text>
+
+      <line x1="520" y1="300" x2="520" y2="140" stroke="#00cec9" stroke-width="2" marker-end="url(#arrowAsync)" opacity=".7"/>
+      <text x="430" y="220" fill="#00cec9" font-size="11" font-weight="600">ASYNC (EventBridge)</text>
+
+      <!-- Circular dependency warning -->
+      <rect x="440" y="190" width="120" height="28" rx="14" fill="rgba(214,48,49,.15)" stroke="#d63031" stroke-width="1"/>
+      <text x="500" y="209" fill="#d63031" font-size="10" font-weight="700" text-anchor="middle">⚠ CIRCULAR</text>
+
+      <!-- Nodes -->
+      <g class="dep-node" onclick="openDetail('unishop-monolith')">
+        <rect x="40" y="60" width="240" height="80" rx="12" fill="#1a1d27" stroke="#d63031" stroke-width="2" filter="url(#glow)"/>
+        <text x="160" y="92" fill="#e4e6f0" font-size="14" font-weight="700" text-anchor="middle">unishop-monolith</text>
+        <text x="160" y="112" fill="#9ca0b0" font-size="11" text-anchor="middle">Java/Spring · EC2 · 1.4/4.0</text>
+        <text x="160" y="130" fill="#d63031" font-size="10" font-weight="600" text-anchor="middle">ISOLATED · P0</text>
+      </g>
+
+      <g class="dep-node" onclick="openDetail('local-monolith')">
+        <rect x="40" y="280" width="240" height="80" rx="12" fill="#1a1d27" stroke="#e17055" stroke-width="2" filter="url(#glow)"/>
+        <text x="160" y="312" fill="#e4e6f0" font-size="14" font-weight="700" text-anchor="middle">local-monolith</text>
+        <text x="160" y="332" fill="#9ca0b0" font-size="11" text-anchor="middle">PHP · Docker · 1.5/4.0</text>
+        <text x="160" y="350" fill="#e17055" font-size="10" font-weight="600" text-anchor="middle">ISOLATED · P0</text>
+      </g>
+
+      <g class="dep-node" onclick="openDetail('aws-microservices')">
+        <rect x="430" y="60" width="260" height="80" rx="12" fill="#1a1d27" stroke="#e17055" stroke-width="2" filter="url(#glow)"/>
+        <text x="560" y="92" fill="#e4e6f0" font-size="14" font-weight="700" text-anchor="middle">aws-microservices</text>
+        <text x="560" y="112" fill="#9ca0b0" font-size="11" text-anchor="middle">Lambda/DDB/EB · 1.8/4.0</text>
+        <text x="560" y="130" fill="#e17055" font-size="10" font-weight="600" text-anchor="middle">COUPLED · P0</text>
+      </g>
+
+      <g class="dep-node" onclick="openDetail('books-api')">
+        <rect x="430" y="280" width="260" height="80" rx="12" fill="#1a1d27" stroke="#fdcb6e" stroke-width="2" filter="url(#glow)"/>
+        <text x="560" y="312" fill="#e4e6f0" font-size="14" font-weight="700" text-anchor="middle">books-api</text>
+        <text x="560" y="332" fill="#9ca0b0" font-size="11" text-anchor="middle">Lambda/DDB/Cognito · 2.2/4.0</text>
+        <text x="560" y="350" fill="#fdcb6e" font-size="10" font-weight="600" text-anchor="middle">COUPLED · P1</text>
+      </g>
+
+      <!-- Legend -->
+      <g transform="translate(720,60)">
+        <text x="0" y="0" fill="#9ca0b0" font-size="11" font-weight="600">LEGEND</text>
+        <line x1="0" y1="16" x2="30" y2="16" stroke="#e17055" stroke-width="2" stroke-dasharray="8,4"/>
+        <text x="36" y="20" fill="#9ca0b0" font-size="11">Synchronous</text>
+        <line x1="0" y1="36" x2="30" y2="36" stroke="#00cec9" stroke-width="2"/>
+        <text x="36" y="40" fill="#9ca0b0" font-size="11">Asynchronous</text>
+        <rect x="0" y="52" width="12" height="12" rx="3" fill="none" stroke="#d63031" stroke-width="2"/>
+        <text x="18" y="63" fill="#9ca0b0" font-size="11">Not Ready</text>
+        <rect x="0" y="72" width="12" height="12" rx="3" fill="none" stroke="#e17055" stroke-width="2"/>
+        <text x="18" y="83" fill="#9ca0b0" font-size="11">Needs Work</text>
+        <rect x="0" y="92" width="12" height="12" rx="3" fill="none" stroke="#fdcb6e" stroke-width="2"/>
+        <text x="18" y="103" fill="#9ca0b0" font-size="11">Partial</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Dependency Matrix</div>
+    <table class="gap-table">
+      <thead><tr><th>Source → Target</th><th>Type</th><th>Coupling</th><th>Risk</th><th>Resolution</th></tr></thead>
+      <tbody>
+        <tr><td>aws-microservices → books-api</td><td><span style="color:var(--green)">ASYNC</span> (EventBridge)</td><td>Medium</td><td><span class="gap-dot" style="background:var(--yellow)"></span>Moderate</td><td>Part of circular — break in Phase 0</td></tr>
+        <tr><td>books-api → aws-microservices</td><td><span style="color:var(--orange)">SYNC</span> (REST)</td><td>Medium</td><td><span class="gap-dot" style="background:var(--red)"></span>High</td><td>Replace with EventBridge async pattern</td></tr>
+        <tr><td>unishop-monolith → *</td><td>None</td><td>None</td><td><span class="gap-dot" style="background:var(--green)"></span>Low</td><td>Isolated — modernize independently</td></tr>
+        <tr><td>local-monolith → *</td><td>None</td><td>None</td><td><span class="gap-dot" style="background:var(--green)"></span>Low</td><td>Isolated — modernize independently</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== PATHWAYS SECTION ==================== -->
+<div id="sec-pathways" class="section">
+  <div style="text-align:center;margin-bottom:32px">
+    <h2 style="font-size:28px;font-weight:800;margin-bottom:8px">AWS Modernization Pathways</h2>
+    <p style="color:var(--text2);font-size:14px">6 of 7 pathways triggered across the portfolio</p>
+  </div>
+
+  <div class="grid grid-3" style="margin-bottom:32px">
+    <div class="card pathway-card">
+      <div class="pw-icon">☁️</div>
+      <div class="pw-name">Move to Cloud Native</div>
+      <div class="pw-pct">100%</div>
+      <div class="pw-services">4 of 4 services</div>
+      <div class="pw-effort high">High Effort</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);line-height:1.5">Decompose monoliths, expand async patterns, add Step Functions workflows, adopt EventBridge portfolio-wide</div>
+    </div>
+    <div class="card pathway-card">
+      <div class="pw-icon">🐳</div>
+      <div class="pw-name">Move to Containers</div>
+      <div class="pw-pct">75%</div>
+      <div class="pw-services">3 of 4 services</div>
+      <div class="pw-effort medium">Medium Effort</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);line-height:1.5">Containerize unishop → ECS Fargate, local-monolith → EKS, create Dockerfiles and K8s manifests</div>
+    </div>
+    <div class="card pathway-card">
+      <div class="pw-icon">🗄️</div>
+      <div class="pw-name">Move to Managed Databases</div>
+      <div class="pw-pct">100%</div>
+      <div class="pw-services">4 of 4 services</div>
+      <div class="pw-effort medium">Medium Effort</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);line-height:1.5">Upgrade Aurora MySQL 5.7 → 3.x, eliminate self-managed MySQL, deploy vector DBs for RAG</div>
+    </div>
+    <div class="card pathway-card">
+      <div class="pw-icon">📊</div>
+      <div class="pw-name">Move to Managed Analytics</div>
+      <div class="pw-pct">100%</div>
+      <div class="pw-services">4 of 4 services</div>
+      <div class="pw-effort low">Low Effort</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);line-height:1.5">Add Kinesis Data Streams for high-throughput streaming, S3 data lake with Athena for ad-hoc analytics</div>
+    </div>
+    <div class="card pathway-card">
+      <div class="pw-icon">🔄</div>
+      <div class="pw-name">Move to Modern DevOps</div>
+      <div class="pw-pct">75%</div>
+      <div class="pw-services">3 of 4 services</div>
+      <div class="pw-effort high">High Effort</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);line-height:1.5">Build CI/CD pipelines, add X-Ray tracing, structured logging, progressive deployments, integration tests</div>
+    </div>
+    <div class="card pathway-card">
+      <div class="pw-icon">🤖</div>
+      <div class="pw-name">Move to AI</div>
+      <div class="pw-pct">100%</div>
+      <div class="pw-services">4 of 4 services</div>
+      <div class="pw-effort high">High Effort</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text2);line-height:1.5">Deploy Bedrock agents, build RAG pipelines, vector databases, agent eval frameworks, LLM cost tracking</div>
+    </div>
+  </div>
+
+  <!-- Pathway × Service Matrix -->
+  <div class="card">
+    <div class="card-title">Pathway × Service Matrix</div>
+    <canvas id="pathwayMatrix" height="280"></canvas>
+  </div>
+</div>
+
+<!-- ==================== ROADMAP SECTION ==================== -->
+<div id="sec-roadmap" class="section">
+  <div style="text-align:center;margin-bottom:40px">
+    <h2 style="font-size:28px;font-weight:800;margin-bottom:8px">9-Month Modernization Roadmap</h2>
+    <p style="color:var(--text2);font-size:14px">4 phases with parallel execution tracks</p>
+  </div>
+
+  <!-- Gantt-style chart -->
+  <div class="card" style="margin-bottom:32px">
+    <div class="card-title">Phase Timeline</div>
+    <canvas id="ganttChart" height="200"></canvas>
+  </div>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-content card" style="margin-right:auto">
+        <div class="tl-phase" style="color:var(--red)">Phase 0 — Foundation</div>
+        <div class="tl-title">Months 0–1</div>
+        <div class="tl-desc">Establish shared infrastructure, resolve circular dependency, address critical security risks. Deploy shared Cognito, CI/CD templates, observability stack. Migrate hardcoded credentials to Secrets Manager. Generate OpenAPI specs for all services.</div>
+        <div class="tl-tags">
+          <span class="tl-tag" style="background:rgba(214,48,49,.15);color:var(--red)">Break Circular Dep</span>
+          <span class="tl-tag">Cognito</span>
+          <span class="tl-tag">CI/CD Templates</span>
+          <span class="tl-tag">Secrets Manager</span>
+          <span class="tl-tag">OpenAPI Specs</span>
+        </div>
+      </div>
+      <div class="tl-dot" style="border-color:var(--red)"></div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-content card" style="margin-left:auto">
+        <div class="tl-phase" style="color:var(--orange)">Phase 1 — Core Services</div>
+        <div class="tl-title">Months 1–3</div>
+        <div class="tl-desc">Modernize 3 P0 services in parallel. Containerize unishop-monolith → ECS Fargate, local-monolith → EKS. Upgrade Node.js 14→20, Java 8→17+, Aurora MySQL 5.7→3.x. Deploy CI/CD pipelines, X-Ray tracing, structured logging for all.</div>
+        <div class="tl-tags">
+          <span class="tl-tag" style="background:rgba(225,112,85,.15);color:var(--orange)">3 P0 Services</span>
+          <span class="tl-tag">Containerize</span>
+          <span class="tl-tag">Runtime Upgrades</span>
+          <span class="tl-tag">X-Ray Tracing</span>
+          <span class="tl-tag">CI/CD Pipelines</span>
+        </div>
+      </div>
+      <div class="tl-dot" style="border-color:var(--orange)"></div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-content card" style="margin-right:auto">
+        <div class="tl-phase" style="color:var(--yellow)">Phase 2 — Dependent Services</div>
+        <div class="tl-title">Months 3–6</div>
+        <div class="tl-desc">Modernize books-api with EventBridge, rate limiting, API versioning. Continue monolith decomposition — extract Basket from unishop, Orders from local-monolith using Strangler Fig pattern.</div>
+        <div class="tl-tags">
+          <span class="tl-tag" style="background:rgba(253,203,110,.15);color:var(--yellow)">books-api</span>
+          <span class="tl-tag">EventBridge</span>
+          <span class="tl-tag">Rate Limiting</span>
+          <span class="tl-tag">Strangler Fig</span>
+          <span class="tl-tag">Service Extraction</span>
+        </div>
+      </div>
+      <div class="tl-dot" style="border-color:var(--yellow)"></div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-content card" style="margin-left:auto">
+        <div class="tl-phase" style="color:var(--green)">Phase 3 — Agent Enablement</div>
+        <div class="tl-title">Months 6–9</div>
+        <div class="tl-desc">Deploy vector databases and RAG pipelines. Integrate Amazon Bedrock agents. Build evaluation frameworks with golden datasets. Implement LLM cost tracking, human-in-the-loop workflows, unified observability with agent-specific SLOs.</div>
+        <div class="tl-tags">
+          <span class="tl-tag" style="background:rgba(0,206,201,.15);color:var(--green)">All 4 Services</span>
+          <span class="tl-tag">Bedrock Agents</span>
+          <span class="tl-tag">RAG Pipelines</span>
+          <span class="tl-tag">Vector DBs</span>
+          <span class="tl-tag">Agent Evals</span>
+        </div>
+      </div>
+      <div class="tl-dot" style="border-color:var(--green)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== RISKS SECTION ==================== -->
+<div id="sec-risks" class="section">
+  <div class="grid grid-2" style="margin-bottom:24px">
+    <div class="card">
+      <div class="card-title">Risk Severity Distribution</div>
+      <canvas id="riskChart" height="240"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">Common Gaps (Affecting 3+ Services)</div>
+      <canvas id="gapChart" height="240"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Critical Risks</div>
+    <table class="gap-table">
+      <thead><tr><th>Risk</th><th>Service(s)</th><th>Likelihood</th><th>Impact</th><th>Phase</th></tr></thead>
+      <tbody>
+        <tr><td><span class="gap-dot" style="background:var(--red)"></span>Aurora MySQL 5.7 EOL</td><td>unishop-monolith</td><td style="color:var(--red)">High</td><td style="color:var(--red)">High</td><td>Phase 1</td></tr>
+        <tr><td><span class="gap-dot" style="background:var(--red)"></span>Node.js 14.x EOL</td><td>aws-microservices</td><td style="color:var(--red)">High</td><td style="color:var(--red)">High</td><td>Phase 1</td></tr>
+        <tr><td><span class="gap-dot" style="background:var(--red)"></span>Hardcoded Credentials</td><td>unishop, local-monolith</td><td style="color:var(--red)">High</td><td style="color:var(--red)">High</td><td>Phase 0</td></tr>
+        <tr><td><span class="gap-dot" style="background:var(--red)"></span>Zero API Authentication</td><td>aws-microservices</td><td style="color:var(--red)">High</td><td style="color:var(--red)">High</td><td>Phase 0</td></tr>
+        <tr><td><span class="gap-dot" style="background:var(--orange)"></span>Circular Dependency</td><td>microservices ↔ books</td><td style="color:var(--red)">High</td><td style="color:var(--yellow)">Medium</td><td>Phase 0</td></tr>
+        <tr><td><span class="gap-dot" style="background:var(--orange)"></span>No CI/CD (3 services)</td><td>unishop, local, microservices</td><td style="color:var(--yellow)">Medium</td><td style="color:var(--red)">High</td><td>Phase 0-1</td></tr>
+        <tr><td><span class="gap-dot" style="background:var(--orange)"></span>Stack Traces in Responses</td><td>aws-microservices</td><td style="color:var(--red)">High</td><td style="color:var(--yellow)">Medium</td><td>Phase 0</td></tr>
+        <tr><td><span class="gap-dot" style="background:var(--orange)"></span>No Rollback Capability</td><td>unishop, local, microservices</td><td style="color:var(--yellow)">Medium</td><td style="color:var(--red)">High</td><td>Phase 1-2</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== DETAIL OVERLAY ==================== -->
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-panel" id="detailPanel"></div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+// ==================== DATA ====================
+const services = {
+  'unishop-monolith': {
+    name: 'unishop-monolith', score: 1.4, priority: 'P0', phase: 'Phase 1',
+    desc: 'Legacy Java 8/Spring Boot 2.1 e-commerce monolith on raw EC2 with self-managed MySQL and Aurora MySQL 5.7 (EOL)',
+    tech: 'Java 8 · Spring Boot 2.1 · EC2 · Aurora MySQL 5.7',
+    cats: { 'Infrastructure': 1.4, 'Architecture': 1.5, 'Data': 2.0, 'Security': 1.2, 'Operations': 1.0 },
+    color: 'red',
+    priorities: [
+      'Hardcoded credentials — migrate to Secrets Manager',
+      'No CI/CD — create pipeline with GitHub Actions',
+      '100% synchronous architecture — introduce EventBridge and SQS',
+      'No API Gateway or authentication — deploy API Gateway with Cognito',
+      'Zero observability — add X-Ray tracing and structured logging'
+    ],
+    deps: 'None (isolated)', depBy: 'None',
+    pathways: ['Cloud Native','Containers','Managed DBs','Analytics','Modern DevOps','AI'],
+    effort: 'High'
+  },
+  'local-monolith': {
+    name: 'local-monolith', score: 1.5, priority: 'P0', phase: 'Phase 1',
+    desc: 'PHP monolith (~2000+ lines in single index.php) with MySQL, targeting EKS containerization',
+    tech: 'PHP 8.2 · Docker · App Runner · MySQL 8.4',
+    cats: { 'Infrastructure': 2.1, 'Architecture': 1.2, 'Data': 1.7, 'Security': 1.4, 'Operations': 1.0 },
+    color: 'orange',
+    priorities: [
+      'Tightly-coupled monolith — conduct EventStorming, begin Strangler Fig',
+      'No CI/CD — create CodePipeline for Docker → ECR → EKS',
+      'Zero observability — add structured logging, tracing, monitoring',
+      'No async messaging — introduce SQS for order fulfillment',
+      'No API documentation — generate OpenAPI 3.0 specs'
+    ],
+    deps: 'None (isolated)', depBy: 'None',
+    pathways: ['Cloud Native','Containers','Managed DBs','Analytics','Modern DevOps','AI'],
+    effort: 'High'
+  },
+  'aws-microservices': {
+    name: 'aws-microservices', score: 1.8, priority: 'P0', phase: 'Phase 1',
+    desc: 'Event-driven serverless microservices (product, basket, ordering) with Lambda, DynamoDB, EventBridge, SQS in CDK',
+    tech: 'Node.js 14.x (EOL) · Lambda · DynamoDB · EventBridge · CDK',
+    cats: { 'Infrastructure': 2.6, 'Architecture': 1.8, 'Data': 2.0, 'Security': 1.4, 'Operations': 1.1 },
+    color: 'orange',
+    priorities: [
+      'No CI/CD — create pipeline with GitHub Actions or CodePipeline',
+      'No API authentication — add Cognito authorizer to all endpoints',
+      'No distributed tracing — enable X-Ray on all Lambda functions',
+      'No resilience patterns — add retry, circuit breaker, idempotency',
+      'Node.js 14.x EOL — upgrade to Node.js 20.x'
+    ],
+    deps: 'books-api (SYNC)', depBy: 'books-api (ASYNC)',
+    pathways: ['Cloud Native','Managed DBs','Analytics','Modern DevOps','AI'],
+    effort: 'Medium'
+  },
+  'books-api': {
+    name: 'books-api', score: 2.2, priority: 'P1', phase: 'Phase 2',
+    desc: 'Serverless REST API with Lambda, API Gateway, DynamoDB, Cognito, SAM/CDK, CI/CD with progressive deployments',
+    tech: 'TypeScript · Node.js 22 · Lambda · DynamoDB · Cognito · SAM',
+    cats: { 'Infrastructure': 2.7, 'Architecture': 2.1, 'Data': 2.0, 'Security': 2.1, 'Operations': 1.9 },
+    color: 'yellow',
+    priorities: [
+      'No AI/agent framework — add Bedrock SDK and agent integration',
+      'No API documentation — generate OpenAPI 3.0 spec',
+      'No async messaging — add EventBridge for domain events',
+      'No structured logging — add Lambda Powertools Logger',
+      'No rate limiting — add API Gateway throttling and usage plans'
+    ],
+    deps: 'aws-microservices (ASYNC)', depBy: 'aws-microservices (SYNC)',
+    pathways: ['Cloud Native','Managed DBs','Analytics','AI'],
+    effort: 'Medium'
+  }
+};
+
+const categories = [
+  { name: 'Infrastructure & Platform', score: 2.20, status: '🟠' },
+  { name: 'Application Architecture', score: 1.65, status: '❌' },
+  { name: 'Data Foundations', score: 1.93, status: '🟠' },
+  { name: 'Identity, Security & Governance', score: 1.53, status: '❌' },
+  { name: 'Operations & Observability', score: 1.25, status: '❌' }
+];
+
+const catKeys = ['Infrastructure','Architecture','Data','Security','Operations'];
+
+// ==================== NAVIGATION ====================
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// ==================== SCORE ANIMATION ====================
+function animateValue(el, start, end, duration) {
+  const range = end - start;
+  const startTime = performance.now();
+  function update(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = (start + range * eased).toFixed(1);
+    if (progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+// ==================== COLOR HELPERS ====================
+function scoreColor(s) {
+  if (s < 1.5) return '#d63031';
+  if (s < 2.5) return '#e17055';
+  if (s < 3.5) return '#fdcb6e';
+  return '#00cec9';
+}
+function scoreColorAlpha(s, a) {
+  if (s < 1.5) return `rgba(214,48,49,${a})`;
+  if (s < 2.5) return `rgba(225,112,85,${a})`;
+  if (s < 3.5) return `rgba(253,203,110,${a})`;
+  return `rgba(0,206,201,${a})`;
+}
+
+// ==================== INIT CHARTS ====================
+Chart.defaults.color = '#9ca0b0';
+Chart.defaults.borderColor = '#2d3140';
+Chart.defaults.font.family = "'Inter', sans-serif";
+
+function initScoreRing() {
+  const ctx = document.getElementById('scoreRing').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [1.73, 4 - 1.73],
+        backgroundColor: ['#6c5ce7', 'rgba(45,49,64,.5)'],
+        borderWidth: 0, borderRadius: 8
+      }]
+    },
+    options: {
+      cutout: '78%', responsive: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      animation: { animateRotate: true, duration: 1500 }
+    }
+  });
+  animateValue(document.getElementById('heroScore'), 0, 1.73, 1500);
+}
+
+function initCatBars() {
+  const container = document.getElementById('catBars');
+  categories.forEach((c, i) => {
+    const pct = (c.score / 4) * 100;
+    const row = document.createElement('div');
+    row.className = 'cat-row';
+    row.innerHTML = `
+      <div class="cat-label">${c.name}</div>
+      <div class="cat-bar-wrap">
+        <div class="cat-bar-track"><div class="cat-bar-fill" style="width:0%;background:${scoreColor(c.score)}" id="catBar${i}"></div></div>
+        <div class="cat-score" style="color:${scoreColor(c.score)}">${c.score.toFixed(1)}</div>
+        <div class="cat-status">${c.status}</div>
+      </div>`;
+    container.appendChild(row);
+    setTimeout(() => document.getElementById('catBar' + i).style.width = pct + '%', 100 + i * 150);
+  });
+}
+
+function initTechChart() {
+  new Chart(document.getElementById('techChart'), {
+    type: 'polarArea',
+    data: {
+      labels: ['Lambda', 'DynamoDB', 'EC2', 'Docker/EKS', 'API Gateway', 'EventBridge', 'SQS', 'Cognito'],
+      datasets: [{
+        data: [2, 2, 1, 1, 2, 1, 1, 1],
+        backgroundColor: ['rgba(108,92,231,.6)','rgba(0,206,201,.6)','rgba(214,48,49,.6)','rgba(225,112,85,.6)','rgba(9,132,227,.6)','rgba(0,184,148,.6)','rgba(253,203,110,.6)','rgba(253,121,168,.6)'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } },
+      scales: { r: { ticks: { display: false }, grid: { color: '#2d3140' } } }
+    }
+  });
+}
+
+function initDeployChart() {
+  new Chart(document.getElementById('deployChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Full CI/CD', 'Manual Deploy'],
+      datasets: [{
+        data: [1, 3],
+        backgroundColor: ['rgba(0,206,201,.7)', 'rgba(214,48,49,.7)'],
+        borderWidth: 0, borderRadius: 6
+      }]
+    },
+    options: {
+      cutout: '55%', responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 12 } } },
+        datalabels: { color: '#e4e6f0', font: { weight: 700, size: 16 }, formatter: (v) => v }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
+
+// ==================== SERVICE CARDS ====================
+function initServiceCards() {
+  const container = document.getElementById('serviceCards');
+  Object.values(services).forEach(svc => {
+    const card = document.createElement('div');
+    card.className = `card svc-card ${svc.color}`;
+    card.onclick = () => openDetail(svc.name);
+    let bars = '';
+    catKeys.forEach(k => {
+      const v = svc.cats[k];
+      const pct = (v / 4) * 100;
+      bars += `<div class="svc-bar-row"><div class="svc-bar-label">${k}</div><div class="svc-bar-track"><div class="svc-bar-fill" style="width:${pct}%;background:${scoreColor(v)}"></div></div><span style="font-size:11px;color:${scoreColor(v)};width:32px;text-align:right">${v.toFixed(1)}</span></div>`;
+    });
+    card.innerHTML = `
+      <div class="svc-name">${svc.name}</div>
+      <div class="svc-desc">${svc.desc}</div>
+      <div class="svc-score" style="color:${scoreColor(svc.score)}">${svc.score.toFixed(1)}<span style="font-size:16px;color:var(--text2);font-weight:400"> / 4.0</span></div>
+      ${bars}
+      <span class="svc-priority ${svc.priority.toLowerCase()}">${svc.priority}</span>
+      <span style="margin-left:8px;font-size:12px;color:var(--text2)">${svc.phase} · ${svc.effort} effort</span>`;
+    container.appendChild(card);
+  });
+}
+
+// ==================== RADAR CHART ====================
+function initRadar() {
+  const colors = ['#d63031','#e17055','#fdcb6e','#00cec9'];
+  const svcArr = Object.values(services);
+  new Chart(document.getElementById('radarChart'), {
+    type: 'radar',
+    data: {
+      labels: catKeys,
+      datasets: svcArr.map((s, i) => ({
+        label: s.name, data: catKeys.map(k => s.cats[k]),
+        borderColor: colors[i], backgroundColor: colors[i] + '22',
+        borderWidth: 2, pointRadius: 4, pointBackgroundColor: colors[i]
+      }))
+    },
+    options: {
+      responsive: true,
+      scales: { r: { min: 0, max: 4, ticks: { stepSize: 1, color: '#9ca0b0', backdropColor: 'transparent' }, grid: { color: '#2d3140' }, pointLabels: { font: { size: 13, weight: 600 }, color: '#e4e6f0' } } },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 12 } } } }
+    }
+  });
+}
+
+// ==================== HEATMAP ====================
+function initHeatmap() {
+  const svcNames = Object.keys(services);
+  const data = [];
+  svcNames.forEach((sn, si) => {
+    catKeys.forEach((ck, ci) => {
+      data.push({ x: ck, y: sn, v: services[sn].cats[ck] });
+    });
+  });
+  new Chart(document.getElementById('heatmapChart'), {
+    type: 'bar',
+    data: {
+      labels: catKeys,
+      datasets: svcNames.map((sn, i) => ({
+        label: sn,
+        data: catKeys.map(k => services[sn].cats[k]),
+        backgroundColor: catKeys.map(k => scoreColorAlpha(services[sn].cats[k], .7)),
+        borderColor: catKeys.map(k => scoreColor(services[sn].cats[k])),
+        borderWidth: 1, borderRadius: 4
+      }))
+    },
+    options: {
+      responsive: true, indexAxis: 'x',
+      scales: { y: { min: 0, max: 4, ticks: { stepSize: 1 }, grid: { color: '#2d3140' } }, x: { grid: { display: false } } },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 11 } } } }
+    }
+  });
+}
+
+// ==================== PATHWAY MATRIX ====================
+function initPathwayMatrix() {
+  const pathways = ['Cloud Native','Containers','Managed DBs','Analytics','Modern DevOps','AI'];
+  const svcNames = Object.keys(services);
+  const pwColors = ['#6c5ce7','#0984e3','#00b894','#fdcb6e','#e17055','#fd79a8'];
+  new Chart(document.getElementById('pathwayMatrix'), {
+    type: 'bar',
+    data: {
+      labels: svcNames,
+      datasets: pathways.map((pw, i) => ({
+        label: pw,
+        data: svcNames.map(sn => services[sn].pathways.includes(pw) ? 1 : 0),
+        backgroundColor: pwColors[i] + 'aa', borderColor: pwColors[i], borderWidth: 1, borderRadius: 4
+      }))
+    },
+    options: {
+      responsive: true, indexAxis: 'y',
+      scales: { x: { stacked: true, display: false }, y: { stacked: true, grid: { display: false } } },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font: { size: 11 } } } }
+    }
+  });
+}
+
+// ==================== GANTT CHART ====================
+function initGantt() {
+  const phases = [
+    { label: 'Phase 0 — Foundation', start: 0, end: 1, color: '#d63031' },
+    { label: 'Phase 1 — Core Services', start: 1, end: 3, color: '#e17055' },
+    { label: 'Phase 2 — Dependent Services', start: 3, end: 6, color: '#fdcb6e' },
+    { label: 'Phase 3 — Agent Enablement', start: 6, end: 9, color: '#00cec9' }
+  ];
+  new Chart(document.getElementById('ganttChart'), {
+    type: 'bar',
+    data: {
+      labels: phases.map(p => p.label),
+      datasets: [
+        { label: 'Start Offset', data: phases.map(p => p.start), backgroundColor: 'transparent', borderWidth: 0 },
+        { label: 'Duration', data: phases.map(p => p.end - p.start), backgroundColor: phases.map(p => p.color + 'cc'), borderColor: phases.map(p => p.color), borderWidth: 1, borderRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true, indexAxis: 'y',
+      scales: {
+        x: { stacked: true, title: { display: true, text: 'Months', color: '#9ca0b0' }, min: 0, max: 9, ticks: { stepSize: 1 }, grid: { color: '#2d3140' } },
+        y: { stacked: true, grid: { display: false } }
+      },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ctx.datasetIndex === 1 ? `${ctx.raw} months` : '' } } }
+    }
+  });
+}
+
+// ==================== RISK CHARTS ====================
+function initRiskChart() {
+  new Chart(document.getElementById('riskChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Critical (4)', 'High (4)', 'Medium (2)'],
+      datasets: [{
+        data: [4, 4, 2],
+        backgroundColor: ['rgba(214,48,49,.7)', 'rgba(225,112,85,.7)', 'rgba(253,203,110,.7)'],
+        borderWidth: 0, borderRadius: 6
+      }]
+    },
+    options: {
+      cutout: '55%', responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 12 } } },
+        datalabels: { color: '#e4e6f0', font: { weight: 700, size: 16 }, formatter: (v) => v }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
+
+function initGapChart() {
+  const gaps = [
+    { name: 'No AI/Agent Framework', count: 4 },
+    { name: 'No API Documentation', count: 4 },
+    { name: 'No Vector DB / RAG', count: 4 },
+    { name: 'No API Versioning', count: 4 },
+    { name: 'No Rate Limiting', count: 4 },
+    { name: 'No CI/CD Pipeline', count: 3 },
+    { name: 'No Structured Logging', count: 3 },
+    { name: 'No SLOs Defined', count: 3 }
+  ];
+  new Chart(document.getElementById('gapChart'), {
+    type: 'bar',
+    data: {
+      labels: gaps.map(g => g.name),
+      datasets: [{
+        data: gaps.map(g => g.count),
+        backgroundColor: gaps.map(g => g.count === 4 ? 'rgba(214,48,49,.6)' : 'rgba(225,112,85,.6)'),
+        borderColor: gaps.map(g => g.count === 4 ? '#d63031' : '#e17055'),
+        borderWidth: 1, borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, indexAxis: 'y',
+      scales: { x: { min: 0, max: 4, ticks: { stepSize: 1 }, title: { display: true, text: 'Services Affected', color: '#9ca0b0' }, grid: { color: '#2d3140' } }, y: { grid: { display: false } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+// ==================== DETAIL PANEL ====================
+function openDetail(name) {
+  const svc = services[name];
+  if (!svc) return;
+  const panel = document.getElementById('detailPanel');
+  let catRows = '';
+  catKeys.forEach(k => {
+    const v = svc.cats[k];
+    const pct = (v / 4) * 100;
+    catRows += `<div class="cat-row"><div class="cat-label">${k}</div><div class="cat-bar-wrap"><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${pct}%;background:${scoreColor(v)}"></div></div><div class="cat-score" style="color:${scoreColor(v)}">${v.toFixed(1)}</div></div></div>`;
+  });
+  let prioList = svc.priorities.map((p, i) => `<li><strong>${i + 1}.</strong> ${p}</li>`).join('');
+  panel.innerHTML = `
+    <button class="detail-close" onclick="closeDetail()">✕</button>
+    <h2>${svc.name}</h2>
+    <div class="detail-desc">${svc.desc}</div>
+    <div class="detail-score-big" style="color:${scoreColor(svc.score)}">${svc.score.toFixed(1)} <span style="font-size:24px;color:var(--text2)">/ 4.0</span></div>
+    <div class="detail-cats">${catRows}</div>
+    <div style="margin:24px 0"><div class="card-title">Top Priorities</div><ol class="detail-priorities">${prioList}</ol></div>
+    <div class="detail-meta">
+      <div class="detail-meta-item"><div class="dm-label">Priority</div><div class="dm-value">${svc.priority}</div></div>
+      <div class="detail-meta-item"><div class="dm-label">Phase</div><div class="dm-value">${svc.phase}</div></div>
+      <div class="detail-meta-item"><div class="dm-label">Effort</div><div class="dm-value">${svc.effort}</div></div>
+      <div class="detail-meta-item"><div class="dm-label">Tech Stack</div><div class="dm-value">${svc.tech}</div></div>
+      <div class="detail-meta-item"><div class="dm-label">Depends On</div><div class="dm-value">${svc.deps}</div></div>
+      <div class="detail-meta-item"><div class="dm-label">Depended On By</div><div class="dm-value">${svc.depBy}</div></div>
+    </div>
+    <div style="margin-top:24px"><div class="card-title">Modernization Pathways</div><div class="tl-tags">${svc.pathways.map(p => `<span class="tl-tag">${p}</span>`).join('')}</div></div>`;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+
+// ==================== INIT ====================
+window.addEventListener('DOMContentLoaded', () => {
+  initScoreRing();
+  initCatBars();
+  initTechChart();
+  initDeployChart();
+  initServiceCards();
+  initRadar();
+  initHeatmap();
+  initPathwayMatrix();
+  initGantt();
+  initRiskChart();
+  initGapChart();
+});
+</script>
+</body>
+</html>
