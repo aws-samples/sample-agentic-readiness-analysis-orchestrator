@@ -1,93 +1,289 @@
-# agentic-readiness-assessment
+# Agentic Readiness Assessment
 
+Evaluate your service portfolio's readiness for agentic AI adoption. This project provides two AWS Transform (ATX) custom transformation definitions and a Kiro Power that orchestrates them across multiple repositories to produce individual and portfolio-level readiness reports.
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## What's in This Repo
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.aws.dev/antonaws/agentic-readiness-assessment.git
-git branch -M main
-git push -uf origin main
+.
+├── agentic-assessment-orchestrator/     # Kiro Power — orchestrates assessments
+│   ├── POWER.md                         # Power definition and documentation
+│   ├── portfolio-config.example.yaml    # Example portfolio configuration
+│   └── portfolio-config.schema.json     # JSON Schema for validation
+├── early-access-aws-agentic-assessment/ # ATX transformation: individual repo assessment
+│   └── transformation_definition.md     # 56 criteria across 5 categories
+├── portfolio-agentic-assessment/        # ATX transformation: portfolio aggregation
+│   └── transformation_definition.md     # Cross-service analysis and roadmap
+├── monolith/                            # Local PHP monolith for testing
+│   ├── index.php, Dockerfile, docker-compose.yml
+│   └── infrastructure/monolith-apprunner.yaml
+├── example-reports/                     # Example output from a full run
+│   ├── agentic-readiness-assessment/    # Individual + portfolio reports
+│   └── example-transform-custom-additional-context/  # Generated ATX configs
+├── test-portfolio-config.yaml           # Portfolio config used for the example run
+├── static/
+│   └── end-kiro-conversation-after-using-power.png
+└── sprint-plan.svg
 ```
 
-## Integrate with your tools
+## How It Works
 
-- [ ] [Set up project integrations](https://gitlab.aws.dev/antonaws/agentic-readiness-assessment/-/settings/integrations)
+There are two layers:
 
-## Collaborate with your team
+1. **ATX Custom Transformation Definitions** — the actual assessment logic published to your AWS Transform registry
+2. **Kiro Power** — an orchestrator that reads a `portfolio-config.yaml`, generates ATX config files with `additionalPlanContext`, spawns parallel subagents for individual assessments, then runs the portfolio aggregation
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### Assessment Flow
 
-## Test and Deploy
+```
+portfolio-config.yaml
+        │
+        ▼
+  Kiro Power parses config, clones repos if needed
+        │
+        ▼
+  ┌──────────┐ ┌──────────┐ ┌──────────┐
+  │ Subagent │ │ Subagent │ │ Subagent │  ← parallel individual assessments
+  │ repo-a   │ │ repo-b   │ │ repo-c   │     via atx custom def exec
+  └──────────┘ └──────────┘ └──────────┘
+        │           │           │
+        └───────────┼───────────┘
+                    ▼
+        Portfolio assessment (aggregation)
+                    │
+                    ▼
+        Consolidated reports in one folder
+```
 
-Use the built-in continuous integration in GitLab.
+Each individual assessment evaluates 56 criteria across 5 categories:
+- Infrastructure & Platform (10 criteria)
+- Application Architecture (13 criteria)
+- Data Foundations (11 criteria)
+- Identity, Security & Governance (10 criteria)
+- Operations & Observability (12 criteria)
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+The portfolio assessment then aggregates results, maps service dependencies, identifies cross-cutting concerns, and produces a phased modernization roadmap.
 
-***
+## Getting Started
 
-# Editing this README
+### Prerequisites
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+- [AWS Transform CLI](https://docs.aws.amazon.com/transform/) installed (`atx --version`)
+- [Kiro IDE](https://kiro.dev) with the Agentic Assessment Orchestrator power installed
 
-## Suggestions for a good README
+### Step 1: Publish the ATX Transformation Definitions
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+The two transformation definitions need to be published to your AWS Transform registry:
 
-## Name
-Choose a self-explaining name for your project.
+```bash
+# Publish the individual repository assessment
+atx custom def publish \
+  -n agentic-readiness-assessment \
+  --sd early-access-aws-agentic-assessment \
+  --description "Evaluate a code repository against 56 agentic readiness criteria"
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+# Publish the portfolio aggregation assessment
+atx custom def publish \
+  -n portfolio-agentic-readiness-assessment \
+  --sd portfolio-agentic-assessment \
+  --description "Aggregate individual assessments into portfolio-level analysis"
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Verify they're available:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```bash
+atx custom def list
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+You should see both under "User Transformations". The names you choose here must match what you put in `transformation_definitions` in your portfolio config.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### Step 2: Install the Kiro Power
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+The `agentic-assessment-orchestrator/` directory is a Kiro Power. To install it:
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+1. Open Kiro IDE
+2. Open the Powers panel (click the Powers icon in the sidebar or use the command palette)
+3. Click "Configure" to open the powers management panel
+4. Add the `agentic-assessment-orchestrator` power from this repository — point it to the `agentic-assessment-orchestrator/` directory
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Once installed, Kiro will have access to the orchestration logic defined in `POWER.md`, including how to parse your portfolio config, generate ATX configs, and coordinate parallel assessments.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### Step 3: Create Your Portfolio Configuration
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Create a `portfolio-config.yaml` at the root of your working directory. At minimum:
 
-## License
-For open source projects, say how it is licensed.
+```yaml
+portfolio_name: "my-platform"
+transformation_definitions:
+  individual_assessment: "agentic-readiness-assessment"
+  portfolio_assessment: "portfolio-agentic-readiness-assessment"
+repositories:
+  - name: "service-a"
+    path: "./services/service-a"
+    priority: "P0"
+  - name: "service-b"
+    path: "./services/service-b"
+    priority: "P1"
+```
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Repositories can be already cloned locally (just set `path`) or auto-cloned by Kiro (set `repository_url` and `path`).
+
+See `agentic-assessment-orchestrator/portfolio-config.example.yaml` for a full example with transformation preferences, dependency overrides, and exclusions.
+
+### Step 4: Run the Assessment via Kiro
+
+In Kiro chat, ask:
+
+```
+Run the agentic assessment orchestrator on portfolio-config.yaml
+```
+
+Kiro will:
+1. Parse the config and read `transformation_definitions` for the ATX names
+2. Clone repos where `repository_url` is provided and `path` doesn't exist
+3. Generate a temporary `.atx-config-<service>.yaml` per repo with `additionalPlanContext` (merging global + per-service preferences)
+4. Spawn parallel subagents running `atx custom def exec -n <individual_assessment> -p <repo> -g file://<config> -x -t`
+5. Wait for all to complete (5–15 min per repo)
+6. Generate `.atx-config-portfolio.yaml` with the full service inventory
+7. Run `atx custom def exec -n <portfolio_assessment> -p . -g file://<portfolio-config> -x -t`
+8. Consolidate all reports into `agentic-readiness-assessment/` at the root and clean up temp files
+
+![Kiro Power conversation end](static/end-kiro-conversation-after-using-power.png)
+
+### Step 5 (Alternative): Run Manually Without Kiro
+
+You can also run the ATX transformations directly:
+
+```bash
+# Individual assessment (repeat per repo)
+atx custom def exec -n agentic-readiness-assessment -p ./services/my-service -x -t
+
+# With additional context via config file
+atx custom def exec -n agentic-readiness-assessment -p ./services/my-service -g file://atx-config.yaml -x -t
+
+# Portfolio assessment (after all individual assessments complete)
+atx custom def exec -n portfolio-agentic-readiness-assessment -p . -g file://atx-portfolio-config.yaml -x -t
+```
+
+Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution.
+
+## Example Run
+
+This repo includes a complete example run using `test-portfolio-config.yaml` at the root. That config assesses 4 repositories:
+
+| Service | Type | Priority | Source |
+|---------|------|----------|--------|
+| unishop-monolith | Java/Spring monolith | P0 | [aws-samples/unishop-monolith-to-microservices](https://github.com/aws-samples/unishop-monolith-to-microservices) |
+| aws-microservices | Lambda/DDB/EventBridge | P0 | [awsrun/aws-microservices](https://github.com/awsrun/aws-microservices) |
+| local-monolith | PHP monolith | P0 | `./monolith` (included in this repo) |
+| books-api | Serverless SAM API | P1 | [aws-samples/aws-serverless-books-api-sample](https://github.com/aws-samples/aws-serverless-books-api-sample) |
+
+### Example Output
+
+The `example-reports/` directory contains the full output:
+
+- `example-reports/agentic-readiness-assessment/` — all individual reports + the portfolio report:
+  - `unishop-monolith-agentic-readiness-report.md`
+  - `aws-microservices-agentic-readiness-report.md`
+  - `monolith-agentic-readiness-report.md`
+  - `books-api-agentic-readiness-report.md`
+  - `ecommerce-platform-test-portfolio-agentic-readiness-report.md`
+
+- `example-reports/example-transform-custom-additional-context/` — the generated ATX config files that Kiro (or you) pass to each transformation via `-g file://`. These show exactly how `additionalPlanContext` is constructed from the portfolio config:
+
+```yaml
+# example: .atx-config-local-monolith.yaml
+additionalPlanContext: |
+  Service: local-monolith
+  Priority: P0
+  Description: Local PHP monolith application targeting EKS-based containerized deployment
+  Tags: monolith, php, containers, eks
+  
+  Transformation Preferences:
+  - Prefer technologies: eks, ecr, alb, rds
+  - Prefer patterns: container-orchestration, microservices
+  - Avoid technologies: lambda, serverless
+  - Modernization approach: aggressive
+```
+
+```yaml
+# example: .atx-config-portfolio.yaml
+additionalPlanContext: |
+  Portfolio: ecommerce-platform-test (4 services)
+
+  SERVICE SCORES:
+  1. unishop-monolith (P0): 1.4/4.0
+  2. aws-microservices (P0): 1.8/4.0
+  3. local-monolith (P0): 1.5/4.0
+  4. books-api (P1): 2.2/4.0
+
+  DEPENDENCIES:
+  aws-microservices→books-api: ASYNC (EventBridge)
+  books-api→aws-microservices: SYNC (REST)
+  ...
+```
+
+This makes it easy to see how the Kiro Power translates your `portfolio-config.yaml` into the parameters that drive each transformation.
+
+## Local Monolith (Test Fixture)
+
+The `monolith/` directory contains a simple PHP application used for testing. It includes:
+- `index.php` — single-file PHP app
+- `Dockerfile` and `docker-compose.yml` — container definitions
+- `infrastructure/monolith-apprunner.yaml` — AWS App Runner config
+- `agentic-readiness-assessment/monolith-agentic-readiness-report.md` — its generated assessment report
+
+This is included so you can run the full portfolio assessment out of the box with `test-portfolio-config.yaml` without needing to clone all external repos first (the other 3 repos get auto-cloned via `repository_url`).
+
+## Managing Transformation Definitions
+
+### Update Definitions
+
+If you modify the transformation definition markdown files, re-publish them:
+
+```bash
+# Delete old versions
+atx custom def delete -n agentic-readiness-assessment
+atx custom def delete -n portfolio-agentic-readiness-assessment
+
+# Publish updated versions
+atx custom def publish \
+  -n agentic-readiness-assessment \
+  --sd early-access-aws-agentic-assessment \
+  --description "Evaluate a code repository against 56 agentic readiness criteria"
+
+atx custom def publish \
+  -n portfolio-agentic-readiness-assessment \
+  --sd portfolio-agentic-assessment \
+  --description "Aggregate individual assessments into portfolio-level analysis"
+```
+
+### List Definitions
+
+```bash
+atx custom def list
+```
+
+### Get Definition Details
+
+```bash
+atx custom def get -n agentic-readiness-assessment
+```
+
+## Scoring Scale
+
+| Score | Label | Meaning |
+|-------|-------|---------|
+| 4 | ✅ Agent-Ready | Fully meets criterion |
+| 3 | 🟡 Partial | Minor gaps |
+| 2 | 🟠 Needs Work | Significant gaps |
+| 1 | ❌ Not Present | Missing or inadequate |
+
+## Related Resources
+
+- [AWS Transform Documentation](https://docs.aws.amazon.com/transform/)
+- [AWS Transform CLI Reference](https://docs.aws.amazon.com/transform/latest/userguide/custom-command-reference.html)
+- [AWS Modernization Pathways](https://skillbuilder.aws/learning-plan)
+- [Cloud Design Patterns](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/)
+- [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)

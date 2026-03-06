@@ -1,0 +1,448 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Deploy PHP Monolith E-commerce Application to AWS App Runner'
+
+Parameters:
+  ServiceName:
+    Type: String
+    Default: ecommerce-monolith
+    Description: Name for the App Runner service
+  
+  ImageUri:
+    Type: String
+    Description: ECR image URI (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com/ecommerce-monolith:latest)
+    Default: ''
+  
+  AllowedIPAddress:
+    Type: String
+    Description: Your IP address in CIDR notation (e.g., 203.0.113.0/32 for single IP)
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    ConstraintDescription: Must be a valid IP CIDR range (e.g., 1.2.3.4/32)
+  
+  Cpu:
+    Type: String
+    Default: '1 vCPU'
+    AllowedValues:
+      - '0.25 vCPU'
+      - '0.5 vCPU'
+      - '1 vCPU'
+      - '2 vCPU'
+      - '4 vCPU'
+    Description: CPU allocation for the service
+  
+  Memory:
+    Type: String
+    Default: '2 GB'
+    AllowedValues:
+      - '0.5 GB'
+      - '1 GB'
+      - '2 GB'
+      - '3 GB'
+      - '4 GB'
+      - '6 GB'
+      - '8 GB'
+      - '10 GB'
+      - '12 GB'
+    Description: Memory allocation for the service
+  
+  Port:
+    Type: Number
+    Default: 80
+    Description: Port the application listens on
+  
+  HealthCheckPath:
+    Type: String
+    Default: '/'
+    Description: Health check path
+  
+  AutoScalingMinSize:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: Minimum number of instances
+  
+  AutoScalingMaxSize:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    Description: Maximum number of instances
+  
+  DBUsername:
+    Type: String
+    Default: ecommerce_user
+    Description: Database master username
+    NoEcho: true
+  
+  DBPassword:
+    Type: String
+    Default: ChangeMe123!
+    Description: Database master password (min 8 characters)
+    NoEcho: true
+    MinLength: 8
+
+Conditions:
+  HasImageUri: !Not [!Equals [!Ref ImageUri, '']]
+
+Resources:
+  # VPC for RDS and App Runner
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-vpc'
+  
+  # Private Subnets for RDS
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-private-subnet-1'
+  
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-private-subnet-2'
+  
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-db-subnet-group'
+  
+  # Security Group for RDS
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS MySQL
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref AppRunnerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-db-sg'
+  
+  # Security Group for App Runner
+  AppRunnerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for App Runner
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-apprunner-sg'
+  
+  # RDS MySQL Instance
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${ServiceName}-db'
+      Engine: mysql
+      EngineVersion: '8.4.8'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: ecommerce
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      AutoMinorVersionUpgrade: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-db'
+  
+  # VPC Connector for App Runner
+  VPCConnector:
+    Type: AWS::AppRunner::VpcConnector
+    Properties:
+      VpcConnectorName: !Sub '${ServiceName}-vpc-connector'
+      Subnets:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroups:
+        - !Ref AppRunnerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-vpc-connector'
+
+  # ECR Repository for storing Docker images
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ServiceName
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Name
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: Production
+
+  # IAM Role for App Runner to access ECR
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ServiceName}-instance-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-instance-role'
+
+  # IAM Role for App Runner to pull from ECR
+  AppRunnerAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ServiceName}-access-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-access-role'
+
+  # App Runner Service
+  AppRunnerService:
+    Type: AWS::AppRunner::Service
+    Condition: HasImageUri
+    Properties:
+      ServiceName: !Ref ServiceName
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerAccessRole.Arn
+        ImageRepository:
+          ImageIdentifier: !Ref ImageUri
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: !Ref Port
+            RuntimeEnvironmentVariables:
+              - Name: APP_ENV
+                Value: production
+              - Name: DB_HOST
+                Value: !GetAtt DBInstance.Endpoint.Address
+              - Name: DB_NAME
+                Value: ecommerce
+              - Name: DB_USER
+                Value: !Ref DBUsername
+              - Name: DB_PASS
+                Value: !Ref DBPassword
+      InstanceConfiguration:
+        Cpu: !Ref Cpu
+        Memory: !Ref Memory
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      NetworkConfiguration:
+        EgressConfiguration:
+          EgressType: VPC
+          VpcConnectorArn: !GetAtt VPCConnector.VpcConnectorArn
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: !Ref HealthCheckPath
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+      AutoScalingConfigurationArn: !GetAtt AutoScalingConfiguration.AutoScalingConfigurationArn
+      Tags:
+        - Key: Name
+          Value: !Ref ServiceName
+        - Key: Environment
+          Value: Production
+
+  # Auto Scaling Configuration
+  AutoScalingConfiguration:
+    Type: AWS::AppRunner::AutoScalingConfiguration
+    Properties:
+      AutoScalingConfigurationName: !Sub '${ServiceName}-autoscaling'
+      MinSize: !Ref AutoScalingMinSize
+      MaxSize: !Ref AutoScalingMaxSize
+      MaxConcurrency: 100
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-autoscaling'
+
+  # WAF Web ACL for IP Whitelisting
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${ServiceName}-ip-whitelist'
+      Scope: REGIONAL
+      DefaultAction:
+        Block: {}
+      Rules:
+        - Name: AllowSpecificIP
+          Priority: 1
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt IPSet.Arn
+          Action:
+            Allow: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AllowedIPRule
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ServiceName}-waf'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-waf'
+
+  # IP Set for Allowed IPs
+  IPSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: !Sub '${ServiceName}-allowed-ips'
+      Scope: REGIONAL
+      IPAddressVersion: IPV4
+      Addresses:
+        - !Ref AllowedIPAddress
+      Tags:
+        - Key: Name
+          Value: !Sub '${ServiceName}-allowed-ips'
+
+  # Associate WAF with App Runner Service
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Condition: HasImageUri
+    Properties:
+      ResourceArn: !GetAtt AppRunnerService.ServiceArn
+      WebACLArn: !GetAtt WebACL.Arn
+
+Outputs:
+  ECRRepositoryUri:
+    Description: ECR Repository URI
+    Value: !GetAtt ECRRepository.RepositoryUri
+    Export:
+      Name: !Sub '${AWS::StackName}-ECRRepositoryUri'
+  
+  ECRRepositoryName:
+    Description: ECR Repository Name
+    Value: !Ref ECRRepository
+    Export:
+      Name: !Sub '${AWS::StackName}-ECRRepositoryName'
+  
+  AppRunnerServiceUrl:
+    Condition: HasImageUri
+    Description: App Runner Service URL
+    Value: !GetAtt AppRunnerService.ServiceUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceUrl'
+  
+  AppRunnerServiceArn:
+    Condition: HasImageUri
+    Description: App Runner Service ARN
+    Value: !GetAtt AppRunnerService.ServiceArn
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceArn'
+  
+  AppRunnerServiceId:
+    Condition: HasImageUri
+    Description: App Runner Service ID
+    Value: !GetAtt AppRunnerService.ServiceId
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceId'
+  
+  WebACLArn:
+    Description: WAF Web ACL ARN
+    Value: !GetAtt WebACL.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WebACLArn'
+  
+  AllowedIP:
+    Description: IP address allowed to access the application
+    Value: !Ref AllowedIPAddress
+  
+  DBEndpoint:
+    Description: RDS MySQL endpoint
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-DBEndpoint'
+  
+  DBPort:
+    Description: RDS MySQL port
+    Value: !GetAtt DBInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-DBPort'
+  
+  DeploymentInstructions:
+    Description: Instructions to deploy the application
+    Value: !Sub |
+      1. Build and tag your Docker image:
+         docker build -t ${ServiceName} .
+      
+      2. Authenticate Docker to ECR:
+         aws ecr get-login-password --region ${AWS::Region} | docker login --username AWS --password-stdin ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
+      
+      3. Tag your image:
+         docker tag ${ServiceName}:latest ${ECRRepository.RepositoryUri}:latest
+      
+      4. Push to ECR:
+         docker push ${ECRRepository.RepositoryUri}:latest
+      
+      5. Update the stack with ImageUri parameter:
+         aws cloudformation update-stack --stack-name ${AWS::StackName} --use-previous-template --parameters ParameterKey=ImageUri,ParameterValue=${ECRRepository.RepositoryUri}:latest --capabilities CAPABILITY_NAMED_IAM
+      
+      6. Access your application at the App Runner Service URL (see output above)

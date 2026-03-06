@@ -7,7 +7,7 @@ transformation_definitions:
 
 # Global transformation preferences for the entire portfolio
 global_transformation_preferences:
-  prefer_technologies: ["lambda", "dynamodb", "api-gateway", "eventbridge", "sqs"]
+  prefer_technologies: ["lambda", "dynamodb", "api-gateway", "eventbridge", "sqs", "eks"]
   modernization_approach: "moderate"
   budget_constraints: "moderate"
   timeline_constraints: "normal"
@@ -38,33 +38,23 @@ repositories:
       prefer_patterns: ["event-driven", "saga", "async-messaging"]
       modernization_approach: "moderate"
   
-  # Microservice 4 - Payment Service (conservative approach)
-  - name: "payment-service"
-    # No repository_url - will need to be created or cloned manually
-    path: "./services/payment-service"
+  # Local Monolith - PHP application for containerized modernization
+  - name: "local-monolith"
+    path: "./monolith"
     priority: "P0"
-    description: "Payment processing and transaction management"
+    description: "Local PHP monolith application targeting EKS-based containerized deployment"
+    tags: ["monolith", "php", "containers", "eks"]
     transformation_preferences:
-      modernization_approach: "conservative"
-      prefer_technologies: ["lambda", "rds"]
-      database_constraints:
-        avoid_migration: true
-        keep_current_database: true
-      avoid_patterns: ["event-sourcing"]
-      # Payment service needs strict consistency
-      prefer_patterns: ["synchronous-api", "acid-transactions"]
-  
-  # Microservice 5 - Notification Service
-  - name: "notification-service"
-    # No repository_url - local placeholder service
-    path: "./services/notification-service"
-    priority: "P2"
-    description: "Email and SMS notifications"
-    transformation_preferences:
-      prefer_technologies: ["lambda", "sns", "sqs", "ses"]
-      prefer_patterns: ["event-driven", "pub-sub"]
+      prefer_technologies: ["eks", "ecr", "alb", "rds"]
+      prefer_patterns: ["container-orchestration", "microservices"]
+      avoid_technologies: ["lambda", "serverless"]
       modernization_approach: "aggressive"
-  
+      avoid_microservices_decomposition: false
+      deployment_constraints:
+        avoid_containers: false
+        avoid_orchestration: false
+        prefer_vm_based: false
+
   # Microservice 6 - Books API (CDK-based serverless API)
   - name: "books-api"
     repository_url: "https://github.com/aws-samples/aws-serverless-books-api-sample.git"
@@ -79,25 +69,35 @@ repositories:
 
 # Optional: Manual dependency declarations (if not detected automatically)
 dependency_overrides:
-  - source: "aws-microservices"
-    target: "payment-service"
-    type: "synchronous"
-    description: "Ordering microservice calls payment service for transaction processing"
-  
-  - source: "aws-microservices"
-    target: "notification-service"
-    type: "asynchronous"
-    description: "Microservices trigger notifications via events"
-  
   - source: "unishop-monolith"
     target: "aws-microservices"
     type: "none"
-    description: "Monolith will be decomposed, no runtime dependency"
-  
-  - source: "books-api"
-    target: "notification-service"
+    description: "Monolith will be decomposed into microservices, no runtime dependency - migration target"
+
+  - source: "unishop-monolith"
+    target: "local-monolith"
+    type: "none"
+    description: "Both monoliths are independent legacy apps targeted for modernization, no runtime dependency"
+
+  - source: "aws-microservices"
+    target: "books-api"
     type: "asynchronous"
-    description: "Books API sends notifications for new book additions"
+    description: "Microservices ordering flow triggers book catalog updates via EventBridge events"
+
+  - source: "books-api"
+    target: "aws-microservices"
+    type: "synchronous"
+    description: "Books API queries product microservice for catalog data via REST"
+
+  - source: "local-monolith"
+    target: "aws-microservices"
+    type: "none"
+    description: "Local PHP monolith is independent, targeted for containerized modernization on EKS"
+
+  - source: "local-monolith"
+    target: "books-api"
+    type: "none"
+    description: "No runtime dependency, both are separate modernization tracks"
 
 # Optional: Exclusions
 exclusions:
@@ -107,3 +107,4 @@ exclusions:
     - "*/.git/*"
     - "*/build/*"
     - "*/dist/*"
+    
