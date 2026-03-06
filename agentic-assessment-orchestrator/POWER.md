@@ -6,8 +6,6 @@ keywords: ["agentic", "assessment", "portfolio", "modernization", "aws", "readin
 author: "AWS"
 ---
 
-<!-- Missing pass config from YAML to actual ATX cli -->
-
 # Agentic Assessment Orchestrator
 
 ## Overview
@@ -22,18 +20,23 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 **How Kiro Orchestrates:**
 - Parses `portfolio-config.yaml` to discover all repositories, their configuration, and the transformation definition names
 - Clones repositories automatically when `repository_url` is provided and the local `path` doesn't exist
-- Spawns parallel subagents — one per repository — to run `atx custom def exec -n <individual_assessment> -x -t` concurrently
+- For each repository, Kiro generates a temporary ATX configuration file containing the service's `additionalPlanContext` — merging global and per-service transformation preferences, priority, tags, and any custom constraints from the portfolio config
+- Spawns parallel subagents — one per repository — to run `atx custom def exec -n <individual_assessment> -g file://<generated-config> -x -t` concurrently
 - Waits for all individual assessments to complete
-- Runs `atx custom def exec -n <portfolio_assessment> -x -t` with the portfolio config to generate the aggregated report
+- Generates a portfolio-level ATX configuration file with `additionalPlanContext` containing the full service inventory, dependency overrides, global preferences, and exclusions
+- Runs `atx custom def exec -n <portfolio_assessment> -g file://<generated-portfolio-config> -x -t` to generate the aggregated report
+- Consolidates all reports into a single `agentic-readiness-assessment/` folder at the portfolio root — copies individual reports from each repo, alongside the portfolio report — and cleans up temporary `.atx-config-*.yaml` files
 
 > All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) flags since assessments run at scale without human intervention.
 
 > **⏱ Long-Running Commands — Timeout Handling:** `atx custom def exec` commands are long-running operations that typically take **5–15 minutes per repository** depending on codebase size. These commands **will likely exceed default shell timeouts**. Subagents MUST NOT hang waiting for output or assume the command failed just because it took a long time. Instead, subagents should:
 > 1. Launch the `atx` command with an appropriate timeout (or no timeout)
-> 2. If the command times out or appears to hang, **do not retry immediately** — check whether the assessment report file was generated at the expected output path
-> 3. Validate success by checking for the existence of the output report file: `{repo}/agentic-readiness-assessment/{project-name}-agentic-readiness-report.md`
-> 4. If the report exists, treat the assessment as successful regardless of the command's exit behavior
-> 5. Only report failure if the report file is missing AND the command returned a clear error
+> 2. **Do NOT poll, retry, or re-check repeatedly.** After launching the command, wait patiently. Do not check status in a loop or re-run the command. A single check after a reasonable wait (10–15 minutes) is sufficient.
+> 3. If the command times out or appears to hang, check **once** whether the assessment report file was generated at the expected output path
+> 4. Validate success by checking for the existence of the output report file: `{repo}/agentic-readiness-assessment/{project-name}-agentic-readiness-report.md`
+> 5. If the report exists, treat the assessment as successful regardless of the command's exit behavior
+> 6. Only report failure if the report file is missing AND the command returned a clear error
+> 7. **Never retry a transformation that is still running.** Running duplicate `atx` processes against the same repo wastes resources and can cause conflicts.
 
 **What You Get:**
 - Dependency-aware modernization roadmaps that respect service relationships
@@ -113,21 +116,54 @@ See `portfolio-config.example.yaml` for complete examples with transformation pr
 Kiro will:
 1. Parse `portfolio-config.yaml` and read `transformation_definitions` for the assessment names
 2. Clone any repositories where `repository_url` is provided and `path` doesn't exist yet
-3. Spawn parallel subagents — one per repository — each running `atx custom def exec -n <individual_assessment> -p <repo-path> -x -t`
-4. Wait for all subagents to complete
-5. Run `atx custom def exec -n <portfolio_assessment> -p . -g portfolio-config.yaml -x -t` to generate the aggregated portfolio report
+3. For each repository, generate a temporary ATX config file (e.g., `.atx-config-<service-name>.yaml`) with `additionalPlanContext` containing the service's transformation preferences, priority, tags, and constraints merged from global and per-service settings
+4. Spawn parallel subagents — one per repository — each running `atx custom def exec -n <individual_assessment> -p <repo-path> -g file://.atx-config-<service-name>.yaml -x -t`
+5. Wait for all subagents to complete
+6. Generate a portfolio-level ATX config file (e.g., `.atx-config-portfolio.yaml`) with `additionalPlanContext` containing the full service inventory, dependency overrides, global preferences, and exclusions
+7. Run `atx custom def exec -n <portfolio_assessment> -p . -g file://.atx-config-portfolio.yaml -x -t` to generate the aggregated portfolio report
+8. Consolidate all reports — copy individual assessment reports from each repo's `agentic-readiness-assessment/` directory into a single `agentic-readiness-assessment/` folder at the portfolio root, alongside the portfolio report. Clean up temporary `.atx-config-*.yaml` files.
 
 ### 3. Or Run Manually Step by Step
 
 **Individual assessments (repeat for each repo):**
 ```bash
 cd ./services/my-service
-atx custom def exec -n <your-individual-assessment-name> -p . -x -t
+atx custom def exec -n <your-individual-assessment-name> -p . -g file://atx-config.yaml -x -t
+```
+
+Where `atx-config.yaml` contains:
+```yaml
+additionalPlanContext: |
+  Service: my-service
+  Priority: P0
+  Transformation Preferences:
+  - Avoid technologies: kubernetes
+  - Prefer technologies: ecs, fargate
+  - Modernization approach: conservative
 ```
 
 **Portfolio assessment (after all individual assessments):**
 ```bash
-atx custom def exec -n <your-portfolio-assessment-name> -p . -g portfolio-config.yaml -x -t
+atx custom def exec -n <your-portfolio-assessment-name> -p . -g file://atx-portfolio-config.yaml -x -t
+```
+
+Where `atx-portfolio-config.yaml` contains:
+```yaml
+additionalPlanContext: |
+  Portfolio: my-platform
+  Services assessed: 2
+  
+  Service inventory:
+  - service-a (P0, ./services/service-a)
+  - service-b (P1, ./services/service-b)
+  
+  Dependency overrides:
+  - service-a -> service-b (sync): REST API calls
+  
+  Global transformation preferences:
+  - Avoid technologies: kubernetes
+  - Prefer technologies: ecs, fargate
+  - Modernization approach: moderate
 ```
 
 > Always use `-x` (non-interactive) and `-t` (trust all tools) when running at scale. Note: these commands are long-running (5–15 min each). If a command times out, check for the output report file before assuming failure.
@@ -276,17 +312,37 @@ transformation_preferences:
 atx custom def exec \
   -n <transformation-name> \
   -p <code-repository-path> \
-  -g <configuration-file> \
+  -g file://<configuration-file> \
+  -x \
   -t
 ```
 
 **Key Options:**
 - `-n, --transformation-name` - Name of the transformation definition
 - `-p, --code-repository-path` - Path to repository (use `.` for current directory)
-- `-g, --configuration` - Path to config file (JSON or YAML) or key=value pairs
+- `-g, --configuration` - Path to config file (with `file://` prefix) or inline `key=value` pairs. Supports `additionalPlanContext` to pass extra context to the transformation agent
 - `-t, --trust-all-tools` - Trust all tools (no prompts)
 - `-x, --non-interactive` - Run without user assistance (mandatory for parallel/batch execution)
 - `--tv, --transformation-version` - Specific version to use
+
+**Configuration File Format:**
+
+The `-g` flag accepts an ATX execution configuration file (YAML or JSON), not arbitrary data. To pass portfolio or service context to the transformation, use the `additionalPlanContext` field:
+
+```yaml
+# atx-config.yaml
+additionalPlanContext: |
+  Service: checkout-service
+  Priority: P0
+  Transformation Preferences:
+  - Avoid technologies: kubernetes, k8s, helm
+  - Prefer technologies: ecs, fargate
+  - Modernization approach: conservative
+```
+
+```bash
+atx custom def exec -n my-assessment -p ./services/checkout -g file://atx-config.yaml -x -t
+```
 
 ### List Available Transformations
 
@@ -336,26 +392,45 @@ portfolio-config.yaml
 └─────────┬───────────┘
           │
           ▼
+┌─────────────────────┐
+│  3. Generate ATX     │  For each repo, create .atx-config-<name>.yaml
+│     config files     │  with additionalPlanContext from portfolio YAML
+└─────────┬───────────┘
+          │
+          ▼
 ┌─────────────────────────────────────────────┐
-│  3. Run individual assessments IN PARALLEL   │
+│  4. Run individual assessments IN PARALLEL   │
 │                                              │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐     │
 │  │ Subagent │ │ Subagent │ │ Subagent │ ... │
 │  │ repo-a   │ │ repo-b   │ │ repo-c   │     │
-│  │ atx -x -t│ │ atx -x -t│ │ atx -x -t│     │
+│  │atx -g -xt│ │atx -g -xt│ │atx -g -xt│     │
 │  └──────────┘ └──────────┘ └──────────┘     │
 └─────────────────────┬───────────────────────┘
                       │  (wait for all to complete)
                       ▼
 ┌─────────────────────┐
-│  4. Run portfolio    │  atx custom def exec
-│     assessment       │  -n <portfolio_assessment>
-│                      │  -p . -g portfolio-config.yaml -x -t
+│  5. Generate         │  Create .atx-config-portfolio.yaml with
+│     portfolio config │  full service inventory & dependencies
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│  5. Review reports   │  Individual + portfolio reports
+│  6. Run portfolio    │  atx custom def exec
+│     assessment       │  -n <portfolio_assessment>
+│                      │  -p . -g file://.atx-config-portfolio.yaml -x -t
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  7. Consolidate      │  Copy all reports into single
+│     reports          │  agentic-readiness-assessment/ folder
+│                      │  at portfolio root. Clean up temp files.
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  8. Review reports   │  All reports in one place
 └─────────────────────┘
 ```
 
@@ -377,16 +452,42 @@ git clone https://github.com/org/service-a.git ./services/service-a
 
 ### Step 1: Run Individual Assessments (Parallel)
 
-Kiro spawns one subagent per repository from `portfolio-config.yaml`. Each subagent runs the individual assessment transformation concurrently:
+Kiro spawns one subagent per repository from `portfolio-config.yaml`. For each repository, Kiro first generates a temporary ATX configuration file that passes the service's context via `additionalPlanContext`. This merges global transformation preferences with any per-service overrides.
+
+**Generated ATX config example** (`.atx-config-checkout-service.yaml`):
+```yaml
+additionalPlanContext: |
+  Service: checkout-service
+  Priority: P0
+  Business Criticality: critical
+  Tags: backend, payment, critical-path
+  Owner Team: Checkout Team
+  
+  Transformation Preferences:
+  - Avoid technologies: kubernetes, k8s, helm
+  - Deployment constraints: avoid orchestration, prefer VM-based
+  - Compliance requirements: PCI-DSS, SOC2
+  - Timeline constraints: urgent
+  - Custom constraints: Must complete migration within 6 months
+```
+
+Each subagent then runs the individual assessment transformation concurrently:
 
 ```bash
 # Each subagent runs independently, using the name from transformation_definitions.individual_assessment:
-atx custom def exec -n <individual_assessment> -p <repo-path> -x -t
+atx custom def exec -n <individual_assessment> -p <repo-path> -g file://.atx-config-<service-name>.yaml -x -t
 ```
+
+**How Kiro generates the `additionalPlanContext`:**
+1. Start with `global_transformation_preferences` from the portfolio config
+2. Overlay the service's `transformation_preferences` (service-level overrides global)
+3. Include service metadata: `name`, `priority`, `tags`, `owner_team`, `business_criticality`
+4. Include any `custom_constraints` verbatim
+5. Format as human-readable text for the transformation agent
 
 The `-x` (non-interactive) flag is mandatory — subagents run without human intervention. Kiro waits for all subagents to complete before proceeding.
 
-> **Timeout Note:** Each `atx custom def exec` invocation is a long-running process (typically 5–15 minutes). Subagents MUST use a generous timeout or no timeout when executing these commands. If the command appears to time out, the subagent should check whether the expected report file was written to `{repo}/agentic-readiness-assessment/` before reporting failure. The presence of the report file is the definitive success indicator, not the command's exit code or timing.
+> **Timeout Note:** Each `atx custom def exec` invocation is a long-running process (typically 5–15 minutes). Subagents MUST NOT poll, retry, or re-check repeatedly. After launching the command, wait patiently — do NOT check status in a loop or re-run the command. A single check after 10–15 minutes is sufficient. If the command appears to time out, check **once** whether the expected report file was written to `{repo}/agentic-readiness-assessment/` before reporting failure. The presence of the report file is the definitive success indicator, not the command's exit code or timing. Never retry a transformation that is still running.
 
 Each assessment generates:
 ```
@@ -395,10 +496,45 @@ Each assessment generates:
 
 ### Step 2: Run Portfolio Assessment
 
-After all subagents complete their individual assessments, Kiro runs the portfolio transformation using the name from `transformation_definitions.portfolio_assessment`:
+After all subagents complete their individual assessments, Kiro generates a portfolio-level ATX configuration file and runs the portfolio transformation using the name from `transformation_definitions.portfolio_assessment`.
+
+**Generated ATX config example** (`.atx-config-portfolio.yaml`):
+```yaml
+additionalPlanContext: |
+  Portfolio: ecommerce-platform
+  Description: Core e-commerce platform services
+  Services Assessed: 8
+  
+  Service Inventory:
+  - storefront-web (P0, critical, ./services/storefront-web) — Tags: frontend, customer-facing
+  - checkout-service (P0, critical, ./services/checkout-service) — Tags: backend, payment
+  - inventory-service (P1, high, ./services/inventory-service) — Tags: backend, data
+  - notification-service (P2, medium, ./services/notification-service) — Tags: backend, messaging
+  
+  Dependency Overrides:
+  - storefront-web -> product-catalog (sync): Storefront calls Product Catalog REST API for product listings
+  - storefront-web -> user-service (sync): Storefront authenticates users via User Service
+  - checkout-service -> inventory-service (sync): Checkout validates inventory availability before order placement
+  - order-fulfillment -> notification-service (async): Fulfillment publishes order status events to notification queue
+  
+  Global Transformation Preferences:
+  - Avoid technologies: kubernetes, k8s, helm
+  - Prefer technologies: ecs, fargate, lambda
+  - Modernization approach: moderate
+  - Avoid patterns: event-sourcing, cqrs
+  - Prefer patterns: rest-api, openapi
+  - Deployment constraints: avoid orchestration
+  - Compliance requirements: SOC2
+  - Budget constraints: moderate
+  - Timeline constraints: normal
+  
+  Exclusions:
+  - Services: legacy-monolith, test-harness
+  - Path patterns: **/archived/**, **/test/**, **/deprecated/**
+```
 
 ```bash
-atx custom def exec -n <portfolio_assessment> -p . -g portfolio-config.yaml -x -t
+atx custom def exec -n <portfolio_assessment> -p . -g file://.atx-config-portfolio.yaml -x -t
 ```
 
 This generates:
@@ -406,7 +542,26 @@ This generates:
 agentic-readiness-assessment/{portfolio-name}-portfolio-agentic-readiness-report.md
 ```
 
-### Step 3: Review Portfolio Report
+### Step 3: Consolidate Reports
+
+After the portfolio assessment completes, Kiro consolidates all reports into a single directory at the portfolio root for easy access and review.
+
+**What Kiro does:**
+1. Creates `agentic-readiness-assessment/` at the portfolio root (if it doesn't already exist from the portfolio assessment)
+2. Copies each individual assessment report from `{repo}/agentic-readiness-assessment/{project-name}-agentic-readiness-report.md` into the root `agentic-readiness-assessment/` folder
+3. The portfolio report is already at `agentic-readiness-assessment/{portfolio-name}-portfolio-agentic-readiness-report.md`
+4. Cleans up temporary `.atx-config-*.yaml` files generated during the assessment
+
+**Resulting structure:**
+```
+agentic-readiness-assessment/
+├── service-a-agentic-readiness-report.md
+├── service-b-agentic-readiness-report.md
+├── service-c-agentic-readiness-report.md
+└── my-platform-portfolio-agentic-readiness-report.md
+```
+
+### Step 4: Review Portfolio Report
 
 The portfolio report provides:
 - **Executive Dashboard** - Portfolio-wide readiness scores and trends
@@ -447,23 +602,15 @@ The portfolio report provides:
 
 ## Output Structure
 
-### Individual Assessment Report
+After consolidation, all reports are collected into a single folder at the portfolio root:
 
-```
-{repo}/agentic-readiness-assessment/
-└── {project-name}-agentic-readiness-report.md
-    ├── Executive Summary
-    ├── Top 5 Priorities
-    ├── 3-Phase Roadmap
-    ├── Learning Materials
-    ├── Detailed Findings (56 criteria)
-    └── Evidence Index
-```
-
-### Portfolio Assessment Report
+### Consolidated Output (Portfolio Root)
 
 ```
 agentic-readiness-assessment/
+├── {service-a}-agentic-readiness-report.md      ← copied from services/service-a/
+├── {service-b}-agentic-readiness-report.md      ← copied from services/service-b/
+├── {service-c}-agentic-readiness-report.md      ← copied from services/service-c/
 └── {portfolio-name}-portfolio-agentic-readiness-report.md
     ├── Executive Dashboard
     ├── Portfolio Readiness Overview
@@ -474,6 +621,19 @@ agentic-readiness-assessment/
     ├── Resource Allocation
     ├── Risk Analysis
     └── Service-by-Service Summary
+```
+
+### Individual Assessment Report (per repo, before consolidation)
+
+```
+{repo}/agentic-readiness-assessment/
+└── {project-name}-agentic-readiness-report.md
+    ├── Executive Summary
+    ├── Top 5 Priorities
+    ├── 3-Phase Roadmap
+    ├── Learning Materials
+    ├── Detailed Findings (56 criteria)
+    └── Evidence Index
 ```
 
 ## Example Usage
