@@ -22,6 +22,86 @@ Each criterion is scored on a 1–4 scale. The output is a detailed Markdown rep
 
 ## Implementation Steps
 
+### Step 0: Read Goal & Classify Repo
+
+Before beginning the discovery scan, read the assessment context from `additionalPlanContext` to determine the goal, preferences, and repo classification that will shape the entire assessment.
+
+#### 0.1 Read Assessment Context
+
+Extract the following fields from `additionalPlanContext`:
+
+- **`goal`** — The customer's modernization objective. Must be one of the 4 predefined values below.
+- **`goal_context`** — Optional free-text field providing additional context for scoping recommendations (e.g., "Building a customer support agent for order and inventory data").
+- **`repo_type`** — Optional user-provided repo classification override. If present, use it directly instead of auto-detecting.
+- **`context`** — Optional free-text description of the repository (e.g., "Legacy PHP e-commerce app running on EC2 with MySQL").
+- **`preferences`** — Optional object with `prefer` and `avoid` string arrays that guide recommendations:
+  - `prefer`: technologies/patterns to favor (e.g., `["eks", "aurora", "bedrock"]`)
+  - `avoid`: technologies/patterns to avoid (e.g., `["serverless", "microservices-decomposition"]`)
+
+#### 0.2 Validate and Default the Goal
+
+Apply these rules to determine the effective goal:
+
+1. If `goal` is present and is one of the 4 predefined values → use it as-is.
+2. If `goal` is absent → default to `general-readiness`.
+3. If `goal` is present but not one of the 4 predefined values → default to `general-readiness` and log a warning: **"Unrecognized goal '{value}', defaulting to general-readiness"**.
+
+The `goal_context` field is always passed through regardless of goal validation — it provides additional framing even when the goal defaults.
+
+#### 0.3 Goal Definition Reference Card
+
+Use this reference throughout the assessment to determine phase names, priority criteria, pathway alignment, and conditional report sections.
+
+```
+GOAL DEFINITIONS:
+
+agentic-ai-enablement:
+  description: "Enable agentic AI workflows — autonomous agents discovering, invoking, orchestrating app capabilities"
+  primary_pathways: [Move to AI, Move to Managed Databases, Move to Modern DevOps]
+  phases: [Agent Quick Wins, Agent Foundations, Agent Scale & Optimization]
+  priority_criteria: [APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6]
+
+cloud-native-modernization:
+  description: "Decompose and modernize into cloud-native architectures"
+  primary_pathways: [Move to Cloud Native, Move to Containers, Move to Modern DevOps]
+  phases: [Containerize & Automate, Decompose & Decouple, Optimize & Scale]
+  priority_criteria: [APP-Q4, INF-Q1, INF-Q5, INF-Q6, APP-Q3, OPS-Q9]
+
+cost-optimization:
+  description: "Reduce costs through license elimination, managed services, right-sizing"
+  primary_pathways: [Move to Open Source, Move to Managed Databases, Move to Managed Analytics]
+  phases: [License & Quick Savings, Managed Service Migration, Optimization & Governance]
+  priority_criteria: [INF-Q2, DATA-Q2, DATA-Q10, DATA-Q11, INF-Q8]
+
+general-readiness:
+  description: "Comprehensive assessment, no specific weighting"
+  primary_pathways: [all equal]
+  phases: [Quick Wins, Foundation, Advanced Capabilities]
+  priority_criteria: [all equal]
+```
+
+#### 0.4 Goal Alignment Mapping
+
+Use this table in Step 7 (Pathway Mapping) to populate the "Goal Alignment" column for each pathway.
+
+| Goal | High Alignment | Medium Alignment | Low Alignment |
+|------|---------------|-----------------|--------------|
+| `agentic-ai-enablement` | Move to AI, Move to Managed Databases, Move to Modern DevOps | Move to Cloud Native, Move to Containers | Move to Open Source, Move to Managed Analytics |
+| `cloud-native-modernization` | Move to Cloud Native, Move to Containers, Move to Modern DevOps | Move to Managed Databases, Move to Open Source | Move to AI, Move to Managed Analytics |
+| `cost-optimization` | Move to Open Source, Move to Managed Databases, Move to Managed Analytics | Move to Containers, Move to Modern DevOps | Move to Cloud Native, Move to AI |
+| `general-readiness` | All Medium | — | — |
+
+#### 0.5 Goal-Specific Phase Names
+
+Use these phase names in Step 8 (Report Generation) for the Readiness Roadmap section.
+
+| Goal | Phase 1 | Phase 2 | Phase 3 |
+|------|---------|---------|---------|
+| `agentic-ai-enablement` | Agent Quick Wins (Days 1–30) | Agent Foundations (Months 1–3) | Agent Scale & Optimization (Months 3–6) |
+| `cloud-native-modernization` | Containerize & Automate (Days 1–30) | Decompose & Decouple (Months 1–3) | Optimize & Scale (Months 3–6) |
+| `cost-optimization` | License & Quick Savings (Days 1–30) | Managed Service Migration (Months 1–3) | Optimization & Governance (Months 3–6) |
+| `general-readiness` | Quick Wins (Days 1–30) | Foundation (Months 1–3) | Advanced Capabilities (Months 3–6) |
+
 ### Step 1: Discovery — Static Scan
 
 Scan the target repository to understand what exists:
@@ -39,7 +119,101 @@ Read all discovered files that are relevant to the assessment. Prioritize IaC, C
 
 Ignore installed dependencies and built binaries, for example "node_modules" directory for Nodejs applications and "target" directory for Java applications.
 
+#### 1.1 Repo Type Classification
+
+After completing the file discovery scan above, classify the repository type. The detected repo type determines which assessment criteria apply (some criteria are scored as N/A for non-application repos) and influences pathway applicability in Step 7.
+
+**If `repo_type` was provided in Step 0** (from `additionalPlanContext`), use it directly and skip auto-detection. User-provided overrides always take precedence.
+
+**If `repo_type` was NOT provided**, apply the following detection decision tree using the files discovered above:
+
+```
+1. Check for source code files (.py, .java, .js, .ts, .go, .cs):
+
+   IF source code files exist:
+     a. Check for multiple independent service directories with separate build configs
+        (e.g., services/api/ with its own package.json, services/worker/ with its own pom.xml,
+        or packages/ dirs each with their own dependency manifest).
+        → If yes: repo_type = "monorepo"
+
+     b. Check if a package manifest exists (package.json, pom.xml, requirements.txt, go.mod,
+        *.csproj, *.gradle) but NO deployable entry point is found:
+        - No Dockerfile
+        - No IaC files (Terraform, CDK, CloudFormation, Helm, Kustomize)
+        - No main application entry point (no main(), no if __name__ == "__main__",
+          no server.listen(), no @SpringBootApplication, no func main())
+        → If yes: repo_type = "library"
+
+     c. Otherwise:
+        → repo_type = "application"
+
+   IF NO source code files exist:
+     a. Check if only IaC files exist (Terraform .tf files, CDK stacks, CloudFormation
+        templates, Helm charts, Kustomize configs, ACK/KRO manifests):
+        → If yes: repo_type = "infrastructure-only"
+
+     b. Check if only CI/CD definition files exist (GitHub Actions workflows, Jenkinsfile,
+        buildspec.yml, .gitlab-ci.yml, deployment scripts, Helm charts for deployment only):
+        → If yes: repo_type = "deployment-cicd"
+
+     c. Otherwise:
+        → repo_type = "application" (default — most comprehensive assessment)
+```
+
+**Repo Type Definitions:**
+
+| Repo Type | Description | Example |
+|-----------|-------------|---------|
+| `application` | Contains application source code. This is the default when source code files exist alongside other files. | Java service, Python API, Node.js app |
+| `infrastructure-only` | Only IaC files exist with NO source code files. | Terraform modules, CDK stacks, CloudFormation templates |
+| `deployment-cicd` | Only CI/CD definition files exist with NO source code and NO IaC. | GitHub Actions workflows, Jenkinsfiles, Helm deployment charts |
+| `monorepo` | Multiple independent service directories with separate build configs. | Monorepo with `services/`, `packages/` dirs each with their own package manifest |
+| `library` | Package manifest exists but NO deployable entry point (no Dockerfile, no IaC, no main application entry point). | Internal SDK, shared utilities package |
+
+**Record the detected `repo_type`** in the assessment context. It will be used in:
+- **Steps 2–6** (Scoring): To determine which criteria are scored as N/A for the detected repo type
+- **Step 7** (Pathway Mapping): To determine which pathways are "Not Applicable" for the repo type
+- **Step 8** (Report Generation): To include the repo type in the report metadata header
+
+### N/A Criteria Mapping by Repo Type
+
+Before scoring criteria in Steps 2–6, consult this mapping to determine which criteria are N/A for the detected repo type (from Step 1.1). Criteria scored as N/A are excluded from category averages and the overall score.
+
+**N/A Criteria by Repo Type:**
+
+| Repo Type | Criteria Scored as N/A |
+|-----------|----------------------|
+| `application` | None — all 56 criteria apply |
+| `infrastructure-only` | APP-Q1 through APP-Q13, DATA-Q1 through DATA-Q9, DATA-Q11 |
+| `deployment-cicd` | APP-Q1 through APP-Q13, DATA-Q1 through DATA-Q11, INF-Q1 through INF-Q4, INF-Q7 through INF-Q10 |
+| `library` | INF-Q1 through INF-Q10, OPS-Q4 through OPS-Q12 |
+| `monorepo` | None — all 56 criteria apply (assessed per-service within the repo) |
+
+**N/A Display Format:**
+
+When a criterion is N/A for the detected repo type, display it as:
+
+```markdown
+#### <Criterion ID>: <Criterion Name>
+- **Score**: N/A
+- **Finding**: This is a <repo_type> repository. <Category> criteria do not apply.
+- **Gap**: N/A
+- **Recommendation**: N/A
+```
+
+For example, for an `infrastructure-only` repo:
+
+```markdown
+#### APP-Q1: Programming Languages
+- **Score**: N/A
+- **Finding**: This is an infrastructure-only repository. Application architecture criteria do not apply.
+- **Gap**: N/A
+- **Recommendation**: N/A
+```
+
 ### Step 2: Evaluate Infrastructure & Platform (10 criteria)
+
+> **N/A Check**: Before scoring each criterion below, check the N/A Criteria Mapping above. If the criterion is N/A for the detected repo type, use the N/A display format instead of scoring it. For `deployment-cicd` repos, INF-Q1 through INF-Q4 and INF-Q7 through INF-Q10 are N/A. For `library` repos, all INF criteria (INF-Q1 through INF-Q10) are N/A.
 
 For each of the following criteria, examine the relevant files, determine a finding, assign a score from 1-4, identify the gap, and formulate a recommendation. Always cite specific file names and resource names.
 
@@ -85,6 +259,8 @@ For each of the following criteria, examine the relevant files, determine a find
 - Agent-ready (score 4): All compute tiers have auto-scaling configured with appropriate min/max.
 
 ### Step 3: Evaluate Application Architecture (13 criteria)
+
+> **N/A Check**: Before scoring each criterion below, check the N/A Criteria Mapping from the preamble above Step 2. If the criterion is N/A for the detected repo type, use the N/A display format instead of scoring it. For `infrastructure-only` and `deployment-cicd` repos, all APP criteria (APP-Q1 through APP-Q13) are N/A.
 
 **APP-Q1 — Programming Languages**: What languages are used and how mature is their agent ecosystem?
 - Look for: File extensions; package.json (Node/TS), requirements.txt (Python), pom.xml/build.gradle (Java), go.mod (Go), *.csproj (.NET).
@@ -147,6 +323,8 @@ For each of the following criteria, examine the relevant files, determine a find
 
 ### Step 4: Evaluate Data Foundations (11 criteria)
 
+> **N/A Check**: Before scoring each criterion below, check the N/A Criteria Mapping from the preamble above Step 2. If the criterion is N/A for the detected repo type, use the N/A display format instead of scoring it. For `infrastructure-only` repos, DATA-Q1 through DATA-Q9 and DATA-Q11 are N/A (DATA-Q10 still applies). For `deployment-cicd` repos, all DATA criteria (DATA-Q1 through DATA-Q11) are N/A.
+
 **DATA-Q1 — Vector Database Presence**: Is a vector database present?
 - Look for: OpenSearch with k-NN plugin; aws_opensearch_domain; Aurora pgvector extension; S3 Vectors; Bedrock Knowledge Bases; Pinecone/Weaviate/Chroma imports.
 - Agent-ready (score 4): Managed vector store configured and integrated.
@@ -195,6 +373,8 @@ For each of the following criteria, examine the relevant files, determine a find
 
 ### Step 5: Evaluate Identity, Security & Governance (10 criteria)
 
+> **N/A Check**: Before scoring each criterion below, check the N/A Criteria Mapping from the preamble above Step 2. If the criterion is N/A for the detected repo type, use the N/A display format instead of scoring it. No SEC criteria are N/A for any repo type — all 10 security criteria apply to all repo types (`application`, `infrastructure-only`, `deployment-cicd`, `library`, `monorepo`).
+
 **SEC-Q1 — Secret Management**: Are secrets in Secrets Manager/Vault vs hardcoded or in env vars?
 - Look for: aws_secretsmanager_* in IaC; boto3.client('secretsmanager'); Vault client; hardcoded secrets patterns (password=, secret=, api_key= in code); .env files committed.
 - Agent-ready (score 4): All secrets in Secrets Manager or equivalent; no hardcoded credentials.
@@ -236,6 +416,8 @@ For each of the following criteria, examine the relevant files, determine a find
 - Agent-ready (score 4): Single centralized identity provider; SSO enabled.
 
 ### Step 6: Evaluate Operations & Observability (12 criteria)
+
+> **N/A Check**: Before scoring each criterion below, check the N/A Criteria Mapping from the preamble above Step 2. If the criterion is N/A for the detected repo type, use the N/A display format instead of scoring it. For `library` repos, OPS-Q4 through OPS-Q12 are N/A (OPS-Q1 through OPS-Q3 still apply).
 
 **OPS-Q1 — Distributed Tracing**: Is X-Ray, OpenTelemetry, or a partner solution in use with trace ID propagation?
 - Look for: aws_xray_*; opentelemetry imports; trace context propagation in HTTP headers (traceparent, X-Amzn-Trace-Id); instrumentation wrappers; Datadog/Jaeger/Zipkin SDK; OpenTelemetry SDK in dependency manifests (requirements.txt, package.json, pom.xml); auto-instrumentation configs; presence of `gen_ai.*` semantic conventions for LLM spans; service mesh configs (Istio, App Mesh) or APM service map configurations that generate real-time dependency graphs.
@@ -289,13 +471,56 @@ For each of the following criteria, examine the relevant files, determine a find
 - WHY: Agentic transformation requires organizational alignment around who owns agent quality, reliability, and safety in production. Without clear observability ownership, agentic systems will be deployed without adequate monitoring and accountability for failures will be unclear. Organizations with a shared responsibility model and SLO-driven culture can extend those practices to agentic workloads — defining agent-level SLOs (task success rate, hallucination rate, tool error rate) and assigning ownership across platform and product teams.
 - Agent-ready (score 4): Observability-as-a-product mindset with dedicated platform engineering, SLO-driven culture, and clear ownership of service-level and agent-level SLOs.
 
+### Scoring Calculation Rules (N/A-Adjusted)
+
+After completing Steps 2–6, calculate category and overall scores using these rules to properly handle N/A criteria:
+
+**Category Averages:**
+- Calculate each category average using only scored (non-N/A) criteria. Exclude N/A criteria from both the numerator and the denominator.
+- Example: If Infrastructure & Platform has 10 criteria but 3 are N/A for the detected repo type, the category average = sum of the 7 scored criteria ÷ 7.
+
+**Edge Case — All Criteria N/A in a Category:**
+- If ALL criteria in a category are N/A for the detected repo type, the category score is **"N/A"**. Skip that category entirely when calculating the overall average.
+- This can happen for `deployment-cicd` repos where Application Architecture (all 13 criteria N/A) and Data Foundations (all 11 criteria N/A) are entirely inapplicable.
+
+**Overall Score:**
+- Overall score = average of the 5 category scores, where each category score is already adjusted for N/A exclusion.
+- If a category is entirely N/A, exclude it from the overall average denominator.
+- Example: If a `deployment-cicd` repo has only 3 scoreable categories (Infrastructure, Security, Operations), the overall score = (INF avg + SEC avg + OPS avg) ÷ 3.
+
+**Score Table Display for N/A Categories:**
+
+When a category is entirely N/A, display it in the score table as:
+
+```markdown
+| Category | Score | Status |
+|----------|-------|--------|
+| Infrastructure & Platform | 2.8 / 4.0 | 🟡 |
+| Application Architecture | N/A | ➖ |
+| Data Foundations | N/A | ➖ |
+| Identity, Security & Governance | 3.2 / 4.0 | 🟡 |
+| Operations & Observability | 2.5 / 4.0 | 🟡 |
+```
+
+Use ➖ as the status emoji for N/A categories.
+
 ### Step 7: Map to AWS Modernization Pathways
 
 Based on the scores and findings from Steps 2-6, determine which AWS Modernization Pathways apply to this application. Multiple pathways can apply simultaneously because modern applications comprise multiple interconnected components — each requiring its own modernization approach.
 
-**Pathway Trigger Rules:**
+#### 7.1 Pathway Status Determination
 
-Evaluate each pathway independently. A pathway is triggered when ANY of its trigger conditions are met:
+Evaluate each pathway independently and assign exactly one of three statuses:
+
+- **Triggered** — The pathway's trigger conditions are met. Show the priority level and key trigger criteria.
+- **Not Triggered** — The pathway's trigger conditions are NOT met, but the pathway is still listed. Priority shown as "—".
+- **Not Applicable** — The pathway does not apply to the detected repo type (from Step 1.1). Show a reason explaining why (e.g., "Infrastructure-only repo — no application compute to containerize"). Priority shown as "—".
+
+**Status determination order:** First check if the pathway is Not Applicable for the repo type (see section 7.3 below). If not N/A, then evaluate the trigger conditions. If any trigger condition is met → Triggered. If no trigger conditions are met → Not Triggered.
+
+#### 7.2 Pathway Trigger Rules
+
+Evaluate each pathway's trigger conditions. A pathway is Triggered when ANY of its trigger conditions are met:
 
 **Move to Cloud Native (Containers and Serverless):**
 - Trigger: APP-Q4 score < 4 (monolith detected) OR INF-Q1 score < 3 (EC2-heavy compute) OR APP-Q3 score < 3 (sync-heavy communication) OR APP-Q10 score < 3 (no async for long-running operations)
@@ -339,8 +564,51 @@ Evaluate each pathway independently. A pathway is triggered when ANY of its trig
 - Representative AWS Services: Amazon Bedrock, Amazon Bedrock AgentCore, Amazon Q, SageMaker
 - Aligns with: Phase 3 (Agent Enablement) primarily, Phase 2 for data foundations (vector DB, RAG)
 
-**For each triggered pathway, record:**
+#### 7.3 Not Applicable Rules by Repo Type
+
+Before evaluating trigger conditions, check if the pathway is Not Applicable for the detected repo type. Pathways marked N/A are listed in the summary table with status "Not Applicable", a reason, and "—" for Priority and Est. Effort.
+
+| Repo Type | Not Applicable Pathways | Reason |
+|-----------|------------------------|--------|
+| `infrastructure-only` | Move to Cloud Native | N/A — no application code to decompose into cloud-native services |
+| `infrastructure-only` | Move to Containers | N/A — no application to containerize |
+| `infrastructure-only` | Move to AI | N/A — no application code for agent integration |
+| `infrastructure-only` | Move to Managed Analytics | N/A — no data processing code |
+| `deployment-cicd` | Move to Cloud Native | N/A — deployment repo, no application to decompose |
+| `deployment-cicd` | Move to Containers | N/A — deployment repo, no application to containerize |
+| `deployment-cicd` | Move to Open Source | N/A — deployment repo, no application or database workloads |
+| `deployment-cicd` | Move to Managed Databases | N/A — deployment repo, no database workloads |
+| `deployment-cicd` | Move to Managed Analytics | N/A — deployment repo, no data processing workloads |
+| `deployment-cicd` | Move to AI | N/A — deployment repo, no application code for agent integration |
+| `library` | Move to Containers | N/A — library is not independently deployable |
+| `library` | Move to Modern DevOps | N/A — library has no deployment pipeline |
+| `library` | Move to Managed Databases | N/A — library does not manage infrastructure |
+| `library` | Move to Managed Analytics | N/A — library does not manage infrastructure |
+| `library` | Move to Cloud Native | N/A — library is not a deployable service |
+| `application` | _(none)_ | All 7 pathways are applicable |
+| `monorepo` | _(none)_ | All 7 pathways are applicable |
+
+**Note:** For `deployment-cicd` repos, only Move to Modern DevOps is applicable (the one pathway directly relevant to CI/CD and deployment practices). For `library` repos, Move to Open Source and Move to AI remain applicable (libraries can have licensing and AI integration concerns).
+
+#### 7.4 Goal Alignment Column
+
+Add a "Goal Alignment" column to the pathway summary table. The alignment value (High, Medium, or Low) is determined by looking up the current goal against the Goal Alignment Mapping table defined in **Step 0, section 0.4**.
+
+For each pathway:
+1. Look up the effective goal from Step 0.
+2. Find the pathway in the Goal Alignment Mapping table (section 0.4).
+3. Record the alignment as High, Medium, or Low.
+
+The Goal Alignment column is shown for all pathways regardless of status (Triggered, Not Triggered, or Not Applicable).
+
+#### 7.5 Priority and Recording Rules
+
+**Priority is only shown for "Triggered" pathways.** Pathways with status "Not Triggered" or "Not Applicable" show "—" for Priority and Est. Effort.
+
+**For each Triggered pathway, record:**
 - Pathway name
+- Status: Triggered
+- Goal Alignment: High, Medium, or Low (from section 7.4)
 - Trigger criteria met (which specific scores/findings triggered it)
 - Priority: High (score < 2 on trigger criteria), Medium (score 2-2.9), Low (score 3-3.4)
 - Key activities required (derived from the gap recommendations in the triggered criteria)
@@ -348,7 +616,50 @@ Evaluate each pathway independently. A pathway is triggered when ANY of its trig
 - Dependencies on other pathways (e.g., Move to Containers may be prerequisite for Move to Cloud Native)
 - Relevant learning materials module (maps directly to the learning materials catalog)
 
-**Parallel Execution Assessment:**
+**For each Not Triggered pathway, record:**
+- Pathway name
+- Status: Not Triggered
+- Goal Alignment: High, Medium, or Low (from section 7.4)
+- Priority: —
+- Key Trigger Criteria: —
+- Est. Effort: —
+
+**For each Not Applicable pathway, record:**
+- Pathway name
+- Status: Not Applicable
+- Goal Alignment: High, Medium, or Low (from section 7.4)
+- Reason: Brief explanation of why the pathway does not apply (from the N/A rules table in section 7.3)
+- Priority: —
+- Key Trigger Criteria: The reason from the N/A rules table (e.g., "Infra-only repo — no app code")
+- Est. Effort: —
+
+#### 7.6 Pathway Summary Table Format
+
+Present all 7 pathways in a single summary table using this format. Every pathway appears in the table regardless of status.
+
+```markdown
+| Pathway | Status | Goal Alignment | Priority | Key Trigger Criteria | Est. Effort |
+|---------|--------|---------------|----------|---------------------|-------------|
+| Move to Cloud Native | Triggered | High | High | APP-Q4: 1/4, INF-Q1: 1/4 | High |
+| Move to Containers | Triggered | High | High | INF-Q1: 1/4 | Medium |
+| Move to Open Source | Not Triggered | Low | — | — | — |
+| Move to Managed Databases | Triggered | Medium | Medium | INF-Q2: 2/4 | Medium |
+| Move to Managed Analytics | Not Applicable | Low | — | Infra-only repo — no data processing code | — |
+| Move to Modern DevOps | Triggered | High | High | INF-Q5: 1/4, INF-Q6: 1/4 | High |
+| Move to AI | Triggered | High | High | APP-Q13: 1/4, DATA-Q1: 1/4 | High |
+```
+
+**Table column definitions:**
+- **Pathway**: The AWS Modernization Pathway name
+- **Status**: Triggered, Not Triggered, or Not Applicable
+- **Goal Alignment**: High, Medium, or Low (from the Goal Alignment Mapping in Step 0, section 0.4)
+- **Priority**: High/Medium/Low for Triggered pathways; "—" for Not Triggered and Not Applicable
+- **Key Trigger Criteria**: The specific criteria scores that triggered the pathway; "—" for Not Triggered; the N/A reason for Not Applicable
+- **Est. Effort**: Estimated effort for Triggered pathways; "—" for Not Triggered and Not Applicable
+
+#### 7.7 Parallel Execution Assessment
+
+For Triggered pathways only:
 - Identify which pathways can execute in parallel (no dependencies between them)
 - Identify which pathways have sequential dependencies (e.g., containerize before decomposing to microservices)
 - Note that a single application commonly pursues 3-5 pathways simultaneously
@@ -362,41 +673,117 @@ Evaluate each pathway independently. A pathway is triggered when ANY of its trig
   - Example: For a project named "payment-service", create `payment-service-agentic-readiness-report.md`
 - Full path example: `agentic-readiness-assessment/payment-service-agentic-readiness-report.md`
 
-**Report Structure:**
+#### 8.1 Goal-Driven Top 5 Critical Gaps Selection
 
-Create the report file with exactly this structure:
+When selecting the Top 5 Critical Gaps, apply goal-based weighting to prioritize criteria that matter most for the customer's objective:
+
+1. Identify all criteria with scores below 3 (these are the candidate gaps).
+2. Look up the effective goal's priority criteria from the Goal Definition Reference Card in Step 0 (section 0.3).
+3. When two criteria have equal gap severity (same score), rank the goal-priority criterion higher.
+4. For `general-readiness`, all criteria are weighted equally — select purely by gap severity (lowest scores first).
+5. The Top 5 should still be based on actual gaps (low scores). The goal just breaks ties and boosts priority criteria when gaps are equally severe.
+
+**Example**: If the goal is `agentic-ai-enablement` and both INF-Q1 (score 2) and APP-Q2 (score 2) are gaps, APP-Q2 ranks higher because it is a priority criterion for agentic-ai-enablement.
+
+#### 8.2 Goal-Scoped Decomposition Section
+
+The Microservices Decomposition Strategy section is conditionally included based on two factors: (1) whether a monolith exists (APP-Q4 < 4), and (2) the effective goal.
+
+**If APP-Q4 >= 4** (no monolith detected): Omit the decomposition section entirely, regardless of goal.
+
+**If APP-Q4 < 4** (monolith detected), apply goal-based scoping:
+
+| Goal | Decomposition Section Behavior |
+|------|-------------------------------|
+| `cloud-native-modernization` | **Full section** — include all decomposition options (Option A/B/C), pattern recommendations, LoE estimates, and integration into all three roadmap phases. This is the current V1 behavior. |
+| `general-readiness` | **Full section** — same as cloud-native-modernization. |
+| `agentic-ai-enablement` | **Condensed paragraph** — replace the full decomposition section with: "This monolith would benefit from service extraction to create clear agent tool boundaries. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing API surface." |
+| `cost-optimization` | **Skip entirely** — omit the decomposition section unless decomposition directly reduces cost (e.g., extracting a service to move from a commercial database to open source). If cost-relevant, include a brief note only: "Decomposing [specific module] would enable migration from [commercial DB] to [open-source alternative], reducing licensing costs." |
+
+#### 8.3 Quick Agent Wins Section
+
+Include the Quick Agent Wins section in the report ONLY when the goal is `agentic-ai-enablement` or `general-readiness`. Omit this section entirely for `cloud-native-modernization` and `cost-optimization`.
+
+**Score-threshold triggers for identifying wins:**
+
+Scan the assessment scores and include a win for each threshold that is met:
+
+| Condition | Win |
+|-----------|-----|
+| APP-Q2 >= 2 (API docs exist) | "Build an API-aware agent that can discover and invoke your existing endpoints" |
+| APP-Q5 >= 3 (structured JSON responses) | "Agent tool integration is straightforward with your JSON APIs" |
+| Documentation/README/wiki content exists | "Build a RAG-based knowledge agent using your existing documentation" |
+| DATA-Q7 >= 2 (database with clear schema) | "Build a data query agent with natural language to SQL" |
+| INF-Q6 >= 2 (CI/CD pipeline exists) | "Build a DevOps agent that can trigger deployments and check status" |
+
+When `goal_context` is provided, tailor the wins to that context. For example, if `goal_context` mentions "customer support agent", frame wins around customer support use cases (e.g., "Build a customer support agent that queries your order database via natural language" instead of the generic "Build a data query agent").
+
+**Placement in report**: The Quick Agent Wins section appears AFTER the pathway details and decomposition section, BEFORE the Readiness Roadmap.
+
+#### 8.4 Goal-Specific Roadmap Phase Names
+
+Use the goal-specific phase names from the Goal-Specific Phase Names table in Step 0 (section 0.5) for the Readiness Roadmap section. Do NOT use the generic V1 phase names.
+
+| Goal | Phase 1 | Phase 2 | Phase 3 |
+|------|---------|---------|---------|
+| `agentic-ai-enablement` | Agent Quick Wins (Days 1–30) | Agent Foundations (Months 1–3) | Agent Scale & Optimization (Months 3–6) |
+| `cloud-native-modernization` | Containerize & Automate (Days 1–30) | Decompose & Decouple (Months 1–3) | Optimize & Scale (Months 3–6) |
+| `cost-optimization` | License & Quick Savings (Days 1–30) | Managed Service Migration (Months 1–3) | Optimization & Governance (Months 3–6) |
+| `general-readiness` | Quick Wins (Days 1–30) | Foundation (Months 1–3) | Advanced Capabilities (Months 3–6) |
+
+#### 8.5 Report Metadata Header
+
+Include the detected repo type and effective goal in the report metadata header:
+
+```markdown
+- **Assessment Goal**: <effective goal value, e.g., agentic-ai-enablement>
+- **Goal Context**: <goal_context value if provided, otherwise omit this line>
+- **Repository Type**: <detected repo_type, e.g., application (auto-detected)>
+```
+
+#### 8.6 Report Template
+
+Create the report file with exactly this structure. Sections marked with conditional logic should be included or omitted based on the rules in sections 8.1–8.5 above.
 
 ```markdown
 # Agentic Readiness Assessment Report
 **Target**: <repository path>
 **Date**: <date>
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
+**Assessment Goal**: <effective goal>
+**Goal Context**: <goal_context if provided, otherwise omit>
+**Repository Type**: <detected repo_type>
 
 ---
 
 ## Table of Contents
 
 1. Executive Summary
-2. Top Priorities (Critical Gaps)
-3. Readiness Roadmap
-   - Phase 1 — Quick Wins (Days 1–30)
-   - Phase 2 — Foundation (Months 1–3)
-   - Phase 3 — Agent Enablement (Months 3–6)
-4. Recommended Modernization Pathways
-5. Recommended Self-Paced Learning Materials
-6. Detailed Findings
+2. Score Table
+3. Top Priorities (Critical Gaps)
+4. Detailed Findings
    - Infrastructure & Platform
    - Application Architecture
    - Data Foundations
    - Identity, Security & Governance
    - Operations & Observability
-7. Appendix: Evidence Index
+5. Recommended Modernization Pathways
+   - Pathway Summary Table
+   - Pathway Details (for Triggered pathways)
+6. Microservices Decomposition Strategy (conditional — see section 8.2)
+7. Quick Agent Wins (conditional — see section 8.3)
+8. Readiness Roadmap
+   - Phase 1 — <goal-specific name> (Days 1–30)
+   - Phase 2 — <goal-specific name> (Months 1–3)
+   - Phase 3 — <goal-specific name> (Months 3–6)
+9. Recommended Self-Paced Learning Materials
+10. Appendix: Evidence Index
 
 ---
 
 ## Executive Summary
 
-<3-5 sentence summary of overall readiness. Be direct. Note the strongest areas and most critical gaps. Emphasize this is an agentic readiness assessment, not a generic one.>
+<3-5 sentence summary of overall readiness. Be direct. Note the strongest areas and most critical gaps. Frame the summary around the effective goal — e.g., for agentic-ai-enablement, emphasize agent readiness; for cost-optimization, emphasize cost reduction opportunities. If goal_context is provided, reference it in the framing.>
 
 ### Overall Score: X.X / 4.0
 
@@ -410,21 +797,128 @@ Create the report file with exactly this structure:
 
 Status emojis: use ✅ for scores >= 3.5, 🟡 for scores >= 2.5, 🟠 for scores >= 1.5, ❌ for scores < 1.5.
 
+For categories where all criteria are N/A (due to repo type), display the score as "N/A" and use "—" for the status emoji.
+
 ---
 
 ## Top Priorities (Critical Gaps)
 
-<List the 5 most impactful gaps that block agentic readiness. For each: what it is, why it matters for agentic workloads, and the first concrete step to address it.>
+<List the 5 most impactful gaps using the goal-weighted selection logic from section 8.1. For each: what it is, why it matters for the customer's goal, and the first concrete step to address it. Frame "why it matters" around the effective goal — e.g., for agentic-ai-enablement, explain why the gap blocks agent workflows; for cost-optimization, explain the cost impact.>
 
 ---
 
-## Readiness Roadmap
+## Detailed Findings
 
-<Account for cross-dependencies between phases. For example, containerizing an application is a prerequisite for moving it to EKS/ECS. When dependencies exist, state them explicitly.>
+### Infrastructure & Platform
 
-### Microservices Decomposition Strategy
+#### INF-Q1: <topic>
+- **Score**: X/4 <status emoji>
+- **Finding**: <what was observed, with specific file and resource references>
+- **Gap**: <what is missing>
+- **Recommendation**: <specific next step>
 
-<If APP-Q4 score indicates monolith (score < 4), include this section with approach recommendations based on modularity assessment. Present options, not prescriptions. Include Level of Effort (LoE) estimates.>
+<Repeat for all INF questions. For N/A criteria, use the N/A display format from the N/A Criteria Mapping section.>
+
+### Application Architecture
+
+#### APP-Q1: <topic>
+- **Score**: X/4 <status emoji>
+- **Finding**: <what was observed, with specific file and resource references>
+- **Gap**: <what is missing>
+- **Recommendation**: <specific next step>
+
+<Repeat for all APP questions in the same format>
+
+### Data Foundations
+
+#### DATA-Q1: <topic>
+- **Score**: X/4 <status emoji>
+- **Finding**: <what was observed, with specific file and resource references>
+- **Gap**: <what is missing>
+- **Recommendation**: <specific next step>
+
+<Repeat for all DATA questions in the same format>
+
+### Identity, Security & Governance
+
+#### SEC-Q1: <topic>
+- **Score**: X/4 <status emoji>
+- **Finding**: <what was observed, with specific file and resource references>
+- **Gap**: <what is missing>
+- **Recommendation**: <specific next step>
+
+<Repeat for all SEC questions in the same format>
+
+### Operations & Observability
+
+#### OPS-Q1: <topic>
+- **Score**: X/4 <status emoji>
+- **Finding**: <what was observed, with specific file and resource references>
+- **Gap**: <what is missing>
+- **Recommendation**: <specific next step>
+
+<Repeat for all OPS questions in the same format>
+
+---
+
+## Recommended Modernization Pathways
+
+Based on the assessment findings, the following AWS Modernization Pathways are evaluated for this application. Multiple pathways can execute in parallel because modern applications comprise multiple interconnected components — each requiring its own modernization approach.
+
+### Pathway Summary
+
+<Use the V2 pathway table format from Step 7 (section 7.6). All 7 pathways appear in the table regardless of status.>
+
+| Pathway | Status | Goal Alignment | Priority | Key Trigger Criteria | Est. Effort |
+|---------|--------|---------------|----------|---------------------|-------------|
+| Move to Cloud Native | <Triggered/Not Triggered/Not Applicable> | <High/Medium/Low> | <High/Medium/Low or —> | <criteria or — or N/A reason> | <High/Medium/Low or —> |
+| Move to Containers | ... | ... | ... | ... | ... |
+| Move to Open Source | ... | ... | ... | ... | ... |
+| Move to Managed Databases | ... | ... | ... | ... | ... |
+| Move to Managed Analytics | ... | ... | ... | ... | ... |
+| Move to Modern DevOps | ... | ... | ... | ... | ... |
+| Move to AI | ... | ... | ... | ... | ... |
+
+### Parallel Execution Plan
+
+<Describe which pathways can execute in parallel and which have sequential dependencies. For example, Move to Containers may be a prerequisite for Move to Cloud Native.>
+
+**Parallel Track 1**: <pathways that can run concurrently>
+**Parallel Track 2**: <pathways that can run concurrently>
+**Sequential Dependencies**: <pathway A must complete before pathway B>
+
+<For each Triggered pathway, include a subsection:>
+
+### Move to <Pathway Name>
+
+- **Priority**: High/Medium/Low
+- **Goal Alignment**: High/Medium/Low
+- **Trigger Criteria Met**:
+  - <criterion ID>: Score X/4 — <brief finding>
+  - <criterion ID>: Score X/4 — <brief finding>
+- **Current State**: <summary of current state based on findings>
+- **Target State**: <what agent-ready looks like for this pathway>
+- **Key Activities**:
+  1. <activity from roadmap>
+  2. <activity from roadmap>
+- **Dependencies**: <other pathways that must complete first, or "None">
+- **Estimated Effort**: High/Medium/Low
+- **Roadmap Phase Alignment**: Phase 1/2/3
+- **Relevant Learning Materials**: Module X — <module name>
+
+<Repeat for each Triggered pathway. Do NOT include subsections for Not Triggered or Not Applicable pathways.>
+
+---
+
+## Microservices Decomposition Strategy
+
+<CONDITIONAL — apply the rules from section 8.2:>
+<If APP-Q4 >= 4 (no monolith): OMIT this entire section.>
+<If APP-Q4 < 4 AND goal is cloud-native-modernization or general-readiness: Include FULL section below.>
+<If APP-Q4 < 4 AND goal is agentic-ai-enablement: Include CONDENSED paragraph only.>
+<If APP-Q4 < 4 AND goal is cost-optimization: OMIT unless decomposition directly reduces cost.>
+
+<FULL SECTION (for cloud-native-modernization and general-readiness):>
 
 **Recommended Approach: Parallel Track (Option B)**
 - **LoE**: Medium | **Risk**: Low-Medium | **Time to Value**: Fast
@@ -469,75 +963,61 @@ Status emojis: use ✅ for scores >= 3.5, 🟡 for scores >= 2.5, 🟠 for score
 - **Resilience First**: Implement [Circuit Breaker](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/circuit-breaker.html) + [Retry with Backoff](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html) before decomposition
 - **Why**: Microservices amplify failure modes; resilience patterns must be in place before increasing system distribution
 
-### Phase 1 — Quick Wins (Days 1–30)
+<CONDENSED PARAGRAPH (for agentic-ai-enablement):>
+
+> This monolith would benefit from service extraction to create clear agent tool boundaries. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing API surface.
+
+---
+
+## Quick Agent Wins
+
+<CONDITIONAL — include ONLY when goal is agentic-ai-enablement or general-readiness. OMIT for cloud-native-modernization and cost-optimization.>
+
+Even before completing the full modernization roadmap, these agent opportunities are available based on your current architecture:
+
+<For each score-threshold trigger that is met (from section 8.3), include a numbered win:>
+
+1. **<Win Title>** — <1-2 sentence description of what agent could be built now>
+   - **Leverages**: <existing capability found in assessment, e.g., "OpenAPI spec at /api/swagger.json">
+   - **Effort**: Low/Medium
+   - **Value**: <what it enables>
+
+2. **<Win Title>** — ...
+
+<If goal_context is provided, tailor the wins to that context.>
+
+> These opportunities can be pursued in parallel with the modernization roadmap.
+> They demonstrate agent value early while foundations are being built.
+
+---
+
+## Readiness Roadmap
+
+<Account for cross-dependencies between phases. For example, containerizing an application is a prerequisite for moving it to EKS/ECS. When dependencies exist, state them explicitly.>
+
+### Phase 1 — <goal-specific phase 1 name from section 8.4>
 <3-5 items that are low-effort but high-impact. Things that can be done in a sprint.>
 
-<If APP-Q4 indicates monolith, include decomposition preparation:>
+<If APP-Q4 indicates monolith AND goal is cloud-native-modernization or general-readiness, include decomposition preparation:>
 - Conduct EventStorming or domain modeling workshop to identify bounded contexts and service candidates
 - Map current module dependencies and data coupling (use dependency analysis tools)
 - Identify first candidate service for extraction: look for high business value, low coupling, clear domain boundary
 - Document current API contracts and data flows to establish baseline before changes
 
-### Phase 2 — Foundation (Months 1–3)
-<Structural improvements that require more planning but are essential before building agents.>
+### Phase 2 — <goal-specific phase 2 name from section 8.4>
+<Structural improvements that require more planning but are essential.>
 
-<If decomposition is recommended (Option B or C), include:>
+<If decomposition is recommended (Option B or C) AND goal is cloud-native-modernization or general-readiness, include:>
 - **If Option B (Parallel Track)**: Extract first service using Strangler Fig pattern; implement API Gateway routing; establish service-to-service authentication; containerize extracted service
 - **If Option C (Conditional)**: Containerize modular components as separate deployments; implement service discovery; add anti-corruption layers at module boundaries; defer tightly-coupled modules for Phase 3 refactoring
 
-### Phase 3 — Agent Enablement (Months 3–6)
-<Capabilities that unlock the actual agent implementation once foundations are solid.>
+### Phase 3 — <goal-specific phase 3 name from section 8.4>
+<Capabilities that unlock the target state once foundations are solid.>
 
-<If decomposition is in progress:>
-- Continue service extraction based on business priorities and agent use case requirements
+<If decomposition is in progress AND goal is cloud-native-modernization or general-readiness:>
+- Continue service extraction based on business priorities
 - Implement domain-specific agent tools per service boundary
-- Establish service-level SLOs and observability for agent-driven workflows
-
----
-
-## Recommended Modernization Pathways
-
-Based on the assessment findings, the following AWS Modernization Pathways are recommended for this application. Multiple pathways can execute in parallel because modern applications comprise multiple interconnected components — each requiring its own modernization approach.
-
-### Pathway Summary
-
-| Pathway | Triggered | Priority | Key Trigger Criteria | Est. Effort |
-|---------|-----------|----------|---------------------|-------------|
-| Move to Cloud Native | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
-| Move to Containers | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
-| Move to Open Source | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
-| Move to Managed Databases | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
-| Move to Managed Analytics | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
-| Move to Modern DevOps | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
-| Move to AI | Yes/No | High/Medium/Low/N/A | <criteria that triggered> | High/Medium/Low |
-
-### Parallel Execution Plan
-
-<Describe which pathways can execute in parallel and which have sequential dependencies. For example, Move to Containers may be a prerequisite for Move to Cloud Native.>
-
-**Parallel Track 1**: <pathways that can run concurrently>
-**Parallel Track 2**: <pathways that can run concurrently>
-**Sequential Dependencies**: <pathway A must complete before pathway B>
-
-<For each triggered pathway, include a subsection:>
-
-### Move to <Pathway Name>
-
-- **Priority**: High/Medium/Low
-- **Trigger Criteria Met**:
-  - <criterion ID>: Score X/4 — <brief finding>
-  - <criterion ID>: Score X/4 — <brief finding>
-- **Current State**: <summary of current state based on findings>
-- **Target State**: <what agent-ready looks like for this pathway>
-- **Key Activities**:
-  1. <activity from roadmap>
-  2. <activity from roadmap>
-- **Dependencies**: <other pathways that must complete first, or "None">
-- **Estimated Effort**: High/Medium/Low
-- **Roadmap Phase Alignment**: Phase 1/2/3
-- **Relevant Learning Materials**: Module X — <module name>
-
-<Repeat for each triggered pathway>
+- Establish service-level SLOs and observability
 
 ---
 
@@ -626,60 +1106,6 @@ Only include links from categories that are relevant to the gaps found in this s
 
 ---
 
-## Detailed Findings
-
-### Infrastructure & Platform
-
-#### INF-Q1: <topic>
-- **Score**: X/4 <status emoji>
-- **Finding**: <what was observed, with specific file and resource references>
-- **Gap**: <what is missing>
-- **Recommendation**: <specific next step>
-
-<Repeat for all INF questions in the same format>
-
-### Application Architecture
-
-#### APP-Q1: <topic>
-- **Score**: X/4 <status emoji>
-- **Finding**: <what was observed, with specific file and resource references>
-- **Gap**: <what is missing>
-- **Recommendation**: <specific next step>
-
-<Repeat for all APP questions in the same format>
-
-### Data Foundations
-
-#### DATA-Q1: <topic>
-- **Score**: X/4 <status emoji>
-- **Finding**: <what was observed, with specific file and resource references>
-- **Gap**: <what is missing>
-- **Recommendation**: <specific next step>
-
-<Repeat for all DATA questions in the same format>
-
-### Identity, Security & Governance
-
-#### SEC-Q1: <topic>
-- **Score**: X/4 <status emoji>
-- **Finding**: <what was observed, with specific file and resource references>
-- **Gap**: <what is missing>
-- **Recommendation**: <specific next step>
-
-<Repeat for all SEC questions in the same format>
-
-### Operations & Observability
-
-#### OPS-Q1: <topic>
-- **Score**: X/4 <status emoji>
-- **Finding**: <what was observed, with specific file and resource references>
-- **Gap**: <what is missing>
-- **Recommendation**: <specific next step>
-
-<Repeat for all OPS questions in the same format>
-
----
-
 ## Appendix: Evidence Index
 
 <List key files examined during the assessment and what each revealed. Limit to 20 files.>
@@ -708,28 +1134,36 @@ Strictly follow these rules at all times:
 - **Calibrate scores honestly**: A score of 4 means genuinely agent-ready, not just "has something." A score of 3 means meaningfully partial. Do not inflate scores.
 - **IaC is ground truth**: Trust IaC definitions over README descriptions. What is deployed is what is defined in the IaC.
 - **Do not modify any source code**: This is a read-only assessment. Only create the output report file.
-- **Do not skip criteria**: All 56 criteria must be evaluated and scored in the report.
-- **Microservices decomposition guidance**: If APP-Q4 score < 4 (monolith detected), include the "Microservices Decomposition Strategy" section in the roadmap with:
-  - Recommended approach (Option B or C) based on modularity assessment
-  - LoE estimates for each option
-  - Pattern recommendations based on findings from APP-Q3, APP-Q7, APP-Q9, APP-Q12, DATA-Q4, INF-Q4
-  - Specific starting points and first service extraction candidates
-  - Integration of decomposition activities into Phase 1, 2, and 3 guidance
+- **Assessment foundations are invariant**: The 56 assessment criteria (INF-Q1 through OPS-Q12), 5 category structure (Infrastructure, Application, Data, Security, Operations), 1–4 scoring scale, 7 AWS Modernization Pathways, and pathway trigger rules remain unchanged from V1. V2 adds a priority lens on top — it does not alter the underlying assessment framework.
+- **Do not skip criteria**: All 56 criteria must be evaluated and scored in the report. Criteria that are N/A for the detected repo type must still appear in the report using the N/A display format.
+- **Repo type classification**: The agent must classify the repo type during Step 1 (Discovery) using the detection decision tree. A user-provided `repo_type` override in `additionalPlanContext` always takes precedence over auto-detection.
+- **N/A scoring rules**: Criteria scored as N/A are excluded from category averages. If all criteria in a category are N/A, the category score is "N/A" and is skipped in the overall average calculation.
+- **Goal is a priority lens, not a filter**: All 7 pathways are always evaluated for every repo regardless of goal. The goal only changes weighting, framing, phase names, and conditional section inclusion — it never removes pathways from evaluation.
+- **Goal-scoped decomposition**: The decomposition section is conditionally included based on goal (see Step 8, section 8.2). Only include the full decomposition section for `cloud-native-modernization` and `general-readiness`. Use the condensed paragraph for `agentic-ai-enablement`. Skip for `cost-optimization` unless cost-relevant.
+- **Quick Agent Wins conditional inclusion**: Include the Quick Agent Wins section only when goal is `agentic-ai-enablement` or `general-readiness`. Omit for `cloud-native-modernization` and `cost-optimization`.
+- **Goal-specific phase names**: Always use the goal-specific phase names from Step 0 (section 0.5) in the Readiness Roadmap. Do not use generic phase names.
+- **Goal-weighted Top 5**: Apply goal-priority criteria weighting when selecting the Top 5 Critical Gaps (see Step 8, section 8.1). For `general-readiness`, all criteria are weighted equally.
+- **Report metadata**: Always include the detected repo type and effective goal in the report metadata header.
 - **Customer choice**: Present options, not prescriptions. The customer decides between parallel track (Option B) or conditional/adaptive (Option C) based on their business priorities and risk tolerance.
 - **Modernization Pathways**: All 7 AWS Modernization Pathways must be evaluated against the trigger criteria. Only include triggered pathways in the detailed subsections. A pathway is triggered when ANY of its trigger conditions are met. Multiple pathways executing in parallel is the norm, not the exception.
+- **Pathway table format**: Use the V2 pathway table format with Status (Triggered/Not Triggered/Not Applicable), Goal Alignment, Priority, Key Trigger Criteria, and Est. Effort columns.
 
 ## Validation / Exit Criteria
 
 1. The directory `agentic-readiness-assessment` is created in the repository root (or already exists)
 2. The report file `{project-name}-agentic-readiness-report.md` is created in the `agentic-readiness-assessment` directory
-3. The report contains an Executive Summary with an overall numeric score
-4. The report contains a score table with all five categories scored
-5. The report contains a Top Priorities section with exactly 5 critical gaps
-6. The report contains a Readiness Roadmap with three phases
-7. The report contains a Recommended Modernization Pathways section with pathway trigger evaluation for all 7 pathways
-8. The report contains a Recommended Self-Paced Learning Materials section with relevant links
-9. The report contains Detailed Findings with all criteria scored 
-10. Every finding references specific files or explicitly states what was not found
-11. The report contains an Appendix: Evidence Index listing up to 20 key files examined
-12. The report is formatted in valid Markdown with clear sections and readable structure
-13. No source code files in the repository were modified
+3. The report contains a metadata header with Assessment Goal, Goal Context (if provided), and Repository Type
+4. The report contains an Executive Summary with an overall numeric score framed around the effective goal
+5. The report contains a score table with all five categories scored (N/A for categories where all criteria are N/A)
+6. The report contains a Top Priorities section with exactly 5 critical gaps, weighted by goal-priority criteria
+7. The report contains Detailed Findings with all 56 criteria evaluated and scored (including N/A criteria with proper display format where applicable based on repo type)
+8. The report contains a Recommended Modernization Pathways section with the V2 pathway table (Status, Goal Alignment, Priority, Key Trigger Criteria, Est. Effort) for all 7 pathways
+9. The report contains pathway detail subsections for each Triggered pathway (not for Not Triggered or Not Applicable)
+10. The report contains a Microservices Decomposition Strategy section scoped by goal (full, condensed, or omitted per section 8.2 rules)
+11. The report contains a Quick Agent Wins section when goal is `agentic-ai-enablement` or `general-readiness` (omitted for other goals)
+12. The report contains a Readiness Roadmap with three phases using goal-specific phase names from Step 0 (section 0.5)
+13. The report contains a Recommended Self-Paced Learning Materials section with relevant links
+14. Every finding references specific files or explicitly states what was not found
+15. The report contains an Appendix: Evidence Index listing up to 20 key files examined
+16. The report is formatted in valid Markdown with clear sections and readable structure
+17. No source code files in the repository were modified
