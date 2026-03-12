@@ -18,12 +18,14 @@ This Knowledge Base Power turns Kiro into an orchestrator for running comprehens
 The transformation definition names are configurable in `portfolio-config.yaml` via the `transformation_definitions` section — use whatever names you published to your AWS Transform registry.
 
 **How Kiro Orchestrates:**
-- Parses `portfolio-config.yaml` to discover all repositories, their configuration, and the transformation definition names
+- Parses `portfolio-config.yaml` to discover all repositories, their configuration, the `goal`, `goal_context`, `preferences`, and the transformation definition names
+- Validates the `goal` value — must be one of `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`; defaults to `general-readiness` if missing or unrecognized (with a warning for unrecognized values)
+- Validates per-repo fields: `name` and `path` required; `priority`, `context`, `preferences`, `repo_type`, `tags` optional
 - Clones repositories automatically when `repository_url` is provided and the local `path` doesn't exist
-- For each repository, Kiro generates a temporary ATX configuration file containing the service's `additionalPlanContext` — merging global and per-service transformation preferences, priority, tags, and any custom constraints from the portfolio config
+- For each repository, Kiro generates a temporary ATX configuration file containing the service's `additionalPlanContext` — including `goal`, `goal_context`, `repo_type` (if specified), `context`, merged `preferences` (global + per-repo with conflict resolution), `priority`, and `tags`
 - Spawns parallel subagents — one per repository — to run `atx custom def exec -n <individual_assessment> -g file://<generated-config> -x -t` concurrently
 - Waits for all individual assessments to complete
-- Generates a portfolio-level ATX configuration file with `additionalPlanContext` containing the full service inventory, dependency overrides, global preferences, and exclusions
+- Generates a portfolio-level ATX configuration file with `additionalPlanContext` containing `goal`, `goal_context`, global `preferences`, the full service inventory, and dependency overrides
 - Runs `atx custom def exec -n <portfolio_assessment> -g file://<generated-portfolio-config> -x -t` to generate the aggregated report
 - Consolidates all reports into a single `agentic-readiness-assessment/` folder at the portfolio root — copies individual reports from each repo, alongside the portfolio report — and cleans up temporary `.atx-config-*.yaml` files
 
@@ -39,12 +41,13 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 > 7. **Never retry a transformation that is still running.** Running duplicate `atx` processes against the same repo wastes resources and can cause conflicts.
 
 **What You Get:**
+- Goal-driven assessment framing aligned to your modernization objective
 - Dependency-aware modernization roadmaps that respect service relationships
-- Cross-cutting concern identification (gaps affecting 3+ services)
+- Cross-cutting concern identification (gaps affecting 3+ services), split by goal priority
 - Integration opportunities (shared services, event-driven architecture)
 - Resource allocation recommendations (team structure, skill gaps, training)
 - Risk analysis with mitigation strategies
-- Configurable transformation preferences to match your constraints
+- Configurable preferences to match your technology constraints
 
 **When to Use:**
 - Planning agentic AI adoption across microservices
@@ -88,24 +91,37 @@ Kiro orchestrates the assessment workflow, but relies on **AWS Transform CLI** t
 
 ### 1. Create Portfolio Configuration
 
-Create `portfolio-config.yaml` defining which services to assess:
+Create `portfolio-config.yaml` defining which services to assess, the modernization goal, and any technology preferences:
 
 ```yaml
 portfolio_name: "my-platform"
+goal: "agentic-ai-enablement"
+goal_context: "Building customer-facing AI agents for support and order management"
+
 transformation_definitions:
-  individual_assessment: "early-access-aws-agentic-assessment"
+  individual_assessment: "individual-aws-agentic-assessment"
   portfolio_assessment: "portfolio-agentic-assessment"
+
+preferences:
+  prefer: ["eks", "aurora", "bedrock"]
+  avoid: ["self-managed-kafka"]
+
 repositories:
   - name: "service-a"
     repository_url: "https://github.com/org/service-a.git"  # optional - Kiro clones if path doesn't exist
     path: "./services/service-a"
     priority: "P0"
+    context: "Main order processing service, handles 80% of traffic"
+    preferences:
+      prefer: ["dynamodb"]
+      avoid: ["rds"]
   - name: "service-b"
     path: "./services/service-b"  # already cloned locally
     priority: "P1"
+    tags: ["backend", "inventory"]
 ```
 
-See `portfolio-config.example.yaml` for complete examples with transformation preferences.
+See `portfolio-config.example.yaml` for complete examples with preferences.
 
 ### 2. Ask Kiro to Run the Portfolio Assessment
 
@@ -114,14 +130,19 @@ See `portfolio-config.example.yaml` for complete examples with transformation pr
 ```
 
 Kiro will:
-1. Parse `portfolio-config.yaml` and read `transformation_definitions` for the assessment names
-2. Clone any repositories where `repository_url` is provided and `path` doesn't exist yet
-3. For each repository, generate a temporary ATX config file (e.g., `.atx-config-<service-name>.yaml`) with `additionalPlanContext` containing the service's transformation preferences, priority, tags, and constraints merged from global and per-service settings
-4. Spawn parallel subagents — one per repository — each running `atx custom def exec -n <individual_assessment> -p <repo-path> -g file://.atx-config-<service-name>.yaml -x -t`
-5. Wait for all subagents to complete
-6. Generate a portfolio-level ATX config file (e.g., `.atx-config-portfolio.yaml`) with `additionalPlanContext` containing the full service inventory, dependency overrides, global preferences, and exclusions
-7. Run `atx custom def exec -n <portfolio_assessment> -p . -g file://.atx-config-portfolio.yaml -x -t` to generate the aggregated portfolio report
-8. Consolidate all reports — copy individual assessment reports from each repo's `agentic-readiness-assessment/` directory into a single `agentic-readiness-assessment/` folder at the portfolio root, alongside the portfolio report. Clean up temporary `.atx-config-*.yaml` files.
+1. Parse `portfolio-config.yaml` — read `goal`, `goal_context`, `preferences`, `transformation_definitions`, `repositories`, and `dependency_overrides`
+2. Validate the `goal` value:
+   - Must be one of: `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`
+   - If unrecognized → warn the user and default to `general-readiness`
+   - If missing → default to `general-readiness`
+3. Validate per-repo fields: `name` and `path` are required; `priority`, `context`, `preferences`, `repo_type`, `tags`, `repository_url`, `report_path` are optional
+4. Clone any repositories where `repository_url` is provided and `path` doesn't exist yet
+5. For each repository, generate a temporary ATX config file (e.g., `.atx-config-<service-name>.yaml`) with `additionalPlanContext` containing: `goal`, `goal_context`, `repo_type` (if specified), `context`, merged `preferences`, `priority`, and `tags`
+6. Spawn parallel subagents — one per repository — each running `atx custom def exec -n <individual_assessment> -p <repo-path> -g file://.atx-config-<service-name>.yaml -x -t`
+7. Wait for all subagents to complete
+8. Generate a portfolio-level ATX config file (e.g., `.atx-config-portfolio.yaml`) with `additionalPlanContext` containing: `goal`, `goal_context`, global `preferences`, the full service inventory, and dependency overrides
+9. Run `atx custom def exec -n <portfolio_assessment> -p . -g file://.atx-config-portfolio.yaml -x -t` to generate the aggregated portfolio report
+10. Consolidate all reports — copy individual assessment reports from each repo's `agentic-readiness-assessment/` directory into a single `agentic-readiness-assessment/` folder at the portfolio root, alongside the portfolio report. Clean up temporary `.atx-config-*.yaml` files.
 
 ### 3. Or Run Manually Step by Step
 
@@ -131,15 +152,18 @@ cd ./services/my-service
 atx custom def exec -n <your-individual-assessment-name> -p . -g file://atx-config.yaml -x -t
 ```
 
-Where `atx-config.yaml` contains:
+Where `atx-config.yaml` contains the new simplified `additionalPlanContext`:
 ```yaml
 additionalPlanContext: |
-  Service: my-service
-  Priority: P0
-  Transformation Preferences:
-  - Avoid technologies: kubernetes
-  - Prefer technologies: ecs, fargate
-  - Modernization approach: conservative
+  goal: "agentic-ai-enablement"
+  goal_context: "Building a customer support agent for order and inventory data"
+  repo_type: "application"
+  context: "Legacy PHP e-commerce app running on EC2 with MySQL"
+  preferences:
+    prefer: ["eks", "aurora", "bedrock", "dynamodb"]
+    avoid: ["self-managed-kafka", "rds"]
+  priority: "P0"
+  tags: ["monolith", "php"]
 ```
 
 **Portfolio assessment (after all individual assessments):**
@@ -150,20 +174,21 @@ atx custom def exec -n <your-portfolio-assessment-name> -p . -g file://atx-portf
 Where `atx-portfolio-config.yaml` contains:
 ```yaml
 additionalPlanContext: |
+  goal: "agentic-ai-enablement"
+  goal_context: "Building customer-facing AI agents for support and order management"
+  preferences:
+    prefer: ["eks", "aurora", "bedrock"]
+    avoid: ["self-managed-kafka"]
+  
   Portfolio: my-platform
   Services assessed: 2
   
   Service inventory:
-  - service-a (P0, ./services/service-a)
-  - service-b (P1, ./services/service-b)
+  - service-a (P0, ./services/service-a) — Tags: monolith, php
+  - service-b (P1, ./services/service-b) — Tags: backend, inventory
   
   Dependency overrides:
-  - service-a -> service-b (sync): REST API calls
-  
-  Global transformation preferences:
-  - Avoid technologies: kubernetes
-  - Prefer technologies: ecs, fargate
-  - Modernization approach: moderate
+  - service-a -> service-b (sync): REST API calls for inventory checks
 ```
 
 > Always use `-x` (non-interactive) and `-t` (trust all tools) when running at scale. Note: these commands are long-running (5–15 min each). If a command times out, check for the output report file before assuming failure.
@@ -174,132 +199,228 @@ additionalPlanContext: |
 
 ### Basic Configuration
 
-Create a `portfolio-config.yaml` file to define which repositories to assess. Kiro will parse this file to orchestrate the assessment workflow. See `portfolio-config.example.yaml` for a complete example.
+Create a `portfolio-config.yaml` file to define which repositories to assess, the modernization goal, and any technology preferences. Kiro will parse this file to orchestrate the assessment workflow. See `portfolio-config.example.yaml` for a complete example.
 
 **Minimum Configuration:**
 
 ```yaml
 portfolio_name: "my-platform"
+goal: "general-readiness"
+
 transformation_definitions:
-  individual_assessment: "early-access-aws-agentic-assessment"
+  individual_assessment: "individual-aws-agentic-assessment"
   portfolio_assessment: "portfolio-agentic-assessment"
+
 repositories:
   - name: "service-a"
     path: "./services/service-a"
-    priority: "P0"
   - name: "service-b"
     path: "./services/service-b"
-    priority: "P1"
 ```
 
-**With Repository Cloning:**
+**With Goal, Preferences, and Repository Cloning:**
 
 ```yaml
 portfolio_name: "my-platform"
+goal: "agentic-ai-enablement"
+goal_context: "Building customer-facing AI agents for support and order management"
+
+transformation_definitions:
+  individual_assessment: "individual-aws-agentic-assessment"
+  portfolio_assessment: "portfolio-agentic-assessment"
+
+preferences:
+  prefer: ["eks", "aurora", "bedrock"]
+  avoid: ["self-managed-kafka"]
+
 repositories:
   - name: "service-a"
     repository_url: "https://github.com/org/service-a.git"  # Kiro clones if path doesn't exist
     path: "./services/service-a"
     priority: "P0"
+    context: "Main order processing service"
   - name: "service-b"
     path: "./services/service-b"  # Already cloned locally
     priority: "P1"
+    tags: ["backend", "inventory"]
 ```
 
 **Advanced Configuration:**
 
 ```yaml
 portfolio_name: "ecommerce-platform"
+goal: "cloud-native-modernization"
+goal_context: "Decomposing monolith into containerized microservices for EKS"
+
+transformation_definitions:
+  individual_assessment: "my-team-agentic-assessment"
+  portfolio_assessment: "my-team-portfolio-assessment"
+
+preferences:
+  prefer: ["eks", "aurora", "fargate"]
+  avoid: ["self-managed-kafka", "oracle"]
+
 repositories:
   - name: "checkout-service"
     repository_url: "https://github.com/org/checkout.git"
     path: "./services/checkout"
     priority: "P0"
-    transformation_preferences:
-      avoid_technologies: ["kubernetes"]
-      prefer_technologies: ["ecs", "fargate"]
-      modernization_approach: "conservative"
+    context: "Monolithic checkout handling payments and orders"
+    preferences:
+      avoid: ["serverless"]  # Override: no Lambda for this service
       
-global_transformation_preferences:
-  avoid_technologies: ["kubernetes"]
-  prefer_technologies: ["ecs", "lambda"]
-  modernization_approach: "moderate"
+  - name: "inventory"
+    path: "./services/inventory"
+    priority: "P1"
+    preferences:
+      prefer: ["dynamodb"]
+    tags: ["backend", "data"]
+
+  - name: "infra-repo"
+    path: "./infrastructure"
+    repo_type: "infrastructure-only"
+    priority: "P2"
+
+dependency_overrides:
+  - source: "checkout-service"
+    target: "inventory"
+    type: "sync"
+    description: "REST API calls for inventory checks"
 ```
+
+### Goal Configuration
+
+The `goal` field drives how the assessment is framed — which pathways are highlighted, how the roadmap is phased, and which criteria are prioritized. Four predefined goals are supported:
+
+| Goal | Description |
+|------|-------------|
+| `agentic-ai-enablement` | Enable agentic AI workflows — autonomous agents discovering, invoking, and orchestrating app capabilities |
+| `cloud-native-modernization` | Decompose and modernize into cloud-native architectures using managed services, containers, and serverless |
+| `cost-optimization` | Reduce costs through license elimination, managed service adoption, and right-sizing |
+| `general-readiness` | Comprehensive assessment across all dimensions with no specific weighting (default) |
+
+**Goal Validation:**
+- If `goal` is missing → defaults to `general-readiness`
+- If `goal` is not one of the 4 predefined values → Kiro warns the user ("Unrecognized goal '{value}', defaulting to general-readiness") and defaults to `general-readiness`
+- The `goal_context` free-text field is optional and provides additional context for scoping recommendations (e.g., "Building a customer support agent that needs access to order and inventory data")
+
+### Preferences
+
+The `preferences` object replaces all previous nested constraint objects (`database_constraints`, `deployment_constraints`, `compliance_requirements`, `budget_constraints`, `timeline_constraints`, `modernization_approach`, `custom_constraints`, `avoid_patterns`, `prefer_patterns`, etc.). It uses two flat arrays:
+
+```yaml
+preferences:
+  prefer: ["eks", "aurora", "bedrock"]    # Technologies/patterns to recommend
+  avoid: ["self-managed-kafka", "oracle"]  # Technologies/patterns to avoid
+```
+
+The agent interprets preferences intelligently:
+- `avoid: ["serverless"]` → don't recommend Lambda, prefer containers
+- `prefer: ["eks", "aurora"]` → recommend EKS for compute, Aurora for databases
+- `avoid: ["microservices-decomposition"]` → keep as monolith, focus on containerization
+
+**Preference Merging:** Per-repo `prefer`/`avoid` arrays are appended to global arrays. If a value appears in both global `prefer` and per-repo `avoid`, the per-repo `avoid` wins (more specific overrides less specific).
 
 ### Configuration Schema
 
 The full configuration schema is available in `portfolio-config.schema.json`. Key sections:
 
+- **portfolio_name** (required): Name identifier for the portfolio
+- **goal** (required): One of `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`
+- **goal_context** (optional): Free-text context for scoping recommendations
 - **transformation_definitions** (required): Names of the AWS Transform definitions to use
   - `individual_assessment` (required): Name for per-repository assessments
   - `portfolio_assessment` (required): Name for portfolio aggregation
-- **repositories** (required): List of services to assess (minimum 2)
+- **preferences** (optional): Global technology/pattern preferences
+  - `prefer` (optional): String array of preferred technologies/patterns
+  - `avoid` (optional): String array of technologies/patterns to avoid
+- **repositories** (required): List of services to assess
   - `name` (required): Service identifier
   - `path` (required): Local path to repository
   - `repository_url` (optional): Git URL — Kiro clones if `path` doesn't exist
-  - `priority` (required): P0 (critical), P1 (high), P2 (medium)
-- **transformation_preferences** (optional): Service-specific constraints and preferences
-- **global_transformation_preferences** (optional): Portfolio-wide defaults
+  - `priority` (optional): P0 (critical), P1 (high), P2 (medium)
+  - `context` (optional): Free-text description of the service
+  - `preferences` (optional): Per-repo preference overrides (same `prefer`/`avoid` format)
+  - `repo_type` (optional): Override auto-detection — one of `application`, `infrastructure-only`, `deployment-cicd`, `monorepo`, `library`
+  - `tags` (optional): String array of tags for categorization
+  - `report_path` (optional): Custom output path for the assessment report
 - **dependency_overrides** (optional): Manual dependency declarations
-- **exclusions** (optional): Services or paths to exclude
+  - `source` (required): Source service name
+  - `target` (required): Target service name
+  - `type` (required): Dependency type (e.g., `sync`, `async`)
+  - `description` (optional): Description of the dependency
 
-## Transformation Preferences
+## Preferences
 
-Control how recommendations are generated for each service:
+Control how recommendations are generated using flat `prefer` and `avoid` arrays. These replace all previous nested constraint objects.
 
-### Technology Constraints
+### Global Preferences
+
+Set at the portfolio level — apply to all repositories unless overridden:
 
 ```yaml
-transformation_preferences:
-  # Avoid specific technologies
-  avoid_technologies: ["kubernetes", "docker", "serverless"]
-  
-  # Prefer specific technologies
-  prefer_technologies: ["ecs", "fargate", "lambda"]
+preferences:
+  prefer: ["eks", "aurora", "bedrock", "fargate"]
+  avoid: ["self-managed-kafka", "oracle", "kubernetes"]
 ```
 
-### Architecture Constraints
+### Per-Repo Preference Overrides
+
+Override or extend global preferences for specific repositories:
 
 ```yaml
-transformation_preferences:
-  # Keep as monolith (don't decompose)
-  avoid_microservices_decomposition: true
-  keep_as_monolith: true
-  
-  # Avoid specific patterns
-  avoid_patterns: ["event-sourcing", "cqrs"]
-  
-  # Prefer specific patterns
-  prefer_patterns: ["rest-api", "openapi"]
+repositories:
+  - name: "checkout-service"
+    path: "./services/checkout"
+    preferences:
+      prefer: ["dynamodb"]           # Appended to global prefer
+      avoid: ["serverless", "rds"]   # Appended to global avoid
 ```
 
-### Database Constraints
+### Preference Merging Rules
 
+When generating the per-repo ATX config, Kiro merges global and per-repo preferences:
+
+1. Per-repo `prefer` items are appended to global `prefer`
+2. Per-repo `avoid` items are appended to global `avoid`
+3. **Conflict resolution:** If a value appears in both global `prefer` and per-repo `avoid`, the per-repo `avoid` wins (more specific overrides less specific). The conflicting value is removed from the merged `prefer` list.
+
+**Example:**
 ```yaml
-transformation_preferences:
-  database_constraints:
-    avoid_migration: true          # Don't recommend DB migration
-    keep_current_database: true    # Keep current DB engine
-    avoid_managed_services: false  # Can use RDS but keep same engine
+# Global
+preferences:
+  prefer: ["eks", "aurora", "rds"]
+  avoid: ["oracle"]
+
+# Per-repo
+repositories:
+  - name: "service-a"
+    preferences:
+      prefer: ["dynamodb"]
+      avoid: ["rds"]  # Conflicts with global prefer — per-repo avoid wins
+
+# Merged result for service-a:
+# prefer: ["eks", "aurora", "dynamodb"]   ← "rds" removed due to per-repo avoid
+# avoid: ["oracle", "rds"]               ← per-repo avoid appended
 ```
 
-### Deployment Constraints
+### Common Preference Patterns
 
 ```yaml
-transformation_preferences:
-  deployment_constraints:
-    avoid_containers: true         # No containerization
-    avoid_orchestration: true      # No K8s/ECS/EKS
-    prefer_vm_based: true          # Prefer EC2
-```
+# Keep as monolith, containerize only
+preferences:
+  prefer: ["ecs", "fargate"]
+  avoid: ["microservices-decomposition"]
 
-### Modernization Approach
+# Cost-focused: eliminate licenses
+preferences:
+  prefer: ["aurora-postgresql", "opensearch", "linux"]
+  avoid: ["oracle", "sql-server", "windows"]
 
-```yaml
-transformation_preferences:
-  modernization_approach: "conservative"  # aggressive | moderate | conservative | minimal
-  budget_constraints: "strict"            # strict | moderate | flexible
-  timeline_constraints: "urgent"          # urgent | normal | flexible
+# Agent-focused: enable AI capabilities
+preferences:
+  prefer: ["bedrock", "opensearch-serverless", "api-gateway"]
+  avoid: ["self-managed-ml-infrastructure"]
 ```
 
 ---
@@ -332,12 +453,14 @@ The `-g` flag accepts an ATX execution configuration file (YAML or JSON), not ar
 ```yaml
 # atx-config.yaml
 additionalPlanContext: |
-  Service: checkout-service
-  Priority: P0
-  Transformation Preferences:
-  - Avoid technologies: kubernetes, k8s, helm
-  - Prefer technologies: ecs, fargate
-  - Modernization approach: conservative
+  goal: "cloud-native-modernization"
+  goal_context: "Decomposing monolith into containerized microservices"
+  context: "Legacy Java monolith running on EC2"
+  preferences:
+    prefer: ["eks", "fargate"]
+    avoid: ["serverless"]
+  priority: "P0"
+  tags: ["monolith", "java"]
 ```
 
 ```bash
@@ -382,24 +505,33 @@ portfolio-config.yaml
         ▼
 ┌─────────────────────┐
 │  1. Parse YAML       │  Kiro reads portfolio-config.yaml
-│     config file      │  and extracts repository list
+│     config file      │  and extracts goal, preferences,
+│                      │  repositories, and dependencies
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│  2. Clone repos      │  For each repo with repository_url
+│  2. Validate goal    │  Must be one of 4 predefined values
+│     & config fields  │  Default to general-readiness if
+│                      │  missing or unrecognized
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  3. Clone repos      │  For each repo with repository_url
 │     (if needed)      │  where path doesn't exist yet
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│  3. Generate ATX     │  For each repo, create .atx-config-<name>.yaml
-│     config files     │  with additionalPlanContext from portfolio YAML
+│  4. Generate ATX     │  For each repo, create .atx-config-<name>.yaml
+│     config files     │  with goal, merged preferences, context,
+│                      │  repo_type, priority, tags
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────────────────────────────┐
-│  4. Run individual assessments IN PARALLEL   │
+│  5. Run individual assessments IN PARALLEL   │
 │                                              │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐     │
 │  │ Subagent │ │ Subagent │ │ Subagent │ ... │
@@ -410,27 +542,28 @@ portfolio-config.yaml
                       │  (wait for all to complete)
                       ▼
 ┌─────────────────────┐
-│  5. Generate         │  Create .atx-config-portfolio.yaml with
-│     portfolio config │  full service inventory & dependencies
+│  6. Generate         │  Create .atx-config-portfolio.yaml with
+│     portfolio config │  goal, preferences, service inventory,
+│                      │  & dependency overrides
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│  6. Run portfolio    │  atx custom def exec
+│  7. Run portfolio    │  atx custom def exec
 │     assessment       │  -n <portfolio_assessment>
 │                      │  -p . -g file://.atx-config-portfolio.yaml -x -t
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│  7. Consolidate      │  Copy all reports into single
+│  8. Consolidate      │  Copy all reports into single
 │     reports          │  agentic-readiness-assessment/ folder
 │                      │  at portfolio root. Clean up temp files.
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│  8. Review reports   │  All reports in one place
+│  9. Review reports   │  All reports in one place
 └─────────────────────┘
 ```
 
@@ -452,23 +585,31 @@ git clone https://github.com/org/service-a.git ./services/service-a
 
 ### Step 1: Run Individual Assessments (Parallel)
 
-Kiro spawns one subagent per repository from `portfolio-config.yaml`. For each repository, Kiro first generates a temporary ATX configuration file that passes the service's context via `additionalPlanContext`. This merges global transformation preferences with any per-service overrides.
+Kiro spawns one subagent per repository from `portfolio-config.yaml`. For each repository, Kiro first generates a temporary ATX configuration file that passes the service's context via `additionalPlanContext`. This includes the portfolio-level `goal`, merged preferences, and per-repo metadata.
 
 **Generated ATX config example** (`.atx-config-checkout-service.yaml`):
 ```yaml
 additionalPlanContext: |
-  Service: checkout-service
-  Priority: P0
-  Business Criticality: critical
-  Tags: backend, payment, critical-path
-  Owner Team: Checkout Team
-  
-  Transformation Preferences:
-  - Avoid technologies: kubernetes, k8s, helm
-  - Deployment constraints: avoid orchestration, prefer VM-based
-  - Compliance requirements: PCI-DSS, SOC2
-  - Timeline constraints: urgent
-  - Custom constraints: Must complete migration within 6 months
+  goal: "agentic-ai-enablement"
+  goal_context: "Building customer-facing AI agents for support and order management"
+  context: "Monolithic checkout handling payments and orders"
+  preferences:
+    prefer: ["eks", "aurora", "bedrock", "dynamodb"]
+    avoid: ["self-managed-kafka", "serverless"]
+  priority: "P0"
+  tags: ["backend", "payment", "critical-path"]
+```
+
+If the repo has a `repo_type` specified in the portfolio config, it is included:
+```yaml
+additionalPlanContext: |
+  goal: "agentic-ai-enablement"
+  goal_context: "Building customer-facing AI agents for support and order management"
+  repo_type: "infrastructure-only"
+  preferences:
+    prefer: ["eks", "aurora", "bedrock"]
+    avoid: ["self-managed-kafka"]
+  priority: "P2"
 ```
 
 Each subagent then runs the individual assessment transformation concurrently:
@@ -479,11 +620,13 @@ atx custom def exec -n <individual_assessment> -p <repo-path> -g file://.atx-con
 ```
 
 **How Kiro generates the `additionalPlanContext`:**
-1. Start with `global_transformation_preferences` from the portfolio config
-2. Overlay the service's `transformation_preferences` (service-level overrides global)
-3. Include service metadata: `name`, `priority`, `tags`, `owner_team`, `business_criticality`
-4. Include any `custom_constraints` verbatim
-5. Format as human-readable text for the transformation agent
+1. Set `goal` from the portfolio config (defaults to `general-readiness` if missing or unrecognized)
+2. Set `goal_context` from the portfolio config (if present)
+3. Set `repo_type` from the per-repo config (only if explicitly specified — otherwise the transformation auto-detects)
+4. Set `context` from the per-repo config (if present)
+5. Merge preferences: start with global `preferences`, append per-repo `preferences`. If a value appears in both global `prefer` and per-repo `avoid`, remove it from `prefer` (per-repo `avoid` wins)
+6. Set `priority` from the per-repo config (if present)
+7. Set `tags` from the per-repo config (if present)
 
 The `-x` (non-interactive) flag is mandatory — subagents run without human intervention. Kiro waits for all subagents to complete before proceeding.
 
@@ -501,41 +644,36 @@ After all subagents complete their individual assessments, Kiro generates a port
 **Generated ATX config example** (`.atx-config-portfolio.yaml`):
 ```yaml
 additionalPlanContext: |
+  goal: "agentic-ai-enablement"
+  goal_context: "Building customer-facing AI agents for support and order management"
+  preferences:
+    prefer: ["eks", "aurora", "bedrock"]
+    avoid: ["self-managed-kafka"]
+  
   Portfolio: ecommerce-platform
-  Description: Core e-commerce platform services
-  Services Assessed: 8
+  Services Assessed: 4
   
   Service Inventory:
-  - storefront-web (P0, critical, ./services/storefront-web) — Tags: frontend, customer-facing
-  - checkout-service (P0, critical, ./services/checkout-service) — Tags: backend, payment
-  - inventory-service (P1, high, ./services/inventory-service) — Tags: backend, data
-  - notification-service (P2, medium, ./services/notification-service) — Tags: backend, messaging
+  - storefront-web (P0, ./services/storefront-web) — Tags: frontend, customer-facing
+  - checkout-service (P0, ./services/checkout-service) — Tags: backend, payment
+  - inventory-service (P1, ./services/inventory-service) — Tags: backend, data
+  - infra-repo (P2, ./infrastructure) — repo_type: infrastructure-only
   
   Dependency Overrides:
-  - storefront-web -> product-catalog (sync): Storefront calls Product Catalog REST API for product listings
-  - storefront-web -> user-service (sync): Storefront authenticates users via User Service
+  - storefront-web -> checkout-service (sync): Storefront calls Checkout REST API for order placement
   - checkout-service -> inventory-service (sync): Checkout validates inventory availability before order placement
-  - order-fulfillment -> notification-service (async): Fulfillment publishes order status events to notification queue
-  
-  Global Transformation Preferences:
-  - Avoid technologies: kubernetes, k8s, helm
-  - Prefer technologies: ecs, fargate, lambda
-  - Modernization approach: moderate
-  - Avoid patterns: event-sourcing, cqrs
-  - Prefer patterns: rest-api, openapi
-  - Deployment constraints: avoid orchestration
-  - Compliance requirements: SOC2
-  - Budget constraints: moderate
-  - Timeline constraints: normal
-  
-  Exclusions:
-  - Services: legacy-monolith, test-harness
-  - Path patterns: **/archived/**, **/test/**, **/deprecated/**
 ```
 
 ```bash
 atx custom def exec -n <portfolio_assessment> -p . -g file://.atx-config-portfolio.yaml -x -t
 ```
+
+**How Kiro generates the portfolio `additionalPlanContext`:**
+1. Set `goal` from the portfolio config (same value passed to individual assessments)
+2. Set `goal_context` from the portfolio config (if present)
+3. Set `preferences` from the global portfolio-level preferences (not merged with per-repo — global only)
+4. Build the service inventory from all repositories in the config, including name, priority, path, tags, and repo_type where specified
+5. Include `dependency_overrides` verbatim from the portfolio config
 
 This generates:
 ```
@@ -643,9 +781,12 @@ agentic-readiness-assessment/
 ```yaml
 # portfolio-config.yaml
 portfolio_name: "payment-platform"
+goal: "general-readiness"
+
 transformation_definitions:
-  individual_assessment: "early-access-aws-agentic-assessment"
+  individual_assessment: "individual-aws-agentic-assessment"
   portfolio_assessment: "portfolio-agentic-assessment"
+
 repositories:
   - name: "payment-gateway"
     path: "./services/payment-gateway"
@@ -658,57 +799,72 @@ repositories:
     priority: "P1"
 ```
 
-### Portfolio with Constraints
+### Goal-Driven Portfolio with Preferences
 
 ```yaml
 # portfolio-config.yaml
 portfolio_name: "ecommerce-platform"
+goal: "agentic-ai-enablement"
+goal_context: "Building customer-facing AI agents for support and order management"
 
 transformation_definitions:
   individual_assessment: "my-team-agentic-assessment"
   portfolio_assessment: "my-team-portfolio-assessment"
 
-# Global preferences apply to all services
-global_transformation_preferences:
-  avoid_technologies: ["kubernetes"]
-  prefer_technologies: ["ecs", "fargate"]
-  modernization_approach: "moderate"
+preferences:
+  prefer: ["eks", "aurora", "bedrock"]
+  avoid: ["self-managed-kafka", "oracle"]
 
 repositories:
   - name: "storefront"
     path: "./services/storefront"
     priority: "P0"
-    transformation_preferences:
-      # Override: keep as monolith
-      keep_as_monolith: true
-      modernization_approach: "conservative"
+    context: "Main customer-facing web application"
+    preferences:
+      avoid: ["microservices-decomposition"]  # Keep as monolith
       
   - name: "checkout"
     path: "./services/checkout"
     priority: "P0"
-    transformation_preferences:
-      # Override: avoid DB migration
-      database_constraints:
-        avoid_migration: true
-        keep_current_database: true
+    context: "Handles payments and order processing"
+    preferences:
+      prefer: ["dynamodb"]
+      avoid: ["rds"]
       
   - name: "inventory"
     path: "./services/inventory"
     priority: "P1"
-    # Uses global preferences
+    tags: ["backend", "data"]
+
+  - name: "infra-repo"
+    path: "./infrastructure"
+    repo_type: "infrastructure-only"
+    priority: "P2"
+
+dependency_overrides:
+  - source: "storefront"
+    target: "checkout"
+    type: "sync"
+    description: "REST API calls for order placement"
+  - source: "checkout"
+    target: "inventory"
+    type: "sync"
+    description: "Validates inventory availability before order placement"
 ```
 
 ## Best Practices
 
-1. **Run individual assessments first** - Portfolio assessment requires completed individual reports
-2. **Always use `-x -t` flags** - Non-interactive (`-x`) is mandatory for parallel execution at scale; trust all tools (`-t`) avoids prompts blocking subagents
-3. **Use transformation preferences** - Guide recommendations to match your constraints
-4. **Document dependencies** - Use `dependency_overrides` for implicit dependencies
-5. **Set realistic priorities** - P0 for critical services, P1 for high priority, P2 for medium
-6. **Review cross-cutting concerns** - Address portfolio-wide gaps before service-specific work
-7. **Follow dependency order** - Modernize upstream services before downstream dependents
-8. **Validate configuration** - Use the JSON schema to validate your portfolio-config.yaml before running
-9. **Leverage parallel subagents** - Kiro runs individual assessments concurrently, so larger portfolios don't linearly increase execution time
+1. **Set a clear goal** - Choose the goal that best matches the customer's modernization objective. Use `goal_context` to provide additional specificity
+2. **Run individual assessments first** - Portfolio assessment requires completed individual reports
+3. **Always use `-x -t` flags** - Non-interactive (`-x`) is mandatory for parallel execution at scale; trust all tools (`-t`) avoids prompts blocking subagents
+4. **Use preferences wisely** - Guide recommendations with `prefer`/`avoid` arrays to match your constraints
+5. **Document dependencies** - Use `dependency_overrides` for implicit dependencies
+6. **Set priorities where helpful** - P0 for critical services, P1 for high priority, P2 for medium (optional)
+7. **Specify repo_type when obvious** - If a repo is clearly infrastructure-only or a library, set `repo_type` to skip irrelevant criteria
+8. **Review cross-cutting concerns** - Address portfolio-wide gaps before service-specific work
+9. **Follow dependency order** - Modernize upstream services before downstream dependents
+10. **Validate configuration** - Use the JSON schema to validate your portfolio-config.yaml before running
+11. **Leverage parallel subagents** - Kiro runs individual assessments concurrently, so larger portfolios don't linearly increase execution time
 
 ---
 
@@ -749,21 +905,29 @@ repositories:
    # Using a JSON schema validator
    ajv validate -s portfolio-config.schema.json -d portfolio-config.yaml
    ```
-2. Check minimum requirements:
-   - At least 2 repositories defined
-   - Each repository has `name`, `path`, and `priority`
+2. Check required fields:
+   - `portfolio_name` is a non-empty string
+   - `goal` is one of: `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`
+   - `transformation_definitions` has both `individual_assessment` and `portfolio_assessment`
+   - Each repository has `name` and `path`
    - Paths are relative to portfolio root
-3. Review `portfolio-config.example.yaml` for correct format
+3. Check optional field formats:
+   - `preferences.prefer` and `preferences.avoid` are string arrays
+   - `repo_type` (if specified) is one of: `application`, `infrastructure-only`, `deployment-cicd`, `monorepo`, `library`
+   - `priority` (if specified) is one of: `P0`, `P1`, `P2`
+4. Review `portfolio-config.example.yaml` for correct format
 
-### Transformation Preferences Not Applied
+> **Note:** V2 config is a breaking change from V1. Old configs using `global_transformation_preferences`, `transformation_options`, `exclusions`, `metadata`, or nested constraint objects (`database_constraints`, `deployment_constraints`, etc.) must be migrated to the new simplified format.
 
-**Problem:** Recommendations ignore specified constraints
+### Preferences Not Applied
+
+**Problem:** Recommendations ignore specified preferences
 
 **Solutions:**
-1. Check preference syntax matches schema exactly
-2. Verify service-specific preferences override global preferences correctly
-3. Remember preferences are guidance, not guarantees - some recommendations may still suggest avoided technologies if they're the best fit
-4. Review generated report's "Transformation Preferences Applied" section
+1. Check that `preferences` uses the correct format: `prefer` and `avoid` as string arrays
+2. Verify per-repo preferences are merging correctly with global preferences (per-repo `avoid` overrides global `prefer` for conflicts)
+3. Remember preferences are guidance, not guarantees — some recommendations may still suggest avoided technologies if they're the best fit
+4. Review generated report's recommendations against your preference configuration
 
 ### AWS Transform CLI Not Found
 

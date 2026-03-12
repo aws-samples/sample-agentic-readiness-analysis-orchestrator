@@ -1,191 +1,192 @@
-# Portfolio Assessment Configuration Example
-# This file defines which repositories to assess and how to configure the portfolio transformation
+# =============================================================================
+# Portfolio Assessment Configuration Example (V2 — Goal-Driven Format)
+# =============================================================================
+#
+# This is the simplified V2 config format. Key changes from V1:
+#   - New required `goal` field drives report framing, phase names, and priorities
+#   - Flat `preferences.prefer` / `preferences.avoid` arrays replace ALL nested
+#     constraint objects (database_constraints, deployment_constraints, etc.)
+#   - Per-repo config simplified: `context` free-text replaces verbose nested objects
+#   - Removed: description, version, assessment_date, global_transformation_preferences,
+#     transformation_options, exclusions, metadata
+#
+# V2 is a BREAKING CHANGE from V1. Old configs require migration.
+# =============================================================================
+
+# --- Required Fields ---
 
 portfolio_name: "ecommerce-platform"
-description: "Core e-commerce platform services including storefront, checkout, inventory, and fulfillment"
-version: "1.0"
-assessment_date: "2024-03-15"
 
-# List of repositories to include in portfolio assessment
-# Minimum 2 repositories required
-# Note: Service-level transformation_preferences override global_transformation_preferences
+# Goal acts as a priority lens — all 7 pathways are still evaluated, but the goal
+# determines which are highlighted, how phases are named, and which criteria are
+# prioritized in the Top 5 Critical Gaps.
+#
+# Valid values:
+#   - agentic-ai-enablement       → Focus on enabling autonomous AI agents
+#   - cloud-native-modernization  → Focus on containers, managed services, decomposition
+#   - cost-optimization           → Focus on license elimination, managed services, right-sizing
+#   - general-readiness           → Comprehensive assessment, no specific weighting
+goal: "cloud-native-modernization"
+
+# Optional free-text context that tailors recommendations to your specific situation.
+# Influences Quick Agent Wins suggestions, recommendation framing, and service prioritization.
+goal_context: "Modernizing legacy e-commerce platform to cloud-native architecture on AWS. Priority is containerizing critical-path services and eliminating Kubernetes self-management overhead by moving to ECS/Fargate."
+
+# Transformation definitions — must match names published to your AWS Transform registry
+transformation_definitions:
+  individual_assessment: "individual-aws-agentic-assessment"
+  portfolio_assessment: "portfolio-agentic-assessment"
+
+# --- Global Preferences ---
+# Flat prefer/avoid arrays replace ALL V1 nested constraint objects.
+# The agent interprets these intelligently:
+#   prefer: ["ecs", "fargate"] → recommend ECS/Fargate for compute
+#   avoid: ["kubernetes"]      → don't recommend EKS or self-managed K8s
+#
+# Per-repo preferences merge with these globals. Per-repo `avoid` overrides
+# global `prefer` when a value appears in both.
+preferences:
+  prefer:
+    - "ecs"
+    - "fargate"
+    - "lambda"
+    - "rest-api"
+    - "openapi"
+  avoid:
+    - "kubernetes"
+    - "k8s"
+    - "helm"
+    - "event-sourcing"
+    - "cqrs"
+
+# --- Repositories ---
+# Minimum 2 required. Each repo gets an individual assessment report.
+# Only `name` and `path` are required — everything else is optional.
 repositories:
+
+  # --- P0: Critical Services ---
+
   - name: "storefront-web"
     path: "./services/storefront-web"
-    priority: "P0"  # Critical service
+    priority: "P0"
     tags: ["frontend", "customer-facing", "web"]
-    owner_team: "Frontend Platform"
-    business_criticality: "critical"
-    transformation_preferences:
-      # Keep as monolith - don't break into microservices
-      avoid_microservices_decomposition: true
-      keep_as_monolith: true
-      modernization_approach: "conservative"
-      custom_constraints:
-        - "Must maintain backward compatibility with mobile apps"
-        - "No breaking changes to public API"
-    
+    # V1 had: avoid_microservices_decomposition, keep_as_monolith, custom_constraints
+    # V2: use `context` for business constraints, `preferences.avoid` for tech constraints
+    context: "Customer-facing storefront. Must maintain backward compatibility with mobile apps — no breaking changes to public API. Keep as monolith, focus on containerization."
+    preferences:
+      avoid:
+        - "microservices-decomposition"
+
   - name: "checkout-service"
     path: "./services/checkout-service"
     priority: "P0"
     tags: ["backend", "payment", "critical-path"]
-    owner_team: "Checkout Team"
-    business_criticality: "critical"
-    transformation_preferences:
-      # Avoid Kubernetes and container orchestration
-      avoid_technologies: ["kubernetes", "k8s", "helm"]
-      deployment_constraints:
-        avoid_orchestration: true
-        prefer_vm_based: true
-      compliance_requirements: ["PCI-DSS", "SOC2"]
-      timeline_constraints: "urgent"
-      custom_constraints:
-        - "Must complete migration within 6 months"
-    
-  - name: "inventory-service"
-    path: "./services/inventory-service"
-    priority: "P1"
-    tags: ["backend", "data", "inventory"]
-    owner_team: "Inventory Team"
-    business_criticality: "high"
-    transformation_preferences:
-      # Keep current database, avoid migration
-      database_constraints:
-        avoid_migration: true
-        keep_current_database: true
-        avoid_managed_services: false  # Can use RDS but keep same DB engine
-      modernization_approach: "moderate"
-      budget_constraints: "strict"
-    
-  - name: "product-catalog"
-    path: "./services/product-catalog"
-    priority: "P1"
-    tags: ["backend", "data", "catalog"]
-    owner_team: "Catalog Team"
-    business_criticality: "high"
-    transformation_preferences:
-      # Prefer specific technologies and patterns
-      prefer_technologies: ["ecs", "fargate", "dynamodb"]
-      prefer_patterns: ["rest-api", "openapi", "caching"]
-      avoid_patterns: ["event-sourcing", "cqrs"]
-      modernization_approach: "aggressive"
-      timeline_constraints: "flexible"
-    
-  - name: "order-fulfillment"
-    path: "./services/order-fulfillment"
-    priority: "P1"
-    tags: ["backend", "fulfillment", "logistics"]
-    owner_team: "Fulfillment Team"
-    business_criticality: "high"
-    
+    # V1 had: avoid_technologies, deployment_constraints, compliance_requirements,
+    #         timeline_constraints, custom_constraints
+    # V2: compliance and timeline info goes in `context`, tech prefs in `preferences`
+    context: "Payment processing service. PCI-DSS and SOC2 compliant. Must complete migration within 6 months. Prefer VM-based deployment over containers for this service."
+    preferences:
+      avoid:
+        - "kubernetes"
+        - "k8s"
+        - "helm"
+        - "containers"
+        - "orchestration"
+
   - name: "user-service"
     path: "./services/user-service"
     priority: "P0"
     tags: ["backend", "auth", "user-management"]
-    owner_team: "Identity Team"
-    business_criticality: "critical"
-    
+    # Minimal config — no special preferences needed. Agent uses global preferences.
+
+  # --- P1: High Priority Services ---
+
+  - name: "inventory-service"
+    path: "./services/inventory-service"
+    priority: "P1"
+    tags: ["backend", "data", "inventory"]
+    # V1 had: database_constraints (avoid_migration, keep_current_database),
+    #         budget_constraints, modernization_approach
+    # V2: database constraints become preferences.avoid, budget info goes in context
+    context: "Core inventory data service. Strict budget — keep current database engine, can use RDS but avoid full database migration."
+    preferences:
+      avoid:
+        - "database-migration"
+
+  - name: "product-catalog"
+    path: "./services/product-catalog"
+    priority: "P1"
+    tags: ["backend", "data", "catalog"]
+    # V1 had: prefer_technologies, prefer_patterns, avoid_patterns,
+    #         modernization_approach, timeline_constraints
+    # V2: all flattened into prefer/avoid arrays
+    context: "Product catalog service. Aggressive modernization timeline is flexible."
+    preferences:
+      prefer:
+        - "ecs"
+        - "fargate"
+        - "dynamodb"
+        - "rest-api"
+        - "openapi"
+        - "caching"
+      avoid:
+        - "event-sourcing"
+        - "cqrs"
+
+  - name: "order-fulfillment"
+    path: "./services/order-fulfillment"
+    priority: "P1"
+    tags: ["backend", "fulfillment", "logistics"]
+    # Minimal config — uses global preferences only
+
+  # --- P2: Medium Priority Services ---
+
   - name: "notification-service"
     path: "./services/notification-service"
     priority: "P2"
     tags: ["backend", "messaging", "notifications"]
-    owner_team: "Platform Team"
-    business_criticality: "medium"
-    transformation_preferences:
-      # Avoid containers entirely, prefer serverless
-      avoid_technologies: ["docker", "containers"]
-      prefer_technologies: ["lambda", "sqs", "sns", "eventbridge"]
-      deployment_constraints:
-        avoid_containers: true
-        avoid_orchestration: true
-      prefer_patterns: ["event-driven", "serverless"]
-      modernization_approach: "aggressive"
-      budget_constraints: "flexible"
-    
+    # V1 had: avoid_technologies (docker, containers), prefer_technologies (lambda, sqs, sns),
+    #         deployment_constraints, prefer_patterns, budget_constraints
+    # V2: all flattened into prefer/avoid
+    context: "Event-driven notification service. Good candidate for serverless migration."
+    preferences:
+      prefer:
+        - "lambda"
+        - "sqs"
+        - "sns"
+        - "eventbridge"
+        - "event-driven"
+        - "serverless"
+      avoid:
+        - "containers"
+        - "orchestration"
+
   - name: "analytics-pipeline"
     path: "./services/analytics-pipeline"
     priority: "P2"
     tags: ["data", "analytics", "ml"]
-    owner_team: "Data Team"
-    business_criticality: "medium"
+    # Minimal config — uses global preferences only
 
-# Transformation configuration options
-transformation_options:
-  output_path: "./portfolio-agentic-readiness-report.md"
-  cross_cutting_threshold: 3  # Gaps in 3+ services = cross-cutting concern
-  min_services: 2
-  include_optional_sections: true
-  validation_strictness: "moderate"  # strict | moderate | lenient
-  log_level: "INFO"  # DEBUG | INFO | WARNING | ERROR
-
-# Global transformation preferences (apply to all services by default)
-# Service-level preferences override these global settings
-global_transformation_preferences:
-  # Avoid Kubernetes across the entire portfolio
-  avoid_technologies: ["kubernetes", "k8s", "helm"]
-  # Prefer AWS-native services
-  prefer_technologies: ["ecs", "fargate", "lambda"]
-  # Conservative modernization approach by default
-  modernization_approach: "moderate"
-  # Avoid breaking services into microservices unless explicitly needed
-  avoid_microservices_decomposition: false
-  # Prefer REST APIs over complex patterns
-  prefer_patterns: ["rest-api", "openapi"]
-  avoid_patterns: ["event-sourcing", "cqrs"]
-  # Global deployment constraints
-  deployment_constraints:
-    avoid_orchestration: true  # No Kubernetes/EKS
-    prefer_vm_based: false
-  # Portfolio-wide compliance
-  compliance_requirements: ["SOC2"]
-  budget_constraints: "moderate"
-  timeline_constraints: "normal"
-
-# Optional: Manual dependency declarations
-# Use this when auto-detection fails or for documenting implicit dependencies
+# --- Dependency Overrides ---
+# Manual dependency declarations for cases where auto-detection fails.
+# Structure unchanged from V1.
 dependency_overrides:
   - source: "storefront-web"
     target: "product-catalog"
     type: "sync"
     description: "Storefront calls Product Catalog REST API for product listings"
-    
+
   - source: "storefront-web"
     target: "user-service"
     type: "sync"
     description: "Storefront authenticates users via User Service"
-    
+
   - source: "checkout-service"
     target: "inventory-service"
     type: "sync"
     description: "Checkout validates inventory availability before order placement"
-    
+
   - source: "order-fulfillment"
     target: "notification-service"
     type: "async"
     description: "Fulfillment publishes order status events to notification queue"
-
-# Optional: Exclusions
-exclusions:
-  services:
-    - "legacy-monolith"  # Exclude deprecated services
-    - "test-harness"
-  path_patterns:
-    - "**/archived/**"
-    - "**/test/**"
-    - "**/deprecated/**"
-
-# Optional: Additional metadata
-metadata:
-  organization: "E-Commerce Division"
-  contact_email: "platform-team@example.com"
-  aws_account_ids:
-    - "123456789012"
-    - "234567890123"
-  regions:
-    - "us-east-1"
-    - "us-west-2"
-    - "eu-west-1"
-  custom_fields:
-    cost_center: "CC-1234"
-    compliance_tier: "PCI-DSS"
-    sla_tier: "gold"

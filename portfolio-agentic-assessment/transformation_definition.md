@@ -21,6 +21,9 @@ The output is a detailed Markdown report saved as `portfolio-agentic-readiness-r
 - Service dependency map with coupling scores and critical path analysis
 - Cross-cutting concerns analysis across all five categories
 - Dependency-aware portfolio modernization roadmap with four phases
+- AWS Modernization Pathways with portfolio pathway aggregation
+- Portfolio Quick Agent Wins aggregation (when goal is `agentic-ai-enablement` or `general-readiness`)
+- AWS Programs & Engagement Recommendations (MAP, OLA, MMP, VMP, WAMP, EBA, ISV WMP, CE — portfolio only)
 - Integration opportunities (shared services, event-driven architecture, consolidation)
 - Resource allocation recommendations (team structure, skill gaps, training)
 - Risk analysis with likelihood × impact matrix and mitigation strategies
@@ -58,46 +61,131 @@ Scan the target directory structure to find all individual assessment reports:
 - Log warnings for inaccessible or malformed files
 - Terminate with clear error if fewer than 2 valid reports found
 
+### Step 1.5: Read Goal and Context from AdditionalPlanContext
+
+Before parsing individual reports, read the portfolio assessment's own `additionalPlanContext` to extract goal-driven configuration. These values are set by the Kiro Power orchestrator when generating the portfolio ATX config.
+
+**Extract the following fields from `additionalPlanContext`:**
+- **`goal`** — The customer's modernization objective. Must be one of: `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`. If absent or unrecognized, default to `general-readiness`. If unrecognized, log a warning: "Unrecognized goal '{value}', defaulting to general-readiness".
+- **`goal_context`** — Optional free-text field providing additional context for scoping recommendations (e.g., "Building customer-facing AI agents for support and order management"). If absent, proceed without it.
+- **`preferences`** — Optional object with `prefer` and `avoid` string arrays representing global portfolio-level technology preferences.
+
+These values are used throughout the portfolio assessment:
+- **`goal`** drives cross-cutting concern splitting (Step 4), roadmap phase naming (Step 6), pathway aggregation goal alignment (Step 10), Quick Agent Wins aggregation, and AWS Programs recommendations.
+- **`goal_context`** tailors portfolio-level recommendations and Quick Agent Wins framing.
+- **`preferences`** inform portfolio-level technology recommendations.
+
+**Goal Definition Reference (for portfolio use):**
+
+| Goal | Primary Pathways | Priority Criteria |
+|------|-----------------|-------------------|
+| `agentic-ai-enablement` | Move to AI, Move to Managed Databases, Move to Modern DevOps | APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6 |
+| `cloud-native-modernization` | Move to Cloud Native, Move to Containers, Move to Modern DevOps | APP-Q4, INF-Q1, INF-Q5, INF-Q6, APP-Q3, OPS-Q9 |
+| `cost-optimization` | Move to Open Source, Move to Managed Databases, Move to Managed Analytics | INF-Q2, DATA-Q2, DATA-Q10, DATA-Q11, INF-Q8 |
+| `general-readiness` | All pathways equally | All criteria equally |
+
 ### Step 2: Parse Individual Assessments
 
-For each assessment report found, extract comprehensive data:
+For each assessment report found, extract comprehensive data. Individual reports may be in V2 format (goal-driven, with repo type classification, N/A criteria, Goal Alignment column, and Quick Agent Wins) or V1 format (goal-agnostic). Handle both gracefully.
 
-**Service Metadata:**
+#### 2.1 Service Metadata
+
 - Service/repository name (from path or metadata)
 - Assessment date (validate YYYY-MM-DD format)
 - Overall readiness score (validate 0.0-4.0 range)
 - Category scores for all five categories (Infrastructure, Application, Data, Security, Operations)
+- **Assessment Goal** — Extract from the report metadata header line `**Assessment Goal**: <value>`. If absent, assume `general-readiness` (V1 report).
+- **Goal Context** — Extract from the report metadata header line `**Goal Context**: <value>`. May be absent.
+- **Repository Type** — Extract from the report metadata header line `**Repository Type**: <value>` (e.g., `application`, `infrastructure-only`, `deployment-cicd`, `monorepo`, `library`). If absent, assume `application` (V1 report default). Record whether the repo type was auto-detected or user-provided (the metadata line may include "(auto-detected)" or "(user-provided)").
 
-**Detailed Findings:**
+#### 2.2 Detailed Findings (with N/A Criteria Handling)
+
 - Extract all criterion-level findings with scores, gaps, and recommendations
 - Parse findings tables to extract criterion IDs (e.g., INF-Q1, APP-Q2)
 - Extract effort estimates where available
 - Top 5 priorities from each service
+- **N/A Criteria Recognition**: Some criteria may have a score of "N/A" instead of a numeric 1–4 value. This occurs when the criterion does not apply to the detected repo type. The N/A format in individual reports is:
+  ```
+  - **Score**: N/A
+  - **Finding**: This is a <repo_type> repository. <Category> criteria do not apply.
+  - **Gap**: N/A
+  - **Recommendation**: N/A
+  ```
+  When a criterion is scored as N/A:
+  - Record it as N/A in the parsed data (do NOT treat it as score 0 or score 1)
+  - **Exclude N/A criteria from portfolio-level category averages and overall score calculations** — they should not count in either the numerator or the denominator
+  - Track which criteria are N/A per service for use in cross-cutting concern analysis (Step 4) — a criterion that is N/A for a service should not count as a "gap" for that service
+  - If ALL criteria in a category are N/A for a service, record the category score as "N/A" and exclude that category from the service's overall score average
 
-**Technology Stack:**
+#### 2.3 Technology Stack
+
 - Programming languages in use
 - Database engines (managed vs self-managed)
 - Compute patterns (EC2, Lambda, ECS, EKS, containers)
 - IaC tools (Terraform, CloudFormation, CDK)
 - CI/CD tools and pipeline maturity
 
-**Architecture Patterns:**
+#### 2.4 Architecture Patterns
+
 - Monolith vs microservices status (from APP-Q4 findings)
 - API patterns and versioning
 - Communication patterns (synchronous vs asynchronous)
 - Data access patterns
 
-**Dependencies and Integration Points:**
+#### 2.5 Dependencies and Integration Points
+
 - Synchronous dependencies: Search for REST API calls, gRPC calls, direct service references
 - Asynchronous dependencies: Search for message queue references, event bus subscriptions, pub/sub patterns
 - Shared databases: Detect database references appearing in multiple services
 - Shared infrastructure: Common API gateways, load balancers, authentication systems, observability infrastructure
 
-**Error Handling:**
+#### 2.6 Pathway Data (V2 Format)
+
+Extract pathway information from the individual report's pathway summary table. V2 reports use a 6-column table format:
+
+```
+| Pathway | Status | Goal Alignment | Priority | Key Trigger Criteria | Est. Effort |
+```
+
+For each pathway row, extract:
+- **Pathway name**: One of the 7 AWS Modernization Pathways
+- **Status**: One of three values — `Triggered`, `Not Triggered`, or `Not Applicable`
+  - **Triggered**: Pathway trigger conditions were met. Priority and Key Trigger Criteria are populated.
+  - **Not Triggered**: Trigger conditions were not met. Priority shows "—".
+  - **Not Applicable**: Pathway does not apply to the repo type. Key Trigger Criteria contains the reason (e.g., "Infra-only repo — no app code"). Priority shows "—".
+- **Goal Alignment**: `High`, `Medium`, or `Low` — indicates how closely the pathway aligns with the assessment goal. Extract this value for use in the Portfolio Pathway Aggregation Table (Step 10).
+- **Priority**: `High`, `Medium`, `Low`, or `—` (for Not Triggered / Not Applicable)
+- **Key Trigger Criteria**: Specific criteria scores that triggered the pathway, or "—", or the N/A reason
+- **Est. Effort**: `High`, `Medium`, `Low`, or `—`
+
+If the report uses V1 format (Yes/No instead of Triggered/Not Triggered/Not Applicable, no Goal Alignment column), map as follows:
+- "Yes" → `Triggered`
+- "No" → `Not Triggered`
+- Goal Alignment → default to `Medium` for all pathways (V1 had no goal alignment)
+
+#### 2.7 Quick Agent Wins (V2 Format)
+
+If the individual report contains a "Quick Agent Wins" section, extract the wins for portfolio-level aggregation. This section is present only when the assessment goal was `agentic-ai-enablement` or `general-readiness`.
+
+For each Quick Agent Win, extract:
+- **Win title** (e.g., "API-Aware Agent Tool Discovery")
+- **Description** (1-2 sentence summary of the agent opportunity)
+- **Leverages** (the existing capability that enables this win, e.g., "OpenAPI spec at /api/swagger.json")
+- **Effort** (`Low` or `Medium`)
+- **Value** (what the win enables)
+
+Record which service each win belongs to, for use in the Portfolio Quick Agent Wins Aggregation section.
+
+If the report does not contain a Quick Agent Wins section (either V1 report or goal was `cloud-native-modernization` / `cost-optimization`), skip this extraction for that service.
+
+#### 2.8 Error Handling
+
 - Log warnings for missing sections (use defaults)
 - Log warnings for malformed scores (exclude from aggregations)
 - Log warnings for missing metadata (use defaults)
 - Handle duplicate service names with disambiguation using repository path
+- If a report is missing the V2 metadata header fields (`Assessment Goal`, `Repository Type`), treat as V1 format and apply defaults: goal = `general-readiness`, repo_type = `application`
+- If a pathway table uses an unrecognized format, log a warning and attempt best-effort parsing
 
 ### Step 3: Cross-Service Dependency Analysis
 
@@ -145,10 +233,145 @@ Identify patterns, anti-patterns, and opportunities across the portfolio:
 
 **Cross-Cutting Concerns Identification:**
 - Group findings by criterion ID (e.g., INF-Q1, APP-Q2, DATA-Q3)
-- For each criterion, count services with score < 3.0
-- If count >= 3 services, flag as cross-cutting concern
-- Calculate portfolio impact percentage (affected services / total services)
+- For each criterion, count services with score < 3.0 (numeric scores only — **exclude services where the criterion is N/A** from the count; N/A criteria are not gaps)
+- If count >= 3 services (with non-N/A scores < 3.0), flag as cross-cutting concern
+- Calculate portfolio impact percentage (affected services / total applicable services — i.e., services where the criterion is not N/A)
 - Generate portfolio-level recommendations addressing all affected services
+
+#### 4.1 Tiered Gap Classification
+
+After identifying all cross-cutting concerns (above), classify each flagged criterion into one of four tiers using the constants and algorithm below. This replaces the previous binary "Blocking Your Goal" / "General Opportunities" split with a more nuanced four-tier classification.
+
+**Tier Classification Constants:**
+
+**TIER_1_CRITERIA** (Foundational Blockers — static, all goals):
+
+| Criterion | Threshold | Description |
+|-----------|-----------|-------------|
+| INF-Q5 | < 2 | No IaC at all |
+| INF-Q6 | < 2 | No CI/CD at all |
+| OPS-Q1 | < 2 | No observability at all |
+| APP-Q8 AND SEC-Q5 | Both < 2 | No rate limiting at all |
+
+**TIER_2_MAP** (Goal-Specific Prerequisites — dynamic by goal):
+
+| Goal | Criteria | Threshold | Rationale |
+|------|----------|-----------|-----------|
+| `agentic-ai-enablement` | APP-Q2 (API docs), SEC-Q3 (identity propagation) | < 3 | Agents need machine-readable API specs and user-context propagation |
+| `cloud-native-modernization` | INF-Q5 (IaC), INF-Q6 (CI/CD) | score = 2 | Need better IaC/CI/CD to iterate on cloud-native infra safely |
+| `cost-optimization` | INF-Q5 (IaC), OPS-Q1 (observability) | < 3 | Can't optimize costs without visibility and control |
+| `general-readiness` | None | — | No specific goal = no goal-specific prerequisites |
+
+**TIER_3_MAP** (Goal Deliverables — dynamic by goal):
+
+| Goal | Criteria | Rationale |
+|------|----------|-----------|
+| `agentic-ai-enablement` | APP-Q13 (agent frameworks), DATA-Q1 (vector DB), DATA-Q2 (semantic search), DATA-Q3 (RAG), SEC-Q7 (human approval), OPS-Q3 (eval framework), OPS-Q6 (LLM cost tracking) | These ARE the agent capabilities the customer is building |
+| `cloud-native-modernization` | APP-Q4 (monolith decomposition), APP-Q3 (async communication), INF-Q1 (managed compute), OPS-Q9 (canary/blue-green) | These ARE the cloud-native capabilities being pursued |
+| `cost-optimization` | INF-Q2 (managed DB migration), DATA-Q10 (EOL DB upgrades), DATA-Q11 (open source migration), INF-Q8 (managed streaming) | These ARE the cost-reduction migrations being pursued |
+| `general-readiness` | None | No specific goal = nothing is a "deliverable" |
+
+**Tier Thresholds and Minimum Service Counts:**
+
+| Tier | Score Threshold | Min Services to Flag |
+|------|----------------|---------------------|
+| Tier 1 (🚨 Foundational Blockers) | < 2 | 2+ services (or 50%+ of portfolio, whichever is lower) |
+| Tier 2 (⚠️ Goal-Specific Prerequisites) | < 3 | 2+ services |
+| Tier 3 (🎯 Goal Deliverables) | < 3 | 2+ services |
+| General (💡 Improvement Opportunities) | < 3 | 3+ services |
+
+**Classification Algorithm:**
+
+For each criterion across all services, after collecting non-N/A scores:
+
+```
+for each criterion_id in all_criteria:
+    scores = [s for s in service_scores[criterion_id] if s != N/A]
+    if len(scores) == 0: continue
+
+    # Step 1: Check Tier 1 (static, goal-independent)
+    if criterion_id in TIER_1_CRITERIA:
+        low_count = count(s < 2 for s in scores)
+        if low_count >= min(2, len(scores) * 0.5):
+            classify as Tier 1
+            continue
+
+    # Step 2: Check Tier 2 (goal-dependent)
+    if criterion_id in TIER_2_MAP[goal]:
+        gap_count = count(s < 3 for s in scores)
+        if gap_count >= 2:
+            classify as Tier 2
+            continue
+
+    # Step 3: Check Tier 3 (goal-dependent)
+    if criterion_id in TIER_3_MAP[goal]:
+        gap_count = count(s < 3 for s in scores)
+        if gap_count >= 2:
+            classify as Tier 3
+            continue
+
+    # Step 4: Default — General Opportunity
+    gap_count = count(s < 3 for s in scores)
+    if gap_count >= 3:
+        classify as General Opportunity
+```
+
+**Important classification rules:**
+- Evaluate tiers in order: Tier 1 → Tier 2 → Tier 3 → General. A criterion is classified into the first tier it matches.
+- A criterion that qualifies for Tier 1 (e.g., INF-Q5 < 2) is classified as Tier 1 even if it also appears in TIER_2_MAP. Tier 1 takes precedence.
+- For `cloud-native-modernization` Tier 2: INF-Q5 and INF-Q6 are Tier 2 only when their score = 2 (exists but weak). If score < 2, they are Tier 1 (foundational blocker) instead.
+- N/A scores are excluded from all tier calculations — a service where a criterion is N/A does not count toward any tier's service count.
+
+**Report Rendering by Tier:**
+
+After classification, render the cross-cutting concerns using four sections with the following structure:
+
+```markdown
+## Cross-Cutting Concerns
+
+### 🚨 Foundational Blockers
+> These gaps block all modernization efforts, not just <goal>.
+> Address these first — nothing else matters until these are resolved.
+
+  - <Criterion description> (<criterion_id>): X of Y services score < 2. [details]
+  ...
+
+### ⚠️ Prerequisites for <Goal>
+> These gaps specifically block your path to <goal>.
+> They aren't the goal itself, but you can't get there without them.
+
+  - <Criterion description> (<criterion_id>): X of Y services score < 3. [details]
+  ...
+
+### 🎯 Goal Deliverables — What You're Here to Build
+> These are the capabilities your <goal> initiative will deliver.
+> Low scores here confirm the need for the initiative, not additional blockers.
+> Your individual assessment reports detail the current state and roadmap for each.
+
+  - <Criterion description> (<criterion_id>): X of Y services score < 3. [current state summary]
+  ...
+
+### 💡 General Improvement Opportunities
+> These gaps are important but do not directly block <goal>.
+> Address them as capacity allows or in parallel with goal work.
+
+  - <Criterion description> (<criterion_id>): X of Y services score < 3. [details]
+  ...
+```
+
+**Rendering rules:**
+- Only render a tier section if it contains at least one classified criterion. Omit empty tier sections entirely.
+- Tier 3 framing must be **informational**, not prescriptive — no "fix this blocker" language. These are the capabilities the customer is here to build.
+- For `general-readiness`: Only render Tier 1 (Foundational Blockers) and General Opportunities sections. Omit Tier 2 and Tier 3 entirely (they require a specific goal to be meaningful). Add a note: "With `general-readiness` as the goal, all non-foundational gaps are treated as equal improvement opportunities."
+
+**Priority criteria by goal (retained for reference — now used as source for TIER_2_MAP + TIER_3_MAP):**
+
+| Goal | Priority Criteria |
+|------|-------------------|
+| `agentic-ai-enablement` | APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6 |
+| `cloud-native-modernization` | APP-Q4, INF-Q1, INF-Q5, INF-Q6, APP-Q3, OPS-Q9 |
+| `cost-optimization` | INF-Q2, DATA-Q2, DATA-Q10, DATA-Q11, INF-Q8 |
+| `general-readiness` | All criteria equally |
 
 **Technology Stack Consolidation:**
 - Count distinct programming languages in use
@@ -215,33 +438,51 @@ Generate comprehensive portfolio-level metrics and scores:
 
 ### Step 6: Generate Dependency-Aware Portfolio Roadmap
 
-Create a four-phase roadmap with dependency-aware sequencing:
+Create a four-phase roadmap with dependency-aware sequencing. Phase names are goal-specific — use the lookup table below to select the correct names based on the `goal` read in Step 1.5.
 
-**Phase Assignment Algorithm:**
+**Goal-Specific Portfolio Phase Names:**
 
-**Phase 0 — Foundation (Months 0-1):**
+| Goal | Phase 0 | Phase 1 | Phase 2 | Phase 3 |
+|------|---------|---------|---------|---------|
+| `agentic-ai-enablement` | Cross-Cutting Foundation (Mo 0–1) | Agent Quick Wins (Mo 1–2) | Agent Foundations (Mo 2–4) | Agent Scale & Optimization (Mo 4–6+) |
+| `cloud-native-modernization` | Cross-Cutting Foundation (Mo 0–1) | Containerize & Automate (Mo 1–2) | Decompose & Decouple (Mo 2–4) | Optimize & Scale (Mo 4–6+) |
+| `cost-optimization` | Cross-Cutting Foundation (Mo 0–1) | License & Quick Savings (Mo 1–2) | Managed Service Migration (Mo 2–4) | Optimization & Governance (Mo 4–6+) |
+| `general-readiness` | Cross-Cutting Foundation (Mo 0–1) | Quick Wins (Mo 1–2) | Foundation (Mo 2–4) | Advanced Capabilities (Mo 4–6+) |
+
+Phase 0 is ALWAYS "Cross-Cutting Foundation (Mo 0–1)" regardless of goal. Phases 1–3 use goal-specific names with portfolio time ranges.
+
+**Phase Assignment Algorithm (unchanged — only phase NAMES change, not assignment logic):**
+
+**Phase 0 — Cross-Cutting Foundation (Mo 0–1):**
 - Cross-cutting concerns affecting 3+ services (portfolio-level solutions)
 - Shared infrastructure improvements benefiting multiple services
 - Circular dependency breaking activities (must be resolved first)
 - Organizational enablers (training, tooling, standards)
 
-**Phase 1 — Core Services (Months 1-3):**
+**Phase 1 — <goal-specific name> (Mo 1–2):**
 - Foundation services (fan-in >= 3, fan-out <= 1) - must go first
 - Services with no dependencies (can start immediately)
 - Services with score < 2.0 AND high blast radius (critical risks)
 - Establish patterns and reference implementations
 
-**Phase 2 — Dependent Services (Months 3-6):**
+**Phase 2 — <goal-specific name> (Mo 2–4):**
 - Services depending only on Phase 1 services
 - Services with moderate dependencies (2-3 dependencies)
 - Services with score 2.0-3.0 (moderate gaps)
 - Replicate proven patterns from Phase 1
 
-**Phase 3 — Optimization (Months 6-9):**
+**Phase 3 — <goal-specific name> (Mo 4–6+):**
 - Leaf services (fan-in <= 1, fan-out >= 2)
 - Services with score >= 3.0 (minor gaps only)
 - Optional enhancements and advanced capabilities
 - Continuous improvement and optimization
+
+**Goal-Driven Activity Re-Weighting Within Phases:**
+
+Within each phase, re-order activities so that goal-aligned activities appear first:
+- Activities addressing goal-priority criteria (see priority criteria table in Step 1.5) should be listed before non-priority activities
+- Activities targeting High Goal Alignment pathways should be listed before Medium or Low alignment activities
+- This is a presentation ordering change only — it does not change which activities are assigned to which phase
 
 **Sequencing Validation:**
 - Verify no service is assigned to a phase before its dependencies
@@ -492,6 +733,67 @@ For each pathway:
 - Aggregate estimated effort level (High/Medium/Low) across all affected services
 - Identify common trigger criteria (which specific gaps are most prevalent)
 
+**Portfolio Pathway Aggregation Table:**
+
+In addition to the counts and percentages above, produce a repo-level aggregation table that shows exactly which repositories fall into each pathway status. This table uses the per-repo pathway data extracted in Step 2.6 (Pathway Data) and provides a single at-a-glance view of pathway coverage across the portfolio.
+
+For each of the 7 pathways, create one row. For each row, place every assessed repository into exactly one of three columns based on its individual pathway status:
+- **Triggered** — The pathway's trigger conditions were met for this repo (from the individual report's pathway table, status = "Triggered")
+- **Not Triggered** — The pathway's trigger conditions were not met, but the pathway is applicable to this repo type (status = "Not Triggered")
+- **Not Applicable** — The pathway does not apply to this repo due to its repo type (status = "Not Applicable")
+
+**Rules:**
+- Every assessed repo MUST appear in exactly ONE column per pathway row. No repo may be missing from a row, and no repo may appear in more than one column per row.
+- If a column has no repos for a given pathway, display "—" instead of leaving it blank.
+- All 7 pathways MUST have a row in the table, even if no repos trigger that pathway.
+- **Goal Alignment** is determined by the portfolio-level `goal` (read in Step 1.5) using the goal-pathway alignment mapping below. This is a portfolio-wide value per pathway — it does not vary per repo.
+
+**Goal-Pathway Alignment Mapping:**
+
+| Goal | High Alignment | Medium Alignment | Low Alignment |
+|------|---------------|-----------------|--------------|
+| `agentic-ai-enablement` | Move to AI, Move to Managed Databases, Move to Modern DevOps | Move to Cloud Native, Move to Containers | Move to Open Source, Move to Managed Analytics |
+| `cloud-native-modernization` | Move to Cloud Native, Move to Containers, Move to Modern DevOps | Move to Managed Databases, Move to Open Source | Move to AI, Move to Managed Analytics |
+| `cost-optimization` | Move to Open Source, Move to Managed Databases, Move to Managed Analytics | Move to Containers, Move to Modern DevOps | Move to Cloud Native, Move to AI |
+| `general-readiness` | — | All pathways Medium | — |
+
+**Table Format:**
+
+Generate the following table in the portfolio report (within the AWS Modernization Pathways section):
+
+```markdown
+### Portfolio Pathway Aggregation
+
+| Pathway | Triggered | Not Triggered | Not Applicable | Goal Alignment |
+|---------|-----------|---------------|----------------|---------------|
+| Move to Cloud Native | <comma-separated repo names or "—"> | <comma-separated repo names or "—"> | <comma-separated repo names or "—"> | High/Medium/Low |
+| Move to Containers | ... | ... | ... | ... |
+| Move to Open Source | ... | ... | ... | ... |
+| Move to Managed Databases | ... | ... | ... | ... |
+| Move to Managed Analytics | ... | ... | ... | ... |
+| Move to Modern DevOps | ... | ... | ... | ... |
+| Move to AI | ... | ... | ... | ... |
+```
+
+**Example** (for a portfolio with goal `agentic-ai-enablement` and repos: service-a, service-b, books-api, infra-repo):
+
+```markdown
+### Portfolio Pathway Aggregation
+
+| Pathway | Triggered | Not Triggered | Not Applicable | Goal Alignment |
+|---------|-----------|---------------|----------------|---------------|
+| Move to Cloud Native | service-a, service-b | books-api | infra-repo | Medium |
+| Move to Containers | service-a, service-b, books-api | — | infra-repo | Medium |
+| Move to Open Source | — | service-a, service-b, books-api | infra-repo | Low |
+| Move to Managed Databases | service-a | service-b, books-api | infra-repo | High |
+| Move to Managed Analytics | — | service-a, service-b, books-api | infra-repo | Low |
+| Move to Modern DevOps | service-a, service-b | books-api | infra-repo | High |
+| Move to AI | service-a | service-b, books-api | infra-repo | High |
+```
+
+**Validation:**
+- After constructing the table, verify that for each pathway row, the total count of repos across the three columns (Triggered + Not Triggered + Not Applicable) equals the total number of assessed repos. If any repo is missing or duplicated, log a warning and correct the table.
+
 **Cross-Pathway Dependency Analysis:**
 
 Identify dependencies between pathways at the portfolio level:
@@ -518,6 +820,123 @@ Each pathway maps directly to a learning materials module:
 - Move to Modern DevOps → Module 6: Move to Modern DevOps
 - Move to AI → Module 7: Move to AI
 
+### Step 10.5: Aggregate Quick Agent Wins Across Portfolio
+
+**Conditional Inclusion — Goal-Based:**
+
+This step applies ONLY when the portfolio `goal` (read in Step 1.5) is one of:
+- `agentic-ai-enablement` → **ALWAYS include** this section
+- `general-readiness` → **ALWAYS include** this section
+
+When the goal is one of the following, **SKIP this step entirely** and do NOT include a Portfolio Quick Agent Wins section in the report:
+- `cloud-native-modernization` → **OMIT**
+- `cost-optimization` → **OMIT**
+
+**Input:** Quick Agent Wins extracted from individual reports in Step 2.7. Each win has: title, description, leverages (existing capability), effort, value, and the service it belongs to.
+
+**Aggregation Process:**
+
+1. **Collect all wins** from all individual reports that contained a Quick Agent Wins section. If no individual reports contained Quick Agent Wins (e.g., all repos were assessed with a non-agent goal in a previous run), note this and produce a brief statement instead of the full aggregation.
+
+2. **Group wins by type/category.** Common win types include:
+   - **API-Aware Agents** — wins leveraging API documentation or OpenAPI specs (triggered by APP-Q2 ≥ 2)
+   - **Tool Integration Agents** — wins leveraging structured JSON responses (triggered by APP-Q5 ≥ 3)
+   - **Data Query Agents** — wins leveraging database schemas for natural language to SQL (triggered by DATA-Q7 ≥ 2)
+   - **DevOps Agents** — wins leveraging CI/CD pipelines (triggered by INF-Q6 ≥ 2)
+   - **Documentation RAG** — wins leveraging existing docs/README content
+   - **Custom/Other** — wins that don't fit the above categories (e.g., tailored to `goal_context`)
+
+   For each win type, list which repos have that capability. Format: `**<Win Type>** (N repos: repo-a, repo-b, repo-c)`
+
+3. **Identify cross-repo agent opportunities.** These are cases where multiple repos' capabilities can be combined into a unified agent that spans services. Look for:
+   - Multiple repos with API documentation → a unified agent could discover and invoke APIs across services
+   - Repos with clear API contracts between them (from dependency analysis in Step 3) → a multi-tool agent could orchestrate cross-service workflows
+   - Multiple repos with documentation → combined knowledge base for an internal developer support agent
+   - Repos with complementary capabilities (e.g., one has data query capability, another has API capability) → an agent that combines both
+
+   For each cross-repo opportunity, describe:
+   - Which repos are involved and how they connect
+   - What the unified agent could do
+   - Why combining is more valuable than individual agents
+
+4. **Prioritize the aggregated wins.** Sort by:
+   1. **Goal alignment first** — wins that directly support the portfolio goal rank higher. For `agentic-ai-enablement`, all agent wins are high alignment. For `general-readiness`, rank by breadth of impact.
+   2. **Number of repos affected** — wins present in more repos rank higher (broader portfolio impact)
+   3. **Effort** — Low effort wins rank before Medium effort wins (faster time to value)
+
+5. **Tailor to `goal_context`** — If `goal_context` was provided (read in Step 1.5), frame the aggregated wins in terms of that context. For example, if `goal_context` mentions "customer support agent", highlight wins that enable customer support workflows (API access to order data, knowledge base from documentation, etc.).
+
+**Output Format:**
+
+The aggregated wins are included in the portfolio report as a "Portfolio Quick Agent Wins" section (see report template in Step 11). The format is:
+
+```markdown
+### Portfolio Quick Agent Wins
+
+Across the portfolio, these agent opportunities are immediately available:
+
+**<Win Type>** (N repos: repo-a, repo-b, repo-c)
+- <Description of the aggregated opportunity and what a unified agent could do>
+
+**Cross-Service Orchestration** (repo-a → repo-b)
+- <Description of the cross-repo agent opportunity>
+
+**<Win Type>** (all repos)
+- <Description>
+
+> These portfolio-wide agent opportunities can be pursued in parallel with the
+> modernization roadmap. They demonstrate agent value early while foundations
+> are being built across the portfolio.
+```
+
+**Edge Cases:**
+- If only 1 repo has Quick Agent Wins, still include the section but note the limited scope and recommend expanding agent capabilities to other repos as they modernize.
+- If no repos have Quick Agent Wins (all were V1 reports or assessed with non-agent goals), state: "No individual Quick Agent Wins were identified in the current assessment reports. As repos are re-assessed with the `agentic-ai-enablement` or `general-readiness` goal, agent opportunities will be identified and aggregated here."
+- If `goal_context` is absent, use generic framing without tailoring to a specific use case.
+
+### Step 10.7: Generate AWS Programs & Engagement Recommendations
+
+> **This section appears ONLY in portfolio reports, NEVER in individual reports.** AWS programs are engagement-level decisions scoped to the customer's overall estate, not per-repo. The portfolio view has the right scope to make these recommendations.
+
+Based on the portfolio-wide assessment findings from previous steps, evaluate each of the 8 AWS engagement programs below against its trigger condition. Include a program in the recommendations only if its trigger condition is met. If no programs are triggered, include a brief note instead.
+
+**Programs Catalog and Trigger Logic:**
+
+| Program | Acronym | Trigger Condition | How to Evaluate |
+|---------|---------|-------------------|-----------------|
+| Migration Acceleration Program | MAP | Portfolio has 3+ repos with overall score < 2.5 | Count repos from Step 5 (Portfolio Metrics) where overall readiness score < 2.5. If count ≥ 3, recommend MAP. |
+| Optimization and Licensing Assessment | OLA | Any repo has Oracle, SQL Server, VMware, or commercial license findings | Check individual report findings for DATA-Q11 (stored procedures / commercial SQL) and INF-Q2 (managed DB) scores. If any repo's findings mention Oracle, SQL Server, VMware, or other commercial database/license references, recommend OLA. |
+| Microsoft Modernization Program | MMP | Any repo has .NET or Windows workloads detected | Check APP-Q1 (Programming Languages) findings from individual reports. If any repo uses C#, .NET, ASP.NET, or VB.NET, recommend MMP. |
+| VMware Modernization Program | VMP | Any repo has VMware references in IaC or deployment configs | Check individual report findings for VMware, vSphere, ESXi, or vCenter references in infrastructure or deployment findings. If found, recommend VMP. |
+| Windows App Modernization Program | WAMP | Any repo has Windows-based deployment targets | Check individual report findings for Windows Server, IIS, Windows containers, or Windows-based EC2 instances. If found, recommend WAMP. |
+| Experience-Based Acceleration | EBA | Each triggered pathway = potential EBA engagement | For each pathway triggered at the portfolio level (from Step 10), create a separate EBA row. E.g., if Move to Containers and Move to Managed Databases are both triggered, include "EBA — Move to Containers" and "EBA — Move to Managed Databases" as separate rows. |
+| ISV Workload Migration Program | ISV WMP | Portfolio is an ISV SaaS platform being modernized | Check `goal_context` (from Step 1.5) for ISV, SaaS, multi-tenant, or independent software vendor references. If the portfolio appears to be an ISV SaaS platform, recommend ISV WMP. |
+| Cloud Economics | CE | Goal is `cost-optimization` OR portfolio has significant licensing costs | If the portfolio `goal` (from Step 1.5) is `cost-optimization`, always recommend CE. Also recommend CE if OLA was triggered (commercial licensing costs detected) or if multiple repos have commercial database/middleware findings. |
+
+**Relevance Classification:**
+
+For each recommended program, assign a relevance level:
+- **High**: The trigger condition is strongly met (e.g., many repos affected, clear evidence in findings, directly aligned with the portfolio goal)
+- **Medium**: The trigger condition is met but with moderate evidence (e.g., few repos affected, indirect evidence)
+- **Low**: The trigger condition is marginally met (e.g., single repo, weak signal)
+
+**EBA Special Handling:**
+
+EBA (Experience-Based Acceleration) gets one row per triggered pathway, not one row for all EBA. Each EBA row should reference:
+- The specific pathway (e.g., "EBA — Move to Containers")
+- The number of repos that trigger that pathway
+- The key trigger criteria driving the pathway
+- The next step: "Request EBA engagement via SA"
+
+**Output:**
+
+The recommended programs are included in the portfolio report as an "AWS Programs & Engagement Recommendations" section (see report template in Step 11). The format is a table with columns: Program, Relevance, Trigger Findings, Next Step.
+
+**Edge Cases:**
+- If no programs are triggered, include the section with a brief note: "No specific AWS program recommendations based on current findings. As the portfolio evolves, re-assess to identify program eligibility."
+- If `goal_context` is absent, evaluate ISV WMP based on available portfolio metadata only (it will likely not be triggered without explicit ISV context).
+- Programs can overlap — a portfolio may qualify for MAP, OLA, and multiple EBA engagements simultaneously. Include all that are triggered.
+
 ### Step 11: Generate the Portfolio Agentic Readiness Report
 
 **Output Location:**
@@ -534,6 +953,8 @@ Create the report file with exactly this structure:
 ```markdown
 # Portfolio Agentic Readiness Assessment Report
 **Portfolio**: <portfolio name or parent directory>
+**Assessment Goal**: <effective goal value, e.g., agentic-ai-enablement>
+**Goal Context**: <goal_context value if provided, otherwise omit this line>
 **Services Assessed**: <count>
 **Assessment Date**: <date>
 **Assessed by**: AWS Transform Custom — Portfolio Agentic Readiness Assessment
@@ -547,23 +968,25 @@ Create the report file with exactly this structure:
 3. Service Dependency Map
 4. Cross-Cutting Concerns
 5. Portfolio Modernization Roadmap
-   - Phase 0 — Foundation (Months 0-1)
-   - Phase 1 — Core Services (Months 1-3)
-   - Phase 2 — Dependent Services (Months 3-6)
-   - Phase 3 — Optimization (Months 6-9)
+   - Phase 0 — Cross-Cutting Foundation (Mo 0–1)
+   - Phase 1 — <goal-specific name> (Mo 1–2)
+   - Phase 2 — <goal-specific name> (Mo 2–4)
+   - Phase 3 — <goal-specific name> (Mo 4–6+)
 6. AWS Modernization Pathways
-7. Integration Opportunities
-8. Resource Allocation Recommendations
-9. Recommended Self-Paced Learning Materials
-10. Risk Analysis
-11. Service-by-Service Summary
-12. Appendix: Assessment Inventory
+7. Portfolio Quick Agent Wins *(only when goal is `agentic-ai-enablement` or `general-readiness`)*
+8. AWS Programs & Engagement Recommendations *(portfolio only)*
+9. Integration Opportunities
+10. Resource Allocation Recommendations
+11. Recommended Self-Paced Learning Materials
+12. Risk Analysis
+13. Service-by-Service Summary
+14. Appendix: Assessment Inventory
 
 ---
 
 ## Executive Dashboard
 
-<2-3 paragraph executive summary highlighting portfolio-wide readiness, critical dependencies, top priorities, and expected timeline for agentic enablement.>
+<2-3 paragraph executive summary highlighting portfolio-wide readiness, critical dependencies, top priorities, and expected timeline. Frame the summary around the portfolio's assessment goal — e.g., for `agentic-ai-enablement` emphasize agent readiness and quick wins; for `cost-optimization` emphasize licensing costs and managed service migration opportunities; for `cloud-native-modernization` emphasize containerization and decomposition readiness; for `general-readiness` provide a balanced overview across all dimensions.>
 
 ### Portfolio Readiness Score: X.X / 4.0
 
@@ -687,6 +1110,70 @@ Create the report file with exactly this structure:
 
 ## Cross-Cutting Concerns
 
+> Cross-cutting concerns are gaps that appear across multiple services. They are classified into four tiers based on severity and relationship to the portfolio's assessment goal (`<goal>`). Use the tiered classification algorithm from Section 4.1 to assign each flagged criterion to a tier.
+>
+> **For `general-readiness`**: Only Tier 1 (Foundational Blockers) and General Opportunities are rendered. Tiers 2 and 3 are omitted.
+
+### 🚨 Foundational Blockers
+
+> These gaps block all modernization efforts, not just `<goal>`.
+> Address these first — nothing else matters until these are resolved.
+> **Render this section only if at least one Tier 1 criterion is classified. Omit entirely if empty.**
+
+1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 2
+   - **Impact**: <explain how this blocks all modernization — e.g., "No IaC means no automated, repeatable infrastructure changes">
+   - **Affected services**: <list service names>
+   - **Recommendation**: <portfolio-level solution>
+
+2. <additional Tier 1 concerns...>
+
+### ⚠️ Prerequisites for `<goal>`
+
+> These gaps specifically block your path to `<goal>`.
+> They aren't the goal itself, but you can't get there without them.
+> **Render this section only if at least one Tier 2 criterion is classified. Omit entirely if empty or if goal is `general-readiness`.**
+
+1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 3
+   - **Impact on goal**: <explain how this gap blocks the goal — e.g., "Agents cannot discover or invoke service capabilities without machine-readable API specs">
+   - **Affected services**: <list service names>
+   - **Recommendation**: <portfolio-level solution>
+
+2. <additional Tier 2 concerns...>
+
+### 🎯 Goal Deliverables — What You're Here to Build
+
+> These are the capabilities your `<goal>` initiative will deliver.
+> Low scores here confirm the need for the initiative, not additional blockers.
+> Your individual assessment reports detail the current state and roadmap for each.
+> **Render this section only if at least one Tier 3 criterion is classified. Omit entirely if empty or if goal is `general-readiness`.**
+> **Framing must be informational, not prescriptive — no "fix this blocker" language.**
+
+1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 3
+   - **Current state**: <summarize where the portfolio stands on this capability>
+   - **Affected services**: <list service names>
+   - **Roadmap reference**: <point to relevant phase in the modernization roadmap>
+
+2. <additional Tier 3 concerns...>
+
+### 💡 General Improvement Opportunities
+
+> These gaps are important but do not directly block `<goal>`.
+> Address them as capacity allows or in parallel with goal work.
+> **Always render this section. If no General criteria are classified, state: "No additional general improvement opportunities identified beyond the tiered concerns above."**
+
+1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 3
+   - **Impact**: <describe impact>
+   - **Affected services**: <list service names>
+   - **Recommendation**: <portfolio-level solution>
+
+2. <additional General concerns...>
+
+> **`general-readiness` note**: When goal is `general-readiness`, add: "With `general-readiness` as the goal, all non-foundational gaps are treated as equal improvement opportunities."
+
+### Per-Category Analysis
+
+> Regardless of the tiered classification above, also provide the per-category analysis below for a complete picture of portfolio health.
+
 ### Infrastructure & Platform
 
 **Portfolio Score: X.X / 4.0**
@@ -734,7 +1221,7 @@ Create the report file with exactly this structure:
 
 ## Portfolio Modernization Roadmap
 
-<Account for cross-service dependencies, shared infrastructure, and organizational capacity. Sequence work to minimize risk and maximize value delivery.>
+<Account for cross-service dependencies, shared infrastructure, and organizational capacity. Sequence work to minimize risk and maximize value delivery. Use goal-specific phase names from the lookup table in Step 6 based on the portfolio's `goal`.>
 
 ### Sequencing Principles
 
@@ -743,8 +1230,11 @@ Create the report file with exactly this structure:
 3. **Risk Mitigation**: High-risk changes sequenced to minimize blast radius
 4. **Parallel Tracks**: Independent services can be modernized concurrently
 5. **Quick Wins**: Early wins build momentum and demonstrate value
+6. **Goal Alignment**: Within each phase, goal-priority activities are listed first
 
-### Phase 0 — Foundation (Months 0-1)
+### Phase 0 — Cross-Cutting Foundation (Mo 0–1)
+
+> Phase 0 is ALWAYS "Cross-Cutting Foundation (Mo 0–1)" regardless of goal.
 
 **Objective**: Establish shared capabilities and organizational readiness
 
@@ -767,15 +1257,21 @@ Create the report file with exactly this structure:
 
 **Estimated Effort**: High/Medium/Low
 
-### Phase 1 — Core Services (Months 1-3)
+### Phase 1 — <goal-specific name> (Mo 1–2)
 
-**Objective**: Modernize foundational services that others depend on
+> Use the goal-specific Phase 1 name from the lookup table:
+> - `agentic-ai-enablement` → "Agent Quick Wins (Mo 1–2)"
+> - `cloud-native-modernization` → "Containerize & Automate (Mo 1–2)"
+> - `cost-optimization` → "License & Quick Savings (Mo 1–2)"
+> - `general-readiness` → "Quick Wins (Mo 1–2)"
+
+**Objective**: Modernize foundational services that others depend on. List goal-priority activities first.
 
 **Services in Scope:**
 1. **Service A** (P0, Score: X.X/4.0)
    - Current State: <summary>
    - Target State: <summary>
-   - Key Activities:
+   - Key Activities (goal-priority activities listed first):
      - <activity 1>
      - <activity 2>
    - Dependencies: None (foundation service)
@@ -794,15 +1290,21 @@ Create the report file with exactly this structure:
 
 **Estimated Effort**: High/Medium/Low
 
-### Phase 2 — Dependent Services (Months 3-6)
+### Phase 2 — <goal-specific name> (Mo 2–4)
 
-**Objective**: Modernize services that depend on Phase 1 services
+> Use the goal-specific Phase 2 name from the lookup table:
+> - `agentic-ai-enablement` → "Agent Foundations (Mo 2–4)"
+> - `cloud-native-modernization` → "Decompose & Decouple (Mo 2–4)"
+> - `cost-optimization` → "Managed Service Migration (Mo 2–4)"
+> - `general-readiness` → "Foundation (Mo 2–4)"
+
+**Objective**: Modernize services that depend on Phase 1 services. List goal-priority activities first.
 
 **Services in Scope:**
 1. **Service C** (P1, Score: X.X/4.0)
    - Current State: <summary>
    - Target State: <summary>
-   - Key Activities:
+   - Key Activities (goal-priority activities listed first):
      - <activity 1>
      - <activity 2>
    - Dependencies: Service A (Phase 1)
@@ -821,9 +1323,15 @@ Create the report file with exactly this structure:
 
 **Estimated Effort**: High/Medium/Low
 
-### Phase 3 — Optimization (Months 6-9)
+### Phase 3 — <goal-specific name> (Mo 4–6+)
 
-**Objective**: Optimize cross-service workflows and implement advanced capabilities
+> Use the goal-specific Phase 3 name from the lookup table:
+> - `agentic-ai-enablement` → "Agent Scale & Optimization (Mo 4–6+)"
+> - `cloud-native-modernization` → "Optimize & Scale (Mo 4–6+)"
+> - `cost-optimization` → "Optimization & Governance (Mo 4–6+)"
+> - `general-readiness` → "Advanced Capabilities (Mo 4–6+)"
+
+**Objective**: Optimize cross-service workflows and implement advanced capabilities. List goal-priority activities first.
 
 **Activities:**
 - Implement distributed tracing across all services
@@ -868,6 +1376,20 @@ Based on the portfolio-wide assessment findings, the following AWS Modernization
 | Service A | ✅ | ✅ | — | ✅ | — | ✅ | ✅ |
 | Service B | — | ✅ | — | — | — | ✅ | — |
 | <list all services> |
+
+### Portfolio Pathway Aggregation
+
+This table shows exactly which repositories fall into each pathway status, providing a single at-a-glance view of pathway coverage across the portfolio. Each repo appears in exactly one column per pathway row. Goal Alignment is based on the portfolio-level goal using the goal-pathway alignment mapping.
+
+| Pathway | Triggered | Not Triggered | Not Applicable | Goal Alignment |
+|---------|-----------|---------------|----------------|---------------|
+| Move to Cloud Native | <comma-separated repo names or "—"> | <comma-separated repo names or "—"> | <comma-separated repo names or "—"> | High/Medium/Low |
+| Move to Containers | ... | ... | ... | ... |
+| Move to Open Source | ... | ... | ... | ... |
+| Move to Managed Databases | ... | ... | ... | ... |
+| Move to Managed Analytics | ... | ... | ... | ... |
+| Move to Modern DevOps | ... | ... | ... | ... |
+| Move to AI | ... | ... | ... | ... |
 
 ### Pathway Dependencies and Parallel Execution
 
@@ -914,6 +1436,71 @@ Based on the portfolio-wide assessment findings, the following AWS Modernization
 - Move to Modern DevOps: Implement CI/CD pipelines
 - Move to Managed Databases: Migrate to managed data tier
 - Move to AI: Integrate agentic capabilities
+
+---
+
+## Portfolio Quick Agent Wins
+
+> **Include this section ONLY when the portfolio goal is `agentic-ai-enablement` or `general-readiness`.
+> OMIT this entire section when the goal is `cloud-native-modernization` or `cost-optimization`.**
+
+Across the portfolio, these agent opportunities are immediately available based on existing capabilities found in individual assessments:
+
+**<Win Type>** (N repos: <comma-separated repo names>)
+- <Description of the aggregated opportunity. Explain what a unified agent could do leveraging this capability across the listed repos.>
+
+**<Win Type>** (N repos: <comma-separated repo names>)
+- <Description of the aggregated opportunity.>
+
+### Cross-Repo Agent Opportunities
+
+<Identify opportunities where multiple repos' capabilities can be combined into unified agents that span services. These are higher-value than individual repo wins because they leverage the portfolio's interconnected nature.>
+
+**<Opportunity Title>** (<repo-a> → <repo-b>)
+- <Description of the cross-service agent opportunity. Explain which repos are involved, how they connect, and what the unified agent could do.>
+
+**<Opportunity Title>** (all repos)
+- <Description of the portfolio-wide agent opportunity.>
+
+### Prioritized Agent Wins
+
+| Win | Repos Affected | Goal Alignment | Effort | Recommended Phase |
+|-----|---------------|----------------|--------|-------------------|
+| <win 1> | N repos | High/Medium | Low/Medium | Phase 1/2 |
+| <win 2> | N repos | High/Medium | Low/Medium | Phase 1/2 |
+| <win 3> | N repos | High/Medium | Low/Medium | Phase 1/2/3 |
+
+> These portfolio-wide agent opportunities can be pursued in parallel with the
+> modernization roadmap. They demonstrate agent value early while foundations
+> are being built across the portfolio.
+
+---
+
+## AWS Programs & Engagement Recommendations
+
+> **This section appears ONLY in portfolio reports, NEVER in individual reports.** Programs are engagement-level decisions scoped to the customer's overall estate, not per-repo.
+
+Based on the portfolio assessment findings, the following AWS programs may accelerate your modernization journey:
+
+### Recommended Programs
+
+| Program | Relevance | Trigger Findings | Next Step |
+|---------|-----------|-----------------|-----------|
+| <Program name or "EBA — <Pathway Name>"> | High/Medium/Low | <Specific findings that triggered this recommendation, referencing criteria IDs and repo names> | <Recommended action, e.g., "Request EBA engagement via SA", "Request OLA for licensing analysis", "Evaluate MAP eligibility"> |
+| <repeat for each triggered program> |
+
+> If no programs are triggered, replace the table above with:
+> "No specific AWS program recommendations based on current findings. As the portfolio evolves, re-assess to identify program eligibility."
+
+### Program Details
+
+<For each recommended program, provide a brief paragraph explaining:>
+- Why this program was recommended (which specific findings triggered it)
+- What the program provides (brief description of the program's value)
+- Suggested timing relative to the modernization roadmap phases
+
+> These are engagement-level recommendations. Discuss with your AWS Solutions Architect
+> or Partner to determine eligibility and timing.
 
 ---
 
@@ -1099,6 +1686,7 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 
 - **Overall Score**: X.X / 4.0 <emoji>
 - **Repository**: <path>
+- **Repository Type**: <repo_type, e.g., application, infrastructure-only, library>
 - **Assessment Date**: <date>
 - **Category Scores**:
   - Infrastructure: X.X / 4.0
@@ -1113,6 +1701,7 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 - **Dependencies**: <list>
 - **Depended On By**: <list>
 - **Modernization Pathways**: <list of triggered pathways for this service>
+- **Goal Alignment**: <list pathways with their alignment: High/Medium/Low>
 - **Modernization Phase**: Phase 0/1/2/3
 - **Estimated Effort**: High/Medium/Low
 
@@ -1124,9 +1713,9 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 
 ### Reports Analyzed
 
-| Service | Repository Path | Assessment Date | Overall Score | Report Path |
-|---------|----------------|-----------------|---------------|-------------|
-| Service A | /path/to/repo | YYYY-MM-DD | X.X / 4.0 | /path/to/report |
+| Service | Repository Path | Repo Type | Assessment Date | Overall Score | Report Path |
+|---------|----------------|-----------|-----------------|---------------|-------------|
+| Service A | /path/to/repo | application | YYYY-MM-DD | X.X / 4.0 | /path/to/report |
 | <list all services> |
 
 ### Assessment Methodology
@@ -1163,18 +1752,20 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 2. The report file `{portfolio-name}-portfolio-agentic-readiness-report.md` is created in the `agentic-readiness-assessment` directory
 3. The report contains an Executive Dashboard with portfolio-wide scores
 4. The report contains a Service Dependency Map with all services listed
-5. The report contains Cross-Cutting Concerns analysis for all 5 categories
-6. The report contains a Portfolio Modernization Roadmap with 4 phases
-7. The roadmap respects dependency order (services are sequenced correctly)
+5. The report contains Cross-Cutting Concerns analysis for all 5 categories, classified into four tiers: 🚨 Foundational Blockers, ⚠️ Prerequisites for Goal, 🎯 Goal Deliverables, and 💡 General Improvement Opportunities. Empty tier sections are omitted. For `general-readiness`, only Tier 1 and General Opportunities are rendered (Tiers 2 and 3 are omitted).
+6. The report contains a Portfolio Modernization Roadmap with 4 phases using goal-specific phase names (Phase 0 is always "Cross-Cutting Foundation (Mo 0–1)"; Phases 1–3 use names from the goal-specific lookup table in Step 6)
+7. The roadmap respects dependency order (services are sequenced correctly) and activities within each phase are re-weighted by goal alignment (goal-priority activities listed first)
 8. The report contains an AWS Modernization Pathways section with all 7 pathways evaluated, per-service pathway assignments, and parallel execution plan
-9. The report contains Integration Opportunities with specific recommendations
-10. The report contains Resource Allocation Recommendations
-11. The report contains a Recommended Self-Paced Learning Materials section with relevant links based on portfolio-wide skill gaps
-12. The report contains Risk Analysis with specific risks identified
-13. The report contains Service-by-Service Summary for all assessed services with pathway assignments
-14. The report contains an Appendix listing all reports analyzed
-15. All scores and metrics are calculated correctly from source reports
-16. No source files were modified during the assessment
+9. When the goal is `agentic-ai-enablement` or `general-readiness`, the report contains a Portfolio Quick Agent Wins section with wins grouped by type across repos, cross-repo agent opportunities identified, and wins prioritized by goal alignment and effort. When the goal is `cloud-native-modernization` or `cost-optimization`, this section is absent from the report.
+10. The report contains an AWS Programs & Engagement Recommendations section that recommends relevant AWS programs (MAP, OLA, MMP, VMP, WAMP, EBA, ISV WMP, CE) based on portfolio-level trigger conditions. Each program is included only if its trigger condition is met. EBA has one row per triggered pathway. If no programs are triggered, a brief note is included instead. This section does NOT appear in individual reports.
+11. The report contains Integration Opportunities with specific recommendations
+12. The report contains Resource Allocation Recommendations
+13. The report contains a Recommended Self-Paced Learning Materials section with relevant links based on portfolio-wide skill gaps
+14. The report contains Risk Analysis with specific risks identified
+15. The report contains Service-by-Service Summary for all assessed services with pathway assignments
+16. The report contains an Appendix listing all reports analyzed
+17. All scores and metrics are calculated correctly from source reports
+18. No source files were modified during the assessment
 
 ## Error Handling
 
@@ -1225,9 +1816,14 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 ### Edge Cases (Handle Gracefully)
 
 **No Cross-Cutting Concerns:**
-- Scenario: All gaps are service-specific (no criterion affects 3+ services)
-- Action: State explicitly in report: "No cross-cutting concerns identified. All gaps are service-specific."
+- Scenario: All gaps are service-specific (no criterion affects enough services to qualify for any tier)
+- Action: State explicitly in report: "No cross-cutting concerns identified. All gaps are service-specific." Omit all four tier sections.
 - Impact: Phase 0 may be empty or contain only shared infrastructure work
+
+**No Foundational Blockers:**
+- Scenario: Cross-cutting concerns exist, but none qualify for Tier 1 (no criterion has 2+ services scoring < 2)
+- Action: Omit the 🚨 Foundational Blockers section entirely. Render remaining applicable tier sections.
+- Impact: Phase 0 prioritization focuses on goal-specific prerequisites or general improvements
 
 **Isolated Services:**
 - Scenario: Service has no dependencies and no dependents
@@ -1301,3 +1897,11 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 - Cross-pathway dependencies MUST be identified and reflected in the parallel execution plan
 - Each triggered pathway MUST map to the corresponding learning materials module
 - Per-service pathway assignments MUST be included in the Service-by-Service Summary
+
+**AWS Programs & Engagement Recommendations:**
+- The AWS Programs section MUST appear ONLY in portfolio reports, NEVER in individual reports
+- Each program (MAP, OLA, MMP, VMP, WAMP, EBA, ISV WMP, CE) MUST be included only if its specific trigger condition is met based on portfolio assessment findings
+- EBA MUST have one row per triggered pathway (e.g., "EBA — Move to Containers", "EBA — Move to Managed Databases"), NOT one row for all EBA
+- Relevance levels (High/Medium/Low) MUST be based on the strength of evidence (number of repos affected, clarity of findings, goal alignment)
+- If no programs are triggered, the section MUST still be present with a brief note stating no programs are recommended based on current findings
+- Program recommendations MUST reference specific findings, criteria IDs, and repo names — do NOT include generic program descriptions without evidence

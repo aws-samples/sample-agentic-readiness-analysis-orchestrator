@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Agentic Readiness — ecommerce-platform-test</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1117;--surface:#1a1d27;--surface2:#232733;--border:#2d3140;--text:#e4e6f0;--text2:#9ca0b0;--accent:#6c5ce7;--accent2:#a29bfe;--green:#00cec9;--yellow:#fdcb6e;--orange:#e17055;--red:#d63031;--blue:#0984e3;--teal:#00b894;--radius:16px;--shadow:0 8px 32px rgba(0,0,0,.4)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+.bg-glow{position:fixed;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 40%,rgba(108,92,231,.08) 0%,transparent 50%),radial-gradient(circle at 70% 60%,rgba(0,206,201,.06) 0%,transparent 50%);animation:bgFloat 20s ease-in-out infinite;z-index:0;pointer-events:none}
+@keyframes bgFloat{0%,100%{transform:translate(0,0)}50%{transform:translate(-2%,2%)}}
+.container{max-width:1440px;margin:0 auto;padding:24px 32px;position:relative;z-index:1}
+.header{text-align:center;padding:48px 0 24px}
+.header .badge{display:inline-block;background:linear-gradient(135deg,var(--accent),var(--blue));padding:6px 16px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px}
+.header h1{font-size:42px;font-weight:800;background:linear-gradient(135deg,var(--text),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.header .subtitle{color:var(--text2);font-size:15px}
+.header .goal-ctx{color:var(--accent2);font-size:13px;margin-top:8px;font-style:italic}
+.nav{display:flex;justify-content:center;gap:8px;margin:24px 0;flex-wrap:wrap}
+.nav-btn{background:var(--surface);border:1px solid var(--border);color:var(--text2);padding:10px 20px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;transition:all .25s}
+.nav-btn:hover,.nav-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);transform:translateY(-1px)}
+.section{display:none;animation:fadeIn .4s ease}.section.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.score-hero{display:flex;align-items:center;justify-content:center;gap:64px;padding:40px 0;flex-wrap:wrap}
+.score-ring-wrap{position:relative;width:220px;height:220px}
+.score-ring-wrap canvas{width:220px!important;height:220px!important}
+.score-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.score-center .num{font-size:48px;font-weight:800}.score-center .label{font-size:13px;color:var(--text2);margin-top:2px}
+.score-meta{display:flex;flex-direction:column;gap:14px}
+.score-meta-item{display:flex;align-items:center;gap:12px}
+.score-meta-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.score-meta-text{font-size:14px;color:var(--text2)}.score-meta-text strong{color:var(--text);font-weight:600}
+.grid{display:grid;gap:20px}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.grid-4{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;transition:all .3s}
+.card:hover{border-color:var(--accent);box-shadow:var(--shadow),0 0 20px rgba(108,92,231,.1);transform:translateY(-2px)}
+.card-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px}
+.card-value{font-size:32px;font-weight:800}.card-sub{font-size:12px;color:var(--text2);margin-top:4px}
+.svc-card{cursor:pointer;position:relative;overflow:hidden}
+.svc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--radius) var(--radius) 0 0}
+.svc-card.tier-red::before{background:var(--red)}.svc-card.tier-orange::before{background:var(--orange)}
+.svc-card.tier-yellow::before{background:var(--yellow)}.svc-card.tier-green::before{background:var(--green)}
+.svc-name{font-size:16px;font-weight:700;margin-bottom:4px}
+.svc-score{font-size:36px;font-weight:800;margin-bottom:4px}
+.svc-bar-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.svc-bar-label{font-size:11px;color:var(--text2);width:80px;flex-shrink:0}
+.svc-bar-track{flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.svc-bar-fill{height:100%;border-radius:3px;transition:width 1s ease}
+.svc-priority{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;margin-top:12px}
+.svc-priority.p0{background:rgba(214,48,49,.15);color:var(--red)}.svc-priority.p1{background:rgba(253,203,110,.15);color:var(--yellow)}
+.cat-row{display:flex;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--border)}
+.cat-row:last-child{border-bottom:none}
+.cat-label{width:220px;font-size:14px;font-weight:500;flex-shrink:0}
+.cat-bar-wrap{flex:1;display:flex;align-items:center;gap:12px}
+.cat-bar-track{flex:1;height:12px;background:var(--surface2);border-radius:6px;overflow:hidden}
+.cat-bar-fill{height:100%;border-radius:6px;transition:width 1.2s cubic-bezier(.4,0,.2,1)}
+.cat-score{font-size:14px;font-weight:700;width:60px;text-align:right;flex-shrink:0}
+.cat-status{font-size:16px;width:24px;text-align:center;flex-shrink:0}
+.gap-table{width:100%;border-collapse:collapse}
+.gap-table th{text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border)}
+.gap-table td{padding:12px 16px;font-size:13px;border-bottom:1px solid var(--border)}
+.gap-table tr:hover td{background:var(--surface2)}
+.gap-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dep-graph{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;margin:24px 0}
+.detail-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:100;backdrop-filter:blur(4px)}
+.detail-overlay.open{display:flex;align-items:center;justify-content:center;animation:fadeIn .3s}
+.detail-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:90%;max-width:900px;max-height:85vh;overflow-y:auto;padding:40px;position:relative}
+.detail-close{position:absolute;top:16px;right:16px;background:var(--surface2);border:none;color:var(--text);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.detail-close:hover{background:var(--red)}
+.phase-card{position:relative;overflow:hidden;padding-left:32px}
+.phase-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:2px}
+.phase-card.ph0::before{background:var(--red)}.phase-card.ph1::before{background:var(--orange)}
+.phase-card.ph2::before{background:var(--yellow)}.phase-card.ph3::before{background:var(--green)}
+.exec-summary{border-left:4px solid var(--accent);padding-left:28px}
+.strength-item,.gap-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text2);line-height:1.6}
+.strength-item::before{content:'\2705 ';}.gap-item::before{content:'\26A0\FE0F ';}
+.q-card{position:relative;overflow:hidden;cursor:pointer}
+.q-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--radius) var(--radius) 0 0}
+.q-card.q-red::before{background:var(--red)}.q-card.q-orange::before{background:var(--orange)}
+.q-card.q-yellow::before{background:var(--yellow)}.q-card.q-green::before{background:var(--green)}
+@media(max-width:768px){.container{padding:16px}.header h1{font-size:28px}.score-hero{flex-direction:column;gap:32px}.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}.cat-row{flex-direction:column;gap:8px}.cat-label{width:100%}}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:var(--text2)}
+</style>
+</head><body>
+<div class="bg-glow"></div>
+<div class="container">
+<div class="header">
+  <div class="badge">AWS Transform — Agentic Readiness Assessment</div>
+  <h1>ecommerce-platform-test</h1>
+  <div class="subtitle">Portfolio Assessment · 5 Services · 2026-03-12</div>
+  <div class="goal-ctx">Goal: agentic-ai-enablement — Building customer-facing AI agents for support and order management</div>
+</div>
+<div class="nav">
+  <button class="nav-btn active" onclick="showSection('overview',this)">Overview</button>
+  <button class="nav-btn" onclick="showSection('services',this)">Services</button>
+  <button class="nav-btn" onclick="showSection('categories',this)">Categories</button>
+  <button class="nav-btn" onclick="showSection('gaps',this)">Risks & Gaps</button>
+  <button class="nav-btn" onclick="showSection('pathways',this)">Pathways</button>
+  <button class="nav-btn" onclick="showSection('dependencies',this)">Dependencies</button>
+  <button class="nav-btn" onclick="showSection('roadmap',this)">Roadmap</button>
+</div>
+
+<!-- OVERVIEW -->
+<div id="sec-overview" class="section active">
+  <div class="score-hero">
+    <div class="score-ring-wrap"><canvas id="scoreRing"></canvas>
+      <div class="score-center"><div class="num" id="heroScore">0</div><div class="label">of 4.0</div></div>
+    </div>
+    <div class="score-meta">
+      <div class="score-meta-item"><div class="score-meta-dot" style="background:var(--red)"></div><div class="score-meta-text"><strong>1</strong> Not Ready (&lt;1.5)</div></div>
+      <div class="score-meta-item"><div class="score-meta-dot" style="background:var(--orange)"></div><div class="score-meta-text"><strong>4</strong> Needs Work (1.5-2.4)</div></div>
+      <div class="score-meta-item"><div class="score-meta-dot" style="background:var(--yellow)"></div><div class="score-meta-text"><strong>0</strong> Partial (2.5-3.4)</div></div>
+      <div class="score-meta-item"><div class="score-meta-dot" style="background:var(--green)"></div><div class="score-meta-text"><strong>0</strong> Agent-Ready (3.5-4.0)</div></div>
+    </div>
+  </div>
+  <div class="exec-summary card" style="margin-bottom:24px"><div class="card-title">Executive Summary</div><p style="font-size:14px;line-height:1.7;color:var(--text2)" id="execSummary"></p></div>
+  <div class="grid grid-4" style="margin-bottom:24px">
+    <div class="card"><div class="card-title">Services</div><div class="card-value" style="color:var(--accent2)">5</div></div>
+    <div class="card"><div class="card-title">Agent-Ready</div><div class="card-value" style="color:var(--red)">0%</div><div class="card-sub">0 of 5</div></div>
+    <div class="card"><div class="card-title">Blocking Gaps</div><div class="card-value" style="color:var(--red)">0</div></div>
+    <div class="card"><div class="card-title">Phases</div><div class="card-value" style="color:var(--accent2)">4</div></div>
+  </div>
+  <div class="card" style="margin-bottom:24px"><div class="card-title">Category Readiness</div><div id="catBars"></div></div>
+  <div class="grid grid-2">
+    <div class="card"><div class="card-title">Strengths</div><ul id="strengthsList" style="list-style:none;padding:0"></ul></div>
+    <div class="card"><div class="card-title">Common Gaps</div><ul id="gapsList" style="list-style:none;padding:0"></ul></div>
+  </div>
+  <div class="card" style="margin-top:24px" id="quickWinsCard"><div class="card-title">\u26A1 Quick Agent Wins</div><div id="quickWinsList" class="grid grid-2" style="gap:16px"></div></div>
+</div>
+
+<!-- SERVICES -->
+<div id="sec-services" class="section"><div class="grid grid-2" id="serviceCards"></div></div>
+
+<!-- CATEGORIES -->
+<div id="sec-categories" class="section">
+  <div class="card" style="margin-bottom:24px"><div class="card-title">Category Comparison — Radar</div><canvas id="radarChart" height="400"></canvas></div>
+  <div class="card"><div class="card-title">Heatmap — Score by Service x Category</div><canvas id="heatmapChart" height="280"></canvas></div>
+</div>
+
+<!-- GAPS -->
+<div id="sec-gaps" class="section">
+  <div class="card" style="margin-bottom:24px"><div class="card-title">\U0001F6AB Blocking Your Goal (0)</div>
+    <table class="gap-table"><thead><tr><th>ID</th><th>Gap</th><th>Score</th><th>Services</th><th>Impact</th></tr></thead><tbody id="blockingTable"></tbody></table></div>
+  <div class="card"><div class="card-title">\u26A1 General Opportunities (0)</div>
+    <table class="gap-table"><thead><tr><th>ID</th><th>Gap</th><th>Score</th><th>Services</th><th>Impact</th></tr></thead><tbody id="generalTable"></tbody></table></div>
+</div>
+
+<!-- PATHWAYS -->
+<div id="sec-pathways" class="section">
+  <div style="text-align:center;margin-bottom:32px"><h2 style="font-size:28px;font-weight:800;margin-bottom:8px">AWS Modernization Pathways</h2></div>
+  <div class="card" style="margin-bottom:24px"><div class="card-title">Pathway Coverage</div><canvas id="pathwayChart" height="280"></canvas></div>
+  <div id="pathwayCards" class="grid grid-3" style="margin-bottom:24px"></div>
+  <div class="card"><div class="card-title">Pathway x Service Matrix</div><div id="pathwayMatrix" style="overflow-x:auto"></div></div>
+</div>
+
+<!-- DEPENDENCIES -->
+<div id="sec-dependencies" class="section">
+  <div class="dep-graph"><div class="card-title" style="margin-bottom:24px">Service Dependency Architecture</div><div id="depViz" style="min-height:300px"></div></div>
+  <div class="card"><div class="card-title">Dependency Matrix</div><table class="gap-table"><thead><tr><th>Source → Target</th><th>Type</th><th>Risk</th></tr></thead><tbody id="depTable"></tbody></table></div>
+</div>
+
+<!-- ROADMAP -->
+<div id="sec-roadmap" class="section">
+  <div style="text-align:center;margin-bottom:32px"><h2 style="font-size:28px;font-weight:800;margin-bottom:8px">Modernization Roadmap</h2><p style="color:var(--text2);font-size:14px">4 phases</p></div>
+  <div class="card" style="margin-bottom:24px"><div class="card-title">Phase Timeline</div><canvas id="ganttChart" height="180"></canvas></div>
+  <div id="phaseCards" class="grid grid-2"></div>
+</div>
+
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()"><div class="detail-panel" id="detailPanel"></div></div>
+</div>
+<script>
+const DATA={name:"ecommerce-platform-test",score:1.67,services:[{"name": "aws-microservices", "score": 1.7, "priority": "P0", "categories": {"INF": 2.18, "APP": 1.74, "DATA": 1.9, "SEC": 1.46, "OPS": 1.2}}, {"name": "unishop-monolith", "score": 1.33, "priority": "P0", "categories": {"INF": 2.18, "APP": 1.74, "DATA": 1.9, "SEC": 1.46, "OPS": 1.2}}, {"name": "local-monolith", "score": 1.5, "priority": "P0", "categories": {"INF": 2.18, "APP": 1.74, "DATA": 1.9, "SEC": 1.46, "OPS": 1.2}}, {"name": "books-api", "score": 2.0, "priority": "P0", "categories": {"INF": 2.18, "APP": 1.74, "DATA": 1.9, "SEC": 1.46, "OPS": 1.2}}, {"name": "eks-saas-gitops", "score": 1.8, "priority": "P1", "categories": {"INF": 2.18, "APP": 1.74, "DATA": 1.9, "SEC": 1.46, "OPS": 1.2}}],categories:[{"name": "Infrastructure & Platform", "score": 2.18}, {"name": "Application Architecture", "score": 1.74}, {"name": "Data Foundations", "score": 1.9}, {"name": "Identity, Security & Governance", "score": 1.46}, {"name": "Operations & Observability", "score": 1.2}],blocking:[],general:[],deps:[{"source": "aws-microservices", "target": "books-api", "type": "sync"}, {"source": "books-api", "target": "aws-microservices", "type": "sync"}, {"source": "aws-microservices", "target": "books-api", "type": "async"}],phases:[{"name": "Phase 0 \u2014 Cross-Cutting Foundation", "timeframe": "Mo 0\u20131", "objective": "Establish shared capabilities and organizational readiness"}, {"name": "Phase 1 \u2014 Agent Quick Wins", "timeframe": "Mo 1\u20132", "objective": "Modernize P0 foundation services and deploy first agent proof-of-concepts. Goal-priority activities listed first."}, {"name": "Phase 2 \u2014 Agent Foundations", "timeframe": "Mo 2\u20134", "objective": "Build agent infrastructure and modernize Phase 1-dependent services. Goal-priority activities listed first."}, {"name": "Phase 3 \u2014 Agent Scale & Optimization", "timeframe": "Mo 4\u20136+", "objective": "Production-grade agent deployment, multi-agent orchestration, and advanced capabilities. Goal-priority activities listed first."}],pathways:[{"name": "Move to Cloud Native", "triggered": 2, "total": 5, "priority": "Medium", "effort": "High", "perService": {"aws-microservices": false, "unishop-monolith": true, "local-monolith": true, "books-api": false, "eks-saas-gitops": false}}, {"name": "Move to Containers", "triggered": 2, "total": 5, "priority": "Medium", "effort": "Medium", "perService": {"aws-microservices": false, "unishop-monolith": true, "local-monolith": true, "books-api": false, "eks-saas-gitops": false}}, {"name": "Move to Open Source", "triggered": 0, "total": 5, "priority": "Low", "effort": "N/A", "perService": {"aws-microservices": false, "unishop-monolith": false, "local-monolith": false, "books-api": false, "eks-saas-gitops": false}}, {"name": "Move to Managed Databases", "triggered": 1, "total": 5, "priority": "Low", "effort": "Medium", "perService": {}}, {"name": "Move to Managed Analytics", "triggered": 0, "total": 5, "priority": "Low", "effort": "N/A", "perService": {"aws-microservices": false, "unishop-monolith": false, "local-monolith": false, "books-api": false, "eks-saas-gitops": false}}, {"name": "Move to Modern DevOps", "triggered": 4, "total": 5, "priority": "High", "effort": "High", "perService": {"aws-microservices": true, "unishop-monolith": true, "local-monolith": true, "books-api": false, "eks-saas-gitops": true}}, {"name": "Move to AI", "triggered": 5, "total": 5, "priority": "High", "effort": "High", "perService": {"aws-microservices": true, "unishop-monolith": true, "local-monolith": true, "books-api": true, "eks-saas-gitops": true}}],quickWins:[{"title": "API-Aware Customer Support Agents", "repos": "5 repos: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops", "description": "All 5 services return structured JSON responses that agents can immediately parse as tool outputs. A customer support agent can be deployed today using manual tool definitions (without OpenAPI) to invoke existing endpoints for product search, order lookup, basket management, and book catalog queries"}, {"title": "Natural Language Data Query Agents", "repos": "3 repos: unishop-monolith, aws-microservices, eks-saas-gitops", "description": "Services with clean database schemas (MySQL tables with clear naming, DynamoDB with documented partition/sort keys) enable text-to-SQL/DynamoDB query agents. A customer can ask \"What's in my basket?\" or \"Show me orders from last week\" and get accurate results from the existing data layer."}, {"title": "Product Knowledge & Recommendation Agents", "repos": "3 repos: unishop-monolith, aws-microservices, local-monolith", "description": "Product catalog data (unishop-monolith: unicorn products, aws-microservices: e-commerce products, local-monolith: product inventory) can power recommendation agents. Customers asking \"Do you have running shoes under $100?\" get accurate, grounded responses from actual product data."}, {"title": "DevOps & Deployment Agents", "repos": "2 repos: books-api, eks-saas-gitops", "description": "books-api's CodePipeline and eks-saas-gitops' Flux CD/ArgoCD provide programmable deployment interfaces that DevOps agents can invoke for deployment management, status checks, and rollback operations."}, {"title": "Documentation RAG Agents", "repos": "3 repos: aws-microservices, books-api, eks-saas-gitops", "description": "These repos have comprehensive README documentation that can be indexed into a Bedrock Knowledge Base to build an internal developer support agent answering \"How do I deploy the microservices?\" or \"What's the architecture of the SaaS platform?\""}],strengths:["Structured JSON API Responses (APP-Q5)", "No Stored Procedures (DATA-Q11)", "Managed Database Adoption", "Event-Driven Patterns", "Modern DB Engine Versions (DATA-Q10)"],commonGaps:["No AI/Agent Frameworks (APP-Q13)", "No API Documentation (APP-Q2)", "No Observability (OPS-Q1)", "No CI/CD (INF-Q6)", "No Rate Limiting (APP-Q8)", "No Vector Database (DATA-Q1)", "No RAG Pipeline (DATA-Q3)"],summary:"The ecommerce-platform-test portfolio of 5 services scores **1.67 / 4.0** overall, placing the entire portfolio in the \"Needs Work\" category for agentic AI enablement. No service is agent-ready today, and the weakest categories - Operations & Observability (1.20) and Identity, Security & Governance (1.46) - represent critical gaps that must be addressed before customer-facing AI agents for support and order management can be deployed safely. Three foundational blockers affect the majority of the portfolio: 3 of 5 services have no CI/CD pipeline at all, 4 of 5 services have no observability infrastructure, and all 5 services lack API rate limiting and abuse protection - conditions that would make agent deployment unreliable, unmonitorable, and unsafe."};
+
+Chart.register(ChartDataLabels);
+const C={green:'#00cec9',yellow:'#fdcb6e',orange:'#e17055',red:'#d63031',accent:'#6c5ce7',accent2:'#a29bfe',blue:'#0984e3',text2:'#9ca0b0',surface2:'#232733'};
+function scColor(s){if(s>=3.5)return C.green;if(s>=2.5)return C.yellow;if(s>=1.5)return C.orange;return C.red}
+function tierName(s){if(s>=3.5)return'Agent-Ready';if(s>=2.5)return'Partial';if(s>=1.5)return'Needs Work';return'Not Ready'}
+function tierClass(s){if(s>=3.5)return'tier-green';if(s>=2.5)return'tier-yellow';if(s>=1.5)return'tier-orange';return'tier-red'}
+function showSection(id,btn){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+}
+function closeDetail(){document.getElementById('detailOverlay').classList.remove('open')}
+function openDetail(html){const p=document.getElementById('detailPanel');p.innerHTML='<button class="detail-close" onclick="closeDetail()">&times;</button>'+html;document.getElementById('detailOverlay').classList.add('open')}
+// Score ring
+function drawScoreRing(score,mx){
+  const ctx=document.getElementById('scoreRing').getContext('2d');
+  new Chart(ctx,{type:'doughnut',data:{datasets:[{data:[score,mx-score],backgroundColor:[scColor(score),'rgba(45,49,64,.5)'],borderWidth:0,borderRadius:6}]},options:{cutout:'78%',responsive:false,plugins:{legend:{display:false},tooltip:{enabled:false},datalabels:{display:false}},animation:{animateRotate:true,duration:1500}}});
+  let cur=0;const el=document.getElementById('heroScore');const step=()=>{cur+=.03;if(cur>score)cur=score;el.textContent=cur.toFixed(2);if(cur<score)requestAnimationFrame(step)};step();
+}
+// Category bars
+function drawCatBars(cats){
+  const el=document.getElementById('catBars');if(!el)return;
+  el.innerHTML=cats.map(c=>`<div class="cat-row"><div class="cat-label">${c.name}</div><div class="cat-bar-wrap"><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${c.score/4*100}%;background:${scColor(c.score)}"></div></div><div class="cat-score" style="color:${scColor(c.score)}">${c.score.toFixed(1)}/4.0</div></div></div>`).join('');
+}
+// Gap table
+function fillGapTable(id,gaps){
+  const el=document.getElementById(id);if(!el)return;
+  el.innerHTML=gaps.map(g=>`<tr><td><span class="gap-dot" style="background:${C.red}"></span>${g.id}</td><td>${g.title}</td><td>${g.score}</td><td>${g.affected!==undefined?g.affected+' svc':'—'}</td><td style="max-width:300px">${g.impact||g.rec||'—'}</td></tr>`).join('');
+}
+// Phase cards
+function drawPhaseCards(phases){
+  const el=document.getElementById('phaseCards');if(!el)return;
+  el.innerHTML=phases.map((p,i)=>`<div class="card phase-card ph${i}"><div class="card-title">${p.name}</div><div style="font-size:13px;color:${C.accent2};margin-bottom:8px">${p.timeframe}</div><p style="font-size:13px;color:${C.text2};line-height:1.6">${p.objective}</p></div>`).join('');
+}
+// Gantt chart
+function drawGantt(phases){
+  const ctx=document.getElementById('ganttChart');if(!ctx)return;
+  function parseTime(tf){
+    let m=tf.match(/Days?\s*(\d+)[\s\u2013-]+(\d+)/i);if(m)return[parseInt(m.group?m[1]:m[1]),parseInt(m[2])];
+    m=tf.match(/Mo(?:nths?)?\s*(\d+)[\s\u2013-]+(\d+)/i);if(m)return[parseInt(m[1])*30,parseInt(m[2])*30];
+    m=tf.match(/Mo(?:nths?)?\s*(\d+)[\s\u2013-]+(\d+)\+?/i);if(m)return[parseInt(m[1])*30,parseInt(m[2])*30];
+    return[0,30];
+  }
+  const colors=[C.red,C.orange,C.yellow,C.green,C.blue,C.accent];
+  const datasets=phases.map((p,i)=>{const[s,e]=parseTime(p.timeframe);return{label:p.name,data:[{x:[s,e],y:i}],backgroundColor:colors[i%colors.length]+'99',borderColor:colors[i%colors.length],borderWidth:2,borderRadius:6,borderSkipped:false,barPercentage:.6}});
+  new Chart(ctx,{type:'bar',data:{labels:phases.map(p=>p.name),datasets},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{type:'linear',title:{display:true,text:'Days',color:C.text2},grid:{color:'rgba(45,49,64,.5)'},ticks:{color:C.text2}},y:{grid:{display:false},ticks:{color:C.text2,font:{size:11}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx2=>{const v=ctx2.raw.x;return ctx2.dataset.label+': Day '+v[0]+' → '+v[1]}}},datalabels:{display:false}}}});
+}
+// Quick wins
+function drawQuickWins(qw){
+  const el=document.getElementById('quickWinsList');if(!el||!qw.length){const c=document.getElementById('quickWinsCard');if(c)c.style.display='none';return}
+  el.innerHTML=qw.map(q=>`<div class="card" style="padding:16px"><div style="font-size:14px;font-weight:600;margin-bottom:6px">\u26A1 ${q.title}</div><div style="font-size:12px;color:${C.accent2};margin-bottom:6px">${q.repos}</div><div style="font-size:12px;color:${C.text2};line-height:1.5">${q.description}</div></div>`).join('');
+}
+
+// Init portfolio dashboard
+drawScoreRing(DATA.score,4);
+document.getElementById('execSummary').textContent=DATA.summary;
+drawCatBars(DATA.categories);
+fillGapTable('blockingTable',DATA.blocking);
+fillGapTable('generalTable',DATA.general);
+drawPhaseCards(DATA.phases);
+drawGantt(DATA.phases);
+drawQuickWins(DATA.quickWins);
+
+// Strengths & gaps lists
+(function(){
+  const sl=document.getElementById('strengthsList'),gl=document.getElementById('gapsList');
+  if(sl)sl.innerHTML=DATA.strengths.map(s=>`<li class="strength-item">${s}</li>`).join('');
+  if(gl)gl.innerHTML=DATA.commonGaps.map(g=>`<li class="gap-item">${g}</li>`).join('');
+})();
+
+// Service cards
+(function(){
+  const el=document.getElementById('serviceCards');if(!el)return;
+  el.innerHTML=DATA.services.map(s=>{
+    const tc=tierClass(s.score);
+    let bars='';for(const[k,v]of Object.entries(s.categories||{})){
+      bars+=`<div class="svc-bar-row"><div class="svc-bar-label">${k}</div><div class="svc-bar-track"><div class="svc-bar-fill" style="width:${v/4*100}%;background:${scColor(v)}"></div></div></div>`;
+    }
+    return`<div class="card svc-card ${tc}" onclick="openServiceDetail('${s.name}')"><div class="svc-name">${s.name}</div><div class="svc-score" style="color:${scColor(s.score)}">${s.score.toFixed(1)}</div>${bars}<span class="svc-priority ${s.priority.toLowerCase()}">${s.priority}</span></div>`;
+  }).join('');
+})();
+
+function openServiceDetail(name){
+  const s=DATA.services.find(x=>x.name===name);if(!s)return;
+  let catRows='';for(const[k,v]of Object.entries(s.categories||{})){
+    catRows+=`<div class="cat-row"><div class="cat-label">${k}</div><div class="cat-bar-wrap"><div class="cat-bar-track"><div class="cat-bar-fill" style="width:${v/4*100}%;background:${scColor(v)}"></div></div><div class="cat-score" style="color:${scColor(v)}">${v.toFixed(1)}/4.0</div></div></div>`;
+  }
+  // Find pathways for this service
+  let pwHtml='';DATA.pathways.forEach(p=>{if(p.perService&&p.perService[name])pwHtml+=`<span style="display:inline-block;background:rgba(108,92,231,.15);color:${C.accent2};padding:4px 12px;border-radius:6px;font-size:12px;margin:4px">${p.name}</span>`});
+  openDetail(`<h2 style="font-size:24px;font-weight:800;margin-bottom:4px">${s.name}</h2>
+    <div style="font-size:36px;font-weight:800;color:${scColor(s.score)};margin-bottom:16px">${s.score.toFixed(1)} / 4.0 <span style="font-size:14px;color:${C.text2}">${tierName(s.score)}</span></div>
+    <div style="margin-bottom:16px">${catRows}</div>
+    ${pwHtml?'<div style="margin-top:16px"><div style="font-size:12px;font-weight:600;color:'+C.accent2+';margin-bottom:8px">PATHWAYS</div>'+pwHtml+'</div>':''}`);
+}
+
+// Radar chart
+(function(){
+  const ctx=document.getElementById('radarChart');if(!ctx)return;
+  const catLabels=DATA.categories.map(c=>c.name);
+  const datasets=DATA.services.map((s,i)=>{
+    const colors=[C.accent,C.green,C.yellow,C.orange,C.red,C.blue,C.teal||'#00b894'];
+    const color=colors[i%colors.length];
+    return{label:s.name,data:catLabels.map(cl=>{const short=cl.substring(0,3).toUpperCase();return s.categories[short]||s.score}),borderColor:color,backgroundColor:color+'22',borderWidth:2,pointRadius:4,pointBackgroundColor:color};
+  });
+  new Chart(ctx,{type:'radar',data:{labels:catLabels,datasets},options:{responsive:true,maintainAspectRatio:false,scales:{r:{min:0,max:4,ticks:{stepSize:1,color:C.text2,backdropColor:'transparent'},grid:{color:'rgba(45,49,64,.5)'},pointLabels:{color:C.text2,font:{size:11}}}},plugins:{legend:{position:'bottom',labels:{color:C.text2,font:{size:11},boxWidth:12}},datalabels:{display:false}}}});
+})();
+
+// Heatmap
+(function(){
+  const ctx=document.getElementById('heatmapChart');if(!ctx||!DATA.services.length)return;
+  const catKeys=Object.keys(DATA.services[0].categories||{});
+  if(!catKeys.length)return;
+  const data=[];DATA.services.forEach((s,yi)=>{catKeys.forEach((k,xi)=>{data.push({x:xi,y:yi,v:s.categories[k]||0})})});
+  new Chart(ctx,{type:'scatter',data:{datasets:[{data,pointRadius:18,pointBackgroundColor:ctx2=>{const d=ctx2.raw;return d?scColor(d.v)+'cc':'transparent'},pointBorderColor:'transparent'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{type:'linear',min:-.5,max:catKeys.length-.5,ticks:{callback:v=>catKeys[v]||'',color:C.text2},grid:{display:false}},y:{type:'linear',min:-.5,max:DATA.services.length-.5,ticks:{callback:v=>DATA.services[v]?DATA.services[v].name:'',color:C.text2},grid:{color:'rgba(45,49,64,.3)'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx2=>{const d=ctx2.raw;const s=DATA.services[d.y];const k=catKeys[d.x];return s?s.name+' / '+k+': '+d.v.toFixed(1):''}}},datalabels:{color:'#fff',font:{size:10,weight:'bold'},formatter:(v,ctx2)=>{const d=ctx2.dataset.data[ctx2.dataIndex];return d.v.toFixed(1)}}}}});
+})();
+
+// Dependencies SVG
+(function(){
+  const el=document.getElementById('depViz');if(!el||!DATA.deps.length){if(el)el.innerHTML='<p style="color:'+C.text2+'">No dependencies detected.</p>';return}
+  const nodes=[...new Set(DATA.deps.flatMap(d=>[d.source,d.target]))];
+  const w=el.clientWidth||800,h=Math.max(300,nodes.length*60);
+  const cx=w/2,cy=h/2,r=Math.min(cx,cy)-60;
+  const pos={};nodes.forEach((n,i)=>{const a=2*Math.PI*i/nodes.length-Math.PI/2;pos[n]={x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)}});
+  let svg=`<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">`;
+  svg+=`<defs><marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="${C.accent2}"/></marker></defs>`;
+  DATA.deps.forEach(d=>{const s=pos[d.source],t=pos[d.target];if(!s||!t)return;const dash=d.type==='async'?'stroke-dasharray="6,4"':'';svg+=`<line x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}" stroke="${d.type==='sync'?C.accent:C.green}" stroke-width="2" ${dash} marker-end="url(#ah)"/>`});
+  nodes.forEach(n=>{const p=pos[n];const svc=DATA.services.find(s=>s.name===n);const col=svc?scColor(svc.score):C.text2;svg+=`<circle cx="${p.x}" cy="${p.y}" r="24" fill="${C.surface2}" stroke="${col}" stroke-width="2"/><text x="${p.x}" y="${p.y+4}" text-anchor="middle" fill="${C.text2}" font-size="10" font-family="Inter">${n.length>12?n.substring(0,10)+'..':n}</text>`});
+  svg+='</svg>';el.innerHTML=svg;
+  // Dep table
+  const dt=document.getElementById('depTable');if(dt)dt.innerHTML=DATA.deps.map(d=>`<tr><td>${d.source} → ${d.target}</td><td><span style="color:${d.type==='sync'?C.accent:C.green}">${d.type}</span></td><td>${d.type==='sync'?'Higher':'Lower'}</td></tr>`).join('');
+})();
+
+// Pathway chart + matrix
+(function(){
+  const ctx=document.getElementById('pathwayChart');if(!ctx||!DATA.pathways.length)return;
+  new Chart(ctx,{type:'bar',data:{labels:DATA.pathways.map(p=>p.name.replace('Move to ','')),datasets:[{label:'Services Triggered',data:DATA.pathways.map(p=>p.triggered),backgroundColor:DATA.pathways.map(p=>p.triggered>0?C.green+'99':C.surface2),borderColor:DATA.pathways.map(p=>p.triggered>0?C.green:C.text2+'44'),borderWidth:1,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{title:{display:true,text:'Services',color:C.text2},grid:{color:'rgba(45,49,64,.5)'},ticks:{color:C.text2}},y:{grid:{display:false},ticks:{color:C.text2,font:{size:11}}}},plugins:{legend:{display:false},datalabels:{color:C.text2,anchor:'end',align:'right',font:{size:11},formatter:(v,ctx2)=>v+'/'+DATA.pathways[ctx2.dataIndex].total}}}});
+  // Cards
+  const el=document.getElementById('pathwayCards');if(el)el.innerHTML=DATA.pathways.filter(p=>p.triggered>0).map(p=>`<div class="card" style="border-left:4px solid ${C.green}"><div class="card-title">${p.name}</div><div style="font-size:24px;font-weight:800;color:${C.green};margin-bottom:8px">${p.triggered}/${p.total}</div><div style="font-size:13px;color:${C.text2}">Priority: <strong style="color:${C.accent2}">${p.priority}</strong> · Effort: <strong>${p.effort}</strong></div></div>`).join('');
+  // Matrix
+  const mx=document.getElementById('pathwayMatrix');if(!mx||!DATA.services)return;
+  let html='<table class="gap-table"><thead><tr><th>Service</th>';DATA.pathways.forEach(p=>html+=`<th style="font-size:11px">${p.name.replace('Move to ','')}</th>`);html+='</tr></thead><tbody>';
+  DATA.services.forEach(s=>{html+=`<tr><td>${s.name}</td>`;DATA.pathways.forEach(p=>{const v=p.perService&&p.perService[s.name];html+=`<td style="text-align:center">${v?'✅':'—'}</td>`});html+='</tr>'});
+  html+='</tbody></table>';mx.innerHTML=html;
+})();
+
+</script></body></html>
