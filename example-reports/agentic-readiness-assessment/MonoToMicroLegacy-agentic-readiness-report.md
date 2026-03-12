@@ -1,7 +1,6 @@
 # Agentic Readiness Assessment Report
-
-**Target**: MonoToMicroLegacy (Unishop e-commerce application)
-**Date**: 2026-03-11
+**Target**: MonoToMicroLegacy (./services/unishop-monolith-to-microservices/MonoToMicroLegacy)
+**Date**: 2026-03-12
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
 **Assessment Goal**: agentic-ai-enablement
 **Goal Context**: Building customer-facing AI agents for support and order management
@@ -36,33 +35,44 @@
 
 ## Executive Summary
 
-The MonoToMicroLegacy Unishop application is a legacy Java 8 / Spring Boot 2.1 monolith deployed on EC2 with a MySQL backend and zero infrastructure-as-code, CI/CD, observability, or security controls. It is fundamentally unprepared for agentic AI workloads — there are no API specifications for agent tool discovery, no vector database or RAG pipeline for knowledge retrieval, no AI/agent frameworks integrated, and no authentication or rate limiting to safely expose capabilities to autonomous agents. The strongest aspects are a clean data access layer (centralized repository pattern with MyBatis), structured JSON responses (Jackson serialization), and a simple schema with no stored procedures — all of which reduce migration friction. To build customer-facing AI agents for support and order management, the immediate priorities are containerizing the application, creating OpenAPI specs for agent tool integration, standing up a managed database, and establishing CI/CD and observability foundations.
+This legacy Java 8 monolith (Spring Boot 2.1.x) running on raw EC2 with a MySQL database represents a significant modernization challenge for agentic AI enablement. The application has **no API documentation** (blocking agent tool discovery), **no AI/agent frameworks**, **no vector database or RAG pipeline**, **no Infrastructure as Code**, **no CI/CD pipeline**, and **hardcoded database credentials** — all fundamental gaps for building customer-facing AI agents for support and order management. The strongest area is Data Foundations (2.0/4.0), where a clean MySQL schema with no stored procedures and a consistent repository pattern provide a foundation for data-layer modernization. Every other category scores below 1.5, indicating the application requires substantial foundational work before agents can reliably interact with it.
 
-### Overall Score: 1.3 / 4.0
+### Overall Score: 1.33 / 4.0
 
 | Category | Score | Status |
 |----------|-------|--------|
-| Infrastructure & Platform | 1.0 / 4.0 | ❌ |
-| Application Architecture | 1.4 / 4.0 | ❌ |
-| Data Foundations | 1.9 / 4.0 | 🟠 |
-| Identity, Security & Governance | 1.0 / 4.0 | ❌ |
+| Infrastructure & Platform | 1.1 / 4.0 | ❌ |
+| Application Architecture | 1.5 / 4.0 | 🟠 |
+| Data Foundations | 2.0 / 4.0 | 🟠 |
+| Identity, Security & Governance | 1.1 / 4.0 | ❌ |
 | Operations & Observability | 1.0 / 4.0 | ❌ |
-
----
 
 ## Top Priorities (Critical Gaps)
 
-1. **APP-Q2 — No API Documentation (Score: 1/4)**: There are no OpenAPI or Swagger specifications anywhere in the repository. Without machine-readable API specs, AI agents cannot discover or invoke the Unishop endpoints for order management and customer support. **First step**: Add `springdoc-openapi-ui` to `build.gradle` to auto-generate OpenAPI 3.0 specs from the existing Spring MVC controllers (`UnicornController`, `BasketController`, `UserController`).
+### 1. APP-Q2 — API Documentation (Score: 1/4 ❌)
+**What**: No OpenAPI/Swagger specs exist for any endpoint. No `springdoc` or `springfox` dependencies in `build.gradle`. No `@ApiOperation` annotations on controllers.
+**Why it blocks agents**: AI agents discover and invoke APIs through machine-readable OpenAPI specifications. Without them, a customer support agent cannot programmatically understand what endpoints are available (`/unicorns`, `/unicorns/basket/{userUuid}`, `/user`, `/user/login`), what parameters they accept, or what responses they return. This is the single biggest blocker for agentic AI enablement.
+**First step**: Add `springdoc-openapi-ui` dependency to `build.gradle` and annotate controllers with `@Operation` and `@Schema` to auto-generate OpenAPI specs.
 
-2. **APP-Q13 — No AI/Agent Frameworks (Score: 1/4)**: No agent SDK, Bedrock client, LangChain, or MCP integration exists. The AWS SDK v1 (`com.amazonaws:aws-java-sdk:1.11.567` in `build.gradle`) predates Bedrock entirely. Without agent framework integration, there is no path to autonomous customer support or order management agents. **First step**: Add the AWS SDK v2 Bedrock Runtime dependency and create a proof-of-concept agent that queries the `/unicorns` and `/unicorns/basket/{userUuid}` endpoints as tools.
+### 2. APP-Q13 — AI/Agent Frameworks (Score: 1/4 ❌)
+**What**: No AI or agent framework integration exists. No Amazon Bedrock SDK, no LangChain, no Spring AI, no Strands Agents SDK. The AWS SDK v1 (`1.11.567`) in `build.gradle` is used only for `EC2MetadataUtils` in `HealthController.java`.
+**Why it blocks agents**: Customer-facing support and order management agents require an agent framework to orchestrate LLM reasoning, tool invocation, and conversation management. Without any framework, there is no foundation to build agent capabilities on.
+**First step**: Add the Strands Agents SDK or Amazon Bedrock Agent Runtime SDK (requires AWS SDK v2 upgrade) as a dependency and create a proof-of-concept agent for order lookup.
 
-3. **DATA-Q1 — No Vector Database (Score: 1/4)**: No vector store (OpenSearch, pgvector, Pinecone, Chroma) is present. Customer support agents need semantic search over product catalogs, order history, and support documentation to provide accurate, context-aware responses. **First step**: Provision Amazon OpenSearch Service with the k-NN plugin or enable `pgvector` on an Aurora PostgreSQL instance to store product and order embeddings.
+### 3. DATA-Q1/Q2/Q3 — Vector Database & RAG Pipeline (Score: 1/4 ❌)
+**What**: No vector database (OpenSearch, pgvector, Bedrock Knowledge Bases), no embedding generation, no RAG pipeline. The application only uses MySQL for structured e-commerce data.
+**Why it blocks agents**: A customer support agent needs semantic search over product catalogs, order histories, and support documentation to provide accurate, context-aware responses. Without vector storage and RAG, agents cannot retrieve relevant knowledge and will hallucinate or provide incomplete answers.
+**First step**: Deploy Amazon OpenSearch Service with k-NN plugin or enable Amazon Bedrock Knowledge Bases, and create an embedding pipeline for product catalog data from the `unicorns` table.
 
-4. **DATA-Q3 — No RAG Implementation (Score: 1/4)**: No document chunking, embedding generation, or semantic search pipeline exists. A customer support agent for order management requires RAG to ground responses in actual product data, order details, and support policies. **First step**: Build a RAG pipeline using Amazon Bedrock Knowledge Bases backed by the product catalog from the `unicorns` table and any customer support documentation.
+### 4. SEC-Q1 — Secret Management (Score: 1/4 ❌)
+**What**: Database credentials are hardcoded in plaintext in `application.properties` (`username: MonoToMicroUser`, `password: MonoToMicroPassword`). No AWS Secrets Manager, no HashiCorp Vault, no encrypted configuration.
+**Why it blocks agents**: Agents deployed in production require secure credential management. Hardcoded secrets prevent credential rotation, create security vulnerabilities, and block compliance requirements for AI systems handling customer data (PII in `unicorn_user` table includes email, first_name, last_name).
+**First step**: Migrate credentials to AWS Secrets Manager and update `application.properties` to use environment variables or Spring Cloud AWS Secrets Manager integration.
 
-5. **SEC-Q7 — No Human Approval Workflows (Score: 1/4)**: There are no human-in-the-loop approval gates for any operations. When AI agents handle order management (refunds, cancellations, basket modifications), high-risk actions must be gated by human approval to prevent autonomous agents from executing harmful operations at machine speed. **First step**: Implement an approval workflow using AWS Step Functions with `waitForTaskToken` for operations like order cancellations and refunds before agents can execute them autonomously.
-
----
+### 5. INF-Q5/Q6 — Infrastructure as Code & CI/CD (Score: 1/4 ❌)
+**What**: Zero IaC files (no Terraform, no CDK, no CloudFormation, no Helm). Zero CI/CD pipeline definitions (no GitHub Actions, no CodePipeline, no Jenkinsfile, no `buildspec.yml`).
+**Why it blocks agents**: Safe agent deployment requires automated, repeatable infrastructure provisioning and deployment pipelines. Without IaC and CI/CD, agent model updates, prompt changes, and tool configurations cannot be safely tested, deployed, or rolled back. Manual deployments introduce unacceptable risk for autonomous systems.
+**First step**: Create a Terraform configuration for the existing EC2 + MySQL infrastructure and a GitHub Actions workflow with build, test, and deploy stages.
 
 ## Detailed Findings
 
@@ -70,347 +80,347 @@ The MonoToMicroLegacy Unishop application is a legacy Java 8 / Spring Boot 2.1 m
 
 #### INF-Q1: Compute
 - **Score**: 1/4 ❌
-- **Finding**: The application runs on EC2 instances. `HealthController.java` imports `com.amazonaws.util.EC2MetadataUtils` and calls `EC2MetadataUtils.getInstanceInfo()` to retrieve instance ID, instance type, availability zone, and region — confirming direct EC2 deployment. No ECS, EKS, Fargate, or container orchestration configuration was found. No Dockerfile exists in the repository. The `build.gradle` has a commented-out `docker` task block, indicating containerization was considered but never implemented.
-- **Gap**: 100% of compute is raw EC2 with no container orchestration or managed compute. No Dockerfile exists to containerize the application.
-- **Recommendation**: Create a Dockerfile for the Spring Boot application (multi-stage build using Gradle to produce a JAR, then run on a JRE base image). Deploy to Amazon ECS on Fargate for managed container orchestration, aligning with the preference for ECS and containers.
+- **Finding**: The application runs on raw EC2 instances. `HealthController.java` explicitly calls `EC2MetadataUtils.getInstanceInfo()` to retrieve instance metadata (account ID, availability zone, instance ID, instance type, region). No ECS, EKS, Lambda, or Fargate definitions exist anywhere in the repository. No Dockerfile is present. The app runs as a standalone Spring Boot JAR on port 8080 (`server.port=8080` in `application.properties`).
+- **Gap**: 100% of compute is raw EC2 with no container orchestration or managed compute.
+- **Recommendation**: Containerize the application by creating a Dockerfile, then deploy to Amazon ECS on Fargate. Use Terraform to define the ECS service, task definition, and ECR repository. Avoid Lambda/serverless per stated preferences.
 
 #### INF-Q2: Databases
-- **Score**: 1/4 ❌
-- **Finding**: `application.properties` defines a MySQL JDBC connection: `jdbc:mysql://${MONO_TO_MICRO_DB_ENDPOINT}:3306/unishop`. The database endpoint is parameterized via environment variable `MONO_TO_MICRO_DB_ENDPOINT`, but there is no IaC (Terraform, CloudFormation, CDK) defining an RDS instance, Aurora cluster, or any managed database. The MySQL connector version is `mysql:mysql-connector-java:8.0.11` in `build.gradle`. Without IaC evidence, the database is assumed to be self-managed or manually provisioned.
-- **Gap**: No IaC-managed database. Cannot verify managed vs. self-managed MySQL. No automated failover, backups, or scaling configuration.
-- **Recommendation**: Define an Amazon RDS for MySQL (or Amazon Aurora MySQL-Compatible) instance in IaC (CDK or Terraform). Consider migrating to Amazon DynamoDB for the basket service (key-value access pattern) to align with preferences, using AWS DMS for migration.
+- **Score**: 2/4 🟠
+- **Finding**: `application.properties` configures a MySQL JDBC connection: `jdbc:mysql://${MONO_TO_MICRO_DB_ENDPOINT}:3306/unishop`. The endpoint is environment-variable driven (`MONO_TO_MICRO_DB_ENDPOINT`), suggesting possible RDS usage, but no IaC exists to confirm managed database configuration, Multi-AZ failover, automated backups, or read replicas. `build.gradle` includes `mysql-connector-java:8.0.11`. The `create_tables.sql` schema uses InnoDB engine with UTF8MB4 charset.
+- **Gap**: No IaC confirming managed RDS configuration. No evidence of automated failover, Multi-AZ deployment, or backup policies. Database management state is unknown.
+- **Recommendation**: Define the MySQL database as Amazon RDS for MySQL (or Aurora MySQL) in Terraform with Multi-AZ enabled, automated backups, and encryption at rest. Pin the engine version explicitly.
 
 #### INF-Q3: Workflow Orchestration
 - **Score**: 1/4 ❌
-- **Finding**: No Step Functions, Temporal, Camunda, or any workflow orchestration service detected. Business logic in `UnicornServiceImpl.java` and `UserServiceImpl.java` is implemented as direct synchronous method calls without state management or workflow coordination.
-- **Gap**: No dedicated workflow orchestration. All business logic is hardcoded in service implementations.
-- **Recommendation**: Introduce AWS Step Functions for multi-step operations like order processing, basket checkout, and customer support escalation workflows. Step Functions will also be critical for agent orchestration with human-in-the-loop approval gates.
+- **Finding**: No workflow orchestration service found. No AWS Step Functions (`aws_sfn_*`), no Temporal SDK, no Camunda, no workflow YAML definitions. Business logic in `UnicornServiceImpl.java` and `UserServiceImpl.java` consists of simple CRUD operations without multi-step workflows.
+- **Gap**: No dedicated workflow orchestration. Agent workflows (multi-step order management, support escalation) have no orchestration infrastructure.
+- **Recommendation**: Implement AWS Step Functions for multi-step agent workflows such as order processing, refund handling, and support ticket escalation. Define workflows in Terraform with `aws_sfn_state_machine`.
 
 #### INF-Q4: Async Messaging
 - **Score**: 1/4 ❌
-- **Finding**: No SQS, SNS, EventBridge, Kafka, or RabbitMQ dependencies or configurations found in `build.gradle` or any source file. All inter-component communication is synchronous (controller → service → repository → DB). The `DataReplicationController.java` fetches all baskets synchronously with no event-driven replication.
-- **Gap**: Zero asynchronous messaging capability. All operations are synchronous request-response.
-- **Recommendation**: Introduce Amazon SQS for decoupling write operations (basket updates, user registration) and Amazon EventBridge for domain event publishing. Add Amazon SNS for notification fanout (order confirmations, support ticket updates). This aligns with preferences for SQS, EventBridge, and SNS.
+- **Finding**: No SQS, SNS, EventBridge, or any messaging infrastructure found. The full AWS SDK v1 (`com.amazonaws:aws-java-sdk:1.11.567`) is included in `build.gradle` but no messaging client is instantiated anywhere in the codebase. All operations are synchronous HTTP request/response.
+- **Gap**: Zero async messaging capability. Agent-triggered operations (order updates, notifications) cannot be decoupled from the request path.
+- **Recommendation**: Introduce Amazon SQS for order processing queues and Amazon EventBridge for domain event publishing (e.g., `OrderPlaced`, `BasketUpdated`). Use Amazon SNS for customer notifications. Define all resources in Terraform.
 
 #### INF-Q5: Infrastructure as Code
 - **Score**: 1/4 ❌
-- **Finding**: No Terraform (.tf), CloudFormation, CDK, Helm, or Kustomize files exist in the repository. Infrastructure is entirely manually provisioned. The `build.gradle` only covers application build, not infrastructure.
-- **Gap**: 0% IaC coverage. All infrastructure (EC2, database, networking) is manually managed.
-- **Recommendation**: Adopt AWS CDK (TypeScript or Java) to define all infrastructure: ECS cluster, RDS/DynamoDB, VPC, API Gateway, SQS queues, and EventBridge rules. CDK provides type-safe infrastructure definitions that integrate well with CI/CD pipelines.
+- **Finding**: Zero IaC files in the repository. No `.tf` files, no CDK stacks, no CloudFormation templates, no Helm charts, no Kustomize configs. The entire infrastructure (EC2 instances, database, networking) is presumably provisioned manually.
+- **Gap**: 0% IaC coverage. Infrastructure changes are manual, unreproducible, and unauditable.
+- **Recommendation**: Create a Terraform project to codify the existing infrastructure: VPC, subnets, security groups, EC2/ECS, RDS, and API Gateway. Start with the database and networking layers, then add compute. Adopt GitOps workflow with Helm for future ECS/EKS deployments.
 
 #### INF-Q6: CI/CD
 - **Score**: 1/4 ❌
-- **Finding**: No GitHub Actions workflows (`.github/workflows/`), Jenkinsfile, `buildspec.yml`, `.gitlab-ci.yml`, or any CI/CD pipeline definition exists in the repository. Deployments are presumed to be manual.
-- **Gap**: No automated build, test, or deployment pipeline.
-- **Recommendation**: Create a CI/CD pipeline using AWS CodePipeline with CodeBuild for build/test and CodeDeploy for ECS deployment. Include stages for unit tests, integration tests, container image build/push to ECR, and ECS service deployment.
+- **Finding**: No CI/CD pipeline definitions found. No `.github/workflows/` directory, no `buildspec.yml`, no `Jenkinsfile`, no `.gitlab-ci.yml`. The `build.gradle` defines a `bootJar` task and an `unpack` task, plus a commented-out Docker plugin, but no automated pipeline triggers build, test, or deploy.
+- **Gap**: Zero deployment automation. No automated testing, building, or deployment. Manual deploys prevent safe, rapid iteration on agent capabilities.
+- **Recommendation**: Create a GitHub Actions workflow with stages: lint → build → test → container image build → push to ECR → deploy to ECS. Use Terraform for infrastructure changes in a separate pipeline. Adopt GitOps practices per stated preferences.
 
 #### INF-Q7: API Entry Point
 - **Score**: 1/4 ❌
-- **Finding**: The application exposes its API directly on port 8080 (`server.port=8080` in `application.properties`). No API Gateway, ALB, or CloudFront configuration exists. CORS is configured application-side in `MVCConfig.java` (`registry.addMapping("/**").allowedMethods(...)`) and `Application.java`.
-- **Gap**: No API Gateway with throttling, authentication, or request validation. Direct service exposure without a managed entry point.
-- **Recommendation**: Deploy Amazon API Gateway (REST API) in front of the application, with VPC Link to the ECS service. Configure throttling, request validation, API keys, and usage plans. This is essential for agent-safe API exposure and aligns with API Gateway preference.
+- **Finding**: No API Gateway, ALB, or CloudFront found. The application exposes HTTP endpoints directly on port 8080 (`server.port=8080` in `application.properties`). No throttling, no request validation, no auth at the gateway level. `ResourceServerConfig.java` permits all requests with `.authorizeRequests().anyRequest().permitAll()`.
+- **Gap**: No managed API entry point. Direct service exposure without throttling, auth, or request validation. Agents making high-frequency API calls have no protection layer.
+- **Recommendation**: Deploy Amazon API Gateway (REST or HTTP API) in front of the application. Configure throttling, request validation, and API key-based usage plans. Define in Terraform with `aws_apigatewayv2_api`.
 
 #### INF-Q8: Real-time Streaming
 - **Score**: 1/4 ❌
-- **Finding**: No Kinesis Data Streams, MSK, or any streaming service configuration found. No stream consumer/producer patterns in the codebase.
-- **Gap**: No event streaming capability for real-time data flow.
-- **Recommendation**: Evaluate Amazon EventBridge for event-driven architecture as a first step (preferred). Add Amazon Kinesis Data Streams if real-time analytics on customer behavior and order events is needed for agent decision-making.
+- **Finding**: No Kinesis, MSK, or streaming infrastructure found. No streaming SDK imports. No event-driven data pipelines.
+- **Gap**: No real-time streaming capability. Agent activity events, order events, and user interaction events cannot be streamed for analytics or real-time processing.
+- **Recommendation**: Implement Amazon EventBridge for domain event streaming when the application is decomposed. Consider Amazon Kinesis Data Streams if real-time analytics on agent interactions are needed.
 
 #### INF-Q9: Network Security
 - **Score**: 1/4 ❌
-- **Finding**: No VPC, subnet, security group, or NACL definitions found in the repository. No IaC means network configuration is unknown or manually managed. The `Application.java` disables CORS OPTIONS request security (`web.ignoring().antMatchers(HttpMethod.OPTIONS, "/**")`) with a comment stating "workaround to get CORS working with this old version, not recommended for production usage!"
-- **Gap**: No verifiable network security configuration. CORS security is explicitly bypassed.
-- **Recommendation**: Define a VPC with public and private subnets in IaC. Place the ECS service in private subnets with ALB/API Gateway in public subnets. Implement least-privilege security groups. Remove the CORS security bypass.
+- **Finding**: No VPC, subnet, or security group definitions in IaC. `ResourceServerConfig.java` permits all requests (`.authorizeRequests().anyRequest().permitAll()`). `Application.java` configures `WebSecurityConfigurerAdapter` to ignore all OPTIONS requests globally as a "workaround" (per code comment: "not recommended for production usage!").
+- **Gap**: No evidence of network segmentation, private subnets, or least-privilege security groups. The application appears to be directly exposed without network-level protections.
+- **Recommendation**: Define a VPC with public/private subnets in Terraform. Place the application in private subnets behind an ALB or API Gateway in the public subnet. Configure security groups with least-privilege ingress/egress rules.
 
 #### INF-Q10: Auto-scaling
 - **Score**: 1/4 ❌
-- **Finding**: No Auto Scaling Groups, ECS Service auto-scaling, or any scaling configuration found. The EC2 deployment has no scaling policies defined in the repository.
-- **Gap**: No auto-scaling capability. Cannot handle traffic spikes from agent workloads.
-- **Recommendation**: When migrating to ECS, configure ECS Service Auto Scaling with target tracking policies on CPU/memory utilization. Agent workloads can generate bursty traffic patterns that require elastic scaling.
+- **Finding**: No ASG, ECS service auto-scaling, or scaling policies found. Running on EC2 with no evidence of auto-scaling configuration.
+- **Gap**: No auto-scaling. Agent traffic can be bursty (e.g., support inquiries during peak hours). Without auto-scaling, the application cannot handle demand spikes.
+- **Recommendation**: When containerized on ECS, configure ECS Service Auto Scaling with target tracking on CPU/memory utilization. Define scaling policies in Terraform with `aws_appautoscaling_target` and `aws_appautoscaling_policy`.
 
 ### Application Architecture
 
 #### APP-Q1: Programming Languages
 - **Score**: 2/4 🟠
-- **Finding**: Java 8 (`sourceCompatibility = 1.8` in `build.gradle`) with Spring Boot 2.1.6.RELEASE. Java has a growing but not leading agent framework ecosystem compared to Python and TypeScript. Spring AI exists but requires Spring Boot 3.x+ and Java 17+. The current Java 8 / Spring Boot 2.1 stack cannot use modern agent frameworks without a major upgrade.
-- **Gap**: Java 8 is at end of life. Spring Boot 2.1 is no longer supported. The Java version blocks adoption of modern agent frameworks (Spring AI, Langchain4j) which require Java 17+.
-- **Recommendation**: Upgrade to Java 17+ and Spring Boot 3.x to unlock Spring AI and Langchain4j for agent framework integration. Alternatively, build the agent layer as a separate service in Python (using Strands Agents SDK or LangChain) that calls the Unishop APIs as tools.
+- **Finding**: Java 8 (`sourceCompatibility = 1.8` in `build.gradle`) with Spring Boot 2.1.x (`spring-boot-gradle-plugin:2.1.0.RELEASE`, Spring Boot plugin `2.1.6.RELEASE`). Java has a growing agent framework ecosystem (Spring AI requires Spring Boot 3.x+; Strands Agents SDK supports Java), but Java 8 is EOL and Spring Boot 2.1.x is unsupported.
+- **Gap**: Java 8 and Spring Boot 2.1.x are EOL. Modern agent frameworks (Spring AI, Strands Agents) require Java 17+ and Spring Boot 3.x+. The outdated platform blocks adoption of current AI tooling.
+- **Recommendation**: Upgrade to Java 17 and Spring Boot 3.2+. This unblocks Spring AI and modern AWS SDK v2 integration. Plan a phased upgrade: Java 11 → Java 17, Spring Boot 2.7 → 3.2.
 
 #### APP-Q2: API Documentation
 - **Score**: 1/4 ❌
-- **Finding**: No OpenAPI, Swagger, or any API specification files exist in the repository. No `@OpenAPIDefinition`, `@ApiOperation`, `@Schema`, or `springdoc` annotations found in any controller. The REST endpoints (`/unicorns`, `/unicorns/basket`, `/user`, `/health`, `/data`) are defined only in Java code via `@RequestMapping` annotations in `UnicornController.java`, `BasketController.java`, `UserController.java`, `HealthController.java`, and `DataReplicationController.java`.
-- **Gap**: Zero API documentation. Agents cannot discover available endpoints, request/response schemas, or operation semantics without manual specification.
-- **Recommendation**: Add `springdoc-openapi-ui` dependency to `build.gradle` to auto-generate OpenAPI 3.0 specs from existing controllers. Annotate controllers with `@Operation`, `@Parameter`, and `@Schema` annotations for rich agent-consumable API descriptions.
+- **Finding**: No OpenAPI or Swagger specifications found. No `swagger.json`, no `openapi.yaml`. No `springdoc-openapi` or `springfox` dependencies in `build.gradle`. No `@ApiOperation`, `@Operation`, or `@Schema` annotations on any controller. API endpoints are only discoverable by reading source code: `GET /unicorns`, `POST /unicorns/basket`, `DELETE /unicorns/basket`, `GET /unicorns/basket/{userUuid}`, `POST /user`, `POST /user/login`, `GET /health/ping`, `GET /health/ishealthy`, `GET /health/dbping`, `GET /data`.
+- **Gap**: Complete absence of machine-readable API documentation. Agents cannot discover, validate, or invoke APIs without OpenAPI specs. This is the #1 blocker for agent tool integration.
+- **Recommendation**: Add `springdoc-openapi-ui` dependency and annotate all controllers with `@Operation`, `@Parameter`, `@Schema`, and `@ApiResponse`. Generate OpenAPI 3.0 spec and publish at `/v3/api-docs`.
 
 #### APP-Q3: Async vs Sync Communication
 - **Score**: 1/4 ❌
-- **Finding**: 100% synchronous communication. All controllers make direct synchronous calls to services (`unicornService.getUnicorns()`, `unicornService.addUnicornToBasket()`, `userService.create()`), which in turn make synchronous database calls via MyBatis mappers. No message queues, event publishers, or async handlers exist. The `DataReplicationController.java` performs a synchronous full-table scan of baskets.
-- **Gap**: No asynchronous communication patterns. All operations are blocking request-response.
-- **Recommendation**: Introduce Amazon SQS for basket write operations and Amazon EventBridge for publishing domain events (user registered, item added to basket). This enables event-driven agent reactions and decouples the monolith for future service extraction.
+- **Finding**: 100% synchronous HTTP communication. All controller methods in `UnicornController.java`, `BasketController.java`, `UserController.java`, and `DataReplicationController.java` use synchronous `@RequestMapping` with `ResponseEntity<>` returns. No message publishing, no event-driven handlers, no `@Async` annotations, no queue consumers.
+- **Gap**: Zero async capability. All operations block the HTTP thread. Agent workflows requiring background processing (e.g., order fulfillment, email notifications) have no async path.
+- **Recommendation**: Introduce Amazon SQS consumers for order processing and Amazon EventBridge for domain event publishing. Add `@Async` for non-critical operations. Keep REST APIs synchronous for agent tool calls but decouple downstream processing.
 
 #### APP-Q4: Monolith vs Microservices
 - **Score**: 2/4 🟠
-- **Finding**: Single deployable Spring Boot application with a layered architecture: controllers (`UnicornController`, `BasketController`, `UserController`) → services (`UnicornServiceImpl`, `UserServiceImpl`) → repositories (`UnicornRepositoryImpl`, `UserRepositoryImpl`) → MyBatis mappers. The domains (Unicorn/Product, Basket/Cart, User) have separate service and repository interfaces, indicating some modularity. However, all domains share a single MySQL database (`unishop` schema), are deployed as one unit, and share the `CoreModel` base class and `CoreController` base class.
-- **Gap**: Monolith with identifiable modules but shared database coupling. Single deployable unit prevents independent scaling or failure isolation.
-- **Recommendation**: The monolith's existing layered structure (controller → service → repository) provides natural extraction boundaries. The Unicorn (product catalog), Basket (shopping cart), and User domains can be extracted into separate services over time.
+- **Finding**: Single deployable Spring Boot application. All domains share one codebase and one MySQL database (`unishop` schema with 3 tables). However, identifiable domain separation exists: `UnicornController`/`UnicornService`/`UnicornRepository` (product catalog), `BasketController`/`UnicornService` (shopping cart), `UserController`/`UserService`/`UserRepository` (user management), `HealthController`/`HealthService`/`HealthRepository` (health checks). Database coupling is moderate — `unicorns_basket` table links user UUIDs to unicorn UUIDs across domains via the `uuid` and `unicornUuid` columns.
+- **Gap**: Monolith with identifiable modules but significant database coupling. Service boundaries are unclear — `BasketController` uses `UnicornService` rather than a dedicated `BasketService`. Shared `CoreModel` base class couples all domain models.
+- **Recommendation**: For agent tool boundaries, extract the Basket/Order domain as the first microservice (highest business value for support agents). Use the Strangler Fig pattern with API Gateway routing.
 
 #### APP-Q5: API Response Format
 - **Score**: 3/4 🟡
-- **Finding**: All API responses use JSON serialization via Jackson. Model classes (`Unicorn.java`, `User.java`) are annotated with `@JsonInclude(JsonInclude.Include.NON_NULL)`. `CoreModel.java` uses `@JsonSerialize(include = JsonSerialize.Inclusion.NON_NULL)` and `@JsonIgnore` on internal fields. Controllers return `ResponseEntity<>` with typed response bodies. However, there is no standardized error response format — failures return raw HTTP status codes (e.g., `HttpStatus.BAD_REQUEST`) without error bodies.
-- **Gap**: No standardized error response format. Missing error codes, messages, and details in error responses.
-- **Recommendation**: Implement a standardized JSON error response format (e.g., RFC 7807 Problem Details) across all endpoints. Agent tools need structured error information to understand failures and decide on retry strategies.
+- **Finding**: JSON responses via Spring Boot's Jackson auto-configuration. Models use `@JsonInclude(JsonInclude.Include.NON_NULL)` (in `Unicorn.java`, `User.java`) and `@JsonSerialize(include = JsonSerialize.Inclusion.NON_NULL)` (in `CoreModel.java`). Controllers return typed `ResponseEntity<Collection<Unicorn>>`, `ResponseEntity<UnicornBasket>`, `ResponseEntity<User>`. The `@JsonIgnore` annotation on `CoreModel` fields (`id`, `creationDate`, `active`) hides internal fields from responses.
+- **Gap**: JSON responses are consistent but lack standardized error response format. Error cases return empty `ResponseEntity` with HTTP status only (no error body). No HATEOAS or hypermedia links.
+- **Recommendation**: Standardize error responses with a consistent JSON error schema (`{ "error": "...", "code": "...", "message": "..." }`). This helps agents parse and handle errors programmatically.
 
 #### APP-Q6: Workflow Logic
 - **Score**: 1/4 ❌
-- **Finding**: No workflow orchestration. Business logic is implemented directly in service methods: `UnicornServiceImpl.addUnicornToBasket()` directly calls `unicornRepository.addUnicornToBasket()`, `UserServiceImpl.create()` directly calls `userRepository.create()`. No state machines, saga patterns, or process orchestration.
-- **Gap**: All business logic is hardcoded procedural code in service implementations. No workflow orchestration for multi-step operations.
-- **Recommendation**: Introduce AWS Step Functions for checkout flows, order processing, and agent orchestration workflows. Step Functions are essential for the customer support agent use case — handling escalation paths, approval gates, and multi-step resolution workflows.
+- **Finding**: No dedicated workflow orchestration. Business logic in `UnicornServiceImpl.java` and `UserServiceImpl.java` consists of simple CRUD operations: get unicorns, add/remove from basket, create user, get user by email. No multi-step workflows, no state machines, no saga patterns.
+- **Gap**: No workflow orchestration for complex agent operations like order processing, refund handling, or support escalation paths.
+- **Recommendation**: Implement AWS Step Functions for multi-step agent workflows. Start with a "support ticket resolution" workflow that orchestrates order lookup, status check, and resolution actions.
 
 #### APP-Q7: Idempotency
 - **Score**: 2/4 🟠
-- **Finding**: Basic idempotency exists via MySQL `INSERT IGNORE` statements in MyBatis mappers. `UnicornMapper.xml` uses `INSERT IGNORE INTO unicorns_basket` with a UNIQUE constraint on `(uuid, unicornUuid)`. `UserMapper.xml` uses `insert ignore into unicorn_user` with a UNIQUE constraint on `email`. This prevents duplicate basket entries and duplicate user registrations at the database level. However, there are no explicit idempotency keys in the API layer (no `Idempotency-Key` header support).
-- **Gap**: Database-level deduplication only. No API-level idempotency keys. Agents retrying failed requests could cause unintended side effects for operations not covered by UNIQUE constraints.
-- **Recommendation**: Add `Idempotency-Key` header support to all write endpoints (`POST /unicorns/basket`, `POST /user`, `DELETE /unicorns/basket`). Use DynamoDB or a cache for idempotency token storage when migrating to the target architecture.
+- **Finding**: Partial idempotency via SQL `INSERT IGNORE` in `UnicornMapper.xml` (`addUnicornToBasket`) and `UserMapper.xml` (`create`). The `UNIQUE` constraints on `unicorns_basket(uuid, unicornUuid)` and `unicorn_user(email)` prevent duplicate inserts. However, no application-level idempotency keys exist — no `Idempotency-Key` headers, no deduplication IDs, no idempotent `DELETE` handling.
+- **Gap**: Database-level deduplication only. No API-level idempotency for agent retries. Agents retrying failed HTTP calls may cause unintended side effects on endpoints without `INSERT IGNORE`.
+- **Recommendation**: Add `Idempotency-Key` header support to all write endpoints. Implement an idempotency table or use DynamoDB for idempotency token storage when migrating to managed databases.
 
 #### APP-Q8: Rate Limiting & Throttling
 - **Score**: 1/4 ❌
-- **Finding**: No rate limiting middleware, API Gateway throttling, or WAF rules found. All endpoints are unprotected against abuse. No `express-rate-limit`, Spring `@RateLimiter`, or any throttling annotation detected.
-- **Gap**: Zero rate limiting. Agent loops or misconfigured agents could overwhelm the API with unbounded requests.
-- **Recommendation**: Implement rate limiting at the API Gateway level (throttle settings with burst/rate limits per API key). This is critical for agent safety — agents can generate high-frequency requests if reasoning loops occur. Use API Gateway usage plans aligned with the API Gateway preference.
+- **Finding**: No rate limiting at any level. No API Gateway throttling, no WAF rules, no application-level rate limiting middleware (no `spring-boot-starter-cache` with rate limit, no bucket4j, no resilience4j rate limiter). `ResourceServerConfig.java` permits all requests without any throttling.
+- **Gap**: Zero rate limiting. Misbehaving agents or agent loops could overwhelm the application with unbounded requests.
+- **Recommendation**: Deploy API Gateway with throttling (burst and rate limits per API key). Add application-level rate limiting with `bucket4j-spring-boot-starter` as a defense-in-depth measure.
 
 #### APP-Q9: Resilience Patterns
 - **Score**: 1/4 ❌
-- **Finding**: No circuit breakers, retry policies, or timeout configurations. Error handling in repository implementations (`UnicornRepositoryImpl.java`, `UserRepositoryImpl.java`) consists of `try/catch` blocks that call `e.printStackTrace()` and return `null` or `false`. No Resilience4j, Hystrix, Spring Retry, or AWS SDK retry configuration.
-- **Gap**: No resilience patterns. Database failures result in silent null returns with stack traces to stdout. No retry logic, no circuit breaking, no graceful degradation.
-- **Recommendation**: Add Spring Retry with exponential backoff for database operations. Implement circuit breaker pattern for external dependencies. Replace `e.printStackTrace()` with structured error handling and logging. These patterns are prerequisite for reliable agent tool invocations.
+- **Finding**: No circuit breakers, retry logic, or timeout configurations. No Resilience4j, Hystrix, or retry decorators in dependencies. Repository methods (`UnicornRepositoryImpl.java`, `UserRepositoryImpl.java`, `HealthRepositoryImpl.java`) catch all exceptions with `catch (Exception e) { e.printStackTrace(); return null/false; }` — silently swallowing errors and returning null.
+- **Gap**: Error handling is fundamentally broken. Exceptions are swallowed, producing null responses that propagate as `BAD_REQUEST` HTTP responses without useful error information. Agents cannot distinguish between "not found" and "system error".
+- **Recommendation**: Add Resilience4j for circuit breaker and retry patterns on database calls. Replace exception swallowing with proper error propagation and structured error responses. Configure timeouts on all external calls.
 
 #### APP-Q10: Long-running Processes
-- **Score**: 1/4 ❌
-- **Finding**: No background job framework (Celery, Bull, Spring Batch). All operations are synchronous database queries that are likely short-lived. The `DataReplicationController.java` performs a synchronous `getAllBaskets()` operation that could become long-running at scale but has no async handling.
-- **Gap**: No asynchronous processing for potentially long-running operations. Agent interactions that trigger data-heavy operations could timeout.
-- **Recommendation**: Implement SQS-based async processing for data replication and batch operations. Use Step Functions for orchestrated multi-step agent workflows. Return job status IDs for polling-based completion tracking.
+- **Score**: 2/4 🟠
+- **Finding**: All current operations are short-lived CRUD queries (SELECT, INSERT, DELETE). No operations appear to exceed 30 seconds. However, no async infrastructure exists for future long-running operations that agents may trigger (e.g., bulk order exports, report generation, data replication via `DataReplicationController.java`).
+- **Gap**: No async job infrastructure. The `DataReplicationController.java` endpoint (`GET /data`) fetches all baskets synchronously — this could become a long-running operation at scale.
+- **Recommendation**: Implement an async job pattern using Amazon SQS + ECS worker tasks for operations that may exceed 30 seconds. Add a job status polling API endpoint for agents to check progress.
 
 #### APP-Q11: API Versioning
 - **Score**: 1/4 ❌
-- **Finding**: No API versioning strategy. Endpoints use unversioned paths: `/unicorns`, `/unicorns/basket`, `/user`, `/health`, `/data`. No `/v1/` prefix, no `Accept-Version` headers, no versioning annotations.
-- **Gap**: No versioning strategy. API changes will break agent tool configurations without a deprecation/migration path.
-- **Recommendation**: Adopt URL path versioning (e.g., `/v1/unicorns`, `/v1/user`) for all API endpoints. This provides clear version boundaries when agent tool definitions reference specific API versions.
+- **Finding**: No API versioning strategy. Endpoints use unversioned paths: `/unicorns`, `/unicorns/basket`, `/user`, `/health`, `/data`. No `/v1/` prefix, no `Accept-Version` headers, no versioning annotations, no changelog.
+- **Gap**: No versioning means breaking API changes will break existing agent tool configurations. Agents calling the API have no contract stability guarantees.
+- **Recommendation**: Introduce URL path versioning (e.g., `/v1/unicorns`) via API Gateway routing. Document API contracts and publish a changelog. This enables safe evolution of APIs while agents continue using stable versions.
 
 #### APP-Q12: Service Discovery & Mesh
 - **Score**: 1/4 ❌
-- **Finding**: No service discovery mechanism. The only external dependency endpoint is the database, configured via environment variable `MONO_TO_MICRO_DB_ENDPOINT` in `application.properties`. As a monolith, internal service discovery is not applicable, but there is no API catalog or service registry for external consumers.
-- **Gap**: No service registry, API catalog, or service mesh. Hard-coded database endpoint via environment variable.
-- **Recommendation**: When decomposing into microservices, implement AWS Cloud Map for service discovery and API Gateway as the service catalog. Agent frameworks need to discover available tools/services dynamically.
+- **Finding**: No service discovery mechanism. The application is a single monolith with no inter-service communication. No AWS Cloud Map, App Mesh, Consul, or environment-variable-based service discovery.
+- **Gap**: Not applicable in current monolithic architecture, but will be essential when decomposing into microservices for agent tool isolation.
+- **Recommendation**: When decomposing, use AWS Cloud Map for service discovery and API Gateway as the unified entry point for agent tool invocation across services.
 
 #### APP-Q13: AI/Agent Frameworks
 - **Score**: 1/4 ❌
-- **Finding**: No AI or agent framework dependencies. `build.gradle` includes AWS SDK v1 (`com.amazonaws:aws-java-sdk:1.11.567`) which predates Amazon Bedrock and has no agent capabilities. No LangChain, LangGraph, CrewAI, Strands Agents, OpenAI, Anthropic, Spring AI, or MCP SDK imports found in any source file.
-- **Gap**: Zero AI/agent integration. No foundation for building customer support or order management agents.
-- **Recommendation**: Build the agent layer as a separate containerized service (Python with Strands Agents SDK or Amazon Bedrock Agents) that calls the Unishop REST APIs as tools. This avoids the Java 8 limitation and leverages the richer Python agent ecosystem. Deploy the agent service on ECS alongside the Unishop monolith.
+- **Finding**: No AI or agent framework usage found. No Amazon Bedrock SDK, no LangChain, no LangGraph, no CrewAI, no Strands Agents SDK, no Spring AI, no OpenAI client, no MCP SDK. The AWS SDK v1 (`com.amazonaws:aws-java-sdk:1.11.567`) in `build.gradle` is used only for `EC2MetadataUtils` in `HealthController.java`. No LLM-related imports anywhere in the codebase.
+- **Gap**: Complete absence of AI/agent infrastructure. No foundation exists for building the customer-facing support and order management agents stated in the goal context.
+- **Recommendation**: Integrate the Strands Agents SDK (Java-compatible) or Amazon Bedrock Agent Runtime. Build a proof-of-concept agent that uses the existing REST API as tools for order lookup (`GET /unicorns/basket/{userUuid}`) and product search (`GET /unicorns`).
 
 ### Data Foundations
 
 #### DATA-Q1: Vector Database Presence
 - **Score**: 1/4 ❌
-- **Finding**: No vector database detected. No OpenSearch, pgvector, Pinecone, Weaviate, Chroma, or Bedrock Knowledge Base references in `build.gradle`, source code, or configuration files. No vector similarity search capabilities exist.
-- **Gap**: No vector store for semantic search. Customer support agents cannot perform similarity-based product lookup or knowledge retrieval.
-- **Recommendation**: Provision Amazon OpenSearch Service with the k-NN plugin for vector storage of product embeddings and customer support knowledge. Alternatively, use Amazon Bedrock Knowledge Bases for a fully managed RAG solution backed by S3 data sources.
+- **Finding**: No vector database found anywhere in the repository. No OpenSearch with k-NN plugin, no Aurora pgvector extension, no S3 Vectors, no Bedrock Knowledge Bases, no Pinecone/Weaviate/Chroma imports. The only database is MySQL accessed via MyBatis.
+- **Gap**: No vector store for semantic search. Customer support agents cannot perform similarity searches on product descriptions, support articles, or order histories.
+- **Recommendation**: Deploy Amazon OpenSearch Service with the k-NN plugin for vector similarity search over product catalog and support knowledge. Alternatively, use Amazon Bedrock Knowledge Bases for a fully managed RAG solution.
 
 #### DATA-Q2: Vector DB Management
 - **Score**: 1/4 ❌
-- **Finding**: No vector database exists (see DATA-Q1). No managed or self-hosted vector store detected.
-- **Gap**: No vector database at all — managed or otherwise.
-- **Recommendation**: When implementing a vector store, use a fully managed service (Amazon OpenSearch Service or Amazon Bedrock Knowledge Bases) to avoid operational overhead. Managed vector stores provide automatic scaling and maintenance required for production agent workloads.
+- **Finding**: No vector database exists, so there is no management to evaluate.
+- **Gap**: No vector database infrastructure of any kind.
+- **Recommendation**: Use a fully managed vector database service — Amazon OpenSearch Service (managed) or Amazon Bedrock Knowledge Bases — to avoid self-management overhead.
 
 #### DATA-Q3: RAG Implementation
 - **Score**: 1/4 ❌
-- **Finding**: No document chunking, embedding generation, or semantic search pipeline exists. No Bedrock Titan Embeddings, OpenAI ada, or any embedding model calls found. No `similarity_search`, `knn_search`, or retrieval patterns in the codebase.
-- **Gap**: No RAG pipeline. Customer support agents have no mechanism to retrieve relevant product information, policies, or order context from knowledge bases.
-- **Recommendation**: Build a RAG pipeline using Amazon Bedrock Knowledge Bases. Ingest product catalog data (from the `unicorns` table), customer support policies, and order management documentation. Use Bedrock Titan Embeddings for vectorization and OpenSearch Service for retrieval.
+- **Finding**: No RAG pipeline found. No embedding model calls (Bedrock Titan, OpenAI ada), no document chunking/splitting code, no similarity search patterns, no Bedrock Knowledge Base integration.
+- **Gap**: No RAG capability. Support agents cannot retrieve contextual product information or customer order context to generate accurate, grounded responses.
+- **Recommendation**: Implement a RAG pipeline using Amazon Bedrock Knowledge Bases: create embeddings for product catalog data (from `unicorns` table), support documentation, and order FAQs. Use Bedrock's managed chunking and indexing.
 
 #### DATA-Q4: Data Source Sprawl
-- **Score**: 3/4 🟡
-- **Finding**: Single MySQL database with the `unishop` schema containing 3 tables: `unicorns` (product catalog), `unicorns_basket` (shopping cart), and `unicorn_user` (users). All data access goes through one JDBC connection defined in `application.properties`. This is a clean, simple data architecture with no sprawl.
-- **Gap**: Minor — single data source is good, but adding vector stores and event streams for agent capabilities will introduce new data sources that need unified access.
-- **Recommendation**: Maintain the simplicity by implementing a unified data access layer as new data sources (DynamoDB for baskets, OpenSearch for vectors) are introduced. Use API Gateway as a single entry point for all data access.
+- **Score**: 4/4 ✅
+- **Finding**: Single data source — MySQL database (`unishop` schema) with 3 tables (`unicorns`, `unicorns_basket`, `unicorn_user`). Connection configured in `application.properties` via `spring.datasource.url`. All data access goes through one `DataSource` bean configured in `MyBatisConfig.java`.
+- **Gap**: None. Minimal data source sprawl.
+- **Recommendation**: Maintain this simplicity as the application evolves. When introducing additional data stores (vector DB, cache, DynamoDB), use a unified data access abstraction layer.
 
 #### DATA-Q5: Data Access Pattern
 - **Score**: 2/4 🟠
-- **Finding**: A repository pattern is in use: `UnicornRepository` / `UnicornRepositoryImpl` and `UserRepository` / `UserRepositoryImpl` provide interfaces that abstract database access. MyBatis mappers (`UnicornMapper.xml`, `UserMapper.xml`, `HealthMapper.xml`) handle SQL execution. Controllers do not access the database directly — they call services which call repositories. However, data is accessed via direct JDBC connections, not through APIs.
-- **Gap**: Repository pattern provides internal abstraction, but data is not accessible via well-defined APIs for external consumers (agents). The Basket domain's data access is coupled through the `UnicornRepository` rather than having its own dedicated repository.
-- **Recommendation**: Expose data access through well-defined REST APIs with OpenAPI specs. For the agent layer, all data access should go through the API layer — agents should never connect directly to the database. This also supports the future decomposition into separate microservices.
+- **Finding**: Data is accessed through a layered repository pattern: Controller → Service → Repository → MyBatis Mapper → MySQL. `UnicornRepositoryImpl.java` and `UserRepositoryImpl.java` encapsulate SQL execution. `MyBatisConfig.java` configures all three mappers centrally. However, this is direct database access — no API-mediated data layer.
+- **Gap**: Direct DB connections from the application layer. When agents need data, they must go through the application's REST endpoints, but those endpoints directly couple to database operations with no abstraction for future data source changes.
+- **Recommendation**: Maintain the repository pattern as-is during containerization. When decomposing, expose data access through well-defined API contracts per service domain, enabling agents to access data through stable API tools.
 
 #### DATA-Q6: Unstructured Data
 - **Score**: 1/4 ❌
-- **Finding**: No S3 storage, document parsing (Textract, Tika), or unstructured data handling detected. The `build.gradle` includes `com.amazonaws:aws-java-sdk-s3:1.11.567` but no S3 operations are implemented in any source file. Product images are referenced by name only (`image` field in `Unicorn.java`) without actual file storage.
-- **Gap**: No unstructured data storage or processing pipeline. Customer support documentation, product manuals, and policy documents cannot be ingested for agent knowledge.
-- **Recommendation**: Create an S3 bucket for customer support documents, product documentation, and policy files. Integrate with Amazon Textract for document parsing and feed into the RAG pipeline via Bedrock Knowledge Bases.
+- **Finding**: No S3 storage, no Textract, no document parsing libraries. Only structured data in MySQL tables. Product images are stored as string references (`image` column in `unicorns` table stores names like `UnicornFloat`, `UnicornHipHop`) — likely referencing external image files, but no S3 integration is present.
+- **Gap**: No unstructured data handling. Support agents cannot process uploaded documents, parse customer emails, or analyze product images.
+- **Recommendation**: Implement S3 storage for product images and customer documents. Add Amazon Textract for document parsing in support workflows. Create an S3-triggered pipeline for indexing unstructured content into the RAG system.
 
 #### DATA-Q7: Schema Documentation
 - **Score**: 2/4 🟠
-- **Finding**: `database/create_tables.sql` provides explicit schema definitions for all 3 tables with column types, constraints (PRIMARY KEY, UNIQUE, NOT NULL), and seed data (10 unicorn products). MyBatis mapper XMLs (`UnicornMapper.xml`, `UserMapper.xml`) define SQL query contracts with parameterized queries. However, there is no schema migration framework (Flyway, Liquibase, Alembic), no schema versioning, and no data dictionary documenting field semantics.
-- **Gap**: Schema exists but is not versioned or migration-managed. No documentation of field semantics, relationships, or business rules beyond the raw DDL.
-- **Recommendation**: Adopt Flyway or Liquibase for schema migration management. Document the data model with field descriptions and business rules. This documentation will feed directly into agent tool descriptions and natural-language-to-SQL capabilities.
+- **Finding**: `database/create_tables.sql` provides complete schema definitions for all 3 tables with column types, constraints (`UNIQUE`, `PRIMARY KEY`), and engine specifications (`InnoDB`, `UTF8MB4`). 10 seed data `INSERT` statements for the `unicorns` table. No Flyway, Liquibase, or Alembic migration framework. No JSON Schema files. No schema registry. No schema versioning.
+- **Gap**: Schema is defined but not versioned or managed. Changes to the schema are untracked, making it risky for agents to rely on schema stability.
+- **Recommendation**: Adopt Flyway or Liquibase for schema migration management. Document the schema in JSON Schema format for agent consumption. Version schema changes alongside application code.
 
 #### DATA-Q8: Data Access Layer
 - **Score**: 3/4 🟡
-- **Finding**: Centralized repository layer with consistent patterns. Both `UnicornRepositoryImpl` and `UserRepositoryImpl` use the same MyBatis-based data access pattern: `@Repository` + `@Transactional` annotations, `@Autowired` mappers, and consistent try/catch error handling. `MyBatisConfig.java` centralizes all mapper bean definitions and SqlSessionFactory configuration. The pattern is consistent across both User and Unicorn domains.
-- **Gap**: Minor — the Basket domain's data access is merged into `UnicornRepository` rather than being a separate repository, creating a coupling between product and basket concerns.
-- **Recommendation**: When decomposing, extract Basket data access into its own `BasketRepository`. The existing centralized pattern is a good foundation — maintain it as services are extracted.
+- **Finding**: Unified data access layer via MyBatis + Spring Repository pattern. `MyBatisConfig.java` centralizes all mapper configuration. `UnicornRepositoryImpl.java`, `UserRepositoryImpl.java`, and `HealthRepositoryImpl.java` provide a consistent interface pattern. All SQL is defined in XML mapper files (`UnicornMapper.xml`, `UserMapper.xml`, `HealthMapper.xml`), not scattered across source code.
+- **Gap**: Tightly coupled to MySQL/MyBatis. The mapper XMLs contain MySQL-specific SQL. Switching to DynamoDB or Aurora PostgreSQL would require rewriting all data access.
+- **Recommendation**: When migrating to managed databases (RDS/Aurora or DynamoDB), replace MyBatis with a more portable ORM (Spring Data JPA) or implement a domain-specific data access interface that abstracts the underlying store.
 
 #### DATA-Q9: Embedding Freshness
 - **Score**: 1/4 ❌
-- **Finding**: No embeddings exist, so there is no refresh mechanism. No CDC (Change Data Capture) patterns, no event-driven re-indexing, no scheduled embedding refresh pipelines.
-- **Gap**: No embedding pipeline at all, let alone incremental updates.
-- **Recommendation**: When implementing the vector store and RAG pipeline, set up DynamoDB Streams or RDS event notifications to trigger embedding regeneration when product data changes. Use EventBridge Scheduler for periodic full re-indexing as a fallback.
+- **Finding**: No embeddings exist, so no freshness mechanism is relevant. No event-driven embedding refresh triggers, no scheduled re-indexing pipelines, no CDC patterns.
+- **Gap**: No embedding infrastructure to keep fresh.
+- **Recommendation**: When implementing RAG (DATA-Q3), include an event-driven embedding refresh pipeline. Use DynamoDB Streams or Amazon EventBridge to trigger re-embedding when product catalog data changes.
 
 #### DATA-Q10: Database Engine Version & EOL
 - **Score**: 2/4 🟠
-- **Finding**: MySQL connector version `8.0.11` is specified in `build.gradle` (`mysql:mysql-connector-java:8.0.11`), indicating MySQL 8.0 compatibility. MySQL 8.0.11 was released in April 2018. No IaC specifies the actual database engine version. MySQL 8.0 is currently supported by Oracle (EOL expected ~April 2026), but the connector version is significantly outdated (8+ years old) and may have known security vulnerabilities.
-- **Gap**: No IaC pinning of database engine version. MySQL connector is 8+ years old. Approaching MySQL 8.0 EOL.
-- **Recommendation**: Pin the MySQL engine version explicitly in IaC when defining the managed RDS instance. Upgrade the MySQL connector to the latest 8.x version. Plan migration to Aurora MySQL or consider DynamoDB (preferred) for the basket service before MySQL 8.0 reaches EOL.
+- **Finding**: `build.gradle` includes `mysql-connector-java:8.0.11` (released April 2018). No IaC exists to specify the actual MySQL server engine version. The connector version suggests MySQL 8.x, but the actual server version is unknown from the repository alone. No explicit version pinning in any infrastructure configuration.
+- **Gap**: Database engine version is not explicitly managed or pinned in IaC. MySQL 8.0 has an EOL date. Without version tracking, there is no proactive upgrade path.
+- **Recommendation**: When creating Terraform for RDS, explicitly pin the engine version (`engine_version = "8.0.35"` or later). Set up a quarterly review of engine version support status. Consider migrating to Aurora MySQL for longer support windows.
 
 #### DATA-Q11: Stored Procedures & Schema Complexity
 - **Score**: 4/4 ✅
-- **Finding**: `database/create_tables.sql` contains only `CREATE SCHEMA`, `CREATE TABLE`, and `INSERT INTO` statements. No stored procedures (`CREATE PROCEDURE`), triggers (`CREATE TRIGGER`), functions (`CREATE FUNCTION`), or proprietary SQL constructs detected. All business logic resides in the Java application layer via MyBatis mappers. SQL in mapper XMLs (`UnicornMapper.xml`, `UserMapper.xml`, `HealthMapper.xml`) uses standard ANSI SQL (SELECT, INSERT IGNORE, DELETE, JOIN).
-- **Gap**: None. Clean separation of business logic from the database layer.
-- **Recommendation**: Maintain this pattern. The absence of stored procedures significantly reduces database migration complexity — the application can be migrated to Aurora, DynamoDB, or another managed database without extracting embedded business logic from the database engine.
+- **Finding**: `create_tables.sql` contains only `CREATE TABLE` and `INSERT` statements. No stored procedures, no triggers, no functions, no views. MyBatis mapper XMLs (`UnicornMapper.xml`, `UserMapper.xml`, `HealthMapper.xml`) contain standard SQL (SELECT, INSERT, DELETE, JOIN) with no proprietary MySQL constructs beyond `INSERT IGNORE` and `CURRENT_TIMESTAMP`. All business logic resides in the Java application layer.
+- **Gap**: None. Clean schema with no stored procedure dependencies.
+- **Recommendation**: Maintain this clean separation. The absence of stored procedures makes database migration (MySQL → Aurora MySQL, or to DynamoDB for the basket) straightforward.
 
 ### Identity, Security & Governance
 
 #### SEC-Q1: Secret Management
 - **Score**: 1/4 ❌
-- **Finding**: Database credentials are hardcoded in plaintext in `application.properties`: `spring.datasource.username: MonoToMicroUser` and `spring.datasource.password: MonoToMicroPassword`. The database endpoint is parameterized via environment variable `MONO_TO_MICRO_DB_ENDPOINT`, but the actual credentials are committed to the repository in clear text.
-- **Gap**: Secrets are committed to source control in plaintext. No Secrets Manager, Parameter Store, or Vault integration.
-- **Recommendation**: Migrate all secrets to AWS Secrets Manager. Replace hardcoded credentials in `application.properties` with Secrets Manager references. Use Spring Cloud AWS Secrets Manager integration or ECS task definition secret references.
+- **Finding**: Database credentials are hardcoded in plaintext in `application.properties`: `spring.datasource.username: MonoToMicroUser` and `spring.datasource.password: MonoToMicroPassword`. The database endpoint uses an environment variable (`${MONO_TO_MICRO_DB_ENDPOINT}`), but credentials are static plaintext. No AWS Secrets Manager, no HashiCorp Vault, no encrypted configuration. No `secretsmanager` client usage despite the full AWS SDK being included.
+- **Gap**: Hardcoded credentials in source control. No secret rotation capability. Critical security vulnerability for any production deployment, especially for AI agents that may need to authenticate to multiple services.
+- **Recommendation**: Migrate credentials to AWS Secrets Manager. Use Spring Cloud AWS Secrets Manager integration or environment variable injection from Secrets Manager at deployment time. Define the secret in Terraform.
 
 #### SEC-Q2: IAM Least Privilege
 - **Score**: 1/4 ❌
-- **Finding**: No IAM policies defined in the repository. The `build.gradle` includes `com.amazonaws:aws-java-sdk:1.11.567` (the full SDK bundle), suggesting potential broad AWS access. No IAM role definitions, no policy documents, no trust relationships configured in code.
-- **Gap**: No IAM policies. The full AWS SDK dependency suggests the application may run with broad permissions rather than least-privilege scoped roles.
-- **Recommendation**: Define per-service IAM roles in IaC with specific action/resource permissions. Replace the full SDK bundle (`aws-java-sdk`) with only required SDK modules. When running on ECS, use ECS task roles with least-privilege policies.
+- **Finding**: No IAM policies defined in the repository. No IaC with IAM roles or policies. The full AWS SDK (`com.amazonaws:aws-java-sdk:1.11.567`) is bundled — the entire SDK including every service module — rather than importing only required service modules. No evidence of scoped IAM roles for the application.
+- **Gap**: No defined IAM roles or policies. The application likely relies on an EC2 instance profile with unknown permissions. Agent workloads require precisely scoped IAM roles for each tool/service interaction.
+- **Recommendation**: Create per-service IAM roles in Terraform with least-privilege policies. Scope permissions to only required actions (e.g., `rds-db:connect`, `sqs:SendMessage`, `bedrock:InvokeModel`). Replace the full AWS SDK with individual service modules.
 
 #### SEC-Q3: Identity Propagation
-- **Score**: 1/4 ❌
-- **Finding**: Spring Security OAuth2 is configured — `ResourceServerConfig.java` has `@EnableResourceServer` annotation and `build.gradle` includes `spring-security-oauth2-autoconfigure`, `spring-security-jwt`, and `spring-cloud-starter-oauth2`. However, the security configuration in `ResourceServerConfig.java` sets `authorizeRequests().anyRequest().permitAll()`, effectively disabling all authentication. No JWT validation, no token exchange, no user identity propagation.
-- **Gap**: OAuth2 infrastructure is present but completely disabled. No user identity is validated or propagated. Agent actions cannot be attributed to specific users.
-- **Recommendation**: Enable JWT validation in `ResourceServerConfig.java` by removing `permitAll()` and configuring a proper JWT token verification (e.g., with Amazon Cognito as the issuer). Propagate user identity through all API calls so agent actions are attributable.
+- **Score**: 2/4 🟠
+- **Finding**: Spring Security OAuth2 libraries are included in `build.gradle` (`spring-security-oauth2-autoconfigure`, `spring-cloud-starter-oauth2`, `spring-security-jwt:1.0.9.RELEASE`). `ResourceServerConfig.java` has `@EnableResourceServer` annotation. However, all requests are permitted (`.authorizeRequests().anyRequest().permitAll()`). `@PreAuthorize("permitAll()")` is on every controller method. JWT infrastructure exists but is completely non-enforcing.
+- **Gap**: OAuth2/JWT libraries are present but authentication is disabled. User identity is not propagated — `UserController` identifies users by email in request body, not by authenticated token. Agent actions cannot be attributed to specific users.
+- **Recommendation**: Enable OAuth2 resource server authentication by configuring a JWT issuer (Amazon Cognito). Replace `permitAll()` with role-based access control. Propagate user identity from JWT tokens through service calls.
 
 #### SEC-Q4: Audit Logging
 - **Score**: 1/4 ❌
-- **Finding**: No audit logging. No CloudTrail configuration. Application logging uses `System.out.println()` in `HealthController.java` (e.g., `System.out.println(infoStr)`) and `e.printStackTrace()` in repository implementations. No structured audit log of API operations, data modifications, or user actions.
-- **Gap**: Zero audit trail. When agents perform actions (basket modifications, user operations), there is no record of what was done, by whom, or when.
-- **Recommendation**: Implement structured audit logging for all API operations using a logging framework (SLF4J + Logback with JSON output). Enable CloudTrail for AWS API calls. Log agent actions with full context (user ID, action, parameters, outcome) for compliance and debugging.
+- **Finding**: No CloudTrail configuration. No audit logging infrastructure. `HealthController.java` uses `System.out.println()` for logging. Repository implementations use `e.printStackTrace()`. No structured audit trail for any operations (user creation, basket modifications, data access).
+- **Gap**: Zero audit capability. Agent actions (what the agent did, on behalf of which user, when) are completely untraceable. This is a compliance and safety risk for customer-facing AI agents.
+- **Recommendation**: Implement CloudTrail for API-level auditing. Add structured application-level audit logging for all state-changing operations. Log agent decision chains with correlation IDs for traceability.
 
 #### SEC-Q5: API Rate Limits
 - **Score**: 1/4 ❌
-- **Finding**: No rate limiting at any level. No API Gateway throttling, no WAF rules, no application-level rate limiting middleware. All endpoints accept unlimited requests.
-- **Gap**: No protection against API abuse. Autonomous agents could generate unlimited request volume without throttling.
-- **Recommendation**: Deploy API Gateway with throttling (burst/rate limits per API key and per-client quotas). Configure WAF rate rules for additional protection. Essential for agent safety — prevents runaway agent loops from overwhelming the service.
+- **Finding**: No rate limiting at any level. No API Gateway throttle settings, no WAF rate rules, no application-level rate limiting. All endpoints are open to unlimited requests.
+- **Gap**: No rate limits. AI agents can make rapid successive API calls; without rate limits, a single misbehaving agent could exhaust system resources.
+- **Recommendation**: Deploy API Gateway with per-API-key usage plans and throttling (burst/rate limits). Configure WAF rate-based rules for DDoS protection. This is especially critical for agent-facing APIs.
 
 #### SEC-Q6: PII Redaction
 - **Score**: 1/4 ❌
-- **Finding**: `User.java` stores and exposes `email`, `firstName`, and `lastName` fields. The `UserMapper.xml` `getByEmail` query returns all user fields including email. `UserController.java` returns the full `User` object in responses. No PII masking, redaction, or filtering in logging or API responses. `e.printStackTrace()` could expose user data in error logs.
-- **Gap**: PII (email, name) is returned unredacted in API responses and could be logged in stack traces. No automated PII detection or redaction.
-- **Recommendation**: Implement PII redaction in logs (mask email addresses and names). Consider field-level access control in API responses. Add Amazon Macie for S3-based PII detection when document storage is added. Critical for customer support agents that handle personal customer data.
+- **Finding**: No PII redaction. `User.java` model exposes `email`, `firstName`, `lastName` directly in API responses (via `@JsonInclude`). `UserMapper.xml` returns `user.email`, `user.first_name`, `user.last_name` in SELECT queries. Exception stack traces are printed to stdout via `e.printStackTrace()` in all repository implementations, potentially exposing sensitive data in logs.
+- **Gap**: PII is returned unredacted in API responses and potentially leaked in error logs. Support agents handling customer data must comply with PII protection requirements.
+- **Recommendation**: Add PII masking in logging (replace `e.printStackTrace()` with a structured logger with PII filters). Consider field-level redaction in API responses for non-essential PII. Enable Amazon Macie for data classification.
 
 #### SEC-Q7: Human Approval Workflows
 - **Score**: 1/4 ❌
-- **Finding**: No human-in-the-loop approval gates for any operation. All API endpoints (`POST /unicorns/basket`, `DELETE /unicorns/basket`, `POST /user`) execute immediately without approval. No Step Functions with `waitForTaskToken`, no approval Lambda patterns, no manual approval stages.
-- **Gap**: No human approval workflow. AI agents for order management could execute destructive operations (removing items from baskets, modifying user data) without human oversight.
-- **Recommendation**: Implement AWS Step Functions with `waitForTaskToken` for high-risk agent actions: basket modifications above a threshold, user account changes, and any future order cancellation/refund flows. This is a critical safety requirement for agentic-ai-enablement.
+- **Finding**: No human approval workflows. No Step Functions with human approval tasks (`waitForTaskToken`), no approval Lambda patterns, no approval API endpoints. No manual approval stages in any pipeline (no CI/CD exists).
+- **Gap**: No human-in-the-loop approval mechanism. Customer-facing AI agents performing high-risk actions (refunds, account modifications, order cancellations) have no safety gate requiring human review.
+- **Recommendation**: Implement Step Functions with `waitForTaskToken` for high-risk agent actions. Create an approval dashboard where human reviewers can approve/reject agent-proposed actions (e.g., refunds above a threshold, account deletions).
 
 #### SEC-Q8: Encryption at Rest
 - **Score**: 1/4 ❌
-- **Finding**: No KMS keys, no encryption configuration found in the repository. No `kms_key_id` references. Database encryption status is unknown (no IaC to verify). No encryption settings on any data store.
-- **Gap**: No verifiable encryption at rest. Customer data (emails, names, order history) may be stored unencrypted.
-- **Recommendation**: Enable encryption at rest with customer-managed KMS keys for all data stores (RDS/Aurora, DynamoDB, S3, OpenSearch). Define KMS key policies in IaC. Essential for protecting customer data that agents will access.
+- **Finding**: No KMS configuration found. No `kms_key_id` on any resource. No encryption-at-rest settings in any configuration file. No IaC to verify data store encryption. The database stores customer PII (email, names) without confirmed encryption.
+- **Gap**: No evidence of encryption at rest for customer data. Agent conversation logs, customer PII, and order data must be encrypted.
+- **Recommendation**: When defining RDS in Terraform, enable encryption with a customer-managed KMS key. Apply KMS encryption to all data stores: RDS, S3 (for future unstructured data), DynamoDB (for future basket/session data), and agent conversation logs.
 
 #### SEC-Q9: API Authentication
 - **Score**: 1/4 ❌
-- **Finding**: Despite OAuth2 dependencies in `build.gradle` and `@EnableResourceServer` in `ResourceServerConfig.java`, authentication is disabled: `authorizeRequests().anyRequest().permitAll()`. Additionally, `Application.java` ignores all OPTIONS requests: `web.ignoring().antMatchers(HttpMethod.OPTIONS, "/**")` with a comment "not recommended for production usage!" Every endpoint is publicly accessible without any credentials.
-- **Gap**: All endpoints are unauthenticated. Any client (or agent) can access all operations without credentials.
-- **Recommendation**: Enable OAuth2/JWT authentication by configuring Amazon Cognito as the authorization server. Remove `permitAll()` from `ResourceServerConfig.java`. Issue per-agent API keys or JWT tokens with scoped permissions for different agent capabilities.
+- **Finding**: OAuth2 resource server is configured but completely non-enforcing. `ResourceServerConfig.java` permits all requests (`.authorizeRequests().anyRequest().permitAll()`). Every controller method has `@PreAuthorize("permitAll()")`. The `/user/login` endpoint accepts a `User` object with `email` and returns user data without any authentication — effectively a user lookup by email with no password verification.
+- **Gap**: Zero API authentication. Any client can access any endpoint. The "login" endpoint returns user data based on email without verifying identity. This is fundamentally insecure for agent access.
+- **Recommendation**: Enable OAuth2/JWT authentication via Amazon Cognito. Remove `permitAll()` and enforce token-based auth on all endpoints. Implement separate auth scopes for human users and AI agents (agent-to-service authentication).
 
 #### SEC-Q10: Centralized Identity
 - **Score**: 1/4 ❌
-- **Finding**: No centralized identity provider configured. No Amazon Cognito, Okta, Auth0, or Ping integration. The OAuth2 dependencies exist in `build.gradle` but no issuer URL, JWKS endpoint, or OIDC configuration is defined in `application.properties` or any configuration class. The `CoreConfig.java` defines a `BCryptPasswordEncoder` bean, suggesting local password management was intended but never fully implemented.
-- **Gap**: No identity provider. No SSO. User authentication is handled by a simple email lookup (`POST /user/login` calls `userMapper.getByEmail`) without any password verification.
-- **Recommendation**: Integrate Amazon Cognito as the centralized identity provider. Configure Cognito User Pools for customer authentication and Cognito Identity Pools for federated agent access. This provides JWT tokens for API authentication and user identity propagation.
+- **Finding**: Spring Security OAuth2 libraries are present but no identity provider is configured. No Cognito user pool, no Okta configuration, no OIDC/SAML settings, no SSO configuration. `CoreConfig.java` defines a `BCryptPasswordEncoder` bean but it is not used anywhere — no password-based authentication is implemented.
+- **Gap**: No centralized identity provider. Users are identified only by email address in request bodies. No SSO, no federated identity, no user pool management.
+- **Recommendation**: Deploy Amazon Cognito as the centralized identity provider. Configure user pools for customer authentication and machine-to-machine credentials for agent authentication. Define in Terraform with `aws_cognito_user_pool`.
 
 ### Operations & Observability
 
 #### OPS-Q1: Distributed Tracing
 - **Score**: 1/4 ❌
-- **Finding**: No X-Ray, OpenTelemetry, Jaeger, Zipkin, or any distributed tracing SDK found in `build.gradle` or any source file. No trace ID propagation (no `traceparent`, `X-Amzn-Trace-Id`, or correlation headers). No instrumentation wrappers around HTTP calls or database operations.
-- **Gap**: Zero distributed tracing. When agents invoke multiple tools in sequence, there is no way to reconstruct the execution path or diagnose failures across the call chain.
-- **Recommendation**: Add AWS X-Ray SDK for Java to `build.gradle` and instrument the Spring Boot application. Alternatively, adopt OpenTelemetry Java agent for automatic instrumentation. This is essential for debugging agent tool invocations and understanding end-to-end latency.
+- **Finding**: No distributed tracing found. No X-Ray SDK, no OpenTelemetry imports, no trace context propagation headers (`traceparent`, `X-Amzn-Trace-Id`). `spring-boot-starter-actuator` is included in `build.gradle` but no tracing configuration exists. No `logback.xml`, no `log4j2.xml`, no tracing auto-instrumentation config.
+- **Gap**: Zero distributed tracing. Agent workflows spanning LLM calls, tool invocations, and database queries are completely invisible. Cannot reconstruct agent decision chains when failures occur.
+- **Recommendation**: Add OpenTelemetry Java auto-instrumentation agent. Configure X-Ray as the tracing backend. Include `gen_ai.*` semantic conventions for future LLM span tracking. Define in Terraform with `aws_xray_group`.
 
 #### OPS-Q2: Structured Logging
 - **Score**: 1/4 ❌
-- **Finding**: Logging uses `System.out.println()` in `HealthController.java` and `e.printStackTrace()` in `UnicornRepositoryImpl.java` and `UserRepositoryImpl.java`. No logging framework (SLF4J, Logback, Log4j2) is explicitly configured. No JSON log format. No correlation IDs or trace IDs in log output. No structured fields.
-- **Gap**: Unstructured logging via stdout/stderr. No correlation between logs and requests. Agent interactions cannot be traced through logs.
-- **Recommendation**: Configure SLF4J with Logback (already on classpath via Spring Boot) with JSON encoder output. Add MDC (Mapped Diagnostic Context) for request IDs and user IDs. Pipe logs to CloudWatch Logs for centralized log management and CloudWatch Log Insights queries.
+- **Finding**: No structured logging. `HealthController.java` uses `System.out.println()` for output. All repository implementations (`UnicornRepositoryImpl.java`, `UserRepositoryImpl.java`, `HealthRepositoryImpl.java`) use `e.printStackTrace()` for error logging. No JSON log formatters, no correlation IDs, no logging framework configuration files (no `logback.xml`, no `log4j2.xml`). Despite Spring Boot including Logback by default, it is not configured.
+- **Gap**: Unstructured, unparseable logs with no correlation IDs. Agent interaction logs cannot be queried, correlated, or analyzed. CloudWatch Log Insights would be ineffective.
+- **Recommendation**: Configure Logback with JSON format (use `logstash-logback-encoder`). Add correlation ID middleware (MDC-based). Replace all `System.out.println()` and `e.printStackTrace()` with proper SLF4J logger calls.
 
 #### OPS-Q3: Automated Evals
 - **Score**: 1/4 ❌
-- **Finding**: No evaluation framework, golden datasets, scoring scripts, or LLM-as-judge patterns found. No AI/agent capabilities exist (see APP-Q13), so there is nothing to evaluate.
-- **Gap**: No agent evaluation pipeline. When customer support agents are built, there will be no way to measure response quality, accuracy, or safety.
-- **Recommendation**: Before deploying customer support agents, establish an evaluation framework: create golden datasets of customer support queries with expected responses, implement automated scoring (relevance, accuracy, helpfulness), and set up regression testing for prompt/model changes.
+- **Finding**: No agent evaluation framework. No eval datasets, no scoring scripts, no LLM-as-judge patterns, no golden dataset files. No test files of any kind exist in the repository.
+- **Gap**: No agent evaluation capability. Customer support agent quality (accuracy, helpfulness, safety) cannot be measured or tracked over time.
+- **Recommendation**: Create evaluation datasets with golden question-answer pairs for customer support scenarios (order status queries, product recommendations, return processing). Implement automated eval pipeline using Amazon Bedrock's evaluation capabilities or RAGAS framework.
 
 #### OPS-Q4: SLOs
 - **Score**: 1/4 ❌
-- **Finding**: No SLO definitions found. No CloudWatch alarms, no p99/p95 latency targets, no error budget tracking, no availability targets. Spring Boot Actuator is included in `build.gradle` (`spring-boot-starter-actuator`) but no custom metric endpoints or SLO dashboards are configured.
-- **Gap**: No SLO definitions or monitoring. Cannot measure whether the application meets reliability requirements for agent-driven workloads.
-- **Recommendation**: Define SLOs for critical API endpoints: p99 latency < 500ms, availability > 99.9%, error rate < 0.1%. Create CloudWatch alarms and dashboards. Extend SLOs to agent-specific metrics once agents are deployed (task success rate, hallucination rate).
+- **Finding**: No SLO definitions. No CloudWatch alarms. No latency or availability targets defined anywhere. `spring-boot-starter-actuator` is present but no custom metrics or health indicators beyond the default are configured.
+- **Gap**: No SLOs for any API endpoint. Agent reliability cannot be measured against defined targets (e.g., "order lookup must respond within 500ms p99").
+- **Recommendation**: Define SLOs for critical agent-facing endpoints: `/unicorns` GET (p99 < 500ms), `/unicorns/basket/{userUuid}` GET (p99 < 500ms), `/user/login` POST (p99 < 1s). Create CloudWatch alarms for SLO violations.
 
 #### OPS-Q5: Rollback Capability
 - **Score**: 1/4 ❌
-- **Finding**: No deployment rollback mechanism. No blue/green, canary, feature flags, prompt versioning, or configuration rollback capability found. No CodeDeploy, Argo Rollouts, or Helm rollback configuration.
-- **Gap**: No rollback capability for code, configuration, or (future) prompts. Failed deployments or agent prompt regressions cannot be quickly reversed.
-- **Recommendation**: Implement ECS rolling deployments with automatic rollback on CloudWatch alarm triggers. Add feature flags (AWS AppConfig or LaunchDarkly) for gradual agent feature rollout. Version all agent prompts in a separate configuration store with instant rollback capability.
+- **Finding**: No deployment automation of any kind. No blue/green, no canary deployments, no rollback triggers. No CodeDeploy, no Helm rollback, no feature flags. No prompt versioning (no AI/agent components to version).
+- **Gap**: No rollback capability. Agent prompt changes, model updates, or tool configuration changes cannot be safely rolled back if they cause regressions.
+- **Recommendation**: Implement blue/green deployments on ECS with CodeDeploy. Use Helm for Kubernetes rollback capability. Add feature flags (AWS AppConfig) for gradual rollout of agent features and prompt changes.
 
 #### OPS-Q6: LLM Cost Tracking
 - **Score**: 1/4 ❌
-- **Finding**: No LLM usage exists and no token tracking infrastructure. No custom CloudWatch metrics for AI/LLM costs. No usage attribution by user, feature, or workflow.
-- **Gap**: No LLM cost tracking. When agents are deployed for customer support, token usage could become a significant cost driver without visibility.
-- **Recommendation**: Implement per-request token tracking from the start of agent development. Log input/output token counts with user ID, conversation ID, and workflow type attribution. Create CloudWatch dashboards for cost monitoring. Set up cost anomaly alerts. Implement tiered retention policies for observability data.
+- **Finding**: No LLM usage in the application, so no cost tracking exists. No token counting, no cost attribution, no usage metrics.
+- **Gap**: No LLM cost tracking infrastructure. When agents are implemented, token usage per customer interaction, per agent type, and per workflow must be tracked to manage costs.
+- **Recommendation**: When integrating Bedrock, implement per-request token usage logging with user/workflow attribution. Create CloudWatch custom metrics for token consumption. Establish tiered retention policies for agent telemetry data.
 
 #### OPS-Q7: Business Metrics
 - **Score**: 1/4 ❌
-- **Finding**: No custom business metrics. Spring Boot Actuator is a dependency in `build.gradle` but no `@Timed`, `@Counted`, or custom metric registrations found. No CloudWatch `put_metric_data` calls. No dashboards tracking business outcomes (orders placed, baskets converted, user registrations).
-- **Gap**: No business outcome metrics. Cannot measure whether agent interactions improve customer support resolution or order management efficiency.
-- **Recommendation**: Publish custom CloudWatch metrics for key business events: baskets created, items added/removed, user registrations, login attempts. When agents are added, track agent-specific business metrics: support tickets resolved, order issues handled, customer satisfaction scores.
+- **Finding**: No custom business metrics published. `spring-boot-starter-actuator` is present but only default health/info endpoints are active (no custom Micrometer metrics, no CloudWatch integration configured).
+- **Gap**: No business outcome tracking. Cannot measure agent effectiveness: order resolution rate, customer satisfaction, basket conversion rate, support ticket deflection.
+- **Recommendation**: Add Micrometer metrics for business KPIs: basket additions/removals per hour, user registrations, API response times by endpoint. Publish to CloudWatch. When agents are deployed, add agent-specific metrics (task success rate, hallucination rate, escalation rate).
 
 #### OPS-Q8: Anomaly Detection
 - **Score**: 1/4 ❌
-- **Finding**: No CloudWatch anomaly detection, no error rate alarms, no latency monitoring, no PagerDuty/OpsGenie integration. No alerting infrastructure of any kind found.
-- **Gap**: No anomaly detection or alerting. Agent reasoning loops, sudden latency increases, or elevated error rates would go unnoticed.
-- **Recommendation**: Enable CloudWatch anomaly detection on API error rates and latency. Create composite alarms for critical paths. When agents are deployed, add behavioral anomaly detection: alert on unusual tool call patterns (e.g., agent calling 15 tools instead of 3, indicating a reasoning loop).
+- **Finding**: No CloudWatch anomaly detection. No error rate alarms. No latency monitoring. No PagerDuty/OpsGenie integration. No monitoring infrastructure of any kind.
+- **Gap**: No anomaly detection. Agent behavioral anomalies (reasoning loops, unexpected tool call patterns, elevated error rates) would go undetected.
+- **Recommendation**: Enable CloudWatch anomaly detection on API latency and error rates. Create composite alarms for critical paths. When agents are deployed, add behavioral baseline monitoring for tool call frequency and reasoning step counts.
 
 #### OPS-Q9: Deployment Strategy
 - **Score**: 1/4 ❌
-- **Finding**: No deployment configuration found in the repository. No CodeDeploy, Helm, Argo, or any deployment tool configuration. Deployments are presumed manual.
-- **Gap**: No automated deployment strategy. Changes go directly to production with no canary or blue/green safety net.
-- **Recommendation**: Implement ECS rolling deployments with health check gates. Progress to blue/green deployments using CodeDeploy with ECS for zero-downtime releases. Add canary analysis for agent prompt/model changes.
+- **Finding**: No deployment strategy defined. No CodeDeploy configuration, no Helm canary, no Argo Rollouts, no feature flags. The commented-out Docker plugin in `build.gradle` (`/*docker { ... }*/`) suggests containerization was planned but never implemented.
+- **Gap**: No deployment strategy. All changes go directly to production with no gradual rollout or safety mechanisms.
+- **Recommendation**: Implement blue/green deployments on ECS using CodeDeploy with automatic rollback on alarm trigger. Use GitOps practices with Helm charts for deployment management per stated preferences.
 
 #### OPS-Q10: Integration Testing
 - **Score**: 1/4 ❌
-- **Finding**: No test files exist in the repository. No `src/test/` directory. No JUnit, Mockito, TestContainers, or any testing framework configuration beyond the `spring-boot-starter-test` dependency in `build.gradle`. No Postman/Newman collections. No contract tests.
-- **Gap**: Zero test coverage. No integration tests, no unit tests, no API contract tests. Cannot verify agent tool behavior or regression-test API changes.
-- **Recommendation**: Create a `src/test/` directory with JUnit 5 integration tests for all API endpoints. Add API contract tests that validate request/response schemas. These tests are essential before agents start using the APIs as tools — any breaking change could cause agent failures.
+- **Finding**: No test files exist. `spring-boot-starter-test` is listed as `testImplementation` in `build.gradle`, but no `src/test/` directory exists. No integration tests, no unit tests, no API tests, no contract tests.
+- **Gap**: Zero test coverage. Agent tools (API endpoints) have no tests. Cannot verify that changes don't break agent functionality.
+- **Recommendation**: Create integration tests for all API endpoints using Spring Boot Test + MockMvc. Add contract tests for API schemas. When agents are deployed, add end-to-end agent workflow tests. Run all tests in CI pipeline.
 
 #### OPS-Q11: Incident Response Automation
 - **Score**: 1/4 ❌
-- **Finding**: No runbooks (markdown, YAML, or JSON), no SSM Automation documents, no Lambda-based remediation, no Step Functions for incident workflows. No self-healing patterns (auto-restart, auto-scaling on failure). The `HealthController.java` provides basic health check endpoints (`/health/ping`, `/health/ishealthy`, `/health/dbping`) but these are not connected to any automated response.
-- **Gap**: No incident response automation. Health checks exist but are not connected to remediation workflows. Agent failures would require manual investigation and resolution.
-- **Recommendation**: Create machine-readable runbooks for common failure scenarios (database connectivity loss, high latency, agent reasoning loops). Connect ECS health checks to automatic task replacement. Implement EventBridge rules for automated incident notification and initial triage.
+- **Finding**: No runbooks (markdown, YAML, or JSON). No Systems Manager Automation documents. No remediation Lambda functions. No incident response workflows. No self-healing patterns.
+- **Gap**: No incident response automation. Agent failures (LLM timeouts, tool errors, data inconsistencies) have no automated response path. Mean-time-to-detect (MTTD) and mean-time-to-resolve (MTTR) are entirely human-paced.
+- **Recommendation**: Create machine-readable runbooks for common failure scenarios: database connection failures, high error rates, agent timeout escalation. Implement SSM Automation documents for common remediations (restart service, scale up, failover).
 
 #### OPS-Q12: Observability Governance & Ownership
 - **Score**: 1/4 ❌
-- **Finding**: No SLO definition files, no CODEOWNERS files, no team ownership assignments for observability assets. No platform team tooling configuration. No per-service dashboards or alarms. No observability-as-a-product evidence.
-- **Gap**: No observability ownership model. No clarity on who would own agent-level SLOs (task success rate, hallucination rate, tool error rate) once agents are deployed.
-- **Recommendation**: Establish an observability ownership model: define service-level SLOs with named owners, create per-service dashboards, and document the shared responsibility between platform and product teams. Plan for agent-level SLO ownership from the start.
+- **Finding**: No CODEOWNERS file. No SLO definition files with named owners. No platform team tooling configuration. No observability stack configuration. No shared responsibility model documentation.
+- **Gap**: No observability ownership model. When agents are deployed, there is no clarity on who owns agent quality metrics, safety monitoring, and operational response.
+- **Recommendation**: Define observability ownership: product team owns agent-level SLOs (task success rate, safety metrics), platform team owns infrastructure SLOs (latency, availability). Create a CODEOWNERS file. Establish an observability-as-product mindset with SLO-driven operations.
 
 ---
 
@@ -422,106 +432,108 @@ Based on the assessment findings, the following AWS Modernization Pathways are e
 
 | Pathway | Status | Goal Alignment | Priority | Key Trigger Criteria | Est. Effort |
 |---------|--------|---------------|----------|---------------------|-------------|
-| Move to Cloud Native | Triggered | Medium | High | APP-Q4: 2/4, INF-Q1: 1/4, APP-Q3: 1/4, APP-Q10: 1/4 | High |
-| Move to Containers | Triggered | Medium | High | INF-Q1: 1/4, No Dockerfile found | High |
+| Move to Cloud Native | Triggered | Medium | High | APP-Q4: 2/4, INF-Q1: 1/4, APP-Q3: 1/4, APP-Q10: 2/4 | High |
+| Move to Containers | Triggered | Medium | High | INF-Q1: 1/4, No Dockerfile found | Medium |
 | Move to Open Source | Not Triggered | Low | — | — | — |
-| Move to Managed Databases | Triggered | High | High | INF-Q2: 1/4, DATA-Q10: 2/4 | Medium |
-| Move to Managed Analytics | Triggered | Low | Medium | INF-Q8: 1/4 | Low |
+| Move to Managed Databases | Triggered | High | Medium | INF-Q2: 2/4 | Medium |
+| Move to Managed Analytics | Not Triggered | Low | — | — | — |
 | Move to Modern DevOps | Triggered | High | High | INF-Q5: 1/4, INF-Q6: 1/4, OPS-Q9: 1/4, OPS-Q10: 1/4, OPS-Q1: 1/4 | High |
 | Move to AI | Triggered | High | High | APP-Q13: 1/4, DATA-Q1: 1/4, DATA-Q3: 1/4, OPS-Q3: 1/4, OPS-Q6: 1/4 | High |
 
 ### Parallel Execution Plan
 
-**Parallel Track 1**: Move to Containers + Move to Modern DevOps — Containerize the application and establish CI/CD simultaneously. These have no dependencies on each other and both produce immediate value.
+**Parallel Track 1 (Infrastructure Foundation)**: Move to Containers + Move to Modern DevOps — these can execute concurrently. Containerization creates the Dockerfile and ECS deployment while DevOps creates the CI/CD pipeline and IaC.
 
-**Parallel Track 2**: Move to Managed Databases — Can proceed in parallel with Track 1. Migrate MySQL to Amazon RDS/Aurora and plan DynamoDB adoption for the basket service.
+**Parallel Track 2 (Data & AI)**: Move to Managed Databases + Move to AI — database migration to RDS/Aurora can proceed in parallel with AI framework integration and vector DB setup.
 
-**Parallel Track 3**: Move to AI — Begin data foundations (vector store, RAG pipeline) and agent framework integration in parallel with infrastructure modernization.
-
-**Sequential Dependencies**: Move to Containers must complete before Move to Cloud Native (must containerize before decomposing into microservices). Move to Managed Databases should precede full Move to Cloud Native (database per service pattern requires managed databases). Move to AI depends on Move to Modern DevOps (need CI/CD for agent deployment pipeline) and partially on Move to Managed Databases (vector store requires managed infrastructure).
+**Sequential Dependencies**:
+- Move to Containers must complete before Move to Cloud Native (must containerize before decomposing to microservices)
+- Move to Modern DevOps (CI/CD) should be in place before Move to AI (need deployment pipeline for agent code)
+- Move to Managed Databases should complete before Move to AI (agents need stable, managed data backends)
 
 ### Move to Containers
 
 - **Priority**: High
 - **Goal Alignment**: Medium
 - **Trigger Criteria Met**:
-  - INF-Q1: Score 1/4 — Application runs on raw EC2 (`HealthController.java` uses `EC2MetadataUtils`). No Dockerfile or container orchestration found.
-  - APP-Q4: Score 2/4 — Monolith needs containerization as the first step toward decomposition.
-- **Current State**: Java Spring Boot application deployed directly on EC2 instances. No Dockerfile, no container image, no container orchestration. Commented-out Docker task in `build.gradle` suggests containerization was considered but never implemented.
-- **Target State**: Application packaged as a Docker container image, stored in Amazon ECR, and deployed on Amazon ECS with Fargate. Container health checks connected to load balancer.
+  - INF-Q1: Score 1/4 — Application runs on raw EC2 (`HealthController.java` uses `EC2MetadataUtils.getInstanceInfo()`). No managed container orchestration or serverless compute.
+  - No Dockerfile found — The repository contains no container definitions. A commented-out Docker plugin in `build.gradle` suggests containerization was planned but never implemented.
+- **Current State**: Standalone Spring Boot JAR deployed directly on EC2 instances with no container runtime, no image registry, no orchestration.
+- **Target State**: Application packaged as a Docker container image, stored in Amazon ECR, running on Amazon ECS with Fargate launch type and auto-scaling.
 - **Key Activities**:
-  1. Create a multi-stage Dockerfile (Gradle build → JRE runtime)
+  1. Create a multi-stage Dockerfile for the Spring Boot application
   2. Set up Amazon ECR repository for container images
-  3. Deploy to Amazon ECS on Fargate with task definitions and service configuration
-  4. Configure Application Load Balancer with health checks pointing to `/health/ishealthy`
-- **Dependencies**: None — this is foundational and should start immediately
-- **Estimated Effort**: High (new Dockerfile, ECS cluster, task definitions, ALB, service config)
-- **Roadmap Phase Alignment**: Phase 1 (Agent Quick Wins)
+  3. Define ECS cluster, service, and task definition in Terraform
+  4. Configure Fargate launch type with appropriate CPU/memory
+  5. Set up ALB target group for ECS service health checks
+- **Dependencies**: None — this is a foundational activity
+- **Estimated Effort**: Medium
+- **Roadmap Phase Alignment**: Phase 1 — Agent Quick Wins (Days 1–30)
 - **Relevant Learning Materials**: Module 3 — Move to Containers with Amazon ECS and EKS
-
-### Move to Managed Databases
-
-- **Priority**: High
-- **Goal Alignment**: High
-- **Trigger Criteria Met**:
-  - INF-Q2: Score 1/4 — MySQL database with no IaC evidence of managed service. Connection via JDBC in `application.properties`.
-  - DATA-Q10: Score 2/4 — MySQL connector 8.0.11 (2018) in `build.gradle`, no engine version pinned in IaC.
-- **Current State**: MySQL database accessed via JDBC (`jdbc:mysql://${MONO_TO_MICRO_DB_ENDPOINT}:3306/unishop`). No IaC defining the database. No automated failover, backups, or version pinning.
-- **Target State**: Product catalog on Amazon Aurora MySQL-Compatible with automated failover. Shopping basket data on Amazon DynamoDB (key-value access pattern: lookup by user UUID). All databases defined in IaC with pinned engine versions and automated backups.
-- **Key Activities**:
-  1. Define Amazon RDS for MySQL (or Aurora MySQL-Compatible) in IaC with explicit engine version
-  2. Migrate database using AWS DMS with Schema Conversion Tool
-  3. Evaluate DynamoDB migration for the basket service (key-value pattern with `uuid` as partition key)
-  4. Move database credentials to AWS Secrets Manager
-  5. Update MySQL connector to latest 8.x version
-- **Dependencies**: None — can proceed in parallel with containerization
-- **Estimated Effort**: Medium (schema is simple, no stored procedures, standard MySQL)
-- **Roadmap Phase Alignment**: Phase 1 (version pinning) and Phase 2 (managed migration)
-- **Relevant Learning Materials**: Module 4 — Move to Managed Databases
 
 ### Move to Cloud Native
 
 - **Priority**: High
 - **Goal Alignment**: Medium
 - **Trigger Criteria Met**:
-  - APP-Q4: Score 2/4 — Monolith with identifiable modules (Unicorn, Basket, User domains) but shared database
-  - INF-Q1: Score 1/4 — EC2-based compute
-  - APP-Q3: Score 1/4 — 100% synchronous communication
-  - APP-Q10: Score 1/4 — No async processing for long-running operations
-- **Current State**: Monolithic Spring Boot application with synchronous HTTP communication. All domains (product catalog, basket, user) deployed as a single unit sharing one MySQL database.
-- **Target State**: Decomposed into independently deployable containerized services (Product Service, Basket Service, User Service) communicating via Amazon SQS and EventBridge, each with its own data store. Agent tools map to individual service APIs.
+  - APP-Q4: Score 2/4 — Monolith with identifiable modules but significant database coupling. All domains (Unicorn catalog, Basket, User) share a single MySQL database.
+  - INF-Q1: Score 1/4 — Raw EC2 compute with no managed orchestration.
+  - APP-Q3: Score 1/4 — 100% synchronous HTTP communication with zero async capability.
+  - APP-Q10: Score 2/4 — No async infrastructure for future long-running operations.
+- **Current State**: Tightly-coupled monolith with shared database, synchronous-only communication, no event-driven patterns.
+- **Target State**: Modular services with clear domain boundaries (Catalog, Basket/Order, User), each independently deployable on ECS, communicating via API Gateway and EventBridge.
 - **Key Activities**:
-  1. Introduce Amazon SQS for asynchronous basket operations
-  2. Add Amazon EventBridge for domain event publishing (user registered, item added to basket)
-  3. Extract Basket service as the first microservice (clear domain boundary, key-value data pattern ideal for DynamoDB)
-  4. Implement API Gateway routing to direct traffic between monolith and extracted services
-- **Dependencies**: Move to Containers (must containerize before decomposing), Move to Managed Databases (database-per-service pattern)
-- **Estimated Effort**: High (service extraction, data separation, messaging infrastructure)
-- **Roadmap Phase Alignment**: Phase 2 (Agent Foundations) and Phase 3 (Agent Scale & Optimization)
+  1. Conduct domain modeling to identify bounded contexts (Catalog, Basket/Order, User)
+  2. Extract Basket/Order service first (highest value for support agents)
+  3. Implement API Gateway routing (Strangler Fig pattern)
+  4. Introduce EventBridge for domain event publishing
+  5. Add SQS for async order processing workflows
+- **Dependencies**: Move to Containers must complete first (need container infrastructure before decomposition)
+- **Estimated Effort**: High
+- **Roadmap Phase Alignment**: Phase 2 — Agent Foundations (Months 1–3) and Phase 3 — Agent Scale & Optimization (Months 3–6)
 - **Relevant Learning Materials**: Module 2 — Move to Cloud Native (Containers and Serverless)
+
+### Move to Managed Databases
+
+- **Priority**: Medium
+- **Goal Alignment**: High
+- **Trigger Criteria Met**:
+  - INF-Q2: Score 2/4 — MySQL database with no IaC confirming managed RDS configuration. No evidence of automated failover, Multi-AZ deployment, or backup policies.
+- **Current State**: MySQL database accessed via JDBC with environment-variable-driven endpoint. No IaC confirms managed status. Credentials hardcoded.
+- **Target State**: Amazon RDS for MySQL (or Aurora MySQL) with Multi-AZ, automated backups, encryption at rest, and explicit engine version pinning in Terraform. DynamoDB for the Basket domain (key-value access pattern) when service is extracted.
+- **Key Activities**:
+  1. Define RDS instance in Terraform with Multi-AZ, encryption, and version pinning
+  2. Migrate credentials to AWS Secrets Manager
+  3. Evaluate DynamoDB for the Basket service (simple key-value lookups by user UUID)
+  4. Set up automated backup policies and monitoring
+- **Dependencies**: None — can proceed in parallel with other tracks
+- **Estimated Effort**: Medium
+- **Roadmap Phase Alignment**: Phase 1 (IaC for existing DB) and Phase 2 (DynamoDB migration for Basket)
+- **Relevant Learning Materials**: Module 4 — Move to Managed Databases
 
 ### Move to Modern DevOps
 
 - **Priority**: High
 - **Goal Alignment**: High
 - **Trigger Criteria Met**:
-  - INF-Q5: Score 1/4 — No IaC (zero Terraform, CloudFormation, CDK, or Helm files)
-  - INF-Q6: Score 1/4 — No CI/CD pipeline definitions
-  - OPS-Q9: Score 1/4 — No deployment strategy
-  - OPS-Q10: Score 1/4 — No test files exist in the repository
-  - OPS-Q1: Score 1/4 — No distributed tracing
-- **Current State**: Zero automation. No IaC, no CI/CD, no testing, no tracing, no deployment strategy. All infrastructure and deployments are manual.
-- **Target State**: Full CI/CD pipeline (CodePipeline → CodeBuild → ECR → ECS deploy) with automated testing, IaC-defined infrastructure (CDK), distributed tracing (X-Ray), and blue/green deployment strategy.
+  - INF-Q5: Score 1/4 — Zero IaC coverage. No `.tf`, CDK, CloudFormation, or Helm files.
+  - INF-Q6: Score 1/4 — Zero CI/CD pipeline definitions. No GitHub Actions, CodePipeline, or Jenkinsfile.
+  - OPS-Q9: Score 1/4 — No deployment strategy. No blue/green, canary, or feature flags.
+  - OPS-Q10: Score 1/4 — Zero test coverage. No test files despite `spring-boot-starter-test` dependency.
+  - OPS-Q1: Score 1/4 — No distributed tracing. No X-Ray or OpenTelemetry.
+- **Current State**: Manual infrastructure provisioning, manual deployments, no testing, no tracing, no observability.
+- **Target State**: Full Terraform IaC, GitHub Actions CI/CD pipeline with build/test/deploy stages, blue/green ECS deployments, OpenTelemetry distributed tracing, structured JSON logging, and integration test suite.
 - **Key Activities**:
-  1. Adopt AWS CDK for infrastructure definitions (VPC, ECS, RDS, API Gateway)
-  2. Create CI/CD pipeline with CodePipeline and CodeBuild
-  3. Add unit and integration tests to the project
-  4. Implement distributed tracing with AWS X-Ray
-  5. Configure structured JSON logging with CloudWatch Logs
-  6. Set up blue/green deployments with CodeDeploy for ECS
-- **Dependencies**: Move to Containers (CI/CD pipeline deploys container images)
-- **Estimated Effort**: High (building from zero across IaC, CI/CD, testing, observability)
-- **Roadmap Phase Alignment**: Phase 1 (IaC and CI/CD basics) and Phase 2 (advanced observability and deployment)
+  1. Create Terraform project for all infrastructure (VPC, ECS, RDS, API Gateway)
+  2. Set up GitHub Actions CI/CD pipeline (build → test → container build → deploy)
+  3. Add OpenTelemetry auto-instrumentation with X-Ray backend
+  4. Configure structured JSON logging with correlation IDs
+  5. Write integration tests for all API endpoints
+  6. Implement blue/green deployments via ECS + CodeDeploy
+  7. Adopt GitOps workflow with Helm per stated preferences
+- **Dependencies**: None — this is a foundational enabler for all other pathways
+- **Estimated Effort**: High
+- **Roadmap Phase Alignment**: Phase 1 (IaC + CI/CD) and Phase 2 (advanced deployment strategies + observability)
 - **Relevant Learning Materials**: Module 6 — Move to Modern DevOps
 
 ### Move to AI
@@ -529,47 +541,32 @@ Based on the assessment findings, the following AWS Modernization Pathways are e
 - **Priority**: High
 - **Goal Alignment**: High
 - **Trigger Criteria Met**:
-  - APP-Q13: Score 1/4 — No AI/agent frameworks. AWS SDK v1 in `build.gradle` predates Bedrock.
-  - DATA-Q1: Score 1/4 — No vector database for semantic search
-  - DATA-Q3: Score 1/4 — No RAG implementation
-  - OPS-Q3: Score 1/4 — No automated evaluation framework
-  - OPS-Q6: Score 1/4 — No LLM cost tracking
-- **Current State**: Zero AI/agent capabilities. No vector store, no RAG pipeline, no agent framework, no evaluation infrastructure. The application has REST APIs that return JSON but no mechanism for AI-powered interaction.
-- **Target State**: Customer-facing AI agents for support and order management built with Strands Agents SDK or Amazon Bedrock Agents. Product catalog and support knowledge accessible via RAG (Bedrock Knowledge Bases + OpenSearch). Agent tool invocations through OpenAPI-documented APIs. Automated evaluation pipeline for agent quality.
+  - APP-Q13: Score 1/4 — No AI/agent framework. No Bedrock SDK, no Spring AI, no Strands Agents SDK.
+  - DATA-Q1: Score 1/4 — No vector database for semantic search.
+  - DATA-Q3: Score 1/4 — No RAG pipeline for knowledge retrieval.
+  - OPS-Q3: Score 1/4 — No automated evaluation framework for agent quality.
+  - OPS-Q6: Score 1/4 — No LLM cost tracking infrastructure.
+- **Current State**: Zero AI/agent capabilities. No LLM integration, no vector store, no RAG, no evaluation framework.
+- **Target State**: Customer-facing support and order management agents powered by Amazon Bedrock, with vector-based knowledge retrieval (Bedrock Knowledge Bases or OpenSearch), automated evaluation pipeline, per-request cost tracking, and human approval workflows for high-risk actions.
 - **Key Activities**:
-  1. Create OpenAPI specs for all existing REST endpoints (agent tool discovery)
-  2. Provision Amazon OpenSearch Service for vector storage
-  3. Build RAG pipeline using Amazon Bedrock Knowledge Bases (product catalog + support docs)
-  4. Build customer support agent using Strands Agents SDK or Amazon Bedrock Agents
-  5. Implement agent evaluation framework with golden datasets
-  6. Add LLM cost tracking with per-request token attribution
-  7. Implement human approval workflows via Step Functions for high-risk agent actions
-- **Dependencies**: Move to Modern DevOps (CI/CD for agent deployment), Move to Managed Databases (vector store infrastructure)
-- **Estimated Effort**: High (new capability built from scratch)
-- **Roadmap Phase Alignment**: Phase 1 (OpenAPI specs, initial agent PoC), Phase 2 (RAG pipeline, vector store), Phase 3 (production agents with evals)
+  1. Integrate Strands Agents SDK or Amazon Bedrock Agent Runtime
+  2. Generate OpenAPI specs for existing APIs (prerequisite for agent tool registration)
+  3. Deploy managed vector database (OpenSearch or Bedrock Knowledge Bases)
+  4. Build RAG pipeline for product catalog and support documentation
+  5. Create agent evaluation datasets and automated eval pipeline
+  6. Implement LLM cost tracking with per-user/per-workflow attribution
+  7. Build human approval workflow (Step Functions) for high-risk agent actions
+  8. Implement agent observability (tracing, logging, metrics)
+- **Dependencies**: Move to Modern DevOps (CI/CD needed for agent deployment), Move to Managed Databases (stable data backend needed)
+- **Estimated Effort**: High
+- **Roadmap Phase Alignment**: Phase 2 (foundations: vector DB, RAG, API docs) and Phase 3 (full agent deployment, evals, cost tracking)
 - **Relevant Learning Materials**: Module 7 — Move to AI
-
-### Move to Managed Analytics
-
-- **Priority**: Medium
-- **Goal Alignment**: Low
-- **Trigger Criteria Met**:
-  - INF-Q8: Score 1/4 — No managed streaming service for event-driven data
-- **Current State**: No streaming, analytics, or event-driven data infrastructure. The `DataReplicationController.java` performs synchronous full-table reads.
-- **Target State**: Amazon EventBridge for domain event streaming. Event-driven analytics on customer behavior and agent interactions for continuous improvement.
-- **Key Activities**:
-  1. Implement EventBridge for domain events (aligned with Move to Cloud Native)
-  2. Add event-driven analytics for agent interaction patterns
-- **Dependencies**: Move to Cloud Native (event-driven architecture is a prerequisite)
-- **Estimated Effort**: Low (EventBridge is lightweight; analytics can be added incrementally)
-- **Roadmap Phase Alignment**: Phase 3 (Agent Scale & Optimization)
-- **Relevant Learning Materials**: Module 5 — Move to Managed Analytics
 
 ---
 
 ## Microservices Decomposition Strategy
 
-This monolith would benefit from service extraction to create clear agent tool boundaries. The Unishop application has three identifiable domains — Product Catalog (Unicorn), Shopping Basket, and User Management — each with separate controllers, services, and repository interfaces. The Basket domain is the strongest extraction candidate: it has a clear key-value access pattern (lookup by user UUID) ideal for DynamoDB, a well-defined API surface (`POST/DELETE/GET /unicorns/basket`), and would map directly to an "Order Management" agent tool. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing REST API surface (`/unicorns`, `/unicorns/basket/{userUuid}`, `/user`) once OpenAPI specifications are generated.
+This monolith would benefit from service extraction to create clear agent tool boundaries. The application has identifiable domain modules (Catalog via `UnicornController`/`UnicornService`, Basket via `BasketController`/`UnicornService`, User via `UserController`/`UserService`) sharing a single MySQL database. For customer support agents, extracting the Basket/Order domain first would create a dedicated "order management" tool with clear API boundaries. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing API surface (`GET /unicorns`, `GET /unicorns/basket/{userUuid}`, `POST /unicorns/basket`, `POST /user`, `POST /user/login`).
 
 ---
 
@@ -577,29 +574,23 @@ This monolith would benefit from service extraction to create clear agent tool b
 
 Even before completing the full modernization roadmap, these agent opportunities are available based on your current architecture:
 
-1. **Customer Support Product Query Agent** — Build an API-aware agent that can discover and invoke the existing `/unicorns` endpoint to answer customer questions about product availability, descriptions, and pricing. A customer support agent can query the full product catalog and provide natural language responses about unicorn products.
-   - **Leverages**: Existing `GET /unicorns` REST endpoint returning structured JSON (Jackson-serialized `Unicorn` objects with uuid, name, description, price, image fields)
+1. **Customer Support Agent with JSON APIs** — Your existing REST APIs already return structured JSON responses (`@JsonInclude`, `@JsonSerialize` in `Unicorn.java`, `User.java`, `CoreModel.java`). An agent can use these endpoints as tools today by defining them manually in an agent tool configuration.
+   - **Leverages**: Structured JSON responses from `GET /unicorns`, `GET /unicorns/basket/{userUuid}`, `POST /user/login`
    - **Effort**: Low
-   - **Value**: Immediate customer support capability — agents can answer "What unicorn products do you have?" and "How much does the UnicornFloat cost?"
+   - **Value**: Proves agent-API integration works; demonstrates value to stakeholders with a support agent that can look up products and check customer baskets
 
-2. **Order Management Basket Agent** — Build a customer support agent that can check order/basket status by querying the `/unicorns/basket/{userUuid}` endpoint. Agents can look up what items a customer has in their basket and help with order-related inquiries.
-   - **Leverages**: Existing `GET /unicorns/basket/{userUuid}` endpoint returning structured JSON basket contents
+2. **Natural Language Order Query Agent** — The clean MySQL schema in `create_tables.sql` (3 tables, clear column naming, no stored procedures) is ideal for a text-to-SQL agent. A customer support agent could answer "What's in John's basket?" by translating to SQL against the `unicorns_basket` + `unicorns` tables.
+   - **Leverages**: Clean schema in `database/create_tables.sql` with well-named tables (`unicorns`, `unicorns_basket`, `unicorn_user`) and clear relationships
+   - **Effort**: Medium
+   - **Value**: Enables natural language data queries for support agents handling order and inventory inquiries; directly addresses the goal of building customer-facing AI agents for support and order management
+
+3. **Product Catalog Knowledge Agent** — The 10 seed products in `create_tables.sql` and the product data structure (`name`, `description`, `price`, `image`) provide a starting dataset for a product recommendation agent. Even without RAG, a simple agent can query the product catalog API and provide recommendations.
+   - **Leverages**: `GET /unicorns` endpoint returning full product catalog with descriptions and prices
    - **Effort**: Low
-   - **Value**: Enables "What's in my basket?" and "Can you check my order?" agent interactions for customer support
-
-3. **Knowledge Base Agent from Schema Documentation** — Build a RAG-based knowledge agent using the existing database schema (`database/create_tables.sql`) and product seed data as initial knowledge. The 10 pre-loaded unicorn products provide a starting dataset for semantic search.
-   - **Leverages**: SQL schema file with table definitions and 10 product records with names, descriptions, and prices
-   - **Effort**: Medium
-   - **Value**: Demonstrates RAG capability with real product data; foundation for expanding to support documentation and policies
-
-4. **Natural Language to SQL Query Agent** — Build a data query agent that translates natural language customer support questions into SQL queries against the `unishop` schema. The clean 3-table schema (unicorns, unicorns_basket, unicorn_user) with clear column names is ideal for text-to-SQL.
-   - **Leverages**: Well-documented database schema in `database/create_tables.sql` with clear table/column naming and UNIQUE constraints
-   - **Effort**: Medium
-   - **Value**: Enables support agents to answer complex queries like "Show me all baskets containing UnicornFloat" without writing SQL
+   - **Value**: Customer-facing product recommendation capability; support agents can help customers find products by describing what they want
 
 > These opportunities can be pursued in parallel with the modernization roadmap.
 > They demonstrate agent value early while foundations are being built.
-> All wins are framed around customer support and order management to align with the goal context.
 
 ---
 
@@ -607,112 +598,119 @@ Even before completing the full modernization roadmap, these agent opportunities
 
 ### Phase 1 — Agent Quick Wins (Days 1–30)
 
-These items deliver immediate value and establish the foundation for agent development:
-
-1. **Generate OpenAPI specs** — Add `springdoc-openapi-ui` to `build.gradle` and annotate controllers to auto-generate OpenAPI 3.0 specifications. This is the single most impactful action for agent enablement — agents need machine-readable API descriptions to discover and invoke tools.
-2. **Containerize the application** — Create a Dockerfile for the Spring Boot application. Push images to Amazon ECR. Deploy to Amazon ECS on Fargate. This moves off EC2 and enables scalable, repeatable deployments.
-3. **Move secrets to Secrets Manager** — Remove hardcoded credentials from `application.properties` (`MonoToMicroUser`/`MonoToMicroPassword`). Store in AWS Secrets Manager and reference via ECS task definition secrets.
-4. **Establish IaC with CDK** — Define the ECS cluster, VPC, ALB, and RDS instance in AWS CDK. This enables repeatable infrastructure provisioning and is prerequisite for CI/CD.
-5. **Create CI/CD pipeline** — Set up CodePipeline with CodeBuild for automated build, test, container image push, and ECS deployment. Add basic health check verification post-deploy.
-6. **Build first agent PoC** — Create a simple customer support agent (Python with Strands Agents SDK) that calls `GET /unicorns` and `GET /unicorns/basket/{userUuid}` as tools. Deploy on ECS alongside the Unishop monolith. Demonstrates agent value immediately.
+1. **Create Dockerfile and containerize the application** — Build a multi-stage Dockerfile for the Spring Boot JAR. Push to Amazon ECR. This unblocks all subsequent infrastructure work. *(Move to Containers)*
+2. **Create Terraform project for core infrastructure** — Define VPC, subnets, security groups, ECS cluster, and ALB in Terraform. Codify the existing MySQL database as an RDS instance with Multi-AZ and encryption. *(Move to Modern DevOps + Move to Managed Databases)*
+3. **Set up GitHub Actions CI/CD pipeline** — Create a basic pipeline: build Gradle project → run tests → build container image → push to ECR → deploy to ECS. Adopt GitOps practices. *(Move to Modern DevOps)*
+4. **Migrate secrets to AWS Secrets Manager** — Move the hardcoded `MonoToMicroUser`/`MonoToMicroPassword` from `application.properties` to Secrets Manager. Update the application to read credentials from environment variables injected at deployment. *(Security Foundation)*
+5. **Generate OpenAPI specification** — Add `springdoc-openapi-ui` to `build.gradle` and annotate controllers with OpenAPI annotations. Publish the spec at `/v3/api-docs`. This is the #1 prerequisite for agent tool registration. *(Move to AI prerequisite)*
 
 ### Phase 2 — Agent Foundations (Months 1–3)
 
-Structural improvements that establish the data and security foundations for production agents:
-
-1. **Migrate to managed database** — Define Amazon RDS for MySQL (or Aurora MySQL-Compatible) in CDK with explicit engine version pinning. Migrate using AWS DMS. Evaluate DynamoDB for the basket service (key-value pattern).
-2. **Deploy API Gateway** — Place Amazon API Gateway in front of the ECS service. Configure throttling, request validation, and API keys. This is critical for agent safety — prevents runaway agent loops from overwhelming the backend.
-3. **Implement authentication** — Configure Amazon Cognito as the identity provider. Enable JWT validation in the Spring Security configuration. Issue scoped API keys for agent access. Remove the `permitAll()` configuration.
-4. **Build RAG pipeline** — Provision Amazon OpenSearch Service for vector storage. Set up Amazon Bedrock Knowledge Bases with product catalog data and customer support documentation. Implement embedding generation and semantic search.
-5. **Add structured logging and tracing** — Configure SLF4J/Logback with JSON output. Add AWS X-Ray instrumentation. Implement correlation IDs across all requests. Essential for debugging agent tool invocations.
-6. **Implement human approval workflows** — Build AWS Step Functions workflows with `waitForTaskToken` for high-risk agent actions (basket modifications above thresholds, user account changes). Critical safety control for production agents.
-7. **Add integration tests** — Create JUnit 5 test suite covering all API endpoints. Add API contract tests. Run tests in CI/CD pipeline. Ensures agent tools don't break during code changes.
-8. **Implement SQS-based async processing** — Introduce Amazon SQS for basket write operations. Add Amazon EventBridge for domain event publishing. Begin decoupling the monolith for future service extraction.
+1. **Upgrade Java and Spring Boot** — Upgrade from Java 8/Spring Boot 2.1.x to Java 17/Spring Boot 3.2+. This unblocks Spring AI, AWS SDK v2, and modern agent frameworks. *(Application Modernization)*
+2. **Deploy API Gateway** — Place Amazon API Gateway in front of the ECS service. Configure throttling, API key-based usage plans, and request validation. Define in Terraform. *(Move to Cloud Native)*
+3. **Implement authentication with Amazon Cognito** — Deploy Cognito user pool and configure OAuth2/JWT authentication. Replace `permitAll()` with role-based access control. Create machine-to-machine credentials for agent authentication. *(Security)*
+4. **Add structured logging and distributed tracing** — Configure Logback with JSON format. Add OpenTelemetry auto-instrumentation with X-Ray backend. Replace all `System.out.println()` and `e.printStackTrace()` calls. *(Move to Modern DevOps)*
+5. **Deploy vector database and build RAG pipeline** — Set up Amazon OpenSearch Service or Bedrock Knowledge Bases. Create embeddings for product catalog data. Build a RAG pipeline for product knowledge and support documentation. *(Move to AI)*
+6. **Integrate agent framework** — Add Strands Agents SDK or Amazon Bedrock Agent Runtime. Register the OpenAPI-documented endpoints as agent tools. Build a proof-of-concept customer support agent for order lookup and product search. *(Move to AI)*
+7. **Write integration test suite** — Create integration tests for all API endpoints using Spring Boot Test. Add to CI pipeline as a required gate. *(Move to Modern DevOps)*
 
 ### Phase 3 — Agent Scale & Optimization (Months 3–6)
 
-Advanced capabilities that enable production-grade agent operations and continuous improvement:
-
-1. **Deploy production customer support agent** — Upgrade PoC agent to production quality with full RAG integration, conversation memory (DynamoDB), multi-turn support, and escalation workflows.
-2. **Implement agent evaluation framework** — Create golden datasets for customer support scenarios. Build automated scoring pipeline (relevance, accuracy, helpfulness, safety). Run evaluations in CI/CD for prompt/model changes.
-3. **Add LLM cost tracking** — Implement per-request token tracking with user/conversation/workflow attribution. Create CloudWatch dashboards for cost monitoring. Set up cost anomaly alerts.
-4. **Extract Basket service** — Using Strangler Fig pattern, extract the shopping basket functionality into an independent ECS service backed by DynamoDB. Route via API Gateway. Map to a dedicated "Order Management" agent tool.
-5. **Implement advanced observability** — Define SLOs for API endpoints and agent metrics (task success rate, hallucination rate). Enable CloudWatch anomaly detection. Create agent-specific dashboards. Establish observability ownership model.
-6. **Add EventBridge analytics** — Stream domain events (basket updates, user actions, agent interactions) to EventBridge. Build analytics dashboards for agent effectiveness and customer support quality metrics.
-7. **Implement blue/green deployments** — Configure CodeDeploy with ECS for blue/green deployments. Add canary analysis for agent prompt/model changes. Version all agent configurations with instant rollback.
+1. **Extract Basket/Order service** — Using Strangler Fig pattern, extract the Basket domain from the monolith into a separate ECS service with its own DynamoDB data store. Route via API Gateway. *(Move to Cloud Native)*
+2. **Implement event-driven architecture** — Add EventBridge for domain events (OrderPlaced, BasketUpdated, UserCreated) and SQS for async order processing. Connect agent actions to event streams. *(Move to Cloud Native)*
+3. **Build human approval workflow** — Implement Step Functions with `waitForTaskToken` for high-risk agent actions (refunds, account modifications). Create an approval dashboard. *(Move to AI + Security)*
+4. **Implement agent evaluation pipeline** — Create golden evaluation datasets for customer support scenarios. Implement automated eval pipeline with scoring metrics (accuracy, helpfulness, safety). Run evals in CI. *(Move to AI)*
+5. **Add LLM cost tracking and agent observability** — Implement per-request token usage tracking with user/workflow attribution. Add agent-specific CloudWatch metrics (task success rate, tool error rate). Set up anomaly detection. *(Move to AI + Move to Modern DevOps)*
+6. **Define SLOs and implement blue/green deployments** — Define SLOs for agent-facing endpoints. Implement blue/green deployments via ECS + CodeDeploy with automatic rollback on SLO violations. *(Move to Modern DevOps)*
+7. **Scale agent capabilities** — Add additional agent tools per extracted service. Implement multi-agent orchestration for complex support scenarios. Add embedding freshness pipeline triggered by data change events. *(Move to AI)*
 
 ---
 
 ## Recommended Self-Paced Learning Materials
 
-**Module 2: Move to Cloud Native (Containers and Serverless):**
-- Cloud Design Patterns, Architectures, and Implementations — https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html
-  - Essential reference for microservices decomposition: Strangler Fig, Anti-corruption Layer, Saga patterns, Event Sourcing, Circuit Breaker, API routing, Hexagonal Architecture, and more
-- AWS Modernization Pathways: Move to Cloud Native Serverless — https://skillbuilder.aws/learning-plan/CMK2J48MVN/aws-modernization-pathways-move-to-cloud-native-serverless-includes-labs/EFUPP53B4Q
-- Modernize a Monolith to ECS and Fargate using Application Discovery — https://skillbuilder.aws/learn/1YXAWYH2WA/modernize-a-monolith-to-ecs-and-fargate-using-application-discovery/AQ37WHN3K1
+### Module 2: Move to Cloud Native (Containers and Serverless)
+- **Cloud Design Patterns, Architectures, and Implementations** — https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html
+  - Essential reference for microservices decomposition: Strangler Fig, Anti-corruption Layer, Saga patterns, Event Sourcing, Circuit Breaker, API routing, Hexagonal Architecture — directly applicable to decomposing this monolith.
+- **Modernize a Monolith to ECS and Fargate using Application Discovery** — https://skillbuilder.aws/learn/1YXAWYH2WA/modernize-a-monolith-to-ecs-and-fargate-using-application-discovery/AQ37WHN3K1
+  - Hands-on lab directly applicable to this assessment — walks through containerizing a monolith and deploying to ECS/Fargate.
 
-**Module 3: Move to Containers with Amazon ECS and EKS:**
-- AWS Modernization Pathways: Move to Containers with Amazon ECS — https://skillbuilder.aws/learning-plan/CDA8Y4JRRR/aws-modernization-pathways-move-to-containers-with-amazon-ecs-includes-labs/1UB9AW4KYN
-  - Directly applicable: ECS is the preferred container orchestration platform for this assessment
-- Introduction to Containers — https://skillbuilder.aws/learn/CUCA1DK47V/introduction-to-containers/XJ58VC1FF5
-- AWS Fargate Getting Started — https://skillbuilder.aws/learn/6QS9CM1V7K/aws-fargate-getting-started/EDX6V7B5YR
-- Amazon ECR Getting Started — https://skillbuilder.aws/learn/M494WWS5EF/amazon-ecr-getting-started/N5CQ7DC6HT
-- Amazon ECS Getting Started — https://skillbuilder.aws/learn/CY2F57HH7V/amazon-ecs-getting-started/4QUDNRVSNC
-- Working with Amazon Elastic Container Service (Lab) — https://skillbuilder.aws/learn/CV6ZEU3NHE/working-with-amazon-elastic-container-service/X989GB8H74
+### Module 3: Move to Containers with Amazon ECS and EKS
+- **AWS Modernization Pathways: Move to Containers with Amazon ECS** — https://skillbuilder.aws/learning-plan/CDA8Y4JRRR/aws-modernization-pathways-move-to-containers-with-amazon-ecs-includes-labs/1UB9AW4KYN
+  - Comprehensive learning plan for ECS containerization — the preferred container orchestration per stated preferences.
+- **Introduction to Containers** — https://skillbuilder.aws/learn/CUCA1DK47V/introduction-to-containers/XJ58VC1FF5
+  - Foundational knowledge for creating Dockerfiles and understanding container concepts.
+- **AWS Fargate Getting Started** — https://skillbuilder.aws/learn/6QS9CM1V7K/aws-fargate-getting-started/EDX6V7B5YR
+  - Fargate-specific guidance for running containers without managing EC2 instances.
+- **Amazon ECR Getting Started** — https://skillbuilder.aws/learn/M494WWS5EF/amazon-ecr-getting-started/N5CQ7DC6HT
+  - Setting up and managing container image registries for the CI/CD pipeline.
+- **Working with Amazon Elastic Container Service (Lab)** — https://skillbuilder.aws/learn/CV6ZEU3NHE/working-with-amazon-elastic-container-service/X989GB8H74
+  - Hands-on lab for ECS service deployment.
 
-**Module 4: Move to Managed Databases:**
-- AWS Modernization Pathways: Move to Managed Databases — https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC/aws-modernization-pathways-move-to-managed-databases-includes-labs/2S2QZKG9DV
-  - Covers migration from MySQL to RDS/Aurora and DynamoDB adoption
-- Introduction to Building with AWS Databases — https://skillbuilder.aws/learn/HYKKWEN9ZS/introduction-to-building-with-aws-databases/V7RVH2KY91
-- Selecting your Data Migration Strategy with AWS — https://skillbuilder.aws/learn/RKGP54WJPP/selecting-your-data-migration-strategy-with-aws/D38U3CZEYR
-- AWS Database Migration Service (DMS) Getting Started — https://skillbuilder.aws/learn/ND246G8Y3W/aws-database-migration-service-aws-dms-getting-started/QK5CCBP464
-- Migrating RDS MySQL to Aurora (Lab) — https://skillbuilder.aws/learn/RZF2GBUUWX/migrating-rds-mysql-to-aurora-with-read-replica/SMG825PXTK
-- AWS PartnerCast: Vector Databases for Generative AI Applications — https://skillbuilder.aws/learn/UQ74USQJHU/aws-partnercast--vector-databases-for-generative-ai-applications--technical/7DKMBAPCST
+### Module 4: Move to Managed Databases
+- **AWS Modernization Pathways: Move to Managed Databases** — https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC/aws-modernization-pathways-move-to-managed-databases-includes-labs/2S2QZKG9DV
+  - Comprehensive path for migrating from self-managed to managed database services.
+- **Introduction to Building with AWS Databases** — https://skillbuilder.aws/learn/HYKKWEN9ZS/introduction-to-building-with-aws-databases/V7RVH2KY91
+  - Understanding AWS database portfolio — relevant for choosing between RDS MySQL, Aurora MySQL, and DynamoDB for different domains.
+- **AWS Database Migration Service (DMS) Getting Started** — https://skillbuilder.aws/learn/ND246G8Y3W/aws-database-migration-service-aws-dms-getting-started/QK5CCBP464
+  - If migrating between database engines during decomposition.
+- **AWS PartnerCast: Vector Databases for Generative AI Applications** — https://skillbuilder.aws/learn/UQ74USQJHU/aws-partnercast--vector-databases-for-generative-ai-applications--technical/7DKMBAPCST
+  - Critical for understanding vector database options for RAG and agent knowledge retrieval.
 
-**Module 6: Move to Modern DevOps:**
-- AWS Modernization Pathways: Move to Modern DevOps — https://skillbuilder.aws/learning-plan/1FGEQKGPQD/aws-modernization-pathways-move-to-modern-devops-includes-labs/MNQZ2KPVCK
-  - Covers IaC, CI/CD, testing, and observability — all critical gaps in this assessment
-- Getting Started with DevOps on AWS — https://skillbuilder.aws/learn/R4B13K95YQ/getting-started-with-devops-on-aws/38NHHYRV1R
-- Create a CI/CD Pipeline to Deploy Your App to AWS Fargate (ECS) — https://skillbuilder.aws/learn/H61B17Z8R7/create-a-cicd-pipeline-to-deploy-your-app-to-aws-fargate/T66BGGGHV5
-- AWS CloudFormation Getting Started — https://skillbuilder.aws/learn/RH22P2RXU4/aws-cloudformation-getting-started/KEK5BT6HSE
-- Advanced Testing Practices Using AWS DevOps Tools — https://skillbuilder.aws/learn/1YC7UXUWBR/advanced-testing-practices-using-aws-devops-tools/A32U6G7NEQ
-- Monitor Java Applications Using Amazon CloudWatch Application Signals — https://skillbuilder.aws/learn/PMCTXKYK1Y/monitor-java-applications-using-amazon-cloudwatch-application-signals/15ZK4ETKE9
+### Module 6: Move to Modern DevOps
+- **AWS Modernization Pathways: Move to Modern DevOps** — https://skillbuilder.aws/learning-plan/1FGEQKGPQD/aws-modernization-pathways-move-to-modern-devops-includes-labs/MNQZ2KPVCK
+  - Complete DevOps modernization learning path — covers IaC, CI/CD, deployment strategies, and observability.
+- **Getting Started with DevOps on AWS** — https://skillbuilder.aws/learn/R4B13K95YQ/getting-started-with-devops-on-aws/38NHHYRV1R
+  - Foundational DevOps concepts for teams new to AWS DevOps practices.
+- **Create a CI/CD Pipeline to Deploy Your App to AWS Fargate (ECS)** — https://skillbuilder.aws/learn/H61B17Z8R7/create-a-cicd-pipeline-to-deploy-your-app-to-aws-fargate/T66BGGGHV5
+  - Directly applicable lab for setting up the CI/CD pipeline to ECS/Fargate.
+- **AWS CloudFormation Getting Started** — https://skillbuilder.aws/learn/RH22P2RXU4/aws-cloudformation-getting-started/KEK5BT6HSE
+  - Understanding IaC concepts (applicable to both CloudFormation and Terraform).
+- **Advanced Testing Practices Using AWS DevOps Tools** — https://skillbuilder.aws/learn/1YC7UXUWBR/advanced-testing-practices-using-aws-devops-tools/A32U6G7NEQ
+  - Critical for building the integration test suite that is completely absent today.
+- **AWS PartnerCast: Automate EKS Deployments With GitOps Using ArgoCD and GitHub Actions** — https://skillbuilder.aws/learn/D9U7XMXP31/aws-partnercast--tech-talks--automate-eks-deployments-with-gitops-using-argocd-and-github-actions--technical/Z4M9Z8FY88
+  - GitOps workflow guidance per stated preferences.
 
-**Module 7: Move to AI:**
-- AWS Modernization Pathways: Move to AI — https://skillbuilder.aws/learning-plan/VDFEE4ACCV/aws-modernization-pathways-move-to-ai-pathways-includes-labs/P3DAWPTN63
-  - Critical pathway for the agentic-ai-enablement goal
-- Amazon Bedrock Getting Started — https://skillbuilder.aws/learn/63KTRM86DQ/amazon-bedrock-getting-started/SC2Y3HMAUE
-- Essentials for Prompt Engineering — https://skillbuilder.aws/learn/XBNAVKA88J/essentials-of-prompt-engineering/9T9Q45EDTV
-- Planning a Generative AI Project — https://skillbuilder.aws/learn/HU1FQRGDDZ/planning-a-generative-ai-project/SYR3SCPSHC
-- Build and Evaluate Retrieval Augmented Generation (RAG) Applications using Knowledge Bases for Amazon Bedrock (Lab) — https://skillbuilder.aws/learn/JRGWCFYT67/lab--build-and-evaluate-retrieval-augmented-generation-rag-applications-using-knowledge-bases-for-amazon-bedrock/A4MN58JB7A
-- Introduction to Agentic AI on AWS — https://skillbuilder.aws/learn/DNBD5MT8ZD/introduction-to-agentic-ai-on-aws/WAKAFK6UFY
-- Creating an AWS DevOps AI Agent with the Strands Agents SDK (Lab) — https://skillbuilder.aws/learn/AH1GD8AJY3/lab--creating-an-aws-devops-ai-agent-with-the-strands-agents-sdk/A9SKJNMPJ2
-- AWS PartnerCast: Deep Dive: Building Observable AI Agents with Strands, Amazon Bedrock Agent Core & SageMaker MLflow — https://skillbuilder.aws/learn/1EN76TZBB6/aws-partnercast--deep-dive-building-observable-ai-agents-with-strands-amazon-bedrock-agent-core--sagemaker-mlflow--technical/CX2K6XAT84
-- DevOps and AI on AWS: CloudWatch Anomaly Detection (Lab) — https://skillbuilder.aws/learn/RWYVJ73MXP/lab--devops-and-ai-on-aws-cloudwatch-anomaly-detection/BRPDNZUGU7
+### Module 7: Move to AI
+- **AWS Modernization Pathways: Move to AI** — https://skillbuilder.aws/learning-plan/VDFEE4ACCV/aws-modernization-pathways-move-to-ai-pathways-includes-labs/P3DAWPTN63
+  - Comprehensive AI modernization learning plan — the primary pathway for this assessment's goal.
+- **Amazon Bedrock Getting Started** — https://skillbuilder.aws/learn/63KTRM86DQ/amazon-bedrock-getting-started/SC2Y3HMAUE
+  - Foundational Bedrock knowledge for LLM integration.
+- **Essentials for Prompt Engineering** — https://skillbuilder.aws/learn/XBNAVKA88J/essentials-of-prompt-engineering/9T9Q45EDTV
+  - Essential for crafting effective agent prompts for customer support scenarios.
+- **Build and Evaluate Retrieval Augmented Generation (RAG) Applications using Knowledge Bases for Amazon Bedrock (Lab)** — https://skillbuilder.aws/learn/JRGWCFYT67/lab--build-and-evaluate-retrieval-augmented-generation-rag-applications-using-knowledge-bases-for-amazon-bedrock/A4MN58JB7A
+  - Directly applicable lab for building the RAG pipeline identified as a critical gap.
+- **Introduction to Agentic AI on AWS** — https://skillbuilder.aws/learn/DNBD5MT8ZD/introduction-to-agentic-ai-on-aws/WAKAFK6UFY
+  - Core agentic AI concepts for the team building customer-facing agents.
+- **Creating an AWS DevOps AI Agent with the Strands Agents SDK (Lab)** — https://skillbuilder.aws/learn/AH1GD8AJY3/lab--creating-an-aws-devops-ai-agent-with-the-strands-agents-sdk/A9SKJNMPJ2
+  - Hands-on lab for the recommended agent framework.
+- **AWS PartnerCast: Deep Dive: Building Observable AI Agents with Strands, Amazon Bedrock Agent Core & SageMaker MLflow** — https://skillbuilder.aws/learn/1EN76TZBB6/aws-partnercast--deep-dive-building-observable-ai-agents-with-strands-amazon-bedrock-agent-core--sagemaker-mlflow--technical/CX2K6XAT84
+  - Advanced agent observability — directly addresses the OPS-Q1, OPS-Q3, and OPS-Q6 gaps.
+- **Planning a Generative AI Project** — https://skillbuilder.aws/learn/HU1FQRGDDZ/planning-a-generative-ai-project/SYR3SCPSHC
+  - Project planning guidance for the agentic AI enablement initiative.
 
 ---
 
 ## Appendix: Evidence Index
 
-| # | File | Key Findings |
+| # | File | Key Finding |
 |---|------|-------------|
-| 1 | `build.gradle` | Java 8, Spring Boot 2.1.6, MySQL connector 8.0.11, AWS SDK v1 1.11.567, Spring Security OAuth2, MyBatis, commented-out Docker task, Spring Boot Actuator |
-| 2 | `src/main/resources/application.properties` | Hardcoded DB credentials (MonoToMicroUser/MonoToMicroPassword), MySQL JDBC connection, port 8080, env var for DB endpoint |
-| 3 | `database/create_tables.sql` | 3-table schema (unicorns, unicorns_basket, unicorn_user), no stored procedures, UNIQUE constraints, 10 seed products |
-| 4 | `src/main/java/com/monoToMicro/Application.java` | @SpringBootApplication entry point, CORS security bypass with "not recommended for production" comment |
-| 5 | `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` | GET /unicorns endpoint, @PreAuthorize("permitAll()"), synchronous service call |
-| 6 | `src/main/java/com/monoToMicro/rest/controller/BasketController.java` | POST/DELETE/GET /unicorns/basket endpoints, all permitAll(), synchronous processing |
-| 7 | `src/main/java/com/monoToMicro/rest/controller/UserController.java` | POST /user and POST /user/login endpoints, email-based login without password verification |
-| 8 | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` | EC2MetadataUtils import confirming EC2 deployment, System.out.println logging, health endpoints |
-| 9 | `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` | Synchronous full-table basket scan, no event-driven replication |
-| 10 | `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` | @EnableResourceServer with authorizeRequests().anyRequest().permitAll() — security disabled |
-| 11 | `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` | Service layer with synchronous repository calls, no resilience patterns |
-| 12 | `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java` | UUID generation for users, direct repository call, no event publishing |
-| 13 | `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` | @Repository @Transactional, try/catch with e.printStackTrace(), MyBatis mapper usage |
-| 14 | `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` | Synchronized create method, e.printStackTrace() error handling |
-| 15 | `src/main/java/com/monoToMicro/core/model/Unicorn.java` | @JsonInclude(NON_NULL), uuid/name/description/price/image fields |
-| 16 | `src/main/java/com/monoToMicro/core/model/User.java` | @JsonInclude(NON_NULL), PII fields (email, firstName, lastName) exposed without redaction |
-| 17 | `src/main/java/com/monoToMicro/core/model/CoreModel.java` | Base model with @JsonIgnore on internal fields, Joda DateTime dependency |
-| 18 | `src/main/java/com/monoToMicro/config/MyBatisConfig.java` | Centralized mapper configuration, SqlSessionFactory setup for all 3 mappers |
-| 19 | `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` | INSERT IGNORE (basic idempotency), JOIN queries, getAllBaskets with resultMap |
-| 20 | `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml` | insert ignore into unicorn_user (UNIQUE email constraint), getByEmail query |
+| 1 | `build.gradle` | Java 8, Spring Boot 2.1.x, MySQL connector 8.0.11, AWS SDK v1 1.11.567, Spring Security OAuth2, MyBatis, spring-boot-starter-actuator, commented-out Docker plugin |
+| 2 | `src/main/resources/application.properties` | Hardcoded DB credentials (MonoToMicroUser/MonoToMicroPassword), MySQL JDBC connection, port 8080 |
+| 3 | `database/create_tables.sql` | 3 MySQL tables (unicorns, unicorns_basket, unicorn_user), clean schema, no stored procedures, 10 seed products |
+| 4 | `src/main/java/com/monoToMicro/Application.java` | @SpringBootApplication entry point, CORS workaround, WebSecurity ignoring all OPTIONS |
+| 5 | `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` | @EnableResourceServer with permitAll() — authentication completely disabled |
+| 6 | `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` | GET /unicorns — synchronous, @PreAuthorize("permitAll()"), returns JSON Collection<Unicorn> |
+| 7 | `src/main/java/com/monoToMicro/rest/controller/BasketController.java` | POST/DELETE/GET /unicorns/basket — basket operations, no idempotency headers, JSON responses |
+| 8 | `src/main/java/com/monoToMicro/rest/controller/UserController.java` | POST /user, POST /user/login — user creation and email-based login without auth, returns PII |
+| 9 | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` | EC2MetadataUtils.getInstanceInfo() confirming EC2 deployment, System.out.println() logging |
+| 10 | `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` | GET /data — synchronous full basket replication, potential long-running operation |
+| 11 | `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` | Unicorn service with CRUD operations, constructor injection, no async patterns |
+| 12 | `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java` | User service with create and getByEmail, UUID generation, no validation |
+| 13 | `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` | Repository pattern, e.printStackTrace() error handling, returns null on failure |
+| 14 | `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` | synchronized create(), e.printStackTrace(), returns null on failure |
+| 15 | `src/main/java/com/monoToMicro/config/MyBatisConfig.java` | Centralized MyBatis configuration, 3 mapper registrations, DataSource autowired |
+| 16 | `src/main/java/com/monoToMicro/core/model/Unicorn.java` | @JsonInclude(NON_NULL), product model with uuid/name/description/price/image |
+| 17 | `src/main/java/com/monoToMicro/core/model/User.java` | @JsonInclude(NON_NULL), PII fields: email, firstName, lastName exposed in API |
+| 18 | `src/main/java/com/monoToMicro/core/model/CoreModel.java` | @JsonSerialize(NON_NULL), @JsonIgnore on internal fields, Joda DateTime dependency |
+| 19 | `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` | Standard SQL (SELECT, INSERT IGNORE, DELETE, JOIN), no stored procedures, MySQL-compatible |
+| 20 | `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml` | INSERT IGNORE for user creation, email-based lookup, MyBatis cache enabled |
