@@ -238,33 +238,140 @@ Identify patterns, anti-patterns, and opportunities across the portfolio:
 - Calculate portfolio impact percentage (affected services / total applicable services — i.e., services where the criterion is not N/A)
 - Generate portfolio-level recommendations addressing all affected services
 
-**Cross-Cutting Concerns Classification by Goal:**
+#### 4.1 Tiered Gap Classification
 
-After identifying all cross-cutting concerns, classify each into one of two subsections based on the portfolio's `goal` (read in Step 1.5):
+After identifying all cross-cutting concerns (above), classify each flagged criterion into one of four tiers using the constants and algorithm below. This replaces the previous binary "Blocking Your Goal" / "General Opportunities" split with a more nuanced four-tier classification.
 
-1. **"Blocking Your Goal"** — Cross-cutting gaps where the criterion IS in the goal's priority criteria list. These gaps directly impede progress toward the customer's stated modernization objective.
-   - Frame each concern in terms of how it blocks the goal
-   - Example (goal = `agentic-ai-enablement`): "4 of 5 repos lack API documentation (APP-Q2 < 3) — this blocks agent tool discovery across the portfolio"
-   - Example (goal = `cloud-native-modernization`): "3 of 4 repos lack IaC (INF-Q5 < 3) — this blocks automated infrastructure provisioning needed for cloud-native deployment"
-   - Example (goal = `cost-optimization`): "4 of 5 repos use self-managed databases (INF-Q2 < 3) — this blocks migration to managed services for cost reduction"
+**Tier Classification Constants:**
 
-2. **"General Opportunities"** — Cross-cutting gaps where the criterion is NOT in the goal's priority criteria list. These are important improvements but do not directly block the customer's primary objective.
-   - Frame each concern as an improvement opportunity
-   - Example: "3 of 5 repos lack auto-scaling (INF-Q10 < 3) — important but not blocking agentic enablement"
+**TIER_1_CRITERIA** (Foundational Blockers — static, all goals):
 
-**Priority criteria by goal (for classification):**
+| Criterion | Threshold | Description |
+|-----------|-----------|-------------|
+| INF-Q5 | < 2 | No IaC at all |
+| INF-Q6 | < 2 | No CI/CD at all |
+| OPS-Q1 | < 2 | No observability at all |
+| APP-Q8 AND SEC-Q5 | Both < 2 | No rate limiting at all |
+
+**TIER_2_MAP** (Goal-Specific Prerequisites — dynamic by goal):
+
+| Goal | Criteria | Threshold | Rationale |
+|------|----------|-----------|-----------|
+| `agentic-ai-enablement` | APP-Q2 (API docs), SEC-Q3 (identity propagation) | < 3 | Agents need machine-readable API specs and user-context propagation |
+| `cloud-native-modernization` | INF-Q5 (IaC), INF-Q6 (CI/CD) | score = 2 | Need better IaC/CI/CD to iterate on cloud-native infra safely |
+| `cost-optimization` | INF-Q5 (IaC), OPS-Q1 (observability) | < 3 | Can't optimize costs without visibility and control |
+| `general-readiness` | None | — | No specific goal = no goal-specific prerequisites |
+
+**TIER_3_MAP** (Goal Deliverables — dynamic by goal):
+
+| Goal | Criteria | Rationale |
+|------|----------|-----------|
+| `agentic-ai-enablement` | APP-Q13 (agent frameworks), DATA-Q1 (vector DB), DATA-Q2 (semantic search), DATA-Q3 (RAG), SEC-Q7 (human approval), OPS-Q3 (eval framework), OPS-Q6 (LLM cost tracking) | These ARE the agent capabilities the customer is building |
+| `cloud-native-modernization` | APP-Q4 (monolith decomposition), APP-Q3 (async communication), INF-Q1 (managed compute), OPS-Q9 (canary/blue-green) | These ARE the cloud-native capabilities being pursued |
+| `cost-optimization` | INF-Q2 (managed DB migration), DATA-Q10 (EOL DB upgrades), DATA-Q11 (open source migration), INF-Q8 (managed streaming) | These ARE the cost-reduction migrations being pursued |
+| `general-readiness` | None | No specific goal = nothing is a "deliverable" |
+
+**Tier Thresholds and Minimum Service Counts:**
+
+| Tier | Score Threshold | Min Services to Flag |
+|------|----------------|---------------------|
+| Tier 1 (🚨 Foundational Blockers) | < 2 | 2+ services (or 50%+ of portfolio, whichever is lower) |
+| Tier 2 (⚠️ Goal-Specific Prerequisites) | < 3 | 2+ services |
+| Tier 3 (🎯 Goal Deliverables) | < 3 | 2+ services |
+| General (💡 Improvement Opportunities) | < 3 | 3+ services |
+
+**Classification Algorithm:**
+
+For each criterion across all services, after collecting non-N/A scores:
+
+```
+for each criterion_id in all_criteria:
+    scores = [s for s in service_scores[criterion_id] if s != N/A]
+    if len(scores) == 0: continue
+
+    # Step 1: Check Tier 1 (static, goal-independent)
+    if criterion_id in TIER_1_CRITERIA:
+        low_count = count(s < 2 for s in scores)
+        if low_count >= min(2, len(scores) * 0.5):
+            classify as Tier 1
+            continue
+
+    # Step 2: Check Tier 2 (goal-dependent)
+    if criterion_id in TIER_2_MAP[goal]:
+        gap_count = count(s < 3 for s in scores)
+        if gap_count >= 2:
+            classify as Tier 2
+            continue
+
+    # Step 3: Check Tier 3 (goal-dependent)
+    if criterion_id in TIER_3_MAP[goal]:
+        gap_count = count(s < 3 for s in scores)
+        if gap_count >= 2:
+            classify as Tier 3
+            continue
+
+    # Step 4: Default — General Opportunity
+    gap_count = count(s < 3 for s in scores)
+    if gap_count >= 3:
+        classify as General Opportunity
+```
+
+**Important classification rules:**
+- Evaluate tiers in order: Tier 1 → Tier 2 → Tier 3 → General. A criterion is classified into the first tier it matches.
+- A criterion that qualifies for Tier 1 (e.g., INF-Q5 < 2) is classified as Tier 1 even if it also appears in TIER_2_MAP. Tier 1 takes precedence.
+- For `cloud-native-modernization` Tier 2: INF-Q5 and INF-Q6 are Tier 2 only when their score = 2 (exists but weak). If score < 2, they are Tier 1 (foundational blocker) instead.
+- N/A scores are excluded from all tier calculations — a service where a criterion is N/A does not count toward any tier's service count.
+
+**Report Rendering by Tier:**
+
+After classification, render the cross-cutting concerns using four sections with the following structure:
+
+```markdown
+## Cross-Cutting Concerns
+
+### 🚨 Foundational Blockers
+> These gaps block all modernization efforts, not just <goal>.
+> Address these first — nothing else matters until these are resolved.
+
+  - <Criterion description> (<criterion_id>): X of Y services score < 2. [details]
+  ...
+
+### ⚠️ Prerequisites for <Goal>
+> These gaps specifically block your path to <goal>.
+> They aren't the goal itself, but you can't get there without them.
+
+  - <Criterion description> (<criterion_id>): X of Y services score < 3. [details]
+  ...
+
+### 🎯 Goal Deliverables — What You're Here to Build
+> These are the capabilities your <goal> initiative will deliver.
+> Low scores here confirm the need for the initiative, not additional blockers.
+> Your individual assessment reports detail the current state and roadmap for each.
+
+  - <Criterion description> (<criterion_id>): X of Y services score < 3. [current state summary]
+  ...
+
+### 💡 General Improvement Opportunities
+> These gaps are important but do not directly block <goal>.
+> Address them as capacity allows or in parallel with goal work.
+
+  - <Criterion description> (<criterion_id>): X of Y services score < 3. [details]
+  ...
+```
+
+**Rendering rules:**
+- Only render a tier section if it contains at least one classified criterion. Omit empty tier sections entirely.
+- Tier 3 framing must be **informational**, not prescriptive — no "fix this blocker" language. These are the capabilities the customer is here to build.
+- For `general-readiness`: Only render Tier 1 (Foundational Blockers) and General Opportunities sections. Omit Tier 2 and Tier 3 entirely (they require a specific goal to be meaningful). Add a note: "With `general-readiness` as the goal, all non-foundational gaps are treated as equal improvement opportunities."
+
+**Priority criteria by goal (retained for reference — now used as source for TIER_2_MAP + TIER_3_MAP):**
 
 | Goal | Priority Criteria |
 |------|-------------------|
 | `agentic-ai-enablement` | APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6 |
 | `cloud-native-modernization` | APP-Q4, INF-Q1, INF-Q5, INF-Q6, APP-Q3, OPS-Q9 |
 | `cost-optimization` | INF-Q2, DATA-Q2, DATA-Q10, DATA-Q11, INF-Q8 |
-| `general-readiness` | All criteria equally (no split — see special handling below) |
-
-**Special handling for `general-readiness`:**
-- When the goal is `general-readiness`, all criteria are weighted equally, so there is no meaningful distinction between "blocking" and "general" concerns.
-- In this case, present all cross-cutting concerns in a single unified section (no split). Use the heading "Cross-Cutting Concerns" without subsections, maintaining the same format as the per-category analysis below.
-- Alternatively, you may place all concerns under "General Opportunities" with a note: "With `general-readiness` as the assessment goal, all criteria are weighted equally. All cross-cutting concerns represent improvement opportunities."
+| `general-readiness` | All criteria equally |
 
 **Technology Stack Consolidation:**
 - Count distinct programming languages in use
@@ -1003,43 +1110,69 @@ Create the report file with exactly this structure:
 
 ## Cross-Cutting Concerns
 
-> Cross-cutting concerns are gaps that appear across 3 or more services (with score < 3.0, excluding services where the criterion is N/A). They are split into two subsections based on the portfolio's assessment goal to help prioritize what matters most.
+> Cross-cutting concerns are gaps that appear across multiple services. They are classified into four tiers based on severity and relationship to the portfolio's assessment goal (`<goal>`). Use the tiered classification algorithm from Section 4.1 to assign each flagged criterion to a tier.
 >
-> **For `general-readiness`**: All criteria are weighted equally, so all cross-cutting concerns are presented together without splitting into subsections.
+> **For `general-readiness`**: Only Tier 1 (Foundational Blockers) and General Opportunities are rendered. Tiers 2 and 3 are omitted.
 
-### Blocking Your Goal
+### 🚨 Foundational Blockers
 
-> These cross-cutting gaps directly impede progress toward the portfolio's stated goal (`<goal>`). Resolving these should be the highest priority in Phase 0 and Phase 1.
-> **Omit this subsection entirely when goal is `general-readiness`** (use the unified format below instead).
+> These gaps block all modernization efforts, not just `<goal>`.
+> Address these first — nothing else matters until these are resolved.
+> **Render this section only if at least one Tier 1 criterion is classified. Omit entirely if empty.**
 
-**<Category Name> gaps blocking `<goal>`:**
-
-1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score below 3.0
-   - **Impact on goal**: <explain how this gap blocks the goal — e.g., "blocks agent tool discovery across the portfolio">
+1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 2
+   - **Impact**: <explain how this blocks all modernization — e.g., "No IaC means no automated, repeatable infrastructure changes">
    - **Affected services**: <list service names>
    - **Recommendation**: <portfolio-level solution>
 
-2. <additional blocking concerns...>
+2. <additional Tier 1 concerns...>
 
-> If no cross-cutting concerns involve goal-priority criteria, state: "No cross-cutting concerns are directly blocking your `<goal>` objective. All portfolio-wide gaps are general improvement opportunities."
+### ⚠️ Prerequisites for `<goal>`
 
-### General Opportunities
+> These gaps specifically block your path to `<goal>`.
+> They aren't the goal itself, but you can't get there without them.
+> **Render this section only if at least one Tier 2 criterion is classified. Omit entirely if empty or if goal is `general-readiness`.**
 
-> These cross-cutting gaps are important improvements but do not directly block the portfolio's primary goal. Address these after resolving goal-blocking concerns.
-> **When goal is `general-readiness`**: All cross-cutting concerns appear here (or use the unified per-category format below).
+1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 3
+   - **Impact on goal**: <explain how this gap blocks the goal — e.g., "Agents cannot discover or invoke service capabilities without machine-readable API specs">
+   - **Affected services**: <list service names>
+   - **Recommendation**: <portfolio-level solution>
 
-1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score below 3.0
+2. <additional Tier 2 concerns...>
+
+### 🎯 Goal Deliverables — What You're Here to Build
+
+> These are the capabilities your `<goal>` initiative will deliver.
+> Low scores here confirm the need for the initiative, not additional blockers.
+> Your individual assessment reports detail the current state and roadmap for each.
+> **Render this section only if at least one Tier 3 criterion is classified. Omit entirely if empty or if goal is `general-readiness`.**
+> **Framing must be informational, not prescriptive — no "fix this blocker" language.**
+
+1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 3
+   - **Current state**: <summarize where the portfolio stands on this capability>
+   - **Affected services**: <list service names>
+   - **Roadmap reference**: <point to relevant phase in the modernization roadmap>
+
+2. <additional Tier 3 concerns...>
+
+### 💡 General Improvement Opportunities
+
+> These gaps are important but do not directly block `<goal>`.
+> Address them as capacity allows or in parallel with goal work.
+> **Always render this section. If no General criteria are classified, state: "No additional general improvement opportunities identified beyond the tiered concerns above."**
+
+1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 3
    - **Impact**: <describe impact>
    - **Affected services**: <list service names>
    - **Recommendation**: <portfolio-level solution>
 
-2. <additional general opportunities...>
+2. <additional General concerns...>
 
-> If no general opportunities exist, state: "All cross-cutting concerns are goal-blocking. No additional general opportunities identified."
+> **`general-readiness` note**: When goal is `general-readiness`, add: "With `general-readiness` as the goal, all non-foundational gaps are treated as equal improvement opportunities."
 
 ### Per-Category Analysis
 
-> Regardless of the blocking/general split above, also provide the per-category analysis below for a complete picture of portfolio health.
+> Regardless of the tiered classification above, also provide the per-category analysis below for a complete picture of portfolio health.
 
 ### Infrastructure & Platform
 
@@ -1619,7 +1752,7 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 2. The report file `{portfolio-name}-portfolio-agentic-readiness-report.md` is created in the `agentic-readiness-assessment` directory
 3. The report contains an Executive Dashboard with portfolio-wide scores
 4. The report contains a Service Dependency Map with all services listed
-5. The report contains Cross-Cutting Concerns analysis for all 5 categories, split into "Blocking Your Goal" and "General Opportunities" subsections when the goal is not `general-readiness` (for `general-readiness`, a unified section is acceptable)
+5. The report contains Cross-Cutting Concerns analysis for all 5 categories, classified into four tiers: 🚨 Foundational Blockers, ⚠️ Prerequisites for Goal, 🎯 Goal Deliverables, and 💡 General Improvement Opportunities. Empty tier sections are omitted. For `general-readiness`, only Tier 1 and General Opportunities are rendered (Tiers 2 and 3 are omitted).
 6. The report contains a Portfolio Modernization Roadmap with 4 phases using goal-specific phase names (Phase 0 is always "Cross-Cutting Foundation (Mo 0–1)"; Phases 1–3 use names from the goal-specific lookup table in Step 6)
 7. The roadmap respects dependency order (services are sequenced correctly) and activities within each phase are re-weighted by goal alignment (goal-priority activities listed first)
 8. The report contains an AWS Modernization Pathways section with all 7 pathways evaluated, per-service pathway assignments, and parallel execution plan
@@ -1683,14 +1816,14 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 ### Edge Cases (Handle Gracefully)
 
 **No Cross-Cutting Concerns:**
-- Scenario: All gaps are service-specific (no criterion affects 3+ services with non-N/A scores below 3.0)
-- Action: State explicitly in report: "No cross-cutting concerns identified. All gaps are service-specific." Omit both "Blocking Your Goal" and "General Opportunities" subsections.
+- Scenario: All gaps are service-specific (no criterion affects enough services to qualify for any tier)
+- Action: State explicitly in report: "No cross-cutting concerns identified. All gaps are service-specific." Omit all four tier sections.
 - Impact: Phase 0 may be empty or contain only shared infrastructure work
 
-**No Goal-Blocking Cross-Cutting Concerns:**
-- Scenario: Cross-cutting concerns exist, but none involve the goal's priority criteria
-- Action: State in the "Blocking Your Goal" subsection: "No cross-cutting concerns are directly blocking your `<goal>` objective." Place all concerns in "General Opportunities."
-- Impact: Phase 0 prioritization focuses on general improvements rather than goal-specific gaps
+**No Foundational Blockers:**
+- Scenario: Cross-cutting concerns exist, but none qualify for Tier 1 (no criterion has 2+ services scoring < 2)
+- Action: Omit the 🚨 Foundational Blockers section entirely. Render remaining applicable tier sections.
+- Impact: Phase 0 prioritization focuses on goal-specific prerequisites or general improvements
 
 **Isolated Services:**
 - Scenario: Service has no dependencies and no dependents

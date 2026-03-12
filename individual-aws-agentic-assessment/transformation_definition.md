@@ -516,53 +516,168 @@ Evaluate each pathway independently and assign exactly one of three statuses:
 - **Not Triggered** — The pathway's trigger conditions are NOT met, but the pathway is still listed. Priority shown as "—".
 - **Not Applicable** — The pathway does not apply to the detected repo type (from Step 1.1). Show a reason explaining why (e.g., "Infrastructure-only repo — no application compute to containerize"). Priority shown as "—".
 
-**Status determination order:** First check if the pathway is Not Applicable for the repo type (see section 7.3 below). If not N/A, then evaluate the trigger conditions. If any trigger condition is met → Triggered. If no trigger conditions are met → Not Triggered.
+**Status determination order (V2.5 four-step evaluation):** For each pathway, follow this evaluation order strictly. Stop at the first step that produces a result:
+
+```
+For each pathway:
+  Step 1: Is pathway N/A for repo type? → "Not Applicable" (stop — see section 7.3)
+  Step 2: Does contextual guard pass? → If no: "Not Triggered" (stop)
+  Step 3: Are trigger conditions met at goal-weighted threshold? → If yes: "Triggered" (stop)
+  Step 4: Otherwise: "Not Triggered"
+```
+
+Earlier steps always take precedence. A pathway that is N/A by repo type is never evaluated for contextual guards. A pathway whose contextual guard fails is never evaluated for trigger thresholds.
 
 #### 7.2 Pathway Trigger Rules
 
-Evaluate each pathway's trigger conditions. A pathway is Triggered when ANY of its trigger conditions are met:
+Evaluate each pathway using the four-step evaluation order above. Each pathway has three components: (A) a contextual relevance guard, (B) trigger conditions, and (C) goal-weighted threshold behavior. The contextual guard must pass before trigger conditions are evaluated. The goal-weighted threshold (see section 7.2.1) determines how many trigger conditions must be met based on the pathway's Goal Alignment level for the current goal.
 
 **Move to Cloud Native (Containers and Serverless):**
-- Trigger: APP-Q4 score < 4 (monolith detected) OR INF-Q1 score < 3 (EC2-heavy compute) OR APP-Q3 score < 3 (sync-heavy communication) OR APP-Q10 score < 3 (no async for long-running operations)
+
+**(A) Contextual Guard:** APP-Q4 must be < 3. If APP-Q4 ≥ 3 (already modular or microservices), the pathway is **Not Triggered** — stop evaluation. Async and long-running process gaps (APP-Q3, APP-Q10) in an already-decomposed service are maturity improvements within the existing architecture, not Cloud Native migration needs.
+
+**(B) Trigger Conditions** (evaluated only if guard passes):
+- APP-Q4 < 3 (monolith or tightly coupled)
+- INF-Q1 < 3 (EC2-heavy compute)
+- APP-Q3 < 3 (sync-heavy communication)
+- APP-Q10 < 3 (no async for long-running operations)
+
+**(C) Goal-Weighted Thresholds** (see section 7.2.1 for tier definitions):
+- High alignment: ANY 1 condition met → Triggered
+- Medium alignment: At least 2 conditions met → Triggered
+- Low alignment: APP-Q4 ≤ 2 (primary criterion, severe gap) → Triggered
+
 - Focus: Decompose monolith applications into loosely coupled distributed architectures using microservices
 - Representative AWS Services: Lambda, API Gateway, Step Functions, EventBridge
 - Aligns with: Phase 2 (Foundation) and Phase 3 (Agent Enablement) roadmap activities
 
 **Move to Containers:**
-- Trigger: INF-Q1 score < 3 (no ECS/EKS/Fargate detected) OR APP-Q4 score < 4 (monolith needing containerization as first step) OR no Dockerfile/container definitions found in discovery
+
+**(A) Contextual Guard:** Compute must be EC2/VM-based or bare-metal. If INF-Q1 ≥ 3 (already Lambda/Fargate/ECS), the pathway is **Not Triggered** — stop evaluation. Absence of Dockerfile is expected for serverless workloads, not a gap.
+
+**(B) Trigger Conditions** (evaluated only if guard passes):
+- INF-Q1 < 3 (no managed container orchestration or serverless)
+- No Dockerfile or container definitions found in discovery
+
+**Removed from V2:** `APP-Q4 < 4` is no longer a trigger condition. Monolith detection is a Cloud Native concern, not a Containers concern. A monolith on ECS is already containerized.
+
+**(C) Goal-Weighted Thresholds** (see section 7.2.1 for tier definitions):
+- High alignment: ANY 1 condition met → Triggered
+- Medium alignment: Both conditions met → Triggered
+- Low alignment: INF-Q1 ≤ 2 AND no Dockerfile → Triggered
+
 - Focus: Containerize existing workloads and adopt fully managed container orchestration services
 - Representative AWS Services: ECS, EKS, Fargate, ECR
 - Aligns with: Phase 1 (Quick Wins) for Dockerfile creation, Phase 2 (Foundation) for orchestration
 
 **Move to Open Source:**
-- Trigger: DATA-Q11 score < 3 (proprietary SQL/stored procedures detected) OR INF-Q2 findings mention commercial database engines (Oracle, SQL Server, or other commercial licenses)
+
+**(A) Contextual Guard:** None required — the current trigger rules are already precise and evidence-based. Commercial database/license detection does not suffer from the "absence = gap" problem.
+
+**(B) Trigger Conditions** (unchanged from V2):
+- DATA-Q11 < 3 (proprietary SQL/stored procedures detected)
+- INF-Q2 findings mention commercial database engines (Oracle, SQL Server, or other commercial licenses)
+
+**(C) Goal-Weighted Thresholds** (see section 7.2.1 for tier definitions):
+- High alignment: ANY 1 condition met → Triggered
+- Medium alignment: At least 2 conditions met → Triggered
+- Low alignment: Primary criterion (DATA-Q11 or INF-Q2) ≤ 2 → Triggered
+
 - Focus: Move away from commercial workloads/licenses to open source for flexibility and reduced cost
 - Representative AWS Services: RDS open source engines (PostgreSQL, MySQL, MariaDB), EKS, Amazon Linux
 - Aligns with: Phase 2 (Foundation) for database migration planning
 
 **Move to Managed Databases:**
-- Trigger: INF-Q2 score < 4 (self-managed databases detected) OR DATA-Q2 score < 4 (self-hosted vector DB) OR DATA-Q10 score < 4 (EOL or unpinned database engine versions)
+
+**(A) Contextual Guard:** INF-Q2 findings must show self-managed or significantly under-managed databases (self-hosted MySQL/PostgreSQL on EC2, unmanaged Redis, MongoDB on containers, etc.). If all databases are already fully managed (DynamoDB, Aurora, RDS, ElastiCache, DocumentDB), the pathway is **Not Triggered** — stop evaluation.
+
+**(B) Trigger Conditions** (evaluated only if guard passes):
+- INF-Q2 < 3 (self-managed databases detected) — threshold raised from `< 4`
+- DATA-Q10 < 3 (EOL or unpinned database engine versions) — threshold raised from `< 4`
+
+**Removed from V2:** `DATA-Q2 < 4` (absence of vector DB) is no longer a trigger for this pathway. Vector DB gaps are an AI pathway concern. A service using DynamoDB (fully managed, score 4 on INF-Q2) should not be told to "Move to Managed Databases" because it lacks a vector store.
+
+**(C) Goal-Weighted Thresholds** (see section 7.2.1 for tier definitions):
+- High alignment: ANY 1 condition met → Triggered
+- Medium alignment: At least 2 conditions met → Triggered
+- Low alignment: INF-Q2 ≤ 2 (severe self-managed DB gap) → Triggered
+
 - Focus: Adopt fully managed purpose-built cloud native databases for scalability and reduced operational burden
 - Representative AWS Services: Aurora, RDS, DynamoDB, DocumentDB, ElastiCache, OpenSearch Service
 - Aligns with: Phase 2 (Foundation) for migration, Phase 1 (Quick Wins) for version pinning
 
 **Move to Managed Analytics:**
-- Trigger: INF-Q8 score < 3 (self-managed Kafka/streaming) OR DATA-Q4 score < 3 (data source sprawl with no unified access) OR no managed analytics services detected in discovery
+
+**(A) Contextual Guard:** Evidence of data processing, ETL, analytics workloads, or self-managed streaming infrastructure (self-hosted Kafka, RabbitMQ, Redis Streams, Spark, Hadoop, Flink) must be found during the Step 1 discovery scan. If none found, the pathway is **Not Triggered** — stop evaluation.
+
+**(B) Trigger Conditions** (evaluated only if guard passes):
+- INF-Q8 < 3 (self-managed streaming detected) — note: this now only fires when the repo actually HAS self-managed streaming, not when streaming is simply absent
+- DATA-Q4 < 3 (data source sprawl with no unified access layer)
+
+**Removed from V2:** The vague "no managed analytics services detected in discovery" catch-all clause is eliminated entirely. This was the primary source of false positives — it triggered for any repo that didn't use Kinesis/Redshift/Athena, even if the repo had zero analytics needs.
+
+**(C) Goal-Weighted Thresholds** (see section 7.2.1 for tier definitions):
+- High alignment: ANY 1 condition met → Triggered
+- Medium alignment: Both conditions met → Triggered
+- Low alignment: INF-Q8 ≤ 2 (severe self-managed streaming gap) → Triggered
+
 - Focus: Adopt fully managed, cost-optimized data lake and real-time analytics
 - Representative AWS Services: Redshift, Kinesis, MSK Serverless, Athena, Lake Formation
 - Aligns with: Phase 2 (Foundation) for streaming migration, Phase 3 for analytics optimization
 
 **Move to Modern DevOps:**
-- Trigger: INF-Q5 score < 3 (low IaC coverage) OR INF-Q6 score < 3 (no CI/CD automation) OR OPS-Q9 score < 3 (no canary/blue-green deployments) OR OPS-Q10 score < 3 (no integration tests) OR OPS-Q1 score < 3 (no distributed tracing)
+
+**(A) Contextual Guard:** None required — DevOps criteria (IaC, CI/CD, deployment strategies, testing, observability) are universally relevant to all application and infrastructure repos.
+
+**(B) Trigger Conditions** (unchanged from V2):
+- INF-Q5 < 3 (low IaC coverage)
+- INF-Q6 < 3 (no CI/CD automation)
+- OPS-Q9 < 3 (no canary/blue-green deployments)
+- OPS-Q10 < 3 (no integration tests)
+- OPS-Q1 < 3 (no distributed tracing)
+
+**(C) Goal-Weighted Thresholds** (see section 7.2.1 for tier definitions):
+- High alignment: ANY 1 condition met → Triggered
+- Medium alignment: At least 2 conditions met → Triggered
+- Low alignment: At least 2 conditions met AND one scores ≤ 2 → Triggered
+
 - Focus: Adopt modern philosophies, practices, and tools for high-velocity application delivery
 - Representative AWS Services: CodeCommit, CodeBuild, CodePipeline, CodeDeploy, CloudFormation, CDK, X-Ray, CloudWatch
 - Aligns with: Phase 1 (Quick Wins) for IaC and CI/CD, Phase 2 for advanced deployment strategies
 
 **Move to AI:**
-- Trigger: APP-Q13 score < 3 (no agent frameworks) OR DATA-Q1 score < 3 (no vector database) OR DATA-Q3 score < 3 (no RAG implementation) OR OPS-Q3 score < 3 (no eval framework) OR OPS-Q6 score < 3 (no LLM cost tracking)
+
+**(A) Contextual Guard:** None required — in the context of an agentic readiness assessment, AI criteria are universally relevant. The entire assessment exists to evaluate AI readiness.
+
+**(B) Trigger Conditions** (unchanged from V2):
+- APP-Q13 < 3 (no agent frameworks)
+- DATA-Q1 < 3 (no vector database)
+- DATA-Q3 < 3 (no RAG implementation)
+- OPS-Q3 < 3 (no eval framework)
+- OPS-Q6 < 3 (no LLM cost tracking)
+
+**(C) Goal-Weighted Thresholds** (see section 7.2.1 for tier definitions):
+- High alignment: ANY 1 condition met → Triggered
+- Medium alignment: At least 2 conditions met → Triggered
+- Low alignment: At least 2 conditions met AND one scores ≤ 2 → Triggered
+
 - Focus: Leverage AWS AI services to transform applications with AI capabilities, bridging traditional modernization and AI-driven computing
 - Representative AWS Services: Amazon Bedrock, Amazon Bedrock AgentCore, Amazon Q, SageMaker
 - Aligns with: Phase 3 (Agent Enablement) primarily, Phase 2 for data foundations (vector DB, RAG)
+
+#### 7.2.1 Goal-Weighted Threshold Reference
+
+The goal-weighted threshold determines how many trigger conditions must be met for a pathway to trigger, based on the pathway's Goal Alignment level (High, Medium, or Low) for the current goal.
+
+| Alignment Tier | Threshold Rule | Rationale |
+|---------------|---------------|-----------|
+| **High** | ANY 1 trigger condition met → Triggered | Primary pathways for the goal. Even minor gaps are valuable to surface because the customer is actively pursuing this direction. |
+| **Medium** | At least 2 trigger conditions met → Triggered | Relevant but not the customer's focus. A single marginal gap shouldn't generate a recommendation that distracts from the primary goal. |
+| **Low** | Primary criterion ≤ 2 AND contextually relevant → Triggered | Tangential to the customer's goal. Only severe, undeniable gaps should surface these pathways. For pathways with 3+ conditions (Modern DevOps, Move to AI), Low requires at least 2 conditions met AND one scoring ≤ 2. |
+
+**Special case — `general-readiness`:** When the goal is `general-readiness`, all 7 pathways have Medium alignment. This means every pathway requires at least 2 trigger conditions to fire. This is intentionally stricter than V2 (where everything triggered on a single OR) because general-readiness should surface only meaningful gaps, not every minor imperfection.
+
+**Interaction with contextual guards:** The goal-weighted threshold is only evaluated AFTER the contextual guard passes (see the four-step evaluation order at the top of section 7.2). A pathway whose guard fails is "Not Triggered" regardless of goal alignment.
 
 #### 7.3 Not Applicable Rules by Repo Type
 

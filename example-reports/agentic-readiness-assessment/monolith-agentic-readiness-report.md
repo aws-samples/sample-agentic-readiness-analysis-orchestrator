@@ -1,709 +1,678 @@
 # Agentic Readiness Assessment Report
+
 **Target**: ./monolith
-**Date**: 2026-03-06
+**Date**: 2026-03-11
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
+**Assessment Goal**: agentic-ai-enablement
+**Goal Context**: Building customer-facing AI agents for support and order management
+**Repository Type**: application (auto-detected)
 
 ---
 
 ## Table of Contents
 
 1. Executive Summary
-2. Top Priorities (Critical Gaps)
-3. Readiness Roadmap
-   - Phase 1 — Quick Wins (Days 1–30)
-   - Phase 2 — Foundation (Months 1–3)
-   - Phase 3 — Agent Enablement (Months 3–6)
-4. Recommended Modernization Pathways
-5. Recommended Self-Paced Learning Materials
-6. Detailed Findings
+2. Score Table
+3. Top Priorities (Critical Gaps)
+4. Detailed Findings
    - Infrastructure & Platform
    - Application Architecture
    - Data Foundations
    - Identity, Security & Governance
    - Operations & Observability
-7. Appendix: Evidence Index
+5. Recommended Modernization Pathways
+   - Pathway Summary Table
+   - Pathway Details (for Triggered pathways)
+6. Microservices Decomposition Strategy
+7. Quick Agent Wins
+8. Readiness Roadmap
+   - Phase 1 — Agent Quick Wins (Days 1–30)
+   - Phase 2 — Agent Foundations (Months 1–3)
+   - Phase 3 — Agent Scale & Optimization (Months 3–6)
+9. Recommended Self-Paced Learning Materials
+10. Appendix: Evidence Index
 
 ---
 
 ## Executive Summary
 
-This is a PHP monolithic e-commerce application with **all business logic contained in a single `index.php` file (~2,000+ lines)**, serving orders, inventory, payments, returns, user management, warehouse operations, shipping, and quality control domains. The application is far from agentic readiness. Its strongest area is **Data Foundations** (1.7/4.0), benefiting from a single MySQL data source with no stored procedures — providing a clean migration path. Its weakest areas are **Operations & Observability** (1.0/4.0) with zero monitoring, testing, or deployment automation, and **Application Architecture** (1.2/4.0) with a tightly-coupled monolith, no API documentation, no async patterns, and no resilience mechanisms. Significant foundational work — containerization to EKS, CI/CD pipelines, service decomposition, and observability — must be completed before any agentic capabilities can be safely introduced.
+This PHP monolith e-commerce application is in the early stages of agentic AI readiness. While it has a solid foundation of structured JSON APIs, a clean relational schema across 9 well-defined tables, and managed RDS MySQL infrastructure defined in CloudFormation, it lacks every core capability required for customer-facing AI agents: no API documentation for agent tool discovery, no AI/agent framework integration, no vector database for RAG, no async messaging for event-driven agent workflows, and no observability infrastructure for monitoring agent behavior. The strongest areas are data simplicity (single MySQL source, no stored procedures, standard SQL) and partial infrastructure-as-code coverage. The most critical gaps for building customer support and order management agents are the complete absence of API specs (agents cannot discover or invoke tools), no AI framework integration, and no workflow orchestration to coordinate multi-step agent actions like order fulfillment or returns processing.
 
 ### Overall Score: 1.5 / 4.0
 
 | Category | Score | Status |
 |----------|-------|--------|
-| Infrastructure & Platform | 2.1 / 4.0 | 🟠 |
-| Application Architecture | 1.2 / 4.0 | ❌ |
-| Data Foundations | 1.7 / 4.0 | 🟠 |
-| Identity, Security & Governance | 1.4 / 4.0 | ❌ |
+| Infrastructure & Platform | 2.0 / 4.0 | 🟠 |
+| Application Architecture | 1.3 / 4.0 | ❌ |
+| Data Foundations | 1.8 / 4.0 | 🟠 |
+| Identity, Security & Governance | 1.3 / 4.0 | ❌ |
 | Operations & Observability | 1.0 / 4.0 | ❌ |
 
 ---
 
 ## Top Priorities (Critical Gaps)
 
-### 1. 🔴 Tightly-Coupled Monolith with No Service Boundaries (APP-Q4: 1/4)
-**What**: The entire application — orders, inventory, payments, returns, users, warehouses, shipping, and quality control — exists in a single `index.php` file with shared database tables, foreign keys across domains, and inline HTML/CSS/JS. There are no module boundaries, no separation of concerns, and no independent deployability.
-**Why it matters for agentic workloads**: Agents need well-defined API boundaries to act as tools. A monolith provides no clear tool boundaries, no failure isolation, and no ability to assign agent capabilities to specific domains. An agent acting on the order domain could inadvertently corrupt inventory or payment data due to tight coupling.
-**First step**: Conduct a domain-modeling workshop (EventStorming) to identify bounded contexts. Map the 9 database tables to candidate services: Inventory, Orders, Payments, Returns, Users, and Warehouse/Fulfillment. Begin containerizing the monolith as-is for EKS deployment while planning Strangler Fig extraction.
+1. **APP-Q2 — No API Documentation (Score: 1/4)**: Zero OpenAPI/Swagger specs exist for the 20+ API endpoints in `index.php`. This is the single biggest blocker for agentic AI enablement — agents cannot discover, understand, or invoke your APIs without machine-readable documentation. **First step**: Generate an OpenAPI 3.0 spec from the existing route handlers in `index.php` (e.g., `/api/products`, `/api/orders`, `/api/orders/{orderId}/validation-data`, etc.).
 
-### 2. 🔴 No CI/CD Pipeline or Deployment Automation (INF-Q6: 1/4, OPS-Q9: 1/4)
-**What**: Deployment is a manual `deploy.sh` script that runs `docker-compose build` and `docker-compose up -d` locally. There are no GitHub Actions, no CodePipeline, no CodeBuild, no buildspec.yml, no Jenkinsfile, and no automated test/build/deploy stages.
-**Why it matters for agentic workloads**: Agents will require frequent prompt tuning, model updates, and configuration changes. Without CI/CD, every change requires manual intervention, creating a bottleneck that prevents the rapid iteration agentic systems demand. Automated rollback — critical when an agent starts misbehaving — is impossible without deployment automation.
-**First step**: Create a CodePipeline with CodeBuild for automated Docker image builds, push to ECR (already provisioned in CloudFormation), and deploy to EKS. Add at minimum a lint and smoke test stage.
+2. **APP-Q13 — No AI/Agent Frameworks (Score: 1/4)**: No Bedrock SDK, no Strands Agents, no LangChain, no agent tooling of any kind is present. For the goal of building customer support and order management agents, this is a foundational gap. **First step**: Add Amazon Bedrock SDK integration and prototype a simple agent that can query order status via the existing `/api/orders/me` endpoint.
 
-### 3. 🔴 Zero Observability — No Tracing, Structured Logging, or Monitoring (OPS-Q1: 1/4, OPS-Q2: 1/4, OPS-Q8: 1/4)
-**What**: The application has no distributed tracing (no X-Ray, no OpenTelemetry), no structured logging (PHP uses basic `error_reporting`/`ini_set`), no CloudWatch alarms, no anomaly detection, no correlation IDs, and no custom metrics. The only monitoring is an App Runner health check.
-**Why it matters for agentic workloads**: Agents can silently degrade — hallucinating, looping, or failing without visible symptoms. Without observability, you cannot detect when an agent is misbehaving, reconstruct what it did, or measure its effectiveness. Agentic systems generate significantly more telemetry than traditional applications, and the infrastructure to handle this must be in place before agents are deployed.
-**First step**: Add structured JSON logging with correlation IDs to the PHP application using a library like Monolog. Deploy OpenTelemetry Collector as a sidecar in EKS and instrument the application for distributed tracing.
+3. **DATA-Q1 — No Vector Database (Score: 1/4)**: No vector store exists for semantic search over product catalogs, order history, or support knowledge bases. Building a customer support agent that can answer questions about products, policies, or past orders requires RAG capabilities. **First step**: Deploy Amazon OpenSearch Service with k-NN plugin or use Amazon Bedrock Knowledge Bases backed by S3 for document ingestion.
 
-### 4. 🔴 No Async Messaging or Event-Driven Patterns (INF-Q4: 1/4, APP-Q3: 1/4)
-**What**: All inter-process communication is synchronous HTTP with direct database queries. There is no SQS, SNS, EventBridge, or any messaging infrastructure. The order fulfillment workflow (confirmed → validated → warehouse_assigned → picking → packed → quality_checked → shipped → delivered) is executed through sequential synchronous API calls.
-**Why it matters for agentic workloads**: Agents orchestrate multi-step workflows that must be resilient to failures and support long-running operations. Without async messaging, agent workflows will be fragile — a single failure in the fulfillment chain breaks the entire flow with no retry mechanism. Event-driven architecture enables agents to react to state changes, enabling autonomous decision-making.
-**First step**: Introduce Amazon SQS for the order fulfillment workflow. Start with the order-confirmed event triggering validation asynchronously, then extend to warehouse assignment and shipping.
+4. **SEC-Q7 — No Human Approval Workflows (Score: 1/4)**: The monolith has manual admin review for returns (`/api/admin/approve-return`) but no formal human-in-the-loop pattern. When AI agents process refunds, cancel orders, or modify inventory, high-risk actions must be gated by human approval. **First step**: Design a Step Functions workflow with `waitForTaskToken` for return approvals, serving as the pattern for all future agent guardrails.
 
-### 5. 🔴 No API Documentation or OpenAPI Specs (APP-Q2: 1/4)
-**What**: API routes are defined inline in `index.php` using regex pattern matching (e.g., `preg_match('#^/api/orders/([^/]+)/validate$#', ...)`). There is no OpenAPI specification, no Swagger documentation, no API catalog, and no machine-readable API description.
-**Why it matters for agentic workloads**: Agents discover and invoke tools through API specifications. Without OpenAPI specs, agents cannot understand what endpoints exist, what parameters they accept, or what responses they return. This is the most fundamental prerequisite for agent tool integration — agents literally cannot work without machine-readable API descriptions.
-**First step**: Generate an OpenAPI 3.0 specification documenting all existing `/api/*` endpoints, their request/response schemas, and authentication requirements. Use this as the foundation for agent tool definitions.
+5. **OPS-Q3 — No Automated Agent Evaluation (Score: 1/4)**: No eval framework, no golden datasets, no LLM-as-judge scoring. Without automated evaluation, there is no way to measure agent accuracy for customer support responses or order management decisions before deployment. **First step**: Create a golden dataset of 50+ customer support scenarios with expected agent responses, then implement a scoring pipeline using Amazon Bedrock as evaluator.
 
-## Readiness Roadmap
-
-> **Note**: This roadmap follows an **aggressive modernization** approach per project requirements, with EKS as the target container orchestration platform. Cross-dependencies between phases are explicitly stated.
-
-### Microservices Decomposition Strategy
-
-The application scores **1/4 on APP-Q4** — a tightly-coupled monolith with all business logic in a single file (`index.php`), a shared MySQL database with foreign keys across domains, and no module boundaries. Decomposition is essential for agentic readiness.
-
-**Domain Analysis — Candidate Services:**
-
-| Domain | Tables | Coupling Level | Extraction Priority |
-|--------|--------|---------------|-------------------|
-| Inventory | `inventory` | Low — read-heavy, minimal writes | ⭐ First candidate |
-| Orders | `orders`, `order_items`, `order_status_history` | High — FK to inventory, payments, returns | Second candidate |
-| Payments | `payments` | Medium — FK to orders | Third candidate |
-| Returns | `returns` | Medium — FK to orders, touches inventory | Fourth candidate |
-| Users | `users` | Low — auth only, no FK to business tables | Can extract early |
-| Warehouses/Fulfillment | `warehouses`, `interactions` | Medium — references orders, inventory | Later extraction |
-
-**Recommended Approach: Parallel Track (Option B)**
-- **LoE**: Medium | **Risk**: Low-Medium | **Time to Value**: Fast
-- **Strategy**: Modernize infrastructure (EKS deployment, CI/CD, observability) while incrementally extracting services
-- **Pattern**: [Strangler Fig](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/strangler-fig.html) + [API Gateway Routing](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/api-routing.html)
-- **Starting Point**: Extract the **Inventory Service** first — it has the clearest domain boundary, is primarily read-heavy (`GET /api/products`), has a single table with no outbound foreign keys, and can be independently scaled. Deploy behind an ALB with path-based routing (`/api/products` → Inventory Service, all other routes → Monolith).
-- **When to Use**: Most scenarios, especially when business value delivery cannot wait for complete decomposition
-
-**Alternative: Conditional/Adaptive (Option C)**
-- **LoE**: Varies by module | **Risk**: Low | **Time to Value**: Fastest
-- **Strategy**: Assess each module independently; containerize the monolith as-is on EKS first, then extract loosely-coupled domains while deferring tightly-coupled ones
-- **Pattern**: [Hexagonal Architecture](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/hexagonal-architecture.html) + [Anti-corruption Layer](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/anti-corruption-layer.html)
-- **Starting Point**: Deploy monolith on EKS as a single pod, extract Inventory and Users (low coupling) first, defer Orders/Payments/Returns (high coupling) for Phase 3
-- **When to Use**: If team bandwidth is limited or risk tolerance is low
-
-**Not Recommended: Big-Bang Decomposition (Option A)**
-- **LoE**: Very High | **Risk**: High | **Time to Value**: Slow
-- **Strategy**: Decompose entire monolith before any modernization
-- **Only Consider If**: Complete rewrite is already planned, funded, and business-approved; existing system is being sunset
-
-**Pattern Recommendations Based on Your Architecture:**
-
-- **Incremental Extraction**: Start with [Strangler Fig](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/strangler-fig.html) + [API Gateway Routing Patterns](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/api-routing.html) (path-based routing via ALB). The ALB provides routing, throttling context, and auth without requiring service mesh infrastructure upfront. This is the recommended starting pattern given no existing service discovery (APP-Q12 score 1).
-
-- **Data Consistency**: Implement [Anti-corruption Layer](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/anti-corruption-layer.html) + [Transactional Outbox](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html) before extracting Orders or Payments. Without idempotency (APP-Q7 score 1), service extraction risks data inconsistency — these patterns provide safety during transition.
-
-- **Resilience First**: Implement [Circuit Breaker](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/circuit-breaker.html) + [Retry with Backoff](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html) before decomposition. Currently no resilience patterns exist (APP-Q9 score 1). Microservices amplify failure modes — resilience patterns must be in place before increasing system distribution.
-
-- **Distributed Transactions**: Use [Saga Orchestration](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga-orchestration.html) via AWS Step Functions for the order fulfillment workflow once extracted. The current synchronous 8-step fulfillment flow (confirmed → delivered) is a natural candidate for saga orchestration.
-
-### Phase 1 — Quick Wins (Days 1–30)
-
-1. **Create OpenAPI 3.0 specification** for all existing `/api/*` endpoints — document request/response schemas, authentication requirements, and status codes. This is the foundation for agent tool definitions.
-2. **Set up CI/CD pipeline** using AWS CodePipeline + CodeBuild: automate Docker build → push to ECR → deploy to EKS. Replace the manual `deploy.sh` script.
-3. **Migrate secrets to AWS Secrets Manager** — remove hardcoded credentials from `docker-compose.yml` (MYSQL_ROOT_PASSWORD, MYSQL_USER, MYSQL_PASSWORD) and `index.php` fallback defaults. Update CloudFormation to reference Secrets Manager instead of parameter defaults.
-4. **Add structured JSON logging** with correlation IDs using Monolog or similar PHP logging library. Configure CloudWatch Logs agent for log aggregation.
-5. **Conduct domain-modeling workshop** (EventStorming) to identify bounded contexts and map service extraction candidates. Document current module dependencies and data coupling.
-6. **Prepare EKS cluster IaC** — create Terraform or CloudFormation templates for EKS cluster, node groups, ALB Ingress Controller, and ECR integration.
-
-### Phase 2 — Foundation (Months 1–3)
-
-**Prerequisite**: Phase 1 CI/CD pipeline and EKS cluster IaC must be complete.
-
-1. **Deploy monolith to EKS** — containerize as-is using existing Dockerfile, deploy behind ALB with health checks. Migrate from App Runner to EKS per user preference. This establishes the container orchestration foundation.
-2. **Extract first service (Inventory)** using Strangler Fig pattern — create a dedicated Inventory Service (Python or TypeScript for better agent ecosystem), deploy as separate EKS pod, route `/api/products` via ALB path-based routing to the new service.
-3. **Introduce Amazon SQS** for async order fulfillment events — start with order-confirmed → validation trigger. Add dead-letter queues for resilience.
-4. **Implement distributed tracing** with AWS X-Ray or OpenTelemetry — instrument both the monolith and extracted services. Deploy OpenTelemetry Collector as EKS DaemonSet.
-5. **Add integration tests** for critical workflows (order creation, fulfillment, returns) — integrate into CI/CD pipeline. Use PHPUnit for the monolith, appropriate frameworks for extracted services.
-6. **Implement rate limiting** at the ALB/API layer — configure request throttling, per-client quotas.
-7. **Set up CloudWatch alarms** for error rates, latency p99, and availability SLOs on critical endpoints.
-
-### Phase 3 — Agent Enablement (Months 3–6)
-
-**Prerequisite**: EKS deployment, first service extraction, CI/CD, and observability from Phase 2 must be operational.
-
-1. **Continue service extraction** — extract Orders and Payments services using Strangler Fig + Saga Orchestration patterns. Implement Transactional Outbox for data consistency.
-2. **Deploy Amazon OpenSearch Service** with k-NN plugin as managed vector database for product catalog semantic search and customer interaction history.
-3. **Implement RAG pipeline** — set up Amazon Bedrock Knowledge Bases for document chunking, embedding generation, and semantic search across order history and product catalog.
-4. **Integrate Amazon Bedrock agents** — create fulfillment automation agent using extracted service APIs as tools (via OpenAPI specs from Phase 1). Start with order validation and warehouse assignment automation.
-5. **Add agent evaluation framework** — create golden datasets for fulfillment decisions, implement automated scoring, set up LLM-as-judge for agent response quality.
-6. **Implement LLM cost tracking** — add per-request token usage tracking with CloudWatch custom metrics, user/workflow attribution, and tiered retention policies for agent telemetry.
-7. **Deploy human-in-the-loop workflows** — implement Step Functions with approval tasks for high-risk agent actions (refund processing, bulk inventory changes).
-
-## Recommended Modernization Pathways
-
-Based on the assessment findings, the following AWS Modernization Pathways are recommended for this application. Multiple pathways can execute in parallel because modern applications comprise multiple interconnected components — each requiring its own modernization approach.
-
-### Pathway Summary
-
-| Pathway | Triggered | Priority | Key Trigger Criteria | Est. Effort |
-|---------|-----------|----------|---------------------|-------------|
-| Move to Cloud Native | Yes | High | APP-Q4: 1/4, APP-Q3: 1/4, APP-Q10: 1/4 | High |
-| Move to Containers | Yes | High | INF-Q1 < 3 (local dev), APP-Q4: 1/4 | Medium |
-| Move to Open Source | No | N/A | Already using MySQL open source | N/A |
-| Move to Managed Databases | Yes | Medium | DATA-Q2: 1/4 (no vector DB) | Medium |
-| Move to Managed Analytics | Yes | Low | INF-Q8: 1/4 (no streaming) | Low |
-| Move to Modern DevOps | Yes | High | INF-Q6: 1/4, OPS-Q9: 1/4, OPS-Q10: 1/4, OPS-Q1: 1/4 | High |
-| Move to AI | Yes | High | APP-Q13: 1/4, DATA-Q1: 1/4, DATA-Q3: 1/4, OPS-Q3: 1/4 | High |
-
-### Parallel Execution Plan
-
-**Parallel Track 1**: Move to Containers + Move to Modern DevOps (no dependencies — containerize the app while building CI/CD pipelines simultaneously)
-**Parallel Track 2**: Move to Managed Databases (can begin vector DB planning while containers and DevOps tracks progress)
-**Sequential Dependencies**:
-- Move to Cloud Native depends on Move to Containers (must containerize before decomposing to microservices on EKS)
-- Move to AI depends on Move to Cloud Native (need service boundaries/APIs before building agent tools) and Move to Managed Databases (need vector DB for RAG)
-- Move to Managed Analytics depends on Move to Cloud Native (need event-driven architecture before streaming analytics)
-
-### Move to Containers
-
-- **Priority**: High
-- **Trigger Criteria Met**:
-  - INF-Q1: Score 3/4 — App Runner in CloudFormation but local dev uses raw Docker Compose. User preference is EKS.
-  - APP-Q4: Score 1/4 — Monolith needing containerization as the first step toward decomposition.
-- **Current State**: Dockerfile exists for PHP 8.2 Apache. Docker Compose used for local development. CloudFormation deploys to App Runner (not the preferred EKS target). ECR repository already provisioned.
-- **Target State**: Application deployed on Amazon EKS with Fargate or managed node groups, behind an ALB, with ECR for image storage. Container orchestration enables independent scaling and zero-downtime deployments.
-- **Key Activities**:
-  1. Create EKS cluster IaC (Terraform/CloudFormation) with ALB Ingress Controller
-  2. Adapt existing Dockerfile for EKS deployment (add health check endpoints, graceful shutdown)
-  3. Create Kubernetes manifests (Deployment, Service, Ingress) for the monolith
-  4. Deploy behind ALB with path-based routing to support future service extraction
-- **Dependencies**: None — can start immediately
-- **Estimated Effort**: Medium
-- **Roadmap Phase Alignment**: Phase 1 (EKS IaC prep), Phase 2 (deployment)
-- **Relevant Learning Materials**: Module 3 — Move to Containers with Amazon ECS and EKS
-
-### Move to Cloud Native
-
-- **Priority**: High
-- **Trigger Criteria Met**:
-  - APP-Q4: Score 1/4 — Tightly-coupled monolith with no service boundaries
-  - APP-Q3: Score 1/4 — 100% synchronous communication, no async patterns
-  - APP-Q10: Score 1/4 — No async handling for long-running operations
-- **Current State**: Single PHP monolith with all domains in one file. All communication is synchronous HTTP. The 8-step fulfillment workflow is hardcoded as sequential API calls.
-- **Target State**: Microservices architecture on EKS with event-driven communication via SQS/EventBridge. Per user preference, EKS-based containerized microservices (not Lambda/serverless). Step Functions for workflow orchestration.
-- **Key Activities**:
-  1. Extract Inventory Service as first microservice (Strangler Fig pattern)
-  2. Introduce SQS for async order fulfillment events
-  3. Implement Step Functions for the fulfillment workflow orchestration
-  4. Extract Orders, Payments, and Returns services incrementally
-  5. Implement EventBridge for cross-service event communication
-- **Dependencies**: Move to Containers must complete first (EKS cluster required)
-- **Estimated Effort**: High
-- **Roadmap Phase Alignment**: Phase 2 (first extraction), Phase 3 (continued decomposition)
-- **Relevant Learning Materials**: Module 2 — Move to Cloud Native (Containers and Serverless)
-
-### Move to Managed Databases
-
-- **Priority**: Medium
-- **Trigger Criteria Met**:
-  - DATA-Q2: Score 1/4 — No vector database for AI/semantic search capabilities
-  - DATA-Q10: Score 3/4 — Dev/prod version mismatch (MySQL 8.0 in Docker vs 8.4.8 in RDS)
-- **Current State**: RDS MySQL 8.4.8 in production (managed). No vector database. Docker Compose uses self-managed MySQL 8.0 for local development.
-- **Target State**: RDS MySQL retained for transactional data. Amazon OpenSearch Service with k-NN plugin added for vector search. Dev environment aligned with production versions.
-- **Key Activities**:
-  1. Align Docker Compose MySQL version with RDS production version
-  2. Deploy Amazon OpenSearch Service with k-NN plugin for vector search
-  3. Configure Aurora PostgreSQL with pgvector as an alternative vector store (evaluate vs OpenSearch)
-  4. Migrate per-service databases as microservices are extracted (database-per-service pattern)
-- **Dependencies**: None for vector DB deployment; database-per-service depends on Move to Cloud Native
-- **Estimated Effort**: Medium
-- **Roadmap Phase Alignment**: Phase 2 (version alignment), Phase 3 (vector DB deployment)
-- **Relevant Learning Materials**: Module 4 — Move to Managed Databases
-
-### Move to Managed Analytics
-
-- **Priority**: Low
-- **Trigger Criteria Met**:
-  - INF-Q8: Score 1/4 — No managed streaming service (no Kinesis, no MSK)
-- **Current State**: No streaming infrastructure. No real-time analytics. All data access is synchronous database queries.
-- **Target State**: Amazon Kinesis Data Streams for real-time order and fulfillment event streaming. Athena for ad-hoc analytics on order history stored in S3.
-- **Key Activities**:
-  1. Implement Kinesis Data Streams for order events after SQS is in place
-  2. Set up S3 data lake for historical order and fulfillment analytics
-  3. Configure Athena for ad-hoc querying of fulfillment performance data
-- **Dependencies**: Move to Cloud Native (need event-driven architecture first)
-- **Estimated Effort**: Low
-- **Roadmap Phase Alignment**: Phase 3
-- **Relevant Learning Materials**: Module 5 — Move to Managed Analytics
-
-### Move to Modern DevOps
-
-- **Priority**: High
-- **Trigger Criteria Met**:
-  - INF-Q6: Score 1/4 — No CI/CD pipeline; manual deploy.sh only
-  - OPS-Q9: Score 1/4 — Manual deployment, no canary/blue-green
-  - OPS-Q10: Score 1/4 — Zero integration tests
-  - OPS-Q1: Score 1/4 — No distributed tracing
-- **Current State**: Manual deployment via `deploy.sh` shell script. No CI/CD pipeline. No tests of any kind. No tracing, no structured logging, no monitoring beyond App Runner health checks.
-- **Target State**: Full CI/CD with CodePipeline/CodeBuild, automated testing in pipeline, canary deployments on EKS, distributed tracing with X-Ray/OpenTelemetry, structured logging with CloudWatch, SLOs with CloudWatch alarms.
-- **Key Activities**:
-  1. Create CodePipeline + CodeBuild for automated build/test/deploy
-  2. Implement structured JSON logging with correlation IDs
-  3. Deploy OpenTelemetry Collector on EKS for distributed tracing
-  4. Add integration tests to CI/CD pipeline
-  5. Implement canary deployment strategy on EKS (Argo Rollouts or Flagger)
-  6. Set up CloudWatch dashboards, alarms, and SLOs
-- **Dependencies**: None — can start immediately in parallel with Move to Containers
-- **Estimated Effort**: High
-- **Roadmap Phase Alignment**: Phase 1 (CI/CD, logging), Phase 2 (tracing, testing, deployment strategy)
-- **Relevant Learning Materials**: Module 6 — Move to Modern DevOps
-
-### Move to AI
-
-- **Priority**: High
-- **Trigger Criteria Met**:
-  - APP-Q13: Score 1/4 — No AI/agent frameworks present
-  - DATA-Q1: Score 1/4 — No vector database
-  - DATA-Q3: Score 1/4 — No RAG implementation
-  - OPS-Q3: Score 1/4 — No evaluation framework
-  - OPS-Q6: Score 1/4 — No LLM cost tracking
-- **Current State**: No AI capabilities whatsoever. No agent frameworks, no vector database, no embeddings, no RAG, no LLM integration. The application has rich decision-making endpoints (fraud detection, warehouse assignment, shipping carrier selection, quality control) that are currently manual — these are prime automation candidates.
-- **Target State**: Amazon Bedrock agents automating order fulfillment decisions. RAG pipeline over order history and product catalog via Bedrock Knowledge Bases. OpenSearch vector database for semantic search. Automated evaluation framework for agent quality. LLM cost tracking with attribution.
-- **Key Activities**:
-  1. Deploy OpenSearch Service with k-NN for vector store
-  2. Implement RAG pipeline with Bedrock Knowledge Bases
-  3. Build fulfillment agent using Bedrock Agents with extracted service APIs as tools
-  4. Create evaluation datasets for fulfillment decisions (order validation, warehouse assignment, carrier selection)
-  5. Implement LLM cost tracking with CloudWatch custom metrics
-  6. Deploy human-in-the-loop approval workflows for high-risk actions
-- **Dependencies**: Move to Cloud Native (need API boundaries for tools), Move to Managed Databases (need vector DB)
-- **Estimated Effort**: High
-- **Roadmap Phase Alignment**: Phase 3 (Agent Enablement)
-- **Relevant Learning Materials**: Module 7 — Move to AI
-
-## Recommended Self-Paced Learning Materials
-
-**Module 2: Move to Cloud Native (Containers and Serverless):**
-- Cloud Design Patterns, Architectures, and Implementations — https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html
-  - Essential reference for microservices decomposition: Strangler Fig, Anti-corruption Layer, Saga patterns, Event Sourcing, Circuit Breaker, API routing, Hexagonal Architecture, and more. Critical for your monolith decomposition strategy.
-- AWS Modernization Pathways: Move to Cloud Native Serverless — https://skillbuilder.aws/learning-plan/CMK2J48MVN/aws-modernization-pathways-move-to-cloud-native-serverless-includes-labs/EFUPP53B4Q
-- Architecting Serverless Applications — https://skillbuilder.aws/learn/MRWENY7FSX/architecting-serverless-applications/QVFY2JHVEH
-- Amazon DynamoDB for Serverless Architecture — https://skillbuilder.aws/learn/SY1Y83VKTB/amazon-dynamodb-for-serverless-architectures/K9NM3PHH3S
-- Modernize a Monolith to ECS and Fargate using Application Discovery — https://skillbuilder.aws/learn/1YXAWYH2WA/modernize-a-monolith-to-ecs-and-fargate-using-application-discovery/AQ37WHN3K1
-  - Directly applicable: walks through the monolith-to-containers migration pattern you need for Phase 2.
-- Meeting Simulator: Transform Monolithic App into Serverless Microservices — https://skillbuilder.aws/learn/HUKQHYU9TB/meeting-simulator-transforming-our-monolithic-app-into-serverless-microservices/NS6S2J7YR7
-
-**Module 3: Move to Containers with Amazon ECS and EKS:**
-- AWS Modernization Pathways: Move to Containers with Amazon EKS — https://skillbuilder.aws/learning-plan/GNYBZ9X9EM/aws-modernization-pathways-move-to-containers-with-amazon-eks-includes-labs/1HB9MKXD2N
-  - Your primary learning path given EKS is the preferred container orchestration platform.
-- Introduction to Containers — https://skillbuilder.aws/learn/CUCA1DK47V/introduction-to-containers/XJ58VC1FF5
-- Amazon EKS Primer — https://skillbuilder.aws/learn/Z521GMBP1J/amazon-eks-primer/NGM5AF9K72
-- Deploy Applications on Amazon EKS (Lab) — https://skillbuilder.aws/learn/2B5XUE2V9C/lab--deploy-applications-on-amazon-elastic-kubernetes-service-eks/SM5HZNTY9J
-  - Hands-on lab directly applicable to your Phase 2 EKS deployment.
-- Amazon ECR Getting Started — https://skillbuilder.aws/learn/M494WWS5EF/amazon-ecr-getting-started/N5CQ7DC6HT
-- EKS Workshop — https://www.eksworkshop.com/
-  - Comprehensive EKS workshop covering ALB Ingress, service mesh, observability on EKS.
-- EKS Auto Mode Workshop — https://catalog.workshops.aws/workshops/aadbd25d-43fa-4ac3-ae88-32d729af8ed4
-
-**Module 4: Move to Managed Databases:**
-- AWS Modernization Pathways: Move to Managed Databases — https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC/aws-modernization-pathways-move-to-managed-databases-includes-labs/2S2QZKG9DV
-- Introduction to Building with AWS Databases — https://skillbuilder.aws/learn/HYKKWEN9ZS/introduction-to-building-with-aws-databases/V7RVH2KY91
-- AWS PartnerCast: Vector Databases for Generative AI Applications — https://skillbuilder.aws/learn/UQ74USQJHU/aws-partnercast--vector-databases-for-generative-ai-applications--technical/7DKMBAPCST
-  - Critical for understanding vector database options (OpenSearch k-NN, pgvector) for your RAG pipeline in Phase 3.
-
-**Module 5: Move to Managed Analytics:**
-- AWS Modernization Pathways: Move to Managed Analytics — https://skillbuilder.aws/learning-plan/RWZA84NMVV/aws-modernization-pathways-move-to-managed-analytics--includes-labs/9BAKK2QQQU
-
-**Module 6: Move to Modern DevOps:**
-- AWS Modernization Pathways: Move to Modern DevOps — https://skillbuilder.aws/learning-plan/1FGEQKGPQD/aws-modernization-pathways-move-to-modern-devops-includes-labs/MNQZ2KPVCK
-  - Comprehensive learning plan covering CI/CD, IaC, monitoring — all critical gaps for this application.
-- Getting Started with DevOps on AWS — https://skillbuilder.aws/learn/R4B13K95YQ/getting-started-with-devops-on-aws/38NHHYRV1R
-- Create a CI/CD Pipeline to Deploy Your App to AWS Fargate (ECS) — https://skillbuilder.aws/learn/H61B17Z8R7/create-a-cicd-pipeline-to-deploy-your-app-to-aws-fargate/T66BGGGHV5
-- Advanced Testing Practices Using AWS DevOps Tools — https://skillbuilder.aws/learn/1YC7UXUWBR/advanced-testing-practices-using-aws-devops-tools/A32U6G7NEQ
-  - Essential for establishing the integration testing practices missing from this application (OPS-Q10: 1/4).
-- AWS PartnerCast: Automate EKS Deployments With GitOps Using ArgoCD and GitHub Actions — https://skillbuilder.aws/learn/D9U7XMXP31/aws-partnercast--tech-talks--automate-eks-deployments-with-gitops-using-argocd-and-github-actions--technical/Z4M9Z8FY88
-  - Directly applicable to your EKS deployment strategy with GitOps-based CI/CD.
-- EKS Workshop: Automation — https://www.eksworkshop.com/docs/automation/
-
-**Module 7: Move to AI:**
-- AWS Modernization Pathways: Move to AI — https://skillbuilder.aws/learning-plan/VDFEE4ACCV/aws-modernization-pathways-move-to-ai-pathways-includes-labs/P3DAWPTN63
-- Amazon Bedrock Getting Started — https://skillbuilder.aws/learn/63KTRM86DQ/amazon-bedrock-getting-started/SC2Y3HMAUE
-  - Foundation for integrating Bedrock agents in Phase 3.
-- Essentials for Prompt Engineering — https://skillbuilder.aws/learn/XBNAVKA88J/essentials-of-prompt-engineering/9T9Q45EDTV
-- Build and Evaluate Retrieval Augmented Generation (RAG) Applications using Knowledge Bases for Amazon Bedrock (Lab) — https://skillbuilder.aws/learn/JRGWCFYT67/lab--build-and-evaluate-retrieval-augmented-generation-rag-applications-using-knowledge-bases-for-amazon-bedrock/A4MN58JB7A
-  - Hands-on lab for the RAG pipeline planned in Phase 3.
-- Introduction to Agentic AI on AWS — https://skillbuilder.aws/learn/DNBD5MT8ZD/introduction-to-agentic-ai-on-aws/WAKAFK6UFY
-  - Core learning for understanding agentic patterns before building fulfillment automation agents.
-- Creating an AWS DevOps AI Agent with the Strands Agents SDK (Lab) — https://skillbuilder.aws/learn/AH1GD8AJY3/lab--creating-an-aws-devops-ai-agent-with-the-strands-agents-sdk/A9SKJNMPJ2
-- AWS PartnerCast: Deep Dive: Building Observable AI Agents with Strands, Amazon Bedrock Agent Core & SageMaker MLflow — https://skillbuilder.aws/learn/1EN76TZBB6/aws-partnercast--deep-dive-building-observable-ai-agents-with-strands-amazon-bedrock-agent-core--sagemaker-mlflow--technical/CX2K6XAT84
-  - Advanced: covers observable agent patterns critical for production agent deployments.
+---
 
 ## Detailed Findings
 
 ### Infrastructure & Platform
 
 #### INF-Q1: Compute
-- **Score**: 3/4 🟡
-- **Finding**: The CloudFormation template (`infrastructure/monolith-apprunner.yaml`) deploys an `AWS::AppRunner::Service` resource — a fully managed compute platform similar to ECS Fargate. The `Dockerfile` defines a PHP 8.2 Apache container image. Locally, `docker-compose.yml` runs the application via raw Docker. An ECR repository (`AWS::ECR::Repository`) is provisioned for image storage with scan-on-push enabled. App Runner provides managed scaling, HTTPS, and health checks.
-- **Gap**: App Runner is managed compute but not the preferred EKS platform. Local development uses raw Docker Compose with no orchestration. No EKS cluster, no Kubernetes manifests, no ALB Ingress Controller.
-- **Recommendation**: Create EKS cluster IaC with ALB Ingress Controller. Migrate from App Runner to EKS for container orchestration per user preference. Keep ECR for image storage.
+- **Score**: 2/4 🟠
+- **Finding**: CloudFormation template `infrastructure/monolith-apprunner.yaml` defines an `AWS::AppRunner::Service` resource with VPC connector, ECR image source, and auto-scaling. Locally, `docker-compose.yml` runs the PHP application in a raw container. No ECS, EKS, or Fargate definitions exist. Customer preference is for ECS-based container orchestration.
+- **Gap**: App Runner is a managed compute service but lacks the fine-grained control of ECS/EKS for microservices orchestration, service mesh integration, and advanced deployment strategies needed for agentic workloads. No ECS task definitions, EKS manifests, or Fargate configurations exist.
+- **Recommendation**: Migrate from App Runner to Amazon ECS on Fargate. Create ECS task definitions for the monolith first, then use ECS service discovery and ALB target groups as the foundation for future microservices decomposition. Use ECR (already defined in CloudFormation) for image storage.
 
 #### INF-Q2: Databases
 - **Score**: 3/4 🟡
-- **Finding**: CloudFormation defines `AWS::RDS::DBInstance` (MySQL 8.4.8, `db.t3.micro`, gp3 storage, encrypted, private subnets, 7-day backup retention, auto minor version upgrade). RDS is a fully managed database service with automated backups and failover. However, `docker-compose.yml` runs a self-managed `mysql:8.0` container for local development with hardcoded credentials.
-- **Gap**: Dev/prod environment mismatch (MySQL 8.0 vs 8.4.8). Local development uses self-managed MySQL. No Multi-AZ deployment configured for high availability in production.
-- **Recommendation**: Align Docker Compose MySQL version with production. Consider enabling Multi-AZ for RDS in production. Evaluate Aurora MySQL for auto-scaling and better failover capabilities.
+- **Finding**: CloudFormation defines `AWS::RDS::DBInstance` (`${ServiceName}-db`) with managed MySQL 8.4.8, `StorageEncrypted: true`, `BackupRetentionPeriod: 7`, automatic minor version upgrades, and private subnet placement. Locally, `docker-compose.yml` runs a self-managed `mysql:8.0` container with plaintext credentials.
+- **Gap**: Production database is managed RDS (good), but it is a single-AZ `db.t3.micro` instance without Multi-AZ failover or read replicas. No Aurora for high availability. Agent workflows require high-availability backends for conversation state and tool execution.
+- **Recommendation**: Upgrade to Amazon Aurora MySQL for automatic failover and read replicas. Consider Amazon DynamoDB for agent session state and conversation history (aligns with customer preference for DynamoDB).
 
 #### INF-Q3: Workflow Orchestration
 - **Score**: 1/4 ❌
-- **Finding**: No Step Functions, Temporal, Camunda, or any workflow orchestration service found in IaC or code. The order fulfillment workflow (confirmed → validated → warehouse_assigned → picking → packed → quality_checked → shipped → delivered) is implemented as sequential manual API calls in `index.php` with hardcoded status transitions via the `update_order_status()` function.
-- **Gap**: No dedicated workflow orchestration. The 8-step fulfillment workflow is entirely manual and has no retry, compensation, or state management capabilities.
-- **Recommendation**: Implement AWS Step Functions to orchestrate the order fulfillment workflow. Define the state machine with retry logic, error handling, and human approval tasks. This is a natural candidate for agent-driven automation.
+- **Finding**: No Step Functions, Temporal, Camunda, or any workflow engine found in the codebase or IaC. All business logic in `index.php` is implemented as procedural PHP if/else chains. The order fulfillment workflow (validate → assign warehouse → pick → pack → QC → ship → deliver) is entirely manual, driven by admin UI button clicks.
+- **Gap**: No dedicated orchestration service exists. The 7-step fulfillment workflow is a prime candidate for Step Functions orchestration, especially for agent-driven automation.
+- **Recommendation**: Implement AWS Step Functions to orchestrate the order fulfillment workflow. This enables agents to trigger and monitor multi-step processes with built-in error handling, retries, and human approval tasks (`waitForTaskToken`).
 
 #### INF-Q4: Async Messaging
 - **Score**: 1/4 ❌
-- **Finding**: No SQS, SNS, EventBridge, MSK, or any messaging resources found in the CloudFormation template or application code. All inter-process communication is synchronous HTTP. The `index.php` file processes all requests synchronously — order creation, payment processing, inventory updates, and status changes all happen in a single blocking request/response cycle.
-- **Gap**: Zero async messaging capability. All operations are synchronous, creating tight coupling and fragility.
-- **Recommendation**: Introduce Amazon SQS for the order fulfillment workflow. Start by publishing order events (order-confirmed, order-validated) to SQS queues, then add consumers that process each fulfillment step asynchronously. Add dead-letter queues for error handling.
+- **Finding**: No SQS, SNS, EventBridge, MSK, or any messaging service found in IaC or application code. All operations in `index.php` are synchronous request-response. No event-driven patterns exist.
+- **Gap**: Complete absence of async messaging. Agent workflows require event-driven communication for order status updates, inventory changes, return processing notifications, and inter-service coordination.
+- **Recommendation**: Introduce Amazon EventBridge as the central event bus for domain events (OrderCreated, OrderShipped, ReturnRequested). Add Amazon SQS for reliable work queues (e.g., fulfillment tasks) and Amazon SNS for fan-out notifications (aligns with customer preferences for EventBridge, SQS, SNS).
 
 #### INF-Q5: Infrastructure as Code
 - **Score**: 3/4 🟡
-- **Finding**: `infrastructure/monolith-apprunner.yaml` is a comprehensive CloudFormation template covering: VPC (`AWS::EC2::VPC`), 2 private subnets, DB subnet group, security groups (DB and App Runner), RDS MySQL instance, VPC Connector, ECR Repository, 2 IAM roles, App Runner Service, Auto Scaling Configuration, WAF Web ACL, IP Set, and WAF Association. This covers compute, networking, database, security, and container registry.
-- **Gap**: No IaC for monitoring (CloudWatch alarms, dashboards), CI/CD pipeline (CodePipeline/CodeBuild), or DNS/Route53. The CloudFormation is for App Runner — EKS IaC does not exist yet. No Terraform or CDK usage.
-- **Recommendation**: Create EKS cluster IaC (Terraform or CloudFormation). Add CloudWatch alarms and dashboards to IaC. Add CodePipeline/CodeBuild definitions. Target 90%+ IaC coverage.
+- **Finding**: `infrastructure/monolith-apprunner.yaml` is a comprehensive CloudFormation template covering VPC, subnets, security groups, RDS, App Runner, ECR, WAF, IAM roles, and auto-scaling. Parameterized with `NoEcho` for sensitive values.
+- **Gap**: IaC covers infrastructure but not CI/CD pipelines, monitoring alarms, or logging configuration. No separate IaC for networking or shared services. The deployment process (`deploy.sh`) is a manual shell script not defined in IaC.
+- **Recommendation**: Extend IaC to include CI/CD pipeline (CodePipeline/CodeBuild), CloudWatch alarms, and structured logging configuration. Consider migrating to AWS CDK for type-safe infrastructure definitions that support the evolving microservices architecture.
 
 #### INF-Q6: CI/CD
 - **Score**: 1/4 ❌
-- **Finding**: The only deployment mechanism is `deploy.sh` — a 30-line shell script that runs `docker-compose build` and `docker-compose up -d` locally. It includes a basic health check (`curl -f http://localhost:8080/api/products`). No GitHub Actions workflows, no `buildspec.yml`, no Jenkinsfile, no CodePipeline definitions, no `.gitlab-ci.yml`. The CloudFormation Outputs include manual deployment instructions (build → tag → push to ECR → update stack).
-- **Gap**: No automated CI/CD pipeline. No automated testing, building, or deployment stages. Every deployment requires manual intervention.
-- **Recommendation**: Create AWS CodePipeline with CodeBuild stages: source → lint → test → build Docker image → push to ECR → deploy to EKS. Add automated rollback on failed health checks.
+- **Finding**: No GitHub Actions workflows, no `buildspec.yml`, no Jenkinsfile, no CodePipeline definitions. The only deployment mechanism is `deploy.sh`, a 30-line bash script that runs `docker-compose build` and `docker-compose up -d` with a manual health check.
+- **Gap**: Complete absence of automated CI/CD. No automated testing, building, or deployment pipeline exists. The CloudFormation output includes manual Docker build/tag/push instructions.
+- **Recommendation**: Implement a CI/CD pipeline using AWS CodePipeline + CodeBuild. Define stages for: lint/test → build Docker image → push to ECR → deploy to ECS. This is a prerequisite for safe agent deployment with rollback capabilities.
 
 #### INF-Q7: API Entry Point
 - **Score**: 2/4 🟠
-- **Finding**: App Runner provides a managed HTTPS endpoint (`AppRunnerServiceUrl` output). A WAF Web ACL (`AWS::WAFv2::WebACL`) with an IP Set is configured for IP whitelisting — default action is Block, with an Allow rule for specific IPs. WAF has CloudWatch metrics enabled (`CloudWatchMetricsEnabled: true`). However, there is no API Gateway, no ALB with throttling, no request validation, and no per-route auth configuration.
-- **Gap**: No API Gateway with throttling, auth, and request validation. WAF provides IP whitelisting only — no rate limiting, no request/response transformation, no API key management.
-- **Recommendation**: Deploy an ALB with the EKS migration. Configure ALB with health checks, path-based routing (for future microservices), and integrate with WAF rate-based rules. Consider adding API Gateway for agent-facing endpoints with throttling and request validation.
+- **Finding**: CloudFormation defines `AWS::WAFv2::WebACL` associated with the App Runner service for IP whitelisting. The WebACL blocks all traffic except from `AllowedIPAddress` parameter. No API Gateway, ALB, or CloudFront is configured.
+- **Gap**: No API Gateway with throttling, request validation, or structured auth. WAF provides IP filtering only, not rate limiting or request transformation. Agents need an API Gateway for tool invocation with proper throttling and authentication.
+- **Recommendation**: Deploy Amazon API Gateway (REST or HTTP API) in front of the application (aligns with customer preference for API Gateway). Configure throttling, request/response validation, API keys for agent access, and usage plans for rate limiting per agent client.
 
 #### INF-Q8: Real-time Streaming
 - **Score**: 1/4 ❌
-- **Finding**: No Kinesis Data Streams, no MSK, no Kafka SDK imports, no stream consumer patterns found in IaC or application code. All data access is synchronous database queries.
-- **Gap**: No real-time streaming capability. Cannot support event-driven data pipelines or real-time analytics for agent decision-making.
-- **Recommendation**: Introduce Amazon Kinesis Data Streams or MSK Serverless for order and fulfillment event streaming after async messaging (SQS) is established. Use for real-time analytics on fulfillment performance.
+- **Finding**: No Kinesis, MSK, or any streaming service found in IaC or application code. No event stream patterns in the codebase.
+- **Gap**: No real-time streaming capability. Agent workflows that need real-time order tracking, inventory updates, or customer interaction events have no streaming infrastructure.
+- **Recommendation**: Evaluate Amazon EventBridge Pipes or Amazon Kinesis Data Streams for real-time order status and inventory change events. Start with EventBridge events before adding dedicated streaming if volume warrants it.
 
 #### INF-Q9: Network Security
 - **Score**: 3/4 🟡
-- **Finding**: CloudFormation defines a VPC (`10.0.0.0/16`), 2 private subnets (`10.0.1.0/24`, `10.0.2.0/24`), a DB security group allowing MySQL (3306) only from the App Runner security group, and the RDS instance is set to `PubliclyAccessible: false`. The App Runner VPC Connector routes egress through the VPC. WAF provides IP whitelisting.
-- **Gap**: No public subnets defined (NAT Gateway pattern incomplete). No NACLs configured beyond VPC defaults. Security groups are appropriately restrictive but only cover two tiers (App Runner and DB). No VPC Flow Logs for network monitoring.
-- **Recommendation**: Add VPC Flow Logs for network monitoring. Configure NACLs for defense-in-depth. When migrating to EKS, ensure pod security policies and network policies are configured. Add a public subnet tier with NAT Gateway for outbound internet access.
+- **Finding**: CloudFormation defines `VPC` (10.0.0.0/16) with two private subnets (`PrivateSubnet1`, `PrivateSubnet2`). `DBSecurityGroup` allows MySQL 3306 only from `AppRunnerSecurityGroup` (least-privilege). RDS is `PubliclyAccessible: false`. App Runner uses `VPCConnector` for private VPC egress.
+- **Gap**: No public subnet tier defined (only private subnets). No NAT Gateway for outbound internet from private subnets. No NACLs explicitly defined. Security group rules are correctly scoped but network architecture is minimal.
+- **Recommendation**: Add NAT Gateway for private subnet outbound access. Define explicit NACLs for defense-in-depth. Add VPC Flow Logs for network monitoring. When migrating to ECS, ensure container tasks run in private subnets with ALB in public subnets.
 
 #### INF-Q10: Auto-scaling
 - **Score**: 3/4 🟡
-- **Finding**: CloudFormation defines `AWS::AppRunner::AutoScalingConfiguration` with configurable `MinSize` (default 1), `MaxSize` (default 3), and `MaxConcurrency` (100). Parameters allow adjustment of min/max via CloudFormation parameters.
-- **Gap**: Auto-scaling is limited to the single App Runner service. No auto-scaling for the database tier (RDS `db.t3.micro` is fixed). When migrating to EKS, Horizontal Pod Autoscaler (HPA) and Cluster Autoscaler will need to be configured.
-- **Recommendation**: When migrating to EKS, configure HPA based on CPU/memory and custom metrics. Set up Cluster Autoscaler or Karpenter for node scaling. Consider Aurora Auto-scaling for the database tier.
+- **Finding**: CloudFormation defines `AWS::AppRunner::AutoScalingConfiguration` with `MinSize: 1`, `MaxSize: 3`, `MaxConcurrency: 100`. Auto-scaling is configured for the App Runner compute tier.
+- **Gap**: Only one compute tier has auto-scaling. No database auto-scaling (RDS is fixed `db.t3.micro`). When migrating to ECS, ECS Service auto-scaling will need separate configuration. Max of 3 instances may be insufficient for agent-driven traffic spikes.
+- **Recommendation**: When migrating to ECS, configure Application Auto Scaling for ECS services with target tracking on CPU/request count. Consider RDS auto-scaling or Aurora Serverless v2 for database tier scaling. Increase max capacity to handle agent-generated request volume.
 
 ### Application Architecture
 
 #### APP-Q1: Programming Languages
 - **Score**: 2/4 🟠
-- **Finding**: The application is written entirely in PHP 8.2 (specified in `Dockerfile`: `FROM php:8.2-apache`). PHP extensions include `pdo` and `pdo_mysql`. The frontend is inline HTML/CSS/JavaScript within `index.php`. No `composer.json` dependency manifest exists — the application relies solely on PHP built-in extensions.
-- **Gap**: PHP has a limited agent framework ecosystem compared to Python or TypeScript. No Bedrock SDK, no LangChain, no Strands Agents SDK for PHP. The inline JavaScript frontend lacks a modern framework.
-- **Recommendation**: When extracting microservices, consider using Python or TypeScript for new services to leverage the richer agent SDK ecosystem (boto3 with Bedrock, LangChain, Strands Agents). Keep the PHP monolith running during the transition.
+- **Finding**: PHP 8.2 is the sole programming language, as indicated by `Dockerfile` (`FROM php:8.2-apache`) and the single `index.php` file. No Python, TypeScript, Java, or Go files exist.
+- **Gap**: PHP has a limited agent framework ecosystem compared to Python (Strands Agents, LangChain, LangGraph, CrewAI) or TypeScript (Vercel AI SDK). The PHP SDK for AWS exists but lacks dedicated agent tooling.
+- **Recommendation**: Introduce a Python or TypeScript agent service alongside the PHP monolith. The agent layer can call the PHP APIs as tools while the monolith is gradually decomposed. This avoids a full rewrite while enabling agent development in a language with mature AI frameworks.
 
 #### APP-Q2: API Documentation
 - **Score**: 1/4 ❌
-- **Finding**: No `openapi.yaml`, `swagger.json`, or any API specification file exists in the repository. API routes are defined inline in `index.php` using PHP regex pattern matching (e.g., `preg_match('#^/api/orders/([^/]+)/validate$#', $request_uri, $matches)`). There are approximately 20+ API endpoints covering products, orders, fulfillment workflow, returns, user management, and admin operations. No API documentation annotations, no auto-generation, no Swagger UI.
-- **Gap**: No machine-readable API specification. Agents cannot discover or invoke tools without OpenAPI specs. The current API surface is undocumented and only discoverable by reading source code.
-- **Recommendation**: Create an OpenAPI 3.0 specification documenting all `/api/*` endpoints. Include request/response schemas, authentication requirements, and error codes. This is the single most important prerequisite for agent tool integration.
+- **Finding**: No OpenAPI/Swagger specs, no `openapi.yaml`, no `swagger.json`, no API documentation files found anywhere in the repository. The 20+ API endpoints in `index.php` (e.g., `GET /api/products`, `POST /api/orders`, `GET /api/orders/{orderId}/validation-data`, `GET /api/warehouses/assignment-options`, `POST /api/orders/{orderId}/validate`, `GET /api/carriers/shipping-options`, etc.) are undocumented PHP route handlers using `preg_match` for URL routing.
+- **Gap**: Complete absence of machine-readable API documentation. This is the #1 blocker for agentic AI enablement — agents cannot discover, understand, or invoke tools without OpenAPI specs describing endpoints, parameters, request/response schemas, and authentication requirements.
+- **Recommendation**: Generate an OpenAPI 3.0 specification documenting all existing API endpoints. Start with the order management and customer-facing endpoints most relevant to the customer support agent use case. Use the spec to auto-generate agent tool definitions.
 
 #### APP-Q3: Async vs Sync Communication
 - **Score**: 1/4 ❌
-- **Finding**: 100% of communication is synchronous. All API endpoints in `index.php` process requests in a single blocking request/response cycle. Order creation (`POST /api/orders`) performs inventory check, order insert, item inserts, inventory update, payment insert, and status update all within a single database transaction (`$db->beginTransaction()` / `$db->commit()`). No message publishing, no event-driven patterns, no queue consumers, no async job processing.
-- **Gap**: All operations are synchronous, creating fragility and preventing resilient workflow execution. Long-running operations (return processing, order fulfillment) block the caller.
-- **Recommendation**: Introduce Amazon SQS for decoupling the order fulfillment workflow. Publish events on order state changes, consume them asynchronously. Use EventBridge for cross-domain event distribution as services are extracted.
+- **Finding**: 100% of operations in `index.php` are synchronous request-response. All database queries are inline synchronous PDO calls. Order creation involves synchronous inventory check → order insert → payment insert → status update in a single transaction. No message publishing, no event emission, no async patterns.
+- **Gap**: All inter-component communication is synchronous. No async patterns for long-running operations like return processing, fulfillment workflows, or notification dispatch. Agent workflows benefit from async communication for non-blocking tool execution.
+- **Recommendation**: Introduce EventBridge events for domain actions (OrderCreated, ReturnRequested, InventoryUpdated). Use SQS queues for fulfillment task processing. This enables agents to trigger workflows without waiting for synchronous completion.
 
 #### APP-Q4: Monolith vs Microservices
 - **Score**: 1/4 ❌
-- **Finding**: The entire application is a single `index.php` file containing all business domains: orders, inventory, payments, returns, user management, warehouse management, shipping, and quality control. It includes the full HTML/CSS/JS frontend (embedded inline). The shared MySQL database has 9 tables with foreign keys across domains (`order_items` → `orders`, `payments` → `orders`, `returns` → `orders`). There is one deployable unit (Dockerfile copies only `index.php` and `.htaccess`). There are no module boundaries, no namespace separation, no interfaces between domains. Functions like `get_db()`, `init_db()`, `seed_data()`, and `update_order_status()` are shared globally. All domains share mutable state through the same PDO connection.
-- **Gap**: Tightly-coupled monolith with no clear module boundaries, pervasive shared state via the database, cross-domain foreign keys, and inline frontend. This is the most severe architectural blocker for agentic readiness.
-- **Recommendation**: See Microservices Decomposition Strategy in the Readiness Roadmap section. Start with the Parallel Track (Option B) approach: containerize on EKS first, then extract Inventory Service using Strangler Fig pattern.
+- **Finding**: Single `index.php` file (~2000+ lines) contains all business domains: orders, inventory, payments, returns, interactions, warehousing, shipping, quality control, and user management. All 9 database tables share a single MySQL database with foreign keys across domains (`order_items.order_id → orders.id`, `payments.order_id → orders.id`, `returns.order_id → orders.id`). No module boundaries, no separate packages, no service directories. The `get_db()` function is called directly in every route handler.
+- **Gap**: Tightly-coupled monolith with pervasive shared state. All domains (orders, inventory, payments, returns, shipping, warehousing, QC, users, interactions) are in a single file with shared database access. Circular data dependencies exist via foreign keys. Cannot scale domains independently or assign agent tools to specific domain boundaries.
+- **Recommendation**: This monolith would benefit from service extraction to create clear agent tool boundaries. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing API surface.
 
 #### APP-Q5: API Response Format
-- **Score**: 3/4 🟡
-- **Finding**: All `/api/*` endpoints return structured JSON responses using `json_encode()`. The content type is set via `header('Content-Type: application/json')`. API responses include consistent structures like `{'products': [...]}`, `{'success': true, 'order_id': '...'}`, `{'error': '...'}` with appropriate HTTP status codes (200, 400, 401, 403, 404, 500). The non-API routes (login page, main application) return HTML.
-- **Gap**: API responses are JSON but there is no standardized error response format across all endpoints. HTML rendering is mixed into the same file. No JSON Schema validation on responses.
-- **Recommendation**: Standardize the error response format across all APIs (e.g., `{error: string, code: string, details: object}`). When extracting services, separate the frontend from the API layer entirely.
+- **Score**: 4/4 ✅
+- **Finding**: All API endpoints in `index.php` return structured JSON via `json_encode()`. The header `Content-Type: application/json` is set for all `/api/` routes. Response structures are consistent with nested objects (e.g., `{"order": {...}, "warehouses": [...]}`, `{"products": [...]}`, `{"success": true, "order_id": "..."}"`). No XML, no binary, no HTML in API responses.
+- **Gap**: None — API responses are fully structured JSON.
+- **Recommendation**: Maintain JSON response format. When generating OpenAPI specs, document the response schemas to enable automatic agent tool response parsing.
 
 #### APP-Q6: Workflow Logic
 - **Score**: 1/4 ❌
-- **Finding**: The order fulfillment workflow is hardcoded across multiple API endpoints in `index.php`. The status flow is: `confirmed` → `validated` → `warehouse_assigned` → `picking` → `packed` → `quality_checked` → `shipped` → `delivered`. Each transition is a separate POST endpoint (e.g., `/api/orders/{id}/validate`, `/api/orders/{id}/assign-warehouse`, `/api/orders/{id}/pick`). The `update_order_status()` helper function records history but has no state machine validation — any status can be set at any time. No Step Functions, no Temporal, no workflow engine.
-- **Gap**: No workflow orchestration. Status transitions are not validated (no guard conditions). No retry logic, no compensation on failure, no timeouts. A failed step leaves the order in an inconsistent state.
-- **Recommendation**: Implement AWS Step Functions for the fulfillment workflow. Define valid state transitions, retry policies, timeouts, and compensation actions. Add human approval tasks for quality check and return processing.
+- **Finding**: No workflow orchestration framework. Business logic is hardcoded procedural PHP. The order fulfillment workflow is implicit: validate → assign warehouse → pick → pack → QC → ship → deliver. Each step is a separate API endpoint (`/api/orders/{orderId}/validate`, `/api/orders/{orderId}/assign-warehouse`, etc.) called manually by admin UI. The `update_order_status()` function logs state transitions but does not enforce workflow ordering.
+- **Gap**: No workflow engine to enforce state transitions, handle errors, implement retries, or coordinate multi-step processes. The fulfillment workflow has no programmatic guard rails — any step can be called in any order.
+- **Recommendation**: Implement AWS Step Functions for the fulfillment workflow. Define state machine with: Validate → AssignWarehouse → Pick → Pack → QualityCheck → Ship → Deliver. Include error handling, retries, and human approval tasks. Agents can then trigger and monitor the workflow via Step Functions API.
 
 #### APP-Q7: Idempotency
 - **Score**: 1/4 ❌
-- **Finding**: No idempotency keys, no deduplication tokens, no upsert patterns found. Order IDs are generated with `uniqid('order-')`, payment IDs with `uniqid('pay-')`, return IDs with `uniqid('return-')` — all non-idempotent. A duplicate `POST /api/orders` request would create a duplicate order. No `Idempotency-Key` header handling. No deduplication on SQS (since SQS is not used).
-- **Gap**: No idempotency support on any write endpoint. Duplicate requests will create duplicate records. This is dangerous for agent workflows where retries are common.
-- **Recommendation**: Add idempotency key support to critical write endpoints (order creation, payment processing, return approval). Use a database-backed idempotency table or DynamoDB for idempotency token storage. Generate deterministic IDs instead of `uniqid()`.
+- **Finding**: No idempotency keys, no idempotency tokens, no deduplication patterns. Order IDs are generated with PHP `uniqid('order-')` which is time-based and not collision-resistant. No `Idempotency-Key` header checking. Payment processing has no deduplication — resubmitting the same order could create duplicate payments.
+- **Gap**: No idempotency support on any write endpoint. Agent tool calls may retry on failure, causing duplicate orders, payments, or return requests without idempotency guarantees.
+- **Recommendation**: Add idempotency key support to all write endpoints (`POST /api/orders`, `POST /api/returns`, `POST /api/orders/{orderId}/validate`). Use DynamoDB as an idempotency store to track request keys. This is critical for agent safety — agents retry failed tool calls.
 
 #### APP-Q8: Rate Limiting & Throttling
 - **Score**: 1/4 ❌
-- **Finding**: The WAF Web ACL in CloudFormation provides IP whitelisting only — no rate-based rules. No rate limiting middleware in the PHP application code (no `express-rate-limit` equivalent). No API Gateway usage plan or throttling configuration. No per-client or per-endpoint rate limiting.
-- **Gap**: No rate limiting at any layer. An agent (or any client) could overwhelm the application with requests. No protection against abuse or runaway agent loops.
-- **Recommendation**: Add WAF rate-based rules as an immediate fix. When migrating to EKS with ALB, configure rate limiting. For agent-facing endpoints, implement per-client throttling with API Gateway usage plans.
+- **Finding**: CloudFormation `WebACL` provides IP-based allow/block list only — no rate-based rules. No application-level rate limiting middleware in `index.php`. No `express-rate-limit` equivalent for PHP. No API Gateway throttling.
+- **Gap**: No rate limiting at any layer. Agent traffic can overwhelm the application. Agents executing tool calls in loops could exhaust database connections or cause cascading failures.
+- **Recommendation**: Deploy API Gateway with throttling (burst/rate limits) and usage plans per agent client. Add application-level rate limiting middleware. Configure WAF rate-based rules as a secondary defense.
 
 #### APP-Q9: Resilience Patterns
 - **Score**: 1/4 ❌
-- **Finding**: No circuit breakers, no retry logic, no timeout configurations, no exponential backoff found in the application code. Database calls use basic `try/catch` blocks with `PDOException` handling but no retry on transient failures. The `get_db()` function terminates the process on connection failure (`die("Database connection failed: ...")`). No Resilience4j, Hystrix, or any resilience library.
-- **Gap**: No resilience patterns. Database connection failure crashes the application. No graceful degradation, no fallback responses, no timeout on external calls.
-- **Recommendation**: Implement connection pooling and retry with exponential backoff for database connections. Add timeouts on all database queries. When extracting services, implement circuit breaker pattern for inter-service communication. Use Guzzle HTTP client with retry middleware for external API calls.
+- **Finding**: No circuit breakers, no retry logic, no timeout configurations in `index.php`. Database connections via `get_db()` use `new PDO()` with no connection timeout, retry, or pool management. If the database is unavailable, the application calls `die()` immediately. No graceful degradation.
+- **Gap**: Zero resilience patterns. Database failure causes immediate application crash. No retry with backoff, no circuit breaker, no timeout on external calls. Agent workflows that depend on this application will experience cascading failures.
+- **Recommendation**: Implement connection pooling with retry logic for database access. Add timeout configurations on all external calls. Implement health check endpoint that returns degraded status when dependencies are unhealthy. Consider PHP circuit breaker library or handle resilience at the ECS/ALB layer.
 
 #### APP-Q10: Long-running Processes
 - **Score**: 1/4 ❌
-- **Finding**: All operations are synchronous and blocking. Return processing (`POST /api/returns`), order creation with inventory checks and payment processing (`POST /api/orders`), and the multi-step fulfillment workflow all execute within a single HTTP request/response. The return submission response states: "A customer service representative will review your request within 24-48 hours" — indicating manual async processing that is not automated. No background job framework (no Celery, no Bull, no PHP workers).
-- **Gap**: No async processing for any operation. Long-running operations like return review, order fulfillment, and quality inspection are handled manually outside the application.
-- **Recommendation**: Implement SQS-based async job processing for return reviews, fulfillment automation, and quality checks. Use Step Functions for orchestrating multi-step async workflows. Return status polling APIs are already partially present.
+- **Finding**: All operations in `index.php` are synchronous inline processing. The return approval workflow (`/api/admin/approve-return`) performs inventory restoration + refund + status update in a single synchronous transaction. No background job framework (no Celery, no Bull, no SQS workers). No async/polling patterns.
+- **Gap**: No async processing for operations that could take significant time. The return approval transaction touches 4 tables atomically — at scale, this blocks the PHP process. Agent tool calls that trigger long-running operations will time out.
+- **Recommendation**: Move long-running operations to SQS-backed worker processes. Return approval should publish an event to EventBridge, trigger a Step Functions workflow, and return immediately with a status URL. Agents can poll for completion.
 
 #### APP-Q11: API Versioning
 - **Score**: 1/4 ❌
-- **Finding**: No URL path versioning (no `/v1/`, `/v2/` prefixes). No `Accept-Version` headers. No versioning annotations. All API routes use unversioned paths (e.g., `/api/products`, `/api/orders`, `/api/admin/users`). No changelog or API versioning documentation.
-- **Gap**: No API versioning strategy. Breaking changes to agent tool APIs would break all agents simultaneously with no backward compatibility.
-- **Recommendation**: Introduce URL path versioning (`/api/v1/products`) when creating the OpenAPI specification. Implement a versioning strategy that supports backward compatibility for agent tool definitions.
+- **Finding**: No URL path versioning (`/v1/`, `/v2/`), no `Accept-Version` headers, no versioning annotations in `index.php`. All endpoints are unversioned (e.g., `/api/products`, `/api/orders`). No changelog or API version documentation.
+- **Gap**: No versioning strategy. When agent tool definitions are built from these APIs, breaking changes to request/response schemas will silently break agent behavior with no backward compatibility guarantees.
+- **Recommendation**: Introduce URL path versioning (`/api/v1/products`) before agents are integrated. Define a versioning policy that guarantees backward compatibility within a major version. API Gateway can handle version routing.
 
 #### APP-Q12: Service Discovery & Mesh
 - **Score**: 1/4 ❌
-- **Finding**: Single monolith — no service-to-service communication exists. The database host is configured via environment variable (`$host = getenv('DB_HOST') ?: 'mysql'`) with a hardcoded fallback default. No AWS Service Discovery, no App Mesh, no Consul, no service registry. No API catalog.
-- **Gap**: No service discovery mechanism. When services are extracted, they will need a way to discover each other. The hardcoded database host fallback is a risk.
-- **Recommendation**: When migrating to EKS, use Kubernetes native service discovery (DNS-based). For cross-service communication, use ALB path-based routing initially. Evaluate AWS Cloud Map or App Mesh as the number of services grows.
+- **Finding**: Single monolith with no service discovery. Database host is hardcoded via environment variable (`DB_HOST` defaults to `'mysql'` in `index.php`). No AWS Service Discovery, no App Mesh, no Consul. No service catalog or API registry.
+- **Gap**: No service discovery mechanism. When decomposing into microservices, services will need to discover each other. Agent tool registries need a service catalog to know which services expose which tools.
+- **Recommendation**: When migrating to ECS, enable AWS Cloud Map (ECS Service Discovery) for automatic service registration. Implement an API catalog (e.g., API Gateway as service registry) for agent tool discovery.
 
 #### APP-Q13: AI/Agent Frameworks
 - **Score**: 1/4 ❌
-- **Finding**: No AI or agent framework imports, SDKs, or integrations found anywhere in the codebase. No `boto3` with Bedrock, no LangChain, no Strands Agents SDK, no OpenAI SDK, no MCP SDK. No `composer.json` with any AI-related dependencies. The application has rich decision-making endpoints (fraud detection in `/api/orders/{id}/validation-data`, warehouse assignment in `/api/warehouses/assignment-options`, shipping carrier selection in `/api/carriers/shipping-options`, quality checklist in `/api/orders/{id}/quality-checklist`) that are currently manual processes — prime candidates for agent automation.
-- **Gap**: No AI capabilities. However, the application has well-structured decision-making data endpoints that provide context for human decisions — these map directly to agent tool inputs.
-- **Recommendation**: The existing decision-data endpoints provide an excellent foundation for agent tools. When building the fulfillment agent in Phase 3, use these endpoints as tool inputs (via OpenAPI specs) for Amazon Bedrock agents. Consider Python or TypeScript for the agent orchestration layer.
+- **Finding**: No AI SDK imports, no Bedrock SDK, no Strands Agents, no LangChain, no OpenAI SDK, no Anthropic SDK, no MCP SDK in the codebase. No `requirements.txt`, `package.json`, or `composer.json` with AI dependencies. No AI-related code patterns in `index.php`.
+- **Gap**: Complete absence of AI/agent framework integration. No foundation for building customer support or order management agents. No tool definitions, no prompt templates, no agent orchestration.
+- **Recommendation**: Add a Python-based agent service using Strands Agents SDK or Amazon Bedrock AgentCore. Define tools that wrap the existing PHP API endpoints. Start with a customer support agent that can query order status (`/api/orders/me`), check product availability (`/api/products`), and submit return requests (`/api/returns`).
 
 ### Data Foundations
 
 #### DATA-Q1: Vector Database Presence
 - **Score**: 1/4 ❌
-- **Finding**: No vector database found. No OpenSearch with k-NN plugin, no Aurora pgvector extension, no S3 Vectors, no Bedrock Knowledge Bases, no Pinecone, no Weaviate, no Chroma imports in the codebase or IaC. The only database is MySQL (RDS in production, Docker Compose locally).
-- **Gap**: No vector storage or semantic search capability. Agents cannot perform similarity-based product searches, find related orders, or leverage semantic understanding of customer interactions.
-- **Recommendation**: Deploy Amazon OpenSearch Service with k-NN plugin for vector search. Alternatively, evaluate Aurora PostgreSQL with pgvector if consolidating on a single database engine is preferred. Use for product catalog semantic search and customer interaction similarity.
+- **Finding**: No vector database present anywhere in the codebase or IaC. No OpenSearch with k-NN, no Aurora pgvector, no S3 Vectors, no Bedrock Knowledge Bases, no Pinecone, no Weaviate, no Chroma imports or configurations.
+- **Gap**: No vector store for semantic search. A customer support agent needs semantic search over product catalogs, order histories, FAQs, and support knowledge bases to answer customer questions accurately.
+- **Recommendation**: Deploy Amazon Bedrock Knowledge Bases backed by Amazon OpenSearch Service for RAG. Ingest product descriptions, FAQ documents, and support policies. This enables the customer support agent to answer natural language questions with grounded, relevant responses.
 
 #### DATA-Q2: Vector DB Management
 - **Score**: 1/4 ❌
-- **Finding**: No vector database exists (see DATA-Q1), so there is no vector DB management to evaluate.
-- **Gap**: When a vector database is introduced, it must be a managed service to avoid operational overhead.
-- **Recommendation**: Use a fully managed vector database: Amazon OpenSearch Service (managed), Bedrock Knowledge Bases (serverless), or Aurora PostgreSQL with pgvector (managed). Avoid self-hosted solutions.
+- **Finding**: No vector database exists (see DATA-Q1), so management is not applicable. No self-hosted or managed vector store configurations found.
+- **Gap**: No vector DB to manage. When a vector store is introduced, it must be a managed service.
+- **Recommendation**: Use Amazon Bedrock Knowledge Bases (fully managed) or Amazon OpenSearch Service (managed) for vector storage. Avoid self-hosted vector databases to minimize operational overhead.
 
 #### DATA-Q3: RAG Implementation
 - **Score**: 1/4 ❌
-- **Finding**: No RAG pipeline components found. No embedding model calls, no document chunking/splitting code, no similarity search patterns, no Bedrock Knowledge Base integration. No references to embedding models (Titan, ada) or vector search APIs.
-- **Gap**: No RAG capability. The application has rich data (order history, customer interactions, product catalog) that could benefit from semantic retrieval for agent-assisted customer service and fulfillment optimization.
-- **Recommendation**: Implement RAG using Amazon Bedrock Knowledge Bases. Ingest product catalog, order history, and fulfillment data. Use Amazon Titan Embeddings for vector generation. Connect to OpenSearch as the vector store.
+- **Finding**: No embedding model calls, no document chunking/splitting code, no similarity search patterns, no Bedrock Knowledge Base integration. No RAG pipeline of any kind.
+- **Gap**: No RAG capability. Customer support agents need RAG to ground responses in actual product data, order details, and support policies rather than hallucinating answers.
+- **Recommendation**: Build a RAG pipeline using Amazon Bedrock Knowledge Bases. Chunk and embed product catalog data, support FAQs, and return policies from the existing MySQL data. Use Bedrock Titan Embeddings for vector generation and Claude/Nova for response generation.
 
 #### DATA-Q4: Data Source Sprawl
 - **Score**: 4/4 ✅
-- **Finding**: Single MySQL database with 9 tables: `orders`, `order_items`, `inventory`, `payments`, `returns`, `interactions`, `order_status_history`, `warehouses`, `users`. All data is accessed through a single PDO connection via the `get_db()` function. No external API calls, no additional data sources, no file storage, no cache layer.
-- **Gap**: None — single data source is optimal for agent simplicity. However, as services are extracted, data source sprawl will need to be managed with a unified data access layer.
-- **Recommendation**: Maintain data source discipline during microservices extraction. Implement a unified API layer (each service owns its data and exposes it via APIs) to prevent sprawl as the architecture evolves.
+- **Finding**: Single MySQL database (`ecommerce`) is the only data source. All 9 tables (orders, order_items, inventory, payments, returns, interactions, order_status_history, warehouses, users) are in one database accessed via a single `get_db()` connection function in `index.php`. `docker-compose.yml` defines one MySQL service; CloudFormation defines one RDS instance.
+- **Gap**: None — single data source with no sprawl. However, as the application is decomposed into microservices, data source sprawl may increase.
+- **Recommendation**: Maintain data simplicity. When decomposing the monolith, consider database-per-service pattern but implement a unified data access layer or API gateway to prevent agent tool sprawl.
 
 #### DATA-Q5: Data Access Pattern
 - **Score**: 1/4 ❌
-- **Finding**: All data access is via direct PDO database connections inline in API route handlers. Raw SQL queries are scattered throughout `index.php` — for example: `$stmt = $db->prepare('SELECT * FROM orders WHERE id = ?')`, `$stmt = $db->prepare('UPDATE inventory SET stock_quantity = stock_quantity - ? WHERE product_id = ?')`. No repository pattern, no Data Access Objects (DAOs), no ORM (no Eloquent, no Doctrine). The `get_db()` function returns a raw PDO connection used directly in every handler.
-- **Gap**: No data access layer. SQL is tightly coupled to route handlers, making it impossible for agents to access data through well-defined interfaces. Database schema changes would require modifying every handler.
-- **Recommendation**: As services are extracted, implement a repository pattern for each service's data access. Each microservice should own its data and expose it only through APIs — direct database access from other services must be prohibited.
+- **Finding**: Direct PDO database connections in every route handler. The `get_db()` function creates a new PDO connection per request. SQL queries are written inline throughout `index.php` — e.g., `$db->prepare('SELECT * FROM orders WHERE id = ?')` is repeated in nearly every endpoint. No repository pattern, no ORM, no data access layer abstraction.
+- **Gap**: No data access layer. Business logic and data access are tightly coupled in every route handler. Agents should not need to understand database schemas — they should interact via well-defined APIs with clean data contracts.
+- **Recommendation**: Extract a data access layer (DAO/Repository pattern) that encapsulates all SQL queries behind method calls. When decomposing to microservices, each service exposes its data through APIs. Agent tools should only call APIs, never access databases directly.
 
 #### DATA-Q6: Unstructured Data
 - **Score**: 1/4 ❌
-- **Finding**: No S3 storage, no document parsing libraries (Textract, Tika), no file upload handling. Product image URLs reference `/images/` paths (e.g., `/images/tshirt.jpg`, `/images/jeans.jpg`) but these are static relative URLs with no actual file storage or processing infrastructure.
-- **Gap**: No unstructured data handling. Cannot process customer-uploaded documents (return photos, damage claims) or product images for AI analysis.
-- **Recommendation**: Implement S3 for product image and document storage. Add Amazon Textract or Rekognition for document/image processing in the returns workflow (e.g., customer uploads damage photos for agent-assisted return processing).
+- **Finding**: No S3 storage, no Textract, no document parsing libraries. No file upload endpoints in `index.php`. Product images are referenced by URL (`image_url` column in inventory table) but no actual image storage or processing exists.
+- **Gap**: No unstructured data storage or parsing. Customer support scenarios may involve uploaded documents (receipts, photos of damaged items), and knowledge base content for RAG needs document storage and parsing.
+- **Recommendation**: Add S3 for document storage. Implement Amazon Textract for receipt/document parsing in return workflows. Store support knowledge base documents in S3 for ingestion into Bedrock Knowledge Bases.
 
 #### DATA-Q7: Schema Documentation
-- **Score**: 1/4 ❌
-- **Finding**: No JSON Schema files, no Avro/Protobuf schemas, no database migration framework (Flyway, Liquibase, Alembic, Phinx). The database schema is defined via `CREATE TABLE IF NOT EXISTS` statements in the `init_db()` function in `index.php`. Schema changes are handled with inline `ALTER TABLE` statements wrapped in try/catch blocks (e.g., adding `warehouse_location`, `weight_lbs`, `dimensions` columns to the inventory table). No schema versioning, no migration history.
-- **Gap**: No schema documentation or versioning. Schema changes are fragile (ALTER TABLE in try/catch). No way to track schema evolution or roll back schema changes.
-- **Recommendation**: Implement a database migration framework (Flyway for MySQL or Phinx for PHP). Extract schema definitions into versioned migration files. Document the schema with OpenAPI schema definitions in the API specification.
+- **Score**: 2/4 🟠
+- **Finding**: Database schema is defined via `CREATE TABLE` statements in the `init_db()` function in `index.php`. Tables have explicit column names, types, foreign keys, and indexes. However, there are no formal JSON Schema files, no Avro/Protobuf definitions, no database migration tool (no Flyway, Liquibase, or Alembic), and no separate schema documentation files.
+- **Gap**: Schema exists only embedded in PHP code. No versioned schema migrations, no formal documentation, no change history. Schema changes are applied via `ALTER TABLE` try/catch blocks (e.g., adding `warehouse_location`, `weight_lbs`, `dimensions` columns to inventory).
+- **Recommendation**: Extract schema definitions into versioned migration files (e.g., Flyway or Liquibase). Generate ERD documentation. When building agent tools, use the schema definitions to create data contracts and response models.
 
 #### DATA-Q8: Data Access Layer
 - **Score**: 1/4 ❌
-- **Finding**: No unified data access layer. The `get_db()` function provides a raw PDO connection. All SQL queries are scattered across ~20+ route handlers in `index.php`. For example, the order creation handler contains 5 different SQL operations (SELECT inventory, INSERT orders, INSERT order_items, UPDATE inventory, INSERT payments). There is no abstraction, no query builder, no centralized data contract.
-- **Gap**: No data access abstraction. Every route handler contains its own SQL, creating duplication and making schema changes risky. No single point of data contract for agents to interact with.
-- **Recommendation**: When extracting services, implement a repository pattern per service. Each service should have a dedicated data access layer that encapsulates all database operations behind a clean interface. Use an ORM (Eloquent for PHP, SQLAlchemy for Python, Prisma for TypeScript) to reduce raw SQL.
+- **Finding**: No unified data access layer. Database queries are scattered across 30+ route handlers in `index.php`. Each endpoint creates its own SQL queries inline. The same tables are queried differently in different endpoints (e.g., orders table is queried in `/api/orders`, `/api/orders/me`, `/api/admin/orders/pending-fulfillment`, `/api/orders/{orderId}/validation-data`, etc.).
+- **Gap**: No single point of data contract. Query logic is duplicated and inconsistent. When agents call different endpoints, they may get different representations of the same data.
+- **Recommendation**: Consolidate all data access into repository classes (OrderRepository, InventoryRepository, etc.). Define consistent data contracts (DTOs) that are returned from all endpoints. This is a prerequisite for clean microservice extraction.
 
 #### DATA-Q9: Embedding Freshness
 - **Score**: 1/4 ❌
-- **Finding**: No embeddings exist (see DATA-Q1, DATA-Q3). No event-driven embedding refresh triggers, no scheduled re-indexing pipelines, no CDC (Change Data Capture) patterns.
-- **Gap**: When embeddings are implemented, they must be kept fresh as the underlying data changes.
-- **Recommendation**: When implementing the RAG pipeline, set up event-driven embedding refresh. Use DynamoDB Streams or SQS events triggered on data changes (product catalog updates, new orders) to incrementally update embeddings in the vector store.
+- **Finding**: No embeddings exist, so no freshness pipeline exists. No event-driven embedding refresh triggers, no scheduled re-indexing, no CDC patterns.
+- **Gap**: No embedding infrastructure to keep fresh. When a vector store and RAG pipeline are introduced, embedding freshness will be critical — product catalog changes, new orders, and policy updates must be reflected in real-time.
+- **Recommendation**: When implementing RAG, use Amazon Bedrock Knowledge Base sync with scheduled or event-driven refresh. Trigger re-indexing when inventory or product data changes via EventBridge events.
 
 #### DATA-Q10: Database Engine Version & EOL
 - **Score**: 3/4 🟡
-- **Finding**: CloudFormation explicitly pins MySQL version: `EngineVersion: '8.4.8'` in `infrastructure/monolith-apprunner.yaml`. Docker Compose uses `mysql:8.0` in `docker-compose.yml`. MySQL 8.0 reached end-of-life in April 2026, but 8.4 is a current Innovation Release. Both versions are explicitly specified (not implicit latest). RDS has `AutoMinorVersionUpgrade: true` enabled.
-- **Gap**: Dev/prod version mismatch: Docker Compose uses MySQL 8.0 while RDS uses 8.4.8. This can cause behavioral differences in SQL execution. MySQL 8.0 is approaching EOL.
-- **Recommendation**: Update `docker-compose.yml` to use `mysql:8.4` to match production. Consider standardizing on MySQL 8.4 LTS or evaluating Aurora MySQL for enhanced managed capabilities.
+- **Finding**: CloudFormation specifies `EngineVersion: '8.4.8'` for RDS MySQL. MySQL 8.4 is a Long-Term Support (LTS) release with extended support through April 2032. `docker-compose.yml` specifies `mysql:8.0` image. Both versions are explicitly pinned and supported.
+- **Gap**: Development environment uses MySQL 8.0 while production CloudFormation targets 8.4.8 — version mismatch between environments. Neither version is at EOL, but the mismatch could cause compatibility issues.
+- **Recommendation**: Align docker-compose MySQL version with production (8.4). Consider Aurora MySQL for production for enhanced availability and managed scaling. Ensure agent development and testing environments match production database engine versions.
 
 #### DATA-Q11: Stored Procedures & Schema Complexity
 - **Score**: 4/4 ✅
-- **Finding**: No stored procedures, triggers, or functions found in any SQL statements in `index.php`. All `CREATE TABLE` statements use standard MySQL DDL without proprietary constructs. All business logic resides in the PHP application layer. No `.sql` files with `CREATE PROCEDURE`, `CREATE TRIGGER`, or `CREATE FUNCTION`. No ORM bypass patterns or raw proprietary SQL.
-- **Gap**: None — all business logic is in the application layer, which is the desired state for agentic readiness. This significantly simplifies database migration and service extraction.
-- **Recommendation**: Maintain this practice as services are extracted. Keep all business logic in the application/service layer. Avoid introducing stored procedures or database-level triggers.
+- **Finding**: No stored procedures, triggers, functions, or proprietary SQL constructs found in `index.php`. All `CREATE TABLE` statements use standard InnoDB SQL. All business logic is in the PHP application layer. No `CREATE PROCEDURE`, `CREATE TRIGGER`, or `CREATE FUNCTION` statements. SQL queries are standard ANSI SQL with MySQL-compatible syntax.
+- **Gap**: None — all business logic is in the application layer with no database-level logic coupling.
+- **Recommendation**: Maintain this pattern. Keeping business logic out of the database makes migration to different database engines (Aurora, DynamoDB) significantly easier and enables clean microservice extraction.
 
 ### Identity, Security & Governance
 
 #### SEC-Q1: Secret Management
 - **Score**: 1/4 ❌
-- **Finding**: Database credentials are hardcoded in multiple locations: `docker-compose.yml` contains `MYSQL_ROOT_PASSWORD: rootpassword`, `MYSQL_USER: ecommerce_user`, `MYSQL_PASSWORD: ecommerce_pass`. The `index.php` `get_db()` function has hardcoded fallback credentials: `$user = getenv('DB_USER') ?: 'ecommerce_user'` and `$pass = getenv('DB_PASS') ?: 'ecommerce_pass'`. CloudFormation uses Parameters with `NoEcho: true` for DB credentials but includes `Default` values (`DBUsername: ecommerce_user`, `DBPassword: ChangeMe123!`). No AWS Secrets Manager, no HashiCorp Vault, no parameter store references.
-- **Gap**: Credentials are hardcoded in source code and configuration files. Default passwords in CloudFormation parameters. No secret rotation capability.
-- **Recommendation**: Migrate all secrets to AWS Secrets Manager. Remove hardcoded fallbacks from `index.php`. Remove default values from CloudFormation DB credential parameters. Implement automatic secret rotation for database credentials.
+- **Finding**: Database credentials are hardcoded as defaults in `index.php`: `$user = getenv('DB_USER') ?: 'ecommerce_user'` and `$pass = getenv('DB_PASS') ?: 'ecommerce_pass'`. `docker-compose.yml` contains plaintext passwords: `MYSQL_ROOT_PASSWORD: rootpassword`, `MYSQL_PASSWORD: ecommerce_pass`. CloudFormation uses `NoEcho` parameters for `DBUsername` and `DBPassword` with a default value of `ChangeMe123!`. No AWS Secrets Manager, no Vault, no SSM Parameter Store integration.
+- **Gap**: Secrets are hardcoded in source code and docker-compose. CloudFormation uses parameter defaults for passwords. No secret rotation. Agent service credentials and API keys will need secure management.
+- **Recommendation**: Migrate all secrets to AWS Secrets Manager. Remove hardcoded defaults from `index.php`. Use Secrets Manager dynamic references in CloudFormation. Enable automatic secret rotation for RDS credentials.
 
 #### SEC-Q2: IAM Least Privilege
 - **Score**: 2/4 🟠
-- **Finding**: CloudFormation defines two IAM roles. `AppRunnerInstanceRole` uses the managed policy `arn:aws:iam::aws:policy/CloudWatchLogsFullAccess` — this grants wildcard access to all CloudWatch Logs actions and resources (`logs:*`), which is overly broad. `AppRunnerAccessRole` uses `AWSAppRunnerServicePolicyForECRAccess` — this is appropriately scoped for ECR image pulling. Both roles have specific `AssumeRolePolicyDocument` limiting the trust to App Runner service principals.
-- **Gap**: `CloudWatchLogsFullAccess` is a wildcard policy granting permissions far beyond what the application needs. No per-service IAM roles (monolith has one role for everything). No condition keys or resource restrictions on the instance role.
-- **Recommendation**: Replace `CloudWatchLogsFullAccess` with a custom policy granting only `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` on specific log group ARNs. When migrating to EKS, use IAM Roles for Service Accounts (IRSA) with per-pod least-privilege policies.
+- **Finding**: CloudFormation defines two IAM roles: `AppRunnerInstanceRole` (for the running application) and `AppRunnerAccessRole` (for ECR image pull). `AppRunnerAccessRole` uses the scoped policy `AWSAppRunnerServicePolicyForECRAccess`. However, `AppRunnerInstanceRole` uses `arn:aws:iam::aws:policy/CloudWatchLogsFullAccess` which grants wildcard access to all CloudWatch Logs operations across all resources.
+- **Gap**: `CloudWatchLogsFullAccess` is overly permissive — it includes `logs:*` on `Resource: *`. Per-service roles exist (good) but need tighter policies. No IAM policies for database access, Bedrock access, or agent service roles.
+- **Recommendation**: Replace `CloudWatchLogsFullAccess` with a custom policy scoped to specific log groups. When adding agent services, create dedicated IAM roles with least-privilege policies for Bedrock, DynamoDB, and S3 access.
 
 #### SEC-Q3: Identity Propagation
 - **Score**: 1/4 ❌
-- **Finding**: Authentication is PHP session-based. `session_start()` initializes the session; `$_SESSION['user']` stores the authenticated user object after login. API endpoints check `isset($_SESSION['user'])` and return 401 if not set. Admin endpoints additionally check `$_SESSION['user']['role'] !== 'admin'` for 403. Password is removed from the session (`unset($user['password'])`). No JWT tokens, no OAuth2 flows, no token exchange, no Cognito integration.
-- **Gap**: Session-based auth does not propagate across services. When services are extracted, there is no user identity token to pass between them. Sessions are server-local and not portable across EKS pods without sticky sessions or session stores.
-- **Recommendation**: Implement JWT-based authentication. Use Amazon Cognito as the identity provider. Issue JWT tokens on login, validate them in each service. Implement token exchange for service-to-service authentication. Store sessions in ElastiCache Redis for the transition period.
+- **Finding**: Authentication in `index.php` uses PHP sessions (`session_start()`, `$_SESSION['user']`). Login validates against the `users` table with `password_verify()`. API endpoints check `isset($_SESSION['user'])` for auth. No JWT, no OAuth2, no token exchange, no Cognito. Session cookies are not configured with secure flags.
+- **Gap**: Session-based auth does not propagate identity across services. When agents call APIs on behalf of users, they need JWT/OAuth2 tokens that carry user identity and permissions. PHP sessions cannot be shared across microservices.
+- **Recommendation**: Implement Amazon Cognito for centralized identity with JWT token issuance. Replace session-based auth with JWT bearer tokens. Agent services can obtain tokens via OAuth2 client credentials flow with user context propagation.
 
 #### SEC-Q4: Audit Logging
 - **Score**: 1/4 ❌
-- **Finding**: No CloudTrail configuration in the CloudFormation template. No application-level audit logging beyond the `order_status_history` table, which records order status changes with `changed_by`, `notes`, and `created_at` fields. No immutable log storage, no CloudWatch log retention policies defined in IaC. No logging of authentication events, API access, or data modifications outside of order status changes.
-- **Gap**: No comprehensive audit trail. No CloudTrail for AWS API activity. No application audit log for security-relevant events (login attempts, permission changes, data access).
-- **Recommendation**: Enable CloudTrail with log file validation and S3 object lock for immutable storage. Implement application-level audit logging for authentication events, admin actions, and data modifications. Set CloudWatch log retention policies.
+- **Finding**: No CloudTrail configuration in IaC. No audit log storage (no S3 bucket with object lock). WAF has `CloudWatchMetricsEnabled: true` and `SampledRequestsEnabled: true` but no log delivery. The `order_status_history` table in `index.php` tracks order state changes with `changed_by` field — this is application-level audit logging but not infrastructure-level.
+- **Gap**: No CloudTrail for API-level audit. No immutable log storage. When agents perform actions (approving returns, modifying orders), there must be an immutable audit trail of what the agent did and why.
+- **Recommendation**: Enable CloudTrail with log file validation and S3 bucket with object lock for immutable storage. Add CloudWatch Logs for application audit events. Implement agent action logging that captures: which agent, what action, on behalf of which user, with what reasoning.
 
 #### SEC-Q5: API Rate Limits
 - **Score**: 1/4 ❌
-- **Finding**: The WAF Web ACL in CloudFormation is configured for IP whitelisting only (`IPSetReferenceStatement` with Allow action). The default action is `Block`. No rate-based rules are defined in the WAF configuration. No API Gateway throttle settings. No application-level rate limiting middleware.
-- **Gap**: No rate limiting enforcement. Agent requests are not throttled. No per-client quotas. A runaway agent could overwhelm the application.
-- **Recommendation**: Add WAF rate-based rules (e.g., 1000 requests per 5 minutes per IP). When adding API Gateway for agent endpoints, configure per-client usage plans with burst and rate limits. Implement application-level rate limiting for critical endpoints.
+- **Finding**: WAF `WebACL` blocks all traffic except from the allowed IP address — this is IP whitelisting, not rate limiting. No `AWS::WAFv2::RateBasedStatement` rules. No application-level rate limiting in `index.php`. No API Gateway throttle settings.
+- **Gap**: No rate limiting at any layer. Agent traffic is typically bursty (multiple tool calls per agent turn). Without rate limits, a malfunctioning agent could overwhelm the application.
+- **Recommendation**: Add WAF rate-based rules (e.g., 1000 requests/5 minutes per IP). Deploy API Gateway with per-client usage plans and throttling. Configure agent-specific API keys with rate limits appropriate for expected agent traffic patterns.
 
 #### SEC-Q6: PII Redaction
 - **Score**: 1/4 ❌
-- **Finding**: No PII redaction in logs or error messages. Customer emails (`customer_email`), names (`customer_name`), and addresses (`shipping_address`) are returned in API responses without masking. The password is removed from the session object (`unset($user['password'])`), but no other PII scrubbing exists. No log filtering, no Macie integration, no PII regex patterns in logging utilities. Error messages include raw database error details (`$e->getMessage()`) which could leak schema information.
-- **Gap**: PII is exposed in API responses and could appear in logs. Error messages leak database internals. No automated PII detection or redaction.
-- **Recommendation**: Implement PII masking in API responses (e.g., mask email to `j***@example.com`). Add log scrubbing middleware to redact PII before logging. Sanitize error messages to hide database internals. Consider Amazon Macie for S3 data classification when unstructured data is added.
+- **Finding**: No PII redaction in logging. Customer names, emails, and addresses are included in JSON API responses without masking (e.g., `"customer_email": "john.doe@example.com"` in order data). PHP logging uses `error_log()` with no scrubbing. No Macie configuration. Seed data in `index.php` contains example PII (`John Doe`, `john.doe@example.com`).
+- **Gap**: PII is exposed in API responses and logs. Agent interactions will process PII (customer names, emails, addresses, order details). Without redaction, agent logs and traces will contain unprotected PII.
+- **Recommendation**: Implement PII masking middleware for log output. Add response-level PII filtering for agent-facing APIs. Enable Amazon Macie on S3 buckets. Define PII handling policies for agent conversation logs.
 
 #### SEC-Q7: Human Approval Workflows
-- **Score**: 2/4 🟠
-- **Finding**: Manual admin approval exists for returns via the `POST /api/admin/approve-return` endpoint — an admin must review pending returns and manually approve them, triggering refund processing and inventory restoration. The order fulfillment workflow also requires manual admin action at each step (validate, assign warehouse, pick, pack, quality check, ship). However, these are not formal human-in-the-loop workflows — they are simple API endpoints that any admin can call without structured approval processes, audit trails, or escalation paths.
-- **Gap**: Manual approval exists but is not a structured workflow. No Step Functions with `waitForTaskToken` patterns. No approval queues, no SLA tracking on approvals, no escalation for delayed reviews.
-- **Recommendation**: Implement Step Functions with human approval tasks (`waitForTaskToken`) for high-risk actions: return approvals over a threshold amount, bulk inventory changes, and user role changes. Add SLA tracking and escalation for delayed approvals.
+- **Score**: 1/4 ❌
+- **Finding**: Return approval is a manual admin process via the `/api/admin/approve-return` endpoint called from the admin UI. There is no formal human-in-the-loop (HITL) pattern — no Step Functions with `waitForTaskToken`, no approval Lambda, no approval queue. The admin UI button directly calls the approve endpoint.
+- **Gap**: No formal approval workflow infrastructure. When AI agents process returns, refunds, or high-value order modifications, there must be a programmatic HITL gate. The current manual admin click is not an agent-compatible approval pattern.
+- **Recommendation**: Implement Step Functions with `waitForTaskToken` for high-risk agent actions: return approvals over a threshold, refunds, order cancellations, and bulk inventory changes. Create an approval UI that completes the Step Functions task token. This is critical for safe agentic AI deployment.
 
 #### SEC-Q8: Encryption at Rest
 - **Score**: 2/4 🟠
-- **Finding**: RDS has `StorageEncrypted: true` in CloudFormation, using the default AWS-managed encryption key. ECR repository uses `EncryptionType: AES256` (AWS-managed). No customer-managed KMS keys (`aws_kms_key` resources) are defined. No encryption configuration on other data stores (there are no S3 buckets, DynamoDB tables, or EBS volumes in the current architecture).
-- **Gap**: Encryption uses AWS-managed keys only, not customer-managed KMS keys. No key rotation policy. No encryption policy for data in transit within the VPC.
-- **Recommendation**: Create customer-managed KMS keys for RDS and ECR encryption. Enable KMS key rotation. When adding S3 and other data stores, enforce encryption with customer-managed keys via AWS Config rules.
+- **Finding**: RDS instance has `StorageEncrypted: true` using AWS-managed encryption key (no explicit `KmsKeyId` specified). ECR repository uses `EncryptionType: AES256` (AWS-managed). No customer-managed KMS keys defined in CloudFormation.
+- **Gap**: Encryption uses AWS-managed keys, not customer-managed KMS keys. No encryption configuration for CloudWatch Logs or future S3 buckets. Agent conversation data (which may contain sensitive customer information) needs customer-managed encryption.
+- **Recommendation**: Create customer-managed KMS keys for RDS, ECR, CloudWatch Logs, S3, and DynamoDB. Apply KMS encryption to all data stores that will handle agent conversation data and customer PII.
 
 #### SEC-Q9: API Authentication
 - **Score**: 2/4 🟠
-- **Finding**: All `/api/*` endpoints check for session authentication: `if (!isset($_SESSION['user'])) { http_response_code(401); ... }`. Admin endpoints additionally check role: `if ($_SESSION['user']['role'] !== 'admin') { http_response_code(403); ... }`. Login uses username/password with `password_verify()` against bcrypt-hashed passwords. However, there is no OAuth2, no JWT, no API Gateway authorizers, no API key authentication, no CORS configuration.
-- **Gap**: Session-based auth only. No token-based authentication suitable for agent-to-API communication. No API keys for programmatic access. No CORS headers for cross-origin requests.
-- **Recommendation**: Implement JWT-based authentication via Amazon Cognito. Add API key authentication for agent/programmatic access. Configure CORS headers. When adding API Gateway, use Cognito authorizers for all endpoints.
+- **Finding**: API endpoints in `index.php` check `isset($_SESSION['user'])` for authentication, returning 401 if not authenticated. Admin endpoints check `$_SESSION['user']['role'] !== 'admin'` for authorization, returning 403 if not admin. Login uses `password_verify()` with bcrypt hashes. However, this is PHP session-based — not OAuth2/JWT.
+- **Gap**: Session-based auth is not suitable for agent API access. Agents need token-based authentication (JWT/OAuth2) with scoped permissions. Current auth provides no granular permissions beyond "customer" and "admin" roles.
+- **Recommendation**: Implement Amazon Cognito with OAuth2/JWT for API authentication. Define scoped permissions for agent access (e.g., `orders:read`, `returns:write`, `inventory:read`). Use API Gateway authorizers for token validation.
 
 #### SEC-Q10: Centralized Identity
 - **Score**: 1/4 ❌
-- **Finding**: No centralized identity provider. Authentication is handled by a custom `users` table in MySQL with bcrypt-hashed passwords. Login is via `POST /login` with form-based username/password submission. No Amazon Cognito, no OIDC/SAML configuration, no Okta/Ping integration, no SSO, no MFA. User management is via admin CRUD endpoints (`/api/admin/users`).
-- **Gap**: No centralized identity provider. Custom auth implementation is a security risk and does not support federation, SSO, or MFA. Cannot integrate with enterprise identity systems.
-- **Recommendation**: Implement Amazon Cognito as the centralized identity provider. Migrate existing users to Cognito User Pool. Enable MFA. Configure OIDC federation for enterprise SSO. Use Cognito tokens for API authentication across all services.
+- **Finding**: Custom `users` table in MySQL with bcrypt password hashes. No Amazon Cognito, no Okta, no OIDC/SAML configuration, no SSO. User management is built into the monolith with CRUD endpoints (`/api/admin/users`).
+- **Gap**: No centralized identity provider. Each microservice will need its own auth logic without a centralized IdP. Agent services need a trusted identity source for user context and permissions.
+- **Recommendation**: Deploy Amazon Cognito User Pool as the centralized identity provider. Migrate existing users from MySQL to Cognito. Enable SSO for admin users. Use Cognito groups for role-based access control (customer, admin, agent).
 
 ### Operations & Observability
 
 #### OPS-Q1: Distributed Tracing
 - **Score**: 1/4 ❌
-- **Finding**: No X-Ray SDK, no OpenTelemetry SDK, no trace context propagation headers (`traceparent`, `X-Amzn-Trace-Id`). No tracing instrumentation in the PHP code. No tracing-related dependencies in the application (no `composer.json` with tracing packages). No Datadog, Jaeger, or Zipkin SDK. No service map or dependency graph generation.
-- **Gap**: Zero distributed tracing capability. Cannot trace requests across the monolith or future services. Cannot reconstruct agent execution paths.
-- **Recommendation**: Deploy OpenTelemetry Collector as a sidecar/DaemonSet in EKS. Instrument the PHP application with the OpenTelemetry PHP SDK. Configure trace context propagation for all HTTP calls. Enable AWS X-Ray as the tracing backend.
+- **Finding**: No X-Ray SDK, no OpenTelemetry imports, no trace context propagation in `index.php`. No `traceparent` or `X-Amzn-Trace-Id` header handling. No tracing SDK in any dependency manifest (no `composer.json` exists). No Datadog, Jaeger, or Zipkin instrumentation.
+- **Gap**: Zero distributed tracing capability. Agent workflows span multiple components (LLM → agent → API → database). Without tracing, it is impossible to debug agent failures, understand tool call latency, or track the complete execution path of an agent interaction.
+- **Recommendation**: Implement AWS X-Ray or OpenTelemetry for distributed tracing. Instrument the PHP application with X-Ray SDK. When adding the agent service (Python), use OpenTelemetry with `gen_ai.*` semantic conventions for LLM spans. Propagate trace IDs across all service boundaries.
 
 #### OPS-Q2: Structured Logging
 - **Score**: 1/4 ❌
-- **Finding**: PHP error logging is configured with `error_reporting(E_ALL)`, `ini_set('display_errors', '0')`, and `ini_set('log_errors', '1')` in `index.php`. This outputs unstructured plain-text error logs. No JSON log formatter (no Monolog, no structlog equivalent). No correlation IDs in log output. No request ID tracking. No CloudWatch Logs Insights queries.
-- **Gap**: Unstructured plain-text logs with no correlation IDs. Cannot correlate logs across requests or trace agent actions. Cannot query logs effectively.
-- **Recommendation**: Implement Monolog with JSON formatter for structured logging. Add request correlation ID middleware that generates a UUID per request and includes it in all log entries. Configure CloudWatch Logs agent for log aggregation from EKS pods.
+- **Finding**: Logging in `index.php` uses `ini_set('log_errors', '1')` and `ini_set('display_errors', '0')`. Error handling uses `die("Database connection failed: " . $e->getMessage())`. No JSON log formatter, no structured logging library, no correlation IDs, no request IDs.
+- **Gap**: No structured logging. Agent interactions need JSON logs with correlation IDs to trace a complete conversation: user request → agent reasoning → tool call → API response → agent response. Unstructured `error_log()` output cannot be searched or correlated.
+- **Recommendation**: Implement structured JSON logging with a PHP logging library (Monolog with JSON formatter). Add correlation ID middleware that generates and propagates request IDs. Ship logs to CloudWatch Logs with Insights queries for agent interaction analysis.
 
 #### OPS-Q3: Automated Evals
 - **Score**: 1/4 ❌
-- **Finding**: No evaluation framework, no golden datasets, no scoring scripts, no LLM-as-judge patterns, no test assertions for LLM outputs. No AI/ML testing infrastructure of any kind.
-- **Gap**: No agent evaluation capability. When agents are deployed, there is no way to measure their quality, detect regressions, or compare prompt versions.
-- **Recommendation**: Create golden datasets for fulfillment decisions: manually curated examples of correct order validation, warehouse assignment, and shipping carrier selection. Build automated eval pipeline using Python with RAGAS or custom scoring. Integrate into CI/CD pipeline.
+- **Finding**: No evaluation framework, no golden datasets, no LLM-as-judge patterns, no scoring scripts. No test files of any kind exist in the repository. No agent evaluation infrastructure.
+- **Gap**: No automated evaluation capability. Before deploying customer support and order management agents, there must be a way to measure: response accuracy, tool selection correctness, hallucination rate, and task completion rate.
+- **Recommendation**: Create a golden dataset of 50+ customer support scenarios (order status queries, return requests, product questions). Implement an eval pipeline using Amazon Bedrock as evaluator (LLM-as-judge). Score agent responses on accuracy, helpfulness, and safety. Run evals in CI pipeline before deploying agent updates.
 
 #### OPS-Q4: SLOs
 - **Score**: 1/4 ❌
-- **Finding**: No SLO definitions in code or configuration. No CloudWatch alarms in the CloudFormation template (no `AWS::CloudWatch::Alarm` resources). No error budget tracking. The only health monitoring is the App Runner `HealthCheckConfiguration` (HTTP check on `/`, interval 10s, timeout 5s). No p99/p95 latency monitoring.
-- **Gap**: No SLOs for any user journey. No alerting on degraded performance. Cannot define or monitor agent-level SLOs (task success rate, latency).
-- **Recommendation**: Define SLOs for critical user journeys: order creation (<500ms p99), product listing (<200ms p99), fulfillment step completion (<2s p99). Create CloudWatch alarms for these SLOs. Track error budgets. Extend to agent SLOs in Phase 3.
+- **Finding**: No SLO definitions in any configuration file. App Runner health check is configured (HTTP path `/`, interval 10s, timeout 5s) but no p99/p95 latency targets, no availability targets, no error budget tracking. No CloudWatch alarms on application metrics.
+- **Gap**: No SLOs defined. Agent-powered customer support needs SLOs for: response time (how fast the agent responds), task success rate, and availability. Without SLOs, there is no measurable quality bar.
+- **Recommendation**: Define SLOs for critical customer journeys: API p99 latency < 500ms, availability > 99.9%, agent response time < 5 seconds, agent task success rate > 95%. Create CloudWatch dashboards and alarms for SLO tracking.
 
 #### OPS-Q5: Rollback Capability
 - **Score**: 1/4 ❌
-- **Finding**: No blue/green deployment, no canary deployment, no feature flags, no rollback configuration. `deploy.sh` is a forward-only deployment script (`docker-compose build && docker-compose up -d`). No CodeDeploy rollback triggers. No Helm rollback. No `RollbackConfiguration` in CloudFormation. No prompt versioning (no prompts exist yet).
-- **Gap**: No automated rollback. A bad deployment requires manual intervention. No ability to quickly revert agent behavior changes.
-- **Recommendation**: When migrating to EKS, implement canary deployments using Argo Rollouts or Flagger. Configure automated rollback on health check failure. Add feature flags (AWS AppConfig) for gradual rollout of agent capabilities and prompt changes.
+- **Finding**: `deploy.sh` runs `docker-compose up -d` with no rollback mechanism. No blue/green deployment, no canary deployment, no feature flags. CloudFormation supports rollback on stack update failure, but the application deployment itself has no staged rollout. No prompt versioning or configuration rollback.
+- **Gap**: No rollback capability for code, configuration, or prompts. A bad agent deployment (wrong prompt, broken tool definition) cannot be quickly reverted. Direct-to-production deployment with no safety net.
+- **Recommendation**: Implement blue/green deployment on ECS with CodeDeploy. Add feature flags for agent rollout (enable agent for 10% of traffic, then expand). Version all prompts and agent configurations in source control with rollback capability.
 
 #### OPS-Q6: LLM Cost Tracking
 - **Score**: 1/4 ❌
-- **Finding**: No LLM usage in the application. No token counting, no cost attribution, no usage metrics. No CloudWatch custom metrics for any AI/ML usage.
-- **Gap**: When LLMs are integrated, there is no infrastructure for tracking token usage, costs, or attribution.
-- **Recommendation**: When integrating Bedrock agents in Phase 3, implement per-request token usage tracking. Log the `usage` object from LLM responses. Publish CloudWatch custom metrics for token counts with dimensions for user, workflow, and model. Set up cost alerting thresholds. Implement tiered retention policies for agent telemetry data.
+- **Finding**: No LLM usage in the application, so no token tracking or cost attribution exists. No CloudWatch custom metrics for AI-related costs. No usage tracking infrastructure.
+- **Gap**: When agents are introduced, LLM token usage must be tracked per request with user/feature attribution. Customer support agents can generate significant token costs, especially with RAG (embedding generation + retrieval + response generation).
+- **Recommendation**: Implement token usage tracking from LLM responses (Bedrock provides usage metadata in API responses). Publish custom CloudWatch metrics for tokens per request, cost per conversation, and cost per user. Define observability data retention policies for agent telemetry.
 
 #### OPS-Q7: Business Metrics
 - **Score**: 1/4 ❌
-- **Finding**: No custom CloudWatch metrics, no business outcome tracking. No `cloudwatch.put_metric_data` calls. No dashboards tracking business KPIs (order volume, fulfillment time, return rate, revenue). The application only tracks order status history in the `order_status_history` database table — not as operational metrics.
-- **Gap**: No business metrics published. Cannot measure fulfillment efficiency, customer satisfaction, or agent impact on business outcomes.
-- **Recommendation**: Publish CloudWatch custom metrics for: orders per hour, average fulfillment time, return rate, revenue per day. Create operational dashboards. When agents are deployed, track agent-driven vs manual fulfillment rates and decision accuracy.
+- **Finding**: No custom CloudWatch metrics. No business outcome tracking. The `order_status_history` table captures order state transitions, but no metrics are published for order volume, fulfillment time, return rate, or customer satisfaction.
+- **Gap**: No business metrics. Agent effectiveness must be measured by business outcomes: customer issue resolution rate, average handle time reduction, return processing time, and customer satisfaction scores.
+- **Recommendation**: Publish custom CloudWatch metrics for: orders per hour, average fulfillment time, return approval time, and customer interaction sentiment. When agents are deployed, add metrics for: agent resolution rate, agent escalation rate, and agent-assisted vs manual resolution comparison.
 
 #### OPS-Q8: Anomaly Detection
 - **Score**: 1/4 ❌
-- **Finding**: No CloudWatch anomaly detection. No error rate alarms. No latency monitoring. No PagerDuty/OpsGenie integration. No composite alarms. WAF has `CloudWatchMetricsEnabled: true` but no alarms configured on WAF metrics.
-- **Gap**: No anomaly detection. Cannot detect when error rates spike, latency degrades, or agent behavior deviates from baselines. Agentic systems can cause harm at machine speed without detection.
-- **Recommendation**: Enable CloudWatch anomaly detection on key metrics (error rate, latency, request count). Create composite alarms. Set up PagerDuty/OpsGenie integration for on-call alerting. When agents are deployed, add behavioral anomaly detection (tool call frequency, response time variance).
+- **Finding**: No CloudWatch anomaly detection, no error rate alarms, no latency alarms. No PagerDuty/OpsGenie integration. No composite alarms. WAF metrics are enabled but no alarms are configured on them.
+- **Gap**: No anomaly detection. Agents can silently degrade — responding slower, making more tool errors, or increasing hallucination rate. Without anomaly detection, these issues go unnoticed until customers complain.
+- **Recommendation**: Enable CloudWatch anomaly detection on API error rates and response latency. Create composite alarms for critical paths (order creation, return processing). When agents are deployed, add anomaly detection on: tool call error rate, agent response time, and token usage per conversation.
 
 #### OPS-Q9: Deployment Strategy
 - **Score**: 1/4 ❌
-- **Finding**: Deployment is manual via `deploy.sh` which runs `docker-compose build` and `docker-compose up -d`. This is a direct-to-production deployment with no staged rollout. No CodeDeploy, no Helm canary, no Argo Rollouts, no Lambda traffic shifting, no ALB weighted target groups, no feature flags.
-- **Gap**: Direct-to-production deployments with no safety net. Any deployment failure affects all users immediately.
-- **Recommendation**: Implement canary deployment strategy on EKS using Argo Rollouts or Flagger. Route 5% of traffic to the new version, monitor error rates and latency, automatically roll back if metrics degrade. Use feature flags (AWS AppConfig) for gradual feature enablement.
+- **Finding**: `deploy.sh` executes `docker-compose up -d` which is a direct-to-production deployment with no staged rollout. App Runner supports auto-deployment from ECR but no canary or blue/green configuration exists in CloudFormation. No traffic shifting, no weighted target groups.
+- **Gap**: Direct-to-production deployment with no safety net. Agent updates (new prompts, tool changes, model upgrades) are high-risk — a bad deployment can cause the agent to give wrong answers to all customers simultaneously.
+- **Recommendation**: Implement canary deployment on ECS using CodeDeploy with automatic rollback on error rate increase. Deploy agent updates to 10% of traffic first, validate with automated evals, then expand to 100%.
 
 #### OPS-Q10: Integration Testing
 - **Score**: 1/4 ❌
-- **Finding**: No test files, no test directories, no PHPUnit configuration, no `composer.json` with test dependencies, no `phpunit.xml`. No integration test suites, no API tests (Postman/Newman), no contract tests, no end-to-end test pipelines. The only validation is the health check in `deploy.sh` (`curl -f http://localhost:8080/api/products`).
-- **Gap**: Zero test coverage. No way to validate that changes don't break existing functionality. No regression testing for agent tool APIs.
-- **Recommendation**: Add PHPUnit for unit and integration tests covering critical workflows (order creation, fulfillment steps, return processing). Add API integration tests using Postman/Newman. Integrate tests into the CI/CD pipeline. When services are extracted, add contract tests between services.
+- **Finding**: No test files found anywhere in the repository. No PHPUnit tests, no integration tests, no API tests (Postman/Newman), no contract tests. No test directory, no `phpunit.xml`, no `tests/` folder.
+- **Gap**: Zero test coverage. When agents are added, integration tests must verify: agent tool calls reach the correct endpoints, tool responses are correctly parsed, and end-to-end agent workflows complete successfully.
+- **Recommendation**: Add PHPUnit tests for existing API endpoints. Create integration tests that verify the complete order workflow (create → validate → assign → pick → pack → QC → ship). Add agent-specific integration tests that verify tool call → API → response chain.
 
 #### OPS-Q11: Incident Response Automation
 - **Score**: 1/4 ❌
-- **Finding**: No runbook files in the repository (no markdown, YAML, or JSON runbooks). No Systems Manager Automation documents. No Lambda-based remediation functions. No Step Functions for incident workflows. No self-healing patterns (no auto-restart beyond Docker Compose's depends_on). No links to runbooks in any alert configuration (no alerts exist).
-- **Gap**: No incident response automation. No machine-readable runbooks for agents to execute. Manual incident response only.
-- **Recommendation**: Create operational runbooks in markdown format for common incidents (database connection failure, high error rate, capacity exhaustion). Implement SSM Automation documents for automated remediation (restart pods, scale up, failover). Add self-healing patterns in EKS (liveness/readiness probes, pod disruption budgets).
+- **Finding**: No runbooks (markdown, YAML, or JSON). No SSM Automation documents. No Lambda-based remediation. No Step Functions for incident workflows. No self-healing patterns (no auto-restart on failure, no auto-scaling on error events). App Runner health check restarts unhealthy instances, but this is basic platform behavior, not incident automation.
+- **Gap**: No incident response automation. When an agent malfunctions (wrong recommendations, excessive token usage, data inconsistency), there are no automated remediation workflows to disable the agent, fallback to manual processing, or notify the operations team.
+- **Recommendation**: Create machine-readable runbooks for common failure scenarios: agent down, database connection failure, high error rate. Implement SSM Automation documents for remediation actions. Add a circuit breaker that automatically disables the agent and falls back to manual processing when error rate exceeds threshold.
 
 #### OPS-Q12: Observability Governance & Ownership
 - **Score**: 1/4 ❌
-- **Finding**: No CODEOWNERS file, no team ownership files, no SLO definition files, no observability configuration files. No platform team tooling evidence. No per-service dashboards or per-service alarms. The only observability-related resource is the `CloudWatchLogsFullAccess` managed policy on the App Runner instance role — which provides access but no structure.
-- **Gap**: No observability ownership model. No SLO-driven culture. No shared responsibility model for monitoring. When agents are deployed, there will be no accountability for agent quality, reliability, or safety.
-- **Recommendation**: Establish an observability ownership model. Create a CODEOWNERS file. Define service-level SLOs with named owners. Set up centralized dashboards. When agents are deployed, assign ownership for agent-level SLOs (task success rate, hallucination rate, tool error rate).
+- **Finding**: No CODEOWNERS file. No team ownership files. No SLO definition files or dashboards with named owners. No platform team tooling or centralized observability stack configuration. No per-service dashboards or alarms.
+- **Gap**: No observability ownership model. When agents are deployed, someone must own: agent quality SLOs (task success rate, hallucination rate), agent safety monitoring (PII exposure, unauthorized actions), and agent cost governance (token budget per agent).
+- **Recommendation**: Define an observability ownership model: platform team owns infrastructure metrics, product team owns agent quality SLOs, security team owns agent safety monitoring. Create CODEOWNERS file and assign observability asset ownership.
+
+---
+
+## Recommended Modernization Pathways
+
+Based on the assessment findings, the following AWS Modernization Pathways are evaluated for this application. Multiple pathways can execute in parallel because modern applications comprise multiple interconnected components — each requiring its own modernization approach.
+
+### Pathway Summary
+
+| Pathway | Status | Goal Alignment | Priority | Key Trigger Criteria | Est. Effort |
+|---------|--------|---------------|----------|---------------------|-------------|
+| Move to Cloud Native | Triggered | Medium | High | APP-Q4: 1/4, INF-Q1: 2/4, APP-Q3: 1/4, APP-Q10: 1/4 | High |
+| Move to Containers | Triggered | Medium | High | INF-Q1: 2/4, APP-Q4: 1/4 | Medium |
+| Move to Open Source | Not Triggered | Low | — | — | — |
+| Move to Managed Databases | Triggered | High | Medium | DATA-Q10: 3/4 (dev/prod version mismatch) | Low |
+| Move to Managed Analytics | Not Triggered | Low | — | — | — |
+| Move to Modern DevOps | Triggered | High | High | INF-Q6: 1/4, OPS-Q9: 1/4, OPS-Q10: 1/4, OPS-Q1: 1/4 | High |
+| Move to AI | Triggered | High | High | APP-Q13: 1/4, DATA-Q1: 1/4, DATA-Q3: 1/4, OPS-Q3: 1/4, OPS-Q6: 1/4 | High |
+
+### Parallel Execution Plan
+
+**Parallel Track 1 — Foundations**: Move to Containers + Move to Modern DevOps (can execute simultaneously — containerize onto ECS while building CI/CD pipeline)
+
+**Parallel Track 2 — Agent Enablement**: Move to AI + Move to Managed Databases (can execute simultaneously — build agent service while upgrading to Aurora and adding DynamoDB for agent state)
+
+**Sequential Dependencies**:
+- Move to Containers must complete (ECS deployment) before Move to Cloud Native (microservices decomposition requires container orchestration)
+- Move to Modern DevOps should be in place before Move to AI (agents need CI/CD for safe deployment and rollback)
+- Move to Managed Databases should precede or parallel Move to AI (agents need reliable database backends and vector stores)
+
+### Move to Containers
+
+- **Priority**: High
+- **Goal Alignment**: Medium
+- **Trigger Criteria Met**:
+  - INF-Q1: Score 2/4 — App Runner defined in CloudFormation but customer prefers ECS for container orchestration
+  - APP-Q4: Score 1/4 — Monolith needs containerization as the first step toward decomposition
+- **Current State**: Application has a `Dockerfile` (PHP 8.2 Apache) and runs locally via `docker-compose.yml`. CloudFormation deploys to App Runner. ECR repository exists in IaC.
+- **Target State**: Application deployed on Amazon ECS Fargate with ALB, service discovery, and auto-scaling. ECR used for image storage. Container-based deployment enables future microservice extraction.
+- **Key Activities**:
+  1. Create ECS task definition from existing Dockerfile
+  2. Deploy ECS Fargate service with ALB (replaces App Runner)
+  3. Configure ECS Service Discovery via AWS Cloud Map
+  4. Set up Application Auto Scaling for ECS service
+- **Dependencies**: None — this is a foundational pathway
+- **Estimated Effort**: Medium
+- **Roadmap Phase Alignment**: Phase 1 (Agent Quick Wins)
+- **Relevant Learning Materials**: Module 3 — Move to Containers with Amazon ECS
+
+### Move to Cloud Native
+
+- **Priority**: High
+- **Goal Alignment**: Medium
+- **Trigger Criteria Met**:
+  - APP-Q4: Score 1/4 — Tightly-coupled monolith with all 9 domains in single `index.php`
+  - INF-Q1: Score 2/4 — No ECS/EKS for microservices orchestration
+  - APP-Q3: Score 1/4 — 100% synchronous communication
+  - APP-Q10: Score 1/4 — No async processing for long-running operations
+- **Current State**: Single PHP monolith with all domains tightly coupled, shared MySQL database, synchronous request-response only.
+- **Target State**: Domain-bounded microservices (Orders, Inventory, Payments, Returns, Fulfillment) deployed on ECS with event-driven communication via EventBridge/SQS. Each service has clear API boundaries suitable for agent tool definition.
+- **Key Activities**:
+  1. Identify bounded contexts via domain modeling (Orders, Inventory, Payments, Returns, Fulfillment, Users)
+  2. Extract first service (e.g., Inventory) using Strangler Fig pattern with API Gateway routing
+  3. Introduce EventBridge for domain events and SQS for async work queues
+  4. Implement database-per-service pattern for extracted services
+- **Dependencies**: Move to Containers must complete first (ECS infrastructure needed for service deployment)
+- **Estimated Effort**: High
+- **Roadmap Phase Alignment**: Phase 2 (Agent Foundations) and Phase 3 (Agent Scale & Optimization)
+- **Relevant Learning Materials**: Module 2 — Move to Cloud Native (Containers and Serverless)
+
+### Move to Managed Databases
+
+- **Priority**: Medium
+- **Goal Alignment**: High
+- **Trigger Criteria Met**:
+  - DATA-Q10: Score 3/4 — Dev/prod MySQL version mismatch (8.0 vs 8.4.8); single-AZ RDS without Aurora failover
+- **Current State**: RDS MySQL 8.4.8 in CloudFormation (managed, encrypted, private subnet). Self-managed MySQL 8.0 in docker-compose for development. Single-AZ, no Multi-AZ failover.
+- **Target State**: Amazon Aurora MySQL with automatic failover and read replicas for the application database. Amazon DynamoDB for agent session state and conversation history. Amazon OpenSearch Service for vector search (RAG).
+- **Key Activities**:
+  1. Upgrade RDS MySQL to Aurora MySQL for automatic failover
+  2. Deploy DynamoDB table for agent session state and idempotency keys
+  3. Deploy OpenSearch Service for vector search (Bedrock Knowledge Base backend)
+  4. Align development MySQL version with production
+- **Dependencies**: None — can execute in parallel with other pathways
+- **Estimated Effort**: Low
+- **Roadmap Phase Alignment**: Phase 1 (version alignment) and Phase 2 (Aurora migration, DynamoDB)
+- **Relevant Learning Materials**: Module 4 — Move to Managed Databases
+
+### Move to Modern DevOps
+
+- **Priority**: High
+- **Goal Alignment**: High
+- **Trigger Criteria Met**:
+  - INF-Q6: Score 1/4 — No CI/CD automation, only manual `deploy.sh`
+  - OPS-Q9: Score 1/4 — Direct-to-production deployment, no canary/blue-green
+  - OPS-Q10: Score 1/4 — No integration tests
+  - OPS-Q1: Score 1/4 — No distributed tracing
+- **Current State**: Manual deployment via `deploy.sh` (docker-compose). No CI/CD pipeline, no tests, no tracing, no structured logging.
+- **Target State**: Full CI/CD pipeline with CodePipeline/CodeBuild → build → test → push to ECR → deploy to ECS with canary/blue-green. Distributed tracing with X-Ray/OpenTelemetry. Structured JSON logging. Integration tests in pipeline.
+- **Key Activities**:
+  1. Create CodePipeline + CodeBuild pipeline for automated build and deploy
+  2. Add PHPUnit tests and agent integration tests to CI pipeline
+  3. Implement distributed tracing (X-Ray/OpenTelemetry)
+  4. Add structured JSON logging with correlation IDs
+  5. Configure canary deployment with CodeDeploy and automatic rollback
+- **Dependencies**: Move to Containers should be in progress (pipeline deploys to ECS)
+- **Estimated Effort**: High
+- **Roadmap Phase Alignment**: Phase 1 (CI/CD, logging) and Phase 2 (tracing, canary deployment)
+- **Relevant Learning Materials**: Module 6 — Move to Modern DevOps
+
+### Move to AI
+
+- **Priority**: High
+- **Goal Alignment**: High
+- **Trigger Criteria Met**:
+  - APP-Q13: Score 1/4 — No agent frameworks or AI SDK integration
+  - DATA-Q1: Score 1/4 — No vector database for RAG
+  - DATA-Q3: Score 1/4 — No RAG implementation
+  - OPS-Q3: Score 1/4 — No automated eval framework
+  - OPS-Q6: Score 1/4 — No LLM cost tracking
+- **Current State**: Zero AI/agent capability. No Bedrock SDK, no vector store, no RAG pipeline, no eval framework.
+- **Target State**: Customer support agent powered by Amazon Bedrock with RAG over product catalog and support knowledge base. Order management agent with tool access to fulfillment APIs. Automated eval pipeline. LLM cost tracking and attribution.
+- **Key Activities**:
+  1. Generate OpenAPI spec from existing PHP API endpoints
+  2. Build Python agent service using Strands Agents SDK with Bedrock
+  3. Deploy Bedrock Knowledge Base with product and support data for RAG
+  4. Implement agent tool definitions wrapping existing API endpoints
+  5. Create golden dataset and automated eval pipeline
+  6. Implement LLM token tracking and cost attribution
+  7. Add human-in-the-loop approval for high-risk agent actions (returns, refunds)
+- **Dependencies**: Move to Managed Databases (for vector store) and Move to Modern DevOps (for safe deployment) should be in progress
+- **Estimated Effort**: High
+- **Roadmap Phase Alignment**: Phase 1 (OpenAPI spec, initial agent), Phase 2 (RAG, tools), Phase 3 (evals, scaling)
+- **Relevant Learning Materials**: Module 7 — Move to AI
+
+---
+
+## Microservices Decomposition Strategy
+
+This monolith would benefit from service extraction to create clear agent tool boundaries. The 9 business domains currently coupled in `index.php` (Orders, Inventory, Payments, Returns, Interactions, Warehousing, Shipping, Quality Control, Users) represent natural bounded contexts for microservice extraction. Each extracted service would expose a focused API surface ideal for agent tool definitions — for example, an Order Service with `getOrder`, `createOrder`, `getOrderHistory` tools, or an Inventory Service with `checkStock`, `getProduct` tools. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing API surface at `/api/*` endpoints, which already return structured JSON responses.
+
+---
+
+## Quick Agent Wins
+
+Even before completing the full modernization roadmap, these agent opportunities are available based on your current architecture:
+
+1. **Customer Support Order Lookup Agent** — Build an agent that can look up customer orders, check order status, and provide tracking information by calling `/api/orders/me` and `/api/orders/{orderId}/history`.
+   - **Leverages**: Existing JSON API endpoints for order queries, structured order status history in `order_status_history` table
+   - **Effort**: Low
+   - **Value**: Reduces customer service volume for "where is my order?" queries — the most common support request
+
+2. **Product Catalog Agent** — Build an agent that answers product questions (pricing, availability, descriptions) by querying `/api/products` and the inventory table.
+   - **Leverages**: Structured JSON product catalog via `GET /api/products` with 5 products including name, description, price, and stock quantity
+   - **Effort**: Low
+   - **Value**: Enables 24/7 automated product inquiries for customers, improving response time from hours to seconds
+
+3. **Order Management Data Query Agent** — Build a natural language to SQL agent that queries the 9-table MySQL schema for business intelligence (order trends, inventory levels, return rates, customer history).
+   - **Leverages**: Clean relational schema with 9 well-defined tables (`orders`, `order_items`, `inventory`, `payments`, `returns`, `interactions`, `order_status_history`, `warehouses`, `users`) — all documented in `init_db()` function
+   - **Effort**: Medium
+   - **Value**: Enables operations managers to query order and inventory data using natural language instead of writing SQL
+
+4. **Return Request Intake Agent** — Build an agent that collects return reasons, validates order eligibility, and submits return requests via `POST /api/returns` — automating the intake process that currently requires manual form submission.
+   - **Leverages**: Existing `POST /api/returns` endpoint that accepts `order_id` and `reason`, structured return workflow with `pending_review` status
+   - **Effort**: Low
+   - **Value**: Automates return intake from 24-48 hour manual review to instant submission, reducing customer wait time for the initial acknowledgment
+
+5. **Fulfillment Decision Support Agent** — Build an agent that recommends warehouse assignments by analyzing `/api/warehouses/assignment-options` data (distance, load, delivery time) and shipping options from `/api/carriers/shipping-options` (carrier rates, delivery dates).
+   - **Leverages**: Rich decision-support APIs already exist: warehouse assignment scoring (`recommendation_score`), carrier comparison with value scoring, and order validation data with fraud scoring
+   - **Effort**: Medium
+   - **Value**: Reduces fulfillment decision-making time from minutes (manual admin review) to seconds (agent recommendation)
+
+> These opportunities can be pursued in parallel with the modernization roadmap.
+> They demonstrate agent value early while foundations are being built.
+
+---
+
+## Readiness Roadmap
+
+### Phase 1 — Agent Quick Wins (Days 1–30)
+
+1. **Generate OpenAPI 3.0 specification** from existing PHP API routes in `index.php`. Document all 20+ endpoints with request/response schemas, authentication requirements, and error responses. This unblocks agent tool definition. *(Addresses APP-Q2)*
+2. **Migrate from App Runner to ECS Fargate** using the existing `Dockerfile` and ECR repository. Create ECS task definition, ALB, and target group. This aligns with customer preference for ECS and enables future service decomposition. *(Addresses INF-Q1)*
+3. **Create CI/CD pipeline** using CodePipeline + CodeBuild: source → build Docker image → push to ECR → deploy to ECS. Replace manual `deploy.sh`. *(Addresses INF-Q6)*
+4. **Migrate secrets to AWS Secrets Manager**: remove hardcoded credentials from `index.php` and `docker-compose.yml`. Use Secrets Manager dynamic references in CloudFormation. *(Addresses SEC-Q1)*
+5. **Build initial customer support agent prototype** using Python + Strands Agents SDK + Amazon Bedrock. Define tools that call existing `/api/products`, `/api/orders/me`, and `/api/returns` endpoints. Deploy as a separate ECS service. *(Addresses APP-Q13)*
+
+### Phase 2 — Agent Foundations (Months 1–3)
+
+1. **Deploy Amazon Cognito** for centralized identity with JWT token issuance. Replace PHP session-based auth with bearer tokens. Configure OAuth2 scopes for agent access (`orders:read`, `returns:write`). *(Addresses SEC-Q3, SEC-Q9, SEC-Q10)*
+2. **Deploy API Gateway** in front of ECS services with throttling, usage plans, and API key management for agent clients. Configure request validation and response caching. *(Addresses INF-Q7, SEC-Q5, APP-Q8)*
+3. **Implement Amazon Bedrock Knowledge Base** backed by OpenSearch Service for RAG. Ingest product catalog, support FAQs, and return policies. Enable the customer support agent to answer knowledge-grounded questions. *(Addresses DATA-Q1, DATA-Q2, DATA-Q3)*
+4. **Add EventBridge and SQS** for async domain events (OrderCreated, ReturnRequested, InventoryUpdated). Implement SQS workers for fulfillment task processing. *(Addresses INF-Q4, APP-Q3)*
+5. **Implement Step Functions** for order fulfillment workflow (validate → assign → pick → pack → QC → ship) with `waitForTaskToken` for human approval on returns and high-value order modifications. *(Addresses INF-Q3, APP-Q6, SEC-Q7)*
+6. **Add distributed tracing** with OpenTelemetry across PHP app and Python agent service. Implement structured JSON logging with Monolog. Ship all logs to CloudWatch. *(Addresses OPS-Q1, OPS-Q2)*
+7. **Upgrade to Aurora MySQL** for automatic failover. Deploy DynamoDB for agent session state, conversation history, and idempotency keys. *(Addresses INF-Q2, APP-Q7)*
+8. **Add PHPUnit tests** for API endpoints and agent integration tests. Run tests in CI pipeline. *(Addresses OPS-Q10)*
+
+### Phase 3 — Agent Scale & Optimization (Months 3–6)
+
+1. **Implement automated agent evaluation pipeline**: create golden dataset of 100+ customer support and order management scenarios. Run LLM-as-judge scoring in CI before every agent deployment. *(Addresses OPS-Q3)*
+2. **Implement LLM cost tracking and attribution**: capture token usage per request from Bedrock response metadata. Publish CloudWatch metrics for cost per conversation, cost per user, and cost per agent tool. *(Addresses OPS-Q6)*
+3. **Begin microservice extraction** using Strangler Fig pattern: extract Inventory service first (clear boundary, minimal coupling), then Orders, then Returns. Each service gets its own ECS task, database, and OpenAPI spec. Agent tools automatically map to service boundaries. *(Addresses APP-Q4)*
+4. **Implement canary deployments** with CodeDeploy for both application services and agent updates. Auto-rollback on error rate increase. *(Addresses OPS-Q5, OPS-Q9)*
+5. **Deploy anomaly detection**: CloudWatch anomaly detection on API error rates, response latency, agent tool call error rate, and token usage per conversation. Composite alarms for critical customer journeys. *(Addresses OPS-Q8)*
+6. **Define SLOs and ownership model**: API p99 latency < 500ms, agent response time < 5s, agent task success rate > 95%, availability > 99.9%. Assign ownership across platform and product teams. *(Addresses OPS-Q4, OPS-Q12)*
+7. **Implement PII redaction** in agent conversation logs and application logs. Enable Amazon Macie on S3 buckets. Define PII handling policies for agent interactions. *(Addresses SEC-Q6)*
+8. **Enable CloudTrail** with log file validation and immutable S3 storage. Implement agent action audit trail: which agent, what action, on behalf of which user, with what reasoning. *(Addresses SEC-Q4)*
+
+---
+
+## Recommended Self-Paced Learning Materials
+
+**Module 2: Move to Cloud Native (Containers and Serverless):**
+- Cloud Design Patterns, Architectures, and Implementations — https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html
+  - Essential reference for microservices decomposition: Strangler Fig, Anti-corruption Layer, Saga patterns, Event Sourcing, Circuit Breaker, API routing, Hexagonal Architecture
+- AWS Modernization Pathways: Move to Cloud Native Serverless — https://skillbuilder.aws/learning-plan/CMK2J48MVN/aws-modernization-pathways-move-to-cloud-native-serverless-includes-labs/EFUPP53B4Q
+- Modernize a Monolith to ECS and Fargate using Application Discovery — https://skillbuilder.aws/learn/1YXAWYH2WA/modernize-a-monolith-to-ecs-and-fargate-using-application-discovery/AQ37WHN3K1
+- Meeting Simulator: Transform Monolithic App into Serverless Microservices — https://skillbuilder.aws/learn/HUKQHYU9TB/meeting-simulator-transforming-our-monolithic-app-into-serverless-microservices/NS6S2J7YR7
+
+**Module 3: Move to Containers with Amazon ECS and EKS:**
+- AWS Modernization Pathways: Move to Containers with Amazon ECS — https://skillbuilder.aws/learning-plan/CDA8Y4JRRR/aws-modernization-pathways-move-to-containers-with-amazon-ecs-includes-labs/1UB9AW4KYN
+- Introduction to Containers — https://skillbuilder.aws/learn/CUCA1DK47V/introduction-to-containers/XJ58VC1FF5
+- AWS Fargate Getting Started — https://skillbuilder.aws/learn/6QS9CM1V7K/aws-fargate-getting-started/EDX6V7B5YR
+- Amazon ECR Getting Started — https://skillbuilder.aws/learn/M494WWS5EF/amazon-ecr-getting-started/N5CQ7DC6HT
+- Amazon ECS Getting Started — https://skillbuilder.aws/learn/CY2F57HH7V/amazon-ecs-getting-started/4QUDNRVSNC
+- Working with Amazon Elastic Container Service (Lab) — https://skillbuilder.aws/learn/CV6ZEU3NHE/working-with-amazon-elastic-container-service/X989GB8H74
+
+**Module 4: Move to Managed Databases:**
+- AWS Modernization Pathways: Move to Managed Databases — https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC/aws-modernization-pathways-move-to-managed-databases-includes-labs/2S2QZKG9DV
+- Introduction to Building with AWS Databases — https://skillbuilder.aws/learn/HYKKWEN9ZS/introduction-to-building-with-aws-databases/V7RVH2KY91
+- Migrating RDS MySQL to Aurora (Lab) — https://skillbuilder.aws/learn/RZF2GBUUWX/migrating-rds-mysql-to-aurora-with-read-replica/SMG825PXTK
+- AWS PartnerCast: Vector Databases for Generative AI Applications — https://skillbuilder.aws/learn/UQ74USQJHU/aws-partnercast--vector-databases-for-generative-ai-applications--technical/7DKMBAPCST
+- Introduction to Amazon DynamoDB (Lab) — https://skillbuilder.aws/learn/6DYXN7K7ZQ/lab--introduction-to-amazon-dynamodb/GZ3EU55RYJ
+
+**Module 6: Move to Modern DevOps:**
+- AWS Modernization Pathways: Move to Modern DevOps — https://skillbuilder.aws/learning-plan/1FGEQKGPQD/aws-modernization-pathways-move-to-modern-devops-includes-labs/MNQZ2KPVCK
+- Getting Started with DevOps on AWS — https://skillbuilder.aws/learn/R4B13K95YQ/getting-started-with-devops-on-aws/38NHHYRV1R
+- Create a CI/CD Pipeline to Deploy Your App to AWS Fargate (ECS) — https://skillbuilder.aws/learn/H61B17Z8R7/create-a-cicd-pipeline-to-deploy-your-app-to-aws-fargate/T66BGGGHV5
+- Advanced Testing Practices Using AWS DevOps Tools — https://skillbuilder.aws/learn/1YC7UXUWBR/advanced-testing-practices-using-aws-devops-tools/A32U6G7NEQ
+- AWS Developer: CI/CD Automation — https://skillbuilder.aws/learn/C1KF8ZJ1D8/aws-developer--cicd-automation/KY1E1JS9FA
+
+**Module 7: Move to AI:**
+- AWS Modernization Pathways: Move to AI — https://skillbuilder.aws/learning-plan/VDFEE4ACCV/aws-modernization-pathways-move-to-ai-pathways-includes-labs/P3DAWPTN63
+- Introduction to Generative AI: Art of the Possible — https://skillbuilder.aws/learn/ZEVZZ1D4AS/introduction-to-generative-ai--art-of-the-possible/Y7MTGJCW1U
+- Amazon Bedrock Getting Started — https://skillbuilder.aws/learn/63KTRM86DQ/amazon-bedrock-getting-started/SC2Y3HMAUE
+- Essentials for Prompt Engineering — https://skillbuilder.aws/learn/XBNAVKA88J/essentials-of-prompt-engineering/9T9Q45EDTV
+- Build and Evaluate Retrieval Augmented Generation (RAG) Applications using Knowledge Bases for Amazon Bedrock (Lab) — https://skillbuilder.aws/learn/JRGWCFYT67/lab--build-and-evaluate-retrieval-augmented-generation-rag-applications-using-knowledge-bases-for-amazon-bedrock/A4MN58JB7A
+- Introduction to Agentic AI on AWS — https://skillbuilder.aws/learn/DNBD5MT8ZD/introduction-to-agentic-ai-on-aws/WAKAFK6UFY
+- Creating an AWS DevOps AI Agent with the Strands Agents SDK (Lab) — https://skillbuilder.aws/learn/AH1GD8AJY3/lab--creating-an-aws-devops-ai-agent-with-the-strands-agents-sdk/A9SKJNMPJ2
+- AWS PartnerCast: Deep Dive: Building Observable AI Agents with Strands, Amazon Bedrock Agent Core & SageMaker MLflow — https://skillbuilder.aws/learn/1EN76TZBB6/aws-partnercast--deep-dive-building-observable-ai-agents-with-strands-amazon-bedrock-agent-core--sagemaker-mlflow--technical/CX2K6XAT84
+
+---
 
 ## Appendix: Evidence Index
 
-| # | File | What It Revealed |
-|---|------|-----------------|
-| 1 | `index.php` | Single monolithic PHP file (~2,000+ lines) containing all business domains: orders, inventory, payments, returns, users, warehouses, shipping, QC. Inline HTML/CSS/JS frontend. Direct PDO database access. Session-based auth. Hardcoded credential fallbacks. 20+ API endpoints with JSON responses. No resilience patterns, no idempotency, no structured logging. |
-| 2 | `infrastructure/monolith-apprunner.yaml` | CloudFormation template deploying: VPC with private subnets, RDS MySQL 8.4.8 (encrypted, private), App Runner Service, ECR Repository, 2 IAM roles (one with overly broad CloudWatchLogsFullAccess), Auto Scaling Configuration (min 1, max 3), WAF Web ACL with IP whitelisting. No CloudWatch alarms, no Step Functions, no SQS, no API Gateway. |
-| 3 | `Dockerfile` | PHP 8.2 Apache container with `pdo` and `pdo_mysql` extensions. Copies only `index.php` and `.htaccess`. No health check endpoint, no graceful shutdown, no multi-stage build, no non-root user. |
-| 4 | `docker-compose.yml` | Defines two services: `mysql` (mysql:8.0 with hardcoded credentials) and `monolith` (PHP app). Health checks configured. Dev/prod MySQL version mismatch (8.0 vs 8.4.8). Hardcoded database passwords in environment variables. |
-| 5 | `deploy.sh` | Manual deployment script: `docker-compose build` + `docker-compose up -d` + health check curl. No CI/CD integration, no rollback, no staged deployment, no test execution. |
-| 6 | `.htaccess` | Apache URL rewrite rules routing all requests to `index.php`. Enables clean URL patterns for the PHP router. |
-| 7 | `.gitignore` | Excludes database files, logs, OS files, and IDE configs. No evidence of test directories, documentation, or additional configuration files being ignored. |
+| File | Key Findings |
+|------|-------------|
+| `index.php` | Single PHP monolith (~2000+ lines) containing all 9 business domains. 20+ API endpoints returning JSON. Session-based auth. Direct PDO database access. No idempotency, no retry logic, no circuit breakers. `get_db()` with hardcoded credential defaults. `init_db()` with 9 CREATE TABLE statements. `seed_data()` with sample data including PII. Fulfillment workflow endpoints (validate, assign-warehouse, pick, pack, quality-check, ship, deliver). |
+| `Dockerfile` | PHP 8.2 Apache base image. Installs PDO MySQL extension. Copies `index.php` and `.htaccess`. Exposes port 80. Simple, production-usable container definition. |
+| `docker-compose.yml` | Two services: `mysql:8.0` (self-managed) and `monolith` (PHP app). Plaintext database credentials. MySQL health check. Application health check on `/api/products`. Volume mount for persistent MySQL data. |
+| `deploy.sh` | Manual deployment script. Runs `docker-compose build` and `docker-compose up -d`. Basic health check with `curl`. No CI/CD, no rollback, no staged deployment. |
+| `infrastructure/monolith-apprunner.yaml` | Comprehensive CloudFormation template. Defines: VPC (10.0.0.0/16), 2 private subnets, RDS MySQL 8.4.8 (encrypted, private, backup enabled), App Runner service with VPC connector, ECR repository, WAF WebACL (IP whitelisting), auto-scaling (min 1, max 3), 2 IAM roles (instance + access). No API Gateway, no SQS/SNS/EventBridge, no Step Functions, no Secrets Manager, no CloudTrail. |
+| `.htaccess` | Apache rewrite rules routing all requests to `index.php`. Standard single-entry-point pattern for PHP applications. |
+| `.gitignore` | Excludes database files, logs, OS files, and IDE configurations. No `node_modules`, `vendor`, or build artifact exclusions (confirms no dependency management). |

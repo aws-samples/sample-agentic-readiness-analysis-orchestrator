@@ -37,19 +37,20 @@ There are two layers:
 ### Assessment Flow
 
 ```mermaid
+
 flowchart TD
     A[portfolio-config.yaml] --> B[Kiro Power]
-    B -->|parse goal, preferences,\nrepos, dependencies| C{Clone repos\nif needed}
-    C --> D[Generate per-repo\nATX configs]
-    D --> E1[atx exec\nrepo-a]
-    D --> E2[atx exec\nrepo-b]
-    D --> E3[atx exec\nrepo-c]
-    E1 --> F[Wait for all\nto complete]
+    B -->|parse goal, preferences,<br/>repos, dependencies| C{Clone repos<br/>if needed}
+    C --> D[Generate per-repo<br/>ATX configs]
+    D --> E1[atx exec<br/>repo-a]
+    D --> E2[atx exec<br/>repo-b]
+    D --> E3[atx exec<br/>repo-c]
+    E1 --> F[Wait for all<br/>to complete]
     E2 --> F
     E3 --> F
-    F --> G[Generate portfolio\nATX config]
-    G --> H[atx exec\nportfolio assessment]
-    H --> I[Consolidate reports\ninto one folder]
+    F --> G[Generate portfolio<br/>ATX config]
+    G --> H[atx exec<br/>portfolio assessment]
+    H --> I[Consolidate reports<br/>into one folder]
 
     style A fill:#f9f,stroke:#333
     style B fill:#bbf,stroke:#333

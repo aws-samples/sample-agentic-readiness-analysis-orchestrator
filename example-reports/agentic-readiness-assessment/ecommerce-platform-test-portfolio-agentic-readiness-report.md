@@ -1,7 +1,10 @@
 # Portfolio Agentic Readiness Assessment Report
+
 **Portfolio**: ecommerce-platform-test
+**Assessment Goal**: agentic-ai-enablement
+**Goal Context**: Building customer-facing AI agents for support and order management
 **Services Assessed**: 4
-**Assessment Date**: 2026-03-06
+**Assessment Date**: 2026-03-12
 **Assessed by**: AWS Transform Custom — Portfolio Agentic Readiness Assessment
 
 ---
@@ -13,442 +16,486 @@
 3. Service Dependency Map
 4. Cross-Cutting Concerns
 5. Portfolio Modernization Roadmap
-   - Phase 0 — Foundation (Months 0-1)
-   - Phase 1 — Core Services (Months 1-3)
-   - Phase 2 — Dependent Services (Months 3-6)
-   - Phase 3 — Optimization (Months 6-9)
+   - Phase 0 — Cross-Cutting Foundation (Mo 0–1)
+   - Phase 1 — Agent Quick Wins (Mo 1–2)
+   - Phase 2 — Agent Foundations (Mo 2–4)
+   - Phase 3 — Agent Scale & Optimization (Mo 4–6+)
 6. AWS Modernization Pathways
-7. Integration Opportunities
-8. Resource Allocation Recommendations
-9. Recommended Self-Paced Learning Materials
-10. Risk Analysis
-11. Service-by-Service Summary
-12. Appendix: Assessment Inventory
+7. Portfolio Quick Agent Wins
+8. AWS Programs & Engagement Recommendations
+9. Integration Opportunities
+10. Resource Allocation Recommendations
+11. Recommended Self-Paced Learning Materials
+12. Risk Analysis
+13. Service-by-Service Summary
+14. Appendix: Assessment Inventory
 
 ---
 
 ## Executive Dashboard
 
-The ecommerce-platform-test portfolio comprises four services spanning two monolithic applications and two serverless microservice architectures. With a portfolio-wide readiness score of **1.73 / 4.0**, the portfolio is firmly in the "Needs Work" category — no service is currently ready for agentic workloads. The most critical finding is a **circular dependency** between aws-microservices and books-api (synchronous REST + asynchronous EventBridge) that must be resolved before independent modernization can proceed. Three of four services lack CI/CD pipelines, all four lack API documentation (OpenAPI specs), and zero services have any AI/agent framework integration, vector databases, or RAG pipelines.
+The ecommerce-platform-test portfolio — comprising four services (unishop-monolith, aws-microservices, local-monolith, and books-api) — is **not ready for agentic AI enablement** with a portfolio readiness score of **1.7 / 4.0**. None of the four services have the foundational capabilities required for building customer-facing AI agents for support and order management: zero services have API documentation (OpenAPI specs) for agent tool discovery, zero have AI/agent framework integrations, zero have vector databases or RAG pipelines for knowledge retrieval, and zero have the observability infrastructure needed to monitor autonomous agent behavior. The portfolio is firmly in the "Needs Work" tier, with the legacy unishop-monolith falling into "Not Ready" territory at 1.3/4.0.
 
-The strongest capability across the portfolio is **Data Foundations architecture** — all services use clean schemas with no stored procedures, and data sources are well-contained (scoring 4/4 on DATA-Q11 across all four services). The weakest dimension is **Operations & Observability** (portfolio score 1.25/4.0), where virtually every service lacks distributed tracing, structured logging, SLOs, and deployment automation. Security is the second-weakest category (1.53/4.0), with hardcoded credentials in two services, zero authentication on one service's APIs, and no centralized identity provider across the portfolio.
+However, the portfolio has significant strengths that reduce the modernization effort. All four services expose structured JSON REST APIs (APP-Q5 scores: 3, 4, 4, 4), all have clean database schemas with zero stored procedures (DATA-Q11: all 4/4), and two services (aws-microservices and books-api) already run on fully managed infrastructure (Lambda, DynamoDB, CDK). The aws-microservices repo demonstrates a mature event-driven architecture with EventBridge and SQS that can serve as a reference pattern for the entire portfolio. These existing capabilities mean agent Quick Wins — such as a unified customer support agent querying existing product and order APIs — are achievable within weeks, not months.
 
-The recommended approach is a **9-month, four-phase modernization roadmap** starting with shared infrastructure (CI/CD, observability, authentication, secrets management) in Phase 0, followed by aggressive modernization of the three P0 services in Phase 1, stabilization and enhancement of books-api in Phase 2, and portfolio-wide AI/agent enablement in Phase 3. Six of seven AWS Modernization Pathways are triggered, with Move to Cloud Native, Move to Modern DevOps, Move to Managed Databases, and Move to AI all affecting 75-100% of the portfolio.
+The recommended 6-month roadmap addresses 8 critical agentic-AI-blocking gaps across all services (API documentation, agent frameworks, vector databases, RAG pipelines, human approval workflows, automated evaluations, and LLM cost tracking) while tackling 20+ general improvement opportunities. A centralized platform team should establish shared infrastructure (Cognito authentication, unified API Gateway, Bedrock Knowledge Bases, observability stack) in Phase 0, enabling all four service teams to pursue agent capabilities in parallel. The circular dependency between aws-microservices and books-api must be resolved through clear API contract definition in Phase 0 before proceeding with service-level modernization.
 
-### Portfolio Readiness Score: 1.73 / 4.0
+### Portfolio Readiness Score: 1.7 / 4.0
 
 | Category | Portfolio Score | Distribution | Status |
 |----------|----------------|--------------|--------|
-| Infrastructure & Platform | 2.20 / 4.0 | ✅ 0 services, 🟡 2 services, 🟠 1 services, ❌ 1 services | 🟠 |
-| Application Architecture | 1.65 / 4.0 | ✅ 0 services, 🟡 0 services, 🟠 1 services, ❌ 3 services | ❌ |
-| Data Foundations | 1.93 / 4.0 | ✅ 0 services, 🟡 0 services, 🟠 3 services, ❌ 0 services | 🟠 |
-| Identity, Security & Governance | 1.53 / 4.0 | ✅ 0 services, 🟡 0 services, 🟠 1 services, ❌ 3 services | ❌ |
-| Operations & Observability | 1.25 / 4.0 | ✅ 0 services, 🟡 0 services, 🟠 1 services, ❌ 3 services | ❌ |
+| Infrastructure & Platform | 2.1 / 4.0 | ✅ 0 services, 🟡 2 services, 🟠 1 service, ❌ 1 service | 🟠 |
+| Application Architecture | 1.6 / 4.0 | ✅ 0 services, 🟡 0 services, 🟠 0 services, ❌ 4 services | ❌ |
+| Data Foundations | 1.9 / 4.0 | ✅ 0 services, 🟡 0 services, 🟠 4 services, ❌ 0 services | 🟠 |
+| Identity, Security & Governance | 1.5 / 4.0 | ✅ 0 services, 🟡 0 services, 🟠 1 service, ❌ 3 services | ❌ |
+| Operations & Observability | 1.2 / 4.0 | ✅ 0 services, 🟡 0 services, 🟠 1 service, ❌ 3 services | ❌ |
 
 **Readiness Distribution:**
 - ✅ Agent-Ready (3.5-4.0): 0 services (0%)
 - 🟡 Partial (2.5-3.4): 0 services (0%)
-- 🟠 Needs Work (1.5-2.4): 3 services (75%)
-- ❌ Not Ready (< 1.5): 1 service (25%)
+- 🟠 Needs Work (1.5-2.4): 3 services (75%) — aws-microservices (1.8), local-monolith (1.5), books-api (2.1)
+- ❌ Not Ready (< 1.5): 1 service (25%) — unishop-monolith (1.3)
 
 ### Key Metrics
 
 | Metric | Value | Insight |
 |--------|-------|---------|
-| Total Services | 4 | 2 monoliths, 2 serverless microservice architectures |
-| Average Readiness Score | 1.73 / 4.0 | All services require significant modernization |
-| Services Ready for Agents | 0 (0%) | No service is currently agent-ready |
-| Critical Dependencies | 1 circular | aws-microservices ↔ books-api (SYNC + ASYNC cycle) |
-| Shared Infrastructure Gaps | 30+ | Cross-cutting concerns affecting 3+ services |
-| Estimated Modernization Effort | High | Portfolio-wide modernization across all 5 categories |
-| Expected Timeline | 9 months | 4 phases with 2-3 parallel tracks |
+| Total Services | 4 | 2 monoliths, 1 microservices platform, 1 serverless API |
+| Average Readiness Score | 1.7 / 4.0 | All services below "Partial" readiness — significant investment required |
+| Services Ready for Agents | 0 (0%) | No service has the minimum capabilities for agent deployment |
+| Critical Dependencies | 1 circular | aws-microservices ↔ books-api bidirectional dependency must be resolved |
+| Shared Infrastructure Gaps | 8 goal-blocking | APP-Q2, APP-Q13, DATA-Q1/Q2/Q3, SEC-Q7, OPS-Q3, OPS-Q6 affect all services |
+| Estimated Modernization Effort | High | All services require significant work across all 5 categories |
+| Expected Timeline | 6 months | With 3 parallel service tracks after shared foundation (Phase 0) |
 
 ## Portfolio Readiness Overview
 
 ### Technology Stack Summary
 
 **Programming Languages:**
-- PHP 8.2: 1 service (25%) — local-monolith
-- Java 8 / Spring Boot 2.1: 1 service (25%) — unishop-monolith
-- TypeScript / Node.js 22.x: 1 service (25%) — books-api
-- JavaScript / Node.js 14.x (EOL): 1 service (25%) — aws-microservices
+- Java 8 (Spring Boot 2.1): 1 service (25%) — unishop-monolith
+- JavaScript/TypeScript (Node.js): 1 service (25%) — aws-microservices
+- PHP 8.2 (Slim Framework): 1 service (25%) — local-monolith
+- TypeScript (Node.js): 1 service (25%) — books-api
 
 **Database Engines:**
-- MySQL / Aurora MySQL: 2 services (50%) — local-monolith (RDS MySQL 8.4.8), unishop-monolith (Aurora MySQL 5.7 EOL + self-managed MySQL on EC2)
-- DynamoDB: 2 services (50%) — books-api (1 table), aws-microservices (3 tables)
+- Amazon DynamoDB (managed): 2 services (50%) — aws-microservices, books-api
+- MySQL self-managed (no IaC): 1 service (25%) — unishop-monolith
+- Amazon RDS MySQL (managed): 1 service (25%) — local-monolith
 
 **Compute Patterns:**
-- Serverless (Lambda): 2 services (50%) — books-api, aws-microservices
-- Containers (App Runner / Docker): 1 service (25%) — local-monolith
-- EC2: 1 service (25%) — unishop-monolith
+- AWS Lambda (serverless): 2 services (50%) — aws-microservices, books-api
+- EC2 (bare metal): 1 service (25%) — unishop-monolith
+- App Runner / Docker: 1 service (25%) — local-monolith
 
 **Infrastructure as Code:**
-- CloudFormation / SAM: 3 services (75%) — local-monolith, unishop-monolith, books-api
-- CDK: 2 services (50%) — books-api (pipeline), aws-microservices
+- Full IaC (CDK/SAM): 2 services (50%) — aws-microservices (CDK), books-api (SAM+CDK)
+- Partial IaC (CloudFormation): 1 service (25%) — local-monolith
+- No IaC: 1 service (25%) — unishop-monolith
 
 **Deployment Maturity:**
-- Full CI/CD: 1 service (25%) — books-api (CodePipeline with staging + production + manual approval)
-- Partial CI/CD: 0 services (0%)
-- Manual deployment: 3 services (75%) — local-monolith (deploy.sh), unishop-monolith (cfn-init on EC2), aws-microservices (manual cdk deploy)
+- Full CI/CD (CodePipeline): 1 service (25%) — books-api
+- Manual deployment (deploy.sh / cdk deploy): 2 services (50%) — aws-microservices, local-monolith
+- No deployment automation: 1 service (25%) — unishop-monolith
 
 ### Common Strengths
 
-1. **Clean Data Architecture (DATA-Q11: 4/4 across all services)**: All four services keep business logic in the application layer with no stored procedures, triggers, or proprietary SQL constructs. This significantly simplifies database migration and service extraction.
-2. **Structured JSON API Responses (APP-Q5: 3-4/4 across all services)**: All services return well-structured JSON from their API endpoints, providing a solid foundation for agent tool integration.
-3. **Contained Data Sources (DATA-Q4: 3-4/4 across all services)**: Each service has well-defined, contained data sources — no sprawl of databases, caches, and external APIs. This simplifies agent data access patterns.
-4. **IaC Foundation (INF-Q5: 3-4/4 across all services)**: All services have meaningful IaC coverage (CloudFormation, SAM, or CDK), providing a foundation for adding monitoring, security, and deployment automation resources.
-5. **Serverless Leader (books-api)**: books-api demonstrates a mature serverless pattern with Lambda, DynamoDB, Cognito, CI/CD with progressive deployments, and X-Ray tracing — a reference implementation for the portfolio.
+1. **Structured JSON APIs (APP-Q5)**: 3 of 4 services score 4/4 on API response format; all return consistent JSON. This is the #1 enabler for agent tool integration — agents can parse API responses without custom handling.
+2. **Clean Database Schemas (DATA-Q11)**: All 4 services score 4/4 — zero stored procedures, triggers, or proprietary SQL. All business logic resides in application code, making database migration and agent data access straightforward.
+3. **Simple Data Architectures (DATA-Q4)**: 2 services score 4/4 and 2 score 3/4 — each service has a single, focused data source. No data sprawl to complicate agent data access patterns.
+4. **Event-Driven Foundation (aws-microservices)**: EventBridge + SQS architecture in aws-microservices provides a reusable pattern for cross-service agent event routing.
+5. **Mature CI/CD Reference (books-api)**: Full CodePipeline with staging, manual approval, and gradual deployment serves as a template for other services.
 
 ### Common Gaps
 
-1. **No AI/Agent Frameworks (APP-Q13: 1/4 across all 4 services)**: Zero services have any AI SDK, Bedrock integration, or agent framework. This is the fundamental blocker for agentic readiness.
-2. **No API Documentation (APP-Q2: 1/4 across all 4 services)**: No service has OpenAPI specifications. Agents cannot discover or invoke tools without machine-readable API descriptions.
-3. **No Vector Database or RAG (DATA-Q1, DATA-Q3: 1/4 across all 4 services)**: No semantic search, no embeddings, no retrieval-augmented generation capability anywhere in the portfolio.
-4. **Weak Observability (OPS-Q2, OPS-Q7, OPS-Q12: 1/4 across 3-4 services)**: Three of four services lack structured logging, all four lack business metrics, and none have observability governance.
-5. **No API Versioning (APP-Q11: 1/4 across all 4 services)**: No service implements API versioning, creating risk of breaking agent integrations during modernization.
-6. **No Rate Limiting (APP-Q8, SEC-Q5: 1/4 across all 4 services)**: No service has API rate limiting or throttling — a critical gap for agent workloads that generate high-frequency programmatic calls.
-7. **Inconsistent Security Posture (SEC category: 1.2-2.1 range)**: Hardcoded credentials in 2 services, no authentication on 1 service, and no centralized identity provider across the portfolio.
+1. **No API Documentation (APP-Q2)**: All 4 services score 1/4. Zero OpenAPI/Swagger specs exist. Agents cannot discover or invoke any service's capabilities without manually created tool definitions.
+2. **No AI/Agent Frameworks (APP-Q13)**: All 4 services score 1/4. No Bedrock, Strands Agents, LangChain, or any agent SDK integrated anywhere in the portfolio.
+3. **No Vector Databases (DATA-Q1, DATA-Q2)**: All 4 services score 1/4. No vector store for semantic search. Customer support agents cannot perform similarity-based retrieval.
+4. **No RAG Pipeline (DATA-Q3)**: All 4 services score 1/4. No document chunking, embedding generation, or knowledge retrieval infrastructure.
+5. **No Observability Infrastructure (OPS-Q1, OPS-Q2)**: 3 of 4 services have zero distributed tracing, zero structured logging. Agent debugging will be impossible without observability foundations.
+6. **No Human Approval Workflows (SEC-Q7)**: All 4 services score 1-2/4. Agents could execute destructive operations (order modifications, deletions) without human oversight.
+7. **No Rate Limiting (APP-Q8, SEC-Q5)**: All 4 services score 1/4. Agent loops could overwhelm APIs with unbounded requests.
 
 ## Service Dependency Map
 
 ### High-Level Architecture
 
-The portfolio consists of four e-commerce services with minimal inter-service coupling. Two services (local-monolith and unishop-monolith) are fully isolated monoliths with no external service dependencies. The remaining two services (aws-microservices and books-api) have a bidirectional dependency — aws-microservices publishes events to EventBridge consumed by books-api (async), while books-api calls aws-microservices REST APIs synchronously. This creates a circular dependency that must be resolved before independent modernization.
+The ecommerce-platform-test portfolio consists of four services spanning the e-commerce domain: two monolithic applications (unishop-monolith and local-monolith) that encapsulate product catalog, basket, and order management; one serverless microservices platform (aws-microservices) with event-driven architecture (EventBridge + SQS + DynamoDB); and one serverless REST API (books-api) for book catalog management. The two monoliths are isolated with no cross-service dependencies. The aws-microservices and books-api services share a bidirectional dependency: books-api queries aws-microservices for product catalog data via REST (synchronous), and aws-microservices triggers catalog updates in books-api via EventBridge events (asynchronous).
 
 ### Service Dependency Matrix
 
 | Service | Depends On | Depended On By | Coupling Score | Fan-In | Fan-Out | Blast Radius | Priority |
-|---------|------------|----------------|----------------|--------|---------|--------------|----------|
-| unishop-monolith | None | None | None (isolated) | 0 | 0 | 0% | P0 |
-| local-monolith | None | None | None (isolated) | 0 | 0 | 0% | P0 |
-| aws-microservices | books-api (SYNC) | books-api (ASYNC) | Medium | 1 | 1 | 25% | P0 |
-| books-api | aws-microservices (ASYNC) | aws-microservices (SYNC) | Medium | 1 | 1 | 25% | P1 |
+|---------|------------|----------------|----------------|--------|---------|-------------|----------|
+| unishop-monolith | None | None | Low (isolated) | 0 | 0 | 25% (self only) | P0 |
+| aws-microservices | None (upstream) | books-api | Medium | 1 | 1 | 50% (self + books-api) | P0 |
+| local-monolith | None | None | Low (isolated) | 0 | 0 | 25% (self only) | P0 |
+| books-api | aws-microservices | aws-microservices | Medium | 1 | 1 | 50% (self + aws-microservices) | P1 |
 
 **Coupling Score Definitions:**
-- **High**: Synchronous dependencies + shared databases, OR 3+ dependency types
-- **Medium**: Synchronous dependency OR 2 dependency types — aws-microservices ↔ books-api (SYNC + ASYNC = 2 types)
-- **Low**: Asynchronous only OR shared infrastructure only
+- **High**: Synchronous dependency + shared database OR 3+ dependency types
+- **Medium**: Synchronous dependency OR 2 dependency types — *aws-microservices ↔ books-api: 1 sync + 1 async = 2 types*
+- **Low**: Minimal or no dependencies — *unishop-monolith and local-monolith are isolated*
 
 **Priority Definitions:**
-- **P0**: Critical path services that block others OR lowest-scoring services requiring immediate attention — unishop-monolith (1.4), local-monolith (1.5), aws-microservices (1.8)
-- **P1**: Important services with moderate dependencies — books-api (2.2, highest score, depends on aws-microservices stabilization)
+- **P0**: Critical path services that block others or require immediate modernization
+- **P1**: Important services with moderate dependencies, can follow P0 services
 
 ### Critical Path Analysis
 
-1. **⚠️ Circular Dependency (Phase 0 Resolution Required)**:
-   - **Cycle**: aws-microservices → books-api (ASYNC via EventBridge) → aws-microservices (SYNC via REST)
-   - **Risk**: Neither service can be independently deployed or modernized without affecting the other
-   - **Resolution**: Replace the synchronous REST call from books-api → aws-microservices with an asynchronous EventBridge pattern, establishing clear unidirectional async contracts
+1. **Foundation Services** (must be modernized first):
+   - **unishop-monolith** (P0): Legacy Java monolith with lowest score (1.3/4.0). Isolated — can be modernized independently. Needs containerization, IaC, CI/CD before agent enablement.
+   - **aws-microservices** (P0): Strongest infrastructure (EventBridge, DynamoDB, CDK) but weakest operations (1.0/4.0). books-api depends on it — must establish API contracts first.
+   - **local-monolith** (P0): PHP monolith with Docker/CloudFormation foundation. Isolated — can be modernized in parallel with other P0 services.
 
-2. **Foundation Services** (must be modernized first):
-   - unishop-monolith: Lowest score (1.4), isolated — no dependencies to sequence against, can start immediately
-   - local-monolith: Second-lowest score (1.5), isolated — can start in parallel with unishop-monolith
+2. **Dependent Services** (modernized after foundation):
+   - **books-api** (P1): Depends on aws-microservices for product catalog data. Has best existing CI/CD (4/4) and testing (4/4). Can begin agent integration once aws-microservices APIs are documented and stable.
 
 3. **Independent Services** (can be parallelized):
-   - unishop-monolith and local-monolith have zero dependencies and can be modernized fully in parallel
+   - unishop-monolith, local-monolith: Both isolated — can be modernized concurrently with no sequencing constraints.
+
+### Circular Dependency Alert
+
+⚠️ **aws-microservices ↔ books-api** forms a bidirectional dependency (strongly connected component of size 2):
+- **books-api → aws-microservices** (sync): REST API queries for product catalog data
+- **aws-microservices → books-api** (async): EventBridge events triggering catalog updates
+
+This circular dependency creates deployment coupling — changes to either service could affect the other. **Must be resolved in Phase 0** by defining clear API contracts, versioning interfaces, and implementing circuit breakers.
 
 ### Integration Points
 
 **Synchronous Integrations:**
-- books-api → aws-microservices: REST API calls for product/catalog data retrieval
+- books-api → aws-microservices: REST API calls for product catalog data
 
 **Asynchronous Integrations:**
-- aws-microservices → books-api: EventBridge events (e.g., checkout or catalog change events consumed by books-api)
+- aws-microservices → books-api: EventBridge events for catalog updates (checkout events, product changes)
 
 **Shared Infrastructure:**
-- No shared databases between services (good — each service owns its data)
-- No shared API gateways (each service has its own)
-- No shared authentication provider (gap — should be unified via Cognito)
+- Common e-commerce domain: All 4 services handle product catalog, orders, or basket management
+- No shared databases detected — each service owns its own data store
+- No shared API Gateway — each service has its own entry point (or none)
 
 ## Cross-Cutting Concerns
 
+> Cross-cutting concerns are gaps that appear across 3 or more services (with score < 3.0, excluding services where the criterion is N/A). They are split into two subsections based on the portfolio's assessment goal (`agentic-ai-enablement`) to help prioritize what matters most.
+
+### Blocking Your Goal
+
+> These cross-cutting gaps directly impede progress toward building customer-facing AI agents for support and order management. Resolving these should be the highest priority in Phase 0 and Phase 1.
+
+1. **APP-Q2: API Documentation** — 4 of 4 services score 1/4
+   - **Impact on goal**: Blocks agent tool discovery across the entire portfolio. Without OpenAPI specs, agents cannot discover available endpoints, understand request/response schemas, or invoke tools.
+   - **Affected services**: unishop-monolith, aws-microservices, local-monolith, books-api
+   - **Recommendation**: Establish a portfolio-wide OpenAPI specification standard. Auto-generate specs from existing code (springdoc for Java, swagger-autogen for Node.js, OpenAPI annotations for PHP). Store specs in a shared API catalog.
+
+2. **APP-Q13: AI/Agent Frameworks** — 4 of 4 services score 1/4
+   - **Impact on goal**: Blocks all agent development. No service has Bedrock, Strands Agents, LangChain, or any agent SDK. The portfolio cannot support any AI agent capability.
+   - **Affected services**: unishop-monolith, aws-microservices, local-monolith, books-api
+   - **Recommendation**: Select a shared agent framework (Strands Agents SDK recommended for AWS-native integration). Build a centralized agent orchestration service that calls individual service APIs as tools. Deploy agent service on ECS (preferred) alongside existing services.
+
+3. **DATA-Q1: Vector Database Presence** — 4 of 4 services score 1/4
+   - **Impact on goal**: Blocks semantic search for customer support. Agents cannot perform similarity-based product lookup, order matching, or knowledge retrieval without a vector store.
+   - **Affected services**: unishop-monolith, aws-microservices, local-monolith, books-api
+   - **Recommendation**: Deploy a shared Amazon Bedrock Knowledge Base backed by OpenSearch Serverless. Ingest product catalogs, order schemas, and support documentation from all services into a unified knowledge base.
+
+4. **DATA-Q2: Vector DB Management** — 4 of 4 services score 1/4
+   - **Impact on goal**: Blocks production-grade RAG. When vector storage is introduced, it must be fully managed for reliable agent operations.
+   - **Affected services**: unishop-monolith, aws-microservices, local-monolith, books-api
+   - **Recommendation**: Use Amazon Bedrock Knowledge Bases (fully managed) or OpenSearch Serverless (managed vector search) as the shared vector store. Avoid self-hosted solutions.
+
+5. **DATA-Q3: RAG Implementation** — 4 of 4 services score 1/4
+   - **Impact on goal**: Blocks context-grounded agent responses. Customer support agents cannot answer questions about products, orders, or policies without a retrieval-augmented generation pipeline.
+   - **Affected services**: unishop-monolith, aws-microservices, local-monolith, books-api
+   - **Recommendation**: Build a shared RAG pipeline using Bedrock Knowledge Bases + Titan Embeddings. Create data connectors from each service's data store (DynamoDB, MySQL) to the knowledge base. Implement automatic sync for embedding freshness.
+
+6. **SEC-Q7: Human Approval Workflows** — 4 of 4 services score 1-2/4
+   - **Impact on goal**: Blocks safe agent deployment. Agents performing order management (refunds, cancellations, basket modifications) must have human-in-the-loop approval for high-risk actions.
+   - **Affected services**: unishop-monolith (1/4), aws-microservices (1/4), local-monolith (1/4), books-api (2/4)
+   - **Recommendation**: Implement shared AWS Step Functions approval workflows with `waitForTaskToken`. Define portfolio-wide risk thresholds for agent actions (e.g., operations above $100 require human approval). Integrate with Slack/email for approval notifications.
+
+7. **OPS-Q3: Automated Evaluations** — 4 of 4 services score 1/4
+   - **Impact on goal**: Blocks production agent quality assurance. Without automated evaluation pipelines, there is no way to measure agent accuracy, detect hallucinations, or regression-test prompt changes.
+   - **Affected services**: unishop-monolith, aws-microservices, local-monolith, books-api
+   - **Recommendation**: Create a shared evaluation framework with golden datasets for customer support scenarios. Implement automated scoring (relevance, accuracy, safety) in the CI/CD pipeline. Use Amazon Bedrock model evaluation for standardized assessment.
+
+8. **OPS-Q6: LLM Cost Tracking** — 4 of 4 services score 1/4
+   - **Impact on goal**: Blocks cost-effective agent operations. Without token tracking, agent costs could spiral unchecked, especially with customer-facing agents handling high conversation volumes.
+   - **Affected services**: unishop-monolith, aws-microservices, local-monolith, books-api
+   - **Recommendation**: Implement centralized LLM cost tracking from day one. Log Bedrock token usage per request with conversation ID, user ID, and service attribution. Create CloudWatch dashboards and cost anomaly alerts. Budget allocation per service.
+
+### General Opportunities
+
+> These cross-cutting gaps are important improvements but do not directly block agentic AI enablement. Address these after resolving goal-blocking concerns.
+
+1. **INF-Q3: Workflow Orchestration** — 4 of 4 services score 1/4
+   - **Impact**: No Step Functions or workflow engine. Multi-step agent operations (checkout, returns, escalations) lack orchestration.
+   - **Recommendation**: Deploy AWS Step Functions for cross-service workflow orchestration, starting with the checkout flow in aws-microservices.
+
+2. **INF-Q4: Async Messaging** — 3 of 4 services score 1/4 (aws-microservices: 4/4)
+   - **Impact**: 75% of services have no async messaging. Agent-triggered operations block on synchronous calls.
+   - **Recommendation**: Extend EventBridge pattern from aws-microservices to all services. Add SQS queues for write operations.
+
+3. **INF-Q6: CI/CD** — 3 of 4 services score 1/4 (books-api: 4/4)
+   - **Impact**: 75% of services have no automated deployment. Agent prompt/model changes cannot be safely rolled out.
+   - **Recommendation**: Use books-api's CodePipeline as a template. Create CI/CD pipelines for all services.
+
+4. **INF-Q8: Real-time Streaming** — 4 of 4 services score 1/4
+   - **Impact**: No streaming capability for real-time agent context updates.
+   - **Recommendation**: Implement EventBridge for event routing; add DynamoDB Streams for change notifications.
+
+5. **APP-Q3: Async Communication** — 4 of 4 services score 1-2/4
+   - **Impact**: Most operations are synchronous. Agent workflows requiring long-running processing will timeout.
+   - **Recommendation**: Introduce async patterns with SQS and EventBridge across all services.
+
+6. **APP-Q6: Workflow Logic** — 4 of 4 services score 1-2/4
+   - **Impact**: Business logic is hardcoded without orchestration. Complex agent workflows lack state management.
+   - **Recommendation**: Refactor into Step Functions state machines, especially for checkout and return flows.
+
+7. **APP-Q7: Idempotency** — 4 of 4 services score 1-2/4
+   - **Impact**: Agent retries on failed tool calls could create duplicate orders, products, or basket entries.
+   - **Recommendation**: Add Idempotency-Key header support to all write endpoints. Use DynamoDB conditional writes.
+
+8. **APP-Q8: Rate Limiting** — 4 of 4 services score 1/4
+   - **Impact**: Agent loops could overwhelm APIs. No per-client throttling exists.
+   - **Recommendation**: Add API Gateway throttling to all services. Create separate usage plans for agent vs human traffic.
+
+9. **APP-Q9: Resilience Patterns** — 4 of 4 services score 1/4
+   - **Impact**: No circuit breakers, retry logic, or timeout configurations. Agent tool calls fail silently.
+   - **Recommendation**: Add retry with exponential backoff, circuit breakers, and timeout configuration across all services.
+
+10. **APP-Q11: API Versioning** — 4 of 4 services score 1/4
+    - **Impact**: API changes break agent tool configurations with no migration path.
+    - **Recommendation**: Adopt URL path versioning (`/v1/`) for all endpoints before agent tools are defined.
+
+11. **SEC-Q4: Audit Logging** — 4 of 4 services score 1-2/4
+    - **Impact**: No audit trail for agent actions. Compliance and debugging are impossible.
+    - **Recommendation**: Implement structured audit logging with CloudTrail and CloudWatch Logs.
+
+12. **SEC-Q6: PII Redaction** — 4 of 4 services score 1/4
+    - **Impact**: Customer PII exposed in logs and API responses. Agents handling customer data create compliance risk.
+    - **Recommendation**: Implement log sanitization and field-level access control for PII.
+
+13. **OPS-Q1: Distributed Tracing** — 3 of 4 services score 1/4 (books-api: 3/4)
+    - **Impact**: Cannot trace agent tool invocations across services. Debugging multi-step agent workflows impossible.
+    - **Recommendation**: Add X-Ray/OpenTelemetry to all services. Use books-api's X-Ray setup as reference.
+
+14. **OPS-Q2: Structured Logging** — 4 of 4 services score 1/4
+    - **Impact**: Unstructured logging prevents log correlation and CloudWatch Log Insights queries.
+    - **Recommendation**: Adopt Lambda Powertools (Node.js/Python) or SLF4J+Logback JSON (Java) across all services.
+
+15. **OPS-Q4: SLOs** — 4 of 4 services score 1/4
+    - **Impact**: No performance baselines. Cannot detect if agents degrade API performance.
+    - **Recommendation**: Define SLOs for all API endpoints and agent-specific metrics (task success rate, response time).
+
+16. **OPS-Q7, OPS-Q8, OPS-Q11, OPS-Q12: Operations Maturity** — 4 of 4 services score 1/4 on each
+    - **Impact**: No business metrics, anomaly detection, incident response, or observability governance.
+    - **Recommendation**: Build unified observability platform with CloudWatch dashboards, anomaly detection, and runbooks.
+
+### Per-Category Analysis
+
 ### Infrastructure & Platform
 
-**Portfolio Score: 2.20 / 4.0**
+**Portfolio Score: 2.1 / 4.0**
 
-The portfolio shows a split between serverless services (books-api and aws-microservices scoring 2.6-2.7) and monoliths (unishop-monolith at 1.4, local-monolith at 2.1). The serverless services benefit from fully managed compute and databases but lack async messaging and workflow orchestration. The monoliths lack containerization, CI/CD, and modern compute patterns.
-
-**Common Patterns:**
-- IaC is present across all 4 services (CloudFormation, SAM, or CDK) with scores of 3-4
-- Auto-scaling ranges from 1 (unishop on EC2) to 3 (Lambda + DynamoDB on-demand)
-
-**Critical Gaps:**
-1. **No CI/CD Pipelines (INF-Q6)**: 3 of 4 services (75%) — local-monolith (1/4), unishop-monolith (1/4), aws-microservices (1/4). Only books-api has CI/CD.
-   - Impact: Manual deployments prevent rapid, safe iteration cycles required for agentic workloads
-   - Recommendation: Establish portfolio-wide CI/CD templates using CodePipeline or GitHub Actions; books-api's pipeline can serve as a reference implementation
-
-2. **No Workflow Orchestration (INF-Q3)**: 4 of 4 services (100%) — all score 1-2/4
-   - Impact: No Step Functions or workflow engine for multi-step agent orchestration
-   - Recommendation: Introduce AWS Step Functions as the portfolio standard for workflow orchestration; prioritize the checkout saga in aws-microservices and fulfillment workflow in local-monolith
-
-3. **No Real-time Streaming (INF-Q8)**: 4 of 4 services (100%) — all score 1-2/4
-   - Impact: Cannot support real-time event analytics or embedding refresh pipelines for RAG
-   - Recommendation: Standardize on EventBridge for event routing and DynamoDB Streams/Kinesis for CDC; low priority until Phase 3
+The strongest category in the portfolio, driven by aws-microservices (2.5) and books-api (2.7) having solid managed compute and IaC foundations. However, unishop-monolith (1.0) has zero infrastructure capabilities (no IaC, no CI/CD, no containers, no API Gateway), and local-monolith (2.0) has partial coverage. The key strengths are Lambda compute (2 services), CDK/SAM IaC (2 services), and DynamoDB managed databases (2 services). Critical gaps are workflow orchestration (all 4 services: 1/4), real-time streaming (all 4: 1/4), and the wide variance in CI/CD maturity (1 service at 4/4, 3 services at 1/4).
 
 ### Application Architecture
 
-**Portfolio Score: 1.65 / 4.0**
+**Portfolio Score: 1.6 / 4.0**
 
-This is the second-weakest category. The most severe gaps are universal: no API documentation, no API versioning, no AI frameworks, and no rate limiting across any service. The portfolio shows a wide range of architectural maturity — from a single-file PHP monolith (local-monolith, APP-Q4: 1/4) to well-decomposed microservices (aws-microservices, APP-Q4: 4/4).
-
-**Critical Gaps:**
-1. **No API Documentation (APP-Q2: 1/4)**: affects 4 of 4 services (100%)
-   - Impact: Agents cannot discover or invoke tools without OpenAPI specifications
-   - Recommendation: Generate OpenAPI 3.0 specs for all services in Phase 0; use SAM/CDK integration for API Gateway validation
-
-2. **No AI/Agent Frameworks (APP-Q13: 1/4)**: affects 4 of 4 services (100%)
-   - Impact: Fundamental blocker for agentic readiness — no Bedrock, LangChain, or Strands SDK
-   - Recommendation: Phase 3 activity; TypeScript services should use Strands Agents SDK, Java services should use Spring AI or LangChain4j
-
-3. **No Rate Limiting (APP-Q8: 1/4)**: affects 4 of 4 services (100%)
-   - Impact: No protection against runaway agent loops or API abuse at machine speed
-   - Recommendation: Add API Gateway throttling and WAF rate-based rules to all services in Phase 0-1
-
-4. **No API Versioning (APP-Q11: 1/4)**: affects 4 of 4 services (100%)
-   - Impact: Breaking changes will disrupt agent tool integrations with no backward compatibility
-   - Recommendation: Adopt URL path versioning (/v1/) across all services during API documentation phase
+The weakest functional category. While all services have strong JSON APIs (3-4/4) and one service has excellent microservices architecture (aws-microservices: 4/4), the portfolio universally lacks API documentation (all 1/4), AI frameworks (all 1/4), rate limiting (all 1/4), resilience patterns (all 1/4), and API versioning (all 1/4). Two services are monoliths requiring decomposition. The lack of API documentation is the single most impactful gap for agent enablement.
 
 ### Data Foundations
 
-**Portfolio Score: 1.93 / 4.0**
+**Portfolio Score: 1.9 / 4.0**
 
-Data Foundations has the best portfolio score among the weaker categories, primarily because all services maintain clean schemas (DATA-Q11: 4/4 everywhere) and contained data sources (DATA-Q4: 3-4/4). The critical gaps are entirely in AI/agent-specific capabilities: no vector databases, no RAG pipelines, and no embedding infrastructure.
-
-**Critical Gaps:**
-1. **No Vector Database (DATA-Q1: 1/4)**: affects 4 of 4 services (100%)
-   - Impact: No semantic search, no similarity matching, no agent knowledge base
-   - Recommendation: Deploy managed vector infrastructure in Phase 3; evaluate OpenSearch Serverless and Bedrock Knowledge Bases
-
-2. **No RAG Pipeline (DATA-Q3: 1/4)**: affects 4 of 4 services (100%)
-   - Impact: Agents cannot access contextual information through semantic retrieval
-   - Recommendation: Build RAG pipelines per service using Bedrock Knowledge Bases in Phase 3
-
-3. **No Embedding Freshness (DATA-Q9: 1/4)**: affects 4 of 4 services (100%)
-   - Impact: When embeddings are implemented, no CDC mechanism exists to keep them current
-   - Recommendation: Enable DynamoDB Streams on serverless services and set up event-driven embedding refresh
+Clean data architectures with zero stored procedures (all 4/4) and simple data sources (3-4/4), but completely lacking in AI-specific data capabilities. All 4 services score 1/4 on vector database, vector DB management, RAG implementation, unstructured data handling, and embedding freshness. The MySQL-based services (unishop-monolith, local-monolith) have well-documented schemas that are ideal for natural-language-to-SQL agents, while DynamoDB services (aws-microservices, books-api) have clean key-value patterns.
 
 ### Identity, Security & Governance
 
-**Portfolio Score: 1.53 / 4.0**
+**Portfolio Score: 1.5 / 4.0**
 
-Security is the second-weakest category and presents the most immediate risk to the portfolio. Two services have hardcoded credentials in source code, one service has completely unauthenticated APIs, and no service has a centralized identity provider that could support cross-service agent authentication.
-
-**Critical Gaps:**
-1. **No Centralized Identity (SEC-Q10)**: 3 of 4 services score 1/4 (75%), only books-api has Cognito (3/4)
-   - Impact: No unified authentication for cross-service agent operations; cannot implement identity propagation
-   - Recommendation: Deploy a shared Cognito User Pool in Phase 0; federate all services through this provider
-
-2. **Weak API Authentication (SEC-Q9)**: 3 of 4 services score 1-2/4 (75%) — aws-microservices has zero auth, others are partial
-   - Impact: Unprotected APIs allow unauthorized agent access and cannot attribute actions to users
-   - Recommendation: Add Cognito authorizers to all API Gateway endpoints in Phase 0-1
-
-3. **Hardcoded Credentials (SEC-Q1)**: 2 of 4 services (50%) — local-monolith (1/4) and unishop-monolith (1/4)
-   - Impact: Critical security vulnerability; credentials in source code cannot be rotated
-   - Recommendation: Migrate all secrets to AWS Secrets Manager in Phase 0
-
-4. **No PII Redaction (SEC-Q6: 1/4)**: affects 4 of 4 services (100%)
-   - Impact: PII exposed in API responses and logs; stack traces leak implementation details
-   - Recommendation: Implement log scrubbing and response masking as part of structured logging initiative
+Critical security gaps across the portfolio. Only books-api has partial authentication (SEC-Q9: 2/4) and a centralized identity provider (SEC-Q10: 3/4). The other 3 services have effectively zero authentication — unishop-monolith has OAuth2 configured but disabled with `permitAll()`, and aws-microservices has completely unauthenticated API Gateway endpoints. PII redaction (all 1/4), human approval workflows (all 1-2/4), and API rate limits (all 1/4) are universally absent.
 
 ### Operations & Observability
 
-**Portfolio Score: 1.25 / 4.0**
+**Portfolio Score: 1.2 / 4.0**
 
-Operations is the weakest category by a significant margin. Only books-api has meaningful observability (X-Ray tracing, CloudWatch alarms, progressive deployments), while the remaining three services have essentially zero operational maturity. This is a critical blocker for agentic workloads, which require deep observability to detect agent misbehavior, track performance, and ensure safety.
-
-**Critical Gaps:**
-1. **No Structured Logging (OPS-Q2)**: 3 of 4 services score 1/4 (75%), aws-microservices scores 2/4
-   - Impact: Cannot debug agent workflows, cannot correlate requests across services
-   - Recommendation: Standardize on AWS Lambda Powertools Logger (for serverless) and Logback JSON (for Java) across all services
-
-2. **No SLOs (OPS-Q4)**: 3 of 4 services score 1/4 (75%)
-   - Impact: No performance baselines, no alerting on degradation, no error budgets
-   - Recommendation: Define SLOs per service for availability, latency p99, and error rate; implement CloudWatch alarms
-
-3. **No Deployment Strategy (OPS-Q9)**: 3 of 4 services score 1/4 (75%)
-   - Impact: Direct-to-production deployments with no safety net; cannot safely iterate on agent configurations
-   - Recommendation: Implement canary/progressive deployments for all services; books-api's Linear10Percent pattern as reference
-
-4. **No Integration Testing (OPS-Q10)**: 3 of 4 services score 1/4 (75%)
-   - Impact: No regression protection; deploying agent integrations without tests amplifies risk
-   - Recommendation: Establish integration test suites per service; integrate into CI/CD pipelines
+The weakest category by far. Only books-api has meaningful operations capabilities (OPS: 1.9/4.0) with X-Ray tracing, CodePipeline CI/CD, rollback capability, and integration testing. The other 3 services score 1.0/4.0 with zero observability across all 12 operations criteria. This is a critical gap for agent deployment — autonomous agents operating without tracing, logging, or monitoring create significant operational risk.
 
 ## Portfolio Modernization Roadmap
 
-This roadmap accounts for cross-service dependencies, shared infrastructure needs, and organizational capacity. Work is sequenced to minimize risk and maximize value delivery, with the circular dependency between aws-microservices and books-api addressed first.
+> This roadmap accounts for cross-service dependencies, shared infrastructure, and organizational capacity. Work is sequenced to minimize risk and maximize value delivery. Phase names reflect the `agentic-ai-enablement` goal. Within each phase, goal-priority activities (APP-Q2, APP-Q13, DATA-Q1/Q2/Q3, SEC-Q7, OPS-Q3, OPS-Q6) are listed first.
 
 ### Sequencing Principles
 
-1. **Foundation First**: Shared infrastructure and platform capabilities (CI/CD, observability, authentication, secrets) before service-specific work
-2. **Dependency Order**: Circular dependency broken in Phase 0; upstream services stabilized before downstream dependents
-3. **Risk Mitigation**: EOL runtimes (Node.js 14.x, Aurora MySQL 5.7), hardcoded credentials, and unauthenticated APIs addressed in Phase 0-1
-4. **Parallel Tracks**: Isolated monoliths (unishop-monolith, local-monolith) modernized concurrently in Phase 1
-5. **Quick Wins**: API documentation, structured logging, and secret migration build momentum and demonstrate value early
+1. **Foundation First**: Shared infrastructure and platform capabilities before service-specific work
+2. **Dependency Order**: aws-microservices (Phase 1) before books-api (Phase 2)
+3. **Risk Mitigation**: Circular dependency resolution and authentication before agent deployment
+4. **Parallel Tracks**: unishop-monolith, aws-microservices, and local-monolith can be modernized concurrently
+5. **Quick Wins**: OpenAPI specs and agent PoCs deliver immediate value
+6. **Goal Alignment**: Within each phase, agentic-AI-priority activities are listed first
 
-### Phase 0 — Foundation (Months 0-1)
+### Phase 0 — Cross-Cutting Foundation (Mo 0–1)
 
-**Objective**: Establish shared capabilities, resolve the circular dependency, and address critical security risks
+**Objective**: Establish shared capabilities, resolve architectural risks, and prepare the organization for agent development
 
-**Shared Infrastructure:**
-- Deploy shared Cognito User Pool for portfolio-wide authentication: benefits all 4 services
-- Create portfolio-wide CI/CD pipeline templates (GitHub Actions / CodePipeline): benefits 3 services (local-monolith, unishop-monolith, aws-microservices)
-- Deploy unified observability stack (OpenTelemetry Collector + CloudWatch): benefits all 4 services
-- Create standardized structured logging library configuration: benefits all 4 services
+**Shared Infrastructure (Goal-Blocking — Highest Priority):**
+- **Agent framework selection and PoC**: Select Strands Agents SDK as the shared agent framework. Create a reference agent implementation that calls a mock API. Benefits all 4 services.
+- **OpenAPI specification standard**: Define portfolio-wide OpenAPI 3.0 template with consistent naming, versioning, and schema conventions. Each service team generates specs in Phase 1.
+- **Shared vector database**: Provision Amazon Bedrock Knowledge Base backed by OpenSearch Serverless. Configure data source connectors for S3 (documentation) and DynamoDB (product catalogs).
+- **Authentication platform**: Deploy shared Amazon Cognito User Pool for customer and agent authentication. Define OAuth scopes for agent actions (read, write, admin).
 
-**Critical Risk Mitigation:**
-- Break circular dependency: replace books-api → aws-microservices synchronous REST call with EventBridge async pattern
-- Migrate hardcoded credentials to AWS Secrets Manager: local-monolith and unishop-monolith
-- Add Cognito authorizer to aws-microservices APIs (currently zero authentication)
-- Remove stack trace exposure from aws-microservices error responses (SEC-Q6)
+**Shared Infrastructure (General):**
+- **Observability stack**: Deploy unified CloudWatch + X-Ray + OpenTelemetry collector. Create portfolio dashboard templates.
+- **CI/CD templates**: Create reusable CodePipeline/GitHub Actions templates for Lambda, ECS, and CDK-based services.
+- **EventBridge shared bus**: Create a portfolio-wide EventBridge event bus for cross-service domain events.
 
-**Platform Capabilities:**
-- Generate OpenAPI 3.0 specifications for all 4 services — foundation for agent tool definitions
-- Establish API versioning standard (URL path versioning /v1/)
-- Create IaC templates for monitoring (CloudWatch alarms, dashboards)
+**Architectural Risk Resolution:**
+- **Circular dependency (aws-microservices ↔ books-api)**: Define versioned API contracts between the two services. Implement circuit breakers for the sync dependency. Document event schemas for the async dependency.
 
 **Organizational Enablers:**
-- Training: Containers/EKS, Serverless/Lambda Powertools, Modern DevOps, CDK
-- Tooling: Standardize on CDK for new IaC; establish coding standards
-- Standards: API documentation requirements, logging format, security baseline
+- Training: Amazon Bedrock Getting Started, Strands Agents SDK, ECS/Lambda patterns, CDK
+- Tooling: Shared CDK construct library, OpenAPI linting tools, agent testing harness
+- Standards: API naming conventions, logging format (JSON), error response format (RFC 7807)
 
 **Expected Outcomes:**
-- Circular dependency eliminated — services can be independently deployed
-- All credentials moved to Secrets Manager — no hardcoded secrets
-- All APIs authenticated via Cognito
-- OpenAPI specs available for all services
+- Shared Cognito User Pool deployed and ready for service integration
+- Bedrock Knowledge Base provisioned with initial product documentation
+- API contract between aws-microservices and books-api formalized
+- All teams trained on agent development basics
 
 **Estimated Effort**: High
 
-### Phase 1 — Core Services (Months 1-3)
+### Phase 1 — Agent Quick Wins (Mo 1–2)
 
-**Objective**: Modernize the three P0 services that form the portfolio's foundation
+**Objective**: Modernize foundational services, generate OpenAPI specs, and deliver first agent prototypes. Goal-priority activities listed first.
 
 **Services in Scope:**
 
-1. **unishop-monolith** (P0, Score: 1.4/4.0)
-   - Current State: Java 8/Spring Boot 2.1 monolith on raw EC2, self-managed MySQL, Aurora MySQL 5.7 (EOL), no CI/CD, hardcoded credentials, no auth
-   - Target State: Containerized on ECS Fargate behind API Gateway with Cognito, Aurora MySQL 3.x, CI/CD pipeline, structured logging, X-Ray tracing
-   - Key Activities:
-     - Create Dockerfile, containerize Spring Boot JAR, deploy to ECS Fargate
-     - Set up CI/CD pipeline (GitHub Actions: build → test → push ECR → deploy ECS)
-     - Upgrade Java 8 → 17+ and Spring Boot 2.1 → 3.x
-     - Upgrade Aurora MySQL 5.7 → 3.x (MySQL 8.0-compatible); eliminate self-managed MySQL EC2
-     - Add X-Ray tracing and structured JSON logging (Logback)
-     - Enforce Cognito JWT authentication on all endpoints (replace `permitAll()`)
-   - Dependencies: Phase 0 shared Cognito User Pool and CI/CD templates
-   - Blocks: None (isolated service)
+1. **unishop-monolith** (P0, Score: 1.3/4.0)
+   - Current State: Java 8 / Spring Boot 2.1 monolith on EC2, self-managed MySQL, no IaC/CI/CD/observability
+   - Target State: Containerized on ECS, OpenAPI specs generated, managed database, CI/CD pipeline, initial agent PoC
+   - Key Activities (goal-priority first):
+     - Generate OpenAPI 3.0 specs via springdoc-openapi-ui (APP-Q2)
+     - Build customer support agent PoC calling `/unicorns` and `/unicorns/basket/{userUuid}` (APP-Q13)
+     - Containerize application (Dockerfile → ECR → ECS Fargate)
+     - Migrate secrets to Secrets Manager
+     - Establish CDK IaC and CodePipeline CI/CD
+     - Migrate MySQL to Amazon RDS (managed)
+   - Dependencies: None (isolated service)
+   - Blocks: None
    - Estimated Effort: High
 
-2. **local-monolith** (P0, Score: 1.5/4.0)
-   - Current State: PHP single-file monolith on Docker/App Runner, manual deploy.sh, no monitoring, hardcoded credentials
-   - Target State: Containerized on EKS, CI/CD pipeline, structured logging, distributed tracing, first microservice extracted (Inventory)
-   - Key Activities:
-     - Create EKS cluster IaC (Terraform/CloudFormation) with ALB Ingress Controller
-     - Deploy monolith to EKS behind ALB; migrate from App Runner per user preference
-     - Set up CI/CD pipeline (CodePipeline: build → test → push ECR → deploy EKS)
-     - Add structured JSON logging (Monolog) with correlation IDs
-     - Deploy OpenTelemetry Collector as EKS DaemonSet for distributed tracing
-     - Begin Strangler Fig extraction of Inventory Service (lowest coupling domain)
-   - Dependencies: Phase 0 CI/CD templates and observability stack
-   - Blocks: None (isolated service)
+2. **aws-microservices** (P0, Score: 1.8/4.0)
+   - Current State: Lambda + DynamoDB + EventBridge + CDK, but no CI/CD, no auth, no observability
+   - Target State: OpenAPI specs generated, CI/CD pipeline, X-Ray tracing, Cognito authentication, agent PoC
+   - Key Activities (goal-priority first):
+     - Generate OpenAPI 3.0 specs for product/basket/ordering APIs (APP-Q2)
+     - Build customer support agent PoC querying product and order endpoints (APP-Q13)
+     - Create CI/CD pipeline (CodePipeline: lint → test → cdk synth → deploy)
+     - Add Cognito authorizer to all API Gateway endpoints (SEC-Q9)
+     - Enable X-Ray tracing on all Lambda functions (OPS-Q1)
+     - Upgrade Lambda runtime from NODEJS_14_X to NODEJS_20_X
+   - Dependencies: None
+   - Blocks: books-api (Phase 2) depends on stable, documented APIs
    - Estimated Effort: High
 
-3. **aws-microservices** (P0, Score: 1.8/4.0)
-   - Current State: Lambda/DynamoDB/EventBridge with Node.js 14.x (EOL), no auth, no CI/CD, no tracing, stack traces in error responses
-   - Target State: Node.js 20.x, Cognito auth on all APIs, CI/CD pipeline, X-Ray tracing, structured logging, idempotency, integration tests
-   - Key Activities:
-     - Upgrade Lambda runtime from Node.js 14.x → 20.x; remove `aws-sdk` external modules config
-     - Set up CI/CD pipeline (GitHub Actions: lint → build → test → cdk synth → cdk deploy)
-     - Enable X-Ray tracing on all Lambda functions and API Gateway
-     - Add structured logging with Lambda Powertools Logger
-     - Implement idempotency on write operations using Lambda Powertools Idempotency
-     - Write integration tests (uncomment and expand `test/aws-microservices.test.ts`)
-     - Add DLQ to SQS OrderQueue for failed checkout events
-   - Dependencies: Phase 0 Cognito User Pool and circular dependency resolution
-   - Blocks: books-api (Phase 2) depends on aws-microservices API stabilization
-   - Estimated Effort: Medium
+3. **local-monolith** (P0, Score: 1.5/4.0)
+   - Current State: PHP 8.2 monolith with Docker/CloudFormation, RDS MySQL, manual deploy.sh
+   - Target State: ECS deployment, OpenAPI specs, CI/CD pipeline, Cognito auth, agent PoC
+   - Key Activities (goal-priority first):
+     - Generate OpenAPI 3.0 specs for all 20+ API endpoints (APP-Q2)
+     - Build customer support agent PoC for order lookup and product catalog (APP-Q13)
+     - Migrate from App Runner/Docker to ECS Fargate (preferred compute)
+     - Create CodePipeline CI/CD replacing manual deploy.sh
+     - Integrate Cognito for API authentication
+     - Add X-Ray tracing and structured logging
+   - Dependencies: None (isolated service)
+   - Blocks: None
+   - Estimated Effort: High
 
 **Cross-Service Activities:**
-- Validate all Phase 0 shared infrastructure is operational
-- Verify OpenAPI specs are accurate and complete for all services
+- Integrate all 3 services with shared Cognito User Pool
+- Begin populating Bedrock Knowledge Base with product catalog data from all services
+- Establish EventBridge event schemas for cross-service communication
 
 **Expected Outcomes:**
-- All P0 services have CI/CD pipelines, authentication, and observability
-- EOL runtimes and databases upgraded
-- Monoliths containerized and ready for incremental decomposition
+- OpenAPI specs available for all 4 services
+- 3 agent PoCs demonstrating customer support query capabilities
+- CI/CD pipelines operational for all services
+- Authentication enabled on all API endpoints
 
 **Estimated Effort**: High
 
-### Phase 2 — Dependent Services (Months 3-6)
+### Phase 2 — Agent Foundations (Mo 2–4)
 
-**Objective**: Modernize books-api (dependent on aws-microservices stabilization) and continue monolith decomposition
+**Objective**: Build production-grade agent infrastructure, implement RAG, deploy approval workflows, and integrate books-api. Goal-priority activities listed first.
 
 **Services in Scope:**
 
-1. **books-api** (P1, Score: 2.2/4.0)
-   - Current State: Well-architected serverless API with Lambda/DynamoDB/Cognito/CI/CD, but lacks async patterns, rate limiting, observability depth, and AI capabilities
-   - Target State: Event-driven serverless with EventBridge, rate limiting, enhanced observability, API versioning, AWS SDK v3
-   - Key Activities:
-     - Add EventBridge integration for domain events (BookCreated, BookRetrieved)
-     - Implement API Gateway throttling and usage plans with API keys
-     - Add structured logging with Lambda Powertools Logger
-     - Implement API versioning (/v1/books)
-     - Upgrade AWS SDK v2 → v3 (modular, tree-shakeable)
-     - Add idempotency to CreateBook using Lambda Powertools
-     - Expand E2E test suite to cover new async patterns
-     - Define SLOs and CloudWatch dashboards
-   - Dependencies: aws-microservices (Phase 1) APIs must be stable
+1. **books-api** (P1, Score: 2.1/4.0)
+   - Current State: Lambda + DynamoDB + CDK + CodePipeline — best infrastructure maturity. No agent frameworks or RAG.
+   - Target State: Agent integration with RAG, Step Functions for approval workflows, structured logging
+   - Key Activities (goal-priority first):
+     - Integrate with shared Bedrock Knowledge Base for book catalog RAG (DATA-Q1, DATA-Q3)
+     - Add agent tool definitions from OpenAPI specs (APP-Q13)
+     - Implement human approval workflow for catalog modifications (SEC-Q7)
+     - Implement LLM cost tracking per agent request (OPS-Q6)
+     - Add SQS queues for async event processing (INF-Q4)
+     - Add structured logging with Lambda Powertools (OPS-Q2)
+   - Dependencies: aws-microservices (Phase 1) — stable, documented API required
    - Blocks: None
    - Estimated Effort: Medium
 
-2. **Continue Monolith Decomposition**:
-   - unishop-monolith: Extract Basket service using Strangler Fig → Lambda + DynamoDB (infrastructure partially exists in MonoToMicroLambda.yaml)
-   - local-monolith: Extract Orders service using Strangler Fig; implement SQS for async fulfillment events
+**Cross-Service Activities (all services):**
+- **RAG Pipeline**: Complete Bedrock Knowledge Base integration with all data sources (DynamoDB exports, MySQL dumps, S3 documentation). Configure automatic sync.
+- **Step Functions Approval Workflows**: Deploy shared approval state machines for high-risk agent actions (order modifications above threshold, product deletions, refunds).
+- **Unified API Gateway**: Begin consolidating service endpoints behind a unified API Gateway with path-based routing.
+- **Agent Evaluation Framework**: Create golden datasets for customer support scenarios. Build automated scoring pipeline.
 
 **Parallel Tracks:**
-- books-api modernization and monolith decomposition can proceed concurrently (no dependencies)
+- unishop-monolith: Continue microservices decomposition (Basket service extraction)
+- aws-microservices: Add Step Functions for checkout flow, idempotency for all writes
+- local-monolith: Add Step Functions for return/refund workflows
 
 **Expected Outcomes:**
-- books-api fully modernized with event-driven patterns and enhanced observability
-- First microservices extracted from both monoliths
-- All 4 services have consistent observability and security posture
+- RAG pipeline operational with cross-service product and order knowledge
+- Human approval workflows active for high-risk agent actions
+- books-api fully integrated with agent platform
+- Evaluation framework with initial golden datasets
 
-**Estimated Effort**: Medium
+**Estimated Effort**: High
 
-### Phase 3 — Optimization (Months 6-9)
+### Phase 3 — Agent Scale & Optimization (Mo 4–6+)
 
-**Objective**: Enable agentic capabilities across the portfolio and implement advanced optimizations
+**Objective**: Deploy production customer support agents, implement evaluation pipelines, optimize costs, and achieve advanced observability. Goal-priority activities listed first.
 
-**Activities:**
-- Deploy vector databases across services (OpenSearch Serverless or Bedrock Knowledge Bases)
-- Implement RAG pipelines for product catalogs and book data
-- Integrate Amazon Bedrock agent frameworks — create e-commerce assistant and fulfillment automation agents
-- Add agent evaluation frameworks with golden datasets per service
-- Implement LLM cost tracking with CloudWatch custom metrics and per-request attribution
-- Deploy end-to-end distributed tracing across all services with gen_ai semantic conventions
-- Implement unified observability platform with centralized dashboards
-- Add human-in-the-loop workflows via Step Functions for high-risk agent actions
-- Continue monolith decomposition — extract Payments, Returns services from monoliths
+**Activities (goal-priority first):**
+- **Production Agent Deployment**: Deploy unified customer-facing support agent handling product queries, order status, returns, and basket management across all 4 services. Full RAG integration with conversation memory (DynamoDB).
+- **Automated Evaluation Pipeline** (OPS-Q3): Golden dataset regression testing in CI/CD. Track relevance, accuracy, hallucination rate, and safety scores. Automated alerts on quality degradation.
+- **LLM Cost Optimization** (OPS-Q6): Per-conversation token tracking with user/workflow attribution. Cost anomaly alerts. Implement tiered model selection (smaller model for simple queries, larger for complex).
+- **Agent Quality SLOs**: Define and monitor: task success rate > 90%, p95 response time < 5s, hallucination rate < 5%, customer satisfaction > 4.0/5.0.
+- **Microservices Decomposition**: Extract Basket service from unishop-monolith (DynamoDB-backed, agent-friendly). Decompose local-monolith into order, product, and fulfillment services.
+- **Advanced Observability**: CloudWatch anomaly detection on agent behavior (detect reasoning loops). Business metrics dashboards (support tickets resolved, order modifications by agent). Incident response runbooks.
+- **Event-Driven Analytics**: Stream agent interactions to EventBridge → analytics pipeline. Build agent effectiveness dashboards.
+- **Blue/Green Deployments**: CodeDeploy with canary analysis for agent prompt/model changes. Version all agent configurations.
 
 **Expected Outcomes:**
-- All services have agent-ready APIs with tools defined from OpenAPI specs
-- RAG-powered semantic search across product catalogs
-- Automated evaluation pipelines ensuring agent quality
-- Unified observability with agent-specific SLOs and anomaly detection
+- Production customer support agent serving real customers
+- Automated evaluation pipeline catching quality regressions
+- Full cost visibility and optimization
+- Advanced observability and anomaly detection
 
 **Estimated Effort**: High
 
 ### Total Portfolio Effort
 
 **Total Estimated Effort**: High
-**Expected Timeline**: 9 months (with 2-3 parallel tracks per phase)
-
-| Phase | Duration | Services | Effort | Key Deliverables |
-|-------|----------|----------|--------|-----------------|
-| Phase 0 | Months 0-1 | All 4 (shared) | High | CI/CD templates, Cognito, observability, API docs, secrets migration |
-| Phase 1 | Months 1-3 | unishop, local-monolith, aws-microservices | High | Containerization, EOL upgrades, CI/CD, auth, tracing |
-| Phase 2 | Months 3-6 | books-api, monolith decomposition | Medium | Event-driven patterns, rate limiting, service extraction |
-| Phase 3 | Months 6-9 | All 4 | High | Vector DBs, RAG, agents, evals, LLM cost tracking |
+**Expected Timeline**: 6 months (with 3 parallel service tracks after Phase 0)
+- Phase 0: Month 0–1 (shared foundation)
+- Phase 1: Month 1–2 (3 services in parallel: unishop-monolith, aws-microservices, local-monolith)
+- Phase 2: Month 2–4 (books-api + cross-service integration)
+- Phase 3: Month 4–6+ (production agents + optimization)
 
 ## AWS Modernization Pathways
 
@@ -460,304 +507,380 @@ Based on the portfolio-wide assessment findings, the following AWS Modernization
 |---------|--------------------|----------------|----------|-------------|
 | Move to Cloud Native | 4 services | 100% | High | High |
 | Move to Containers | 3 services | 75% | High | Medium |
-| Move to Open Source | 0 services | 0% | N/A | N/A |
-| Move to Managed Databases | 4 services | 100% | High | Medium |
-| Move to Managed Analytics | 4 services | 100% | Medium | Low |
-| Move to Modern DevOps | 3 services | 75% | High | High |
+| Move to Open Source | 0 services | 0% | Low | — |
+| Move to Managed Databases | 3 services | 75% | High | Medium |
+| Move to Managed Analytics | 3 services | 75% | Medium | Low |
+| Move to Modern DevOps | 4 services | 100% | High | High |
 | Move to AI | 4 services | 100% | High | High |
 
 ### Per-Service Pathway Assignment
 
 | Service | Cloud Native | Containers | Open Source | Managed DB | Managed Analytics | Modern DevOps | Move to AI |
 |---------|-------------|------------|-------------|------------|-------------------|---------------|------------|
-| local-monolith | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ |
 | unishop-monolith | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ |
-| books-api | ✅ | — | — | ✅ | ✅ | — | ✅ |
-| aws-microservices | ✅ | — | — | ✅ | ✅ | ✅ | ✅ |
+| aws-microservices | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ |
+| local-monolith | ✅ | ✅ | — | ✅ | — | ✅ | ✅ |
+| books-api | ✅ | — | — | — | ✅ | ✅ | ✅ |
+
+### Portfolio Pathway Aggregation
+
+This table shows exactly which repositories fall into each pathway status, providing a single at-a-glance view of pathway coverage across the portfolio. Each repo appears in exactly one column per pathway row. Goal Alignment is based on the portfolio-level goal (`agentic-ai-enablement`) using the goal-pathway alignment mapping.
+
+| Pathway | Triggered | Not Triggered | Not Applicable | Goal Alignment |
+|---------|-----------|---------------|----------------|---------------|
+| Move to Cloud Native | unishop-monolith, aws-microservices, local-monolith, books-api | — | — | Medium |
+| Move to Containers | unishop-monolith, aws-microservices, local-monolith | books-api | — | Medium |
+| Move to Open Source | — | unishop-monolith, aws-microservices, local-monolith, books-api | — | Low |
+| Move to Managed Databases | unishop-monolith, aws-microservices, local-monolith | books-api | — | High |
+| Move to Managed Analytics | unishop-monolith, aws-microservices, books-api | local-monolith | — | Low |
+| Move to Modern DevOps | unishop-monolith, aws-microservices, local-monolith, books-api | — | — | High |
+| Move to AI | unishop-monolith, aws-microservices, local-monolith, books-api | — | — | High |
+
+**Validation**: Each row totals 4 repos (Triggered + Not Triggered + Not Applicable = 4). ✓
 
 ### Pathway Dependencies and Parallel Execution
 
 **Sequential Dependencies:**
-- **Move to Containers** should precede **Move to Cloud Native** for monoliths (containerize before decomposing into microservices)
-- **Move to Modern DevOps** enables faster execution of all other pathways (CI/CD accelerates delivery, observability enables safe changes)
-- **Move to Managed Databases** and **Move to Cloud Native** are prerequisites for **Move to AI** (data foundations and service boundaries needed for agent tools)
-- **Move to Open Source** is not applicable (MySQL is already open source, DynamoDB is managed NoSQL)
+- **Move to Containers** should precede **Move to Cloud Native** — containerize monoliths before decomposing into microservices
+- **Move to Managed Databases** should precede **Move to AI** — data foundations (vector store, managed DB) needed for RAG pipeline
+- **Move to Modern DevOps** enables faster execution of all other pathways — CI/CD accelerates delivery across the portfolio
 
 **Parallel Execution Tracks:**
-- **Track 1 (Phase 0-1)**: Move to Containers + Move to Modern DevOps — containerize monoliths while building CI/CD pipelines and observability simultaneously
-- **Track 2 (Phase 1-2)**: Move to Managed Databases — database migrations (Aurora MySQL 5.7 → 3.x, eliminate self-managed MySQL) can proceed alongside containerization
-- **Track 3 (Phase 2-3)**: Move to Cloud Native — decompose monoliths and expand async patterns after containers and databases are modernized
-- **Track 4 (Phase 3)**: Move to AI — integrate agent frameworks and vector databases after Cloud Native and Managed Database foundations are in place
+- **Track 1 (Infrastructure)**: Move to Containers + Move to Modern DevOps — containerization and CI/CD can proceed simultaneously
+- **Track 2 (Data)**: Move to Managed Databases + Move to Managed Analytics — database migration and analytics can proceed in parallel
+- **Track 3 (Agent)**: Move to AI — agent framework integration, RAG pipeline, evaluation infrastructure
 
 ### Pathway Details
 
 #### Move to Cloud Native
 
-- **Services Affected**: local-monolith, unishop-monolith, books-api, aws-microservices (4 total)
-- **Portfolio Priority**: High
+- **Services Affected**: unishop-monolith, aws-microservices, local-monolith, books-api (4 total)
+- **Portfolio Priority**: High (100% of services triggered)
 - **Common Trigger Criteria**:
-  - APP-Q4 < 4: affects 3 services (local-monolith=1, unishop-monolith=2, books-api=3)
-  - APP-Q3 < 3: affects 4 services (all score 1-2)
-  - APP-Q10 < 3: affects 3 services (local-monolith=1, unishop-monolith=1, aws-microservices=2)
-- **Representative AWS Services**: Lambda, API Gateway, Step Functions, EventBridge, SQS, ECS Fargate, EKS
-- **Key Activities**:
-  1. Portfolio-level: Standardize on EventBridge for inter-service events; adopt Step Functions for workflow orchestration
-  2. Per-service: Decompose monoliths (Strangler Fig), expand async patterns, add Step Functions workflows
-- **Cross-Service Synergies**: EventBridge can serve as the portfolio-wide event bus; Step Functions patterns can be reused across services
+  - APP-Q4 < 4: 3 services (unishop 2/4, local-monolith 1/4, books-api 3/4)
+  - INF-Q1 < 3: 2 services (unishop 1/4, local-monolith 2/4)
+  - APP-Q3 < 3: 4 services (all score 1-2/4)
+  - APP-Q10 < 3: 3 services (unishop 1/4, aws-microservices 2/4, local-monolith 1/4)
+- **Representative AWS Services**: Lambda, API Gateway, Step Functions, EventBridge, SQS, SNS
+- **Key Activities**: Decompose monoliths using Strangler Fig pattern, introduce async communication via EventBridge, adopt serverless patterns for new services
+- **Cross-Service Synergies**: aws-microservices demonstrates clean microservices architecture (4/4) — use as reference for monolith decomposition
 - **Estimated Effort**: High across 4 services
-- **Roadmap Phase Alignment**: Phase 1-2 (containerization → decomposition), Phase 3 (agent workflows)
+- **Roadmap Phase Alignment**: Phase 1 (containerization), Phase 2-3 (decomposition)
 - **Relevant Learning Materials**: Module 2 — Move to Cloud Native (Containers and Serverless)
 
 #### Move to Containers
 
-- **Services Affected**: local-monolith, unishop-monolith, books-api (3 total)
-- **Portfolio Priority**: High
+- **Services Affected**: unishop-monolith, aws-microservices, local-monolith (3 total)
+- **Portfolio Priority**: High (75% of services triggered, includes P0 foundation services)
 - **Common Trigger Criteria**:
-  - INF-Q1 < 3: unishop-monolith (1/4, raw EC2)
-  - APP-Q4 < 4: local-monolith (1/4, monolith), unishop-monolith (2/4), books-api (3/4)
-- **Representative AWS Services**: ECS Fargate, EKS, ECR, App Runner
-- **Key Activities**:
-  1. unishop-monolith: Create Dockerfile for Spring Boot JAR → deploy to ECS Fargate
-  2. local-monolith: Adapt existing Dockerfile for EKS deployment with Kubernetes manifests
-  3. books-api: Already serverless Lambda — no containerization needed; triggered via APP-Q4 < 4 but containers not the right path
-- **Estimated Effort**: Medium across 3 services
-- **Roadmap Phase Alignment**: Phase 1 (Core Services)
+  - INF-Q1 < 3: unishop-monolith (1/4 — EC2), local-monolith (2/4 — App Runner)
+  - No Dockerfile: aws-microservices (Lambda-based but no container packaging)
+- **Representative AWS Services**: ECS, Fargate, ECR, Docker
+- **Key Activities**: Create Dockerfiles for monoliths, deploy to ECS Fargate, configure ALB health checks
+- **Cross-Service Synergies**: local-monolith already has a Dockerfile — use as template for unishop-monolith
+- **Estimated Effort**: Medium across 3 services (books-api already serverless, not triggered)
+- **Roadmap Phase Alignment**: Phase 1 (containerization)
 - **Relevant Learning Materials**: Module 3 — Move to Containers with Amazon ECS and EKS
 
 #### Move to Managed Databases
 
-- **Services Affected**: local-monolith, unishop-monolith, books-api, aws-microservices (4 total)
-- **Portfolio Priority**: High
+- **Services Affected**: unishop-monolith, aws-microservices, local-monolith (3 total)
+- **Portfolio Priority**: High (75% of services triggered, **High Goal Alignment** for agentic-ai-enablement)
 - **Common Trigger Criteria**:
-  - INF-Q2 < 4: unishop-monolith (2/4, self-managed MySQL on EC2)
-  - DATA-Q2 < 4: all 4 services (1/4, no vector database)
-  - DATA-Q10 < 4: unishop-monolith (1/4, Aurora MySQL 5.7 EOL)
-- **Representative AWS Services**: Aurora MySQL, DynamoDB, OpenSearch Serverless, Bedrock Knowledge Bases
-- **Key Activities**:
-  1. unishop-monolith: Upgrade Aurora MySQL 5.7 → 3.x; eliminate self-managed MySQL on EC2
-  2. local-monolith: Align dev/prod MySQL versions; evaluate Aurora for production
-  3. All services: Deploy managed vector databases (OpenSearch Serverless or Bedrock Knowledge Bases) for AI capabilities
-- **Estimated Effort**: Medium across 4 services
-- **Roadmap Phase Alignment**: Phase 1 (database upgrades), Phase 3 (vector databases)
+  - INF-Q2 < 4: unishop-monolith (1/4 — self-managed MySQL)
+  - DATA-Q2 < 4: aws-microservices (1/4 — no vector DB)
+  - DATA-Q10: local-monolith (3/4 — dev/prod version mismatch)
+- **Representative AWS Services**: Amazon RDS, Aurora, DynamoDB, OpenSearch Serverless
+- **Key Activities**: Migrate self-managed MySQL to RDS/Aurora, provision vector database for RAG, evaluate DynamoDB for key-value patterns
+- **Cross-Service Synergies**: DynamoDB pattern from aws-microservices/books-api as template for basket service migration
+- **Estimated Effort**: Medium across 3 services
+- **Roadmap Phase Alignment**: Phase 1 (database migration), Phase 2 (vector DB)
 - **Relevant Learning Materials**: Module 4 — Move to Managed Databases
 
 #### Move to Managed Analytics
 
-- **Services Affected**: local-monolith, unishop-monolith, books-api, aws-microservices (4 total)
-- **Portfolio Priority**: Medium
+- **Services Affected**: unishop-monolith, aws-microservices, books-api (3 total)
+- **Portfolio Priority**: Medium (75% triggered but Low Goal Alignment)
 - **Common Trigger Criteria**:
-  - INF-Q8 < 3: all 4 services (scores 1-2, no managed streaming)
-- **Representative AWS Services**: EventBridge, Kinesis Data Streams, Kinesis Data Firehose, Athena
-- **Key Activities**:
-  1. Evaluate whether EventBridge (from Cloud Native pathway) satisfies streaming needs
-  2. Add Kinesis Data Streams if higher-throughput streaming is needed for analytics
-  3. Set up S3 data lake with Athena for ad-hoc analytics
-- **Estimated Effort**: Low across 4 services
-- **Roadmap Phase Alignment**: Phase 2-3
+  - INF-Q8 < 3: All 3 triggered services score 1/4 on real-time streaming
+- **Representative AWS Services**: EventBridge, Kinesis Data Streams, DynamoDB Streams
+- **Key Activities**: Implement EventBridge for domain event streaming, add DynamoDB Streams for real-time data changes
+- **Estimated Effort**: Low across 3 services
+- **Roadmap Phase Alignment**: Phase 3 (analytics and optimization)
 - **Relevant Learning Materials**: Module 5 — Move to Managed Analytics
 
 #### Move to Modern DevOps
 
-- **Services Affected**: local-monolith, unishop-monolith, aws-microservices (3 total)
-- **Portfolio Priority**: High
+- **Services Affected**: unishop-monolith, aws-microservices, local-monolith, books-api (4 total)
+- **Portfolio Priority**: High (100% of services triggered, **High Goal Alignment**)
 - **Common Trigger Criteria**:
-  - INF-Q6 < 3: 3 services (all score 1/4 — no CI/CD)
-  - OPS-Q1 < 3: 3 services (all score 1/4 — no tracing)
-  - OPS-Q9 < 3: 3 services (all score 1/4 — no deployment strategy)
-  - OPS-Q10 < 3: 3 services (all score 1/4 — no testing)
-- **Representative AWS Services**: CodePipeline, CodeBuild, CodeDeploy, X-Ray, CloudWatch, CloudFormation, CDK
-- **Key Activities**:
-  1. Portfolio-level: Create CI/CD pipeline templates and observability standards
-  2. Per-service: Build CI/CD pipelines, add tracing, structured logging, and integration tests
-  3. Per-service: Implement progressive/canary deployment strategies
-- **Cross-Service Synergies**: books-api's existing CI/CD pipeline serves as the reference implementation; Lambda Powertools patterns reusable across serverless services
-- **Estimated Effort**: High across 3 services
-- **Roadmap Phase Alignment**: Phase 0-1 (CI/CD, tracing, logging), Phase 2 (advanced deployment strategies)
+  - INF-Q6 < 3: 3 services (unishop 1/4, aws-microservices 1/4, local-monolith 1/4)
+  - OPS-Q9 < 3: 3 services (unishop 1/4, aws-microservices 1/4, local-monolith 1/4)
+  - OPS-Q10 < 3: 3 services (unishop 1/4, aws-microservices 1/4, local-monolith 1/4)
+  - OPS-Q1 < 3: 3 services (unishop 1/4, aws-microservices 1/4, local-monolith 1/4)
+- **Representative AWS Services**: CodePipeline, CodeBuild, CodeDeploy, CloudFormation, CDK, X-Ray
+- **Key Activities**: Establish CI/CD pipelines, implement IaC, add distributed tracing, configure structured logging
+- **Cross-Service Synergies**: books-api's CodePipeline (4/4) as reference pattern; aws-microservices' CDK (4/4) as IaC template
+- **Estimated Effort**: High across 4 services
+- **Roadmap Phase Alignment**: Phase 0-1 (CI/CD, IaC), Phase 2 (advanced observability)
 - **Relevant Learning Materials**: Module 6 — Move to Modern DevOps
 
 #### Move to AI
 
-- **Services Affected**: local-monolith, unishop-monolith, books-api, aws-microservices (4 total)
-- **Portfolio Priority**: High
+- **Services Affected**: unishop-monolith, aws-microservices, local-monolith, books-api (4 total)
+- **Portfolio Priority**: High (100% of services triggered, **High Goal Alignment** — this is the primary pathway for agentic-ai-enablement)
 - **Common Trigger Criteria**:
-  - APP-Q13 < 3: all 4 services (1/4 — no agent frameworks)
-  - DATA-Q1 < 3: all 4 services (1/4 — no vector database)
-  - DATA-Q3 < 3: all 4 services (1/4 — no RAG pipeline)
-  - OPS-Q3 < 3: all 4 services (1/4 — no eval framework)
-  - OPS-Q6 < 3: all 4 services (1/4 — no LLM cost tracking)
-- **Representative AWS Services**: Amazon Bedrock, Bedrock Knowledge Bases, Bedrock AgentCore, OpenSearch Serverless, Strands Agents SDK
-- **Key Activities**:
-  1. Portfolio-level: Establish vector database infrastructure and Bedrock access patterns
-  2. Per-service: Build RAG pipelines, integrate agent frameworks, create eval datasets
-  3. Per-service: Implement LLM cost tracking and agent-specific observability
+  - APP-Q13 < 3: ALL 4 services score 1/4 (no agent frameworks)
+  - DATA-Q1 < 3: ALL 4 services score 1/4 (no vector database)
+  - DATA-Q3 < 3: ALL 4 services score 1/4 (no RAG implementation)
+  - OPS-Q3 < 3: ALL 4 services score 1/4 (no automated evaluations)
+  - OPS-Q6 < 3: ALL 4 services score 1/4 (no LLM cost tracking)
+- **Representative AWS Services**: Amazon Bedrock, Amazon Bedrock AgentCore, Amazon Q, Strands Agents SDK, OpenSearch Serverless
+- **Key Activities**: Build centralized agent orchestration service, deploy RAG pipeline with Bedrock Knowledge Bases, implement agent evaluation framework, add LLM cost tracking
+- **Cross-Service Synergies**: Unified customer support agent serves all 4 services via their APIs as tools. Shared Bedrock Knowledge Base indexes data from all services.
 - **Estimated Effort**: High across 4 services
-- **Roadmap Phase Alignment**: Phase 3 (Agent Enablement)
+- **Roadmap Phase Alignment**: Phase 0 (framework selection), Phase 1 (agent PoCs), Phase 2 (RAG, approvals), Phase 3 (production deployment)
 - **Relevant Learning Materials**: Module 7 — Move to AI
 
 ### Example: Parallel Pathway Execution for a Single Service
 
-**unishop-monolith** simultaneously pursues:
-- **Move to Containers** (Phase 1): Create Dockerfile, containerize Spring Boot JAR, deploy to ECS Fargate
-- **Move to Modern DevOps** (Phase 0-1): Build CI/CD pipeline, add X-Ray tracing, structured logging
-- **Move to Managed Databases** (Phase 1): Upgrade Aurora MySQL 5.7 → 3.x, eliminate self-managed MySQL EC2
-- **Move to Cloud Native** (Phase 2): Extract Basket service using Strangler Fig, add EventBridge events
-- **Move to Managed Databases** (Phase 3): Deploy vector database for product catalog semantic search
-- **Move to AI** (Phase 3): Integrate Bedrock agents for product recommendations and conversational commerce
+**aws-microservices** simultaneously pursues:
+- **Move to Cloud Native**: Already microservices (4/4) — extend async patterns (Step Functions, more EventBridge events)
+- **Move to Containers**: Package Lambda functions for container deployment flexibility
+- **Move to Modern DevOps**: Build CI/CD pipeline, add X-Ray tracing, structured logging
+- **Move to Managed Databases**: Provision vector database (OpenSearch Serverless) for RAG
+- **Move to AI**: Build customer support agent PoC, integrate with Bedrock Knowledge Base, implement evaluation framework
+
+## Portfolio Quick Agent Wins
+
+> Included because the portfolio goal is `agentic-ai-enablement`. Goal context: Building customer-facing AI agents for support and order management.
+
+Across the portfolio, these agent opportunities are immediately available based on existing capabilities found in individual assessments:
+
+**Customer Support Query Agents** (4 repos: unishop-monolith, aws-microservices, local-monolith, books-api)
+- All 4 services expose REST APIs returning structured JSON for products, orders, and baskets. An agent can be built today to query product catalogs (`GET /unicorns`, `GET /product`, `GET /api/products`, `GET /books`), check order status (`GET /order/{userName}`, `GET /api/orders/me`), and view basket contents (`GET /unicorns/basket/{userUuid}`, `GET /basket/{userName}`). This directly enables the "customer-facing AI agents for support and order management" goal.
+
+**Agent Tool Integration via JSON APIs** (2 repos: aws-microservices, books-api)
+- aws-microservices and books-api return consistently structured JSON responses (`{ message: "...", body: <data> }`). Agent tool parsers can be standardized across these services without custom response handling, accelerating multi-tool agent development.
+
+**Natural Language Data Query Agents** (2 repos: unishop-monolith, local-monolith)
+- Both MySQL-based monoliths have clean relational schemas ideal for text-to-SQL agents. unishop-monolith has a 3-table schema (unicorns, unicorns_basket, unicorn_user) and local-monolith has a 9-table schema (orders, order_items, inventory, payments, returns, interactions, order_status_history, warehouses, users). Agents can translate customer support queries like "Show me all orders from last week" into SQL.
+
+**Knowledge Base / RAG Agents** (3 repos: unishop-monolith, aws-microservices, books-api)
+- unishop-monolith has SQL schema documentation and product seed data. aws-microservices has README with architecture docs and DynamoDB schema comments. books-api has comprehensive README and CONTRIBUTING.md. These can be ingested into a shared Bedrock Knowledge Base for an internal developer support agent.
+
+**DevOps Deployment Agents** (2 repos: aws-microservices, books-api)
+- aws-microservices has comprehensive CDK IaC for the full infrastructure stack. books-api has a complete CodePipeline with staging and production stages. Agents can trigger deployments, check pipeline status, and report on infrastructure changes.
+
+**Return/Fulfillment Support Agents** (1 repo: local-monolith)
+- local-monolith has rich decision-support APIs for returns (`POST /api/returns`), warehouse assignment scoring, and carrier shipping options. An agent can automate return intake and recommend fulfillment decisions.
+
+### Cross-Repo Agent Opportunities
+
+**Unified E-Commerce Customer Support Agent** (all 4 repos)
+- Combine product catalog queries (all services), order management (aws-microservices, local-monolith, unishop-monolith), and book catalog (books-api) into a single customer-facing support agent. The agent uses each service's API as a tool, providing a unified interface for customers to ask "What products do you have?", "Where is my order?", "Can I return this item?", and "Do you have any books about X?". This is more valuable than individual per-service agents because customers don't know (or care) which backend service handles their request.
+
+**Cross-Service Order Orchestration Agent** (aws-microservices → books-api)
+- The EventBridge-based async dependency between aws-microservices and books-api enables an orchestration agent that manages cross-service workflows: when an order is placed in aws-microservices, the agent can verify related book catalog items in books-api, update inventory, and notify the customer — all as a coordinated workflow.
+
+**Portfolio-Wide Developer Support Agent** (all repos)
+- Combine documentation from all 4 repos into a unified knowledge base. Internal developers can ask "How does checkout work in aws-microservices?", "What's the database schema for the monolith?", or "How do I deploy books-api?" — a single agent answers based on all repo documentation.
+
+### Prioritized Agent Wins
+
+| Win | Repos Affected | Goal Alignment | Effort | Recommended Phase |
+|-----|---------------|----------------|--------|-------------------|
+| Unified Customer Support Agent | 4 repos | High | Medium | Phase 1 |
+| Product Catalog Query Agent | 4 repos | High | Low | Phase 1 |
+| Order Status Lookup Agent | 3 repos | High | Low | Phase 1 |
+| NL-to-SQL Data Query Agent | 2 repos | High | Medium | Phase 2 |
+| RAG Knowledge Base Agent | 3 repos | High | Low-Medium | Phase 2 |
+| Return Intake Agent | 1 repo | High | Low | Phase 1 |
+| DevOps Deployment Agent | 2 repos | Medium | Medium | Phase 2 |
+| Cross-Service Orchestration Agent | 2 repos | High | Medium | Phase 3 |
+
+> These portfolio-wide agent opportunities can be pursued in parallel with the
+> modernization roadmap. They demonstrate agent value early while foundations
+> are being built across the portfolio.
+
+## AWS Programs & Engagement Recommendations
+
+> **This section appears ONLY in portfolio reports, NEVER in individual reports.** Programs are engagement-level decisions scoped to the customer's overall estate, not per-repo.
+
+Based on the portfolio assessment findings, the following AWS programs may accelerate your modernization journey:
+
+### Recommended Programs
+
+| Program | Relevance | Trigger Findings | Next Step |
+|---------|-----------|-----------------|-----------|
+| Migration Acceleration Program (MAP) | High | All 4 repos score below 2.5 overall (unishop-monolith: 1.3, aws-microservices: 1.8, local-monolith: 1.5, books-api: 2.1) — significantly exceeds the 3-repo threshold | Evaluate MAP eligibility with your AWS account team for migration credits and professional services support |
+| EBA — Move to Cloud Native | High | 4 of 4 services triggered (APP-Q4, INF-Q1, APP-Q3, APP-Q10). Two monoliths require decomposition. | Request EBA engagement via SA for Strangler Fig decomposition guidance |
+| EBA — Move to Containers | High | 3 of 4 services triggered (unishop-monolith INF-Q1: 1/4, aws-microservices no Dockerfile, local-monolith INF-Q1: 2/4). Core P0 services need containerization. | Request EBA engagement via SA for ECS migration acceleration |
+| EBA — Move to Managed Databases | Medium | 3 of 4 services triggered (unishop-monolith INF-Q2: 1/4 self-managed MySQL, aws-microservices DATA-Q2: 1/4, local-monolith DATA-Q10: 3/4) | Request EBA engagement via SA for database migration planning |
+| EBA — Move to Modern DevOps | High | 4 of 4 services triggered. 3 services have zero CI/CD (INF-Q6: 1/4). 3 services have zero observability (OPS-Q1: 1/4). | Request EBA engagement via SA for DevOps transformation |
+| EBA — Move to AI | High | 4 of 4 services triggered with all AI criteria at 1/4 (APP-Q13, DATA-Q1, DATA-Q3, OPS-Q3, OPS-Q6). Primary pathway for `agentic-ai-enablement` goal. | Request EBA engagement via SA for agent architecture design and Bedrock implementation |
+
+### Program Details
+
+**Migration Acceleration Program (MAP)** — Recommended with High relevance because all 4 services in the portfolio score below 2.5/4.0, indicating substantial modernization needs across compute, data, security, and operations dimensions. MAP provides migration credits, AWS Professional Services engagement, and partner support that can significantly accelerate the 6-month roadmap, particularly for Phase 0 shared infrastructure establishment and Phase 1 service modernization. Suggested timing: Initiate MAP assessment during Phase 0.
+
+**EBA — Move to Cloud Native** — The two monoliths (unishop-monolith and local-monolith) both require decomposition into microservices for effective agent tool boundary definition. An EBA engagement provides hands-on guidance for Strangler Fig pattern implementation, event-driven architecture design (EventBridge/SQS), and API Gateway routing strategies. Suggested timing: Phase 1-2.
+
+**EBA — Move to Containers** — Three P0 services need containerization: unishop-monolith (EC2 → ECS), local-monolith (App Runner → ECS), and aws-microservices (Lambda → container packaging). EBA provides accelerated ECS cluster design, Dockerfile optimization, and ECR/deployment pipeline guidance. Suggested timing: Phase 1.
+
+**EBA — Move to Managed Databases** — unishop-monolith has self-managed MySQL with no IaC, presenting migration risk. EBA provides database migration strategy guidance with AWS DMS and Schema Conversion Tool expertise. Suggested timing: Phase 1-2.
+
+**EBA — Move to Modern DevOps** — Three of four services have zero CI/CD and zero observability. EBA provides accelerated DevOps transformation with CodePipeline/CodeBuild templates, X-Ray integration, and structured logging patterns. Suggested timing: Phase 0-1.
+
+**EBA — Move to AI** — The primary pathway for the portfolio's `agentic-ai-enablement` goal. All services lack AI foundations. EBA provides agent architecture design, Bedrock Knowledge Base implementation guidance, Strands Agents SDK best practices, and evaluation framework design. Suggested timing: Phase 0-3 (continuous engagement).
+
+> These are engagement-level recommendations. Discuss with your AWS Solutions Architect
+> or Partner to determine eligibility and timing.
 
 ## Integration Opportunities
 
 ### Shared Service Extraction
 
-**Opportunity 1: Centralized Authentication (Cognito User Pool)**
-- **Current State**: Duplicated and inconsistent authentication across services — books-api has Cognito, aws-microservices has zero auth, monoliths use custom session/password mechanisms
-- **Proposed Solution**: Deploy a single shared Amazon Cognito User Pool with OAuth2/OIDC flows, machine-to-machine client credentials for agent authentication, and user pools for human access
-- **Services Affected**: All 4 services
-- **Benefits**: Consistent identity across services, agent identity propagation, SSO capability, centralized MFA
-- **Effort**: Medium
-- **Priority**: High — prerequisite for secure agent operations
+**Opportunity 1: Centralized Authentication Service (Amazon Cognito)**
+- Current State: unishop-monolith has OAuth2 disabled (permitAll), aws-microservices has zero auth, local-monolith has basic WAF, books-api has partial Cognito
+- Proposed Solution: Deploy shared Amazon Cognito User Pool with customer pools and agent service accounts. OAuth scopes for read, write, and admin operations.
+- Benefits: Consistent authentication across all services, agent identity propagation, per-user data access boundaries
+- Effort: Medium
+- Priority: High — prerequisite for safe agent deployment
 
-**Opportunity 2: Unified Observability Platform**
-- **Current State**: books-api has X-Ray tracing only; other 3 services have zero observability. No structured logging standard. No cross-service trace correlation.
-- **Proposed Solution**: Deploy OpenTelemetry Collector (ADOT) as a shared observability platform. Standardize on Lambda Powertools (serverless) and Logback JSON (Java) for structured logging. Centralize in CloudWatch with cross-service dashboards.
-- **Services Affected**: All 4 services
-- **Benefits**: End-to-end request tracing, unified log querying, consistent alerting, agent workflow visibility
-- **Effort**: Medium
-- **Priority**: High — required for safe agent deployment and debugging
+**Opportunity 2: Agent Orchestration Service (Strands Agents SDK)**
+- Current State: All 4 services score 1/4 on APP-Q13. No agent framework anywhere.
+- Proposed Solution: Build a centralized agent service using Strands Agents SDK that calls individual service APIs as tools. Deploy on ECS Fargate. Define tools from OpenAPI specs.
+- Benefits: Single agent service manages all customer interactions, consistent tool interface, centralized prompt management
+- Effort: High
+- Priority: High — core requirement for agentic-ai-enablement goal
 
-**Opportunity 3: Portfolio API Catalog**
-- **Current State**: No API documentation exists for any service. APIs discoverable only by reading source code.
-- **Proposed Solution**: Generate OpenAPI 3.0 specs for all services. Create a centralized API catalog (API Gateway developer portal or custom documentation site). Use specs as the foundation for agent tool definitions.
-- **Services Affected**: All 4 services
-- **Benefits**: Agent tool discovery, consistent API documentation, request validation, developer onboarding
-- **Effort**: Low
-- **Priority**: High — fundamental prerequisite for agentic readiness
+**Opportunity 3: Unified Observability Platform**
+- Current State: 3 of 4 services have zero tracing and logging. Only books-api has X-Ray.
+- Proposed Solution: Deploy unified CloudWatch + X-Ray + OpenTelemetry stack. Shared dashboards, log format standards, correlation ID propagation.
+- Benefits: End-to-end agent request tracing, consistent metrics, portfolio-level visibility
+- Effort: Medium
+- Priority: High — required for debugging agent tool invocations
+
+**Opportunity 4: Shared Bedrock Knowledge Base**
+- Current State: All 4 services score 1/4 on DATA-Q1, DATA-Q2, DATA-Q3. No vector store or RAG.
+- Proposed Solution: Deploy Amazon Bedrock Knowledge Base backed by OpenSearch Serverless. Ingest product catalogs, order schemas, and support documentation from all 4 services.
+- Benefits: Unified semantic search across all e-commerce data, reduced infrastructure cost vs per-service vector stores
+- Effort: Medium
+- Priority: High — core enabler for customer support RAG
 
 ### Event-Driven Architecture
 
-**Opportunity 1: Replace Synchronous Circular Dependency**
-- **Current State**: books-api calls aws-microservices synchronously via REST API, while aws-microservices publishes to EventBridge consumed by books-api — creating a circular dependency
-- **Proposed Solution**: Replace the synchronous REST call from books-api → aws-microservices with an EventBridge async pattern. books-api publishes a request event, aws-microservices processes it and publishes a response event.
-- **Services Affected**: books-api, aws-microservices
-- **Benefits**: Eliminates circular dependency, enables independent deployment, improves resilience
-- **Effort**: Medium
-- **Priority**: High — Phase 0 resolution required
+**Opportunity 1: Portfolio-Wide EventBridge Bus**
+- Current State: aws-microservices has EventBridge + SQS (INF-Q4: 4/4). Other 3 services score 1/4.
+- Proposed Solution: Create a shared EventBridge event bus. Extend the aws-microservices EventBridge pattern to all services. Define domain event schemas: `OrderCreated`, `ProductUpdated`, `ReturnRequested`, `CatalogUpdated`, `BasketModified`.
+- Benefits: Decoupled services, agent event-driven reactions, real-time knowledge base updates
+- Effort: Medium
+- Priority: High — aligned with EventBridge preference
 
-**Opportunity 2: Portfolio-Wide Event Bus**
-- **Current State**: Only aws-microservices uses EventBridge (for checkout flow). Other services have no event infrastructure.
-- **Proposed Solution**: Establish a shared EventBridge custom event bus for portfolio-wide domain events (OrderCreated, ProductUpdated, BookCreated, UserRegistered). Each service publishes events to the bus; other services subscribe as needed.
-- **Services Affected**: All 4 services
-- **Benefits**: Loose coupling, event-driven agent triggers, audit trail for all domain events, embedding refresh triggers for RAG
-- **Effort**: Medium
-- **Priority**: Medium — Phase 2 activity
+**Opportunity 2: Async Agent Task Processing**
+- Current State: All services process requests synchronously. Agent workflows could timeout on long operations.
+- Proposed Solution: SQS queues for async agent tasks (returns processing, order modifications). Status polling endpoints for agent completion tracking.
+- Benefits: Agents don't timeout on long operations, scalable task processing
+- Effort: Low
+- Priority: Medium
+
+### API Gateway Consolidation
+
+- Current State: aws-microservices has 3 separate API Gateways, local-monolith has WAF only, unishop-monolith has no gateway, books-api has API Gateway with Cognito
+- Proposed Solution: Unified Amazon API Gateway with path-based routing for all services. Consistent auth (Cognito), throttling, request validation, and monitoring. Agent-specific usage plans with higher rate limits.
+- Benefits: Single entry point for agents, consistent security, simplified tool configuration, portfolio-level API analytics
+- Effort: Medium
+- Priority: High — aligned with API Gateway preference
 
 ### Observability Unification
 
-- **Current State**: books-api uses X-Ray + CloudWatch alarms; aws-microservices has basic console.log; monoliths have zero observability
-- **Proposed Solution**: Standardize on X-Ray/ADOT for distributed tracing, Lambda Powertools Logger / Logback for structured logging, and CloudWatch for metrics/alarms/dashboards across all services
-- **Services Affected**: All 4 services
-- **Benefits**: End-to-end tracing across service boundaries, consistent metrics, unified alerting, reduced tool sprawl
-- **Effort**: Medium
-- **Priority**: High — Phase 0-1 activity
+- Current State: Only books-api has X-Ray tracing (OPS-Q1: 3/4). Others score 1/4. No service has structured logging.
+- Proposed Solution: Deploy OpenTelemetry collector + X-Ray + CloudWatch Logs across all services. Shared dashboards for portfolio-level visibility. Agent-specific metrics (tool call success rate, response latency, token usage).
+- Benefits: End-to-end tracing across agent → API Gateway → service → database, consistent log format for CloudWatch Log Insights
+- Effort: Medium
+- Priority: High
 
 ## Resource Allocation Recommendations
 
 ### Team Structure
 
-**Recommended Approach**: Centralized platform team + dedicated service teams (30+ cross-cutting concerns justify centralized approach)
+**Recommended Approach**: Centralized platform team + embedded service teams (20+ cross-cutting concerns detected — exceeds the 5-concern threshold for centralized platform team recommendation).
 
-**Platform Team** (dedicated):
-- **Responsibilities**: Shared Cognito deployment, CI/CD pipeline templates, observability stack (ADOT, CloudWatch dashboards), IaC templates, security baseline (Secrets Manager patterns, encryption standards), API documentation standards, vector database infrastructure
-- **Skills Required**: CDK/CloudFormation, Cognito/IAM, OpenTelemetry/X-Ray, CodePipeline/GitHub Actions, CloudWatch, EventBridge
+**Platform Team**:
+- Responsibilities: Shared Cognito deployment, API Gateway management, EventBridge bus, observability stack, Bedrock Knowledge Base, agent orchestration framework, CI/CD templates, CDK construct library
+- Skills Required: AWS CDK, Amazon Bedrock, Strands Agents SDK, API Gateway, Cognito, EventBridge, X-Ray/OpenTelemetry, CloudWatch
 
-**Service Team 1 — Monolith Modernization** (unishop-monolith + local-monolith):
-- **Responsibilities**: Containerization, database migrations, service decomposition (Strangler Fig), EKS/ECS deployment
-- **Skills Required**: Java/Spring Boot (unishop), PHP (local-monolith), Docker, ECS Fargate, EKS, MySQL/Aurora, domain-driven design
-- **Note**: Both monoliths are isolated and can be worked in parallel by sub-teams
-
-**Service Team 2 — Serverless Services** (aws-microservices + books-api):
-- **Responsibilities**: Runtime upgrades, async pattern expansion, API hardening, agent integration (Phase 3)
-- **Skills Required**: TypeScript/JavaScript, Lambda, DynamoDB, EventBridge, SAM/CDK, Lambda Powertools
+**Service Teams**:
+- **unishop-monolith team**: Java/Spring Boot containerization, database migration, OpenAPI generation
+- **aws-microservices team**: Node.js/TypeScript CI/CD, Lambda optimization, EventBridge patterns
+- **local-monolith team**: PHP modernization, ECS migration, order management domain
+- **books-api team**: TypeScript agent integration, RAG implementation, evaluation pipeline
 
 ### Skill Gaps
 
-1. **EKS/Containers**: Required for local-monolith EKS deployment — currently not available (no EKS infrastructure exists)
-2. **Serverless Patterns (Lambda Powertools)**: Required for structured logging, idempotency, and tracing across serverless services — not currently used
-3. **IaC (CDK v2)**: Required for standardizing infrastructure across portfolio — aws-microservices uses CDK 2.17.0 (outdated), books-api uses CDK 2.189.1
-4. **Observability (X-Ray/OpenTelemetry)**: Required for distributed tracing across all services — only books-api has basic X-Ray
-5. **AI/Bedrock/Agents**: Required for Phase 3 agent enablement — zero AI capability exists in any service
-6. **Database Migration (Aurora)**: Required for unishop-monolith Aurora MySQL 5.7 → 3.x upgrade — DMS partially configured but not executed
+1. **Agent Development (Strands Agents, Bedrock)**: Required across all teams, currently absent across the entire portfolio. Critical for goal achievement.
+2. **Containerization (Docker, ECS, Fargate)**: Required for unishop-monolith and local-monolith teams. local-monolith has Docker experience; unishop-monolith has none.
+3. **Infrastructure as Code (CDK)**: Required for unishop-monolith team (zero IaC). aws-microservices and books-api teams have CDK experience.
+4. **CI/CD (CodePipeline, CodeBuild)**: Required for 3 of 4 teams. books-api team has expertise to share.
+5. **Observability (X-Ray, OpenTelemetry, CloudWatch)**: Required across all teams. books-api team has X-Ray experience.
+6. **RAG / Vector Databases (Bedrock KB, OpenSearch)**: Required for platform team and all service teams. Not present anywhere.
 
 ### Training Recommendations
 
-- **Phase 0-1 Priority**: Containers/EKS, Modern DevOps (CI/CD, IaC), observability (X-Ray/OpenTelemetry) — skills needed immediately
-- **Phase 2 Priority**: Serverless advanced patterns (Lambda Powertools, EventBridge), database migration (DMS, Aurora upgrades)
-- **Phase 3 Priority**: AI/Bedrock, RAG pipelines, agent frameworks (Strands Agents SDK), agent evaluation
+- **Phase 0 priority**: Amazon Bedrock Getting Started, Strands Agents SDK, ECS/Fargate fundamentals, CDK basics
+- **Phase 1 priority**: CI/CD with CodePipeline, X-Ray tracing, structured logging, OpenAPI specification
+- **Phase 2 priority**: RAG pipeline design, Step Functions, evaluation frameworks, cost optimization
+- **Certification paths**: AWS Solutions Architect (platform team), AWS DevOps Engineer (service teams)
 
 ### External Support
 
-- **Recommended**: AWS Professional Services or consulting partner engagement for:
-  - EKS cluster setup and monolith-to-container migration (2-3 months, Phase 0-1)
-  - Aurora MySQL 5.7 → 3.x migration planning and execution (1-2 months, Phase 1)
-  - Agent framework architecture and initial implementation (2-3 months, Phase 3)
-- **Knowledge Transfer**: External support should include knowledge transfer sessions to build internal capability
+- **AWS Professional Services or consulting partners** recommended for:
+  - Phase 0 shared platform infrastructure (Cognito, API Gateway, Bedrock KB) — accelerate foundation work
+  - Agent architecture design — Strands Agents SDK implementation patterns, multi-tool agent orchestration
+  - Database migration (unishop-monolith MySQL → RDS) — mitigate data migration risk
+  - Knowledge transfer — upskill all teams on agent development simultaneously
+- Estimated engagement: 2-3 months for platform work, shorter engagements for individual service consultations
 
 ## Recommended Self-Paced Learning Materials
 
-Based on portfolio-wide skill gaps, the following learning materials are recommended. All six triggered pathways are represented.
+Based on portfolio-wide skill gaps identified in containerization, CI/CD, managed databases, DevOps practices, and AI/agent development:
 
 **Module 2: Move to Cloud Native (Containers and Serverless):**
 - Cloud Design Patterns, Architectures, and Implementations — https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html
-  - Essential reference for microservices decomposition: Strangler Fig, Anti-corruption Layer, Saga patterns, Event Sourcing, Circuit Breaker, API routing, Hexagonal Architecture, and more. Critical for the monolith decomposition strategy across unishop-monolith and local-monolith.
+  - Essential reference for microservices decomposition: Strangler Fig, Anti-corruption Layer, Saga patterns, Event Sourcing, Circuit Breaker, API routing, Hexagonal Architecture, and more
 - AWS Modernization Pathways: Move to Cloud Native Serverless — https://skillbuilder.aws/learning-plan/CMK2J48MVN/aws-modernization-pathways-move-to-cloud-native-serverless-includes-labs/EFUPP53B4Q
 - Lambda Foundations — https://skillbuilder.aws/learn/XHRS91KKK6/aws-lambda-foundations/R85JRN3APC
 - Architecting Serverless Applications — https://skillbuilder.aws/learn/MRWENY7FSX/architecting-serverless-applications/QVFY2JHVEH
 - Amazon API Gateway for Serverless Applications — https://skillbuilder.aws/learn/GQA6FHWPJD/amazon-api-gateway-for-serverless-applications/JVRZ3PSW4H
-- Deploying Serverless Applications — https://skillbuilder.aws/learn/M531VCW415/deploying-serverless-applications/SMY21G7FYZ
-- Amazon DynamoDB for Serverless Architecture — https://skillbuilder.aws/learn/SY1Y83VKTB/amazon-dynamodb-for-serverless-architectures/K9NM3PHH3S
 - Modernize a Monolith to ECS and Fargate using Application Discovery — https://skillbuilder.aws/learn/1YXAWYH2WA/modernize-a-monolith-to-ecs-and-fargate-using-application-discovery/AQ37WHN3K1
 - Meeting Simulator: Transform Monolithic App into Serverless Microservices — https://skillbuilder.aws/learn/HUKQHYU9TB/meeting-simulator-transforming-our-monolithic-app-into-serverless-microservices/NS6S2J7YR7
 
 **Module 3: Move to Containers with Amazon ECS and EKS:**
-- AWS Modernization Pathways: Move to Containers with Amazon EKS — https://skillbuilder.aws/learning-plan/GNYBZ9X9EM/aws-modernization-pathways-move-to-containers-with-amazon-eks-includes-labs/1HB9MKXD2N
-  - Primary learning path for local-monolith's EKS migration (preferred container platform).
 - AWS Modernization Pathways: Move to Containers with Amazon ECS — https://skillbuilder.aws/learning-plan/CDA8Y4JRRR/aws-modernization-pathways-move-to-containers-with-amazon-ecs-includes-labs/1UB9AW4KYN
-  - Applicable for unishop-monolith's ECS Fargate deployment.
 - Introduction to Containers — https://skillbuilder.aws/learn/CUCA1DK47V/introduction-to-containers/XJ58VC1FF5
 - AWS Fargate Getting Started — https://skillbuilder.aws/learn/6QS9CM1V7K/aws-fargate-getting-started/EDX6V7B5YR
 - Amazon ECR Getting Started — https://skillbuilder.aws/learn/M494WWS5EF/amazon-ecr-getting-started/N5CQ7DC6HT
-- Amazon EKS Primer — https://skillbuilder.aws/learn/Z521GMBP1J/amazon-eks-primer/NGM5AF9K72
-- Deploy Applications on Amazon EKS (Lab) — https://skillbuilder.aws/learn/2B5XUE2V9C/lab--deploy-applications-on-amazon-elastic-kubernetes-service-eks/SM5HZNTY9J
 - Amazon ECS Getting Started — https://skillbuilder.aws/learn/CY2F57HH7V/amazon-ecs-getting-started/4QUDNRVSNC
 - Working with Amazon Elastic Container Service (Lab) — https://skillbuilder.aws/learn/CV6ZEU3NHE/working-with-amazon-elastic-container-service/X989GB8H74
-- EKS Workshop — https://www.eksworkshop.com/
-- EKS Auto Mode Workshop — https://catalog.workshops.aws/workshops/aadbd25d-43fa-4ac3-ae88-32d729af8ed4
 
 **Module 4: Move to Managed Databases:**
 - AWS Modernization Pathways: Move to Managed Databases — https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC/aws-modernization-pathways-move-to-managed-databases-includes-labs/2S2QZKG9DV
 - Introduction to Building with AWS Databases — https://skillbuilder.aws/learn/HYKKWEN9ZS/introduction-to-building-with-aws-databases/V7RVH2KY91
+- Selecting your Data Migration Strategy with AWS — https://skillbuilder.aws/learn/RKGP54WJPP/selecting-your-data-migration-strategy-with-aws/D38U3CZEYR
 - AWS Database Migration Service (DMS) Getting Started — https://skillbuilder.aws/learn/ND246G8Y3W/aws-database-migration-service-aws-dms-getting-started/QK5CCBP464
-  - Directly applicable: unishop-monolith already has DMS partially configured for MySQL migration.
 - Migrating RDS MySQL to Aurora (Lab) — https://skillbuilder.aws/learn/RZF2GBUUWX/migrating-rds-mysql-to-aurora-with-read-replica/SMG825PXTK
 - AWS PartnerCast: Vector Databases for Generative AI Applications — https://skillbuilder.aws/learn/UQ74USQJHU/aws-partnercast--vector-databases-for-generative-ai-applications--technical/7DKMBAPCST
-  - Essential for understanding vector database options (OpenSearch k-NN, pgvector) for Phase 3 RAG pipelines.
-
-**Module 5: Move to Managed Analytics:**
-- AWS Modernization Pathways: Move to Managed Analytics — https://skillbuilder.aws/learning-plan/RWZA84NMVV/aws-modernization-pathways-move-to-managed-analytics--includes-labs/9BAKK2QQQU
 
 **Module 6: Move to Modern DevOps:**
 - AWS Modernization Pathways: Move to Modern DevOps — https://skillbuilder.aws/learning-plan/1FGEQKGPQD/aws-modernization-pathways-move-to-modern-devops-includes-labs/MNQZ2KPVCK
-  - Comprehensive learning plan covering CI/CD, IaC, monitoring — all critical gaps for 3 of 4 services.
 - Getting Started with DevOps on AWS — https://skillbuilder.aws/learn/R4B13K95YQ/getting-started-with-devops-on-aws/38NHHYRV1R
 - Create a CI/CD Pipeline to Deploy Your App to AWS Fargate (ECS) — https://skillbuilder.aws/learn/H61B17Z8R7/create-a-cicd-pipeline-to-deploy-your-app-to-aws-fargate/T66BGGGHV5
 - AWS CloudFormation Getting Started — https://skillbuilder.aws/learn/RH22P2RXU4/aws-cloudformation-getting-started/KEK5BT6HSE
 - Advanced Testing Practices Using AWS DevOps Tools — https://skillbuilder.aws/learn/1YC7UXUWBR/advanced-testing-practices-using-aws-devops-tools/A32U6G7NEQ
-  - Critical: 3 of 4 services have zero tests.
 - Monitor Java Applications Using Amazon CloudWatch Application Signals — https://skillbuilder.aws/learn/PMCTXKYK1Y/monitor-java-applications-using-amazon-cloudwatch-application-signals/15ZK4ETKE9
-  - Directly applicable for unishop-monolith's Java/Spring Boot observability.
+- Monitor Python Applications Using Amazon CloudWatch Application Signals — https://skillbuilder.aws/learn/JMPDZD64MV/monitor-python-applications-using-amazon-cloudwatch-application-signals/2JP3J2MPCK
 - AWS Developer: CI/CD Automation — https://skillbuilder.aws/learn/C1KF8ZJ1D8/aws-developer--cicd-automation/KY1E1JS9FA
-- AWS PartnerCast: Automate EKS Deployments With GitOps Using ArgoCD and GitHub Actions — https://skillbuilder.aws/learn/D9U7XMXP31/aws-partnercast--tech-talks--automate-eks-deployments-with-gitops-using-argocd-and-github-actions--technical/Z4M9Z8FY88
-  - Applicable for local-monolith's EKS deployment with GitOps CI/CD.
-- EKS Workshop: Automation — https://www.eksworkshop.com/docs/automation/
 
 **Module 7: Move to AI:**
 - AWS Modernization Pathways: Move to AI — https://skillbuilder.aws/learning-plan/VDFEE4ACCV/aws-modernization-pathways-move-to-ai-pathways-includes-labs/P3DAWPTN63
@@ -765,96 +888,78 @@ Based on portfolio-wide skill gaps, the following learning materials are recomme
 - Planning a Generative AI Project — https://skillbuilder.aws/learn/HU1FQRGDDZ/planning-a-generative-ai-project/SYR3SCPSHC
 - Amazon Bedrock Getting Started — https://skillbuilder.aws/learn/63KTRM86DQ/amazon-bedrock-getting-started/SC2Y3HMAUE
 - Essentials for Prompt Engineering — https://skillbuilder.aws/learn/XBNAVKA88J/essentials-of-prompt-engineering/9T9Q45EDTV
+- Optimizing Foundation Models — https://skillbuilder.aws/learn/CDYTAJCKGY/optimizing-foundation-models/PVR1FRGN1T
 - Build and Evaluate Retrieval Augmented Generation (RAG) Applications using Knowledge Bases for Amazon Bedrock (Lab) — https://skillbuilder.aws/learn/JRGWCFYT67/lab--build-and-evaluate-retrieval-augmented-generation-rag-applications-using-knowledge-bases-for-amazon-bedrock/A4MN58JB7A
-  - Essential for building RAG pipelines across all 4 services in Phase 3.
 - Amazon Q Developer Getting Started — https://skillbuilder.aws/learn/BQMRXE8AB4/amazon-q-developer-getting-started/JY4XXGZDJA
 - Introduction to Agentic AI on AWS — https://skillbuilder.aws/learn/DNBD5MT8ZD/introduction-to-agentic-ai-on-aws/WAKAFK6UFY
-  - Core learning for understanding agentic patterns before building agents across the portfolio.
 - Creating an AWS DevOps AI Agent with the Strands Agents SDK (Lab) — https://skillbuilder.aws/learn/AH1GD8AJY3/lab--creating-an-aws-devops-ai-agent-with-the-strands-agents-sdk/A9SKJNMPJ2
 - AWS PartnerCast: Deep Dive: Building Observable AI Agents with Strands, Amazon Bedrock Agent Core & SageMaker MLflow — https://skillbuilder.aws/learn/1EN76TZBB6/aws-partnercast--deep-dive-building-observable-ai-agents-with-strands-amazon-bedrock-agent-core--sagemaker-mlflow--technical/CX2K6XAT84
-  - Advanced: covers observable agent patterns critical for production agent deployments.
+- DevOps and AI on AWS: CloudWatch Anomaly Detection (Lab) — https://skillbuilder.aws/learn/RWYVJ73MXP/lab--devops-and-ai-on-aws-cloudwatch-anomaly-detection/BRPDNZUGU7
 
 ## Risk Analysis
 
 ### Technical Risks
 
-| Risk | Likelihood | Impact | Priority | Mitigation | Phase |
-|------|------------|--------|----------|------------|-------|
-| Aurora MySQL 5.7 EOL (unishop-monolith) — no security patches, compatibility issues | High | High | Critical | Upgrade Aurora MySQL 5.7 → 3.x in Phase 1; plan migration with DMS (partially configured) | Phase 1 |
-| Node.js 14.x EOL (aws-microservices) — no security patches, runtime deprecation | High | High | Critical | Upgrade to Node.js 20.x in Phase 1; remove aws-sdk external modules config | Phase 1 |
-| Hardcoded credentials (unishop-monolith, local-monolith) — secrets in source code | High | High | Critical | Migrate to AWS Secrets Manager in Phase 0; remove defaults from CloudFormation parameters | Phase 0 |
-| Zero API authentication (aws-microservices) — all endpoints publicly accessible | High | High | Critical | Add Cognito authorizer to all API Gateway methods in Phase 0 | Phase 0 |
-| Circular dependency (aws-microservices ↔ books-api) — prevents independent deployment | High | Medium | High | Replace sync REST call with EventBridge async pattern in Phase 0 | Phase 0 |
-| No CI/CD for 3 services — manual deployments, no automated testing | Medium | High | High | Create CI/CD pipeline templates in Phase 0; deploy per-service pipelines in Phase 1 | Phase 0-1 |
-| Stack traces in error responses (aws-microservices) — information leakage | High | Medium | High | Remove `errorStack: e.stack` from all three Lambda handlers | Phase 0 |
-| No rollback capability for 3 services — bad deployments affect all traffic immediately | Medium | High | High | Implement canary/progressive deployments in Phase 1-2 | Phase 1-2 |
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Unauthenticated APIs exposed to agents (SEC-Q9: 3 services at 1/4) | High | High | Deploy Cognito in Phase 0. No agent deployment until auth is in place. |
+| No rate limiting allows agent loops to overwhelm APIs (APP-Q8: all 4 at 1/4) | High | High | Add API Gateway throttling in Phase 0/1. Separate usage plans for agents vs humans. |
+| Self-managed MySQL data loss (unishop-monolith INF-Q2: 1/4, no IaC) | High | Medium | Migrate to Amazon RDS with automated backups in Phase 1. |
+| No testing infrastructure (OPS-Q10: 3 of 4 services at 1/4) | High | High | Establish test suites before agent tool deployment. API contract tests prevent breaking agent tools. |
+| Circular dependency between aws-microservices and books-api | Medium | Medium | Define API contracts and event schemas in Phase 0. Add circuit breakers. |
+| Java 8 EOL blocks agent framework adoption (unishop-monolith) | Medium | Medium | Build agent layer as separate Python/TypeScript service on ECS. Upgrade Java later. |
 
 ### Organizational Risks
 
-| Risk | Likelihood | Impact | Priority | Mitigation |
-|------|------------|--------|----------|------------|
-| Skill gaps in containers/EKS — no EKS experience for local-monolith migration | Medium | Medium | Medium | Training (Module 3), consider external support for initial EKS setup |
-| Language diversity (PHP, Java, TypeScript, JavaScript) — increases maintenance burden | Medium | Medium | Medium | Standardize new services on TypeScript; keep existing languages during transition |
-| Training lag — teams not ready for Phase 1 activities | Medium | Medium | Medium | Start training in Phase 0; leverage books-api team as internal champions |
-| Scope creep during monolith decomposition — extraction takes longer than planned | Medium | Medium | Medium | Use Parallel Track (Option B) approach; containerize first, extract incrementally |
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| 4 different programming languages create skill fragmentation | Medium | Medium | Platform team uses Python/TypeScript for shared agent service. Service teams maintain existing stacks. |
+| No CI/CD in 3 services slows agent iteration velocity | High | Medium | CI/CD is Phase 0/1 priority. Use books-api pipeline as template. |
+| Agent development skills absent across all teams | High | High | Phase 0 training on Bedrock + Strands Agents SDK. External support for initial implementation. |
+| Scope creep from 4 simultaneous modernization tracks | Medium | Medium | Clear phase boundaries. P0/P1 prioritization. Platform team coordinates shared work. |
 
 ### Dependency Risks
 
-- **Circular Dependency (aws-microservices ↔ books-api)**: Must be resolved in Phase 0 before any independent modernization of these services. If resolution is delayed, both services are blocked from Phase 1 activities.
-- **Shared Cognito Dependency**: All services will depend on the shared Cognito User Pool deployed in Phase 0. If Cognito deployment is delayed, authentication work in Phase 1 is blocked.
-- **Phase 0 Completion Gate**: Phase 1 cannot begin until Phase 0 shared infrastructure is operational. Delays in CI/CD templates, observability stack, or Cognito will cascade to all subsequent phases.
+- **aws-microservices ↔ books-api bidirectional dependency**: Creates deployment coupling. Changes to aws-microservices API could break books-api's sync queries. Changes to event schemas could break async processing. **Mitigation**: Versioned API contracts (Phase 0), circuit breakers (Phase 1), contract testing (Phase 2).
+- **Monolith isolation (unishop-monolith, local-monolith)**: Low dependency risk. Both can be modernized independently. No cross-service impact.
 
 ### Single Points of Failure
 
-- **unishop-monolith**: Single EC2 instance with no auto-scaling (INF-Q10: 1/4) and no Multi-AZ database (Aurora `MultiAZ: false`). Instance failure = total service outage. Mitigated in Phase 1 by moving to ECS Fargate with auto-scaling.
-- **local-monolith**: Single App Runner service with limited auto-scaling (1-3 instances). Single RDS instance with no Multi-AZ. Mitigated in Phase 1 by EKS deployment with HPA.
-- **aws-microservices SQS OrderQueue**: No DLQ configured — failed checkout messages are lost after visibility timeout expires. Mitigated in Phase 1 by adding DLQ.
+- **unishop-monolith self-managed MySQL**: No automated failover, no IaC, no backups verifiable. Customer data at risk. **Mitigation**: Priority migration to RDS with automated backups and Multi-AZ in Phase 1.
+- **No blast radius >= 50%**: All services are mostly independent. aws-microservices and books-api each affect 50% (themselves + the other), but this is manageable with circuit breakers.
+
+### Risk Matrix
+
+|  | **Low Impact** | **Medium Impact** | **High Impact** |
+|--|---------------|------------------|----------------|
+| **High Likelihood** | — | Self-managed MySQL EOL, No CI/CD (3 services) | No API authentication, No rate limiting, No testing, Agent skill gap |
+| **Medium Likelihood** | — | Circular dependency, Language diversity, Scope creep | — |
+| **Low Likelihood** | Isolated service blast radius | — | — |
 
 ## Service-by-Service Summary
 
 ### unishop-monolith
 
-- **Overall Score**: 1.4 / 4.0 ❌
+- **Overall Score**: 1.3 / 4.0 ❌
 - **Repository**: ./services/unishop-monolith-to-microservices/MonoToMicroLegacy
-- **Assessment Date**: 2026-03-06
+- **Repository Type**: application (auto-detected)
+- **Assessment Date**: 2026-03-11
 - **Category Scores**:
-  - Infrastructure: 1.4 / 4.0
-  - Application: 1.5 / 4.0
-  - Data: 2.0 / 4.0
-  - Security: 1.2 / 4.0
-  - Operations: 1.0 / 4.0
+  - Infrastructure: 1.0 / 4.0 ❌
+  - Application: 1.4 / 4.0 ❌
+  - Data: 1.9 / 4.0 🟠
+  - Security: 1.0 / 4.0 ❌
+  - Operations: 1.0 / 4.0 ❌
 - **Top Priorities**:
-  1. Hardcoded credentials — migrate to Secrets Manager
-  2. No CI/CD — create pipeline with GitHub Actions
-  3. 100% synchronous architecture — introduce EventBridge and SQS
-  4. No API Gateway or authentication — deploy API Gateway with Cognito
-  5. Zero observability — add X-Ray tracing and structured logging
-- **Dependencies**: None (isolated)
+  1. APP-Q2 — No API Documentation (Score: 1/4)
+  2. APP-Q13 — No AI/Agent Frameworks (Score: 1/4)
+  3. DATA-Q1 — No Vector Database (Score: 1/4)
+  4. DATA-Q3 — No RAG Implementation (Score: 1/4)
+  5. SEC-Q7 — No Human Approval Workflows (Score: 1/4)
+- **Dependencies**: None (isolated monolith)
 - **Depended On By**: None
-- **Modernization Pathways**: Move to Cloud Native, Move to Containers, Move to Managed Databases, Move to Managed Analytics, Move to Modern DevOps, Move to AI
-- **Modernization Phase**: Phase 1
-- **Estimated Effort**: High
-
-### local-monolith
-
-- **Overall Score**: 1.5 / 4.0 🟠
-- **Repository**: ./monolith
-- **Assessment Date**: 2026-03-06
-- **Category Scores**:
-  - Infrastructure: 2.1 / 4.0
-  - Application: 1.2 / 4.0
-  - Data: 1.7 / 4.0
-  - Security: 1.4 / 4.0
-  - Operations: 1.0 / 4.0
-- **Top Priorities**:
-  1. Tightly-coupled monolith — conduct EventStorming, begin Strangler Fig extraction
-  2. No CI/CD — create CodePipeline for Docker build → ECR → EKS
-  3. Zero observability — add structured logging, tracing, monitoring
-  4. No async messaging — introduce SQS for order fulfillment
-  5. No API documentation — generate OpenAPI 3.0 specs
-- **Dependencies**: None (isolated)
-- **Depended On By**: None
-- **Modernization Pathways**: Move to Cloud Native, Move to Containers, Move to Managed Databases, Move to Managed Analytics, Move to Modern DevOps, Move to AI
+- **Modernization Pathways**: Move to Cloud Native (High), Move to Containers (High), Move to Managed Databases (High), Move to Managed Analytics (Medium), Move to Modern DevOps (High), Move to AI (High)
+- **Goal Alignment**: Move to AI (High), Move to Managed Databases (High), Move to Modern DevOps (High)
 - **Modernization Phase**: Phase 1
 - **Estimated Effort**: High
 
@@ -862,45 +967,74 @@ Based on portfolio-wide skill gaps, the following learning materials are recomme
 
 - **Overall Score**: 1.8 / 4.0 🟠
 - **Repository**: ./services/aws-microservices
-- **Assessment Date**: 2026-03-06
+- **Repository Type**: application (auto-detected)
+- **Assessment Date**: 2026-03-11
 - **Category Scores**:
-  - Infrastructure: 2.6 / 4.0
-  - Application: 1.8 / 4.0
-  - Data: 2.0 / 4.0
-  - Security: 1.4 / 4.0
-  - Operations: 1.1 / 4.0
+  - Infrastructure: 2.5 / 4.0 🟡
+  - Application: 1.9 / 4.0 🟠
+  - Data: 2.0 / 4.0 🟠
+  - Security: 1.4 / 4.0 ❌
+  - Operations: 1.0 / 4.0 ❌
 - **Top Priorities**:
-  1. No CI/CD — create pipeline with GitHub Actions or CodePipeline
-  2. No API authentication — add Cognito authorizer to all endpoints
-  3. No distributed tracing — enable X-Ray on all Lambda functions
-  4. No resilience patterns — add retry, circuit breaker, idempotency
-  5. Node.js 14.x EOL — upgrade to Node.js 20.x
-- **Dependencies**: books-api (SYNC — REST calls)
-- **Depended On By**: books-api (ASYNC — EventBridge events)
-- **Modernization Pathways**: Move to Cloud Native, Move to Managed Databases, Move to Managed Analytics, Move to Modern DevOps, Move to AI
+  1. APP-Q2 — No API Documentation (Score: 1/4)
+  2. APP-Q13 — No AI/Agent Frameworks (Score: 1/4)
+  3. DATA-Q1 — No Vector Database (Score: 1/4)
+  4. DATA-Q3 — No RAG Implementation (Score: 1/4)
+  5. SEC-Q9 — No API Authentication (Score: 1/4)
+- **Dependencies**: None (upstream)
+- **Depended On By**: books-api (sync REST queries + async EventBridge events)
+- **Modernization Pathways**: Move to Cloud Native (Low), Move to Containers (Low), Move to Managed Databases (High), Move to Managed Analytics (High), Move to Modern DevOps (High), Move to AI (High)
+- **Goal Alignment**: Move to AI (High), Move to Managed Databases (High), Move to Modern DevOps (High)
 - **Modernization Phase**: Phase 1
-- **Estimated Effort**: Medium
+- **Estimated Effort**: High
+
+### local-monolith
+
+- **Overall Score**: 1.5 / 4.0 🟠
+- **Repository**: ./monolith
+- **Repository Type**: application (auto-detected)
+- **Assessment Date**: 2026-03-11
+- **Category Scores**:
+  - Infrastructure: 2.0 / 4.0 🟠
+  - Application: 1.3 / 4.0 ❌
+  - Data: 1.8 / 4.0 🟠
+  - Security: 1.3 / 4.0 ❌
+  - Operations: 1.0 / 4.0 ❌
+- **Top Priorities**:
+  1. APP-Q2 — No API Documentation (Score: 1/4)
+  2. APP-Q13 — No AI/Agent Frameworks (Score: 1/4)
+  3. DATA-Q1 — No Vector Database (Score: 1/4)
+  4. DATA-Q3 — No RAG Implementation (Score: 1/4)
+  5. SEC-Q7 — No Human Approval Workflows (Score: 1/4)
+- **Dependencies**: None (isolated monolith)
+- **Depended On By**: None
+- **Modernization Pathways**: Move to Cloud Native (High), Move to Containers (High), Move to Managed Databases (Medium), Move to Modern DevOps (High), Move to AI (High)
+- **Goal Alignment**: Move to AI (High), Move to Managed Databases (High), Move to Modern DevOps (High)
+- **Modernization Phase**: Phase 1
+- **Estimated Effort**: High
 
 ### books-api
 
-- **Overall Score**: 2.2 / 4.0 🟠
+- **Overall Score**: 2.1 / 4.0 🟠
 - **Repository**: ./services/books-api
-- **Assessment Date**: 2026-03-06
+- **Repository Type**: application (auto-detected)
+- **Assessment Date**: 2026-03-11
 - **Category Scores**:
-  - Infrastructure: 2.7 / 4.0
-  - Application: 2.1 / 4.0
-  - Data: 2.0 / 4.0
-  - Security: 2.1 / 4.0
-  - Operations: 1.9 / 4.0
+  - Infrastructure: 2.7 / 4.0 🟡
+  - Application: 1.9 / 4.0 🟠
+  - Data: 2.0 / 4.0 🟠
+  - Security: 2.1 / 4.0 🟠
+  - Operations: 1.9 / 4.0 🟠
 - **Top Priorities**:
-  1. No AI/agent framework — add Bedrock SDK and agent integration
-  2. No API documentation — generate OpenAPI 3.0 spec
-  3. No async messaging — add EventBridge for domain events
-  4. No structured logging — add Lambda Powertools Logger
-  5. No rate limiting — add API Gateway throttling and usage plans
-- **Dependencies**: aws-microservices (ASYNC — EventBridge events)
-- **Depended On By**: aws-microservices (SYNC — REST calls)
-- **Modernization Pathways**: Move to Cloud Native, Move to Managed Databases, Move to Managed Analytics, Move to AI
+  1. APP-Q2 — No API Documentation (Score: 1/4)
+  2. APP-Q13 — No AI/Agent Frameworks (Score: 1/4)
+  3. DATA-Q1 — No Vector Database (Score: 1/4)
+  4. DATA-Q3 — No RAG Implementation (Score: 1/4)
+  5. OPS-Q3 — No Automated Evaluations (Score: 1/4)
+- **Dependencies**: aws-microservices (sync REST for product catalog data)
+- **Depended On By**: aws-microservices (async EventBridge for catalog updates)
+- **Modernization Pathways**: Move to Cloud Native (Medium), Move to Managed Analytics (Low), Move to Modern DevOps (Medium), Move to AI (High)
+- **Goal Alignment**: Move to AI (High), Move to Modern DevOps (High)
 - **Modernization Phase**: Phase 2
 - **Estimated Effort**: Medium
 
@@ -908,12 +1042,12 @@ Based on portfolio-wide skill gaps, the following learning materials are recomme
 
 ### Reports Analyzed
 
-| Service | Repository Path | Assessment Date | Overall Score | Report Path |
-|---------|----------------|-----------------|---------------|-------------|
-| local-monolith | ./monolith | 2026-03-06 | 1.5 / 4.0 | ./monolith/agentic-readiness-assessment/monolith-agentic-readiness-report.md |
-| unishop-monolith | ./services/unishop-monolith-to-microservices/MonoToMicroLegacy | 2026-03-06 | 1.4 / 4.0 | ./services/unishop-monolith-to-microservices/MonoToMicroLegacy/agentic-readiness-assessment/unishop-monolith-agentic-readiness-report.md |
-| books-api | ./services/books-api | 2026-03-06 | 2.2 / 4.0 | ./services/books-api/agentic-readiness-assessment/books-api-agentic-readiness-report.md |
-| aws-microservices | ./services/aws-microservices | 2026-03-06 | 1.8 / 4.0 | ./services/aws-microservices/agentic-readiness-assessment/aws-microservices-agentic-readiness-report.md |
+| Service | Repository Path | Repo Type | Assessment Date | Overall Score | Report Path |
+|---------|----------------|-----------|-----------------|---------------|-------------|
+| unishop-monolith | ./services/unishop-monolith-to-microservices/MonoToMicroLegacy | application | 2026-03-11 | 1.3 / 4.0 | ./services/unishop-monolith-to-microservices/MonoToMicroLegacy/agentic-readiness-assessment/MonoToMicroLegacy-agentic-readiness-report.md |
+| aws-microservices | ./services/aws-microservices | application | 2026-03-11 | 1.8 / 4.0 | ./services/aws-microservices/agentic-readiness-assessment/aws-microservices-agentic-readiness-report.md |
+| local-monolith | ./monolith | application | 2026-03-11 | 1.5 / 4.0 | ./monolith/agentic-readiness-assessment/monolith-agentic-readiness-report.md |
+| books-api | ./services/books-api | application | 2026-03-11 | 2.1 / 4.0 | ./services/books-api/agentic-readiness-assessment/books-api-agentic-readiness-report.md |
 
 ### Assessment Methodology
 
@@ -921,34 +1055,40 @@ Based on portfolio-wide skill gaps, the following learning materials are recomme
 - Portfolio assessment performed using: AWS Transform Custom — Portfolio Agentic Readiness Assessment
 - Assessment criteria: 56 total criteria across 5 categories
 - Scoring scale: 1-4 (Not Present, Needs Work, Partial, Agent-Ready)
-- Portfolio scores: Arithmetic means of individual service scores
+- Portfolio scores: Arithmetic mean of individual service scores
+- No N/A criteria in this portfolio (all services are application type)
+
+---
 
 ## Recommended Next Steps
 
 1. **Immediate (Week 1)**:
-   - Remove hardcoded credentials from unishop-monolith and local-monolith source code; migrate to AWS Secrets Manager
-   - Remove `errorStack: e.stack` from aws-microservices Lambda error responses to stop information leakage
-   - Add API Gateway Cognito authorizer to aws-microservices endpoints (currently zero authentication)
-   - Begin OpenAPI 3.0 specification generation for all 4 services
+   - Review this portfolio assessment with stakeholders and agree on Phase 0 priorities
+   - Initiate MAP eligibility discussion with AWS account team
+   - Begin Cognito User Pool design for shared authentication
+   - Schedule team training on Amazon Bedrock and Strands Agents SDK
 
-2. **Short-term (Month 1)**:
-   - Deploy shared Cognito User Pool for portfolio-wide authentication
-   - Create CI/CD pipeline templates; deploy pipelines for aws-microservices and unishop-monolith
-   - Break the circular dependency between aws-microservices and books-api (replace sync REST with EventBridge)
-   - Add structured logging to all 4 services (Lambda Powertools for serverless, Monolog/Logback for monoliths)
-   - Begin training program: Module 3 (Containers), Module 6 (Modern DevOps)
+2. **Short-term (Month 1 — Phase 0)**:
+   - Deploy shared Cognito User Pool and API Gateway
+   - Provision Bedrock Knowledge Base with initial product documentation
+   - Define API contracts between aws-microservices and books-api (resolve circular dependency)
+   - Create CI/CD pipeline templates and CDK construct library
+   - Deploy unified observability stack (CloudWatch + X-Ray)
+   - Request EBA engagements for Move to AI and Move to Modern DevOps
 
-3. **Medium-term (Months 1-3)**:
-   - Containerize unishop-monolith on ECS Fargate; deploy local-monolith to EKS
-   - Upgrade Node.js 14.x → 20.x in aws-microservices; upgrade Java 8 → 17+ in unishop-monolith
-   - Upgrade Aurora MySQL 5.7 → 3.x; eliminate self-managed MySQL on EC2
-   - Enable X-Ray distributed tracing across all services
-   - Begin Strangler Fig extraction of first microservices from both monoliths
+3. **Medium-term (Months 1-3 — Phases 1-2)**:
+   - Generate OpenAPI specs for all 4 services (highest-impact action for agent enablement)
+   - Build and deploy 3 agent PoCs (one per P0 service)
+   - Containerize monoliths on ECS Fargate
+   - Establish CI/CD pipelines for all services
+   - Complete RAG pipeline with Bedrock Knowledge Bases
+   - Implement human approval workflows for high-risk agent actions
+   - Integrate books-api with agent platform
 
-4. **Long-term (Months 3-9)**:
-   - Modernize books-api with EventBridge, rate limiting, and API versioning (Phase 2)
-   - Continue monolith decomposition using Strangler Fig pattern
-   - Deploy vector databases and build RAG pipelines for product catalogs (Phase 3)
-   - Integrate Amazon Bedrock agents with OpenAPI-defined tool interfaces (Phase 3)
-   - Implement agent evaluation frameworks, LLM cost tracking, and unified observability (Phase 3)
-   - Establish agent-specific SLOs: task success rate, hallucination rate, tool error rate
+4. **Long-term (Months 3-6+ — Phase 3)**:
+   - Deploy production customer-facing support agent
+   - Implement automated evaluation pipeline with golden datasets
+   - Establish LLM cost tracking and optimization
+   - Begin microservices decomposition for monoliths
+   - Implement advanced observability with anomaly detection
+   - Continuous agent quality improvement based on evaluation metrics
