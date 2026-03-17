@@ -43,8 +43,8 @@ Extract the following fields from `additionalPlanContext`:
 Apply these rules to determine the effective goal:
 
 1. If `goal` is present and is one of the 4 predefined values → use it as-is.
-2. If `goal` is absent → default to `general-readiness`.
-3. If `goal` is present but not one of the 4 predefined values → default to `general-readiness` and log a warning: **"Unrecognized goal '{value}', defaulting to general-readiness"**.
+2. If `goal` is absent → default to `agentic-readiness`.
+3. If `goal` is present but not one of the 4 predefined values → default to `agentic-readiness` and log a warning: **"Unrecognized goal '{value}', defaulting to agentic-readiness"**.
 
 The `goal_context` field is always passed through regardless of goal validation — it provides additional framing even when the goal defaults.
 
@@ -55,8 +55,8 @@ Use this reference throughout the assessment to determine phase names, priority 
 ```
 GOAL DEFINITIONS:
 
-agentic-ai-enablement:
-  description: "Enable agentic AI workflows — autonomous agents discovering, invoking, orchestrating app capabilities"
+enable-agentic-use-case:
+  description: "Enable a specific agentic AI use case — scoped to the identified use case being built"
   primary_pathways: [Move to AI, Move to Managed Databases, Move to Modern DevOps]
   phases: [Agent Quick Wins, Agent Foundations, Agent Scale & Optimization]
   priority_criteria: [APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6]
@@ -73,8 +73,8 @@ cost-optimization:
   phases: [License & Quick Savings, Managed Service Migration, Optimization & Governance]
   priority_criteria: [INF-Q2, DATA-Q2, DATA-Q10, DATA-Q11, INF-Q8]
 
-general-readiness:
-  description: "Comprehensive assessment, no specific weighting"
+agentic-readiness:
+  description: "Evaluate overall agentic readiness across all dimensions with equal weighting"
   primary_pathways: [all equal]
   phases: [Quick Wins, Foundation, Advanced Capabilities]
   priority_criteria: [all equal]
@@ -86,10 +86,10 @@ Use this table in Step 7 (Pathway Mapping) to populate the "Goal Alignment" colu
 
 | Goal | High Alignment | Medium Alignment | Low Alignment |
 |------|---------------|-----------------|--------------|
-| `agentic-ai-enablement` | Move to AI, Move to Managed Databases, Move to Modern DevOps | Move to Cloud Native, Move to Containers | Move to Open Source, Move to Managed Analytics |
+| `enable-agentic-use-case` | Move to AI, Move to Managed Databases, Move to Modern DevOps | Move to Cloud Native, Move to Containers | Move to Open Source, Move to Managed Analytics |
 | `cloud-native-modernization` | Move to Cloud Native, Move to Containers, Move to Modern DevOps | Move to Managed Databases, Move to Open Source | Move to AI, Move to Managed Analytics |
 | `cost-optimization` | Move to Open Source, Move to Managed Databases, Move to Managed Analytics | Move to Containers, Move to Modern DevOps | Move to Cloud Native, Move to AI |
-| `general-readiness` | All Medium | — | — |
+| `agentic-readiness` | All Medium | — | — |
 
 #### 0.5 Goal-Specific Phase Names
 
@@ -97,10 +97,10 @@ Use these phase names in Step 8 (Report Generation) for the Readiness Roadmap se
 
 | Goal | Phase 1 | Phase 2 | Phase 3 |
 |------|---------|---------|---------|
-| `agentic-ai-enablement` | Agent Quick Wins (Days 1–30) | Agent Foundations (Months 1–3) | Agent Scale & Optimization (Months 3–6) |
+| `agentic-readiness` | Quick Wins (Days 1–30) | Foundation (Months 1–3) | Advanced Capabilities (Months 3–6) |
+| `enable-agentic-use-case` | Agent Quick Wins (Days 1–30) | Agent Foundations (Months 1–3) | Agent Scale & Optimization (Months 3–6) |
 | `cloud-native-modernization` | Containerize & Automate (Days 1–30) | Decompose & Decouple (Months 1–3) | Optimize & Scale (Months 3–6) |
 | `cost-optimization` | License & Quick Savings (Days 1–30) | Managed Service Migration (Months 1–3) | Optimization & Governance (Months 3–6) |
-| `general-readiness` | Quick Wins (Days 1–30) | Foundation (Months 1–3) | Advanced Capabilities (Months 3–6) |
 
 ### Step 1: Discovery — Static Scan
 
@@ -675,7 +675,7 @@ The goal-weighted threshold determines how many trigger conditions must be met f
 | **Medium** | At least 2 trigger conditions met → Triggered | Relevant but not the customer's focus. A single marginal gap shouldn't generate a recommendation that distracts from the primary goal. |
 | **Low** | Primary criterion ≤ 2 AND contextually relevant → Triggered | Tangential to the customer's goal. Only severe, undeniable gaps should surface these pathways. For pathways with 3+ conditions (Modern DevOps, Move to AI), Low requires at least 2 conditions met AND one scoring ≤ 2. |
 
-**Special case — `general-readiness`:** When the goal is `general-readiness`, all 7 pathways have Medium alignment. This means every pathway requires at least 2 trigger conditions to fire. This is intentionally stricter than V2 (where everything triggered on a single OR) because general-readiness should surface only meaningful gaps, not every minor imperfection.
+**Special case — `agentic-readiness`:** When the goal is `agentic-readiness`, all 7 pathways have Medium alignment. This means every pathway requires at least 2 trigger conditions to fire. This is intentionally stricter than V2 (where everything triggered on a single OR) because agentic-readiness should surface only meaningful gaps, not every minor imperfection.
 
 **Interaction with contextual guards:** The goal-weighted threshold is only evaluated AFTER the contextual guard passes (see the four-step evaluation order at the top of section 7.2). A pathway whose guard fails is "Not Triggered" regardless of goal alignment.
 
@@ -795,10 +795,10 @@ When selecting the Top 5 Critical Gaps, apply goal-based weighting to prioritize
 1. Identify all criteria with scores below 3 (these are the candidate gaps).
 2. Look up the effective goal's priority criteria from the Goal Definition Reference Card in Step 0 (section 0.3).
 3. When two criteria have equal gap severity (same score), rank the goal-priority criterion higher.
-4. For `general-readiness`, all criteria are weighted equally — select purely by gap severity (lowest scores first).
+4. For `agentic-readiness`, all criteria are weighted equally — select purely by gap severity (lowest scores first).
 5. The Top 5 should still be based on actual gaps (low scores). The goal just breaks ties and boosts priority criteria when gaps are equally severe.
 
-**Example**: If the goal is `agentic-ai-enablement` and both INF-Q1 (score 2) and APP-Q2 (score 2) are gaps, APP-Q2 ranks higher because it is a priority criterion for agentic-ai-enablement.
+**Example**: If the goal is `enable-agentic-use-case` and both INF-Q1 (score 2) and APP-Q2 (score 2) are gaps, APP-Q2 ranks higher because it is a priority criterion for enable-agentic-use-case.
 
 #### 8.2 Goal-Scoped Decomposition Section
 
@@ -811,13 +811,13 @@ The Microservices Decomposition Strategy section is conditionally included based
 | Goal | Decomposition Section Behavior |
 |------|-------------------------------|
 | `cloud-native-modernization` | **Full section** — include all decomposition options (Option A/B/C), pattern recommendations, LoE estimates, and integration into all three roadmap phases. This is the current V1 behavior. |
-| `general-readiness` | **Full section** — same as cloud-native-modernization. |
-| `agentic-ai-enablement` | **Condensed paragraph** — replace the full decomposition section with: "This monolith would benefit from service extraction to create clear agent tool boundaries. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing API surface." |
+| `agentic-readiness` | **Full section** — same as cloud-native-modernization. |
+| `enable-agentic-use-case` | **Condensed paragraph** — replace the full decomposition section with: "This monolith would benefit from service extraction to create clear agent tool boundaries. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing API surface." |
 | `cost-optimization` | **Skip entirely** — omit the decomposition section unless decomposition directly reduces cost (e.g., extracting a service to move from a commercial database to open source). If cost-relevant, include a brief note only: "Decomposing [specific module] would enable migration from [commercial DB] to [open-source alternative], reducing licensing costs." |
 
 #### 8.3 Quick Agent Wins Section
 
-Include the Quick Agent Wins section in the report ONLY when the goal is `agentic-ai-enablement` or `general-readiness`. Omit this section entirely for `cloud-native-modernization` and `cost-optimization`.
+Include the Quick Agent Wins section in the report ONLY when the goal is `enable-agentic-use-case` or `agentic-readiness`. Omit this section entirely for `cloud-native-modernization` and `cost-optimization`.
 
 **Score-threshold triggers for identifying wins:**
 
@@ -841,17 +841,17 @@ Use the goal-specific phase names from the Goal-Specific Phase Names table in St
 
 | Goal | Phase 1 | Phase 2 | Phase 3 |
 |------|---------|---------|---------|
-| `agentic-ai-enablement` | Agent Quick Wins (Days 1–30) | Agent Foundations (Months 1–3) | Agent Scale & Optimization (Months 3–6) |
+| `agentic-readiness` | Quick Wins (Days 1–30) | Foundation (Months 1–3) | Advanced Capabilities (Months 3–6) |
+| `enable-agentic-use-case` | Agent Quick Wins (Days 1–30) | Agent Foundations (Months 1–3) | Agent Scale & Optimization (Months 3–6) |
 | `cloud-native-modernization` | Containerize & Automate (Days 1–30) | Decompose & Decouple (Months 1–3) | Optimize & Scale (Months 3–6) |
 | `cost-optimization` | License & Quick Savings (Days 1–30) | Managed Service Migration (Months 1–3) | Optimization & Governance (Months 3–6) |
-| `general-readiness` | Quick Wins (Days 1–30) | Foundation (Months 1–3) | Advanced Capabilities (Months 3–6) |
 
 #### 8.5 Report Metadata Header
 
 Include the detected repo type and effective goal in the report metadata header:
 
 ```markdown
-- **Assessment Goal**: <effective goal value, e.g., agentic-ai-enablement>
+- **Assessment Goal**: <effective goal value, e.g., enable-agentic-use-case>
 - **Goal Context**: <goal_context value if provided, otherwise omit this line>
 - **Repository Type**: <detected repo_type, e.g., application (auto-detected)>
 ```
@@ -898,7 +898,7 @@ Create the report file with exactly this structure. Sections marked with conditi
 
 ## Executive Summary
 
-<3-5 sentence summary of overall readiness. Be direct. Note the strongest areas and most critical gaps. Frame the summary around the effective goal — e.g., for agentic-ai-enablement, emphasize agent readiness; for cost-optimization, emphasize cost reduction opportunities. If goal_context is provided, reference it in the framing.>
+<3-5 sentence summary of overall readiness. Be direct. Note the strongest areas and most critical gaps. Frame the summary around the effective goal — e.g., for enable-agentic-use-case, emphasize agent readiness; for cost-optimization, emphasize cost reduction opportunities. If goal_context is provided, reference it in the framing.>
 
 ### Overall Score: X.X / 4.0
 
@@ -918,7 +918,7 @@ For categories where all criteria are N/A (due to repo type), display the score 
 
 ## Top Priorities (Critical Gaps)
 
-<List the 5 most impactful gaps using the goal-weighted selection logic from section 8.1. For each: what it is, why it matters for the customer's goal, and the first concrete step to address it. Frame "why it matters" around the effective goal — e.g., for agentic-ai-enablement, explain why the gap blocks agent workflows; for cost-optimization, explain the cost impact.>
+<List the 5 most impactful gaps using the goal-weighted selection logic from section 8.1. For each: what it is, why it matters for the customer's goal, and the first concrete step to address it. Frame "why it matters" around the effective goal — e.g., for enable-agentic-use-case, explain why the gap blocks agent workflows; for cost-optimization, explain the cost impact.>
 
 ---
 
@@ -1029,11 +1029,11 @@ Based on the assessment findings, the following AWS Modernization Pathways are e
 
 <CONDITIONAL — apply the rules from section 8.2:>
 <If APP-Q4 >= 4 (no monolith): OMIT this entire section.>
-<If APP-Q4 < 4 AND goal is cloud-native-modernization or general-readiness: Include FULL section below.>
-<If APP-Q4 < 4 AND goal is agentic-ai-enablement: Include CONDENSED paragraph only.>
+<If APP-Q4 < 4 AND goal is cloud-native-modernization or agentic-readiness: Include FULL section below.>
+<If APP-Q4 < 4 AND goal is enable-agentic-use-case: Include CONDENSED paragraph only.>
 <If APP-Q4 < 4 AND goal is cost-optimization: OMIT unless decomposition directly reduces cost.>
 
-<FULL SECTION (for cloud-native-modernization and general-readiness):>
+<FULL SECTION (for cloud-native-modernization and agentic-readiness):>
 
 **Recommended Approach: Parallel Track (Option B)**
 - **LoE**: Medium | **Risk**: Low-Medium | **Time to Value**: Fast
@@ -1078,7 +1078,7 @@ Based on the assessment findings, the following AWS Modernization Pathways are e
 - **Resilience First**: Implement [Circuit Breaker](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/circuit-breaker.html) + [Retry with Backoff](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html) before decomposition
 - **Why**: Microservices amplify failure modes; resilience patterns must be in place before increasing system distribution
 
-<CONDENSED PARAGRAPH (for agentic-ai-enablement):>
+<CONDENSED PARAGRAPH (for enable-agentic-use-case):>
 
 > This monolith would benefit from service extraction to create clear agent tool boundaries. See the Move to Cloud Native pathway for detailed decomposition guidance. For now, agents can interact with the monolith via its existing API surface.
 
@@ -1086,7 +1086,7 @@ Based on the assessment findings, the following AWS Modernization Pathways are e
 
 ## Quick Agent Wins
 
-<CONDITIONAL — include ONLY when goal is agentic-ai-enablement or general-readiness. OMIT for cloud-native-modernization and cost-optimization.>
+<CONDITIONAL — include ONLY when goal is enable-agentic-use-case or agentic-readiness. OMIT for cloud-native-modernization and cost-optimization.>
 
 Even before completing the full modernization roadmap, these agent opportunities are available based on your current architecture:
 
@@ -1113,7 +1113,7 @@ Even before completing the full modernization roadmap, these agent opportunities
 ### Phase 1 — <goal-specific phase 1 name from section 8.4>
 <3-5 items that are low-effort but high-impact. Things that can be done in a sprint.>
 
-<If APP-Q4 indicates monolith AND goal is cloud-native-modernization or general-readiness, include decomposition preparation:>
+<If APP-Q4 indicates monolith AND goal is cloud-native-modernization or agentic-readiness, include decomposition preparation:>
 - Conduct EventStorming or domain modeling workshop to identify bounded contexts and service candidates
 - Map current module dependencies and data coupling (use dependency analysis tools)
 - Identify first candidate service for extraction: look for high business value, low coupling, clear domain boundary
@@ -1122,14 +1122,14 @@ Even before completing the full modernization roadmap, these agent opportunities
 ### Phase 2 — <goal-specific phase 2 name from section 8.4>
 <Structural improvements that require more planning but are essential.>
 
-<If decomposition is recommended (Option B or C) AND goal is cloud-native-modernization or general-readiness, include:>
+<If decomposition is recommended (Option B or C) AND goal is cloud-native-modernization or agentic-readiness, include:>
 - **If Option B (Parallel Track)**: Extract first service using Strangler Fig pattern; implement API Gateway routing; establish service-to-service authentication; containerize extracted service
 - **If Option C (Conditional)**: Containerize modular components as separate deployments; implement service discovery; add anti-corruption layers at module boundaries; defer tightly-coupled modules for Phase 3 refactoring
 
 ### Phase 3 — <goal-specific phase 3 name from section 8.4>
 <Capabilities that unlock the target state once foundations are solid.>
 
-<If decomposition is in progress AND goal is cloud-native-modernization or general-readiness:>
+<If decomposition is in progress AND goal is cloud-native-modernization or agentic-readiness:>
 - Continue service extraction based on business priorities
 - Implement domain-specific agent tools per service boundary
 - Establish service-level SLOs and observability
@@ -1254,10 +1254,10 @@ Strictly follow these rules at all times:
 - **Repo type classification**: The agent must classify the repo type during Step 1 (Discovery) using the detection decision tree. A user-provided `repo_type` override in `additionalPlanContext` always takes precedence over auto-detection.
 - **N/A scoring rules**: Criteria scored as N/A are excluded from category averages. If all criteria in a category are N/A, the category score is "N/A" and is skipped in the overall average calculation.
 - **Goal is a priority lens, not a filter**: All 7 pathways are always evaluated for every repo regardless of goal. The goal only changes weighting, framing, phase names, and conditional section inclusion — it never removes pathways from evaluation.
-- **Goal-scoped decomposition**: The decomposition section is conditionally included based on goal (see Step 8, section 8.2). Only include the full decomposition section for `cloud-native-modernization` and `general-readiness`. Use the condensed paragraph for `agentic-ai-enablement`. Skip for `cost-optimization` unless cost-relevant.
-- **Quick Agent Wins conditional inclusion**: Include the Quick Agent Wins section only when goal is `agentic-ai-enablement` or `general-readiness`. Omit for `cloud-native-modernization` and `cost-optimization`.
+- **Goal-scoped decomposition**: The decomposition section is conditionally included based on goal (see Step 8, section 8.2). Only include the full decomposition section for `cloud-native-modernization` and `agentic-readiness`. Use the condensed paragraph for `enable-agentic-use-case`. Skip for `cost-optimization` unless cost-relevant.
+- **Quick Agent Wins conditional inclusion**: Include the Quick Agent Wins section only when goal is `enable-agentic-use-case` or `agentic-readiness`. Omit for `cloud-native-modernization` and `cost-optimization`.
 - **Goal-specific phase names**: Always use the goal-specific phase names from Step 0 (section 0.5) in the Readiness Roadmap. Do not use generic phase names.
-- **Goal-weighted Top 5**: Apply goal-priority criteria weighting when selecting the Top 5 Critical Gaps (see Step 8, section 8.1). For `general-readiness`, all criteria are weighted equally.
+- **Goal-weighted Top 5**: Apply goal-priority criteria weighting when selecting the Top 5 Critical Gaps (see Step 8, section 8.1). For `agentic-readiness`, all criteria are weighted equally.
 - **Report metadata**: Always include the detected repo type and effective goal in the report metadata header.
 - **Customer choice**: Present options, not prescriptions. The customer decides between parallel track (Option B) or conditional/adaptive (Option C) based on their business priorities and risk tolerance.
 - **Modernization Pathways**: All 7 AWS Modernization Pathways must be evaluated against the trigger criteria. Only include triggered pathways in the detailed subsections. A pathway is triggered when ANY of its trigger conditions are met. Multiple pathways executing in parallel is the norm, not the exception.
@@ -1275,7 +1275,7 @@ Strictly follow these rules at all times:
 8. The report contains a Recommended Modernization Pathways section with the V2 pathway table (Status, Goal Alignment, Priority, Key Trigger Criteria, Est. Effort) for all 7 pathways
 9. The report contains pathway detail subsections for each Triggered pathway (not for Not Triggered or Not Applicable)
 10. The report contains a Microservices Decomposition Strategy section scoped by goal (full, condensed, or omitted per section 8.2 rules)
-11. The report contains a Quick Agent Wins section when goal is `agentic-ai-enablement` or `general-readiness` (omitted for other goals)
+11. The report contains a Quick Agent Wins section when goal is `enable-agentic-use-case` or `agentic-readiness` (omitted for other goals)
 12. The report contains a Readiness Roadmap with three phases using goal-specific phase names from Step 0 (section 0.5)
 13. The report contains a Recommended Self-Paced Learning Materials section with relevant links
 14. Every finding references specific files or explicitly states what was not found

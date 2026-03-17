@@ -13,18 +13,26 @@ Evaluate your service portfolio's readiness for agentic AI adoption. This projec
 ├── portfolio-agentic-assessment/             # ATX transformation: portfolio aggregation
 │   └── transformation_definition.md          #   Cross-service analysis and roadmap
 ├── portfolio-config.schema.json              # JSON Schema for portfolio config validation
-├── portfolio-schema-example.yaml             # Example portfolio configuration
-├── test-portfolio-config.yaml                # Portfolio config used for the example run
+├── example-reports/                          # Example configs and output per goal
+│   ├── goal-agentic-readiness/               #   Default equal-weight assessment
+│   │   └── portfolio-config.yaml
+│   ├── goal-cloud-native-modernization/      #   EKS/containers modernization (full run)
+│   │   ├── portfolio-config.yaml
+│   │   ├── cloud-native-modernization-portfolio-agentic-readiness-report.md
+│   │   ├── eks-saas-gitops-agentic-readiness-report.md
+│   │   ├── monolith-agentic-readiness-report.md
+│   │   └── MonoToMicroLegacy-agentic-readiness-report.md
+│   ├── goal-cost-optimization/               #   Cost reduction focus
+│   │   └── portfolio-config.yaml
+│   └── goal-enable-agentic-use-case/         #   Specific agentic AI use case
+│       └── portfolio-config.yaml
 ├── monolith/                                 # Local PHP monolith (test fixture)
 │   ├── index.php, Dockerfile, docker-compose.yml
-│   ├── infrastructure/monolith-apprunner.yaml
-│   └── agentic-readiness-assessment/         #   Generated assessment report
-├── example-reports/                          # Example output from a full run
-│   ├── agentic-readiness-assessment/         #   Individual + portfolio reports
-│   └── example-transform-custom-additional-context/  # Generated ATX configs
-├── DESIGN-v2-goal-driven-assessment.md       # V2 design document (reference)
-├── README.md
-└── static/
+│   └── infrastructure/monolith-apprunner.yaml
+├── dashboard-generator/                      # HTML dashboard generator
+│   └── generate_dashboard.py
+├── static/                                   # Documentation images
+└── README.md
 ```
 
 ## How It Works
@@ -74,20 +82,18 @@ The portfolio assessment then aggregates results, maps service dependencies, ide
 
 V2 introduces a **goal-driven priority lens** that re-weights the assessment based on the customer's modernization objective. Instead of treating all 56 criteria equally, the goal determines which pathways are highlighted, how the roadmap is phased, and which report sections appear.
 
-> **Breaking Change**: V2 config is NOT backward-compatible with V1. Configs using `global_transformation_preferences`, `transformation_options`, `exclusions`, `metadata`, or nested constraint objects (e.g., `database_constraints`, `deployment_constraints`) must be migrated to the new simplified format. See [Configuration](#step-3-create-your-portfolio-configuration) for the new format.
-
 ### Predefined Goals
 
 | Goal | Description | Primary Pathways |
 |------|-------------|-----------------|
-| `agentic-ai-enablement` | Enable agentic AI workflows — autonomous agents discovering, invoking, and orchestrating app capabilities | Move to AI, Move to Managed Databases, Move to Modern DevOps |
-| `cloud-native-modernization` | Decompose and modernize into cloud-native architectures using managed services, containers, and serverless | Move to Cloud Native, Move to Containers, Move to Modern DevOps |
+| `agentic-readiness` | Evaluate overall agentic readiness across all dimensions with equal weighting (default) | All pathways evaluated equally |
+| `enable-agentic-use-case` | Enable a specific agentic AI use case — scoped to the identified use case being built | Move to AI, Move to Managed Databases, Move to Modern DevOps |
 | `cost-optimization` | Reduce costs through license elimination, managed service adoption, and right-sizing | Move to Open Source, Move to Managed Databases, Move to Managed Analytics |
-| `general-readiness` | Comprehensive assessment across all dimensions with no specific weighting (default) | All pathways evaluated equally |
+| `cloud-native-modernization` | Decompose and modernize into cloud-native architectures using managed services, containers, and serverless | Move to Cloud Native, Move to Containers, Move to Modern DevOps |
 
 The goal is a **priority lens**, not a filter — all 7 pathways are still evaluated for every repo. The goal changes which pathways are highlighted as primary, how roadmap phases are named, which criteria are emphasized in the Top 5 Critical Gaps, and whether certain report sections appear (decomposition guidance, Quick Agent Wins).
 
-If none of the predefined goals fit, use `general-readiness` with a detailed `goal_context` to guide the assessment.
+If none of the predefined goals fit, use `agentic-readiness` with a detailed `goal_context` to guide the assessment.
 
 ### `goal_context` Field
 
@@ -158,7 +164,6 @@ You should see both under "User Transformations". The names you choose here must
 
 ### Step 2: Install the Kiro Power
 
-
 The `agentic-assessment-orchestrator/` directory is a Kiro Power. To install it:
 
 1. Open Kiro IDE
@@ -170,11 +175,11 @@ Once installed, Kiro will have access to the orchestration logic defined in `POW
 
 ### Step 3: Create Your Portfolio Configuration
 
-Create a `portfolio-config.yaml` at the root of your working directory:
+Create a `portfolio-config.yaml` in a working directory or use one of the examples from `example-reports/`:
 
 ```yaml
 portfolio_name: "my-platform"
-goal: "agentic-ai-enablement"
+goal: "enable-agentic-use-case"
 goal_context: "Building customer-facing AI agents"
 
 transformation_definitions:
@@ -195,14 +200,14 @@ repositories:
 ```
 
 Key fields:
-- `goal` — one of `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`. Defaults to `general-readiness` if omitted.
+- `goal` — one of `agentic-readiness`, `enable-agentic-use-case`, `cost-optimization`, `cloud-native-modernization`. Defaults to `agentic-readiness` if omitted.
 - `goal_context` — optional free-text that influences recommendation framing and Quick Agent Wins
 - `preferences.prefer` / `preferences.avoid` — flat arrays replacing all previous nested constraint objects
 - Per-repo optional fields: `priority`, `context`, `preferences` (merges with global), `repo_type`, `tags`, `repository_url`, `report_path`
 
 Repositories can be already cloned locally (just set `path`) or auto-cloned by Kiro (set `repository_url` and `path`).
 
-See `agentic-assessment-orchestrator/portfolio-config.example.yaml` for a full example with preferences and dependency overrides.
+See `example-reports/` for complete portfolio configs for each predefined goal.
 
 ### Step 4: Run the Assessment via Kiro
 
@@ -220,7 +225,7 @@ Kiro will:
 5. Wait for all to complete (5–15 min per repo)
 6. Generate `.atx-config-portfolio.yaml` with the full service inventory
 7. Run `atx custom def exec -n <portfolio_assessment> -p . -g file://<portfolio-config> -x -t`
-8. Consolidate all reports into `agentic-readiness-assessment/` at the root and clean up temp files
+8. Consolidate all reports into the output folder and clean up temp files
 
 ![Kiro Power conversation end](static/end-kiro-conversation-after-using-power.png)
 
@@ -241,78 +246,43 @@ atx custom def exec -n portfolio-agentic-readiness-assessment -p . -g file://atx
 
 Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution.
 
-## Example Run
+## Example Reports
 
-This repo includes a complete example run using `test-portfolio-config.yaml` at the root. That config assesses 4 repositories:
+The `example-reports/` directory contains portfolio configs for each predefined goal, plus a complete set of generated reports for the `cloud-native-modernization` goal:
 
-| Service | Type | Priority | Source |
-|---------|------|----------|--------|
-| unishop-monolith | Java/Spring monolith | P0 | [aws-samples/unishop-monolith-to-microservices](https://github.com/aws-samples/unishop-monolith-to-microservices) |
-| aws-microservices | Lambda/DDB/EventBridge | P0 | [awsrun/aws-microservices](https://github.com/awsrun/aws-microservices) |
-| local-monolith | PHP monolith | P0 | `./monolith` (included in this repo) |
-| books-api | Serverless SAM API | P1 | [aws-samples/aws-serverless-books-api-sample](https://github.com/aws-samples/aws-serverless-books-api-sample) |
-
-### Example Output
-
-The `example-reports/` directory contains the full output:
-
-- `example-reports/agentic-readiness-assessment/` — all individual reports + the portfolio report:
-  - `unishop-monolith-agentic-readiness-report.md`
-  - `aws-microservices-agentic-readiness-report.md`
-  - `monolith-agentic-readiness-report.md`
-  - `books-api-agentic-readiness-report.md`
-  - `ecommerce-platform-test-portfolio-agentic-readiness-report.md`
-
-- `example-reports/example-transform-custom-additional-context/` — the generated ATX config files that Kiro (or you) pass to each transformation via `-g file://`. These show exactly how `additionalPlanContext` is constructed from the portfolio config:
-
-```yaml
-# example: .atx-config-local-monolith.yaml
-additionalPlanContext: |
-  goal: "agentic-ai-enablement"
-  goal_context: "Building customer-facing AI agents for support and order management"
-  repo_type: "application"
-  context: "Local PHP monolith application targeting EKS-based containerized deployment"
-  preferences:
-    prefer: ["eks", "ecr", "alb", "rds"]
-    avoid: ["lambda", "serverless"]
-  priority: "P0"
-  tags: ["monolith", "php", "containers", "eks"]
+```
+example-reports/
+├── goal-agentic-readiness/
+│   └── portfolio-config.yaml
+├── goal-cloud-native-modernization/          # Full run with reports
+│   ├── portfolio-config.yaml
+│   ├── cloud-native-modernization-portfolio-agentic-readiness-report.md
+│   ├── eks-saas-gitops-agentic-readiness-report.md
+│   ├── monolith-agentic-readiness-report.md
+│   └── MonoToMicroLegacy-agentic-readiness-report.md
+├── goal-cost-optimization/
+│   └── portfolio-config.yaml
+└── goal-enable-agentic-use-case/
+    └── portfolio-config.yaml
 ```
 
-```yaml
-# example: .atx-config-portfolio.yaml
-additionalPlanContext: |
-  goal: "agentic-ai-enablement"
-  goal_context: "Building customer-facing AI agents for support and order management"
-  preferences:
-    prefer: ["eks", "aurora", "bedrock"]
-    avoid: ["self-managed-kafka"]
+The `goal-cloud-native-modernization` example assessed 3 repositories against the goal of decomposing monoliths into containerized microservices on EKS with GitOps deployment:
 
-  Portfolio: ecommerce-platform-test (4 services)
-
-  SERVICE SCORES:
-  1. unishop-monolith (P0): 1.4/4.0
-  2. aws-microservices (P0): 1.8/4.0
-  3. local-monolith (P0): 1.5/4.0
-  4. books-api (P1): 2.2/4.0
-
-  DEPENDENCIES:
-  aws-microservices→books-api: ASYNC (EventBridge)
-  books-api→aws-microservices: SYNC (REST)
-  ...
-```
-
-This makes it easy to see how the Kiro Power translates your `portfolio-config.yaml` into the parameters that drive each transformation.
+| Service | Score | Type | Priority |
+|---------|-------|------|----------|
+| eks-saas-gitops | 1.9/4.0 | EKS/Terraform/GitOps platform | P0 |
+| local-monolith | 1.4/4.0 | PHP monolith | P1 |
+| unishop-monolith | 1.2/4.0 | Java/Spring Boot monolith | P0 |
+| **Portfolio Average** | **1.5/4.0** | | |
 
 ## Local Monolith (Test Fixture)
 
-The `monolith/` directory contains a simple PHP application used for testing. It includes:
+The `monolith/` directory contains a simple PHP application used as a test fixture. It includes:
 - `index.php` — single-file PHP app
 - `Dockerfile` and `docker-compose.yml` — container definitions
 - `infrastructure/monolith-apprunner.yaml` — AWS App Runner config
-- `agentic-readiness-assessment/monolith-agentic-readiness-report.md` — its generated assessment report
 
-This is included so you can run the full portfolio assessment out of the box with `test-portfolio-config.yaml` without needing to clone all external repos first (the other 3 repos get auto-cloned via `repository_url`).
+This is included so you can run a portfolio assessment out of the box without needing to clone all external repos first (external repos get auto-cloned via `repository_url` in the portfolio config).
 
 ## Managing Transformation Definitions
 
@@ -361,7 +331,7 @@ atx custom def get -n agentic-readiness-assessment
 ## Roadmap
 
 1. **Custom output formats** — Allow transformation definitions to produce reports in configurable formats (JSON, CSV, SARIF) beyond Markdown, so teams can feed results into their existing dashboards and tooling
-2. **Interactive HTML dashboard** — Auto-generate a visual portfolio dashboard from the assessment reports. A hand-built prototype lives at `example-reports/agentic-readiness-assessment/dashboard.html` — open it in a browser to see what this could look like
+2. **Interactive HTML dashboard** — Auto-generate a visual portfolio dashboard from the assessment reports
 
 ## Related Resources
 

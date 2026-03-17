@@ -1,0 +1,47 @@
+portfolio_name: "cost-optimization"
+goal: "cost-optimization"
+goal_context: "Reducing licensing costs and migrating to managed and open-source services"
+
+transformation_definitions:
+  individual_assessment: "agentic-readiness-assessment"
+  portfolio_assessment: "portfolio-agentic-readiness-assessment"
+
+preferences:
+  prefer: ["aurora-postgresql", "opensearch", "dynamodb", "managed-services", "open-source"]
+  avoid: ["oracle", "sql-server", "windows", "self-managed-databases"]
+
+repositories:
+  # Unishop Monolith — Java on EC2 with MySQL, license and compute cost target
+  - name: "unishop-monolith"
+    path: "./services/unishop-monolith-to-microservices/MonoToMicroLegacy"
+    priority: "P0"
+    repository_url: "https://github.com/aws-samples/unishop-monolith-to-microservices.git"
+    context: "Java monolith on raw EC2 with self-managed MySQL — high compute and potential licensing costs. Candidate for managed service migration and right-sizing."
+    preferences:
+      prefer: ["aurora-mysql", "ecs", "graviton"]
+      avoid: ["ec2-self-managed"]
+
+  # Local PHP Monolith — RDS MySQL, managed service migration candidate
+  - name: "local-monolith"
+    path: "./monolith"
+    priority: "P0"
+    tags: ["monolith", "php", "rds"]
+    context: "PHP monolith with RDS MySQL on App Runner — evaluate managed service migration and database cost optimization"
+    preferences:
+      prefer: ["aurora-mysql", "fargate", "managed-services"]
+
+  # AWS Microservices — already serverless, optimize DynamoDB and evaluate open-source
+  - name: "aws-microservices"
+    path: "./services/aws-microservices"
+    priority: "P1"
+    repository_url: "https://github.com/awsrun/aws-microservices.git"
+    tags: ["microservices", "serverless", "event-driven"]
+    context: "Serverless microservices with Lambda and DynamoDB — already low-cost compute, evaluate DynamoDB capacity optimization and open-source alternatives"
+    preferences:
+      prefer: ["dynamodb-on-demand", "lambda-arm64", "graviton"]
+
+dependency_overrides:
+  - source: "aws-microservices"
+    target: "local-monolith"
+    type: "sync"
+    description: "Microservices query monolith for legacy product data during migration"
