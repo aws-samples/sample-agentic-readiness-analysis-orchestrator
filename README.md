@@ -370,3 +370,11 @@ atx custom def get -n agentic-readiness-assessment
 - [AWS Modernization Pathways](https://skillbuilder.aws/learning-plan)
 - [Cloud Design Patterns](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/)
 - [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)
+
+## Security
+
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+
+## License
+
+This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file.
