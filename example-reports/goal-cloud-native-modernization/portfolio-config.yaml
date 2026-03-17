@@ -1,0 +1,53 @@
+portfolio_name: "cloud-native-modernization"
+goal: "cloud-native-modernization"
+goal_context: "Decomposing monoliths into containerized microservices on EKS with GitOps deployment"
+
+transformation_definitions:
+  individual_assessment: "agentic-readiness-assessment"
+  portfolio_assessment: "portfolio-agentic-readiness-assessment"
+
+preferences:
+  prefer: ["eks", "fargate", "terraform", "gitops", "helm", "containers", "api-gateway"]
+  avoid: ["self-managed-kubernetes", "manual-deployments"]
+
+repositories:
+  # EKS SaaS GitOps — the target architecture and foundation for modernization
+  - name: "eks-saas-gitops"
+    path: "./services/eks-saas-gitops"
+    priority: "P0"
+    repository_url: "https://github.com/aws-solutions-library-samples/eks-saas-gitops"
+    tags: ["eks", "gitops", "terraform", "saas", "target-architecture"]
+    context: "EKS SaaS GitOps monorepo — this is the target architecture pattern. Already has EKS, Terraform IaC, Karpenter, and multi-tenant microservices. Assess for cloud-native maturity gaps."
+    preferences:
+      prefer: ["eks", "karpenter", "flux", "terraform"]
+
+  # Unishop Monolith — classic monolith-to-microservices decomposition candidate
+  - name: "unishop-monolith"
+    path: "./services/unishop-monolith-to-microservices/MonoToMicroLegacy"
+    priority: "P0"
+    repository_url: "https://github.com/aws-samples/unishop-monolith-to-microservices.git"
+    context: "Legacy Java Spring Boot monolith on EC2 with MySQL — primary decomposition target for containerization and EKS migration"
+    preferences:
+      prefer: ["eks", "containers", "aurora", "microservices-decomposition"]
+      avoid: ["lambda", "serverless"]
+
+  # Local PHP Monolith — containerization target
+  - name: "local-monolith"
+    path: "./monolith"
+    priority: "P1"
+    tags: ["monolith", "php", "containers"]
+    context: "PHP monolith with Docker and CloudFormation — containerize and deploy to EKS alongside the SaaS platform"
+    preferences:
+      prefer: ["eks", "ecr", "containers", "rds-aurora"]
+      avoid: ["lambda", "serverless"]
+
+dependency_overrides:
+  - source: "unishop-monolith"
+    target: "eks-saas-gitops"
+    type: "shared_infra"
+    description: "Unishop will be deployed onto the EKS cluster managed by eks-saas-gitops"
+
+  - source: "local-monolith"
+    target: "eks-saas-gitops"
+    type: "shared_infra"
+    description: "Local monolith will be containerized and deployed onto the EKS cluster"

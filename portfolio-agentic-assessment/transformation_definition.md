@@ -22,7 +22,7 @@ The output is a detailed Markdown report saved as `portfolio-agentic-readiness-r
 - Cross-cutting concerns analysis across all five categories
 - Dependency-aware portfolio modernization roadmap with four phases
 - AWS Modernization Pathways with portfolio pathway aggregation
-- Portfolio Quick Agent Wins aggregation (when goal is `agentic-ai-enablement` or `general-readiness`)
+- Portfolio Quick Agent Wins aggregation (when goal is `enable-agentic-use-case` or `agentic-readiness`)
 - AWS Programs & Engagement Recommendations (MAP, OLA, MMP, VMP, WAMP, EBA, ISV WMP, CE — portfolio only)
 - Integration opportunities (shared services, event-driven architecture, consolidation)
 - Resource allocation recommendations (team structure, skill gaps, training)
@@ -66,7 +66,7 @@ Scan the target directory structure to find all individual assessment reports:
 Before parsing individual reports, read the portfolio assessment's own `additionalPlanContext` to extract goal-driven configuration. These values are set by the Kiro Power orchestrator when generating the portfolio ATX config.
 
 **Extract the following fields from `additionalPlanContext`:**
-- **`goal`** — The customer's modernization objective. Must be one of: `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`. If absent or unrecognized, default to `general-readiness`. If unrecognized, log a warning: "Unrecognized goal '{value}', defaulting to general-readiness".
+- **`goal`** — The customer's modernization objective. Must be one of: `agentic-readiness`, `enable-agentic-use-case`, `cloud-native-modernization`, `cost-optimization`. If absent or unrecognized, default to `agentic-readiness`. If unrecognized, log a warning: "Unrecognized goal '{value}', defaulting to agentic-readiness".
 - **`goal_context`** — Optional free-text field providing additional context for scoping recommendations (e.g., "Building customer-facing AI agents for support and order management"). If absent, proceed without it.
 - **`preferences`** — Optional object with `prefer` and `avoid` string arrays representing global portfolio-level technology preferences.
 
@@ -79,10 +79,10 @@ These values are used throughout the portfolio assessment:
 
 | Goal | Primary Pathways | Priority Criteria |
 |------|-----------------|-------------------|
-| `agentic-ai-enablement` | Move to AI, Move to Managed Databases, Move to Modern DevOps | APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6 |
+| `agentic-readiness` | All pathways equally | All criteria equally |
+| `enable-agentic-use-case` | Move to AI, Move to Managed Databases, Move to Modern DevOps | APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6 |
 | `cloud-native-modernization` | Move to Cloud Native, Move to Containers, Move to Modern DevOps | APP-Q4, INF-Q1, INF-Q5, INF-Q6, APP-Q3, OPS-Q9 |
 | `cost-optimization` | Move to Open Source, Move to Managed Databases, Move to Managed Analytics | INF-Q2, DATA-Q2, DATA-Q10, DATA-Q11, INF-Q8 |
-| `general-readiness` | All pathways equally | All criteria equally |
 
 ### Step 2: Parse Individual Assessments
 
@@ -94,7 +94,7 @@ For each assessment report found, extract comprehensive data. Individual reports
 - Assessment date (validate YYYY-MM-DD format)
 - Overall readiness score (validate 0.0-4.0 range)
 - Category scores for all five categories (Infrastructure, Application, Data, Security, Operations)
-- **Assessment Goal** — Extract from the report metadata header line `**Assessment Goal**: <value>`. If absent, assume `general-readiness` (V1 report).
+- **Assessment Goal** — Extract from the report metadata header line `**Assessment Goal**: <value>`. If absent, assume `agentic-readiness` (V1 report).
 - **Goal Context** — Extract from the report metadata header line `**Goal Context**: <value>`. May be absent.
 - **Repository Type** — Extract from the report metadata header line `**Repository Type**: <value>` (e.g., `application`, `infrastructure-only`, `deployment-cicd`, `monorepo`, `library`). If absent, assume `application` (V1 report default). Record whether the repo type was auto-detected or user-provided (the metadata line may include "(auto-detected)" or "(user-provided)").
 
@@ -165,7 +165,7 @@ If the report uses V1 format (Yes/No instead of Triggered/Not Triggered/Not Appl
 
 #### 2.7 Quick Agent Wins (V2 Format)
 
-If the individual report contains a "Quick Agent Wins" section, extract the wins for portfolio-level aggregation. This section is present only when the assessment goal was `agentic-ai-enablement` or `general-readiness`.
+If the individual report contains a "Quick Agent Wins" section, extract the wins for portfolio-level aggregation. This section is present only when the assessment goal was `enable-agentic-use-case` or `agentic-readiness`.
 
 For each Quick Agent Win, extract:
 - **Win title** (e.g., "API-Aware Agent Tool Discovery")
@@ -184,7 +184,7 @@ If the report does not contain a Quick Agent Wins section (either V1 report or g
 - Log warnings for malformed scores (exclude from aggregations)
 - Log warnings for missing metadata (use defaults)
 - Handle duplicate service names with disambiguation using repository path
-- If a report is missing the V2 metadata header fields (`Assessment Goal`, `Repository Type`), treat as V1 format and apply defaults: goal = `general-readiness`, repo_type = `application`
+- If a report is missing the V2 metadata header fields (`Assessment Goal`, `Repository Type`), treat as V1 format and apply defaults: goal = `agentic-readiness`, repo_type = `application`
 - If a pathway table uses an unrecognized format, log a warning and attempt best-effort parsing
 
 ### Step 3: Cross-Service Dependency Analysis
@@ -257,19 +257,19 @@ After identifying all cross-cutting concerns (above), classify each flagged crit
 
 | Goal | Criteria | Threshold | Rationale |
 |------|----------|-----------|-----------|
-| `agentic-ai-enablement` | APP-Q2 (API docs), SEC-Q3 (identity propagation) | < 3 | Agents need machine-readable API specs and user-context propagation |
+| `agentic-readiness` | None | — | No specific goal = no goal-specific prerequisites |
+| `enable-agentic-use-case` | APP-Q2 (API docs), SEC-Q3 (identity propagation) | < 3 | Agents need machine-readable API specs and user-context propagation |
 | `cloud-native-modernization` | INF-Q5 (IaC), INF-Q6 (CI/CD) | score = 2 | Need better IaC/CI/CD to iterate on cloud-native infra safely |
 | `cost-optimization` | INF-Q5 (IaC), OPS-Q1 (observability) | < 3 | Can't optimize costs without visibility and control |
-| `general-readiness` | None | — | No specific goal = no goal-specific prerequisites |
 
 **TIER_3_MAP** (Goal Deliverables — dynamic by goal):
 
 | Goal | Criteria | Rationale |
 |------|----------|-----------|
-| `agentic-ai-enablement` | APP-Q13 (agent frameworks), DATA-Q1 (vector DB), DATA-Q2 (semantic search), DATA-Q3 (RAG), SEC-Q7 (human approval), OPS-Q3 (eval framework), OPS-Q6 (LLM cost tracking) | These ARE the agent capabilities the customer is building |
+| `agentic-readiness` | None | No specific goal = nothing is a "deliverable" |
+| `enable-agentic-use-case` | APP-Q13 (agent frameworks), DATA-Q1 (vector DB), DATA-Q2 (semantic search), DATA-Q3 (RAG), SEC-Q7 (human approval), OPS-Q3 (eval framework), OPS-Q6 (LLM cost tracking) | These ARE the agent capabilities being built |
 | `cloud-native-modernization` | APP-Q4 (monolith decomposition), APP-Q3 (async communication), INF-Q1 (managed compute), OPS-Q9 (canary/blue-green) | These ARE the cloud-native capabilities being pursued |
 | `cost-optimization` | INF-Q2 (managed DB migration), DATA-Q10 (EOL DB upgrades), DATA-Q11 (open source migration), INF-Q8 (managed streaming) | These ARE the cost-reduction migrations being pursued |
-| `general-readiness` | None | No specific goal = nothing is a "deliverable" |
 
 **Tier Thresholds and Minimum Service Counts:**
 
@@ -361,17 +361,17 @@ After classification, render the cross-cutting concerns using four sections with
 
 **Rendering rules:**
 - Only render a tier section if it contains at least one classified criterion. Omit empty tier sections entirely.
-- Tier 3 framing must be **informational**, not prescriptive — no "fix this blocker" language. These are the capabilities the customer is here to build.
-- For `general-readiness`: Only render Tier 1 (Foundational Blockers) and General Opportunities sections. Omit Tier 2 and Tier 3 entirely (they require a specific goal to be meaningful). Add a note: "With `general-readiness` as the goal, all non-foundational gaps are treated as equal improvement opportunities."
+- Tier 3 framing must be **informational**, not prescriptive — no "fix this blocker" language. These are the capabilities being built.
+- For `agentic-readiness`: Only render Tier 1 (Foundational Blockers) and General Opportunities sections. Omit Tier 2 and Tier 3 entirely (they require a specific goal to be meaningful). Add a note: "With `agentic-readiness` as the goal, all non-foundational gaps are treated as equal improvement opportunities."
 
 **Priority criteria by goal (retained for reference — now used as source for TIER_2_MAP + TIER_3_MAP):**
 
 | Goal | Priority Criteria |
 |------|-------------------|
-| `agentic-ai-enablement` | APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6 |
+| `agentic-readiness` | All criteria equally |
+| `enable-agentic-use-case` | APP-Q2, APP-Q13, DATA-Q1, DATA-Q2, DATA-Q3, SEC-Q7, OPS-Q3, OPS-Q6 |
 | `cloud-native-modernization` | APP-Q4, INF-Q1, INF-Q5, INF-Q6, APP-Q3, OPS-Q9 |
 | `cost-optimization` | INF-Q2, DATA-Q2, DATA-Q10, DATA-Q11, INF-Q8 |
-| `general-readiness` | All criteria equally |
 
 **Technology Stack Consolidation:**
 - Count distinct programming languages in use
@@ -444,10 +444,10 @@ Create a four-phase roadmap with dependency-aware sequencing. Phase names are go
 
 | Goal | Phase 0 | Phase 1 | Phase 2 | Phase 3 |
 |------|---------|---------|---------|---------|
-| `agentic-ai-enablement` | Cross-Cutting Foundation (Mo 0–1) | Agent Quick Wins (Mo 1–2) | Agent Foundations (Mo 2–4) | Agent Scale & Optimization (Mo 4–6+) |
+| `agentic-readiness` | Cross-Cutting Foundation (Mo 0–1) | Quick Wins (Mo 1–2) | Foundation (Mo 2–4) | Advanced Capabilities (Mo 4–6+) |
+| `enable-agentic-use-case` | Cross-Cutting Foundation (Mo 0–1) | Agent Quick Wins (Mo 1–2) | Agent Foundations (Mo 2–4) | Agent Scale & Optimization (Mo 4–6+) |
 | `cloud-native-modernization` | Cross-Cutting Foundation (Mo 0–1) | Containerize & Automate (Mo 1–2) | Decompose & Decouple (Mo 2–4) | Optimize & Scale (Mo 4–6+) |
 | `cost-optimization` | Cross-Cutting Foundation (Mo 0–1) | License & Quick Savings (Mo 1–2) | Managed Service Migration (Mo 2–4) | Optimization & Governance (Mo 4–6+) |
-| `general-readiness` | Cross-Cutting Foundation (Mo 0–1) | Quick Wins (Mo 1–2) | Foundation (Mo 2–4) | Advanced Capabilities (Mo 4–6+) |
 
 Phase 0 is ALWAYS "Cross-Cutting Foundation (Mo 0–1)" regardless of goal. Phases 1–3 use goal-specific names with portfolio time ranges.
 
@@ -752,10 +752,10 @@ For each of the 7 pathways, create one row. For each row, place every assessed r
 
 | Goal | High Alignment | Medium Alignment | Low Alignment |
 |------|---------------|-----------------|--------------|
-| `agentic-ai-enablement` | Move to AI, Move to Managed Databases, Move to Modern DevOps | Move to Cloud Native, Move to Containers | Move to Open Source, Move to Managed Analytics |
+| `agentic-readiness` | — | All pathways Medium | — |
+| `enable-agentic-use-case` | Move to AI, Move to Managed Databases, Move to Modern DevOps | Move to Cloud Native, Move to Containers | Move to Open Source, Move to Managed Analytics |
 | `cloud-native-modernization` | Move to Cloud Native, Move to Containers, Move to Modern DevOps | Move to Managed Databases, Move to Open Source | Move to AI, Move to Managed Analytics |
 | `cost-optimization` | Move to Open Source, Move to Managed Databases, Move to Managed Analytics | Move to Containers, Move to Modern DevOps | Move to Cloud Native, Move to AI |
-| `general-readiness` | — | All pathways Medium | — |
 
 **Table Format:**
 
@@ -775,7 +775,7 @@ Generate the following table in the portfolio report (within the AWS Modernizati
 | Move to AI | ... | ... | ... | ... |
 ```
 
-**Example** (for a portfolio with goal `agentic-ai-enablement` and repos: service-a, service-b, books-api, infra-repo):
+**Example** (for a portfolio with goal `enable-agentic-use-case` and repos: service-a, service-b, books-api, infra-repo):
 
 ```markdown
 ### Portfolio Pathway Aggregation
@@ -825,8 +825,8 @@ Each pathway maps directly to a learning materials module:
 **Conditional Inclusion — Goal-Based:**
 
 This step applies ONLY when the portfolio `goal` (read in Step 1.5) is one of:
-- `agentic-ai-enablement` → **ALWAYS include** this section
-- `general-readiness` → **ALWAYS include** this section
+- `enable-agentic-use-case` → **ALWAYS include** this section
+- `agentic-readiness` → **ALWAYS include** this section
 
 When the goal is one of the following, **SKIP this step entirely** and do NOT include a Portfolio Quick Agent Wins section in the report:
 - `cloud-native-modernization` → **OMIT**
@@ -860,7 +860,7 @@ When the goal is one of the following, **SKIP this step entirely** and do NOT in
    - Why combining is more valuable than individual agents
 
 4. **Prioritize the aggregated wins.** Sort by:
-   1. **Goal alignment first** — wins that directly support the portfolio goal rank higher. For `agentic-ai-enablement`, all agent wins are high alignment. For `general-readiness`, rank by breadth of impact.
+   1. **Goal alignment first** — wins that directly support the portfolio goal rank higher. For `enable-agentic-use-case`, all agent wins are high alignment. For `agentic-readiness`, rank by breadth of impact.
    2. **Number of repos affected** — wins present in more repos rank higher (broader portfolio impact)
    3. **Effort** — Low effort wins rank before Medium effort wins (faster time to value)
 
@@ -891,7 +891,7 @@ Across the portfolio, these agent opportunities are immediately available:
 
 **Edge Cases:**
 - If only 1 repo has Quick Agent Wins, still include the section but note the limited scope and recommend expanding agent capabilities to other repos as they modernize.
-- If no repos have Quick Agent Wins (all were V1 reports or assessed with non-agent goals), state: "No individual Quick Agent Wins were identified in the current assessment reports. As repos are re-assessed with the `agentic-ai-enablement` or `general-readiness` goal, agent opportunities will be identified and aggregated here."
+- If no repos have Quick Agent Wins (all were V1 reports or assessed with non-agent goals), state: "No individual Quick Agent Wins were identified in the current assessment reports. As repos are re-assessed with the `enable-agentic-use-case` or `agentic-readiness` goal, agent opportunities will be identified and aggregated here."
 - If `goal_context` is absent, use generic framing without tailoring to a specific use case.
 
 ### Step 10.7: Generate AWS Programs & Engagement Recommendations
@@ -953,7 +953,7 @@ Create the report file with exactly this structure:
 ```markdown
 # Portfolio Agentic Readiness Assessment Report
 **Portfolio**: <portfolio name or parent directory>
-**Assessment Goal**: <effective goal value, e.g., agentic-ai-enablement>
+**Assessment Goal**: <effective goal value, e.g., enable-agentic-use-case>
 **Goal Context**: <goal_context value if provided, otherwise omit this line>
 **Services Assessed**: <count>
 **Assessment Date**: <date>
@@ -973,7 +973,7 @@ Create the report file with exactly this structure:
    - Phase 2 — <goal-specific name> (Mo 2–4)
    - Phase 3 — <goal-specific name> (Mo 4–6+)
 6. AWS Modernization Pathways
-7. Portfolio Quick Agent Wins *(only when goal is `agentic-ai-enablement` or `general-readiness`)*
+7. Portfolio Quick Agent Wins *(only when goal is `enable-agentic-use-case` or `agentic-readiness`)*
 8. AWS Programs & Engagement Recommendations *(portfolio only)*
 9. Integration Opportunities
 10. Resource Allocation Recommendations
@@ -986,7 +986,7 @@ Create the report file with exactly this structure:
 
 ## Executive Dashboard
 
-<2-3 paragraph executive summary highlighting portfolio-wide readiness, critical dependencies, top priorities, and expected timeline. Frame the summary around the portfolio's assessment goal — e.g., for `agentic-ai-enablement` emphasize agent readiness and quick wins; for `cost-optimization` emphasize licensing costs and managed service migration opportunities; for `cloud-native-modernization` emphasize containerization and decomposition readiness; for `general-readiness` provide a balanced overview across all dimensions.>
+<2-3 paragraph executive summary highlighting portfolio-wide readiness, critical dependencies, top priorities, and expected timeline. Frame the summary around the portfolio's assessment goal — e.g., for `enable-agentic-use-case` emphasize agent readiness and quick wins; for `cost-optimization` emphasize licensing costs and managed service migration opportunities; for `cloud-native-modernization` emphasize containerization and decomposition readiness; for `agentic-readiness` provide a balanced overview across all dimensions.>
 
 ### Portfolio Readiness Score: X.X / 4.0
 
@@ -1112,7 +1112,7 @@ Create the report file with exactly this structure:
 
 > Cross-cutting concerns are gaps that appear across multiple services. They are classified into four tiers based on severity and relationship to the portfolio's assessment goal (`<goal>`). Use the tiered classification algorithm from Section 4.1 to assign each flagged criterion to a tier.
 >
-> **For `general-readiness`**: Only Tier 1 (Foundational Blockers) and General Opportunities are rendered. Tiers 2 and 3 are omitted.
+> **For `agentic-readiness`**: Only Tier 1 (Foundational Blockers) and General Opportunities are rendered. Tiers 2 and 3 are omitted.
 
 ### 🚨 Foundational Blockers
 
@@ -1131,7 +1131,7 @@ Create the report file with exactly this structure:
 
 > These gaps specifically block your path to `<goal>`.
 > They aren't the goal itself, but you can't get there without them.
-> **Render this section only if at least one Tier 2 criterion is classified. Omit entirely if empty or if goal is `general-readiness`.**
+> **Render this section only if at least one Tier 2 criterion is classified. Omit entirely if empty or if goal is `agentic-readiness`.**
 
 1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 3
    - **Impact on goal**: <explain how this gap blocks the goal — e.g., "Agents cannot discover or invoke service capabilities without machine-readable API specs">
@@ -1145,7 +1145,7 @@ Create the report file with exactly this structure:
 > These are the capabilities your `<goal>` initiative will deliver.
 > Low scores here confirm the need for the initiative, not additional blockers.
 > Your individual assessment reports detail the current state and roadmap for each.
-> **Render this section only if at least one Tier 3 criterion is classified. Omit entirely if empty or if goal is `general-readiness`.**
+> **Render this section only if at least one Tier 3 criterion is classified. Omit entirely if empty or if goal is `agentic-readiness`.**
 > **Framing must be informational, not prescriptive — no "fix this blocker" language.**
 
 1. **<criterion ID>: <criterion name>** — <N> of <M applicable> services score < 3
@@ -1168,7 +1168,7 @@ Create the report file with exactly this structure:
 
 2. <additional General concerns...>
 
-> **`general-readiness` note**: When goal is `general-readiness`, add: "With `general-readiness` as the goal, all non-foundational gaps are treated as equal improvement opportunities."
+> **`agentic-readiness` note**: When goal is `agentic-readiness`, add: "With `agentic-readiness` as the goal, all non-foundational gaps are treated as equal improvement opportunities."
 
 ### Per-Category Analysis
 
@@ -1260,10 +1260,10 @@ Create the report file with exactly this structure:
 ### Phase 1 — <goal-specific name> (Mo 1–2)
 
 > Use the goal-specific Phase 1 name from the lookup table:
-> - `agentic-ai-enablement` → "Agent Quick Wins (Mo 1–2)"
+> - `enable-agentic-use-case` → "Agent Quick Wins (Mo 1–2)"
 > - `cloud-native-modernization` → "Containerize & Automate (Mo 1–2)"
 > - `cost-optimization` → "License & Quick Savings (Mo 1–2)"
-> - `general-readiness` → "Quick Wins (Mo 1–2)"
+> - `agentic-readiness` → "Quick Wins (Mo 1–2)"
 
 **Objective**: Modernize foundational services that others depend on. List goal-priority activities first.
 
@@ -1293,10 +1293,10 @@ Create the report file with exactly this structure:
 ### Phase 2 — <goal-specific name> (Mo 2–4)
 
 > Use the goal-specific Phase 2 name from the lookup table:
-> - `agentic-ai-enablement` → "Agent Foundations (Mo 2–4)"
+> - `enable-agentic-use-case` → "Agent Foundations (Mo 2–4)"
 > - `cloud-native-modernization` → "Decompose & Decouple (Mo 2–4)"
 > - `cost-optimization` → "Managed Service Migration (Mo 2–4)"
-> - `general-readiness` → "Foundation (Mo 2–4)"
+> - `agentic-readiness` → "Foundation (Mo 2–4)"
 
 **Objective**: Modernize services that depend on Phase 1 services. List goal-priority activities first.
 
@@ -1326,10 +1326,10 @@ Create the report file with exactly this structure:
 ### Phase 3 — <goal-specific name> (Mo 4–6+)
 
 > Use the goal-specific Phase 3 name from the lookup table:
-> - `agentic-ai-enablement` → "Agent Scale & Optimization (Mo 4–6+)"
+> - `enable-agentic-use-case` → "Agent Scale & Optimization (Mo 4–6+)"
 > - `cloud-native-modernization` → "Optimize & Scale (Mo 4–6+)"
 > - `cost-optimization` → "Optimization & Governance (Mo 4–6+)"
-> - `general-readiness` → "Advanced Capabilities (Mo 4–6+)"
+> - `agentic-readiness` → "Advanced Capabilities (Mo 4–6+)"
 
 **Objective**: Optimize cross-service workflows and implement advanced capabilities. List goal-priority activities first.
 
@@ -1441,7 +1441,7 @@ This table shows exactly which repositories fall into each pathway status, provi
 
 ## Portfolio Quick Agent Wins
 
-> **Include this section ONLY when the portfolio goal is `agentic-ai-enablement` or `general-readiness`.
+> **Include this section ONLY when the portfolio goal is `enable-agentic-use-case` or `agentic-readiness`.
 > OMIT this entire section when the goal is `cloud-native-modernization` or `cost-optimization`.**
 
 Across the portfolio, these agent opportunities are immediately available based on existing capabilities found in individual assessments:
@@ -1752,11 +1752,11 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 2. The report file `{portfolio-name}-portfolio-agentic-readiness-report.md` is created in the `agentic-readiness-assessment` directory
 3. The report contains an Executive Dashboard with portfolio-wide scores
 4. The report contains a Service Dependency Map with all services listed
-5. The report contains Cross-Cutting Concerns analysis for all 5 categories, classified into four tiers: 🚨 Foundational Blockers, ⚠️ Prerequisites for Goal, 🎯 Goal Deliverables, and 💡 General Improvement Opportunities. Empty tier sections are omitted. For `general-readiness`, only Tier 1 and General Opportunities are rendered (Tiers 2 and 3 are omitted).
+5. The report contains Cross-Cutting Concerns analysis for all 5 categories, classified into four tiers: 🚨 Foundational Blockers, ⚠️ Prerequisites for Goal, 🎯 Goal Deliverables, and 💡 General Improvement Opportunities. Empty tier sections are omitted. For `agentic-readiness`, only Tier 1 and General Opportunities are rendered (Tiers 2 and 3 are omitted).
 6. The report contains a Portfolio Modernization Roadmap with 4 phases using goal-specific phase names (Phase 0 is always "Cross-Cutting Foundation (Mo 0–1)"; Phases 1–3 use names from the goal-specific lookup table in Step 6)
 7. The roadmap respects dependency order (services are sequenced correctly) and activities within each phase are re-weighted by goal alignment (goal-priority activities listed first)
 8. The report contains an AWS Modernization Pathways section with all 7 pathways evaluated, per-service pathway assignments, and parallel execution plan
-9. When the goal is `agentic-ai-enablement` or `general-readiness`, the report contains a Portfolio Quick Agent Wins section with wins grouped by type across repos, cross-repo agent opportunities identified, and wins prioritized by goal alignment and effort. When the goal is `cloud-native-modernization` or `cost-optimization`, this section is absent from the report.
+9. When the goal is `enable-agentic-use-case` or `agentic-readiness`, the report contains a Portfolio Quick Agent Wins section with wins grouped by type across repos, cross-repo agent opportunities identified, and wins prioritized by goal alignment and effort. When the goal is `cloud-native-modernization` or `cost-optimization`, this section is absent from the report.
 10. The report contains an AWS Programs & Engagement Recommendations section that recommends relevant AWS programs (MAP, OLA, MMP, VMP, WAMP, EBA, ISV WMP, CE) based on portfolio-level trigger conditions. Each program is included only if its trigger condition is met. EBA has one row per triggered pathway. If no programs are triggered, a brief note is included instead. This section does NOT appear in individual reports.
 11. The report contains Integration Opportunities with specific recommendations
 12. The report contains Resource Allocation Recommendations

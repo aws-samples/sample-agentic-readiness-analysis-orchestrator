@@ -19,7 +19,7 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 
 **How Kiro Orchestrates:**
 - Parses `portfolio-config.yaml` to discover all repositories, their configuration, the `goal`, `goal_context`, `preferences`, and the transformation definition names
-- Validates the `goal` value — must be one of `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`; defaults to `general-readiness` if missing or unrecognized (with a warning for unrecognized values)
+- Validates the `goal` value — must be one of `enable-agentic-use-case`, `cloud-native-modernization`, `cost-optimization`, `agentic-readiness`; defaults to `agentic-readiness` if missing or unrecognized (with a warning for unrecognized values)
 - Validates per-repo fields: `name` and `path` required; `priority`, `context`, `preferences`, `repo_type`, `tags` optional
 - Clones repositories automatically when `repository_url` is provided and the local `path` doesn't exist
 - For each repository, Kiro generates a temporary ATX configuration file containing the service's `additionalPlanContext` — including `goal`, `goal_context`, `repo_type` (if specified), `context`, merged `preferences` (global + per-repo with conflict resolution), `priority`, and `tags`
@@ -95,7 +95,7 @@ Create `portfolio-config.yaml` defining which services to assess, the modernizat
 
 ```yaml
 portfolio_name: "my-platform"
-goal: "agentic-ai-enablement"
+goal: "enable-agentic-use-case"
 goal_context: "Building customer-facing AI agents for support and order management"
 
 transformation_definitions:
@@ -132,9 +132,9 @@ See `portfolio-config.example.yaml` for complete examples with preferences.
 Kiro will:
 1. Parse `portfolio-config.yaml` — read `goal`, `goal_context`, `preferences`, `transformation_definitions`, `repositories`, and `dependency_overrides`
 2. Validate the `goal` value:
-   - Must be one of: `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`
-   - If unrecognized → warn the user and default to `general-readiness`
-   - If missing → default to `general-readiness`
+   - Must be one of: `enable-agentic-use-case`, `cloud-native-modernization`, `cost-optimization`, `agentic-readiness`
+   - If unrecognized → warn the user and default to `agentic-readiness`
+   - If missing → default to `agentic-readiness`
 3. Validate per-repo fields: `name` and `path` are required; `priority`, `context`, `preferences`, `repo_type`, `tags`, `repository_url`, `report_path` are optional
 4. Clone any repositories where `repository_url` is provided and `path` doesn't exist yet
 5. For each repository, generate a temporary ATX config file (e.g., `.atx-config-<service-name>.yaml`) with `additionalPlanContext` containing: `goal`, `goal_context`, `repo_type` (if specified), `context`, merged `preferences`, `priority`, and `tags`
@@ -155,7 +155,7 @@ atx custom def exec -n <your-individual-assessment-name> -p . -g file://atx-conf
 Where `atx-config.yaml` contains the new simplified `additionalPlanContext`:
 ```yaml
 additionalPlanContext: |
-  goal: "agentic-ai-enablement"
+  goal: "enable-agentic-use-case"
   goal_context: "Building a customer support agent for order and inventory data"
   repo_type: "application"
   context: "Legacy PHP e-commerce app running on EC2 with MySQL"
@@ -174,7 +174,7 @@ atx custom def exec -n <your-portfolio-assessment-name> -p . -g file://atx-portf
 Where `atx-portfolio-config.yaml` contains:
 ```yaml
 additionalPlanContext: |
-  goal: "agentic-ai-enablement"
+  goal: "enable-agentic-use-case"
   goal_context: "Building customer-facing AI agents for support and order management"
   preferences:
     prefer: ["eks", "aurora", "bedrock"]
@@ -205,7 +205,7 @@ Create a `portfolio-config.yaml` file to define which repositories to assess, th
 
 ```yaml
 portfolio_name: "my-platform"
-goal: "general-readiness"
+goal: "agentic-readiness"
 
 transformation_definitions:
   individual_assessment: "individual-aws-agentic-assessment"
@@ -222,7 +222,7 @@ repositories:
 
 ```yaml
 portfolio_name: "my-platform"
-goal: "agentic-ai-enablement"
+goal: "enable-agentic-use-case"
 goal_context: "Building customer-facing AI agents for support and order management"
 
 transformation_definitions:
@@ -294,14 +294,14 @@ The `goal` field drives how the assessment is framed — which pathways are high
 
 | Goal | Description |
 |------|-------------|
-| `agentic-ai-enablement` | Enable agentic AI workflows — autonomous agents discovering, invoking, and orchestrating app capabilities |
+| `agentic-readiness` | Evaluate overall agentic readiness across all dimensions with equal weighting (default) |
+| `enable-agentic-use-case` | Enable a specific agentic AI use case — scoped to the identified use case being built |
 | `cloud-native-modernization` | Decompose and modernize into cloud-native architectures using managed services, containers, and serverless |
 | `cost-optimization` | Reduce costs through license elimination, managed service adoption, and right-sizing |
-| `general-readiness` | Comprehensive assessment across all dimensions with no specific weighting (default) |
 
 **Goal Validation:**
-- If `goal` is missing → defaults to `general-readiness`
-- If `goal` is not one of the 4 predefined values → Kiro warns the user ("Unrecognized goal '{value}', defaulting to general-readiness") and defaults to `general-readiness`
+- If `goal` is missing → defaults to `agentic-readiness`
+- If `goal` is not one of the 4 predefined values → Kiro warns the user ("Unrecognized goal '{value}', defaulting to agentic-readiness") and defaults to `agentic-readiness`
 - The `goal_context` free-text field is optional and provides additional context for scoping recommendations (e.g., "Building a customer support agent that needs access to order and inventory data")
 
 ### Preferences
@@ -326,7 +326,7 @@ The agent interprets preferences intelligently:
 The full configuration schema is available in `portfolio-config.schema.json`. Key sections:
 
 - **portfolio_name** (required): Name identifier for the portfolio
-- **goal** (required): One of `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`
+- **goal** (required): One of `enable-agentic-use-case`, `cloud-native-modernization`, `cost-optimization`, `agentic-readiness`
 - **goal_context** (optional): Free-text context for scoping recommendations
 - **transformation_definitions** (required): Names of the AWS Transform definitions to use
   - `individual_assessment` (required): Name for per-repository assessments
@@ -512,7 +512,7 @@ portfolio-config.yaml
           ▼
 ┌─────────────────────┐
 │  2. Validate goal    │  Must be one of 4 predefined values
-│     & config fields  │  Default to general-readiness if
+│     & config fields  │  Default to agentic-readiness if
 │                      │  missing or unrecognized
 └─────────┬───────────┘
           │
@@ -590,7 +590,7 @@ Kiro spawns one subagent per repository from `portfolio-config.yaml`. For each r
 **Generated ATX config example** (`.atx-config-checkout-service.yaml`):
 ```yaml
 additionalPlanContext: |
-  goal: "agentic-ai-enablement"
+  goal: "enable-agentic-use-case"
   goal_context: "Building customer-facing AI agents for support and order management"
   context: "Monolithic checkout handling payments and orders"
   preferences:
@@ -603,7 +603,7 @@ additionalPlanContext: |
 If the repo has a `repo_type` specified in the portfolio config, it is included:
 ```yaml
 additionalPlanContext: |
-  goal: "agentic-ai-enablement"
+  goal: "enable-agentic-use-case"
   goal_context: "Building customer-facing AI agents for support and order management"
   repo_type: "infrastructure-only"
   preferences:
@@ -620,7 +620,7 @@ atx custom def exec -n <individual_assessment> -p <repo-path> -g file://.atx-con
 ```
 
 **How Kiro generates the `additionalPlanContext`:**
-1. Set `goal` from the portfolio config (defaults to `general-readiness` if missing or unrecognized)
+1. Set `goal` from the portfolio config (defaults to `agentic-readiness` if missing or unrecognized)
 2. Set `goal_context` from the portfolio config (if present)
 3. Set `repo_type` from the per-repo config (only if explicitly specified — otherwise the transformation auto-detects)
 4. Set `context` from the per-repo config (if present)
@@ -644,7 +644,7 @@ After all subagents complete their individual assessments, Kiro generates a port
 **Generated ATX config example** (`.atx-config-portfolio.yaml`):
 ```yaml
 additionalPlanContext: |
-  goal: "agentic-ai-enablement"
+  goal: "enable-agentic-use-case"
   goal_context: "Building customer-facing AI agents for support and order management"
   preferences:
     prefer: ["eks", "aurora", "bedrock"]
@@ -781,7 +781,7 @@ agentic-readiness-assessment/
 ```yaml
 # portfolio-config.yaml
 portfolio_name: "payment-platform"
-goal: "general-readiness"
+goal: "agentic-readiness"
 
 transformation_definitions:
   individual_assessment: "individual-aws-agentic-assessment"
@@ -804,7 +804,7 @@ repositories:
 ```yaml
 # portfolio-config.yaml
 portfolio_name: "ecommerce-platform"
-goal: "agentic-ai-enablement"
+goal: "enable-agentic-use-case"
 goal_context: "Building customer-facing AI agents for support and order management"
 
 transformation_definitions:
@@ -907,7 +907,7 @@ dependency_overrides:
    ```
 2. Check required fields:
    - `portfolio_name` is a non-empty string
-   - `goal` is one of: `agentic-ai-enablement`, `cloud-native-modernization`, `cost-optimization`, `general-readiness`
+   - `goal` is one of: `enable-agentic-use-case`, `cloud-native-modernization`, `cost-optimization`, `agentic-readiness`
    - `transformation_definitions` has both `individual_assessment` and `portfolio_assessment`
    - Each repository has `name` and `path`
    - Paths are relative to portfolio root

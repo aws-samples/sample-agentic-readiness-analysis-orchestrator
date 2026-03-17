@@ -1,0 +1,58 @@
+portfolio_name: "agentic-use-case-ecommerce"
+goal: "enable-agentic-use-case"
+goal_context: "Building an AI agent that handles order status inquiries, processes returns, and manages inventory restocking across the e-commerce platform"
+
+transformation_definitions:
+  individual_assessment: "agentic-readiness-assessment"
+  portfolio_assessment: "portfolio-agentic-readiness-assessment"
+
+preferences:
+  prefer: ["dynamodb", "api-gateway", "eventbridge", "sqs", "ecs", "sns", "lambda when makes sense", "RDS", "terraform", "gitops", "helm"]
+
+repositories:
+  - name: "unishop-monolith"
+    path: "./services/unishop-monolith-to-microservices/MonoToMicroLegacy"
+    priority: "P0"
+    repository_url: "https://github.com/aws-samples/unishop-monolith-to-microservices.git"
+    context: "Legacy monolithic e-commerce app — needs decomposition so the agent can access order and return data through discrete service APIs"
+    preferences:
+      prefer: ["containers"]
+      avoid: ["lambda", "serverless"]
+
+  - name: "aws-microservices"
+    path: "./services/aws-microservices"
+    priority: "P0"
+    repository_url: "https://github.com/awsrun/aws-microservices.git"
+    tags: ["microservices", "serverless", "event-driven"]
+    context: "Event-driven microservices (product, basket, ordering) — the agent will invoke these as tools for order status lookups, basket operations, and return processing"
+    preferences:
+      prefer: ["lambda", "dynamodb", "eventbridge", "sqs", "event-driven", "saga", "async-messaging"]
+
+  - name: "local-monolith"
+    path: "./monolith"
+    priority: "P0"
+    tags: ["monolith", "php", "containers", "eks"]
+    context: "PHP monolith with inventory data — containerize and expose inventory APIs the agent needs for restocking decisions"
+    preferences:
+      prefer: ["ecs", "ecr", "alb", "rds", "container-orchestration", "microservices"]
+      avoid: ["lambda", "serverless"]
+
+  - name: "books-api"
+    path: "./services/books-api"
+    priority: "P1"
+    repository_url: "https://github.com/aws-samples/aws-serverless-books-api-sample.git"
+    tags: ["serverless", "cdk", "api", "dynamodb"]
+    context: "Serverless REST API for book catalog — clean API surface the agent can use as a tool for product lookups and catalog queries"
+    preferences:
+      prefer: ["lambda", "dynamodb", "api-gateway", "cdk", "rest-api", "iac", "serverless"]
+
+dependency_overrides:
+  - source: "aws-microservices"
+    target: "books-api"
+    type: "async"
+    description: "Microservices ordering flow triggers book catalog updates via EventBridge events"
+
+  - source: "books-api"
+    target: "aws-microservices"
+    type: "sync"
+    description: "Books API queries product microservice for catalog data via REST"
