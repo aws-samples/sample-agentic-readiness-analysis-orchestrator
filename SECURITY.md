@@ -71,7 +71,7 @@ ssh-keygen -t ed25519 -C "your_email@example.com"
 ssh-add ~/.ssh/id_ed25519
 
 # ❌ NEVER - Hardcode credentials in configs
-repository_url: "https://user:password@github.com/repo.git"  # NEVER DO THIS
+repository_url: "https://<username>:<token>@github.com/repo.git"  # NEVER DO THIS
 ```
 
 **AWS Credentials:**
