@@ -93,16 +93,44 @@ Resources:
           Value: !Sub '${ServiceName}-vpc'
 
   # VPC Flow Log
+  VPCFlowLogKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for ${ServiceName} VPC Flow Log CloudWatch Log Group'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableRootAccountAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudWatchLogs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/vpc/flowlogs/${ServiceName}'
+
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/vpc/flowlogs/${ServiceName}'
       RetentionInDays: 30
+      KmsKeyId: !GetAtt VPCFlowLogKMSKey.Arn
 
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ServiceName}-vpc-flowlog-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -117,12 +145,14 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
+                Resource: !Sub '${VPCFlowLogGroup.Arn}:*'
+              - Effect: Allow
+                Action:
                   - logs:DescribeLogGroups
                   - logs:DescribeLogStreams
-                Resource: !GetAtt VPCFlowLogGroup.Arn
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/vpc/flowlogs/${ServiceName}:*'
 
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
@@ -251,7 +281,6 @@ Resources:
   RDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ServiceName}-rds-monitoring-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -259,8 +288,18 @@ Resources:
             Principal:
               Service: monitoring.rds.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Policies:
+        - PolicyName: RDSEnhancedMonitoring
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:RDSOSMetrics:*'
 
   # VPC Connector for App Runner
   VPCConnector:
@@ -350,7 +389,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apprunner/${ServiceName}*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apprunner/${ServiceName}:*'
       Tags:
         - Key: Name
           Value: !Sub '${ServiceName}-instance-role'
@@ -379,10 +418,11 @@ Resources:
                   - ecr:BatchCheckLayerAvailability
                   - ecr:DescribeImages
                 Resource: !GetAtt ECRRepository.Arn
-              - Effect: Allow
+              - Sid: ECRAuth  # ecr:GetAuthorizationToken is account-level, cannot be scoped to a specific resource
+                Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
-                Resource: '*'
+                Resource: !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ServiceName}'
       Tags:
         - Key: Name
           Value: !Sub '${ServiceName}-access-role'
