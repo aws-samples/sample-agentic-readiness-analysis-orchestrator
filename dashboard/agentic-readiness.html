@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Readiness — Agentic Readiness Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f1117;--surface:#1a1d27;--card:#222639;--border:#2d3148;--text:#e2e4ed;--muted:#8b8fa3;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--green-bg:rgba(34,197,94,.12);--yellow-bg:rgba(234,179,8,.12);--orange-bg:rgba(249,115,22,.12);--red-bg:rgba(239,68,68,.12)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline;color:#a5b4fc}
+.container{max-width:1440px;margin:0 auto;padding:24px}
+nav{display:flex;align-items:center;gap:6px;margin-bottom:24px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--border)}
+nav a{padding:8px 18px;font-size:.82rem;font-weight:600;color:var(--muted);border-radius:8px;border:1px solid var(--border);background:var(--surface);transition:all .2s;white-space:nowrap;text-decoration:none}
+nav a:hover{border-color:var(--accent);color:var(--text)}
+nav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:12px}
+.top-bar h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em}
+.top-bar h1 span{color:var(--accent2)}
+.grid{display:grid;gap:20px}.grid-4{grid-template-columns:repeat(4,1fr)}.grid-3{grid-template-columns:repeat(3,1fr)}.grid-2{grid-template-columns:repeat(2,1fr)}.grid-12{grid-template-columns:repeat(12,1fr)}
+.span-8{grid-column:span 8}.span-4{grid-column:span 4}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s}.card:hover{border-color:var(--accent)}
+.card-title{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-value{font-size:2rem;font-weight:700;letter-spacing:-.03em}
+.card-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+.score-green{color:var(--green)}.score-yellow{color:var(--yellow)}.score-orange{color:var(--orange)}.score-red{color:var(--red)}
+.bg-green{background:var(--green-bg)}.bg-yellow{background:var(--yellow-bg)}.bg-orange{background:var(--orange-bg)}.bg-red{background:var(--red-bg)}
+.score-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:8px}.score-bar-fill{height:100%;border-radius:3px}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600}
+.pill-green{background:var(--green-bg);color:var(--green)}.pill-yellow{background:var(--yellow-bg);color:var(--yellow)}.pill-orange{background:var(--orange-bg);color:var(--orange)}.pill-red{background:var(--red-bg);color:var(--red)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:10px 12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}tr:hover td{background:rgba(99,102,241,.04)}
+.section{margin-bottom:32px}.section-title{font-size:1.1rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.phase{position:relative;padding-left:28px;margin-bottom:24px}.phase::before{content:'';position:absolute;left:8px;top:28px;bottom:0;width:2px;background:var(--border)}.phase:last-child::before{display:none}
+.phase-dot{position:absolute;left:0;top:6px;width:18px;height:18px;border-radius:50%;border:2px solid var(--accent);background:var(--bg);display:flex;align-items:center;justify-content:center}.phase-dot::after{content:'';width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.phase h3{font-size:1rem;font-weight:600;margin-bottom:4px}.phase p{font-size:.85rem;color:var(--muted)}
+.phase-items{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}.phase-tag{padding:3px 10px;border-radius:6px;font-size:.75rem;background:var(--surface);border:1px solid var(--border);color:var(--text)}
+.yaml-block{background:#181b24;border:1px solid var(--border);border-radius:8px;padding:16px;font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:#a5b4fc;overflow-x:auto;white-space:pre;line-height:1.6;max-height:400px;overflow-y:auto}
+@media(max-width:1024px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-12 .span-8,.grid-12 .span-4{grid-column:span 12}.grid-3{grid-template-columns:1fr}}
+@media(max-width:640px){.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="top-bar">
+  <h1>📊 <span>Portfolio Agentic Readiness</span> — Agentic Readiness Baseline</h1>
+  <div style="font-size:.8rem;color:var(--muted)">📅 March 17, 2026</div>
+</div>
+<nav>
+  <a href="cloud-native.html">☁️ Cloud-Native</a>
+  <a href="agentic-readiness.html" class="active">🤖 Agentic Readiness</a>
+  <a href="agentic-usecase.html">🛒 Agentic Use Case</a>
+  <a href="cost-optimization.html">💰 Cost Optimization</a>
+</nav>
+
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+  <div style="font-size:1.15rem;font-weight:700">🤖 Agentic Readiness Baseline</div>
+  <div class="pill pill-orange">1.67 / 4.0</div>
+  <div style="font-size:.8rem;color:var(--muted)">5 Services · Baseline agentic readiness assessment across the full portfolio</div>
+</div>
+
+<!-- KPIs -->
+<div class="section"><div class="grid grid-4">
+  <div class="card"><div class="card-title">📊 Portfolio Readiness</div><div class="card-value score-orange">1.67<span style="font-size:1rem;color:var(--muted)"> / 4.0</span></div><div class="score-bar"><div class="score-bar-fill" style="width:41.8%;background:var(--orange)"></div></div><div class="card-sub">All services below "Partial" threshold</div></div>
+  <div class="card"><div class="card-title">✅ Agent-Ready Services</div><div class="card-value score-red">0<span style="font-size:1rem;color:var(--muted)"> / 5</span></div><div class="score-bar"><div class="score-bar-fill" style="width:0%;background:var(--red)"></div></div><div class="card-sub">0% meet 3.5+ threshold</div></div>
+  <div class="card"><div class="card-title">⏱️ Estimated Timeline</div><div class="card-value" style="color:var(--accent2)">6<span style="font-size:1rem;color:var(--muted)"> months</span></div><div class="card-sub">4 phases, 3 parallel tracks</div></div>
+  <div class="card"><div class="card-title">⚠️ Critical Dependencies</div><div class="card-value score-yellow">1</div><div class="card-sub">aws-microservices ↔ books-api circular</div></div>
+</div></div>
+
+<!-- Distribution -->
+<div class="section"><div class="section-title"><span>📈</span> Readiness Distribution</div><div class="grid grid-4">
+  <div class="card bg-green" style="text-align:center"><div style="font-size:2rem;font-weight:700;color:var(--green)">0</div><div style="font-size:.8rem;color:var(--green)">✅ Agent-Ready</div></div>
+  <div class="card bg-yellow" style="text-align:center"><div style="font-size:2rem;font-weight:700;color:var(--yellow)">0</div><div style="font-size:.8rem;color:var(--yellow)">🟡 Partial</div></div>
+  <div class="card bg-orange" style="text-align:center"><div style="font-size:2rem;font-weight:700;color:var(--orange)">4</div><div style="font-size:.8rem;color:var(--orange)">🟠 Needs Work</div><div style="font-size:.72rem;color:var(--muted);margin-top:4px">microservices, monolith, books, eks</div></div>
+  <div class="card bg-red" style="text-align:center"><div style="font-size:2rem;font-weight:700;color:var(--red)">1</div><div style="font-size:.8rem;color:var(--red)">❌ Not Ready</div><div style="font-size:.72rem;color:var(--muted);margin-top:4px">unishop-monolith</div></div>
+</div></div>
+
+<!-- Charts -->
+<div class="section"><div class="grid grid-12">
+  <div class="card span-8"><div class="card-title">📊 Category Scores by Service</div><div style="position:relative;height:280px;overflow:hidden"><canvas id="catChart"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">🎯 Portfolio Averages</div><div style="position:relative;height:280px;overflow:hidden"><canvas id="radarChart"></canvas></div></div>
+</div></div>
+
+<!-- Service Cards -->
+<div class="section"><div class="section-title"><span>🔍</span> Service Assessment</div><div class="grid grid-3">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px"><div><div style="font-weight:700">books-api</div><div style="font-size:.75rem;color:var(--muted)">Serverless CDK REST API</div></div><span class="pill pill-orange">2.0</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="phase-tag">CDK</span><span class="phase-tag">Lambda</span><span class="phase-tag">DynamoDB</span><span class="phase-tag">API GW</span></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Infrastructure</span><span class="score-yellow">2.5</span></div><div class="score-bar"><div class="score-bar-fill" style="width:62.5%;background:var(--yellow)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Application</span><span class="score-orange">2.1</span></div><div class="score-bar"><div class="score-bar-fill" style="width:52.5%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Data</span><span class="score-orange">2.1</span></div><div class="score-bar"><div class="score-bar-fill" style="width:52.5%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Security</span><span class="score-orange">1.9</span></div><div class="score-bar"><div class="score-bar-fill" style="width:47.5%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem"><div style="display:flex;justify-content:space-between"><span>Operations</span><span class="score-orange">1.7</span></div><div class="score-bar"><div class="score-bar-fill" style="width:42.5%;background:var(--orange)"></div></div></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px"><div><div style="font-weight:700">eks-saas-gitops</div><div style="font-size:.75rem;color:var(--muted)">EKS + Terraform + Flux CD</div></div><span class="pill pill-orange">1.9</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="phase-tag">Python</span><span class="phase-tag">EKS</span><span class="phase-tag">Terraform</span><span class="phase-tag">Flux</span></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Infrastructure</span><span class="score-yellow">2.7</span></div><div class="score-bar"><div class="score-bar-fill" style="width:67.5%;background:var(--yellow)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Application</span><span class="score-orange">2.1</span></div><div class="score-bar"><div class="score-bar-fill" style="width:52.5%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Data</span><span class="score-orange">1.8</span></div><div class="score-bar"><div class="score-bar-fill" style="width:45%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Security</span><span class="score-red">1.4</span></div><div class="score-bar"><div class="score-bar-fill" style="width:35%;background:var(--red)"></div></div></div>
+    <div style="font-size:.8rem"><div style="display:flex;justify-content:space-between"><span>Operations</span><span class="score-red">1.2</span></div><div class="score-bar"><div class="score-bar-fill" style="width:30%;background:var(--red)"></div></div></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px"><div><div style="font-weight:700">aws-microservices</div><div style="font-size:.75rem;color:var(--muted)">Serverless Event-Driven</div></div><span class="pill pill-orange">1.73</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="phase-tag">Lambda</span><span class="phase-tag">DynamoDB</span><span class="phase-tag">EventBridge</span><span class="phase-tag">SQS</span></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Infrastructure</span><span class="score-yellow">2.5</span></div><div class="score-bar"><div class="score-bar-fill" style="width:62.5%;background:var(--yellow)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Application</span><span class="score-orange">1.7</span></div><div class="score-bar"><div class="score-bar-fill" style="width:42.5%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Data</span><span class="score-orange">1.8</span></div><div class="score-bar"><div class="score-bar-fill" style="width:45%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Security</span><span class="score-red">1.4</span></div><div class="score-bar"><div class="score-bar-fill" style="width:35%;background:var(--red)"></div></div></div>
+    <div style="font-size:.8rem"><div style="display:flex;justify-content:space-between"><span>Operations</span><span class="score-red">1.0</span></div><div class="score-bar"><div class="score-bar-fill" style="width:25%;background:var(--red)"></div></div></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px"><div><div style="font-weight:700">local-monolith</div><div style="font-size:.75rem;color:var(--muted)">PHP on App Runner</div></div><span class="pill pill-orange">1.50</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="phase-tag">PHP 8.2</span><span class="phase-tag">App Runner</span><span class="phase-tag">RDS MySQL</span></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Infrastructure</span><span class="score-orange">2.1</span></div><div class="score-bar"><div class="score-bar-fill" style="width:52.5%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Application</span><span class="score-red">1.4</span></div><div class="score-bar"><div class="score-bar-fill" style="width:35%;background:var(--red)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Data</span><span class="score-orange">1.7</span></div><div class="score-bar"><div class="score-bar-fill" style="width:42.5%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Security</span><span class="score-red">1.4</span></div><div class="score-bar"><div class="score-bar-fill" style="width:35%;background:var(--red)"></div></div></div>
+    <div style="font-size:.8rem"><div style="display:flex;justify-content:space-between"><span>Operations</span><span class="score-red">1.0</span></div><div class="score-bar"><div class="score-bar-fill" style="width:25%;background:var(--red)"></div></div></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px"><div><div style="font-weight:700">unishop-monolith</div><div style="font-size:.75rem;color:var(--muted)">Java Spring Boot on EC2</div></div><span class="pill pill-red">1.21</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="phase-tag">Java 8</span><span class="phase-tag">Spring Boot</span><span class="phase-tag">EC2</span><span class="phase-tag">MySQL</span></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Infrastructure</span><span class="score-red">1.0</span></div><div class="score-bar"><div class="score-bar-fill" style="width:25%;background:var(--red)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Application</span><span class="score-red">1.2</span></div><div class="score-bar"><div class="score-bar-fill" style="width:30%;background:var(--red)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Data</span><span class="score-orange">1.8</span></div><div class="score-bar"><div class="score-bar-fill" style="width:45%;background:var(--orange)"></div></div></div>
+    <div style="font-size:.8rem;margin-bottom:6px"><div style="display:flex;justify-content:space-between"><span>Security</span><span class="score-red">1.1</span></div><div class="score-bar"><div class="score-bar-fill" style="width:27.5%;background:var(--red)"></div></div></div>
+    <div style="font-size:.8rem"><div style="display:flex;justify-content:space-between"><span>Operations</span><span class="score-red">1.0</span></div><div class="score-bar"><div class="score-bar-fill" style="width:25%;background:var(--red)"></div></div></div>
+  </div>
+</div></div>
+
+<!-- Heatmap -->
+<div class="section"><div class="card"><div class="card-title">🔥 Category × Service Heatmap</div><div class="table-wrap"><table>
+  <thead><tr><th>Category</th><th>unishop</th><th>aws-micro</th><th>local-mono</th><th>books-api</th><th>eks-saas</th><th>Avg</th></tr></thead>
+  <tbody>
+    <tr><td>Infrastructure</td><td><span class="pill pill-red">1.0</span></td><td><span class="pill pill-yellow">2.5</span></td><td><span class="pill pill-orange">2.1</span></td><td><span class="pill pill-yellow">2.5</span></td><td><span class="pill pill-yellow">2.7</span></td><td>2.16</td></tr>
+    <tr><td>Application</td><td><span class="pill pill-red">1.2</span></td><td><span class="pill pill-orange">1.7</span></td><td><span class="pill pill-red">1.4</span></td><td><span class="pill pill-orange">2.1</span></td><td><span class="pill pill-orange">2.1</span></td><td>1.70</td></tr>
+    <tr><td>Data</td><td><span class="pill pill-orange">1.8</span></td><td><span class="pill pill-orange">1.8</span></td><td><span class="pill pill-orange">1.7</span></td><td><span class="pill pill-orange">2.1</span></td><td><span class="pill pill-orange">1.8</span></td><td>1.85</td></tr>
+    <tr><td>Security</td><td><span class="pill pill-red">1.1</span></td><td><span class="pill pill-red">1.4</span></td><td><span class="pill pill-red">1.4</span></td><td><span class="pill pill-orange">1.9</span></td><td><span class="pill pill-red">1.4</span></td><td>1.44</td></tr>
+    <tr><td>Operations</td><td><span class="pill pill-red">1.0</span></td><td><span class="pill pill-red">1.0</span></td><td><span class="pill pill-red">1.0</span></td><td><span class="pill pill-orange">1.7</span></td><td><span class="pill pill-red">1.2</span></td><td>1.18</td></tr>
+  </tbody>
+</table></div></div></div>
+
+<!-- Roadmap -->
+<div class="section"><div class="card"><div class="card-title">🗺️ Modernization Roadmap</div><div style="padding:8px 0">
+  <div class="phase"><div class="phase-dot"></div><h3>Phase 0 — Cross-Cutting Foundation <span style="font-weight:400;color:var(--muted);font-size:.85rem">(Mo 0–1)</span></h3><p>Break circular dependency, CI/CD templates, observability platform, secrets management, rate limiting.</p><div class="phase-items"><span class="phase-tag">🔗 Break Circular Dep</span><span class="phase-tag">⚙️ CI/CD</span><span class="phase-tag">🔍 OTel + X-Ray</span><span class="phase-tag">🔐 Secrets Mgr</span></div></div>
+  <div class="phase"><div class="phase-dot"></div><h3>Phase 1 — Quick Wins <span style="font-weight:400;color:var(--muted);font-size:.85rem">(Mo 1–2)</span></h3><p>Containerize unishop, CI/CD for 3 P0 services, OpenAPI specs, structured logging, X-Ray tracing.</p><div class="phase-items"><span class="phase-tag">🐳 Containerize</span><span class="phase-tag">📖 OpenAPI</span><span class="phase-tag">📝 JSON Logging</span><span class="phase-tag">🔑 Cognito Auth</span></div></div>
+  <div class="phase"><div class="phase-dot"></div><h3>Phase 2 — Foundation <span style="font-weight:400;color:var(--muted);font-size:.85rem">(Mo 2–4)</span></h3><p>Modernize P1 services, deploy vector DB, begin RAG pipeline, resilience patterns, SLOs.</p><div class="phase-items"><span class="phase-tag">🗄️ Vector DB</span><span class="phase-tag">🔄 RAG Pipeline</span><span class="phase-tag">📊 SLOs</span><span class="phase-tag">🛡️ Resilience</span></div></div>
+  <div class="phase"><div class="phase-dot"></div><h3>Phase 3 — Advanced Capabilities <span style="font-weight:400;color:var(--muted);font-size:.85rem">(Mo 4–6+)</span></h3><p>Agent frameworks (Spring AI, Strands, LangChain), eval pipelines, LLM cost tracking, human approval gates.</p><div class="phase-items"><span class="phase-tag">🤖 Agent Frameworks</span><span class="phase-tag">🧪 Eval Pipeline</span><span class="phase-tag">💰 LLM Costs</span><span class="phase-tag">👤 Human-in-Loop</span></div></div>
+</div></div></div>
+
+<!-- Modernization Pathways -->
+<div class="section">
+<div class="section-title"><span>🛤️</span> AWS Modernization Pathways</div>
+<div class="card" style="margin-bottom:16px"><div class="card-title">📊 Portfolio Pathway Summary</div>
+<div class="table-wrap"><table>
+<thead><tr><th>Pathway</th><th>Services Triggered</th><th>% Portfolio</th><th>Goal Alignment</th><th>Priority</th><th>Est. Effort</th></tr></thead>
+<tbody>
+<tr><td style="font-weight:600">Move to AI</td><td>All 5 services</td><td>100%</td><td><span class="pill pill-yellow">Medium</span></td><td>High</td><td>High</td></tr>
+<tr><td style="font-weight:600">Move to Modern DevOps</td><td>unishop-monolith, local-monolith, aws-microservices, eks-saas-gitops</td><td>80%</td><td><span class="pill pill-yellow">Medium</span></td><td>High</td><td>High</td></tr>
+<tr><td style="font-weight:600">Move to Cloud Native</td><td>unishop-monolith, local-monolith</td><td>40%</td><td><span class="pill pill-yellow">Medium</span></td><td>Medium</td><td>High</td></tr>
+<tr><td style="font-weight:600">Move to Containers</td><td>unishop-monolith</td><td>20%</td><td><span class="pill pill-yellow">Medium</span></td><td>Low</td><td>Medium</td></tr>
+<tr><td style="font-weight:600">Move to Managed Databases</td><td>unishop-monolith</td><td>20%</td><td><span class="pill pill-yellow">Medium</span></td><td>Low</td><td>Medium</td></tr>
+<tr><td style="font-weight:600">Move to Open Source</td><td>—</td><td>0%</td><td><span class="pill pill-yellow">Medium</span></td><td>—</td><td>—</td></tr>
+<tr><td style="font-weight:600">Move to Managed Analytics</td><td>—</td><td>0%</td><td><span class="pill pill-yellow">Medium</span></td><td>—</td><td>—</td></tr>
+</tbody>
+</table></div></div>
+
+<div class="grid grid-2">
+<div class="card"><div class="card-title">🔗 Parallel Execution Tracks</div>
+<div style="font-size:.85rem;line-height:1.7">
+<div style="margin-bottom:10px"><span style="color:var(--accent2);font-weight:600">Track 1 — Foundation:</span> Move to Modern DevOps — CI/CD, observability, testing across 4 services (Phase 0–1)</div>
+<div style="margin-bottom:10px"><span style="color:var(--green);font-weight:600">Track 2 — AI Enablement:</span> Move to AI — API docs, vector DB, RAG pipelines, agent frameworks across all 5 services (Phase 1–3)</div>
+<div style="margin-bottom:10px"><span style="color:var(--yellow);font-weight:600">Track 3 — Infrastructure:</span> Move to Containers + Managed Databases for unishop-monolith (Phase 1–2)</div>
+<div><span style="color:var(--orange);font-weight:600">Track 4 — Decomposition:</span> Move to Cloud Native — monolith decomposition after Track 3 (Phase 2–3)</div>
+</div></div>
+
+<div class="card"><div class="card-title">⚠️ Sequential Dependencies</div>
+<div style="font-size:.85rem;line-height:1.7">
+<div style="margin-bottom:10px">Move to <span style="color:var(--accent2)">Containers</span> → before Move to <span style="color:var(--green)">Cloud Native</span> — containerize before decomposing</div>
+<div style="margin-bottom:10px">Move to <span style="color:var(--accent2)">Modern DevOps</span> (CI/CD) → enables all other pathways</div>
+<div>Move to <span style="color:var(--accent2)">AI</span> agent framework integration → depends on stable APIs from Track 1</div>
+</div></div>
+</div>
+
+<div class="card" style="margin-top:16px"><div class="card-title">🎓 AWS Skill Builder Learning Paths</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+<a href="https://skillbuilder.aws/learning-plan/VDFEE4ACCV" target="_blank" style="display:block;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:.82rem;transition:border-color .2s"><span style="color:var(--accent2)">🤖 Move to AI</span><div style="color:var(--muted);margin-top:4px;font-size:.75rem">GenAI, Bedrock, agent frameworks & labs</div></a>
+<a href="https://skillbuilder.aws/learning-plan/1FGEQKGPQD" target="_blank" style="display:block;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:.82rem;transition:border-color .2s"><span style="color:var(--accent2)">⚙️ Move to Modern DevOps</span><div style="color:var(--muted);margin-top:4px;font-size:.75rem">CI/CD, IaC, observability & deployment</div></a>
+<a href="https://skillbuilder.aws/learning-plan/CMK2J48MVN" target="_blank" style="display:block;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:.82rem;transition:border-color .2s"><span style="color:var(--accent2)">☁️ Move to Cloud Native Serverless</span><div style="color:var(--muted);margin-top:4px;font-size:.75rem">Serverless decomposition patterns & labs</div></a>
+<a href="https://skillbuilder.aws/learning-plan/GNYBZ9X9EM" target="_blank" style="display:block;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:.82rem;transition:border-color .2s"><span style="color:var(--accent2)">📦 Move to Containers (EKS)</span><div style="color:var(--muted);margin-top:4px;font-size:.75rem">Amazon EKS containerization labs</div></a>
+<a href="https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC" target="_blank" style="display:block;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);font-size:.82rem;transition:border-color .2s"><span style="color:var(--accent2)">🗄️ Move to Managed Databases</span><div style="color:var(--muted);margin-top:4px;font-size:.75rem">Aurora, DMS, managed DB migration labs</div></a>
+</div></div>
+</div>
+
+<!-- YAML -->
+<div class="section"><div class="card"><div class="card-title">📄 Portfolio Config (YAML)</div>
+<div class="yaml-block">portfolio_name: "agentic-readiness-baseline"
+goal: "agentic-readiness"
+
+repositories:
+  - name: "unishop-monolith"
+    priority: "P0"
+    context: "Legacy Java monolith e-commerce application"
+
+  - name: "aws-microservices"
+    priority: "P0"
+    tags: ["microservices", "serverless", "event-driven"]
+    context: "Event-driven serverless microservices with Lambda, DynamoDB, EventBridge, SQS"
+
+  - name: "local-monolith"
+    priority: "P0"
+    tags: ["monolith", "php", "containers"]
+    context: "PHP monolith application with Docker and CloudFormation"
+
+  - name: "books-api"
+    priority: "P1"
+    tags: ["serverless", "cdk", "api"]
+    context: "Serverless REST API with CDK for book catalog management"
+
+  - name: "eks-saas-gitops"
+    priority: "P1"
+    tags: ["eks", "gitops", "terraform", "saas"]
+    context: "EKS SaaS GitOps monorepo with Terraform IaC, Karpenter, multi-tenant microservices"
+
+dependency_overrides:
+  - source: "aws-microservices"
+    target: "books-api"
+    type: "async"
+  - source: "books-api"
+    target: "aws-microservices"
+    type: "sync"</div>
+</div></div>
+
+</div>
+<script>
+const catCtx=document.getElementById('catChart');
+catCtx.width=catCtx.parentElement.offsetWidth;catCtx.height=280;
+new Chart(catCtx,{type:'bar',data:{labels:['Infrastructure','Application','Data','Security','Operations'],datasets:[
+  {label:'unishop-monolith',data:[1.0,1.2,1.8,1.1,1.0],backgroundColor:'#ef4444'},
+  {label:'aws-microservices',data:[2.5,1.7,1.8,1.4,1.0],backgroundColor:'#f97316'},
+  {label:'local-monolith',data:[2.1,1.4,1.7,1.4,1.0],backgroundColor:'#eab308'},
+  {label:'books-api',data:[2.5,2.1,2.1,1.9,1.7],backgroundColor:'#22c55e'},
+  {label:'eks-saas-gitops',data:[2.7,2.1,1.8,1.4,1.2],backgroundColor:'#6366f1'}
+]},options:{responsive:false,animation:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:11}}}},scales:{x:{ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}},y:{min:0,max:4,ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}}}}});
+
+const radCtx=document.getElementById('radarChart');
+radCtx.width=radCtx.parentElement.offsetWidth;radCtx.height=280;
+new Chart(radCtx,{type:'radar',data:{labels:['Infrastructure','Application','Data','Security','Operations'],datasets:[{label:'Portfolio Avg',data:[2.16,1.70,1.85,1.44,1.18],borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,.15)',pointBackgroundColor:'#6366f1',pointRadius:4}]},options:{responsive:false,animation:false,scales:{r:{min:0,max:4,ticks:{stepSize:1,color:'#8b8fa3',backdropColor:'transparent'},grid:{color:'#2d3148'},pointLabels:{color:'#e2e4ed',font:{size:11}}}},plugins:{legend:{labels:{color:'#8b8fa3'}}}}});
+</script>
+</body>
+</html>
