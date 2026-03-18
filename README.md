@@ -2,39 +2,6 @@
 
 Evaluate your service portfolio's readiness for agentic AI adoption. This project provides two AWS Transform (ATX) custom transformation definitions and a Kiro Power that orchestrates them across multiple repositories to produce individual and portfolio-level readiness reports.
 
-## What's in This Repo
-
-```
-.
-├── agentic-assessment-orchestrator/          # Kiro Power — orchestrates assessments
-│   └── POWER.md                              #   Power definition and documentation
-├── individual-aws-agentic-assessment/        # ATX transformation: individual repo assessment
-│   └── transformation_definition.md          #   56 criteria across 5 categories
-├── portfolio-agentic-assessment/             # ATX transformation: portfolio aggregation
-│   └── transformation_definition.md          #   Cross-service analysis and roadmap
-├── portfolio-config.schema.json              # JSON Schema for portfolio config validation
-├── example-reports/                          # Example configs and output per goal
-│   ├── goal-agentic-readiness/               #   Default equal-weight assessment
-│   │   └── portfolio-config.yaml
-│   ├── goal-cloud-native-modernization/      #   EKS/containers modernization (full run)
-│   │   ├── portfolio-config.yaml
-│   │   ├── cloud-native-modernization-portfolio-agentic-readiness-report.md
-│   │   ├── eks-saas-gitops-agentic-readiness-report.md
-│   │   ├── monolith-agentic-readiness-report.md
-│   │   └── MonoToMicroLegacy-agentic-readiness-report.md
-│   ├── goal-cost-optimization/               #   Cost reduction focus
-│   │   └── portfolio-config.yaml
-│   └── goal-enable-agentic-use-case/         #   Specific agentic AI use case
-│       └── portfolio-config.yaml
-├── monolith/                                 # Local PHP monolith (test fixture)
-│   ├── index.php, Dockerfile, docker-compose.yml
-│   └── infrastructure/monolith-apprunner.yaml
-├── dashboard-generator/                      # HTML dashboard generator
-│   └── generate_dashboard.py
-├── static/                                   # Documentation images
-└── README.md
-```
-
 ## How It Works
 
 There are two layers:
@@ -78,9 +45,138 @@ Each individual assessment evaluates 56 criteria across 5 categories:
 
 The portfolio assessment then aggregates results, maps service dependencies, identifies cross-cutting concerns, and produces a phased modernization roadmap.
 
-## Goal-Driven Assessment (V2)
+### Individual Assessment Workflow (per repo)
 
-V2 introduces a **goal-driven priority lens** that re-weights the assessment based on the customer's modernization objective. Instead of treating all 56 criteria equally, the goal determines which pathways are highlighted, how the roadmap is phased, and which report sections appear.
+Each individual assessment follows a linear 8-step pipeline that scans a single repository and produces a scored readiness report:
+
+```mermaid
+flowchart LR
+    S0["0: Read Goal\n& Classify"] --> S1["1: Discovery\nStatic Scan"]
+    S1 -->|"repo_type\ndrives N/A"| S2["2: Infra\n10 criteria"]
+    S2 --> S3["3: App\n13 criteria"]
+    S3 --> S4["4: Data\n11 criteria"]
+    S4 --> S5["5: Security\n10 criteria"]
+    S5 --> S6["6: Ops\n12 criteria"]
+    S6 --> S7["7: Map AWS\nPathways"]
+    S7 --> S8["8: Generate\nReport"]
+
+    S0 -.->|"goal weights\npathway thresholds\nphase names"| S7
+    S0 -.->|"goal weights\nTop 5 gaps\nconditional sections"| S8
+
+    style S0 fill:#e8daef,stroke:#7d3c98
+    style S1 fill:#d5f5e3,stroke:#27ae60
+    style S2 fill:#d6eaf8,stroke:#2980b9
+    style S3 fill:#d6eaf8,stroke:#2980b9
+    style S4 fill:#d6eaf8,stroke:#2980b9
+    style S5 fill:#d6eaf8,stroke:#2980b9
+    style S6 fill:#d6eaf8,stroke:#2980b9
+    style S7 fill:#fdebd0,stroke:#e67e22
+    style S8 fill:#fadbd8,stroke:#e74c3c
+```
+
+Step 7 uses goal-weighted thresholds to decide when a pathway triggers. The goal determines each pathway's alignment tier, and the tier sets how many conditions must be met:
+
+```mermaid
+flowchart LR
+    subgraph eval ["Per-Pathway Evaluation (Step 7)"]
+        direction LR
+        NA{"N/A for\nrepo type?"} -->|yes| SNA["Not Applicable"]
+        NA -->|no| CG{"Contextual\nguard pass?"}
+        CG -->|no| SNT1["Not Triggered"]
+        CG -->|yes| TH{"Goal-weighted\nthreshold met?"}
+        TH -->|yes| ST["Triggered"]
+        TH -->|no| SNT2["Not Triggered"]
+    end
+
+    style NA fill:#f5f5f5,stroke:#999
+    style CG fill:#f5f5f5,stroke:#999
+    style TH fill:#fdebd0,stroke:#e67e22
+    style ST fill:#d5f5e3,stroke:#27ae60
+    style SNT1 fill:#fadbd8,stroke:#e74c3c
+    style SNT2 fill:#fadbd8,stroke:#e74c3c
+    style SNA fill:#d5dbdb,stroke:#7f8c8d
+```
+
+| Goal Alignment | Threshold to Trigger | When it applies |
+|----------------|---------------------|-----------------|
+| **High** | ANY 1 condition met | Pathway is primary for the goal — even minor gaps surface it |
+| **Medium** | At least 2 conditions met | Pathway is relevant but not the focus — needs stronger signal |
+| **Low** | Primary criterion ≤ 2 (severe gap only) | Pathway is tangential — only undeniable gaps surface it |
+
+Example: `enable-agentic-use-case` gives Move to AI **High** alignment (1 gap triggers it), Move to Containers **Medium** (needs 2 gaps), and Move to Open Source **Low** (only severe gaps). `agentic-readiness` sets all pathways to **Medium** — every pathway needs at least 2 conditions.
+
+### Portfolio Assessment Workflow (cross-repo)
+
+The portfolio assessment consumes all individual reports and produces a coordinated multi-service analysis:
+
+```mermaid
+flowchart LR
+    P1["1: Discover\nReports"] --> P15["1.5: Read\nGoal"]
+    P15 --> P2["2: Parse\nReports"]
+    P2 --> P3["3: Dependency\nGraph"]
+    P3 --> P4["4: Pattern\nAnalysis"]
+    P4 -->|"4-tier gap\nclassification"| P5["5: Portfolio\nMetrics"]
+    P5 --> P6["6: Roadmap\n4 phases"]
+    P6 --> P7["7: Integration\nOpps"]
+    P7 --> P8["8: Risk\nAssessment"]
+    P8 --> P9["9: Resource\nAllocation"]
+    P9 --> P10["10: Pathway\nAggregation"]
+    P10 --> P105["10.5: Agent\nWins ⚡"]
+    P105 --> P107["10.7: AWS\nPrograms"]
+    P107 --> P11["11: Generate\nReport"]
+
+    P3 -.->|"dependency graph\ndrives sequencing"| P6
+    P15 -.->|"goal drives\ntier classification\nphase names"| P4
+
+    style P1 fill:#d5f5e3,stroke:#27ae60
+    style P15 fill:#e8daef,stroke:#7d3c98
+    style P2 fill:#d5f5e3,stroke:#27ae60
+    style P3 fill:#aed6f1,stroke:#2471a3
+    style P4 fill:#aed6f1,stroke:#2471a3
+    style P5 fill:#aed6f1,stroke:#2471a3
+    style P6 fill:#fdebd0,stroke:#e67e22
+    style P7 fill:#fdebd0,stroke:#e67e22
+    style P8 fill:#f5b7b1,stroke:#c0392b
+    style P9 fill:#fdebd0,stroke:#e67e22
+    style P10 fill:#d5f5e3,stroke:#27ae60
+    style P105 fill:#d5f5e3,stroke:#27ae60
+    style P107 fill:#d5f5e3,stroke:#27ae60
+    style P11 fill:#fadbd8,stroke:#e74c3c
+```
+
+Step 4 uses goal-driven tiered classification to sort cross-cutting concerns by severity and goal relevance:
+
+```mermaid
+flowchart LR
+    subgraph classify ["Per-Criterion Classification (Step 4)"]
+        direction LR
+        T1{"Tier 1?\nFoundational\nblocker"} -->|yes| B["🚨 Blocker\nBlocks ALL goals"]
+        T1 -->|no| T2{"Tier 2?\nGoal-specific\nprerequisite"}
+        T2 -->|yes| P["⚠️ Prerequisite\nBlocks YOUR goal"]
+        T2 -->|no| T3{"Tier 3?\nGoal\ndeliverable"}
+        T3 -->|yes| D["🎯 Deliverable\nWhat you're building"]
+        T3 -->|no| G["💡 General\nImprove when able"]
+    end
+
+    style T1 fill:#f5f5f5,stroke:#999
+    style T2 fill:#f5f5f5,stroke:#999
+    style T3 fill:#f5f5f5,stroke:#999
+    style B fill:#fadbd8,stroke:#e74c3c
+    style P fill:#fdebd0,stroke:#e67e22
+    style D fill:#d5f5e3,stroke:#27ae60
+    style G fill:#d6eaf8,stroke:#2980b9
+```
+
+| Tier | Example (goal: `enable-agentic-use-case`) | Action |
+|------|------------------------------------------|--------|
+| 🚨 Foundational Blockers | No IaC (INF-Q5 < 2), No CI/CD (INF-Q6 < 2) | Fix first — blocks everything |
+| ⚠️ Goal Prerequisites | No API docs (APP-Q2 < 3), No identity propagation (SEC-Q3 < 3) | Fix next — agents can't work without these |
+| 🎯 Goal Deliverables | No agent frameworks (APP-Q13 < 3), No vector DB (DATA-Q1 < 3) | This IS what you're building — low scores confirm the need |
+| 💡 General Opportunities | Gaps in 3+ services that don't block the goal | Address as capacity allows |
+
+## Goal-Driven Assessment
+
+The assessment uses a **goal-driven priority lens** that re-weights results based on the customer's modernization objective. Instead of treating all 56 criteria equally, the goal determines which pathways are highlighted, how the roadmap is phased, and which report sections appear.
 
 ### Predefined Goals
 
