@@ -2,39 +2,6 @@
 
 Evaluate your service portfolio's readiness for agentic AI adoption. This project provides two AWS Transform (ATX) custom transformation definitions and a Kiro Power that orchestrates them across multiple repositories to produce individual and portfolio-level readiness reports.
 
-## What's in This Repo
-
-```
-.
-├── agentic-assessment-orchestrator/          # Kiro Power — orchestrates assessments
-│   └── POWER.md                              #   Power definition and documentation
-├── individual-aws-agentic-assessment/        # ATX transformation: individual repo assessment
-│   └── transformation_definition.md          #   56 criteria across 5 categories
-├── portfolio-agentic-assessment/             # ATX transformation: portfolio aggregation
-│   └── transformation_definition.md          #   Cross-service analysis and roadmap
-├── portfolio-config.schema.json              # JSON Schema for portfolio config validation
-├── example-reports/                          # Example configs and output per goal
-│   ├── goal-agentic-readiness/               #   Default equal-weight assessment
-│   │   └── portfolio-config.yaml
-│   ├── goal-cloud-native-modernization/      #   EKS/containers modernization (full run)
-│   │   ├── portfolio-config.yaml
-│   │   ├── cloud-native-modernization-portfolio-agentic-readiness-report.md
-│   │   ├── eks-saas-gitops-agentic-readiness-report.md
-│   │   ├── monolith-agentic-readiness-report.md
-│   │   └── MonoToMicroLegacy-agentic-readiness-report.md
-│   ├── goal-cost-optimization/               #   Cost reduction focus
-│   │   └── portfolio-config.yaml
-│   └── goal-enable-agentic-use-case/         #   Specific agentic AI use case
-│       └── portfolio-config.yaml
-├── monolith/                                 # Local PHP monolith (test fixture)
-│   ├── index.php, Dockerfile, docker-compose.yml
-│   └── infrastructure/monolith-apprunner.yaml
-├── dashboard-generator/                      # HTML dashboard generator
-│   └── generate_dashboard.py
-├── static/                                   # Documentation images
-└── README.md
-```
-
 ## How It Works
 
 There are two layers:
@@ -207,9 +174,9 @@ flowchart LR
 | 🎯 Goal Deliverables | No agent frameworks (APP-Q13 < 3), No vector DB (DATA-Q1 < 3) | This IS what you're building — low scores confirm the need |
 | 💡 General Opportunities | Gaps in 3+ services that don't block the goal | Address as capacity allows |
 
-## Goal-Driven Assessment (V2)
+## Goal-Driven Assessment
 
-V2 introduces a **goal-driven priority lens** that re-weights the assessment based on the customer's modernization objective. Instead of treating all 56 criteria equally, the goal determines which pathways are highlighted, how the roadmap is phased, and which report sections appear.
+The assessment uses a **goal-driven priority lens** that re-weights results based on the customer's modernization objective. Instead of treating all 56 criteria equally, the goal determines which pathways are highlighted, how the roadmap is phased, and which report sections appear.
 
 ### Predefined Goals
 
