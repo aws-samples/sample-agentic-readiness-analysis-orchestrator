@@ -343,7 +343,21 @@ atx custom def get -n agentic-readiness-assessment
 
 ## Security
 
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+This project handles sensitive architecture and security assessment data. Please review our security guidelines before running assessments:
+
+- **[Security Guidelines](SECURITY.md)** - Best practices for secure assessment execution
+- **[Threat Model](THREAT_MODEL.md)** - Comprehensive security threat analysis
+- **[Security Issue Reporting](CONTRIBUTING.md#security-issue-notifications)** - How to report vulnerabilities
+
+**Key Security Practices:**
+- Only assess repositories you have authorization to analyze
+- Use Git credential managers and AWS IAM roles (never hardcode credentials)
+- Treat assessment reports as confidential - they contain architecture details
+- Run assessments in isolated development environments (not production)
+- Validate repository URLs before cloning from external sources
+- Review reports for credential exposure before sharing
+
+See [SECURITY.md](SECURITY.md) for detailed guidance.
 
 ## License
 
