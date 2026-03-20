@@ -1,6 +1,8 @@
 # Agentic Readiness Assessment
 
-Evaluate your service portfolio's readiness for agentic AI adoption. This project provides two AWS Transform (ATX) custom transformation definitions and a Kiro Power that orchestrates them across multiple repositories to produce individual and portfolio-level readiness reports.
+> Automated assessment of your service portfolio's readiness for agentic AI adoption — 56 criteria across infrastructure, architecture, data, security, and operations — with scored reports and phased modernization roadmaps tailored to your goals.
+
+This project provides two [AWS Transform](https://docs.aws.amazon.com/transform/) (ATX) custom transformation definitions and a [Kiro](https://kiro.dev) Power that orchestrates them across multiple repositories to produce individual and portfolio-level readiness reports.
 
 ## How It Works
 
@@ -428,6 +430,15 @@ atx custom def get -n agentic-readiness-assessment
 
 1. **Custom output formats** — Allow transformation definitions to produce reports in configurable formats (JSON, CSV, SARIF) beyond Markdown, so teams can feed results into their existing dashboards and tooling
 2. **Interactive HTML dashboard** — Auto-generate a visual portfolio dashboard from the assessment reports
+
+## Contributing to Transformation Definitions
+
+We welcome contributions that improve existing transformation definitions or propose entirely new ones. Whether you have a specific fix, a new assessment domain in mind, or just an idea you'd like to explore together — we're open to collaboration. Use the GitHub issue templates to get started:
+
+- **[Improve Existing TD](../../issues/new?template=improve-transformation-definition.yml)** — Suggest changes to criteria, scoring, pathway logic, report format, or goal weighting in the individual or portfolio assessment
+- **[Propose New TD](../../issues/new?template=new-transformation-definition.yml)** — Propose a new transformation definition for a different assessment type or domain
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for general contribution guidelines.
 
 ## Related Resources
 
