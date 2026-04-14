@@ -30,14 +30,22 @@ flowchart TB
     M_GEN[📝 Generate MOD configs] --> M_RUN
 
     subgraph A_RUN [🟢 ARA per repo - parallel]
-        A_TD[49 Qs · BLOCKER/RISK/INFO]
+        direction TB
+        A_EVAL[Evaluate 49 questions]
+        A_SECTIONS[API Surface · Auth & Identity<br/>State & Transactions · Human-in-the-Loop<br/>Data Quality · Discoverability<br/>Observability · Engineering Maturity]
+        A_OUT[Readiness Profile<br/>BLOCKERs · RISKs · INFOs<br/>Remediation Guidance<br/>Evidence Index]
+        A_EVAL --> A_SECTIONS --> A_OUT
     end
     subgraph M_RUN [🔵 MOD per repo - parallel]
-        M_TD[37 Qs · Scored 1-4 · 7 Pathways]
+        direction TB
+        M_EVAL[Evaluate 37 questions]
+        M_SECTIONS[Infrastructure & DevOps<br/>App Architecture · Data Platform<br/>Security Baseline<br/>Operations & Observability]
+        M_OUT[Category Scores · Top 5 Gaps<br/>7 Modernization Pathway Triggers<br/>Quick Agent Wins<br/>Decomposition Strategy<br/>Learning Materials]
+        M_EVAL --> M_SECTIONS --> M_OUT
     end
 
-    A_RUN --> A_PORT[🟢 Portfolio ARA TD]
-    M_RUN --> M_PORT[🔵 Portfolio MOD TD]
+    A_RUN --> A_PORT[🟢 Portfolio ARA TD<br/>Cross-cutting blockers<br/>Readiness distribution<br/>Agentic programs]
+    M_RUN --> M_PORT[🔵 Portfolio MOD TD<br/>Cross-cutting concerns<br/>Dependency-aware roadmap<br/>Modernization Pathway aggregation<br/>Risk & resource analysis<br/>AWS Programs]
 
     A_PORT --> A_OUT[📋 ARA Portfolio Report]
     M_PORT --> M_OUT[📋 MOD Portfolio Report]
