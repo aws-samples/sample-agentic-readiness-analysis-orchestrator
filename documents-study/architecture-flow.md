@@ -1,174 +1,156 @@
 # Assessment Architecture Flow
 
-## Current State (Today)
+## Current State
 
 ```mermaid
 flowchart TB
-    CONFIG[portfolio-config.yaml] --> POWER[Power: Orchestrator]
-    POWER --> GOAL{Parse goal}
-    GOAL -->|All 4 goals use same TD| MEGA_TD
-
-    subgraph PER_REPO [Per Repository - parallel]
-        MEGA_TD[TD: individual-aws-agentic-assessment<br/>56 criteria mixed agentic + modernization<br/>Goal re-weighting + conditional sections<br/>Pathway mapping + decomposition<br/>Repo classification inside TD]
-    end
-
-    MEGA_TD --> REPORT1[Hybrid Report<br/>Goal-specific phases<br/>Conditional Quick Agent Wins<br/>Conditional Decomposition]
-    REPORT1 --> PORTFOLIO_TD[TD: portfolio-agentic-assessment<br/>Tiered gap classification<br/>Goal-driven cross-cutting concerns]
-    PORTFOLIO_TD --> PORTFOLIO_REPORT[Portfolio Report]
-
-    style MEGA_TD fill:#ff6b6b,color:#fff
-    style PORTFOLIO_TD fill:#ff6b6b,color:#fff
+    CONFIG[📄 portfolio-config.yaml] --> POWER[⚙️ Power]
+    POWER --> MEGA[🔴 1 Mega-TD<br/>56 criteria · 4 goals<br/>Conditional everything]
+    MEGA --> REPORT[📊 Hybrid Report]
+    REPORT --> PORT[🔴 1 Portfolio TD]
+    PORT --> FINAL[📋 Portfolio Report]
 ```
 
----
-
-## Target State (New Architecture)
+## Target State
 
 ```mermaid
 flowchart TB
-    CONFIG[portfolio-config.yaml] --> POWER[Power: Assessment Orchestrator]
+    CONFIG[📄 portfolio-config.yaml] --> POWER[⚙️ Power]
     
-    POWER --> CLASSIFY[Classify Repos<br/>Scan each repo<br/>Detect: application / infrastructure-only<br/>/ deployment-cicd / monorepo / library<br/>User override via repo_type in config]
+    POWER --> CLASSIFY[🔍 Classify Repos]
+    CLASSIFY --> ROUTE{assessment_type?}
     
-    CLASSIFY --> TYPE{assessment_type?}
+    ROUTE -->|agentic-readiness| A_GEN
+    ROUTE -->|modernization| M_GEN
+    ROUTE -->|full| BOTH[Both paths]
+    BOTH --> A_GEN
+    BOTH --> M_GEN
 
-    TYPE -->|agentic-readiness| ARA_FLOW
-    TYPE -->|modernization| MOD_FLOW
-    TYPE -->|full| BOTH
+    A_GEN[📝 Generate ARA configs] --> A_RUN
+    M_GEN[📝 Generate MOD configs] --> M_RUN
 
-    BOTH[Run both in parallel] --> ARA_FLOW
-    BOTH --> MOD_FLOW
-
-    subgraph ARA_FLOW [Agentic Readiness Flow]
-        ARA_CFG[Generate ATX config per repo<br/>agent_scope + repo_type + context]
-        ARA_TD[TD: agentic-readiness-assessment<br/>49 questions - BLOCKER/RISK/INFO<br/>Reads repo_type from context<br/>Applies N/A mapping per repo type<br/>Skips N/A questions in scoring]
-        ARA_REPORT[ARA Report per repo<br/>Readiness Profile<br/>N/A questions listed but excluded from counts]
-        ARA_PORTFOLIO[TD: portfolio-agentic-readiness<br/>Cross-cutting blockers<br/>Portfolio readiness distribution<br/>Agentic programs]
-        ARA_PORT_REPORT[Portfolio ARA Report]
-
-        ARA_CFG --> ARA_TD --> ARA_REPORT --> ARA_PORTFOLIO --> ARA_PORT_REPORT
+    subgraph A_RUN [🟢 ARA per repo - parallel]
+        A_TD[49 Qs · BLOCKER/RISK/INFO]
+    end
+    subgraph M_RUN [🔵 MOD per repo - parallel]
+        M_TD[37 Qs · Scored 1-4 · 7 Pathways]
     end
 
-    subgraph MOD_FLOW [Modernization Flow]
-        MOD_CFG[Generate ATX config per repo<br/>repo_type + context + preferences]
-        MOD_TD[TD: modernization-assessment<br/>37 questions - Scored 1-4<br/>Reads repo_type from context<br/>Applies N/A mapping per repo type<br/>N/A pathways marked Not Applicable]
-        MOD_REPORT[MOD Report per repo<br/>Category scores + Pathways<br/>N/A categories excluded from averages]
-        MOD_PORTFOLIO[TD: portfolio-modernization<br/>Cross-cutting concerns<br/>Dependency-aware roadmap<br/>AWS Programs]
-        MOD_PORT_REPORT[Portfolio MOD Report]
+    A_RUN --> A_PORT[🟢 Portfolio ARA TD]
+    M_RUN --> M_PORT[🔵 Portfolio MOD TD]
 
-        MOD_CFG --> MOD_TD --> MOD_REPORT --> MOD_PORTFOLIO --> MOD_PORT_REPORT
-    end
+    A_PORT --> A_OUT[📋 ARA Portfolio Report]
+    M_PORT --> M_OUT[📋 MOD Portfolio Report]
 
-    style CLASSIFY fill:#f9c74f,color:#000
-    style ARA_TD fill:#4ecdc4,color:#fff
-    style MOD_TD fill:#45b7d1,color:#fff
-    style ARA_PORTFOLIO fill:#4ecdc4,color:#fff
-    style MOD_PORTFOLIO fill:#45b7d1,color:#fff
+    style A_TD fill:#4ecdc4,color:#fff
+    style M_TD fill:#45b7d1,color:#fff
+    style A_PORT fill:#4ecdc4,color:#fff
+    style M_PORT fill:#45b7d1,color:#fff
 ```
 
----
-
-## Repo Classification (Power Responsibility)
+## Repo Classification
 
 ```mermaid
 flowchart TB
-    REPO[Scan Repository] --> HAS_CODE{Source code files?}
+    SCAN[🔍 Scan Repo] --> CODE{Source code?}
     
-    HAS_CODE -->|Yes| MULTI{Multiple service dirs<br/>with separate build configs?}
-    HAS_CODE -->|No| HAS_IAC{Only IaC provisioning?<br/>Terraform / CDK / CloudFormation}
+    CODE -->|Yes| MULTI{Multiple services?}
+    CODE -->|No| IAC{IaC only?}
     
-    MULTI -->|Yes| MONOREPO[monorepo]
-    MULTI -->|No| HAS_ENTRY{Deployable entry point?<br/>Dockerfile / IaC / main}
+    MULTI -->|Yes| T1[📦 monorepo]
+    MULTI -->|No| ENTRY{Has entry point?}
     
-    HAS_ENTRY -->|Yes| APP[application]
-    HAS_ENTRY -->|No| LIB[library]
+    ENTRY -->|Yes| T2[📦 application]
+    ENTRY -->|No| T3[📦 library]
     
-    HAS_IAC -->|Yes| INFRA[infrastructure-only]
-    HAS_IAC -->|No| HAS_DEPLOY{Deployment configs?<br/>CI/CD pipelines / Helm / Kustomize<br/>ArgoCD / Ansible / GitOps<br/>Service mesh / Env configs}
+    IAC -->|Yes| T4[📦 infrastructure-only]
+    IAC -->|No| DEPLOY{Deploy configs?}
     
-    HAS_DEPLOY -->|Yes| DEPLOY[deployment-config]
-    HAS_DEPLOY -->|No| APP_DEFAULT[application - default]
+    DEPLOY -->|Yes| T5[📦 deployment-config]
+    DEPLOY -->|No| T6[📦 application ∗default]
 
-    style MONOREPO fill:#4ecdc4,color:#fff
-    style APP fill:#4ecdc4,color:#fff
-    style LIB fill:#f9c74f,color:#000
-    style INFRA fill:#f9c74f,color:#000
-    style DEPLOY fill:#f9c74f,color:#000
-    style APP_DEFAULT fill:#4ecdc4,color:#fff
+    style T1 fill:#4ecdc4,color:#fff
+    style T2 fill:#4ecdc4,color:#fff
+    style T3 fill:#f9c74f,color:#000
+    style T4 fill:#f9c74f,color:#000
+    style T5 fill:#f9c74f,color:#000
+    style T6 fill:#4ecdc4,color:#fff
 ```
 
----
-
-## Per-Repo ATX Config Generation
+## Config Flow: Portfolio YAML → Per-Repo ATX Configs
 
 ```mermaid
 flowchart TB
-    POWER[Power + repo_type] --> TYPE{assessment_type?}
+    YAML[📄 portfolio-config.yaml] --> POWER[⚙️ Power]
+    
+    POWER --> |ARA config| ARA_CFG
+    POWER --> |MOD config| MOD_CFG
 
-    TYPE -->|agentic-readiness| ARA_CFG
-    TYPE -->|modernization| MOD_CFG
-    TYPE -->|full| BOTH_CFG[Generate both]
-    BOTH_CFG --> ARA_CFG
-    BOTH_CFG --> MOD_CFG
-
-    subgraph ARA_CFG [ARA Config]
+    subgraph ARA_CFG [ARA: .atx-config-ara-repoA.yaml]
         A1[repo_type: application]
         A2[agent_scope: write-enabled]
-        A3[context: Legacy PHP e-commerce]
+        A3[context: Order service]
         A4[priority: P0]
-        A5[tags: monolith, php]
+        A5[tags: backend, critical]
     end
 
-    subgraph MOD_CFG [MOD Config]
+    subgraph MOD_CFG [MOD: .atx-config-mod-repoA.yaml]
         M1[repo_type: application]
-        M2[context: Legacy PHP e-commerce]
+        M2[context: Order service]
         M3[priority: P0]
-        M4[tags: monolith, php]
-        M5[preferences: prefer eks, aurora]
+        M4[tags: backend, critical]
+        M5[preferences:]
+        M6[  prefer: eks, aurora]
+        M7[  avoid: serverless]
     end
 ```
 
----
+> **Note:** `agent_scope` is ARA-only (drives conditional BLOCKERs). `preferences` is MOD-only (frames recommendations). `repo_type`, `context`, `priority`, and `tags` are shared by both.
 
-## Report Output Structure
+## N/A Mapping: What Gets Skipped
+
+```mermaid
+flowchart TB
+    subgraph APP [application]
+        A[All questions apply<br/>All pathways apply]
+    end
+    
+    subgraph INFRA [infrastructure-only]
+        I_SKIP[❌ Skip: APP, most DATA]
+        I_KEEP[✅ Keep: INF, SEC, OPS]
+        I_PATH[❌ Pathways: Cloud Native,<br/>Containers, AI, Analytics]
+    end
+    
+    subgraph DEPLOY [deployment-config]
+        D_SKIP[❌ Skip: APP, DATA,<br/>most INF]
+        D_KEEP[✅ Keep: IaC, CI/CD,<br/>SEC, OPS]
+        D_PATH[✅ Only: Modern DevOps]
+    end
+    
+    subgraph LIB [library]
+        L_SKIP[❌ Skip: all INF,<br/>most OPS]
+        L_KEEP[✅ Keep: APP, DATA,<br/>SEC, Tracing]
+        L_PATH[✅ Only: Open Source, AI]
+    end
+
+    subgraph MONO [monorepo]
+        M[All questions apply<br/>All pathways apply<br/>Assessed per-service]
+    end
+```
+
+## Report Output
 
 ```mermaid
 flowchart LR
-    subgraph AR [agentic-readiness-assessment/]
-        AR1[service-a-ara-report.md]
-        AR2[service-b-ara-report.md]
+    subgraph ARA [📁 agentic-readiness-assessment/]
+        AR1[repo-a-ara-report.md]
+        AR2[repo-b-ara-report.md]
         AR3[portfolio-ara-report.md]
     end
 
-    subgraph MR [modernization-assessment/]
-        MR1[service-a-mod-report.md]
-        MR2[service-b-mod-report.md]
+    subgraph MOD [📁 modernization-assessment/]
+        MR1[repo-a-mod-report.md]
+        MR2[repo-b-mod-report.md]
         MR3[portfolio-mod-report.md]
-    end
-```
-
----
-
-## Old vs New Comparison
-
-```mermaid
-flowchart LR
-    subgraph OLD [Current: 1 Mega-TD]
-        direction TB
-        O1[56 mixed criteria]
-        O2[4 goals with re-weighting]
-        O3[Repo classification inside TD]
-        O4[Conditional sections]
-        O5[Tiered gap classification]
-        O6[7 pathways + goal alignment]
-    end
-
-    OLD -->|Split and Simplify| NEW
-
-    subgraph NEW [New: 2 Focused TDs]
-        direction TB
-        N1[ARA: 49 questions<br/>BLOCKER/RISK/INFO<br/>Agentic programs]
-        N2[MOD: 37 questions<br/>Scored 1-4<br/>7 pathways + AWS programs]
-        N3[Power: repo classification<br/>+ orchestration]
     end
 ```

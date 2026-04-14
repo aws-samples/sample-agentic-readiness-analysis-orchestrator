@@ -218,9 +218,9 @@ Power: assessment-orchestrator
 
 - [ ] **T4.1** Update portfolio-config.yaml schema
   - Replace `goal` with `assessment_type`: "agentic-readiness" | "modernization" | "full"
-  - Add `agent_scope`: "read-only" | "write-enabled" (used by ARA TD)
+  - Add `agent_scope`: "read-only" | "write-enabled" — ARA-only field, drives conditional BLOCKERs. Ignored by MOD TD.
   - Rename `goal_context` to `context` at portfolio level
-  - Keep `preferences` (used by MOD TD only)
+  - Keep `preferences` (prefer/avoid arrays) — MOD-only field, frames recommendations. Ignored by ARA TD. Per-repo preferences merge with global (per-repo avoid overrides global prefer on conflict).
   - Keep `repositories` with existing fields (name, path, priority, context, preferences, repo_type, tags, repository_url, report_path)
   - Keep `dependency_overrides`
   - Update `transformation_definitions`:
@@ -237,19 +237,19 @@ Power: assessment-orchestrator
   - Classify repos (T4.0)
   - Route by assessment_type:
     - `agentic-readiness`:
-      1. Generate ARA ATX config per repo (repo_type, agent_scope, context, priority, tags)
+      1. Generate ARA ATX config per repo (repo_type, agent_scope, context, priority, tags — NO preferences)
       2. Spawn parallel subagents running ARA TD
       3. Wait for all to complete
       4. Generate portfolio ARA ATX config (service inventory, dependency_overrides, portfolio_name)
       5. Run portfolio-agentic-readiness TD
     - `modernization`:
-      1. Generate MOD ATX config per repo (repo_type, context, priority, tags, preferences)
+      1. Generate MOD ATX config per repo (repo_type, context, priority, tags, merged preferences — NO agent_scope)
       2. Spawn parallel subagents running MOD TD
       3. Wait for all to complete
-      4. Generate portfolio MOD ATX config (service inventory, dependency_overrides, portfolio_name, preferences)
+      4. Generate portfolio MOD ATX config (service inventory, dependency_overrides, portfolio_name, global preferences)
       5. Run portfolio-modernization TD
     - `full`:
-      1. Generate both ARA and MOD ATX configs per repo
+      1. Generate both ARA config (with agent_scope, without preferences) and MOD config (with preferences, without agent_scope) per repo
       2. Spawn parallel subagents running both TDs per repo (2 subagents per repo)
       3. Wait for all to complete
       4. Generate portfolio ARA ATX config AND portfolio MOD ATX config (separate files)
