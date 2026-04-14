@@ -31,14 +31,14 @@ flowchart TB
 
     subgraph A_RUN [🟢 ARA per repo - parallel]
         direction TB
-        A_EVAL[Evaluate 49 questions]
+        A_EVAL[Evaluate 49 questions<br/>Scoring: BLOCKER / RISK / INFO]
         A_SECTIONS[API Surface · Auth & Identity<br/>State & Transactions · Human-in-the-Loop<br/>Data Quality · Discoverability<br/>Observability · Engineering Maturity]
         A_OUT[Readiness Profile<br/>BLOCKERs · RISKs · INFOs<br/>Remediation Guidance<br/>Evidence Index]
         A_EVAL --> A_SECTIONS --> A_OUT
     end
     subgraph M_RUN [🔵 MOD per repo - parallel]
         direction TB
-        M_EVAL[Evaluate 37 questions]
+        M_EVAL[Evaluate 37 questions<br/>Scoring: 1-4 scale per question]
         M_SECTIONS[Infrastructure & DevOps<br/>App Architecture · Data Platform<br/>Security Baseline<br/>Operations & Observability]
         M_OUT[Category Scores · Top 5 Gaps<br/>7 Modernization Pathway Triggers<br/>Quick Agent Wins<br/>Decomposition Strategy<br/>Learning Materials]
         M_EVAL --> M_SECTIONS --> M_OUT
