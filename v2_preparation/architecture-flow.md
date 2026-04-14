@@ -119,30 +119,22 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    subgraph APP [application]
-        A[All questions apply<br/>All pathways apply]
-    end
-    
-    subgraph INFRA [infrastructure-only]
-        I_SKIP[❌ Skip: APP, most DATA]
-        I_KEEP[✅ Keep: INF, SEC, OPS]
-        I_PATH[❌ Pathways: Cloud Native,<br/>Containers, AI, Analytics]
-    end
-    
-    subgraph DEPLOY [deployment-config]
-        D_SKIP[❌ Skip: APP, DATA,<br/>most INF]
-        D_KEEP[✅ Keep: IaC, CI/CD,<br/>SEC, OPS]
-        D_PATH[✅ Only: Modern DevOps]
-    end
-    
-    subgraph LIB [library]
-        L_SKIP[❌ Skip: all INF,<br/>most OPS]
-        L_KEEP[✅ Keep: APP, DATA,<br/>SEC, Tracing]
-        L_PATH[✅ Only: Open Source, AI]
+    subgraph ARA_NA [ARA N/A Mapping]
+        direction TB
+        AA[🟢 application: all 49 Qs apply]
+        AI[🟡 infrastructure-only: skip API,<br/>most AUTH, STATE, HITL, DATA, DISC]
+        AD[🟡 deployment-config: only ENG<br/>and AUTH-Q1 to Q3 apply]
+        AL[🟡 library: skip ENG section]
+        AM[🟢 monorepo: all 49 Qs apply]
     end
 
-    subgraph MONO [monorepo]
-        M[All questions apply<br/>All pathways apply<br/>Assessed per-service]
+    subgraph MOD_NA [MOD N/A Mapping]
+        direction TB
+        MA[🔵 application: all 37 Qs,<br/>all 7 pathways]
+        MI[🟡 infrastructure-only: skip APP,<br/>most DATA · skip 4 pathways]
+        MD[🟡 deployment-config: skip APP,<br/>DATA, most INF · only Modern DevOps]
+        ML[🟡 library: skip all INF,<br/>most OPS · only Open Source + AI]
+        MM[🔵 monorepo: all 37 Qs,<br/>all 7 pathways]
     end
 ```
 
