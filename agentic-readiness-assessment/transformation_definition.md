@@ -29,6 +29,8 @@ Each question is scored using a severity model:
 
 Four questions are **conditional BLOCKERs** (⚡) — their severity depends on the `agent_scope` context (write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q7, and DATA-Q2.
 
+Four additional questions are **scope-calibrated RISKs** (⚡) — they evaluate as RISK when `agent_scope` is `"write-enabled"` but downgrade to INFO when `agent_scope` is `"read-only"` because their concerns are specific to write operations: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6.
+
 The output is a structured Markdown report saved as `{repo-name}-ara-report.md` containing:
 - Metadata header (repo name, date, repo_type, agent_scope)
 - Readiness profile (Agent-Ready, Pilot-Ready, Remediation Required, or Not Agent-Integrable)
@@ -111,7 +113,7 @@ The ARA TD does **not** read, validate, or apply the following fields from `addi
 Record the resolved values from Steps 0.1–0.2 in the assessment context. They will be used in subsequent steps as follows:
 
 - **`repo_type`** → Used in the N/A Mapping (Step 1) to determine which questions are scored as N/A for the detected repo type. Included in the report metadata header.
-- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q7, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK. Included in the report metadata header.
+- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q7, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
 - **`context`** → Used throughout the report to frame findings and recommendations with repository-specific context.
 - **`priority`** → Recorded in the report metadata header.
 - **`tags`** → Recorded in the report metadata header.
@@ -601,9 +603,13 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### STATE-Q3: Concurrency Controls — RISK
+#### STATE-Q3: Concurrency Controls — RISK ⚡ (Scope-Calibrated)
 
 **Question:** Does the application support optimistic locking or concurrency controls to prevent race conditions when multiple agent instances operate simultaneously?
+
+**⚡ Scope-Calibrated:**
+- **When `agent_scope` is `"write-enabled"`:** Evaluate as **RISK**. Multiple write-enabled agent instances may attempt concurrent writes. Without concurrency controls, data integrity is at risk.
+- **When `agent_scope` is `"read-only"`:** Evaluate as **INFO**. Read-only agents do not perform writes, so concurrency controls for write operations are informational only — relevant for future scope expansion planning.
 
 **Why it matters:** Multiple agent instances may attempt concurrent writes. Without concurrency controls (optimistic locking, ETags, version fields), data integrity is at risk.
 
@@ -643,9 +649,13 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### STATE-Q6: Blast Radius and Transaction Limits — RISK
+#### STATE-Q6: Blast Radius and Transaction Limits — RISK ⚡ (Scope-Calibrated)
 
 **Question:** Can the system enforce configurable limits on agent-initiated actions — such as maximum records modified per run, maximum spend per hour, or maximum delete operations per session — independently of general rate limits?
+
+**⚡ Scope-Calibrated:**
+- **When `agent_scope` is `"write-enabled"`:** Evaluate as **RISK**. Write-enabled agents can execute correct-but-catastrophic logic at machine speed. Transaction limits define the maximum blast radius of an agent error.
+- **When `agent_scope` is `"read-only"`:** Evaluate as **INFO**. Read-only agents cannot modify records, trigger spend, or delete data. Transaction limits for write operations are informational only — relevant for future scope expansion planning.
 
 **Why it matters:** Rate limits (STATE-Q5) protect the system from traffic overload. Transaction limits protect the business from the consequences of an agent executing correct-but-catastrophic logic — deleting 10,000 records instead of 100, or issuing $50,000 in refunds in a loop. These limits define the maximum blast radius of an agent error.
 
@@ -677,9 +687,13 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### HITL-Q1: Draft/Pending State — RISK
+#### HITL-Q1: Draft/Pending State — RISK ⚡ (Scope-Calibrated)
 
 **Question:** Does the application have the concept of a pending or draft state that an agent can write to before a human approves and commits?
+
+**⚡ Scope-Calibrated:**
+- **When `agent_scope` is `"write-enabled"`:** Evaluate as **RISK**. Write-enabled agents should not commit irreversible actions autonomously for high-stakes operations. Draft states let agents propose and humans confirm.
+- **When `agent_scope` is `"read-only"`:** Evaluate as **INFO**. Read-only agents do not make state changes, so draft/pending states are informational only — relevant for future scope expansion planning.
 
 **Why it matters:** Agents should not commit irreversible actions autonomously for high-stakes operations. Draft states let agents propose and humans confirm.
 
@@ -691,9 +705,13 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### HITL-Q2: Configurable Approval Gates — RISK
+#### HITL-Q2: Configurable Approval Gates — RISK ⚡ (Scope-Calibrated)
 
 **Question:** Can specific operations be configured to require a human approval step before the application executes them — configurable by operation type?
+
+**⚡ Scope-Calibrated:**
+- **When `agent_scope` is `"write-enabled"`:** Evaluate as **RISK**. Write-enabled agents executing high-risk operations benefit from human-in-the-loop approval at the application layer as defense in depth.
+- **When `agent_scope` is `"read-only"`:** Evaluate as **INFO**. Read-only agents do not execute write operations, so approval gates are informational only — relevant for future scope expansion planning.
 
 **Why it matters:** High-risk actions benefit from human-in-the-loop approval at the application layer as defense in depth, even when orchestration-layer gates exist.
 
@@ -1046,11 +1064,11 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### ENG-Q6: Cross-Origin and Network Policies — BLOCKER
+#### ENG-Q6: Cross-Origin and Network Policies — RISK
 
 **Question:** Are CORS policies and network security configurations (security groups, firewall rules, API gateway settings) documented and discoverable, regardless of whether they are defined in application code, infrastructure-as-code repos, or centralized configuration systems?
 
-**Why it matters:** Agents running on cloud platforms must traverse network boundaries. Misconfigured CORS or firewall rules block integration entirely. These configurations may exist in application repos, infrastructure repos (Terraform/CloudFormation), API gateway configs, or service mesh policies.
+**Why it matters:** Network policies are a defense-in-depth control that restricts which pods or services can communicate at the network layer. While important for overall security posture, they are an enforcement mechanism for authorization decisions that should be made at the application or service mesh layer (AUTH-Q1, AUTH-Q3). If authentication and authorization are properly implemented, network policies provide a secondary defense layer rather than a primary agent safety gate. CORS is a browser-enforced mechanism irrelevant to machine-to-machine agent traffic. Classified as RISK (not BLOCKER) because the absence of network policies does not directly prevent safe agent integration when identity and authorization controls are in place — it reduces defense depth.
 
 **Look for:**
 - CORS configuration in API Gateway or application middleware
@@ -1314,6 +1332,18 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q6). This s
 - **Evidence**: <files cited>
 ```
 
+**For scope-calibrated RISK (⚡) questions** (HITL-Q1, HITL-Q2, STATE-Q3, STATE-Q6), include the resolved severity based on `agent_scope`:
+
+```markdown
+#### <question_id>: <question topic> ⚡
+- **Severity**: <RISK if write-enabled / INFO if read-only>
+- **Scope-Calibrated**: agent_scope is "<agent_scope>" — evaluated as <resolved severity>
+- **Finding**: <what was observed>
+- **Gap**: <what is missing>
+- **Recommendation**: <specific next step>
+- **Evidence**: <files cited>
+```
+
 ---
 
 ### Evidence Index
@@ -1405,6 +1435,7 @@ Strictly follow these rules at all times:
 - **Do not skip questions**: All 49 questions must be evaluated and appear in the report. Questions that are N/A for the detected `repo_type` must still appear using the N/A display format — they are listed, not omitted.
 - **N/A scoring rules**: Questions scored as N/A are excluded from BLOCKER, RISK, and INFO counts and from readiness profile determination. N/A questions do not affect the readiness profile.
 - **Conditional BLOCKER rules**: The 4 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q7, DATA-Q2) must be evaluated at the severity determined by `agent_scope`. Do not override the conditional logic.
+- **Scope-calibrated RISK rules**: The 4 scope-calibrated RISK questions (HITL-Q1, HITL-Q2, STATE-Q3, STATE-Q6) must be evaluated as RISK when `agent_scope` is `"write-enabled"` and as INFO when `agent_scope` is `"read-only"`. Do not override the scope calibration logic.
 - **Repo type classification**: Use the `repo_type` from `additionalPlanContext`. If not provided, default to `application`. Apply the N/A mapping table exactly as defined — do not add or remove N/A mappings.
 - **No goal system**: This TD does not use goals, goal_context, preferences, pathways, decomposition strategies, numeric scores, or goal-based re-weighting. If these fields appear in `additionalPlanContext`, ignore them.
 - **Report completeness**: The output report must contain all required sections: metadata header, readiness profile, summary counts, BLOCKERs with remediation, RISKs with compensating controls, INFOs, detailed findings for all 49 questions, and evidence index.

@@ -32,7 +32,7 @@ The output is a detailed Markdown report saved as `portfolio-mod-report.md` cont
 - Integration opportunities
 - Risk assessment with likelihood-impact matrix
 - Resource allocation recommendations
-- AWS Programs & Engagement Recommendations (MAP, OLA, MMP, VMP, WAMP, EBA, ISV WMP, CE)
+- AWS Programs & Engagement Recommendations (MAP, OLA, MMP, VMP, WAMP, EBA, ISV WMP)
 - Learning materials mapped to portfolio skill gaps
 - Service-by-service summary
 
@@ -297,6 +297,35 @@ If all services have N/A for a category, the portfolio category average is "N/A"
 | monorepo | N | X% |
 | library | N | X% |
 
+#### 3.5 Readiness Snapshot
+
+Produce a structured, machine-parseable summary block containing the key portfolio metrics. This block is designed for consumption by dashboard and tracking systems that build time-series views across multiple assessment runs.
+
+The snapshot captures the state of the portfolio at assessment time. Delta calculations (score improvements, pathway resolutions, velocity) are the responsibility of the consuming system, not this TD.
+
+Fields:
+
+| Field | Type | Source |
+|-------|------|--------|
+| `assessment_date` | string (YYYY-MM-DD) | Report date |
+| `total_services` | integer | Count of assessed services |
+| `portfolio_score` | float | Overall portfolio score average |
+| `score_range_min` | float | Lowest individual service score |
+| `score_range_max` | float | Highest individual service score |
+| `mature_services` | integer | Count with score >= 3.5 |
+| `partial_services` | integer | Count with score 2.5–3.4 |
+| `needs_work_services` | integer | Count with score 1.5–2.4 |
+| `not_ready_services` | integer | Count with score < 1.5 |
+| `pathways_triggered` | integer | Count of distinct pathways triggered across portfolio |
+| `foundational_blockers` | integer | Count of criteria scoring < 2 in 2+ repos |
+| `improvement_opportunities` | integer | Count of criteria scoring < 3 in 3+ repos |
+| `category_inf` | float or "N/A" | Infrastructure & DevOps portfolio average |
+| `category_app` | float or "N/A" | Application Architecture portfolio average |
+| `category_data` | float or "N/A" | Data Platform portfolio average |
+| `category_sec` | float or "N/A" | Security Baseline portfolio average |
+| `category_ops` | float or "N/A" | Operations & Observability portfolio average |
+| `portfolio_level_avg` | float | Average score of portfolio-level questions (PORT-MOD-Q1–Q5) |
+
 ### Step 3b: Technology Stack Summary
 
 Consolidate technology usage across the portfolio to identify standardization opportunities and diversity metrics.
@@ -401,14 +430,27 @@ For each service, calculate:
 
 If `dependency_overrides` is not provided:
 
-Display a note in the service dependency map section:
+**Infer dependencies from individual MOD reports.** Rather than skipping dependency analysis entirely, extract dependency information from the individual report findings:
 
-> No dependency information was provided in the portfolio configuration. To enable
-> dependency-aware analysis — including coupling scores, blast radius calculation,
-> circular dependency detection, and dependency-ordered roadmap phasing — add
-> `dependency_overrides` to the portfolio config.
+1. **Scan individual report findings** for evidence of inter-service communication:
+   - Look for mentions of gRPC/REST calls to other services in the portfolio (e.g., "calls cartservice via gRPC", "synchronous dependency on productcatalogservice")
+   - Look for shared data store references (e.g., "Redis backing store", "shared database")
+   - Look for service names mentioned in context fields, findings, or technology stack sections
+   - Look for import/client references to other services in the codebase
+   - Look for infrastructure dependencies (e.g., "shared GKE cluster", "common Istio mesh")
 
-Still produce the roadmap (Step 6) using priority-based ordering only (P0 → P1 → P2) without dependency-based phase assignment.
+2. **Construct an inferred dependency graph** using the same structure as explicit `dependency_overrides`:
+   - Set `type` based on communication pattern: `sync` for REST/gRPC calls, `async` for message queue/event references, `shared_db` for shared data store references, `shared_infra` for shared infrastructure references
+   - Set `description` from the evidence found in the report
+   - Mark all inferred dependencies as `"inferred": true` to distinguish from explicit overrides
+
+3. **Apply Steps 4.1–4.5 normally** using the inferred dependency graph — calculate coupling scores, fan-in/fan-out, blast radius, detect circular dependencies, and perform critical path analysis
+
+4. **Add a note in the service dependency map section:**
+
+> Dependencies were inferred from individual MOD report findings (not explicitly provided via `dependency_overrides`). Inferred dependencies may be incomplete — they reflect only what was observable in the assessed code and report context. For authoritative dependency data, add `dependency_overrides` to the portfolio config.
+
+If no dependencies can be inferred from the reports, fall back to the current behavior: display a note that no dependency information was available and produce the roadmap using priority-based ordering only (P0 → P1 → P2) without dependency-based phase assignment.
 
 ### Step 5: Identify Cross-Cutting Concerns
 
@@ -742,7 +784,6 @@ Based on the portfolio-wide assessment findings from previous steps, evaluate ea
 | Windows App Modernization Program | WAMP | Any repo has Windows-based deployment targets | Check individual report findings for Windows Server, IIS, or Windows-specific deployment references. If found, recommend WAMP. |
 | Experience-Based Acceleration | EBA | Portfolio has 2+ repos with triggered pathways AND overall score < 3.0 | Count repos with at least one triggered pathway AND overall score < 3.0. If count >= 2, recommend EBA. Specify which pathway(s) are most prevalent for the EBA engagement focus. |
 | ISV Workload Migration Program | ISV WMP | Portfolio includes ISV or third-party software workloads | Check findings for references to third-party commercial software, ISV applications, or packaged software deployments. If found, recommend ISV WMP. |
-| Cloud Enablement | CE | Portfolio has 5+ repos OR overall portfolio score < 2.0 | If total repos >= 5 OR portfolio overall score < 2.0, recommend CE for broad organizational enablement. |
 
 #### 9.2 Program Recommendations Output
 
@@ -755,6 +796,47 @@ For each triggered program:
 - **Next step** — Recommended action (e.g., "Request MAP engagement via AWS Solutions Architect")
 
 If no programs are triggered, include: "No specific AWS program recommendations based on current findings. As the portfolio evolves, re-assess to identify program eligibility."
+
+
+### Step 10: Evaluate Portfolio-Level Questions
+
+Evaluate questions that can only be answered by looking across multiple repos. These are distinct from cross-cutting analysis (Step 4) which aggregates individual scores — portfolio-level questions assess capabilities that no individual repo assessment can see.
+
+Individual report scores are never overridden. Where a portfolio-level finding provides context for individual gaps, annotate with "potentially mitigated — verify" but do not change individual scores.
+
+#### 10.1 Portfolio-Level Questions (5)
+
+| ID | Question | Score Rubric | How to Evaluate |
+|----|----------|-------------|-----------------|
+| PORT-MOD-Q1 | **IaC Standardization** — Are services using a consistent IaC tool across the portfolio? | 4: Single IaC tool across all services. 3: Primary tool covers 80%+, minor exceptions. 2: 2-3 different tools with no standard. 1: No IaC or completely fragmented. | Count distinct IaC tools across repos (Terraform, CDK, CloudFormation, Pulumi, none). Calculate the percentage covered by the most common tool. Factor in the portfolio's preferred IaC tool from preferences. |
+| PORT-MOD-Q2 | **Shared Observability Platform** — Is there a centralized observability stack (tracing, logging, metrics) spanning all services? | 4: Centralized tracing + logging + metrics with cross-service correlation. 3: Centralized logging and metrics but no cross-service tracing. 2: Some shared tooling but inconsistent adoption. 1: Each service has independent or no observability. | Check for: shared CloudWatch Log Groups, shared X-Ray/ADOT configuration, shared dashboards, consistent metric namespaces. Cross-reference with individual OPS-Q1 (tracing), OPS-Q2 (SLOs), OPS-Q3 (metrics) scores. |
+| PORT-MOD-Q3 | **Dependency Cycle Health** — Are there circular dependencies that block independent modernization? | 4: No circular dependencies. 3: Circular deps exist but are async-only (breakable). 2: Sync circular deps exist with known resolution path. 1: Sync circular deps with no resolution path, blocking modernization. | Using the dependency graph from Step 3, detect cycles. Classify each cycle by dependency type (sync vs async). Sync cycles are harder to break. Score based on severity and resolution feasibility. |
+| PORT-MOD-Q4 | **Technology Diversity** — How fragmented is the technology stack across the portfolio? | 4: Low diversity (1-2 languages, 1 IaC tool, 1 DB engine). 3: Moderate diversity (2-3 languages, 1-2 IaC tools). 2: High diversity (4+ languages, 3+ IaC tools, mixed DB engines). 1: Extreme fragmentation with no standardization effort. | Calculate technology diversity score: count distinct languages, IaC tools, DB engines, compute patterns, CI/CD tools. Divide by number of services. Higher ratio = more fragmentation. Factor in preference alignment. |
+| PORT-MOD-Q5 | **Shared Security Posture** — Is there a centralized security scanning pipeline, shared WAF, or unified vulnerability management across the portfolio? | 4: Centralized security scanning + shared WAF + unified vuln management. 3: Shared WAF or centralized scanning but not both. 2: Some shared security tooling but inconsistent. 1: Each service manages security independently or not at all. | Check for: shared WAF WebACL, centralized security scanning in CI/CD, shared Secrets Manager configuration, consistent IAM patterns. Cross-reference with individual SEC-Q1 through SEC-Q6 scores. |
+
+#### 10.2 Contextual Annotations
+
+When a portfolio-level finding provides context for individual cross-cutting concerns, add an annotation:
+
+```markdown
+> **Portfolio Context**: <portfolio-level question ID> found that <finding>.
+> This may affect the severity of this concern for <services> — **verify** that <specific check>.
+```
+
+Do NOT change individual scores or cross-cutting concern classifications based on portfolio-level findings.
+
+#### 10.3 Portfolio-Level Findings Output
+
+Record portfolio-level question results in a dedicated section of the report. Include:
+
+- **Question ID and topic**
+- **Score** (1-4)
+- **Finding** — what was observed across the portfolio
+- **Evidence** — specific repos, files, or configurations
+- **Recommendation** — portfolio-level action
+- **Contextual Annotations** — any individual concerns this finding provides context for
+
+Portfolio-level scores are included in the readiness snapshot but NOT in the portfolio overall score average (they are a separate dimension).
 
 
 ## Report Template
@@ -821,6 +903,29 @@ The portfolio MOD report is saved as `portfolio-mod-report.md`. The complete rep
 | deployment-config | N | X% |
 | monorepo | N | X% |
 | library | N | X% |
+
+### Readiness Snapshot
+
+| Metric | Value |
+|--------|-------|
+| assessment_date | <YYYY-MM-DD> |
+| total_services | <N> |
+| portfolio_score | <X.X> |
+| score_range_min | <X.X> |
+| score_range_max | <X.X> |
+| mature_services | <N> |
+| partial_services | <N> |
+| needs_work_services | <N> |
+| not_ready_services | <N> |
+| pathways_triggered | <N> |
+| foundational_blockers | <N> |
+| improvement_opportunities | <N> |
+| category_inf | <X.X> |
+| category_app | <X.X> |
+| category_data | <X.X> |
+| category_sec | <X.X> |
+| category_ops | <X.X> |
+| portfolio_level_avg | <X.X> |
 ```
 
 ---
@@ -1408,6 +1513,28 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 
 ---
 
+### Portfolio-Level Findings
+
+```markdown
+## Portfolio-Level Findings
+
+> These questions evaluate capabilities that can only be assessed by looking across
+> multiple repos. They are distinct from cross-cutting analysis (which aggregates
+> individual scores). Individual report scores are never overridden.
+
+### <question_id>: <question topic>
+
+- **Score**: <1-4>
+- **Finding**: <what was observed across the portfolio>
+- **Evidence**: <specific repos, files, or configurations>
+- **Recommendation**: <portfolio-level action>
+- **Contextual Annotations**: <any individual concerns this provides context for, with "verify" instructions>
+
+<Repeat for each of the 5 portfolio-level questions (PORT-MOD-Q1 through PORT-MOD-Q5).>
+```
+
+---
+
 ### Service-by-Service Summary
 
 ```markdown
@@ -1474,6 +1601,7 @@ The complete report structure, for reference:
    - Readiness Distribution
    - Category Score Averages
    - Repo Type Distribution
+   - Readiness Snapshot
 2. Technology Stack Summary
 3. Service Dependency Map
 4. Cross-Cutting Concerns
@@ -1496,8 +1624,9 @@ The complete report structure, for reference:
 9. Resource Allocation Recommendations
 10. AWS Programs & Engagement Recommendations
 11. Recommended Self-Paced Learning Materials
-12. Service-by-Service Summary
-13. Assessment Inventory
+12. Portfolio-Level Findings
+13. Service-by-Service Summary
+14. Assessment Inventory
 ```
 
 ## Constraints and Guardrails

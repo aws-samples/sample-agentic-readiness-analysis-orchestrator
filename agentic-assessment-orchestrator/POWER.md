@@ -483,6 +483,7 @@ The full configuration schema is available in `portfolio-config.schema.json`. Ke
   - `repo_type` (optional): Override auto-detection — one of `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`
   - `tags` (optional): String array of tags for categorization
   - `report_path` (optional): Custom output path for the assessment report
+  - `agent_scope` (optional): Per-repo override for agent scope — one of `read-only`, `write-enabled`. ARA-only. Overrides portfolio-level `agent_scope` for this repo.
 - **dependency_overrides** (optional): Manual dependency declarations
   - `source` (required): Source service name
   - `target` (required): Target service name
@@ -789,7 +790,7 @@ atx custom def exec -n <modernization> -p <repo-path> -g file://.atx-config-<ser
 
 **How Kiro generates the ARA `additionalPlanContext`:**
 1. Set `repo_type` from classification (auto-detected or config override)
-2. Set `agent_scope` from the portfolio config (if present; defaults to `read-only` if not specified)
+2. Set `agent_scope` from the per-repo config if present; otherwise from the portfolio-level config; defaults to `read-only` if neither is specified
 3. Set `context` from the per-repo config (if present)
 4. Set `priority` from the per-repo config (if present)
 5. Set `tags` from the per-repo config (if present)

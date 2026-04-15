@@ -21,6 +21,8 @@ The transformation follows a 7-step pipeline:
 
 The output is a detailed Markdown report saved as `portfolio-ara-report.md` containing:
 - Executive dashboard with readiness distribution by profile
+- Blocker heatmap by section (which dimensions block the most repos)
+- Readiness snapshot (structured, machine-parseable metrics for dashboard consumption)
 - Cross-cutting BLOCKERs (same blocker question in 2+ repos)
 - Cross-cutting RISKs (same risk question in 3+ repos)
 - Service dependency map from dependency_overrides
@@ -253,6 +255,72 @@ Count services by repo type:
 | monorepo | N | X% |
 | library | N | X% |
 
+#### 3.4 Blocker Heatmap by Section
+
+Aggregate BLOCKER counts by ARA section to surface which dimensions are blocking the most repos. This is the key metric for identifying platform-level investments vs. individual service fixes.
+
+For each of the 8 ARA sections (API, AUTH, STATE, HITL, DATA, DISC, OBS, ENG):
+
+1. Count the number of repos that have at least one BLOCKER in that section (excluding N/A questions)
+2. Calculate the percentage of applicable repos blocked by that section
+3. List the top blocker question IDs in that section
+
+**Calculation:**
+
+```
+for each section in [API, AUTH, STATE, HITL, DATA, DISC, OBS, ENG]:
+    repos_blocked = 0
+    applicable_repos = 0
+    blocker_questions = set()
+    
+    for each service in portfolio:
+        has_applicable_question = false
+        has_blocker = false
+        
+        for each question_id in section:
+            severity = service.findings[question_id].severity
+            if severity != "N/A":
+                has_applicable_question = true
+                if severity == "BLOCKER":
+                    has_blocker = true
+                    blocker_questions.add(question_id)
+        
+        if has_applicable_question:
+            applicable_repos += 1
+            if has_blocker:
+                repos_blocked += 1
+    
+    record: section, repos_blocked, applicable_repos, percentage, top blocker_questions
+```
+
+Order sections by repos_blocked descending — the section blocking the most repos is the highest priority platform investment.
+
+#### 3.5 Readiness Snapshot
+
+Produce a structured, machine-parseable summary block containing the key portfolio metrics. This block is designed for consumption by dashboard and tracking systems that build time-series views across multiple assessment runs.
+
+The snapshot captures the state of the portfolio at assessment time. Delta calculations (blockers resolved, profile changes, velocity) are the responsibility of the consuming system, not this TD.
+
+Fields:
+
+| Field | Type | Source |
+|-------|------|--------|
+| `assessment_date` | string (YYYY-MM-DD) | Report date |
+| `total_services` | integer | Count of assessed services |
+| `agent_ready` | integer | Count with Agent-Ready profile |
+| `pilot_ready` | integer | Count with Pilot-Ready profile |
+| `remediation_required` | integer | Count with Remediation Required profile |
+| `not_integrable` | integer | Count with Not Agent-Integrable profile |
+| `total_blockers` | integer | Sum of BLOCKER counts across all services |
+| `total_risks` | integer | Sum of RISK counts across all services |
+| `total_infos` | integer | Sum of INFO counts across all services |
+| `cross_cutting_blockers` | integer | Count of question IDs that are BLOCKER in 2+ repos |
+| `cross_cutting_risks` | integer | Count of question IDs that are RISK in 3+ repos |
+| `portfolio_level_blockers` | integer | Count of portfolio-level questions (PORT-ARA-Q1–Q5) scored as BLOCKER |
+| `portfolio_level_risks` | integer | Count of portfolio-level questions (PORT-ARA-Q1–Q5) scored as RISK |
+| `write_enabled_services` | integer | Count with write-enabled agent scope |
+| `read_only_services` | integer | Count with read-only agent scope |
+
 ### Step 4: Identify Cross-Cutting BLOCKERs
 
 Identify BLOCKER questions that appear across multiple services. These represent portfolio-wide agentic readiness gaps that should be addressed with coordinated remediation.
@@ -394,11 +462,26 @@ Combine dependency information with readiness profiles to identify high-risk pat
 
 If `dependency_overrides` is not provided:
 
-Display a note in the service dependency map section:
+**Infer dependencies from individual ARA reports.** Rather than skipping dependency analysis entirely, extract dependency information from the individual report findings:
 
-> No dependency information was provided in the portfolio configuration. To enable dependency-aware analysis — including identification of high-risk foundation services, transitive blocker propagation, and shared infrastructure impacts — add `dependency_overrides` to the portfolio config.
+1. **Scan individual report findings** for evidence of inter-service communication:
+   - Look for mentions of gRPC/REST calls to other services in the portfolio (e.g., "calls cartservice via gRPC", "depends on productcatalogservice")
+   - Look for shared data store references (e.g., "Redis backing store shared with...")
+   - Look for service names mentioned in context fields, findings, or evidence sections
+   - Look for import/client references to other services in the codebase (e.g., `NewCheckoutServiceClient`, `CartServiceClient`)
 
-Still produce the service-by-service summary (Step 7) without dependency enrichment.
+2. **Construct an inferred dependency graph** using the same structure as explicit `dependency_overrides`:
+   - Set `type` based on communication pattern: `sync` for REST/gRPC calls, `async` for message queue/event references, `shared_db` for shared data store references, `shared_infra` for shared infrastructure references
+   - Set `description` from the evidence found in the report
+   - Mark all inferred dependencies as `"inferred": true` to distinguish from explicit overrides
+
+3. **Apply Steps 5.1–5.3 normally** using the inferred dependency graph — calculate fan-in/fan-out, identify foundation services, and perform transitive blocker propagation analysis
+
+4. **Add a note in the service dependency map section:**
+
+> Dependencies were inferred from individual ARA report findings (not explicitly provided via `dependency_overrides`). Inferred dependencies may be incomplete — they reflect only what was observable in the assessed code and report context. For authoritative dependency data, add `dependency_overrides` to the portfolio config.
+
+If no dependencies can be inferred from the reports, fall back to the current behavior: display a note that no dependency information was available and produce the service-by-service summary without dependency enrichment.
 
 ### Step 6: Generate Portfolio-Level Remediation Guidance
 
@@ -458,6 +541,53 @@ For each triggered program:
 If no programs are triggered, include a brief note: "No specific agentic program recommendations based on current findings. As the portfolio's agentic readiness improves, re-assess to identify program eligibility."
 
 
+### Step 8: Evaluate Portfolio-Level Questions
+
+Evaluate questions that can only be answered by looking across multiple repos. These are distinct from cross-cutting analysis (Step 4) which aggregates individual findings — portfolio-level questions assess capabilities that no individual repo assessment can see.
+
+Individual report findings are never overridden. Where a portfolio-level finding provides context for an individual blocker, annotate it with "potentially mitigated — verify" but do not change individual counts.
+
+#### 8.1 Portfolio-Level Questions (5)
+
+| ID | Question | Severity | How to Evaluate |
+|----|----------|----------|-----------------|
+| PORT-ARA-Q1 | **Centralized Identity Plane** — Is there a shared identity provider that all services use for agent M2M authentication? | BLOCKER if no shared IdP detected across any repo; RISK if shared IdP exists but not all services are integrated | Scan all repos for Cognito User Pools, Cognito Identity Pools, Okta configs, or shared auth middleware. Check if the same IdP resource (by ARN, name, or config reference) appears in 2+ repos. Cross-reference with `shared_infra` dependencies. If a shared IdP is found in an infra repo but application repos don't reference it, score as RISK with annotation "shared IdP exists in {repo} but integration not confirmed in {services}." |
+| PORT-ARA-Q2 | **Cross-Service Audit Correlation** — Can audit logs be correlated across services for end-to-end agent action tracing? | RISK if no shared trace ID propagation or centralized audit trail detected | Check for: (1) shared CloudTrail trail covering multiple services, (2) consistent trace ID headers (X-Amzn-Trace-Id, traceparent) across repos, (3) centralized log aggregation (CloudWatch Log Groups with shared retention, S3 audit bucket). If individual repos log independently with no correlation mechanism, score as RISK. |
+| PORT-ARA-Q3 | **Portfolio-Level Rate Limiting** — Is there a shared API gateway or WAF protecting the portfolio perimeter from agent traffic storms? | RISK if no shared WAF or API gateway detected; INFO if each service has its own rate limiting | Check for: (1) shared WAF WebACL referenced across repos, (2) shared API Gateway with usage plans, (3) portfolio-level rate limiting rules. If rate limiting exists only at individual service level, score as INFO with note that portfolio-level protection is recommended for agent-at-scale scenarios. |
+| PORT-ARA-Q4 | **Transitive Dependency Safety** — Do dependency chains create transitive agent safety risks? | BLOCKER if a service with profile Agent-Ready or Pilot-Ready depends (sync) on a service with profile Not Agent-Integrable; RISK if depends on Remediation Required | Using the dependency graph from Step 5 and readiness profiles from Step 3, trace sync dependency chains. If Service A (Agent-Ready) synchronously depends on Service B (Not Agent-Integrable), Service A's agent integration is effectively blocked regardless of its own profile. Flag as BLOCKER. Async dependencies are RISK (eventual consistency issues but not hard blocks). |
+| PORT-ARA-Q5 | **Agent Identity Governance** — Is there a centralized mechanism to suspend or revoke agent identities across all services simultaneously? | RISK if no portfolio-wide agent identity registry or centralized revocation mechanism detected | Check for: (1) shared Cognito app client registry, (2) centralized API key management, (3) portfolio-level agent identity documentation. If each service manages agent identities independently with no centralized kill switch, score as RISK. |
+
+#### 8.2 Contextual Annotations
+
+When a portfolio-level finding provides context for individual cross-cutting BLOCKERs, add an annotation to the cross-cutting BLOCKER section:
+
+```markdown
+> **Portfolio Context**: <portfolio-level question ID> found that <finding>.
+> This may mitigate this blocker for <services> — **verify** that <specific check>.
+```
+
+Example:
+```markdown
+> **Portfolio Context**: PORT-ARA-Q1 found a shared Cognito User Pool in eks-saas-gitops
+> (terraform/cognito.tf). This may mitigate AUTH-Q1 for services deployed on this
+> cluster — **verify** that each service's API Gateway has a Cognito authorizer attached.
+```
+
+Do NOT change individual blocker counts or readiness profiles based on portfolio-level findings. The annotation is informational — human verification is required.
+
+#### 8.3 Portfolio-Level Findings Output
+
+Record portfolio-level question results in a dedicated section of the report, separate from cross-cutting analysis. Include:
+
+- **Question ID and topic**
+- **Severity** (BLOCKER / RISK / INFO)
+- **Finding** — what was observed across the portfolio
+- **Evidence** — specific repos, files, or configurations that informed the finding
+- **Recommendation** — portfolio-level action to address the gap
+- **Affected Services** — which services are impacted
+- **Contextual Annotations** — any individual blockers this finding provides context for
+
+
 ## Report Template
 
 The portfolio ARA report is saved as `portfolio-ara-report.md`. The complete report structure is defined below.
@@ -511,6 +641,33 @@ The portfolio ARA report is saved as `portfolio-ara-report.md`. The complete rep
 | deployment-config | N | X% |
 | monorepo | N | X% |
 | library | N | X% |
+
+### Blocker Heatmap by Section
+
+| Section | Repos Blocked | % of Applicable Repos | Top Blockers |
+|---------|--------------|----------------------|--------------|
+| <section> | N | X% | <question IDs> |
+| <repeat for each of the 8 sections, ordered by repos blocked descending> |
+
+### Readiness Snapshot
+
+| Metric | Value |
+|--------|-------|
+| assessment_date | <YYYY-MM-DD> |
+| total_services | <N> |
+| agent_ready | <N> |
+| pilot_ready | <N> |
+| remediation_required | <N> |
+| not_integrable | <N> |
+| total_blockers | <N> |
+| total_risks | <N> |
+| total_infos | <N> |
+| cross_cutting_blockers | <N> |
+| cross_cutting_risks | <N> |
+| portfolio_level_blockers | <N> |
+| portfolio_level_risks | <N> |
+| write_enabled_services | <N> |
+| read_only_services | <N> |
 ```
 
 ---
@@ -690,6 +847,29 @@ Group related BLOCKERs that can be addressed together.>
 
 ---
 
+### Portfolio-Level Findings
+
+```markdown
+## Portfolio-Level Findings
+
+> These questions evaluate capabilities that can only be assessed by looking across
+> multiple repos. They are distinct from cross-cutting analysis (which aggregates
+> individual findings). Individual report findings are never overridden.
+
+### <question_id>: <question topic>
+
+- **Severity**: BLOCKER / RISK / INFO
+- **Finding**: <what was observed across the portfolio>
+- **Evidence**: <specific repos, files, or configurations>
+- **Recommendation**: <portfolio-level action>
+- **Affected Services**: <which services are impacted>
+- **Contextual Annotations**: <any individual blockers this provides context for, with "verify" instructions>
+
+<Repeat for each of the 5 portfolio-level questions (PORT-ARA-Q1 through PORT-ARA-Q5).>
+```
+
+---
+
 ### Service-by-Service Summary
 
 ```markdown
@@ -750,13 +930,16 @@ The complete report structure, for reference:
    - Readiness Distribution
    - Portfolio Summary
    - Repo Type Distribution
+   - Blocker Heatmap by Section
+   - Readiness Snapshot
 2. Cross-Cutting BLOCKERs — Same Blocker in 2+ Repos
 3. Cross-Cutting RISKs — Same Risk in 3+ Repos
 4. Service Dependency Map
 5. Portfolio Remediation Guidance
 6. Agentic Program Recommendations
-7. Service-by-Service Summary
-8. Assessment Inventory
+7. Portfolio-Level Findings
+8. Service-by-Service Summary
+9. Assessment Inventory
 ```
 
 ## Constraints and Guardrails

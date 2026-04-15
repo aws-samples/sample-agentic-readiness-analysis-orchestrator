@@ -844,7 +844,6 @@ in exactly one column per pathway row.
 |---------|---------|-----------|-----------------|-----------|
 | Migration Acceleration Program | MAP | 3 of 5 services have overall score < 2.5 | local-monolith (1.29), MonoToMicroLegacy (1.43), aws-microservices (2.24) all below 2.5 threshold | Request MAP engagement via AWS Solutions Architect |
 | Experience-Based Acceleration | EBA | 3 services have triggered pathways AND score < 3.0 | local-monolith (4 pathways, 1.29), MonoToMicroLegacy (5 pathways, 1.43), aws-microservices (2 pathways, 2.24) | Request EBA engagement focused on Move to Modern DevOps pathway |
-| Cloud Enablement | CE | Portfolio has 5+ repos assessed | 5 services assessed in this portfolio, portfolio overall score 2.05 | Request CE engagement for organizational enablement |
 
 ### Program Details
 
@@ -855,10 +854,6 @@ This program is recommended because 3 of 5 services (60%) have overall moderniza
 **Experience-Based Acceleration (EBA)**
 
 This program is recommended because 3 services have at least one triggered modernization pathway AND an overall score below 3.0. The most prevalent pathway is **Move to Modern DevOps** (triggered for 3 services), making it the recommended EBA focus area. EBA provides AWS-led sprints where AWS architects work alongside the customer team to execute specific modernization activities. **Suggested timing**: Align the first EBA sprint with Phase 1 (Mo 1–2) to establish Terraform, CI/CD, and GitOps patterns that all services can adopt.
-
-**Cloud Enablement (CE)**
-
-This program is recommended because the portfolio has 5 or more assessed services, indicating a broad organizational modernization initiative. CE provides organizational readiness assessment, cloud fluency training, and change management support. Given the significant skill gaps identified (Terraform, EKS, observability, database migration), CE can accelerate team capability building. **Suggested timing**: Initiate CE during Phase 0 alongside training activities to build organizational readiness before Phase 1 execution.
 
 > These are engagement-level recommendations. Discuss with your AWS Solutions Architect
 > or Partner to determine eligibility and timing.
