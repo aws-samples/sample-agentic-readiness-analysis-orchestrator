@@ -15,7 +15,7 @@ There are two layers:
 
 | Assessment | Questions | Scoring | Focus |
 |---|---|---|---|
-| **ARA** (Agentic Readiness) | 49 across 8 sections | BLOCKER / RISK / INFO | Is this system safe for autonomous AI agents? |
+| **ARA** (Agentic Readiness) | 43 across 8 sections | BLOCKER / RISK / INFO | Is this system safe for autonomous AI agents? |
 | **MOD** (Modernization Readiness) | 37 across 5 sections | 1-4 scale | How mature is the cloud architecture? |
 
 Zero question overlap between ARA and MOD. The `assessment_type` field routes which assessments run:
@@ -83,10 +83,11 @@ flowchart TB
 
     subgraph ARA_CFG [ARA additionalPlanContext]
         A1[repo_type]
-        A2[agent_scope]
-        A3[context]
-        A4[priority]
-        A5[tags]
+        A2[service_archetype]
+        A3[agent_scope]
+        A4[context]
+        A5[priority]
+        A6[tags]
     end
 
     subgraph MOD_CFG [MOD additionalPlanContext]
@@ -98,7 +99,7 @@ flowchart TB
     end
 ```
 
-> `agent_scope` is ARA-only (drives conditional BLOCKERs). `preferences` is MOD-only (frames recommendations). `repo_type`, `context`, `priority`, and `tags` are shared.
+> `agent_scope` is ARA-only (drives conditional BLOCKERs). `service_archetype` is ARA-only (determines core/extended question tiers). `preferences` is MOD-only (frames recommendations). `repo_type`, `context`, `priority`, and `tags` are shared.
 
 ### Report Output
 
@@ -219,11 +220,11 @@ Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution
 ## Project Structure
 
 ```
-├── agentic-readiness-assessment/       # ARA TD (49 questions, BLOCKER/RISK/INFO)
+├── agentic-readiness-assessment/       # ARA TD (43 questions, BLOCKER/RISK/INFO)
 │   └── transformation_definition.md
 ├── modernization-assessment/           # MOD TD (37 questions, 1-4 scale)
 │   └── transformation_definition.md
-├── portfolio-agentic-readiness/        # Portfolio ARA TD (cross-cutting blockers)
+├── portfolio-agentic-readiness/        # Portfolio ARA TD (cross-cutting analysis + programs)
 │   └── transformation_definition.md
 ├── portfolio-modernization/            # Portfolio MOD TD (dependency-aware roadmap)
 │   └── transformation_definition.md
@@ -233,8 +234,12 @@ Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution
 ├── portfolio-config.schema.json        # JSON schema for portfolio config
 ├── example-reports/                    # Generated example reports
 │   ├── v2-full-assessment/             # Full assessment (ARA + MOD) across 5 repos
-│   └── online-boutique/               # Online Boutique (11 microservices) ARA + MOD
-├── dashboard/                          # HTML dashboards for report visualization
+│   └── online-boutique/               # Online Boutique (11 microservices) with delta tracking
+├── dashboard/                          # HTML dashboards (deployed to CloudFront)
+│   ├── agentic-readiness.html          # ARA dashboard with run selector and delta comparison
+│   ├── modernization.html              # MOD dashboard with pathways and roadmap
+│   ├── index.html                      # Landing page redirect
+│   └── cloudformation.yaml             # S3 + CloudFront hosting template
 ├── monolith/                           # Test fixture (PHP app for out-of-box testing)
 └── static/                             # Static assets
 ```
@@ -269,16 +274,37 @@ example-reports/v2-full-assessment/
 ```
 example-reports/online-boutique/
 ├── portfolio-config.yaml
-├── agentic-readiness.html              # Interactive dashboard
-├── agentic-readiness-assessment/       # ARA reports (original code)
+├── agentic-readiness.html              # Interactive dashboard (also deployed to CloudFront)
+├── modernization.html                  # MOD dashboard
+├── agentic-readiness-assessment/       # ARA reports (original code — 43 questions, archetypes)
 │   ├── frontend-ara-report.md
 │   ├── cartservice-ara-report.md
 │   ├── ... (11 individual + 1 portfolio)
 │   └── online-boutique-portfolio-ara-report.md
-├── agentic-readiness-assessment-v2/    # ARA reports (after remediation)
-│   └── currencyservice-ara-report.md   # (remaining in progress)
+├── agentic-readiness-assessment-v2/    # ARA reports (after remediation — Istio, OTel, etc.)
+│   ├── frontend-ara-report.md
+│   ├── cartservice-ara-report.md
+│   ├── ... (11 individual + 1 portfolio)
+│   └── online-boutique-portfolio-ara-report.md
 └── modernization-assessment/           # MOD reports
     └── ... (11 individual + 1 portfolio)
+```
+
+The two ARA report folders enable delta tracking — comparing assessment results before and after remediation changes (Istio mTLS, OTel, proto versioning, data classification, HPAs, monitoring alerts).
+
+## Dashboard
+
+The `dashboard/` directory contains interactive HTML dashboards deployed to CloudFront:
+
+- **ARA Dashboard** — Assessment run selector, readiness profiles, cross-cutting analysis, pilot candidate ranking, agentic program recommendations (AgentStorming, AXE, EBA), delta comparison between runs
+- **MOD Dashboard** — Category scores, pathway summary, 4-phase roadmap, technology stack, radar chart
+
+Live at: **https://d2fplme21ym2t.cloudfront.net**
+
+Deploy updates:
+```bash
+aws s3 sync dashboard/ s3://936068047509-dashboard/ --delete --exclude "cloudformation.yaml" --exclude "README.md" --content-type "text/html"
+aws cloudfront create-invalidation --distribution-id E36HDAABDBBG66 --paths "/*"
 ```
 
 ## Local Monolith (Test Fixture)
