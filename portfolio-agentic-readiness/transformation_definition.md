@@ -27,7 +27,7 @@ The output is a detailed Markdown report saved as `portfolio-ara-report.md` cont
 - Cross-cutting RISKs (same risk question in 3+ repos)
 - Service dependency map from dependency_overrides
 - Portfolio-level remediation guidance for cross-cutting blockers
-- Agentic program recommendations (EBA-Agentic AI)
+- Agentic program recommendations (AgentStorming, AXE, EBA on Agentic AI)
 - Service-by-service summary (repo name, profile, blocker count, risk count)
 
 This portfolio TD focuses exclusively on cross-cutting BLOCKER/RISK identification across multiple ARA reports. It does not include modernization pathways, roadmap phases, numeric scores, technology preferences, or resource allocation recommendations.
@@ -500,25 +500,38 @@ If `context` was provided in additionalPlanContext, use it to tailor the remedia
 
 ### Step 7: Recommend Agentic Programs
 
-Based on the portfolio-wide assessment findings, recommend relevant agentic enablement programs.
+Based on the portfolio-wide assessment findings, recommend relevant agentic enablement programs and engagement workshops.
 
 #### 7.1 Program Catalog and Trigger Logic
 
-Evaluate each program against its trigger condition. Include a program in the recommendations only if its trigger condition is met.
+Evaluate each program against its trigger condition. Include a program in the recommendations only if its trigger condition is met. Multiple programs can be triggered simultaneously — they serve different purposes and are not mutually exclusive.
 
-| Program | Trigger Condition | How to Evaluate |
-|---------|-------------------|-----------------|
-| **EBA-Agentic AI** (Experience-Based Acceleration for Agentic AI) | Portfolio has services with readiness profile "Pilot-Ready" or "Agent-Ready" — there are services ready to begin agent integration with guided acceleration | Count services with profile Agent-Ready or Pilot-Ready. If count >= 1, recommend EBA-Agentic AI. |
+| Program | Description | Trigger Condition | How to Evaluate |
+|---------|-------------|-------------------|-----------------|
+| **AgentStorming** | A workshop format that builds on EventStorming by adding Cognitive Complexity Analysis and Agentic Workflow Design to pinpoint where agentic AI delivers real value versus traditional automation. Gives customers a structured, repeatable path from "where should we use AI?" to a qualified, implementation-ready answer. | Portfolio shows inconsistent process documentation, lack of process modeling syntax, or unclear agent opportunity identification across business units. Run before ARA to identify where agents should operate. | Check if the portfolio context mentions unclear agent use cases, or if the assessment was run without a clear `context` field describing the agent use case. If the portfolio has no defined agent scope or the context is vague (e.g., "exploring AI opportunities"), recommend AgentStorming. Also recommend if 50%+ of services have no clear agent integration path identified in their individual reports. |
+| **AXE (Agentic Experience Workshop)** | A strategic methodology that helps enterprises implement agentic AI solutions by starting with desired customer and employee experience and working backwards to define AI agents and technical architecture. Built on the proven D2E methodology with 580+ successful engagements, AXE delivers a six-phase framework covering business process mapping, task identification, evaluation metrics, data architecture, governance, and guardrails. The Guardrails & Boundaries phase aligns with ARA, which evaluates whether target systems have the technical controls needed to safely support autonomous agents. Together, they provide a complete assess-to-implement pathway: ARA validates system readiness while AXE designs the agent experience and implementation roadmap. | Portfolio shows 3+ services in "Pilot-Ready" or "Agent-Ready" state, or when business has defined customer/employee experience goals but lacks technical implementation roadmap. | Count services with profile Agent-Ready or Pilot-Ready. If count >= 3, recommend AXE. Also recommend if the portfolio `context` describes experience-level goals (e.g., "customer support agent", "employee productivity") without a corresponding technical implementation plan. |
+| **EBA on Agentic AI** (Experience-Based Acceleration) | Hands-on implementation support for organizations that need accelerated path from assessment to production deployment. Provides coordinated architecture remediation across multiple services with AWS specialist guidance. | Portfolio shows systemic cross-cutting blockers appearing in 5+ repositories requiring coordinated architecture remediation, or when organization needs accelerated path from assessment to production deployment. | Count cross-cutting BLOCKERs (same BLOCKER in 2+ repos). If any single BLOCKER affects 5+ repos, recommend EBA on Agentic AI. Also recommend if total cross-cutting BLOCKERs >= 3 (indicating systemic issues requiring coordinated remediation). |
 
-#### 7.2 Program Recommendations Output
+#### 7.2 Program Sequencing Guidance
+
+When multiple programs are triggered, recommend them in this order:
+
+1. **AgentStorming** (if triggered) — Run first to identify where agents should operate before assessing system readiness
+2. **AXE** (if triggered) — Run after AgentStorming (or after ARA if AgentStorming was not needed) to design the agent experience and implementation roadmap
+3. **EBA on Agentic AI** (if triggered) — Run after AXE to accelerate implementation with hands-on remediation support
+
+If only one program is triggered, recommend it directly without sequencing context.
+
+#### 7.3 Program Recommendations Output
 
 For each triggered program:
 
-- **Program name** — e.g., EBA-Agentic AI
+- **Program name** — AgentStorming, AXE, or EBA on Agentic AI
 - **Relevance** — Why this program is recommended based on portfolio findings
-- **Trigger findings** — Specific portfolio metrics that triggered the recommendation (e.g., "3 of 5 services are Pilot-Ready")
+- **Trigger findings** — Specific portfolio metrics that triggered the recommendation
 - **What it provides** — Brief description of the program's value
-- **Next step** — Recommended action (e.g., "Request EBA engagement via AWS Solutions Architect")
+- **Suggested timing** — When to run relative to other programs or assessment phases
+- **Next step** — Recommended action (e.g., "Request engagement via AWS Solutions Architect")
 
 If no programs are triggered, include a brief note: "No specific agentic program recommendations based on current findings. As the portfolio's agentic readiness improves, re-assess to identify program eligibility."
 
@@ -809,10 +822,22 @@ Group related BLOCKERs that can be addressed together.>
 > These are engagement-level recommendations based on the portfolio's agentic readiness
 > profile. Discuss with your AWS Solutions Architect to determine eligibility and timing.
 
-| Program | Relevance | Trigger Findings | Next Step |
-|---------|-----------|-----------------|-----------|
-| <Program name> | <Why recommended> | <Specific metrics that triggered this> | <Recommended action> |
+| Program | Relevance | Trigger Findings | Suggested Timing | Next Step |
+|---------|-----------|-----------------|------------------|-----------|
+| <Program name> | <Why recommended> | <Specific metrics> | <When to run> | <Action> |
 | <repeat for each triggered program> |
+
+### Program Details
+
+#### <Program Name>
+
+- **Why triggered**: <Portfolio metrics that triggered this recommendation>
+- **What it provides**: <Brief description of the program's value>
+- **Suggested timing**: <When to run relative to other programs>
+- **Recommended scope**: <Which services or areas to focus on>
+- **Next step**: <Recommended action>
+
+<Repeat for each triggered program.>
 
 <If no programs are triggered:>
 > No specific agentic program recommendations based on current findings. As the

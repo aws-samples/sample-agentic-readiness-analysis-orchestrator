@@ -129,7 +129,7 @@ flowchart LR
 ```bash
 # Individual assessments
 atx custom def publish -n agentic-readiness-assessment --sd agentic-readiness-assessment \
-  --description "Evaluate a repository against 49 agentic readiness criteria (BLOCKER/RISK/INFO)"
+  --description "Evaluate a repository against 43 agentic readiness criteria (BLOCKER/RISK/INFO)"
 
 atx custom def publish -n modernization-assessment --sd modernization-assessment \
   --description "Evaluate a repository against 37 modernization readiness criteria (1-4 scale)"
@@ -294,7 +294,7 @@ atx custom def list
 # Update (delete + re-publish)
 atx custom def delete -n agentic-readiness-assessment
 atx custom def publish -n agentic-readiness-assessment --sd agentic-readiness-assessment \
-  --description "Evaluate a repository against 49 agentic readiness criteria (BLOCKER/RISK/INFO)"
+  --description "Evaluate a repository against 43 agentic readiness criteria (BLOCKER/RISK/INFO)"
 
 # Get details
 atx custom def get -n agentic-readiness-assessment

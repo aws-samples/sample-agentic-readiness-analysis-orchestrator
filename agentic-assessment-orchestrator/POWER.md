@@ -34,7 +34,7 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
   - `agentic-readiness` → generates ARA ATX configs per repo, spawns ARA subagents, then runs Portfolio ARA TD
   - `modernization` → generates MOD ATX configs per repo, spawns MOD subagents, then runs Portfolio MOD TD
   - `full` → generates both ARA and MOD ATX configs per repo (2 subagents per repo), then runs both portfolio TDs
-- ARA ATX configs contain: `repo_type`, `agent_scope`, `context`, `priority`, `tags` — NO preferences
+- ARA ATX configs contain: `repo_type`, `service_archetype` (if provided or auto-detected), `agent_scope`, `context`, `priority`, `tags` — NO preferences
 - MOD ATX configs contain: `repo_type`, `context`, `priority`, `tags`, merged `preferences` (global + per-repo with conflict resolution) — NO agent_scope
 - Spawns parallel subagents to run `atx custom def exec -n <td_name> -g file://<generated-config> -x -t` concurrently
 - Waits for all individual assessments to complete
@@ -177,6 +177,7 @@ Where `atx-config-ara.yaml` contains the ARA `additionalPlanContext` (NO prefere
 ```yaml
 additionalPlanContext: |
   repo_type: "application"
+  service_archetype: "stateful-crud"
   agent_scope: "write-enabled"
   context: "Legacy PHP e-commerce app running on EC2 with MySQL"
   priority: "P0"
@@ -481,6 +482,7 @@ The full configuration schema is available in `portfolio-config.schema.json`. Ke
   - `context` (optional): Free-text description of the service
   - `preferences` (optional): Per-repo preference overrides (same `prefer`/`avoid` format) — MOD-only
   - `repo_type` (optional): Override auto-detection — one of `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`
+  - `service_archetype` (optional): Override auto-detection for ARA — one of `stateless-utility`, `stateful-crud`, `orchestrator`, `data-gateway`, `event-processor`. ARA-only. Determines which extended questions are triggered.
   - `tags` (optional): String array of tags for categorization
   - `report_path` (optional): Custom output path for the assessment report
   - `agent_scope` (optional): Per-repo override for agent scope — one of `read-only`, `write-enabled`. ARA-only. Overrides portfolio-level `agent_scope` for this repo.
@@ -594,6 +596,7 @@ The `-g` flag accepts an ATX execution configuration file (YAML or JSON), not ar
 # atx-config-ara.yaml (ARA — NO preferences)
 additionalPlanContext: |
   repo_type: "application"
+  service_archetype: "stateful-crud"
   agent_scope: "write-enabled"
   context: "Legacy Java monolith running on EC2"
   priority: "P0"
@@ -760,6 +763,7 @@ Kiro spawns subagents per repository from `portfolio-config.yaml`. The number of
 ```yaml
 additionalPlanContext: |
   repo_type: "application"
+  service_archetype: "orchestrator"
   agent_scope: "write-enabled"
   context: "Monolithic checkout handling payments and orders"
   priority: "P0"
@@ -790,11 +794,12 @@ atx custom def exec -n <modernization> -p <repo-path> -g file://.atx-config-<ser
 
 **How Kiro generates the ARA `additionalPlanContext`:**
 1. Set `repo_type` from classification (auto-detected or config override)
-2. Set `agent_scope` from the per-repo config if present; otherwise from the portfolio-level config; defaults to `read-only` if neither is specified
-3. Set `context` from the per-repo config (if present)
-4. Set `priority` from the per-repo config (if present)
-5. Set `tags` from the per-repo config (if present)
-6. Do NOT include `preferences` — ARA configs never contain preferences
+2. Set `service_archetype` from the per-repo config if present; otherwise omit (the ARA TD will auto-detect during Step 1.5)
+3. Set `agent_scope` from the per-repo config if present; otherwise from the portfolio-level config; defaults to `read-only` if neither is specified
+4. Set `context` from the per-repo config (if present)
+5. Set `priority` from the per-repo config (if present)
+6. Set `tags` from the per-repo config (if present)
+7. Do NOT include `preferences` — ARA configs never contain preferences
 
 **How Kiro generates the MOD `additionalPlanContext`:**
 1. Set `repo_type` from classification (same value as ARA — classified once per repo)
