@@ -1,20 +1,21 @@
 # Agentic Readiness Assessment Report
 
-**Target**: ./services/microservices-demo
-**Date**: 2025-07-15
+**Target**: services/microservices-demo
+**Date**: 2026-04-16
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
 **Repository Type**: infrastructure-only
+**Service Archetype**: N/A — infrastructure-only
 **Agent Scope**: read-only
 **Tags**: kubernetes, helm, terraform, istio, cicd, iac
-**Context**: Root-level deployment and infrastructure configuration — Kubernetes manifests, Helm charts, Kustomize overlays, Terraform IaC, Istio service mesh configs, Skaffold/Cloud Build CI/CD pipelines, and shared protobuf definitions.
+**Context**: Root-level deployment and infrastructure configuration.
 
 ---
 
 ## Readiness Profile: Remediation Required
 
-**BLOCKERs**: 1 | **RISKs**: 12 | **INFOs**: 2
+**BLOCKERs**: 1 | **RISKs**: 9 | **INFOs**: 4
 
-Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days.
+Resolve all blockers before any agent deployment — including pilots. Estimated runway: 30–90 days. The single blocker (AUTH-Q1: Istio AuthorizationPolicies disabled in Helm values) must be resolved to establish machine identity authentication across all services. The 9 RISKs cover observability, engineering maturity, and remaining auth gaps that are manageable with compensating controls.
 
 ---
 
@@ -23,29 +24,32 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 | Severity | Count |
 |----------|-------|
 | BLOCKER | 1 |
-| RISK | 12 |
-| INFO | 2 |
-| N/A | 34 |
-| **Total** | **49** |
+| RISK | 9 |
+| INFO | 4 |
+| N/A | 29 |
+| Not Evaluated (extended) | 0 |
+| **Total** | **43** |
 
-**Questions Evaluated**: 15
-**Questions N/A (repo_type: infrastructure-only)**: 34
+**Core Questions Evaluated**: 14
+**Extended Questions Triggered**: 0
+**Extended Questions Not Triggered**: 0
+**Questions N/A (repo_type: infrastructure-only)**: 29
 
 ---
 
 ## BLOCKERs — Must Resolve Before Agent Deployment
 
-### ENG-Q6: Cross-Origin and Network Policies
+### AUTH-Q1: Machine Identity Authentication
 
 - **Severity**: BLOCKER
-- **Finding**: Comprehensive NetworkPolicy definitions exist in `kustomize/components/network-policies/`: a `deny-all` baseline policy and 13 per-service policies with specific pod selectors, ingress sources, and port restrictions (e.g., `network-policy-cartservice.yaml` allows ingress only from `frontend` and `checkoutservice` on port 7070). The Helm chart supports `networkPolicies.create` which generates equivalent policies. Istio service mesh configs define Gateway (`istio-manifests/frontend-gateway.yaml`), VirtualService (`istio-manifests/frontend.yaml`), ServiceEntry (`istio-manifests/allow-egress-googleapis.yaml`), and AuthorizationPolicy (in Helm templates). **However**, network policies are disabled by default: `networkPolicies.create: false` in `helm-chart/values.yaml` and `# - components/network-policies` is commented out in `kustomize/kustomization.yaml`. The Istio Gateway accepts `hosts: ["*"]` on HTTP port 80 with no TLS. No CORS configuration was found anywhere. While the policies are documented and discoverable in IaC, the disabled-by-default state combined with a permissive Gateway and absent CORS means the agent-facing integration surface has no network security enforcement in place.
-- **Gap**: Network policies are comprehensively defined but disabled by default — no enforcement without explicit opt-in. No CORS configuration. Istio Gateway is permissive (HTTP, wildcard hosts, no TLS). The integration surface agents would traverse is unsecured.
+- **Finding**: Istio AuthorizationPolicies are disabled globally (`authorizationPolicies.create: false` in `helm-chart/values.yaml` — assessment uses original code with this value set to false). The Helm chart templates define fine-grained AuthorizationPolicies for every service (restricting callers by service account principal and RPC path), but none are deployed because the global flag is false. NetworkPolicies are also disabled (`networkPolicies.create: false`). Sidecars are disabled (`sidecars.create: false` — assessment uses original code). Without AuthorizationPolicies, there is no mesh-level machine identity enforcement. Any pod in the cluster can call any service without presenting credentials.
+- **Gap**: No machine identity authentication at the infrastructure layer. All AuthorizationPolicy templates exist but are gated by a disabled flag. The entire service mesh security posture is disabled.
 - **Remediation**:
-  - **Immediate**: Enable network policies by uncommenting `components/network-policies` in `kustomize/kustomization.yaml` or setting `networkPolicies.create: true` in Helm values. Configure TLS on the Istio Gateway.
-  - **Target State**: Network policies enabled as mandatory baseline for all environments. Istio Gateway configured with TLS and specific host restrictions. CORS policy defined for agent-facing endpoints.
-  - **Estimated Effort**: Low (14–30 days — policies already exist, only need enablement and TLS/CORS additions)
-  - **Dependencies**: AUTH-Q3 (Istio AuthorizationPolicies are also disabled by default — enable together)
-- **Evidence**: `kustomize/components/network-policies/kustomization.yaml`, `kustomize/components/network-policies/network-policy-deny-all.yaml`, `kustomize/components/network-policies/network-policy-cartservice.yaml`, `helm-chart/values.yaml` (networkPolicies.create: false), `istio-manifests/frontend-gateway.yaml` (hosts: *, HTTP), `.github/workflows/ci-pr.yaml` (skaffold -p network-policies)
+  - **Immediate**: Set `authorizationPolicies.create: true` in `helm-chart/values.yaml`. This single change deploys AuthorizationPolicies for all 10 services, enforcing mTLS-based caller identity via Istio service account principals.
+  - **Target State**: AuthorizationPolicies enabled with agent-specific service accounts added to each policy. NetworkPolicies enabled as defense-in-depth. Sidecars enabled for egress control.
+  - **Estimated Effort**: Low (single Helm value change deploys all policies)
+  - **Dependencies**: All per-service AUTH-Q1 blockers are resolved by this single infrastructure change
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`, `networkPolicies.create: false`), `helm-chart/templates/*.yaml` (AuthorizationPolicy templates for all services gated by flag)
 
 ---
 
@@ -54,166 +58,145 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 ### AUTH-Q2: Scoped Permissions (Least Privilege)
 
 - **Severity**: RISK
-- **Finding**: The GKE service account (`gke-clusters-service-account`) defined in `.github/terraform/main.tf` has four scoped IAM roles: `roles/monitoring.metricWriter`, `roles/logging.logWriter`, `roles/monitoring.viewer`, and `roles/stackdriver.resourceMetadata.writer`. These follow least-privilege principles for the GKE node identity. No wildcard `Action: "*"` or `Resource: "*"` patterns were found. However, no agent-specific IAM role or policy is defined — an agent would need its own dedicated service account with separately scoped permissions.
-- **Gap**: No agent-specific IAM role or policy is provisioned. The current service account is scoped for GKE workload operations (monitoring, logging), not for agent-initiated API access to the deployed services.
+- **Finding**: The Helm chart templates define per-service AuthorizationPolicies with fine-grained caller restrictions. For example, `paymentservice.yaml` restricts to `checkoutservice` principal, `recommendationservice.yaml` restricts to `frontend` principal, `shippingservice.yaml` restricts to `frontend` and `checkoutservice` principals. Each policy specifies allowed RPC paths, methods (POST), and ports. K8s ServiceAccounts are created per service (`serviceAccounts.create: true`). However, all policies are disabled (`authorizationPolicies.create: false`). No agent-specific service accounts are defined in any template.
+- **Gap**: Well-designed least-privilege policies exist but are not deployed. No agent-specific service accounts.
 - **Compensating Controls**:
-  - Create a dedicated GCP IAM service account for agent access with read-only permissions scoped to the specific APIs the agent will consume
-  - Use GKE Workload Identity to bind agent Kubernetes ServiceAccounts to minimal GCP IAM roles
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Define a Terraform module for agent-specific service accounts with narrowly scoped IAM roles. Use the existing per-service K8s ServiceAccount pattern as a model.
-- **Evidence**: `.github/terraform/main.tf` (IAM roles), `kubernetes-manifests/frontend.yaml` (ServiceAccount), `helm-chart/values.yaml` (serviceAccounts.create)
+  - Enabling `authorizationPolicies.create: true` immediately deploys all per-service policies
+  - ServiceAccounts already exist per service for Istio principal-based identity
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Enable AuthorizationPolicies. Add agent-specific K8s ServiceAccounts to each policy's `principals` list.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml` (AuthorizationPolicy restricts to checkoutservice), `helm-chart/templates/recommendationservice.yaml` (restricts to frontend), `helm-chart/values.yaml` (`serviceAccounts.create: true`, `authorizationPolicies.create: false`)
 
 ### AUTH-Q3: Action-Level Authorization
 
 - **Severity**: RISK
-- **Finding**: Istio AuthorizationPolicy resources are defined in the Helm chart (`helm-chart/templates/common.yaml`, `helm-chart/templates/frontend.yaml`) with method-level controls (methods: GET, POST) and port-level restrictions (ports: "8080"). A deny-all baseline AuthorizationPolicy is defined in `helm-chart/templates/common.yaml`. However, `authorizationPolicies.create` is set to `false` by default in `helm-chart/values.yaml`. When enabled, the policies enforce principal-based access with specific service account identities (e.g., `cluster.local/ns/<namespace>/sa/loadgenerator`).
-- **Gap**: Action-level authorization via Istio is available as infrastructure configuration but disabled by default. No enforcement without explicit opt-in.
+- **Finding**: The AuthorizationPolicy templates define per-RPC path restrictions. For example, `adservice.yaml` allows only `/hipstershop.AdService/GetAds`, `paymentservice.yaml` allows only `/hipstershop.PaymentService/Charge`. Each policy specifies exact paths, methods, and ports. This is action-level authorization at the mesh layer. However, all policies are disabled.
+- **Gap**: Action-level authorization is well-designed in templates but not deployed.
 - **Compensating Controls**:
-  - Enable `authorizationPolicies.create: true` in Helm chart values for environments where agents will operate
-  - Use the Kustomize `service-mesh-istio` component to enforce Istio policies alongside network policies
-- **Remediation Timeline**: 30 days (enable existing policies)
-- **Recommendation**: Enable Istio AuthorizationPolicies as a mandatory baseline for agent-facing environments. Set `authorizationPolicies.create: true` in production values.
-- **Evidence**: `helm-chart/values.yaml` (authorizationPolicies.create: false), `helm-chart/templates/common.yaml` (deny-all AuthorizationPolicy), `helm-chart/templates/frontend.yaml` (method/port-level AuthorizationPolicy)
+  - Enabling AuthorizationPolicies deploys per-RPC restrictions for all services
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Enable AuthorizationPolicies. The per-RPC path restrictions are already defined.
+- **Evidence**: `helm-chart/templates/adservice.yaml` (path: /hipstershop.AdService/GetAds), `helm-chart/templates/paymentservice.yaml` (path: /hipstershop.PaymentService/Charge)
 
-### AUTH-Q6: Credential Management
+### AUTH-Q5: Credential Management
 
 - **Severity**: RISK
-- **Finding**: No secrets management system (GCP Secret Manager, HashiCorp Vault) is configured in any Terraform or Kubernetes manifest. The `terraform/terraform.tfvars` file contains a placeholder `gcp_project_id = "<project_id_here>"` — not a hardcoded credential. No hardcoded passwords, API keys, or secrets were detected. The GCS bucket for Terraform state in `.github/terraform/main.tf` uses `public_access_prevention: "enforced"` and `versioning.enabled: true` but has no encryption configuration. The Redis instance in `terraform/memorystore.tf` has no `auth_enabled` setting. Credentials rely on GCP IAM workload identity implicitly.
-- **Gap**: No formal secrets management system is provisioned in IaC. No credential rotation mechanism is defined. Redis (Memorystore) does not have authentication enabled.
+- **Finding**: No secrets management infrastructure is defined. No AWS Secrets Manager, no HashiCorp Vault, no K8s External Secrets Operator. Service environment variables contain only service addresses, ports, and feature flags — no secrets. The `cartDatabase` section in `values.yaml` defines a Redis connection string (`redis-cart:6379`) without authentication. No TLS for Redis. Terraform files define GKE cluster and Memorystore (Redis) but no secrets management resources.
+- **Gap**: No secrets management infrastructure. Redis connection without authentication or TLS. No credential rotation framework.
 - **Compensating Controls**:
-  - Use GCP Workload Identity for service-to-service authentication (avoiding static credentials)
-  - Enable Memorystore AUTH for Redis connections
+  - Current services have no secrets to manage (simulated backends)
+  - Istio mTLS (when enabled) provides inter-service encryption
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add GCP Secret Manager resources to Terraform for any credentials that agents would require. Enable `auth_enabled = true` on `google_redis_instance`. Define rotation schedules for any static credentials.
-- **Evidence**: `terraform/terraform.tfvars` (placeholder project ID), `terraform/memorystore.tf` (no auth_enabled), `.github/terraform/main.tf` (GCS bucket without encryption block)
+- **Recommendation**: Implement K8s External Secrets Operator or AWS Secrets Manager integration. Add Redis authentication and TLS. Establish credential rotation policies.
+- **Evidence**: `helm-chart/values.yaml` (`cartDatabase.connectionString: "redis-cart:6379"` — no auth), `terraform/memorystore.tf` (Redis without auth config)
 
-### AUTH-Q7: Immutable Audit Logging ⚡
+### AUTH-Q6: Immutable Audit Logging
 
 - **Severity**: RISK
-- **Finding**: No Cloud Audit Logs, CloudTrail, or immutable log storage configuration was found in any Terraform file or Kubernetes manifest. The GKE service account has `roles/logging.logWriter` enabling application log ingestion to Cloud Logging, but no explicit audit log configuration or retention policies are defined. The GCS bucket for Terraform state has `versioning.enabled: true` but this is for state management, not audit log immutability. No log sink, log retention, or tamper-evident logging resources are provisioned.
-- **Gap**: No audit logging configuration for agent actions. No immutable log storage. No log retention policies.
+- **Finding**: No centralized audit logging infrastructure is defined. No CloudWatch Logs, no S3 log archival, no Elasticsearch/OpenSearch. The OpenTelemetry Collector is defined (`opentelemetryCollector.create: true`) which can forward traces and metrics, but log forwarding is not configured. Tracing is disabled (`googleCloudOperations.tracing: false` in assessment context). No log retention policies. No immutable storage configuration.
+- **Gap**: No centralized, immutable audit logging infrastructure. Logs are ephemeral container stdout across all services.
 - **Compensating Controls**:
-  - GCP Cloud Audit Logs are enabled by default for GKE Admin Activity — verify this is active at the project level
-  - Add Terraform resources for explicit Cloud Logging sinks with locked retention policies
+  - OpenTelemetry Collector exists and can be configured for log forwarding
+  - GKE cluster logging (if enabled) provides some log retention
+- **Remediation Timeline**: 60–90 days
+- **Recommendation**: Configure OpenTelemetry Collector for log forwarding to immutable store. Enable tracing. Define log retention policies. Implement S3 with Object Lock or CloudWatch Logs with retention.
+- **Evidence**: `helm-chart/values.yaml` (`opentelemetryCollector.create: true`, `googleCloudOperations.tracing: false`), `helm-chart/templates/opentelemetry-collector.yaml`
+
+### AUTH-Q7: Agent Identity Suspension
+
+- **Severity**: RISK
+- **Finding**: No agent identity suspension mechanism exists at the infrastructure level. AuthorizationPolicies (when enabled) provide the mechanism — removing a service account principal from a policy blocks access. However, this requires a Helm values change and redeployment. No real-time suspension capability (no API key revocation, no dynamic policy updates).
+- **Gap**: No real-time agent suspension. Policy changes require redeployment.
+- **Compensating Controls**:
+  - AuthorizationPolicy updates via Helm provide eventual suspension
+  - K8s NetworkPolicy (when enabled) can block specific pods
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add Terraform resources for: (1) Cloud Logging log sink with retention lock, (2) Cloud Storage bucket with retention policy for audit log archival, (3) Organization policy to enforce audit log retention.
-- **Evidence**: `.github/terraform/main.tf` (logging.logWriter role but no audit config), `terraform/main.tf` (no logging resources), absence of any audit log resources across all Terraform files
-
-### AUTH-Q8: Agent Identity Suspension
-
-- **Severity**: RISK
-- **Finding**: Individual Kubernetes ServiceAccounts can be deleted or modified per-service (each microservice has its own SA in `kubernetes-manifests/*.yaml`). The GCP IAM service account in `.github/terraform/main.tf` can be disabled via the GCP IAM API. However, no automated kill-switch, suspension runbook, or emergency revocation mechanism is defined in the IaC or CI/CD pipelines.
-- **Gap**: No automated agent identity suspension mechanism. Revocation requires manual IAM or kubectl intervention.
-- **Compensating Controls**:
-  - Document a runbook for disabling agent ServiceAccounts via `kubectl delete serviceaccount` and `gcloud iam service-accounts disable`
-  - Pre-provision a script or CI/CD step that can be triggered to revoke agent access
-- **Remediation Timeline**: 30 days
-- **Recommendation**: Create an IaC-managed emergency revocation mechanism — e.g., a Terraform variable `agent_enabled` that controls the agent's ServiceAccount and IAM bindings, allowing a single `terraform apply` to suspend agent access.
-- **Evidence**: `kubernetes-manifests/frontend.yaml` (ServiceAccount per service), `.github/terraform/main.tf` (google_service_account resource)
+- **Recommendation**: Implement dynamic AuthorizationPolicy management (e.g., via Istio API or custom controller) for real-time agent suspension without full redeployment.
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`), `helm-chart/templates/*.yaml` (AuthorizationPolicy templates)
 
 ### OBS-Q1: Distributed Tracing and Structured Logging
 
 - **Severity**: RISK
-- **Finding**: An OpenTelemetry Collector is defined in `kustomize/components/google-cloud-operations/otel-collector.yaml` with OTLP receiver → Google Cloud exporter pipelines for both traces and metrics. The `kustomize/components/google-cloud-operations/kustomization.yaml` patches `COLLECTOR_SERVICE_ADDR`, `OTEL_SERVICE_NAME`, and `ENABLE_TRACING` environment variables into 7 service deployments (checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice). The Helm chart supports this via `opentelemetryCollector.create` and `googleCloudOperations.tracing` flags. Terraform enables `monitoring.googleapis.com`, `cloudtrace.googleapis.com`, and `cloudprofiler.googleapis.com` APIs. **However**, the google-cloud-operations component is commented out in `kustomize/kustomization.yaml` and `opentelemetryCollector.create: false` / `googleCloudOperations.tracing: false` in `helm-chart/values.yaml`. No structured logging (JSON format) or correlation ID configuration was found.
-- **Gap**: Distributed tracing infrastructure exists but is disabled by default. No structured logging configuration. No correlation ID propagation.
+- **Finding**: The OpenTelemetry Collector is defined and deployed (`opentelemetryCollector.create: true`). Collector service address is injected into all service deployments as `COLLECTOR_SERVICE_ADDR`. However, tracing is disabled (`googleCloudOperations.tracing: false` in assessment context — `ENABLE_TRACING` env var not set). Individual services have OpenTelemetry SDK integration (paymentservice, recommendationservice, frontend) but it is inactive. The collector configuration exists but the pipeline is not active.
+- **Gap**: Tracing infrastructure exists but is disabled. The full OpenTelemetry pipeline (collector + per-service SDKs) is ready but inactive.
 - **Compensating Controls**:
-  - Enable the `google-cloud-operations` Kustomize component by uncommenting it in `kustomize/kustomization.yaml`
-  - Set `opentelemetryCollector.create: true` and `googleCloudOperations.tracing: true` in Helm values for agent-facing environments
-- **Remediation Timeline**: 14–30 days (enable existing infrastructure)
-- **Recommendation**: Enable the existing OpenTelemetry Collector configuration as a mandatory component for agent-facing environments. Add structured logging configuration to service deployments.
-- **Evidence**: `kustomize/components/google-cloud-operations/otel-collector.yaml`, `kustomize/components/google-cloud-operations/kustomization.yaml`, `helm-chart/values.yaml` (opentelemetryCollector.create: false), `terraform/main.tf` (API enablement)
+  - OpenTelemetry Collector is deployed and ready
+  - Per-service SDK integration exists — enabling requires only config changes
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Set `googleCloudOperations.tracing: true` in `values.yaml`. This enables `ENABLE_TRACING: "1"` across all services, activating the existing OpenTelemetry pipeline.
+- **Evidence**: `helm-chart/values.yaml` (`opentelemetryCollector.create: true`, `googleCloudOperations.tracing: false`), `helm-chart/templates/opentelemetry-collector.yaml`
 
 ### OBS-Q2: Alerting on Error Rates and Latency
 
 - **Severity**: RISK
-- **Finding**: No Cloud Monitoring alert policies, alerting thresholds, PagerDuty/OpsGenie integration, or SLO-based alerting configuration was found in any Terraform file, Kubernetes manifest, or CI/CD pipeline. The `monitoring.googleapis.com` API is enabled in `terraform/main.tf` but no alerting resources (e.g., `google_monitoring_alert_policy`) are provisioned. The Helm chart and Kustomize overlays contain no alerting definitions.
-- **Gap**: Complete absence of alerting configuration. No error rate or latency alerts for any service.
+- **Finding**: No alerting infrastructure is defined. No Prometheus alerting rules, no CloudWatch alarms, no PagerDuty/OpsGenie integration. The `kubernetes-manifests/monitoring-alerts.yaml` file exists but is part of the raw K8s manifests (not Helm). The Helm chart has no alerting configuration. Individual services have health probes but no error rate or latency alerting.
+- **Gap**: No alerting infrastructure. Health probes provide basic availability only.
 - **Compensating Controls**:
-  - Create Cloud Monitoring alert policies manually in the GCP Console while IaC alerting is being developed
-  - Use GKE Autopilot built-in metrics for basic uptime monitoring
+  - `monitoring-alerts.yaml` in kubernetes-manifests may provide alerting if deployed separately
+  - Istio sidecar metrics can feed Prometheus
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add Terraform resources for `google_monitoring_alert_policy` covering: (1) 5xx error rate > threshold per service, (2) P95 latency > threshold per service, (3) pod restart count anomaly. Configure notification channels (email, PagerDuty, or Cloud Pub/Sub).
-- **Evidence**: `terraform/main.tf` (monitoring API enabled, no alert resources), absence of `google_monitoring_alert_policy` across all Terraform files
+- **Recommendation**: Add Prometheus alerting rules to the Helm chart. Configure alerting for all services' error rates and p99 latency.
+- **Evidence**: `helm-chart/values.yaml` (no alerting config), `kubernetes-manifests/monitoring-alerts.yaml` (exists but not in Helm)
 
 ### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
 
 - **Severity**: RISK
-- **Finding**: (1) **IaC Defined**: ✅ Yes — Infrastructure is comprehensively defined as code: Terraform in `terraform/` (GKE cluster, Memorystore) and `.github/terraform/` (CI/CD infrastructure, IAM, GCS), Kubernetes manifests, Helm chart, and Kustomize overlays. (2) **Peer Review**: ✅ Yes — `.github/CODEOWNERS` assigns `@GoogleCloudPlatform/devrel-flagship-app-maintainers @yoshi-approver` as default code owners for all files. CI validates Terraform (`terraform-validate-ci.yaml`), Helm (`helm-chart-ci.yaml`), Kustomize (`kustomize-build-ci.yaml`), and manifests (`kubevious-manifests-ci.yaml`) on PRs. (3) **Drift Detection**: ❌ No — No drift detection mechanism found. No Terraform Cloud, no `google_organization_policy`, no Config Connector, no scheduled `terraform plan` comparison.
-- **Gap**: Drift detection is absent. 2 of 3 governance sub-checks pass.
+- **Finding**: Infrastructure is defined as Helm charts (`helm-chart/`) and Terraform (`terraform/`). The Helm chart defines all K8s resources (Deployments, Services, NetworkPolicies, Sidecars, AuthorizationPolicies) with configurable values. Terraform defines GKE cluster and Memorystore. GitHub Actions CI includes `helm-chart-ci.yaml` and `terraform-validate-ci.yaml`. PR-based review enforced. However, no drift detection — no ArgoCD, no Flux, no AWS Config rules.
+- **Gap**: IaC exists with PR review and CI validation, but no drift detection.
 - **Compensating Controls**:
-  - Run `terraform plan` on a schedule (e.g., daily cron via GitHub Actions) and alert on drift
-  - Use GCP Config Connector or Config Validator for continuous compliance checks
+  - Helm chart provides declarative infrastructure
+  - CI validates Helm and Terraform on PRs
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add a scheduled GitHub Actions workflow that runs `terraform plan` against production state and creates an issue or alert if drift is detected.
-- **Evidence**: `terraform/main.tf`, `.github/terraform/main.tf`, `.github/CODEOWNERS`, `.github/workflows/terraform-validate-ci.yaml`, `.github/workflows/helm-chart-ci.yaml`, `.github/workflows/kustomize-build-ci.yaml`, `.github/workflows/kubevious-manifests-ci.yaml`
+- **Recommendation**: Implement GitOps with ArgoCD or Flux for drift detection and reconciliation.
+- **Evidence**: `helm-chart/` (full Helm chart), `terraform/` (GKE + Memorystore), `.github/workflows/helm-chart-ci.yaml`, `.github/workflows/terraform-validate-ci.yaml`
 
 ### ENG-Q2: CI/CD with API Contract Testing
 
 - **Severity**: RISK
-- **Finding**: Comprehensive CI/CD pipelines exist: `ci-pr.yaml` runs Go unit tests (shippingservice, productcatalogservice, frontend/validator), C# unit tests (cartservice), GKE deployment tests, and smoke tests (loadgenerator-based end-to-end verification). `helm-chart-ci.yaml` runs `helm lint --strict` and template rendering tests for multiple configurations (default, gRPC health probes, Spanner, ASM, Memorystore TLS). `kustomize-build-ci.yaml` validates Kustomize builds. `terraform-validate-ci.yaml` runs `terraform init` and `terraform validate`. `kubevious-manifests-ci.yaml` validates kubernetes-manifests, helm-chart, and kustomize using Kubevious CLI. However, no API contract testing (Pact, OpenAPI validation), schema comparison, or breaking change detection was found.
-- **Gap**: No API contract testing or breaking change detection. CI/CD validates infrastructure configuration but does not catch API contract regressions.
+- **Finding**: CI/CD exists via GitHub Actions (`.github/workflows/`) and Cloud Build (`cloudbuild.yaml`). The PR workflow runs unit tests for some services (Go, C#), deploys to staging GKE via Skaffold, and runs smoke tests via load generator. Helm chart CI validates chart syntax. Terraform CI validates configuration. However, no API contract tests across services, no proto compatibility checks, no consumer-driven contract tests (Pact).
+- **Gap**: CI/CD exists but no cross-service API contract testing. No proto breaking change detection.
 - **Compensating Controls**:
-  - The loadgenerator-based smoke test catches gross functional regressions (non-zero error count fails the build)
-  - Protobuf schema in `protos/demo.proto` can be used to implement proto-level breaking change detection
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add proto breaking change detection (e.g., `buf breaking`) to CI pipelines for the `protos/demo.proto` schema. Consider adding API contract tests using the protobuf definitions.
-- **Evidence**: `.github/workflows/ci-pr.yaml`, `.github/workflows/ci-main.yaml`, `.github/workflows/helm-chart-ci.yaml`, `.github/workflows/kustomize-build-ci.yaml`, `.github/workflows/terraform-validate-ci.yaml`, `.github/workflows/kubevious-manifests-ci.yaml`, `protos/demo.proto`
-
-### ENG-Q3: Rollback Capability
-
-- **Severity**: RISK
-- **Finding**: Deployments use `skaffold run` (`skaffold.yaml`, `cloudbuild.yaml`) which performs forward-only deployment via `kubectl apply`. No automated rollback mechanism was found: no blue/green deployment, no canary configuration, no `helm rollback` steps, no CodeDeploy triggers, no feature flags, and no traffic shifting configuration. The CI/CD cleanup workflow (`.github/workflows/cleanup.yaml`) deletes PR namespaces on PR close but this is environment cleanup, not rollback. GKE Autopilot supports `kubectl rollout undo` natively but this is not automated in any pipeline.
-- **Gap**: No automated rollback mechanism in deployment pipelines. Recovery relies on manual `kubectl rollout undo` or re-running Skaffold with a previous image tag.
-- **Compensating Controls**:
-  - Use `kubectl rollout undo deployment/<name>` as a manual rollback procedure
-  - The Helm chart supports `helm rollback` if Helm-based deployment is used instead of Skaffold
+  - Staging deployment with smoke tests provides basic end-to-end validation
+  - Per-service unit tests validate individual service logic
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add rollback steps to CI/CD pipelines. Options: (1) Add `skaffold run` with the previous git commit's images as a rollback step, (2) Switch to Helm-based deployment with `helm upgrade --atomic` for automatic rollback on failure, (3) Implement canary deployment using Istio VirtualService traffic splitting.
-- **Evidence**: `skaffold.yaml` (skaffold run, no rollback), `cloudbuild.yaml` (forward-only deploy), `.github/workflows/cleanup.yaml` (namespace cleanup only)
-
-### ENG-Q4: API Test Coverage
-
-- **Severity**: RISK
-- **Finding**: CI pipelines include: Go unit tests for `shippingservice`, `productcatalogservice`, and `frontend/validator` (`ci-pr.yaml`); C# unit tests for `cartservice` (`ci-pr.yaml`); and loadgenerator-based smoke tests that deploy the full stack to GKE, wait for pods, and verify the loadgenerator produces 50+ requests with 0 errors. Helm chart CI tests template rendering for multiple configurations. No dedicated API test suites (Postman/Newman, pytest API tests, REST Assured, gRPC-specific test frameworks), no contract tests, and no integration test directories were found.
-- **Gap**: No dedicated API-level test coverage. Smoke tests validate end-to-end availability but do not test individual API endpoints, error responses, or edge cases.
-- **Compensating Controls**:
-  - The loadgenerator smoke test provides basic end-to-end coverage verifying all services are reachable and functional
-  - Unit tests in service source code (referenced by CI pipelines) cover internal logic
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add gRPC-level API tests using the protobuf service definitions in `protos/demo.proto`. Use tools like `grpcurl` or `ghz` for endpoint-level validation in CI.
-- **Evidence**: `.github/workflows/ci-pr.yaml` (Go tests, C# tests, smoke tests), `.github/workflows/ci-main.yaml`, `protos/demo.proto` (service definitions)
-
-### ENG-Q5: Encryption at Rest for Agent-Accessible Data
-
-- **Severity**: RISK
-- **Finding**: The `google_redis_instance.redis-cart` in `terraform/memorystore.tf` has no encryption configuration — no `customer_managed_key`, no `transit_encryption_mode`. The `google_storage_bucket.terraform_state_storage_bucket` in `.github/terraform/main.tf` has no `encryption` block or `default_kms_key_name`. The `google_container_cluster` in both Terraform directories has no database encryption configuration. The in-cluster Redis (`kubernetes-manifests/cartservice.yaml`) uses an `emptyDir` volume with no encryption. GCP provides Google-managed encryption by default for GCS and Memorystore, but no customer-managed KMS keys (CMEK) are configured.
-- **Gap**: No customer-managed encryption at rest (CMEK). Relies entirely on GCP Google-managed default encryption. No explicit encryption configuration in IaC.
-- **Compensating Controls**:
-  - GCP provides Google-managed encryption by default for GCS, Memorystore, and GKE persistent volumes — data is encrypted at rest, but with Google-managed keys
-  - For most non-regulated workloads, Google-managed encryption meets baseline requirements
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: For regulated data or enhanced security posture, add CMEK configuration: (1) Create `google_kms_key_ring` and `google_kms_crypto_key` in Terraform, (2) Add `encryption { default_kms_key_name }` to the GCS bucket, (3) Add `customer_managed_key` to the Memorystore instance, (4) Configure GKE application-layer secrets encryption.
-- **Evidence**: `terraform/memorystore.tf` (no encryption config), `.github/terraform/main.tf` (GCS bucket without encryption block), `kubernetes-manifests/cartservice.yaml` (emptyDir volume)
+- **Recommendation**: Add `buf breaking` to CI for proto compatibility. Add cross-service contract tests. Add Pact or similar consumer-driven contract testing.
+- **Evidence**: `.github/workflows/ci-pr.yaml` (staging deploy, smoke tests), `cloudbuild.yaml` (Skaffold deploy)
 
 ---
 
 ## INFOs — Architecture and Design Inputs
 
-### AUTH-Q1: Machine Identity Authentication
+### ENG-Q3: Rollback Capability
 
 - **Severity**: INFO
-- **Finding**: Machine identity authentication is well-supported through the existing infrastructure patterns. A dedicated GCP IAM service account (`gke-clusters-service-account`) is defined in `.github/terraform/main.tf` with scoped IAM role bindings. Per-microservice Kubernetes ServiceAccounts are provisioned for all 11 services (adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, loadgenerator, paymentservice, productcatalogservice, recommendationservice, shippingservice) in `kubernetes-manifests/*.yaml`. The Helm chart supports `serviceAccounts.create: true` with customizable annotations (for Workload Identity binding). The GKE Autopilot cluster uses the custom service account via `cluster_autoscaling.auto_provisioning_defaults.service_account`. An agent would follow this established pattern — creating its own GCP IAM service account and Kubernetes ServiceAccount with Workload Identity Federation.
-- **Implication**: The machine identity pattern is established and extensible. Creating an agent-specific service account requires minimal effort — add a `google_service_account` resource to Terraform and a K8s ServiceAccount to the manifests. Workload Identity Federation can bind them for seamless authentication.
-- **Recommendation**: When provisioning agent access, create a dedicated `google_service_account` for the agent with Workload Identity annotation on a corresponding Kubernetes ServiceAccount. Follow the existing per-service pattern.
-- **Evidence**: `.github/terraform/main.tf` (google_service_account, IAM member bindings), `kubernetes-manifests/frontend.yaml` (ServiceAccount), `kubernetes-manifests/cartservice.yaml` (ServiceAccount), `helm-chart/values.yaml` (serviceAccounts.create: true)
+- **Finding**: Deployment uses Helm (`helm rollback` natively supported) and Skaffold via Cloud Build. K8s Deployments use standard rolling update strategy. No canary deployments, no blue/green, no automatic rollback triggers. The Helm chart version is 0.10.5. Rollback requires manual `helm rollback` or Skaffold redeployment.
+- **Implication**: Manual rollback is available and functional. Automated rollback would improve operational safety.
+- **Recommendation**: Implement Flagger or Argo Rollouts for automated canary deployments with rollback.
+- **Evidence**: `helm-chart/Chart.yaml` (version 0.10.5), `cloudbuild.yaml` (Skaffold deploy), `skaffold.yaml`
+
+### ENG-Q4: API Test Coverage
+
+- **Severity**: INFO
+- **Finding**: Test coverage varies by service. Shippingservice has comprehensive unit tests. Frontend has utility package tests. Most other services have no tests. The CI pipeline runs available tests and staging smoke tests. For an infrastructure-only assessment, the relevant metric is whether infrastructure changes are tested — Helm chart CI and Terraform validation provide this.
+- **Implication**: Infrastructure changes are validated in CI. Per-service test coverage is assessed in individual service reports.
+- **Recommendation**: Add infrastructure integration tests (e.g., test that AuthorizationPolicies are correctly applied after Helm deploy).
+- **Evidence**: `.github/workflows/helm-chart-ci.yaml`, `.github/workflows/terraform-validate-ci.yaml`, `.github/workflows/ci-pr.yaml`
+
+### ENG-Q5: Encryption at Rest for Agent-Accessible Data
+
+- **Severity**: INFO
+- **Finding**: The only persistent data store is Redis (cartservice database). Redis is configured as in-cluster (`cartDatabase.inClusterRedis.create: true`) with no encryption at rest, no authentication, and no TLS. Terraform defines a Memorystore (managed Redis) instance but the Helm chart defaults to in-cluster Redis. GKE node disk encryption depends on GCP configuration (default is encrypted). No explicit encryption-at-rest configuration in the Helm chart or Terraform.
+- **Implication**: Redis data (cart contents) is not encrypted at rest. GKE node disks may be encrypted by default.
+- **Recommendation**: Enable Redis authentication and TLS. Use Memorystore (managed Redis) with encryption at rest. Verify GKE node disk encryption.
+- **Evidence**: `helm-chart/values.yaml` (`cartDatabase.type: redis`, `connectionString: "redis-cart:6379"`), `terraform/memorystore.tf`
 
 ### OBS-Q3: Business Outcome Metrics
 
 - **Severity**: INFO
-- **Finding**: No custom business outcome metrics, business KPI dashboards, or custom metric publishing configuration was found in any IaC or Kubernetes manifest. The OpenTelemetry Collector pipeline (when enabled) exports infrastructure traces and system-level metrics to Google Cloud, but no business-specific metrics (e.g., order completion rate, cart conversion rate, payment success rate) are defined. The `monitoring.googleapis.com` API is enabled in Terraform but only infrastructure metrics are collected.
-- **Implication**: Without business outcome metrics, there is no way to measure whether agent-initiated interactions produce positive business results. When agents begin consuming these services, business-level metrics should be defined to measure agent effectiveness.
-- **Recommendation**: Define custom Cloud Monitoring metrics for key business outcomes: order completion rate, cart abandonment rate, payment success rate, and recommendation click-through rate. These can be published via the OTel Collector's metrics pipeline.
-- **Evidence**: `terraform/main.tf` (monitoring API enabled), `kustomize/components/google-cloud-operations/otel-collector.yaml` (infrastructure metrics only)
+- **Finding**: No business outcome metrics infrastructure. The OpenTelemetry Collector can forward metrics but no custom business metrics are defined at the infrastructure level. `googleCloudOperations.metrics: true` is set but individual services have no custom metrics (all `initStats()` are TODO stubs).
+- **Implication**: Metrics infrastructure exists (OTel Collector) but no business metrics are published.
+- **Recommendation**: Define business outcome metrics at the infrastructure level. Configure OTel Collector to forward custom metrics.
+- **Evidence**: `helm-chart/values.yaml` (`googleCloudOperations.metrics: true`), `helm-chart/templates/opentelemetry-collector.yaml`
 
 ---
 
@@ -226,129 +209,98 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### API-Q2: Machine-Readable API Specification
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### API-Q3: Structured Error Responses
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### API-Q4: Idempotent Write Operations ⚡
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### API-Q5: API Versioning and Deprecation
+#### API-Q5: Structured Response Format
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### API-Q6: Structured Response Format
+#### API-Q6: Asynchronous Operation Support
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### API-Q7: Asynchronous Operation Support
+#### API-Q7: Event Emission for State Changes
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### API-Q8: Event Emission for State Changes
+#### API-Q8: Rate Limit Documentation and Headers
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
-
-#### API-Q9: Rate Limit Documentation and Headers
-- **Severity**: N/A
-- **Finding**: This is a `infrastructure-only` repository. This question does not apply.
-- **Gap**: N/A
-- **Recommendation**: N/A
-- **Evidence**: N/A
-
-#### API-Q10: API Latency Profile
-- **Severity**: N/A
-- **Finding**: This is a `infrastructure-only` repository. This question does not apply.
-- **Gap**: N/A
-- **Recommendation**: N/A
-- **Evidence**: N/A
 
 ### 02 — Authentication, Authorization, and Identity
 
 #### AUTH-Q1: Machine Identity Authentication
-- **Severity**: INFO
-- **Finding**: Machine identity authentication is well-supported. A dedicated GCP IAM service account (`gke-clusters-service-account`) is defined in `.github/terraform/main.tf` with scoped IAM role bindings (`roles/monitoring.metricWriter`, `roles/logging.logWriter`, `roles/monitoring.viewer`, `roles/stackdriver.resourceMetadata.writer`). Per-microservice Kubernetes ServiceAccounts are provisioned for all 11 services in `kubernetes-manifests/*.yaml`. The Helm chart supports `serviceAccounts.create: true` with customizable annotations. The GKE Autopilot cluster uses the custom SA via `cluster_autoscaling.auto_provisioning_defaults.service_account`. The service account email provides principal attribution in IAM audit logs.
-- **Gap**: No agent-specific service account is pre-provisioned. No Workload Identity Federation binding is configured. However, the infrastructure pattern is established and extensible.
-- **Recommendation**: Create a dedicated `google_service_account` for agent access with Workload Identity annotation on a corresponding Kubernetes ServiceAccount. Follow the existing per-service pattern.
-- **Evidence**: `.github/terraform/main.tf` (google_service_account, IAM member bindings), `kubernetes-manifests/frontend.yaml` (ServiceAccount), `helm-chart/values.yaml` (serviceAccounts.create: true)
+- **Severity**: BLOCKER
+- **Finding**: AuthorizationPolicies disabled globally. All service AuthorizationPolicy templates exist but gated by `authorizationPolicies.create: false`. No mesh-level identity enforcement.
+- **Gap**: No machine identity authentication at infrastructure layer.
+- **Recommendation**: Set `authorizationPolicies.create: true`.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/*.yaml`
 
 #### AUTH-Q2: Scoped Permissions (Least Privilege)
 - **Severity**: RISK
-- **Finding**: The GKE service account has four scoped IAM roles: `roles/monitoring.metricWriter`, `roles/logging.logWriter`, `roles/monitoring.viewer`, `roles/stackdriver.resourceMetadata.writer`. No wildcard permissions. Per-service K8s ServiceAccounts provide namespace-scoped identity. No agent-specific IAM role or policy is defined.
-- **Gap**: No agent-specific IAM role or policy provisioned. Agent would need its own scoped permissions.
-- **Recommendation**: Define a Terraform module for agent-specific service accounts with narrowly scoped IAM roles.
-- **Evidence**: `.github/terraform/main.tf` (IAM roles), `kubernetes-manifests/frontend.yaml` (ServiceAccount)
+- **Finding**: Per-service AuthorizationPolicies with fine-grained caller restrictions exist but are disabled. ServiceAccounts created per service.
+- **Gap**: Policies exist but not deployed. No agent-specific accounts.
+- **Recommendation**: Enable AuthorizationPolicies. Add agent-specific ServiceAccounts.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/*.yaml`
 
 #### AUTH-Q3: Action-Level Authorization
 - **Severity**: RISK
-- **Finding**: Istio AuthorizationPolicy resources with method-level controls (methods: GET, POST) and port-level restrictions are defined in Helm chart templates. Deny-all baseline AuthorizationPolicy in `helm-chart/templates/common.yaml`. However, `authorizationPolicies.create` is `false` by default.
-- **Gap**: Action-level authorization available but disabled by default.
-- **Recommendation**: Enable Istio AuthorizationPolicies (`authorizationPolicies.create: true`) for agent-facing environments.
-- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/common.yaml`, `helm-chart/templates/frontend.yaml`
+- **Finding**: Per-RPC path restrictions defined in AuthorizationPolicy templates but disabled.
+- **Gap**: Action-level auth designed but not deployed.
+- **Recommendation**: Enable AuthorizationPolicies.
+- **Evidence**: `helm-chart/templates/*.yaml`
 
-#### AUTH-Q4: Identity Propagation
+#### AUTH-Q4: Identity Propagation and Delegation
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-- **Severity**: N/A
-- **Finding**: This is a `infrastructure-only` repository. This question does not apply.
-- **Gap**: N/A
-- **Recommendation**: N/A
-- **Evidence**: N/A
-
-#### AUTH-Q6: Credential Management
+#### AUTH-Q5: Credential Management
 - **Severity**: RISK
-- **Finding**: No secrets management system (GCP Secret Manager, Vault) configured. No hardcoded credentials detected. `terraform/terraform.tfvars` uses placeholder values. Redis Memorystore has no `auth_enabled`. Credentials rely on implicit GCP IAM workload identity.
-- **Gap**: No formal secrets management or credential rotation mechanism in IaC. Redis without authentication.
-- **Recommendation**: Add GCP Secret Manager resources. Enable `auth_enabled = true` on Memorystore. Define rotation schedules.
-- **Evidence**: `terraform/terraform.tfvars`, `terraform/memorystore.tf`, `.github/terraform/main.tf`
+- **Finding**: No secrets management infrastructure. Redis without auth or TLS. No External Secrets Operator.
+- **Gap**: No credential management infrastructure.
+- **Recommendation**: Implement External Secrets Operator. Add Redis auth and TLS.
+- **Evidence**: `helm-chart/values.yaml` (Redis connection), `terraform/memorystore.tf`
 
-#### AUTH-Q7: Immutable Audit Logging ⚡
+#### AUTH-Q6: Immutable Audit Logging
 - **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No Cloud Audit Logs configuration, immutable log storage, or log retention policies found in Terraform or Kubernetes manifests. GKE SA has `roles/logging.logWriter` for application logs but no explicit audit configuration. GCS bucket has `versioning.enabled: true` for Terraform state only.
-- **Gap**: No audit logging configuration. No immutable log storage. No log retention policies.
-- **Recommendation**: Add Terraform resources for Cloud Logging sinks with retention lock and GCS buckets with retention policies for audit archival.
-- **Evidence**: `.github/terraform/main.tf` (logging.logWriter role), `terraform/main.tf` (no logging resources)
+- **Finding**: No centralized audit logging. OTel Collector exists but log forwarding not configured. Tracing disabled.
+- **Gap**: No immutable audit logging infrastructure.
+- **Recommendation**: Configure OTel Collector for log forwarding. Enable tracing. Define retention policies.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/opentelemetry-collector.yaml`
 
-#### AUTH-Q8: Agent Identity Suspension
+#### AUTH-Q7: Agent Identity Suspension
 - **Severity**: RISK
-- **Finding**: K8s ServiceAccounts can be individually deleted. GCP IAM service accounts can be disabled via API. No automated kill-switch or suspension mechanism in IaC or CI/CD.
-- **Gap**: No automated agent identity suspension mechanism. Requires manual intervention.
-- **Recommendation**: Create an IaC-managed emergency revocation mechanism (e.g., Terraform variable `agent_enabled`).
-- **Evidence**: `kubernetes-manifests/frontend.yaml` (ServiceAccount), `.github/terraform/main.tf` (google_service_account)
+- **Finding**: No real-time suspension. Policy changes require redeployment.
+- **Gap**: No real-time agent suspension capability.
+- **Recommendation**: Implement dynamic AuthorizationPolicy management.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/*.yaml`
 
 ### 03 — State Management and Transactional Integrity
 
@@ -357,72 +309,62 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### STATE-Q2: Queryable Current State
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### STATE-Q3: Concurrency Controls
+#### STATE-Q3: Concurrency Controls ⚡
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### STATE-Q4: Circuit Breakers and Resilience
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### STATE-Q5: Rate Limiting and Throttling
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### STATE-Q6: Blast Radius and Transaction Limits
+#### STATE-Q6: Blast Radius and Transaction Limits ⚡
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### STATE-Q7: Infrastructure Capacity for Agent Traffic
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 ### 04 — Human-in-the-Loop and Approval Workflows
 
-#### HITL-Q1: Draft/Pending State
+#### HITL-Q1: Draft/Pending State ⚡
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### HITL-Q2: Configurable Approval Gates
+#### HITL-Q2: Configurable Approval Gates ⚡
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### HITL-Q3: Sandbox/Staging Environment
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 ### 05 — Data Accessibility and Quality
 
@@ -431,225 +373,147 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### DATA-Q3: Selective Query Support
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### DATA-Q4: System of Record Designations
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### DATA-Q5: Reliable Timestamps
+#### DATA-Q5: Temporal Metadata and Freshness
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### DATA-Q6: Data Freshness Signaling
+#### DATA-Q6: PII Redaction in Logs
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
-#### DATA-Q7: PII Redaction in Logs
+#### DATA-Q7: Data Quality Awareness
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
-
-#### DATA-Q8: Data Quality Awareness
-- **Severity**: N/A
-- **Finding**: This is a `infrastructure-only` repository. This question does not apply.
-- **Gap**: N/A
-- **Recommendation**: N/A
-- **Evidence**: N/A
 
 ### 06 — Discoverability and Semantic Readiness
 
-#### DISC-Q1: Schema Documentation and Versioning
+#### DISC-Q1: Schema Versioning and API Contracts
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### DISC-Q2: Semantically Meaningful Field Names
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
 
 #### DISC-Q3: Data Catalog / Metadata Layer
 - **Severity**: N/A
 - **Finding**: This is a `infrastructure-only` repository. This question does not apply.
 - **Gap**: N/A
 - **Recommendation**: N/A
-- **Evidence**: N/A
-
-#### DISC-Q4: Data Lineage
-- **Severity**: N/A
-- **Finding**: This is a `infrastructure-only` repository. This question does not apply.
-- **Gap**: N/A
-- **Recommendation**: N/A
-- **Evidence**: N/A
 
 ### 07 — Observability of Target Systems
 
 #### OBS-Q1: Distributed Tracing and Structured Logging
 - **Severity**: RISK
-- **Finding**: OpenTelemetry Collector defined in `kustomize/components/google-cloud-operations/otel-collector.yaml` with OTLP → Google Cloud exporter for traces and metrics. Kustomize patches enable tracing for 7 services. Helm chart supports `opentelemetryCollector.create` and `googleCloudOperations.tracing`. Terraform enables `cloudtrace.googleapis.com` API. **Disabled by default**: component is commented out in `kustomize/kustomization.yaml`; `opentelemetryCollector.create: false` in Helm values. No structured logging or correlation ID configuration.
-- **Gap**: Tracing infrastructure exists but disabled by default. No structured logging. No correlation IDs.
-- **Recommendation**: Enable the google-cloud-operations Kustomize component and set `opentelemetryCollector.create: true` for agent-facing environments.
-- **Evidence**: `kustomize/components/google-cloud-operations/otel-collector.yaml`, `kustomize/components/google-cloud-operations/kustomization.yaml`, `helm-chart/values.yaml`, `terraform/main.tf`
+- **Finding**: OTel Collector deployed but tracing disabled. Full pipeline ready but inactive.
+- **Gap**: Tracing infrastructure exists but disabled.
+- **Recommendation**: Set `googleCloudOperations.tracing: true`.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/opentelemetry-collector.yaml`
 
 #### OBS-Q2: Alerting on Error Rates and Latency
 - **Severity**: RISK
-- **Finding**: No Cloud Monitoring alert policies, alerting thresholds, or notification channels found in any Terraform or Kubernetes manifest. `monitoring.googleapis.com` API is enabled but no `google_monitoring_alert_policy` resources are provisioned.
-- **Gap**: Complete absence of alerting configuration.
-- **Recommendation**: Add Terraform `google_monitoring_alert_policy` for 5xx error rates, P95 latency, and pod restart anomalies per service.
-- **Evidence**: `terraform/main.tf` (monitoring API enabled), absence of alert policy resources
+- **Finding**: No alerting infrastructure in Helm chart. monitoring-alerts.yaml exists in raw K8s manifests only.
+- **Gap**: No alerting infrastructure.
+- **Recommendation**: Add Prometheus alerting rules to Helm chart.
+- **Evidence**: `helm-chart/values.yaml`, `kubernetes-manifests/monitoring-alerts.yaml`
 
 #### OBS-Q3: Business Outcome Metrics
 - **Severity**: INFO
-- **Finding**: No custom business metrics, KPI dashboards, or business metric publishing found. OTel pipeline (when enabled) exports infrastructure metrics only.
-- **Gap**: No business outcome metrics defined.
-- **Recommendation**: Define custom Cloud Monitoring metrics for business outcomes (order completion, cart conversion, payment success rates).
-- **Evidence**: `terraform/main.tf`, `kustomize/components/google-cloud-operations/otel-collector.yaml`
+- **Finding**: OTel Collector can forward metrics. `googleCloudOperations.metrics: true`. No custom business metrics defined.
+- **Gap**: Metrics infrastructure exists but no business metrics.
+- **Recommendation**: Define business outcome metrics. Configure OTel Collector.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/opentelemetry-collector.yaml`
 
 ### 08 — Engineering and Deployment Maturity
 
 #### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
 - **Severity**: RISK
-- **Finding**: (1) IaC: ✅ Terraform, K8s manifests, Helm, Kustomize. (2) Peer Review: ✅ CODEOWNERS + CI validation (terraform validate, helm lint, kustomize build, kubevious). (3) Drift Detection: ❌ Not configured.
-- **Gap**: Drift detection absent. 2 of 3 sub-checks pass.
-- **Recommendation**: Add scheduled `terraform plan` GitHub Action for drift detection.
-- **Evidence**: `terraform/main.tf`, `.github/terraform/main.tf`, `.github/CODEOWNERS`, `.github/workflows/terraform-validate-ci.yaml`
+- **Finding**: Helm charts and Terraform with CI validation and PR review. No drift detection.
+- **Gap**: No drift detection.
+- **Recommendation**: Implement GitOps with ArgoCD or Flux.
+- **Evidence**: `helm-chart/`, `terraform/`, `.github/workflows/helm-chart-ci.yaml`, `.github/workflows/terraform-validate-ci.yaml`
 
 #### ENG-Q2: CI/CD with API Contract Testing
 - **Severity**: RISK
-- **Finding**: Comprehensive CI/CD: Go/C# unit tests, GKE deployment tests, loadgenerator smoke tests, helm lint, kustomize build, terraform validate, kubevious manifests validation. No API contract testing (Pact, OpenAPI validation) or breaking change detection.
-- **Gap**: No API contract testing or breaking change detection.
-- **Recommendation**: Add proto breaking change detection (`buf breaking`) for `protos/demo.proto`.
-- **Evidence**: `.github/workflows/ci-pr.yaml`, `.github/workflows/helm-chart-ci.yaml`, `.github/workflows/kustomize-build-ci.yaml`, `.github/workflows/terraform-validate-ci.yaml`, `protos/demo.proto`
+- **Finding**: CI/CD with staging deploy and smoke tests. No cross-service contract tests. No proto compatibility checks.
+- **Gap**: No API contract testing.
+- **Recommendation**: Add buf breaking. Add cross-service contract tests.
+- **Evidence**: `.github/workflows/ci-pr.yaml`, `cloudbuild.yaml`
 
 #### ENG-Q3: Rollback Capability
-- **Severity**: RISK
-- **Finding**: Forward-only deployment via `skaffold run`. No automated rollback: no blue/green, no canary, no helm rollback, no feature flags. Manual `kubectl rollout undo` is possible but not automated.
-- **Gap**: No automated rollback mechanism.
-- **Recommendation**: Implement `helm upgrade --atomic` or Istio canary deployment for automatic rollback on failure.
-- **Evidence**: `skaffold.yaml`, `cloudbuild.yaml`, `.github/workflows/cleanup.yaml`
+- **Severity**: INFO
+- **Finding**: Helm rollback available. Skaffold deploy. No automated rollback.
+- **Gap**: No automated rollback.
+- **Recommendation**: Implement Flagger or Argo Rollouts.
+- **Evidence**: `helm-chart/Chart.yaml`, `cloudbuild.yaml`, `skaffold.yaml`
 
 #### ENG-Q4: API Test Coverage
-- **Severity**: RISK
-- **Finding**: Go unit tests (3 services), C# unit tests (cartservice), loadgenerator smoke tests. No dedicated API test suites, no contract tests.
-- **Gap**: No API-level test coverage beyond smoke tests.
-- **Recommendation**: Add gRPC API tests using `protos/demo.proto` service definitions with `grpcurl` or `ghz`.
-- **Evidence**: `.github/workflows/ci-pr.yaml`, `protos/demo.proto`
+- **Severity**: INFO
+- **Finding**: Infrastructure CI validates Helm and Terraform. Per-service test coverage varies.
+- **Gap**: No infrastructure integration tests.
+- **Recommendation**: Add infrastructure integration tests.
+- **Evidence**: `.github/workflows/helm-chart-ci.yaml`, `.github/workflows/terraform-validate-ci.yaml`
 
 #### ENG-Q5: Encryption at Rest for Agent-Accessible Data
-- **Severity**: RISK
-- **Finding**: No CMEK configuration. Memorystore Redis has no encryption config. GCS bucket has no encryption block. GKE has no database encryption. In-cluster Redis uses `emptyDir`. GCP provides Google-managed default encryption.
-- **Gap**: No customer-managed encryption at rest. Relies on GCP Google-managed encryption.
-- **Recommendation**: Add CMEK via `google_kms_key_ring` and `google_kms_crypto_key` in Terraform for GCS, Memorystore, and GKE secrets.
-- **Evidence**: `terraform/memorystore.tf`, `.github/terraform/main.tf`, `kubernetes-manifests/cartservice.yaml`
+- **Severity**: INFO
+- **Finding**: Redis without encryption, auth, or TLS. GKE node encryption depends on GCP defaults.
+- **Gap**: Redis data not encrypted at rest.
+- **Recommendation**: Enable Redis auth and TLS. Use Memorystore with encryption.
+- **Evidence**: `helm-chart/values.yaml` (Redis config), `terraform/memorystore.tf`
 
-#### ENG-Q6: Cross-Origin and Network Policies
-- **Severity**: BLOCKER
-- **Finding**: Comprehensive NetworkPolicies defined in `kustomize/components/network-policies/` (deny-all baseline + 13 per-service policies). Helm chart supports `networkPolicies.create`. Istio configs define Gateway, VirtualService, ServiceEntry, AuthorizationPolicy. **Disabled by default** (`networkPolicies.create: false`, component commented out). Istio Gateway accepts `hosts: ["*"]` on HTTP port 80 with no TLS. No CORS configuration. CI deploys with `-p network-policies` validating policies work. While the policies are documented and discoverable in IaC, the disabled-by-default state combined with a permissive Gateway and absent CORS means the agent-facing integration surface has no network security enforcement in place.
-- **Gap**: Network policies disabled by default — no enforcement. No CORS. Permissive Gateway (HTTP, wildcard hosts, no TLS). The integration surface agents would traverse is unsecured.
-- **Recommendation**: (1) Enable network policies as mandatory baseline for all environments. (2) Configure TLS on Istio Gateway with specific host restrictions. (3) Add CORS configuration for agent-facing endpoints.
-- **Evidence**: `kustomize/components/network-policies/`, `helm-chart/values.yaml`, `istio-manifests/frontend-gateway.yaml`, `.github/workflows/ci-pr.yaml`
+---
 
 ## Evidence Index
 
 ### Infrastructure as Code
 | File | Questions Referenced |
 |------|---------------------|
-| `terraform/main.tf` | AUTH-Q1, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q1 |
-| `terraform/providers.tf` | ENG-Q1 |
-| `terraform/variables.tf` | AUTH-Q6 |
-| `terraform/memorystore.tf` | AUTH-Q6, ENG-Q5 |
-| `terraform/terraform.tfvars` | AUTH-Q6 |
-| `.github/terraform/main.tf` | AUTH-Q1, AUTH-Q2, AUTH-Q6, AUTH-Q7, AUTH-Q8, ENG-Q1, ENG-Q5 |
-| `.github/terraform/variables.tf` | ENG-Q1 |
-| `.github/terraform/versions.tf` | ENG-Q1 |
-
-### Kubernetes Manifests
-| File | Questions Referenced |
-|------|---------------------|
-| `kubernetes-manifests/frontend.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q8 |
-| `kubernetes-manifests/cartservice.yaml` | AUTH-Q1, ENG-Q5 |
-| `kubernetes-manifests/checkoutservice.yaml` | AUTH-Q1 |
-| `kubernetes-manifests/kustomization.yaml` | ENG-Q1 |
-| `kustomize/kustomization.yaml` | OBS-Q1, ENG-Q6 |
-| `kustomize/base/kustomization.yaml` | ENG-Q1 |
-
-### Helm Chart
-| File | Questions Referenced |
-|------|---------------------|
-| `helm-chart/Chart.yaml` | ENG-Q1 |
-| `helm-chart/values.yaml` | AUTH-Q1, AUTH-Q3, AUTH-Q6, OBS-Q1, ENG-Q6 |
-| `helm-chart/templates/common.yaml` | AUTH-Q3, ENG-Q6 |
-| `helm-chart/templates/frontend.yaml` | AUTH-Q3, ENG-Q6 |
-| `helm-chart/templates/opentelemetry-collector.yaml` | OBS-Q1 |
-
-### Istio Service Mesh
-| File | Questions Referenced |
-|------|---------------------|
-| `istio-manifests/frontend-gateway.yaml` | AUTH-Q3, ENG-Q6 |
-| `istio-manifests/allow-egress-googleapis.yaml` | ENG-Q6 |
-| `istio-manifests/frontend.yaml` | AUTH-Q3 |
-| `kustomize/components/service-mesh-istio/kustomization.yaml` | AUTH-Q3, ENG-Q6 |
-
-### Network Policies
-| File | Questions Referenced |
-|------|---------------------|
-| `kustomize/components/network-policies/kustomization.yaml` | ENG-Q6 |
-| `kustomize/components/network-policies/network-policy-deny-all.yaml` | ENG-Q6 |
-| `kustomize/components/network-policies/network-policy-cartservice.yaml` | ENG-Q6 |
-| `kustomize/components/network-policies/network-policy-frontend.yaml` | ENG-Q6 |
-| `kustomize/components/network-policies/network-policy-checkoutservice.yaml` | ENG-Q6 |
-
-### Observability
-| File | Questions Referenced |
-|------|---------------------|
-| `kustomize/components/google-cloud-operations/kustomization.yaml` | OBS-Q1 |
-| `kustomize/components/google-cloud-operations/otel-collector.yaml` | OBS-Q1, OBS-Q3 |
+| `helm-chart/values.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q5, AUTH-Q6, AUTH-Q7, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q1, ENG-Q5 |
+| `helm-chart/templates/*.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q7 |
+| `helm-chart/templates/opentelemetry-collector.yaml` | AUTH-Q6, OBS-Q1, OBS-Q3 |
+| `helm-chart/Chart.yaml` | ENG-Q3 |
+| `terraform/` | AUTH-Q5, ENG-Q1, ENG-Q5 |
+| `terraform/memorystore.tf` | AUTH-Q5, ENG-Q5 |
 
 ### CI/CD Configurations
 | File | Questions Referenced |
 |------|---------------------|
-| `.github/workflows/ci-pr.yaml` | ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q6 |
-| `.github/workflows/ci-main.yaml` | ENG-Q2, ENG-Q4 |
-| `.github/workflows/helm-chart-ci.yaml` | ENG-Q1, ENG-Q2 |
-| `.github/workflows/kustomize-build-ci.yaml` | ENG-Q1, ENG-Q2 |
-| `.github/workflows/terraform-validate-ci.yaml` | ENG-Q1, ENG-Q2 |
-| `.github/workflows/kubevious-manifests-ci.yaml` | ENG-Q1, ENG-Q2 |
-| `.github/workflows/cleanup.yaml` | ENG-Q3 |
-| `cloudbuild.yaml` | ENG-Q3 |
+| `.github/workflows/ci-pr.yaml` | ENG-Q2, ENG-Q4 |
+| `.github/workflows/helm-chart-ci.yaml` | ENG-Q1, ENG-Q4 |
+| `.github/workflows/terraform-validate-ci.yaml` | ENG-Q1, ENG-Q4 |
+| `cloudbuild.yaml` | ENG-Q2, ENG-Q3 |
 | `skaffold.yaml` | ENG-Q3 |
-| `.github/CODEOWNERS` | ENG-Q1 |
 
-### API Specifications
+### Kubernetes Manifests
 | File | Questions Referenced |
 |------|---------------------|
-| `protos/demo.proto` | ENG-Q2, ENG-Q4 |
+| `kubernetes-manifests/monitoring-alerts.yaml` | OBS-Q2 |

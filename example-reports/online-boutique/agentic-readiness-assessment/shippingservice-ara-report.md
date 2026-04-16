@@ -1,9 +1,10 @@
 # Agentic Readiness Assessment Report
 
-**Target**: ./services/microservices-demo/src/shippingservice
-**Date**: 2026-04-15
+**Target**: services/microservices-demo/src/shippingservice
+**Date**: 2026-04-16
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
 **Repository Type**: application
+**Service Archetype**: stateful-crud (user-provided)
 **Agent Scope**: read-only
 **Priority**: P1
 **Tags**: go, grpc, shipping
@@ -11,11 +12,11 @@
 
 ---
 
-## Readiness Profile: Not Agent-Integrable
+## Readiness Profile: Remediation Required
 
-**BLOCKERs**: 3 | **RISKs**: 35 | **INFOs**: 11
+**BLOCKERs**: 2 | **RISKs**: 17 | **INFOs**: 13
 
-Exclude from agent toolset or plan major remediation before re-evaluation. Three or more blockers indicate fundamental gaps in authentication, data classification, and network security that must be addressed before any agent interaction — including pilots — can proceed safely.
+Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days. The two blockers (AUTH-Q1: no machine identity authentication; DATA-Q1: PII data — shipping addresses) must be resolved before any agent can safely call this service. The 17 RISKs are manageable with compensating controls once blockers are cleared.
 
 ---
 
@@ -23,14 +24,18 @@ Exclude from agent toolset or plan major remediation before re-evaluation. Three
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 3 |
-| RISK | 35 |
-| INFO | 11 |
+| BLOCKER | 2 |
+| RISK | 17 |
+| INFO | 13 |
 | N/A | 0 |
-| **Total** | **49** |
+| Not Evaluated (extended) | 11 |
+| **Total** | **43** |
 
-**Questions Evaluated**: 49
+**Core Questions Evaluated**: 24
+**Extended Questions Triggered**: 8
+**Extended Questions Not Triggered**: 11
 **Questions N/A (repo_type: application)**: 0
+**Service Archetype**: stateful-crud (user-provided)
 
 ---
 
@@ -39,554 +44,395 @@ Exclude from agent toolset or plan major remediation before re-evaluation. Three
 ### AUTH-Q1: Machine Identity Authentication
 
 - **Severity**: BLOCKER
-- **Finding**: The gRPC server is created with `grpc.NewServer()` in `main.go` with no interceptors, no TLS configuration, and no authentication middleware. Any client can connect to port 50051 and invoke `GetQuote` or `ShipOrder` without providing any identity. No service account definitions, no OAuth2 client credentials flow, no API key authentication, and no mTLS configuration exist anywhere in the codebase.
-- **Gap**: No machine identity authentication mechanism exists. The service cannot distinguish which agent (or any caller) made a request. There is no principal attribution for audit purposes.
+- **Finding**: The gRPC server is created via `grpc.NewServer()` in `main.go` (line 89) with no authentication interceptor, no TLS configuration, and no credential verification. The server accepts all incoming connections on port 50051. Istio AuthorizationPolicies are disabled (`authorizationPolicies.create: false` in `helm-chart/values.yaml`), so there is no mesh-level caller identity enforcement. NetworkPolicies are also disabled (`networkPolicies.create: false`). gRPC server reflection is enabled (`reflection.Register(srv)` at line 96) which exposes the full service schema to any caller. No OAuth2, no API key, no mTLS at the application layer.
+- **Gap**: No machine identity authentication at any layer. Any network-reachable client can call `GetQuote` and `ShipOrder` without presenting credentials. gRPC reflection exposes the full API surface to unauthenticated callers.
 - **Remediation**:
-  - **Immediate**: Add a gRPC unary server interceptor that validates a bearer token or API key from gRPC metadata. Use `grpc.UnaryInterceptor()` server option to register it. At minimum, require an API key in the `authorization` metadata field and validate it against a known set of keys.
-  - **Target State**: mTLS or OAuth2 client credentials authentication with per-caller principal attribution. Each agent identity has a unique credential that is logged with every request.
-  - **Estimated Effort**: Medium (2–4 weeks for mTLS; 1–2 weeks for API key interceptor)
-  - **Dependencies**: ENG-Q6 (network policies must also be addressed to secure the transport layer)
-- **Evidence**: `main.go` (lines 73–85: `grpc.NewServer()` with no options)
+  - **Immediate**: Enable Istio AuthorizationPolicies (`authorizationPolicies.create: true`) to enforce mTLS-based caller identity at the mesh layer.
+  - **Target State**: Mesh-level mTLS with per-caller AuthorizationPolicy rules. Agent-specific K8s ServiceAccounts. Application-layer gRPC `UnaryInterceptor` for defense-in-depth.
+  - **Estimated Effort**: Low (Helm value change), Medium (application-layer interceptor)
+  - **Dependencies**: AUTH-Q2, AUTH-Q6
+- **Evidence**: `main.go` (line 89, `grpc.NewServer()` with no auth; line 96, `reflection.Register(srv)`), `helm-chart/values.yaml` (`authorizationPolicies.create: false`, `networkPolicies.create: false`)
 
 ### DATA-Q1: Sensitive Data Classification
 
 - **Severity**: BLOCKER
-- **Finding**: The protobuf message `Address` in `genproto/demo.pb.go` (line 917) includes PII fields: `street_address`, `city`, `state`, `country`, `zip_code`. The `ShipOrderRequest` and `GetQuoteRequest` both accept `Address` as a required field. The broader shared proto definition (generated from `../../protos/demo.proto`) also includes `CreditCardInfo` (credit_card_number, credit_card_cvv, credit_card_expiration_year/month) and email fields, though this service only processes Address data. No data classification tags, field-level encryption, or access controls exist on any of these fields.
-- **Gap**: PII (shipping addresses) is processed without classification or field-level access controls. An agent calling `GetQuote` or `ShipOrder` must submit address data with no mechanism to restrict which agents can access which address fields.
+- **Finding**: The shipping service processes PII — physical shipping addresses. The `ShipOrderRequest` and `GetQuoteRequest` proto messages contain an `Address` message with `street_address`, `city`, `state`, `country`, and `zip_code`. The `ShipOrder` handler in `main.go` (line 131) constructs a `baseAddress` string from `street_address`, `city`, and `state` and uses it as a salt for tracking ID generation. Address data is PII under GDPR and CCPA. No formal data classification exists — no `DATA_CLASSIFICATION.md` in the service directory. The repo-level `DATA_CLASSIFICATION.md` exists but does not provide per-service PII classification.
+- **Gap**: PII (physical addresses) processed without formal data classification. Address data used as input to tracking ID generation (leaked into tracking ID entropy). No PII handling controls.
 - **Remediation**:
-  - **Immediate**: Document a data classification policy that tags `Address` fields as PII. Add proto field-level annotations or comments classifying sensitivity. Implement field-level access controls in a gRPC interceptor that masks or redacts address fields based on the caller's permissions.
-  - **Target State**: All PII fields classified and tagged at the schema level. Field-level access controls enforced per caller identity. Integration with AWS Macie or equivalent for ongoing PII detection.
-  - **Estimated Effort**: Medium (2–4 weeks for classification and basic controls)
-  - **Dependencies**: AUTH-Q1 (cannot enforce field-level access controls without knowing who is calling)
-- **Evidence**: `genproto/demo.pb.go` (lines 917–927: Address struct with PII fields), `main.go` (lines 107–114: ShipOrder uses `in.Address.StreetAddress`, `in.Address.City`, `in.Address.State`)
+  - **Immediate**: Create a `DATA_CLASSIFICATION.md` documenting that the shipping service processes PII (physical addresses). Classify `Address` fields as CONFIDENTIAL/PII.
+  - **Target State**: PII-aware logging (redact addresses from logs). Address data handling compliant with GDPR/CCPA requirements.
+  - **Estimated Effort**: Low (classification document), Medium (PII handling controls)
+  - **Dependencies**: AUTH-Q1 (identity required before PII access controls)
+- **Evidence**: `proto/demo.proto` (Address message with `street_address`, `city`, `state`, `country`, `zip_code`), `main.go` (line 131, `baseAddress` from address fields), `tracker.go` (CreateTrackingId uses address as salt)
 
-### ENG-Q6: Cross-Origin and Network Policies
-
-- **Severity**: BLOCKER
-- **Finding**: The gRPC server in `main.go` listens on port 50051 (`net.Listen("tcp", port)`) with no TLS configuration, no network restrictions, and no firewall rules. The `Dockerfile` exposes port 50051 (`EXPOSE 50051`) with no security constraints. No security group rules, no Kubernetes NetworkPolicy, no API Gateway access policies, no WAF rules, and no service mesh configuration exist in the repository. The server accepts plaintext gRPC connections from any source.
-- **Gap**: No network security controls are documented or defined. The service is completely open to any network client. No TLS means traffic is transmitted in plaintext, including PII (addresses).
-- **Remediation**:
-  - **Immediate**: Add TLS to the gRPC server using `grpc.Creds(credentials.NewTLS(tlsConfig))`. Define Kubernetes NetworkPolicy or security group rules that restrict inbound traffic to known callers only.
-  - **Target State**: mTLS between all service-to-service calls. Network policies defined as IaC (Terraform/CloudFormation) restricting port 50051 to authorized CIDR ranges or service mesh peers only. All policies subject to peer review and drift detection.
-  - **Estimated Effort**: Medium (1–2 weeks for TLS; 2–4 weeks for full network policy IaC)
-  - **Dependencies**: AUTH-Q1 (mTLS solves both authentication and transport security simultaneously)
-- **Evidence**: `main.go` (line 75: `net.Listen("tcp", port)` — no TLS), `Dockerfile` (line 33: `EXPOSE 50051` — no security constraints)
+---
 
 ## RISKs — Proceed with Compensating Controls
 
 ### API-Q2: Machine-Readable API Specification
 
 - **Severity**: RISK
-- **Finding**: The protobuf generated code (`genproto/demo.pb.go`, `genproto/demo_grpc.pb.go`) defines the schema for `ShippingService` with `GetQuote` and `ShipOrder` RPCs. gRPC reflection is enabled in `main.go` via `reflection.Register(srv)`, allowing runtime schema discovery. However, the source `.proto` file is not in this repository — it is referenced as `../../protos/demo.proto` in `genproto.sh`. No OpenAPI or standalone machine-readable spec exists in the repo.
-- **Gap**: The source proto definition is external to this repository. While generated code and gRPC reflection provide runtime discoverability, agent tool authors must access a separate repository to obtain the canonical `.proto` file.
+- **Finding**: The service API is defined in `genproto/demo.pb.go` generated from the shared `demo.proto`. The `ShippingService` has two RPCs: `GetQuote` and `ShipOrder`. Protobuf is machine-readable. gRPC server reflection IS enabled (`reflection.Register(srv)` in `main.go`), which is a positive — agents can discover the API at runtime. However, the proto file is monolithic (all 10 services) and not published as a standalone spec.
+- **Gap**: No standalone machine-readable spec. Proto is shared across all services. Reflection is enabled but unauthenticated.
 - **Compensating Controls**:
-  - Use gRPC reflection at runtime to discover the service schema dynamically.
-  - Copy the relevant `.proto` file into this repository as a versioned artifact.
-- **Remediation Timeline**: 1–2 weeks
-- **Recommendation**: Include the `demo.proto` file (or the shipping-specific subset) in this repository. Add a CI step that validates generated code matches the proto source.
-- **Evidence**: `genproto.sh` (references `../../protos/demo.proto`), `main.go` (line 91: `reflection.Register(srv)`), `genproto/demo_grpc.pb.go` (ShippingService definition)
+  - gRPC server reflection enables runtime API discovery
+  - The proto file can generate client stubs for agent tool definitions
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Secure gRPC reflection behind authentication. Extract shipping service proto into standalone file.
+- **Evidence**: `main.go` (line 96, `reflection.Register(srv)`), `genproto/demo.pb.go` (generated from demo.proto)
 
 ### API-Q3: Structured Error Responses
 
 - **Severity**: RISK
-- **Finding**: The gRPC framework provides structured error codes via the `codes` and `status` packages (imported in `main.go`). The `Watch` health check method uses `status.Errorf(codes.Unimplemented, ...)`. However, the core business RPCs `GetQuote` and `ShipOrder` never return errors — they always succeed. No custom error types exist, no retryable/non-retryable classification, and no structured error bodies beyond the standard gRPC status code.
-- **Gap**: No error classification for agent consumption. When errors do occur (e.g., nil address pointer), the service will panic rather than return a structured error. Agents cannot distinguish retriable from terminal errors.
+- **Finding**: The `GetQuote` and `ShipOrder` handlers return `nil` errors on success. Error handling is minimal — no explicit error returns in the current implementation. The gRPC framework provides standard status codes, but no rich error model is implemented. No `google.golang.org/genproto/googleapis/rpc/errdetails` usage. No retryable boolean, no error code taxonomy.
+- **Gap**: No rich error model. Agents cannot distinguish retriable from terminal errors.
 - **Compensating Controls**:
-  - Agents can rely on gRPC status codes for basic error classification (UNAVAILABLE = retriable, INVALID_ARGUMENT = terminal).
-  - Wrap agent tool calls with retry logic keyed on standard gRPC codes.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Add input validation to `GetQuote` and `ShipOrder` that returns `codes.InvalidArgument` for malformed requests. Implement structured error details using `google.rpc.Status` with retryable classification.
-- **Evidence**: `main.go` (lines 96–120: GetQuote and ShipOrder implementations — no error returns)
-
-### API-Q5: API Versioning and Deprecation
-
-- **Severity**: RISK
-- **Finding**: The gRPC service is registered as `hipstershop.ShippingService` with no version suffix in `genproto/demo_grpc.pb.go`. No `/v1/` or `/v2/` URL patterns. No `Accept-Version` headers. No changelog files. No deprecation notices.
-- **Gap**: No API versioning strategy. Breaking changes to the proto definition would silently break agent tool schemas.
-- **Compensating Controls**:
-  - Pin agent tool definitions to the current proto schema and validate on each deployment.
-  - Use gRPC's built-in forward compatibility (adding fields is non-breaking in protobuf).
+  - gRPC status codes provide basic error classification
+  - Wrap agent tool calls with client-side error classification
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Adopt protobuf package versioning (e.g., `hipstershop.v1.ShippingService`). Establish a deprecation policy with downstream notification.
-- **Evidence**: `genproto/demo_grpc.pb.go` (ServiceName: `hipstershop.ShippingService` — no version)
-
-### API-Q7: Asynchronous Operation Support
-
-- **Severity**: RISK
-- **Finding**: Both `GetQuote` and `ShipOrder` are synchronous unary RPCs. No background job frameworks, no polling endpoints, no webhook callbacks, no Step Functions, no async invocation patterns found anywhere in the codebase.
-- **Gap**: No async support for long-running operations. While the current operations are lightweight and sub-second, there is no mechanism for async patterns if operations become longer-running in the future.
-- **Compensating Controls**:
-  - Current operations are lightweight (in-memory computation) and unlikely to exceed timeout limits.
-  - Agent orchestration can implement its own timeout handling for these fast operations.
-- **Remediation Timeline**: 60–90 days (if async patterns become needed)
-- **Recommendation**: For current lightweight operations, this is low priority. If shipping cost estimation or order fulfillment becomes more complex (e.g., real carrier API calls), implement async patterns with job submission and polling endpoints.
-- **Evidence**: `main.go` (lines 96–120: synchronous RPC implementations), `quote.go` (in-memory computation), `tracker.go` (in-memory random ID generation)
+- **Recommendation**: Implement gRPC rich error model using `errdetails` package. Add error codes and retryable flags.
+- **Evidence**: `main.go` (GetQuote and ShipOrder handlers — minimal error handling)
 
 ### AUTH-Q2: Scoped Permissions (Least Privilege)
 
 - **Severity**: RISK
-- **Finding**: No authorization model exists. No IAM policies, no role definitions, no permission checks in code. The gRPC server accepts all requests from any caller without any identity verification. Both `GetQuote` (read) and `ShipOrder` (write) are equally accessible.
-- **Gap**: No scoped permissions. An agent cannot be granted read-only access to `GetQuote` without also having access to `ShipOrder`.
+- **Finding**: AuthorizationPolicies disabled. The Helm template defines a policy restricting callers to `frontend` and `checkoutservice` service accounts on `/hipstershop.ShippingService/GetQuote` and `/hipstershop.ShippingService/ShipOrder`, but not deployed. No agent-specific service accounts.
+- **Gap**: No caller restriction. No agent-specific permission scoping.
 - **Compensating Controls**:
-  - Restrict agent scope at the orchestration layer — configure agent tools to only call `GetQuote` and not expose `ShipOrder` as a tool.
-  - Implement an API Gateway or service mesh proxy that enforces method-level access control.
+  - Enable AuthorizationPolicies to activate existing Helm template
+  - Define agent-specific K8s ServiceAccounts
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement a gRPC interceptor that checks caller identity against a permission matrix (e.g., agent-readonly can call GetQuote but not ShipOrder).
-- **Evidence**: `main.go` (lines 73–85: `grpc.NewServer()` with no interceptors or authorization)
+- **Recommendation**: Enable `authorizationPolicies.create: true`. Create agent-specific service accounts with per-RPC rules.
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`), `helm-chart/templates/shippingservice.yaml`
 
 ### AUTH-Q3: Action-Level Authorization
 
 - **Severity**: RISK
-- **Finding**: No action-level authorization exists. Both `GetQuote` and `ShipOrder` are accessible to any caller without permission checks. No ABAC policies, no fine-grained RBAC, no method-level authorization.
-- **Gap**: Cannot enforce that an agent may read (GetQuote) but not write (ShipOrder) within the same service.
+- **Finding**: No application-layer authorization. The gRPC server accepts all calls. AuthorizationPolicy with per-path rules exists in Helm template but disabled. Both `GetQuote` (read) and `ShipOrder` (write) are equally accessible.
+- **Gap**: No action-level authorization. Read and write RPCs have identical access controls (none).
 - **Compensating Controls**:
-  - Restrict at the orchestration layer by only exposing `GetQuote` as an agent tool.
-  - Use an external authorization service (e.g., OPA) as a gRPC interceptor.
+  - Enable AuthorizationPolicies for mesh-level per-path enforcement
+  - The service exposes only two RPCs, limiting the action surface
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add a gRPC unary interceptor that maps the authenticated principal to allowed methods. Use a configuration file or external policy engine to define the mapping.
-- **Evidence**: `main.go` (no authorization interceptors), `genproto/demo_grpc.pb.go` (both methods registered without any authorization middleware)
+- **Recommendation**: Enable AuthorizationPolicies. Consider separate authorization rules for `GetQuote` (read) vs `ShipOrder` (write).
+- **Evidence**: `main.go` (no auth interceptor), `helm-chart/values.yaml` (`authorizationPolicies.create: false`)
 
-### AUTH-Q4: Identity Propagation
+### AUTH-Q5: Credential Management
 
 - **Severity**: RISK
-- **Finding**: No identity propagation found. No JWT parsing middleware, no OAuth2 token exchange, no user context headers. The gRPC `context.Context` is passed through but carries no identity information. No `X-User-Id` or `Authorization` metadata extraction.
-- **Gap**: The service cannot carry originating user context through requests. An agent acting on behalf of a user cannot have that user's identity propagated to the shipping service.
+- **Finding**: No secrets or credentials used. Only environment variable is `PORT`. No database connections, no external API calls. Shipping cost is calculated in-memory (`quote.go`), tracking IDs are generated algorithmically (`tracker.go`). No Secrets Manager or Vault.
+- **Gap**: No credential management framework. Credential-free architecture is appropriate for current scope.
 - **Compensating Controls**:
-  - For read-only agent scope, identity propagation is less critical since no user-specific data is returned.
-  - Agents can include user context in request metadata even if the service doesn't currently validate it.
+  - Credential-free architecture eliminates secret rotation concerns
+  - K8s ServiceAccount with Istio mTLS (when enabled) avoids hardcoded credentials
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add gRPC metadata extraction for identity tokens. Implement a middleware that parses JWT/bearer tokens from the `authorization` metadata key and makes the user identity available to handlers.
-- **Evidence**: `main.go` (lines 96–120: context used but no identity extraction)
+- **Recommendation**: Maintain credential-free architecture. Use K8s Secrets with external secrets operator if credentials are introduced.
+- **Evidence**: `main.go` (line 79, `os.LookupEnv("PORT")`), `Dockerfile` (no secrets)
 
-### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-
-- **Severity**: RISK
-- **Finding**: No distinction between agent identity modes exists. No separate IAM roles or API keys for different agent access patterns. No audit log fields distinguishing agent-as-self from agent-on-behalf-of-user.
-- **Gap**: The service cannot differentiate between an agent acting under its own service identity and an agent acting on behalf of a specific human user. This conflation creates privilege escalation risk.
-- **Compensating Controls**:
-  - For read-only agent scope, this risk is reduced since agents are not modifying data.
-  - Document the expected agent identity model in operational runbooks.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Define separate credential types for agent-as-self and agent-on-behalf-of-user. Log the identity mode with every request.
-- **Evidence**: `main.go` (no authentication or identity distinction in any RPC handler)
-
-### AUTH-Q6: Credential Management
-
-- **Severity**: RISK
-- **Finding**: No hardcoded credentials found in the codebase. No `.env` files committed. No Secrets Manager or Vault references. The service uses environment-based GCP authentication for the profiler (`cloud.google.com/go/profiler`). The `Dockerfile` does not embed any secrets. However, there is no secrets management integration for service credentials.
-- **Gap**: No secrets management system is integrated. When authentication is added (AUTH-Q1), credentials must be managed through AWS Secrets Manager or HashiCorp Vault with rotation support — not environment variables or config files.
-- **Compensating Controls**:
-  - Current service has no credentials to manage (it connects to no external services requiring auth beyond GCP profiler).
-  - GCP profiler uses workload identity or environment-based auth, which is acceptable.
-- **Remediation Timeline**: 30–60 days (concurrent with AUTH-Q1 remediation)
-- **Recommendation**: When implementing authentication (AUTH-Q1), integrate with AWS Secrets Manager for credential storage and rotation. Do not store credentials in environment variables or config files.
-- **Evidence**: `main.go` (lines 131–148: GCP profiler uses environment-based auth), `Dockerfile` (no secrets embedded), `go.mod` (no secrets management dependencies)
-
-### AUTH-Q7: Immutable Audit Logging ⚡
+### AUTH-Q6: Immutable Audit Logging ⚡
 
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: The service uses logrus with JSON formatting (`logrus.JSONFormatter` in `main.go`). Structured logs with `timestamp`, `severity`, and `message` fields are produced. However, log messages are generic: `[GetQuote] received request` and `[ShipOrder] received request`. No authenticated principal is logged. No CloudTrail integration. No immutable log storage configuration. No S3 bucket with object lock.
-- **Gap**: Logs do not include caller identity. Even if authentication were added, the current logging does not capture who made the request. No immutable log storage ensures logs cannot be tampered with.
+- **Finding**: Logging uses `logrus` with JSON formatter (`JSONFormatter` with `timestamp`, `severity`, `message` fields). Logs include request start/complete messages for `GetQuote` and `ShipOrder` but no request details, no caller identity, no principal attribution. Logs are ephemeral container stdout. No immutable storage. Tracing is disabled (`initTracing()` is a TODO stub at line 148).
+- **Gap**: No immutable audit trail. No principal attribution. No immutable log storage. Tracing is a stub.
 - **Compensating Controls**:
-  - Structured JSON logging is already in place — adding identity fields is an incremental change.
-  - Ship logs to CloudWatch Logs with retention policies as an interim measure.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add caller identity (principal, agent ID) to every log entry. Configure log shipping to an immutable store (S3 with Object Lock or CloudWatch Logs with resource policies preventing deletion).
-- **Evidence**: `main.go` (lines 39–49: logrus JSONFormatter configured; lines 97, 99, 108, 110: generic log messages with no identity)
-
-### AUTH-Q8: Agent Identity Suspension
-
-- **Severity**: RISK
-- **Finding**: No mechanism for suspending or revoking agent identities exists. Since there is no authentication at all (AUTH-Q1), there is nothing to suspend. No API key revocation, no IAM role deactivation, no Cognito user pool disable mechanism.
-- **Gap**: If an agent misbehaves, there is no way to suspend its access to this service without shutting down the service entirely.
-- **Compensating Controls**:
-  - Network-level blocking (firewall rules) can block a specific agent's IP as an emergency measure.
-  - Service mesh policies can be updated to deny traffic from specific service identities.
-- **Remediation Timeline**: 30–60 days (concurrent with AUTH-Q1 remediation)
-- **Recommendation**: When implementing authentication (AUTH-Q1), ensure the credential store supports per-identity revocation. Implement an API key revocation endpoint or integrate with a centralized identity provider that supports instant suspension.
-- **Evidence**: `main.go` (no authentication framework to provide suspension capability)
-
-### STATE-Q1: Compensation and Rollback ⚡
-
-- **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No compensation or rollback logic exists. `ShipOrder` is a simple function that generates a random tracking ID using `CreateTrackingId(baseAddress)` in `tracker.go`. There are no multi-step operations, no saga pattern, no undo endpoints, no Step Functions with error handling.
-- **Gap**: `ShipOrder` is a one-way operation with no way to cancel or reverse a shipment. The generated tracking ID cannot be invalidated.
-- **Compensating Controls**:
-  - For read-only agent scope, agents would only call `GetQuote` (which has no side effects), making compensation unnecessary.
-  - If `ShipOrder` is exposed, wrap it in an orchestration layer with human approval.
+  - JSON structured logging provides basic log analysis
+  - Enable Istio access logging for mesh-level request attribution
 - **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add a `CancelShipment` RPC that invalidates a tracking ID. Implement a state machine for shipment lifecycle (pending → confirmed → shipped → cancelled).
-- **Evidence**: `main.go` (lines 107–117: ShipOrder implementation — no rollback), `tracker.go` (CreateTrackingId — one-way generation)
+- **Recommendation**: Add caller identity to structured logs. Forward to immutable store. Implement OpenTelemetry tracing (replace TODO stub).
+- **Evidence**: `main.go` (lines 42–52, logrus JSON formatter; lines 147–148, initTracing TODO stub)
+
+### AUTH-Q7: Agent Identity Suspension
+
+- **Severity**: RISK
+- **Finding**: No agent identity suspension mechanism. AuthorizationPolicies disabled. No kill switch for individual agent instances.
+- **Gap**: No mechanism to immediately suspend a misbehaving agent.
+- **Compensating Controls**:
+  - When AuthorizationPolicies are enabled, removing an agent's principal blocks access
+  - K8s NetworkPolicy can block specific pod selectors
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Implement agent-specific ServiceAccounts with AuthorizationPolicy-based suspension.
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`), `helm-chart/templates/shippingservice.yaml`
 
 ### STATE-Q2: Queryable Current State
 
 - **Severity**: RISK
-- **Finding**: The service is entirely stateless. `GetQuote` returns a computed value based on item count. `ShipOrder` generates a random tracking ID that is not stored anywhere. There are no GET endpoints for resource state, no status query APIs, no database schemas.
-- **Gap**: No queryable state. An agent cannot check the status of a previously created shipment or retrieve historical quotes. There is no read-before-write pattern possible.
+- **Finding**: The shipping service is stateless — it does not persist shipping records, tracking IDs, or quote history. `GetQuote` calculates a cost based on item count (always $8.99 for non-empty carts). `ShipOrder` generates a tracking ID algorithmically but does not store it. There is no way to query previous quotes or track shipment status.
+- **Gap**: No queryable state. Agents cannot verify previous quotes or track shipments.
 - **Compensating Controls**:
-  - For `GetQuote`, the operation is deterministic (same count → same quote) so state is implicit.
-  - Agents can store tracking IDs externally for reference.
+  - The calling service (checkoutservice) may store tracking IDs in order records
+  - Implement a shipment tracking query endpoint
 - **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add a `GetShipmentStatus` RPC that accepts a tracking ID and returns shipment state. Implement a data store (DynamoDB or PostgreSQL) to persist shipment records.
-- **Evidence**: `main.go` (only two RPCs: GetQuote and ShipOrder — no query endpoints), `tracker.go` (tracking ID generated but not stored)
-
-### STATE-Q3: Concurrency Controls
-
-- **Severity**: RISK
-- **Finding**: No concurrency controls exist. No optimistic locking, no version fields, no `SELECT FOR UPDATE`, no DynamoDB conditional writes. The service is stateless, so there is no shared mutable state to protect. However, `ShipOrder` generates tracking IDs using `rand.Intn()` which is not concurrency-safe in older Go versions (Go's default global rand became safe in Go 1.20+).
-- **Gap**: No concurrency controls. If the service becomes stateful (e.g., storing shipments), concurrent agent calls could create race conditions.
-- **Compensating Controls**:
-  - Current stateless design minimizes concurrency risk.
-  - Go 1.25+ (as specified in go.mod) has a concurrency-safe global rand, mitigating the `rand.Intn()` concern.
-- **Remediation Timeline**: 60–90 days (when stateful features are added)
-- **Recommendation**: When adding persistence, implement optimistic locking with version fields on all mutable records. Use DynamoDB conditional writes or database-level constraints.
-- **Evidence**: `tracker.go` (uses `rand.Intn()` for ID generation), `go.mod` (go 1.25.0 — safe global rand), `main.go` (stateless service)
+- **Recommendation**: Implement a `GetShipmentStatus` RPC for tracking ID lookup. Consider persisting quote and shipment records.
+- **Evidence**: `main.go` (GetQuote and ShipOrder — no persistence), `quote.go` (in-memory calculation), `tracker.go` (algorithmic ID generation)
 
 ### STATE-Q4: Circuit Breakers and Resilience
 
 - **Severity**: RISK
-- **Finding**: No circuit breaker or resilience patterns found for core service operations. The `initProfiling` function in `main.go` (lines 131–148) has retry logic with exponential backoff for GCP Profiler initialization, but this is not a core service pattern. No Resilience4j, no Polly, no circuit breaker annotations. The service does not call external dependencies for its core operations.
-- **Gap**: No resilience patterns. If the service is extended to call external carrier APIs, there are no circuit breakers to prevent cascading failures.
+- **Finding**: The shipping service has no external dependencies and no resilience patterns. No circuit breakers, no retry logic, no timeout configuration. The gRPC server has no graceful shutdown handling. All operations are in-memory calculations.
+- **Gap**: No resilience patterns. While currently no external dependencies, the lack of resilience infrastructure means adding external shipping APIs would require significant rework.
 - **Compensating Controls**:
-  - Current implementation has no external dependencies for core operations (GetQuote and ShipOrder are fully in-memory), so circuit breakers are not currently needed.
-  - gRPC framework provides built-in deadline/timeout propagation via context.
-- **Remediation Timeline**: 60–90 days (when external dependencies are added)
-- **Recommendation**: When adding external service calls (e.g., carrier rate APIs), implement circuit breakers using a Go resilience library (e.g., `sony/gobreaker`). Configure timeout and retry policies.
-- **Evidence**: `main.go` (lines 131–148: retry logic for profiler only), `quote.go` (in-memory computation), `tracker.go` (in-memory ID generation)
-
-### STATE-Q5: Rate Limiting and Throttling
-
-- **Severity**: RISK
-- **Finding**: No rate limiting configuration found. No API Gateway throttling. No WAF rate rules. No application-level rate limiting middleware. The gRPC server has no interceptors for throttling. No `aws_api_gateway_usage_plan` or equivalent in IaC (no IaC exists).
-- **Gap**: A runaway agent loop could overwhelm the service with requests at machine speed. No mechanism to prevent or detect this.
-- **Compensating Controls**:
-  - Implement rate limiting at the infrastructure layer (API Gateway, service mesh, or load balancer) outside this service.
-  - Add a gRPC interceptor for per-client rate limiting as a quick fix.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Add a gRPC unary interceptor that enforces per-client rate limits using a token bucket algorithm. Store rate limit state in Redis or in-memory. Return `codes.ResourceExhausted` when limits are exceeded.
-- **Evidence**: `main.go` (lines 73–85: `grpc.NewServer()` with no interceptors)
-
-### STATE-Q6: Blast Radius and Transaction Limits
-
-- **Severity**: RISK
-- **Finding**: No transaction limits or blast radius controls exist. No configurable limits per agent identity (e.g., max shipments per hour, max quotes per minute). No `max_refunds_per_hour` or equivalent configuration.
-- **Gap**: An agent could call `ShipOrder` thousands of times per second with no limit. While currently the operation is lightweight (generating random IDs), if the service becomes production-grade with real carrier integrations, uncapped agent operations could have significant business impact.
-- **Compensating Controls**:
-  - For read-only agent scope, limit agent tools to `GetQuote` only — which has no side effects.
-  - Implement blast radius controls at the orchestration layer.
+  - In-memory operations have no external failure modes
+  - K8s health probes provide basic availability detection
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement per-identity transaction limits configurable via environment variables or configuration. Example: `MAX_SHIP_ORDERS_PER_HOUR=100` per agent identity.
-- **Evidence**: `main.go` (no transaction limit logic), no configuration files with limit definitions
-
-### STATE-Q7: Infrastructure Capacity for Agent Traffic
-
-- **Severity**: RISK
-- **Finding**: No load testing results, no auto-scaling configuration, and no capacity planning documentation found. The `Dockerfile` builds a single binary with no horizontal scaling configuration. No Kubernetes HPA (Horizontal Pod Autoscaler), no ECS service auto-scaling, no load test configurations.
-- **Gap**: Unknown capacity limits. The service has not been tested for agent-scale traffic patterns (high concurrency, burst requests, exploratory retries).
-- **Compensating Controls**:
-  - The service is lightweight (in-memory computation, no I/O) and likely has high throughput capacity.
-  - Container orchestration (Kubernetes/ECS) can provide horizontal scaling externally.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Run load tests simulating agent traffic patterns (high concurrency, burst requests). Define auto-scaling policies based on CPU/memory thresholds. Document capacity limits.
-- **Evidence**: `Dockerfile` (single binary, no scaling config), no load test files, no auto-scaling configuration
-
-### HITL-Q1: Draft/Pending State
-
-- **Severity**: RISK
-- **Finding**: No draft or pending state concept exists. The service is stateless. `ShipOrder` immediately generates and returns a tracking ID — there is no "pending shipment" state that could be reviewed before confirmation.
-- **Gap**: No ability for an agent to propose a shipment and have a human review/approve it before execution.
-- **Compensating Controls**:
-  - For read-only agent scope, agents would only use `GetQuote` which has no side effects.
-  - Implement approval gates in the agent orchestration layer.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add a `CreatePendingShipment` RPC that creates a shipment in PENDING state, and a `ConfirmShipment` RPC that transitions it to CONFIRMED. Only confirmed shipments generate tracking IDs.
-- **Evidence**: `main.go` (lines 107–117: ShipOrder immediately returns tracking ID, no pending state)
-
-### HITL-Q2: Configurable Approval Gates
-
-- **Severity**: RISK
-- **Finding**: No approval workflow exists. No human-in-the-loop gates. No Step Functions with `waitForTaskToken`. No approval API endpoints. No configurable operation-level flags.
-- **Gap**: No mechanism to require human approval for specific operations (e.g., high-value shipments, bulk operations).
-- **Compensating Controls**:
-  - Implement approval gates in the agent orchestration layer (e.g., require human approval in the agent workflow before calling ShipOrder).
-  - Use Amazon Step Functions with human approval tasks in the agent pipeline.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add configurable approval gates at the service level. For example, shipments exceeding a configurable item count threshold require explicit approval via a separate `ApproveShipment` RPC.
-- **Evidence**: No approval-related code or configuration found in any repository file
-
-### HITL-Q3: Sandbox/Staging Environment
-
-- **Severity**: RISK
-- **Finding**: A `Dockerfile` exists for containerization, and the `README.md` documents `docker build ./` for building. However, no docker-compose file, no staging environment configuration, no seed data scripts, no synthetic data generators, and no environment-specific configuration files exist.
-- **Gap**: No sandbox or staging environment for testing agent interactions without risk to production. No environment separation configuration.
-- **Compensating Controls**:
-  - The service is stateless with no external dependencies — it can be run locally via Docker for testing.
-  - `go test .` provides unit test coverage for core functionality.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Create a `docker-compose.yml` for local development and testing. Define environment-specific configurations (dev/staging/prod) via environment variables. Create a test harness that simulates agent interactions.
-- **Evidence**: `Dockerfile` (containerization exists), `README.md` (documents `docker build ./` and `go test .`), no docker-compose.yml or staging config
-
-### DATA-Q2: Data Residency and Sovereignty ⚡
-
-- **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No data residency requirements are documented. The service is stateless and does not persist data. However, it processes address data (PII) in transit — `GetQuoteRequest` and `ShipOrderRequest` both include `Address` with `street_address`, `city`, `state`, `country`, `zip_code`. No region-specific configuration, no GDPR/LGPD references, no data sovereignty policies.
-- **Gap**: No documentation of data residency requirements for the address data processed by this service. If an agent sends address data to an LLM endpoint in a different jurisdiction, there may be compliance implications.
-- **Compensating Controls**:
-  - The service is stateless — address data is processed in memory and not stored.
-  - For read-only scope (GetQuote), address data is used only for cost calculation.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Document data residency requirements for the address data processed by this service. Determine if GDPR or other regulations apply based on the deployment region and customer base. Ensure the agent orchestration layer does not send address data to LLM endpoints in restricted jurisdictions.
-- **Evidence**: `genproto/demo.pb.go` (lines 917–927: Address struct with location data), no data residency documentation
+- **Recommendation**: Add graceful shutdown handling. Implement circuit breaker pattern for future external API integration.
+- **Evidence**: `main.go` (no circuit breaker, no graceful shutdown), `quote.go` (in-memory), `tracker.go` (in-memory)
 
 ### DATA-Q3: Selective Query Support
 
 - **Severity**: RISK
-- **Finding**: The service has only two RPCs with fixed request/response types. `GetQuote` accepts items and returns a single cost. `ShipOrder` accepts items/address and returns a single tracking ID. No pagination, no filtering, no sorting. The protobuf messages define exactly what fields are returned.
-- **Gap**: No selective query support. While the current API returns small, fixed-size responses (a single cost or tracking ID), there is no mechanism for agents to request subsets of data if the API grows.
+- **Finding**: `GetQuote` accepts a single request with items array and returns a single cost. `ShipOrder` accepts a single order and returns a tracking ID. No list/query endpoints, no pagination, no filtering. An agent could call `ShipOrder` at machine speed to generate many shipments without any batch controls.
+- **Gap**: No selective query. No batch limits on shipment creation.
 - **Compensating Controls**:
-  - Current responses are small and fixed-size — agents receive exactly what they need without unbounded result sets.
-  - Protobuf's strongly typed schema inherently limits what is returned per call.
-- **Remediation Timeline**: Low priority (not a current concern)
-- **Recommendation**: If the API evolves to return lists (e.g., shipment history), implement pagination parameters in the protobuf messages (e.g., `page_token`, `page_size`).
-- **Evidence**: `genproto/demo.pb.go` (GetQuoteResponse has single CostUsd field; ShipOrderResponse has single TrackingId field)
+  - Rate limiting at mesh or API gateway layer can bound requests
+  - Simulated shipping limits real-world impact
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Implement per-caller rate limiting on `ShipOrder` RPC.
+- **Evidence**: `proto/demo.proto` (GetQuote, ShipOrder — single request/response)
 
 ### DATA-Q4: System of Record Designations
 
 - **Severity**: RISK
-- **Finding**: No system-of-record documentation exists. No master data management references. No data ownership definitions. The service is part of the `hipstershop` microservices demo but there is no documentation of which service is authoritative for which data entities.
-- **Gap**: If multiple services handle shipping-related data, agents may encounter conflicting records without knowing which source is authoritative.
+- **Finding**: The shipping service does not persist data. Tracking IDs are generated algorithmically but not stored. Quote calculations are ephemeral. The service cannot serve as a system of record for shipping records.
+- **Gap**: No system of record for shipping data. Tracking IDs not persisted.
 - **Compensating Controls**:
-  - The shipping service is the only service generating tracking IDs — it is implicitly the system of record for tracking IDs.
-  - Document service data ownership in a central architecture document.
+  - Checkoutservice may record tracking IDs in order records
+- **Remediation Timeline**: 60–90 days
+- **Recommendation**: Implement persistent shipment records with tracking ID as primary key.
+- **Evidence**: `tracker.go` (generates tracking ID, doesn't persist), `main.go` (no database)
+
+### DATA-Q5: Temporal Metadata and Freshness
+
+- **Severity**: RISK
+- **Finding**: `GetQuoteResponse` contains only `cost_usd`. `ShipOrderResponse` contains only `tracking_id`. No timestamps, no `created_at`, no `shipped_at` metadata. Agents cannot determine when a quote was generated or when a shipment was created.
+- **Gap**: No temporal metadata on responses.
+- **Compensating Controls**:
+  - Calling service can record timestamps at invocation time
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Create a data ownership matrix documenting which service owns which data entities (e.g., ShippingService owns tracking IDs and shipping quotes). Publish this as part of the service documentation.
-- **Evidence**: No data ownership documentation in any repository file
-
-### DATA-Q5: Reliable Timestamps
-
-- **Severity**: RISK
-- **Finding**: No timestamps are included in the data model or API responses. `GetQuoteResponse` returns only `CostUsd` (a `Money` message). `ShipOrderResponse` returns only `TrackingId` (a string). No `created_at`, `updated_at`, `quote_timestamp`, or `shipped_at` fields. Log timestamps exist (logrus JSONFormatter uses `time.RFC3339Nano`) but these are not in API responses.
-- **Gap**: Agents performing time-sensitive reasoning cannot determine when a quote was generated or when a shipment was created. Stale quotes cannot be detected.
-- **Compensating Controls**:
-  - Agents can record timestamps on their side when receiving responses.
-  - Quotes are deterministic (same count → same price), so staleness is less of a concern currently.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Add `timestamp` fields to `GetQuoteResponse` and `ShipOrderResponse` in the protobuf definition. Use UTC (`google.protobuf.Timestamp`) for all timestamps.
-- **Evidence**: `genproto/demo.pb.go` (GetQuoteResponse and ShipOrderResponse — no timestamp fields), `main.go` (log timestamps exist but not in API responses)
-
-### DATA-Q6: Data Freshness Signaling
-
-- **Severity**: RISK
-- **Finding**: No data freshness signaling exists. No `Cache-Control` headers (not applicable to gRPC), no `X-Data-Age` metadata, no `last_refreshed` field, no `consistency_level` field. The service computes responses in real-time (no caching).
-- **Gap**: Agents have no way to know if data is current, cached, or eventually consistent. While the current service computes in real-time, the protocol does not signal this.
-- **Compensating Controls**:
-  - The service is stateless and computes all responses in real-time — data is always "fresh" by definition.
-  - Document this behavior in the service API documentation.
-- **Remediation Timeline**: Low priority
-- **Recommendation**: Add gRPC response metadata indicating data freshness (e.g., `x-data-source: computed` or `x-cache-status: none`). This is useful documentation even if the service currently has no caching.
-- **Evidence**: `main.go` (lines 96–117: real-time computation, no caching), `quote.go` (deterministic in-memory computation)
-
-### DATA-Q7: PII Redaction in Logs
-
-- **Severity**: RISK
-- **Finding**: Log statements in `main.go` log only generic messages: `[GetQuote] received request`, `[GetQuote] completed request`, `[ShipOrder] received request`, `[ShipOrder] completed request`. Address data from `ShipOrder` is used in `baseAddress` string (`fmt.Sprintf("%s, %s, %s", in.Address.StreetAddress, in.Address.City, in.Address.State)`) for tracking ID generation but is NOT logged. However, no log scrubbing middleware exists, and if debug logging or error logging is added in the future, PII could leak into logs.
-- **Gap**: No PII redaction framework exists. While current logs do not contain PII, there is no systematic protection against PII leaking into logs as the service evolves.
-- **Compensating Controls**:
-  - Current log statements do not include PII — address data is used only for computation and not logged.
-  - Add a linting rule or code review checklist item to prevent logging PII.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Add a log scrubbing middleware or logrus hook that redacts known PII patterns (addresses, phone numbers, email) from log messages. Implement a pre-commit hook or CI check that detects potential PII in log statements.
-- **Evidence**: `main.go` (lines 97–110: log messages are generic, no PII logged; line 112: `baseAddress` constructed from PII but not logged)
-
-### DISC-Q1: Schema Documentation and Versioning
-
-- **Severity**: RISK
-- **Finding**: Protobuf generated code exists in `genproto/demo.pb.go` and `genproto/demo_grpc.pb.go`, generated by `protoc v3.6.1` and `protoc-gen-go v1.34.2`. The source `.proto` file is external (`../../protos/demo.proto` per `genproto.sh`). No schema versioning is evident — no version tags in the proto package name, no schema registry, no migration files. The generated code header indicates `protoc v3.6.1` which is outdated.
-- **Gap**: Schema source is external and not version-controlled within this repository. No schema versioning strategy. Protoc version (3.6.1) is significantly outdated.
-- **Compensating Controls**:
-  - Generated code is committed to the repository, providing a snapshot of the current schema.
-  - gRPC reflection enables runtime schema discovery.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Include the `.proto` file in this repository. Implement a CI step that validates generated code matches the proto source. Add schema version tags to the proto package. Update protoc to a current version.
-- **Evidence**: `genproto.sh` (references `../../protos`), `genproto/demo_grpc.pb.go` (line 18: `protoc v3.6.1`), `genproto/demo.pb.go` (line 19: `protoc-gen-go v1.34.2`)
+- **Recommendation**: Add `quoted_at` to GetQuoteResponse and `shipped_at` to ShipOrderResponse.
+- **Evidence**: `proto/demo.proto` (GetQuoteResponse, ShipOrderResponse — no timestamps)
 
 ### OBS-Q1: Distributed Tracing and Structured Logging
 
 - **Severity**: RISK
-- **Finding**: Structured JSON logging IS configured using logrus with `JSONFormatter` in `main.go` (lines 39–49), producing logs with `timestamp`, `severity`, and `message` fields. However, distributed tracing is NOT implemented — `initTracing()` (line 128) and `initStats()` (line 124) are TODO stubs with no implementation. OpenTelemetry packages appear in `go.mod` as indirect dependencies (via GCP profiler and gRPC) but are not used directly. No trace ID propagation, no `traceparent` header handling, no correlation IDs in log entries.
-- **Gap**: No distributed tracing. When an agent-initiated request fails, there is no trace ID to correlate the request across services. Log entries lack correlation IDs for request-level debugging.
+- **Finding**: Tracing is disabled. `initTracing()` in `main.go` (line 148) is a TODO stub. `initStats()` (line 145) is also a TODO stub. Logging uses `logrus` with JSON formatter — structured logs with `timestamp`, `severity`, `message` fields. Logs lack trace correlation IDs. The `go.mod` includes `go.opentelemetry.io/otel` as indirect dependencies but no direct instrumentation.
+- **Gap**: No distributed tracing. Structured logs lack trace correlation. Agent-initiated requests cannot be traced.
 - **Compensating Controls**:
-  - Structured JSON logging is in place — adding correlation IDs is incremental.
-  - OpenTelemetry libraries are already indirect dependencies — minimal new dependencies needed.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Implement `initTracing()` using OpenTelemetry SDK. Add a gRPC interceptor (`otelgrpc`) for automatic trace propagation. Include `trace_id` and `span_id` in log entries. The `go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc` package is already an indirect dependency.
-- **Evidence**: `main.go` (lines 39–49: structured logging configured; lines 124, 128: TODO stubs for tracing/stats), `go.mod` (OpenTelemetry indirect dependencies present)
+  - Logrus JSON structured logging provides basic log analysis
+  - Istio sidecar can provide mesh-level trace context
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Implement OpenTelemetry Go SDK instrumentation. Replace `initTracing()` TODO with actual implementation. Add trace context to logrus fields.
+- **Evidence**: `main.go` (lines 145–148, initStats and initTracing TODO stubs), `go.mod` (OpenTelemetry indirect deps)
 
 ### OBS-Q2: Alerting on Error Rates and Latency
 
 - **Severity**: RISK
-- **Finding**: No alerting configuration found. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration, no SLO-based alerting. No monitoring configuration files exist in the repository.
-- **Gap**: No alerting on error rates or latency. If the service degrades, agents will experience failures without any proactive notification.
+- **Finding**: No alerting configuration. gRPC health probes (readiness and liveness on port 50051) exist but no error rate or latency alerting. No custom metrics. `initStats()` is a TODO stub.
+- **Gap**: No alerting on error rates or latency.
 - **Compensating Controls**:
-  - gRPC health checking is implemented (`health.NewServer()` in `main.go`), enabling basic liveness detection.
-  - External monitoring tools can be configured outside this repository.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Define CloudWatch alarms for gRPC error rates (status codes ≠ OK) and P95 latency. Configure anomaly detection for traffic patterns. Integrate with PagerDuty/OpsGenie for on-call alerting.
-- **Evidence**: `main.go` (lines 87–88: health checking configured but no alerting), no monitoring configuration files
+  - gRPC health probes provide basic availability detection
+  - Istio sidecar metrics can feed Prometheus alerting
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Configure Prometheus alerting rules for gRPC error rates and p99 latency.
+- **Evidence**: `main.go` (line 145, initStats TODO), `helm-chart/templates/shippingservice.yaml` (health probes only)
 
-### ENG-Q1: Infrastructure Governance
+### DISC-Q1: Schema Versioning and API Contracts
 
 - **Severity**: RISK
-- **Finding**: No IaC files exist in the repository. No Terraform, CloudFormation, CDK, Helm charts, or Kustomize definitions. The infrastructure exposing this service (API gateways, IAM roles, secrets, network configurations) is not defined as code in this repository. A `Dockerfile` exists but defines only the container build, not the infrastructure.
-- **Gap**: No infrastructure governance. The service's deployment infrastructure is not defined, reviewed, or monitored for drift within this repository.
+- **Finding**: Proto uses `package hipstershop` with no version suffix. No `buf.yaml`. No breaking change detection. No contract tests. CI has no proto compatibility checks.
+- **Gap**: No proto versioning. No breaking change detection.
 - **Compensating Controls**:
-  - Infrastructure may be defined in a separate infrastructure repository (common in microservices architectures).
-  - The Dockerfile provides container build reproducibility.
+  - Proto file in source control provides change history via git
+  - Pin agent tool definitions to current schema
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Define the service's infrastructure as code (Terraform or CDK) within this repository or link to the infrastructure repository. Include API Gateway, IAM roles, security groups, and secrets configuration. Subject IaC changes to peer review and enable drift detection.
-- **Evidence**: No IaC files found in repository, `Dockerfile` (container build only)
+- **Recommendation**: Add version suffix (`hipstershop.v1`). Integrate `buf breaking` into CI.
+- **Evidence**: `genproto/demo.pb.go` (generated from `package hipstershop`), no `buf.yaml`
+
+### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
+
+- **Severity**: RISK
+- **Finding**: Helm charts and Terraform with PR-based review. No drift detection.
+- **Gap**: No drift detection.
+- **Compensating Controls**:
+  - Helm charts provide declarative infrastructure
+  - GitHub PR workflow enforces peer review
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Implement GitOps with ArgoCD or Flux.
+- **Evidence**: `helm-chart/templates/shippingservice.yaml`, `helm-chart/values.yaml`
 
 ### ENG-Q2: CI/CD with API Contract Testing
 
 - **Severity**: RISK
-- **Finding**: No CI/CD configuration found. No `.github/workflows/` directory, no `Jenkinsfile`, no `buildspec.yml`, no GitLab CI configuration. No contract testing (Pact or equivalent). No OpenAPI spec validation in build. No breaking change detection.
-- **Gap**: No CI/CD pipeline. API changes cannot be automatically tested or validated before deployment. No mechanism to detect breaking proto changes.
+- **Finding**: CI/CD exists via GitHub Actions and Cloud Build. The shipping service has unit tests (`shippingservice_test.go`) covering `GetQuote`, `ShipOrder`, tracking ID generation, and quote calculation. However, no API contract tests (Pact), no proto compatibility checks, no gRPC integration tests against a running server.
+- **Gap**: Unit tests exist but no API contract testing. No proto breaking change detection.
 - **Compensating Controls**:
-  - Unit tests exist in `shippingservice_test.go` that validate core RPC behavior.
-  - Proto changes would cause compilation errors if incompatible, providing a basic safety net.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Create a CI pipeline (GitHub Actions or CodeBuild) that runs `go test ./...`, validates proto compatibility using `buf breaking`, and checks for API contract compliance. Add consumer-driven contract tests.
-- **Evidence**: No CI/CD configuration files in repository, `shippingservice_test.go` (unit tests exist but no CI to run them)
-
-### ENG-Q3: Rollback Capability
-
-- **Severity**: RISK
-- **Finding**: No deployment or rollback configuration found. No blue/green deployment, no canary deployment, no CodeDeploy rollback triggers, no Helm rollback configuration, no feature flags, no traffic shifting.
-- **Gap**: If a deployment breaks agent-facing APIs, there is no documented or configured mechanism to roll back to a known-good state.
-- **Compensating Controls**:
-  - Container image tagging allows manual rollback to a previous image version.
-  - Kubernetes rollback (`kubectl rollout undo`) is available if deployed on Kubernetes.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Implement deployment configuration with automatic rollback triggers. Use blue/green or canary deployment strategy. Define rollback procedures in an operational runbook.
-- **Evidence**: `Dockerfile` (container build exists but no deployment config), no deployment configuration files
+  - Unit tests validate core business logic
+  - Staging deployment provides pre-production validation
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Add gRPC integration tests. Integrate `buf breaking` for proto compatibility.
+- **Evidence**: `shippingservice_test.go` (unit tests for GetQuote, ShipOrder, tracking ID), `.github/workflows/ci-pr.yaml`
 
 ### ENG-Q4: API Test Coverage
 
 - **Severity**: RISK
-- **Finding**: Unit tests exist in `shippingservice_test.go` with good coverage: `TestGetQuote` (validates quote value), `TestGetQuoteEmptyCart` (edge case), `TestShipOrder` (validates tracking ID length), `TestTrackingIdFormat` (regex validation), `TestTrackingIdUniqueness` (50 IDs for uniqueness), `TestCreateQuoteFromFloat` (5 sub-tests), `TestCreateQuoteFromCount`, `TestGetRandomLetterCode` (100 iterations), `TestGetRandomNumber` (5 digit counts), `TestQuoteString`. Tests directly invoke gRPC handlers. However, no contract tests, no integration tests, no error handling tests (missing address, nil items), and no CI pipeline to run tests.
-- **Gap**: Unit tests cover happy path but not error cases. No contract tests to validate proto compatibility. No CI pipeline ensures tests run before deployment.
+- **Finding**: Unit tests exist in `shippingservice_test.go` covering `GetQuote` (basic and empty cart), `ShipOrder` (basic), tracking ID format and uniqueness, quote creation, and random number generation. Good coverage of business logic. However, no gRPC integration tests, no error path testing, no load testing. Tests run via `go test` in CI.
+- **Gap**: Unit tests cover happy paths but no error paths, no integration tests, no contract tests.
 - **Compensating Controls**:
-  - Existing unit tests provide basic API behavior validation.
-  - Protobuf schema provides compile-time type safety.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Add error case tests (nil address, empty items, boundary values). Add contract tests using `buf breaking` for proto compatibility. Create a CI pipeline that runs all tests. Add test coverage reporting.
-- **Evidence**: `shippingservice_test.go` (11 test functions with good happy-path coverage but no error case testing)
+  - Existing unit tests validate core business logic
+  - Smoke tests via load generator provide end-to-end validation
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Add error path tests. Add gRPC integration tests against a running server.
+- **Evidence**: `shippingservice_test.go` (TestGetQuote, TestShipOrder, TestTrackingIdFormat, TestTrackingIdUniqueness, etc.)
 
-### ENG-Q5: Encryption at Rest
+### ENG-Q5: Encryption at Rest for Agent-Accessible Data
 
 - **Severity**: RISK
-- **Finding**: No encryption at rest configuration found. No KMS key references, no `kms_key_id` on any resource. The service is stateless with no data stores (no S3, no RDS, no DynamoDB, no EBS volumes). No IaC defining encrypted storage.
-- **Gap**: While the service is currently stateless, there is no encryption configuration for any future data storage. If persistence is added (STATE-Q2 recommendation), encryption at rest must be configured from the start.
+- **Finding**: The shipping service does not persist data. Address data and tracking IDs exist only in-memory during request processing. However, log output may contain address data (currently logs only start/complete messages, not request details). No persistent data store to encrypt.
+- **Gap**: No persistent data store. Address data in-memory only. Log storage encryption depends on K8s node configuration.
 - **Compensating Controls**:
-  - Service is stateless — no data at rest to encrypt currently.
-  - AWS services default to encryption at rest (S3, DynamoDB) when properly configured.
-- **Remediation Timeline**: When data persistence is added
-- **Recommendation**: When adding data persistence, ensure all data stores are encrypted at rest using customer-managed KMS keys. Define encryption configuration in IaC.
-- **Evidence**: No IaC files, no data store configuration, `main.go` (no database connections)
+  - In-memory-only processing means PII is not persisted by the application
+  - Current logging does not include address details
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Ensure address data is not logged. If shipment records are persisted (per STATE-Q2), ensure encryption at rest.
+- **Evidence**: `main.go` (logs only start/complete messages), `tracker.go` (in-memory), `quote.go` (in-memory)
+
+---
 
 ## INFOs — Architecture and Design Inputs
 
 ### API-Q1: Documented API Interface
 
 - **Severity**: INFO
-- **Finding**: The service exposes a well-defined gRPC interface via Protocol Buffers. `ShippingService` implements two RPCs: `GetQuote` (shipping cost estimation) and `ShipOrder` (tracking ID generation). The generated code in `genproto/demo_grpc.pb.go` defines the full service contract with strongly typed request/response messages. gRPC reflection is enabled via `reflection.Register(srv)` in `main.go`, allowing runtime schema discovery. The service does NOT require direct database access, file-based exchange, or UI automation for integration.
-- **Implication**: gRPC with protobuf is an excellent agent integration surface. Agent tools can be auto-generated from the proto definition. gRPC reflection further enhances runtime discoverability.
-- **Recommendation**: Continue using gRPC as the primary integration interface. Consider adding a gRPC-Web or gRPC-Gateway proxy if HTTP/REST clients need to integrate alongside gRPC agents.
-- **Evidence**: `main.go` (line 86: `pb.RegisterShippingServiceServer(srv, svc)`; line 91: `reflection.Register(srv)`), `genproto/demo_grpc.pb.go` (ShippingService definition with GetQuote and ShipOrder RPCs)
+- **Finding**: The service exposes a gRPC API with two RPCs: `GetQuote(GetQuoteRequest) returns (GetQuoteResponse)` and `ShipOrder(ShipOrderRequest) returns (ShipOrderResponse)`. Well-defined, typed interface using Protocol Buffers. gRPC server reflection is enabled for runtime discovery.
+- **Implication**: The gRPC interface is agent-consumable with runtime discovery via reflection.
+- **Recommendation**: No action required.
+- **Evidence**: `genproto/demo.pb.go`, `main.go` (line 96, `reflection.Register(srv)`)
 
 ### API-Q4: Idempotent Write Operations ⚡
 
 - **Severity**: INFO
 - **Conditional**: agent_scope is "read-only" — evaluated as INFO
-- **Finding**: `ShipOrder` is a write operation that generates a random tracking ID via `CreateTrackingId(baseAddress)` in `tracker.go`. The same input (same address and items) produces a different tracking ID each time — the operation is NOT idempotent. `GetQuote` IS idempotent (same item count always returns $8.99). No idempotency key support, no unique constraint enforcement on business keys.
-- **Implication**: For read-only agent scope, this is informational only since agents would only call `GetQuote`. If the agent scope expands to write-enabled, `ShipOrder` non-idempotency becomes a BLOCKER — duplicate agent retries would create duplicate shipments.
-- **Recommendation**: When expanding to write-enabled agent scope, add idempotency key support to `ShipOrder`. Accept an `idempotency_key` field in the request and return the same tracking ID for duplicate keys.
-- **Evidence**: `tracker.go` (CreateTrackingId uses `rand.Intn()` — non-deterministic), `quote.go` (CreateQuoteFromCount — deterministic), `main.go` (lines 107–117: ShipOrder implementation)
+- **Finding**: `GetQuote` is read-only and deterministic (same item count → same cost). `ShipOrder` is a write operation that generates a random tracking ID — not idempotent. Repeated calls with the same address/items produce different tracking IDs. No idempotency key in request schema.
+- **Implication**: ShipOrder is non-idempotent. If scope changes to write-enabled, this needs attention.
+- **Recommendation**: No action for read-only scope. Add idempotency key to ShipOrderRequest if write-enabled.
+- **Evidence**: `main.go` (ShipOrder generates random tracking ID), `tracker.go` (random components in ID)
 
-### API-Q6: Structured Response Format
-
-- **Severity**: INFO
-- **Finding**: gRPC uses Protocol Buffers — a strongly typed, structured binary format. `GetQuoteResponse` returns a `Money` message with `CurrencyCode` (string), `Units` (int64), and `Nanos` (int32). `ShipOrderResponse` returns a `TrackingId` (string). All response types are defined in `genproto/demo.pb.go` with full type information.
-- **Implication**: Protocol Buffers are excellent for machine consumption. Agent tools can parse responses with zero ambiguity. The strongly typed schema eliminates format-related parsing errors.
-- **Recommendation**: No action needed. Protobuf is the ideal response format for agent integration. If HTTP/REST access is needed, gRPC-Gateway can auto-generate JSON REST endpoints from the proto definition.
-- **Evidence**: `genproto/demo.pb.go` (GetQuoteResponse with Money message, ShipOrderResponse with TrackingId), `genproto/demo_grpc.pb.go` (typed service interface)
-
-### API-Q8: Event Emission for State Changes
+### API-Q5: Structured Response Format
 
 - **Severity**: INFO
-- **Finding**: No event emission capability found. No SNS/SQS/EventBridge/Kafka integration. No webhook endpoints. No CDC pipelines. The service does not emit events when shipping quotes are generated or orders are shipped.
-- **Implication**: Agents cannot subscribe to shipping events for proactive workflows (e.g., "notify when shipment status changes"). All agent interaction must be request/response. For initial read-only deployment, this is acceptable.
-- **Recommendation**: When the service becomes stateful, add event emission for key state changes (shipment created, shipment shipped, shipment delivered) via SNS or EventBridge. This enables event-driven agent patterns.
-- **Evidence**: No event/webhook code or configuration in any repository file
+- **Finding**: Responses are Protocol Buffers over gRPC. `GetQuoteResponse` contains `cost_usd` (Money message). `ShipOrderResponse` contains `tracking_id` (string). Strongly typed.
+- **Implication**: Protobuf is efficient for machine consumption.
+- **Recommendation**: Consider gRPC-JSON transcoding if agents require JSON.
+- **Evidence**: `genproto/demo.pb.go` (GetQuoteResponse, ShipOrderResponse)
 
-### API-Q9: Rate Limit Documentation and Headers
-
-- **Severity**: INFO
-- **Finding**: No rate limiting configuration found. No API Gateway throttle settings. No WAF rate rules. No rate limiting middleware. No `X-RateLimit-Remaining` or `Retry-After` response headers (or gRPC metadata equivalents). No `aws_api_gateway_usage_plan` in IaC.
-- **Implication**: Agents calling this service at machine speed have no self-throttling signal. Without rate limit information in responses, agents must rely on external configuration to manage call frequency.
-- **Recommendation**: When rate limiting is implemented (STATE-Q5), add gRPC response metadata for rate limit status: `x-ratelimit-remaining`, `x-ratelimit-reset`. Document rate limits in the service API documentation.
-- **Evidence**: `main.go` (no rate limiting interceptors), no IaC files with API Gateway throttling
-
-### API-Q10: API Latency Profile
+### API-Q8: Rate Limit Documentation and Headers
 
 - **Severity**: INFO
-- **Finding**: No performance benchmarks, load test results, or latency metrics found. The service performs only in-memory computation: `GetQuote` multiplies item count by a fixed price (`quote.go`), and `ShipOrder` generates a random string (`tracker.go`). No I/O, no database calls, no external API calls. P95 latency is expected to be sub-millisecond but no evidence exists to confirm this.
-- **Implication**: The lightweight in-memory implementation suggests sub-second P95 latency, making synchronous agent tool calls practical. However, without actual latency measurements, this is an assumption. If carrier API integrations are added, latency will increase significantly.
-- **Recommendation**: Add latency benchmarks using Go's `testing.B` benchmarks. When deployed, configure CloudWatch or Prometheus metrics to track P95/P99 latency.
-- **Evidence**: `quote.go` (simple arithmetic — no I/O), `tracker.go` (random string generation — no I/O), `main.go` (no external service calls in RPC handlers)
+- **Finding**: No rate limiting configured. No rate limit documentation.
+- **Implication**: Agents have no rate limit feedback.
+- **Recommendation**: Document throughput capacity. Consider gRPC rate limiting.
+- **Evidence**: `main.go` (no rate limiting), `helm-chart/templates/shippingservice.yaml`
 
-### DATA-Q8: Data Quality Awareness
+### AUTH-Q4: Identity Propagation and Delegation
 
 - **Severity**: INFO
-- **Finding**: No data quality scores, completeness metrics, duplicate detection, or data freshness SLAs found. The service is stateless — it does not store data, so traditional data quality metrics do not apply. `GetQuote` returns a hardcoded $8.99 for any non-empty cart. `ShipOrder` generates random tracking IDs.
-- **Implication**: Data quality is not a concern for the current stateless implementation. If the service evolves to use real carrier data (actual shipping rates, real tracking), data quality metrics become important for agent decision-making.
-- **Recommendation**: When integrating with real carrier APIs, add data quality monitoring for carrier rate freshness, tracking status accuracy, and delivery estimate reliability.
-- **Evidence**: `quote.go` (hardcoded `8.99` rate), `tracker.go` (random ID generation), `main.go` (stateless implementation)
+- **Finding**: No identity propagation. `GetQuoteRequest` and `ShipOrderRequest` contain `Address` and `CartItem` data but no user identity. The service does not know who is requesting the quote or shipment.
+- **Implication**: No caller identity propagation. Limited audit capability for PII-processing service.
+- **Recommendation**: Add caller identity context when AUTH-Q1 is resolved.
+- **Evidence**: `genproto/demo.pb.go` (no user identity in requests), `main.go`
+
+### STATE-Q1: Compensation and Rollback ⚡
+
+- **Severity**: INFO
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: `ShipOrder` is a write operation with no compensation. No `CancelShipment` RPC. Once a tracking ID is generated, it cannot be voided. `GetQuote` is read-only.
+- **Implication**: No compensation for write operations. Mitigated by read-only scope.
+- **Recommendation**: No action for read-only scope. Implement CancelShipment if write-enabled.
+- **Evidence**: `main.go` (ShipOrder — no compensation), `genproto/demo.pb.go` (no cancel RPC)
+
+### STATE-Q5: Rate Limiting and Throttling
+
+- **Severity**: INFO
+- **Finding**: No rate limiting. Resource limits (CPU: 200m, memory: 128Mi) provide coarse ceiling. In-memory operations with no external dependencies limit blast radius.
+- **Implication**: Runaway agent loop limited to pod resource exhaustion.
+- **Recommendation**: Consider gRPC rate limiting via interceptor.
+- **Evidence**: `helm-chart/templates/shippingservice.yaml` (resource limits), `helm-chart/values.yaml`
+
+### STATE-Q6: Blast Radius and Transaction Limits ⚡
+
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: `ShipOrder` generates tracking IDs with no limits. `GetQuote` is read-only. Read-only scope mitigates.
+- **Gap**: N/A for read-only scope.
+- **Recommendation**: No action for current scope.
+- **Evidence**: `main.go` (ShipOrder), `tracker.go`
+
+### HITL-Q3: Sandbox/Staging Environment
+
+- **Severity**: INFO
+- **Finding**: CI pipeline deploys to staging GKE cluster with per-PR namespaces. Full stack via Skaffold with smoke tests.
+- **Gap**: No dedicated agent testing documentation.
+- **Recommendation**: Document staging environment for agent testing.
+- **Evidence**: `.github/workflows/ci-pr.yaml`, `cloudbuild.yaml`
+
+### DATA-Q2: Data Residency and Sovereignty ⚡
+
+- **Severity**: INFO
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: Address data exists only in-memory during request processing. Not persisted. Processing region determined by GKE cluster. GDPR/CCPA may apply to address processing.
+- **Gap**: No formal data residency documentation for PII processing.
+- **Recommendation**: Document processing region for GDPR/CCPA compliance.
+- **Evidence**: `main.go` (in-memory processing), `helm-chart/values.yaml`
+
+### DATA-Q6: PII Redaction in Logs
+
+- **Severity**: INFO
+- **Finding**: Current logging does not include address details. Logs contain only `[GetQuote] received request` / `completed request` and `[ShipOrder] received request` / `completed request` messages. No PII in log output.
+- **Gap**: None — address data is not currently logged.
+- **Recommendation**: Maintain current practice of not logging address details.
+- **Evidence**: `main.go` (lines 113–114, 128–129, log messages without request details)
+
+### DATA-Q7: Data Quality Awareness
+
+- **Severity**: INFO
+- **Finding**: `GetQuote` calculates cost based on item count — deterministic and complete. `ShipOrder` generates tracking IDs algorithmically. No external data source that could degrade. Input validation is minimal (no address validation).
+- **Gap**: No address validation. Invalid addresses are accepted without error.
+- **Recommendation**: Consider adding address validation for data quality.
+- **Evidence**: `quote.go` (deterministic calculation), `tracker.go` (algorithmic generation), `main.go` (no input validation)
 
 ### DISC-Q2: Semantically Meaningful Field Names
 
 - **Severity**: INFO
-- **Finding**: Protobuf field names are clear and semantically meaningful: `product_id`, `quantity`, `street_address`, `city`, `state`, `country`, `zip_code`, `currency_code`, `units`, `nanos`, `tracking_id`, `cost_usd`. No legacy abbreviations or cryptic codes. Go struct tags include JSON field names for serialization.
-- **Implication**: Field names are immediately interpretable by LLM-based agents. No data dictionary lookup required. This is a positive finding that accelerates agent tool definition.
-- **Recommendation**: Maintain current naming conventions. Add field-level documentation comments in the `.proto` source file to further enhance agent understanding.
-- **Evidence**: `genproto/demo.pb.go` (Address struct fields: `StreetAddress`, `City`, `State`, `Country`, `ZipCode`; Money: `CurrencyCode`, `Units`, `Nanos`)
+- **Finding**: Proto field names are human-readable: `street_address`, `city`, `state`, `country`, `zip_code`, `tracking_id`, `cost_usd`, `product_id`, `quantity`. No legacy abbreviations.
+- **Gap**: None — naming is clear and semantic.
+- **Recommendation**: No action required.
+- **Evidence**: `genproto/demo.pb.go` (Address, GetQuoteRequest, ShipOrderRequest field names)
 
 ### DISC-Q3: Data Catalog / Metadata Layer
 
 - **Severity**: INFO
-- **Finding**: No data catalog or metadata layer exists. No AWS Glue Data Catalog, no Collibra, no Alation, no DataHub. No metadata files or data dictionaries in the repository.
-- **Implication**: Agent tool authors must read the proto definition to understand what data the service handles. No centralized metadata discovery for this service.
-- **Recommendation**: For a microservice this simple, the proto definition serves as the de facto metadata layer. For the broader microservices platform, consider a service catalog (e.g., Backstage) that indexes all services and their proto definitions.
-- **Evidence**: No metadata or data catalog files in the repository
-
-### DISC-Q4: Data Lineage
-
-- **Severity**: INFO
-- **Finding**: No data lineage tools or documentation exist. No Apache Atlas, no AWS Glue DataBrew, no ETL pipeline documentation, no data flow diagrams, no source-to-target mappings.
-- **Implication**: If an agent produces incorrect output based on shipping data, there is no lineage to trace where the data originated (e.g., which frontend submitted the address, which service called ShipOrder).
-- **Recommendation**: For the current simple service, implement request-level tracing (OBS-Q1) as a lightweight lineage mechanism. For the broader platform, consider data lineage tooling.
-- **Evidence**: No lineage tools or documentation in the repository
+- **Finding**: No formal data catalog. Proto file serves as de facto schema documentation.
+- **Gap**: No formal metadata layer.
+- **Recommendation**: No action required for current scope.
+- **Evidence**: `genproto/demo.pb.go`
 
 ### OBS-Q3: Business Outcome Metrics
 
 - **Severity**: INFO
-- **Finding**: No custom business metrics published. No `cloudwatch.put_metric_data` calls. No business KPI dashboards. No metrics for quote accuracy, shipment success rate, or tracking ID usage. Only infrastructure-level metrics (if deployed with monitoring) would exist.
-- **Implication**: When agents consume this service, there are no business-level signals to determine whether agent interactions produce good outcomes (e.g., are agent-initiated quotes converting to orders? Are agent-generated shipments being delivered successfully?).
-- **Recommendation**: Add custom metrics for: quotes generated per minute, shipments created per minute, average items per shipment. When deployed, track these in CloudWatch custom metrics or Prometheus.
-- **Evidence**: `main.go` (no metrics publication code), no monitoring configuration files
+- **Finding**: No custom business metrics. `initStats()` is a TODO stub. No shipping cost distribution, no shipment volume metrics, no quote-to-shipment conversion tracking.
+- **Gap**: No business outcome measurement.
+- **Recommendation**: Implement shipping volume and cost metrics.
+- **Evidence**: `main.go` (line 145, initStats TODO stub)
+
+### ENG-Q3: Rollback Capability
+
+- **Severity**: INFO
+- **Finding**: Helm rollback available. K8s rolling update. No canary or automated rollback. Distroless container image provides minimal attack surface.
+- **Gap**: No automated rollback triggers.
+- **Recommendation**: Consider Flagger or Argo Rollouts.
+- **Evidence**: `helm-chart/Chart.yaml`, `helm-chart/templates/shippingservice.yaml`, `Dockerfile` (distroless base)
+
+---
 
 ## Detailed Findings
 
@@ -594,393 +440,366 @@ Exclude from agent toolset or plan major remediation before re-evaluation. Three
 
 #### API-Q1: Documented API Interface
 - **Severity**: INFO
-- **Finding**: The service exposes a well-defined gRPC interface via Protocol Buffers. `ShippingService` implements two RPCs: `GetQuote` and `ShipOrder`. gRPC reflection is enabled via `reflection.Register(srv)`. No direct database access, file-based exchange, or UI automation required.
-- **Gap**: N/A — the service passes this check. gRPC with protobuf is a documented, typed API interface.
-- **Recommendation**: Continue using gRPC. Consider adding gRPC-Gateway for HTTP/REST agent clients.
-- **Evidence**: `main.go`, `genproto/demo_grpc.pb.go`
+- **Finding**: gRPC API with `GetQuote` and `ShipOrder` RPCs. Well-defined proto interface. gRPC reflection enabled.
+- **Gap**: Monolithic proto file shared across all services.
+- **Recommendation**: Extract shipping service proto into standalone file.
+- **Evidence**: `genproto/demo.pb.go`, `main.go` (reflection.Register)
 
 #### API-Q2: Machine-Readable API Specification
 - **Severity**: RISK
-- **Finding**: Generated protobuf code defines the schema. Source `.proto` file is external (`../../protos/demo.proto`). gRPC reflection enabled for runtime discovery. No OpenAPI spec in repo.
-- **Gap**: Source proto definition is not in this repository.
-- **Recommendation**: Include `demo.proto` in this repository. Add CI validation step.
-- **Evidence**: `genproto.sh`, `main.go`, `genproto/demo_grpc.pb.go`
+- **Finding**: Proto IDL is machine-readable. gRPC reflection enabled. Monolithic proto shared across services.
+- **Gap**: No standalone spec. Reflection is unauthenticated.
+- **Recommendation**: Secure reflection. Extract standalone proto.
+- **Evidence**: `main.go` (reflection.Register), `genproto/demo.pb.go`
 
 #### API-Q3: Structured Error Responses
 - **Severity**: RISK
-- **Finding**: gRPC provides structured error codes via `codes` and `status` packages. Core RPCs never return errors — they always succeed. No custom error types or retryable classification.
-- **Gap**: No error classification for agent consumption. Missing input validation.
-- **Recommendation**: Add input validation returning appropriate gRPC status codes. Implement structured error details.
-- **Evidence**: `main.go` (GetQuote and ShipOrder implementations)
+- **Finding**: Minimal error handling. No rich error model. No `errdetails` usage.
+- **Gap**: No rich error model beyond gRPC status codes.
+- **Recommendation**: Implement gRPC rich error model with errdetails.
+- **Evidence**: `main.go` (GetQuote, ShipOrder handlers)
 
 #### API-Q4: Idempotent Write Operations ⚡
 - **Severity**: INFO
 - **Conditional**: agent_scope is "read-only" — evaluated as INFO
-- **Finding**: `ShipOrder` generates a random tracking ID — not idempotent. `GetQuote` is idempotent. No idempotency key support.
-- **Gap**: `ShipOrder` is non-idempotent (informational for read-only scope).
-- **Recommendation**: Add idempotency key support when expanding to write-enabled scope.
-- **Evidence**: `tracker.go`, `quote.go`, `main.go`
+- **Finding**: GetQuote is deterministic. ShipOrder generates random tracking IDs — not idempotent.
+- **Gap**: ShipOrder is non-idempotent. Mitigated by read-only scope.
+- **Recommendation**: No action for read-only scope.
+- **Evidence**: `main.go` (ShipOrder), `tracker.go` (random ID generation)
 
-#### API-Q5: API Versioning and Deprecation
-- **Severity**: RISK
-- **Finding**: Service registered as `hipstershop.ShippingService` with no version suffix. No changelog or deprecation policy.
-- **Gap**: No API versioning strategy.
-- **Recommendation**: Adopt protobuf package versioning (e.g., `hipstershop.v1.ShippingService`).
-- **Evidence**: `genproto/demo_grpc.pb.go`
-
-#### API-Q6: Structured Response Format
+#### API-Q5: Structured Response Format
 - **Severity**: INFO
-- **Finding**: gRPC uses Protocol Buffers — strongly typed, structured binary format. Excellent for machine consumption.
-- **Gap**: N/A — positive finding.
-- **Recommendation**: No action needed. Protobuf is ideal for agent integration.
-- **Evidence**: `genproto/demo.pb.go`, `genproto/demo_grpc.pb.go`
+- **Finding**: Protocol Buffers over gRPC. Strongly typed responses.
+- **Gap**: Binary protobuf may need transcoding for LLM agents.
+- **Recommendation**: Consider gRPC-JSON transcoding.
+- **Evidence**: `genproto/demo.pb.go`
 
-#### API-Q7: Asynchronous Operation Support
-- **Severity**: RISK
-- **Finding**: Both RPCs are synchronous. No async patterns, no background job frameworks, no polling endpoints.
-- **Gap**: No async support. Current operations are lightweight, so this is low-impact.
-- **Recommendation**: Implement async patterns if operations become long-running.
-- **Evidence**: `main.go`, `quote.go`, `tracker.go`
+#### API-Q6: Asynchronous Operation Support
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered.
+- **Trigger**: Service has operations >30s OR long-running workflows
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
-#### API-Q8: Event Emission for State Changes
+#### API-Q7: Event Emission for State Changes
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered.
+- **Trigger**: Service has state changes (stateful-crud, orchestrator)
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
+
+#### API-Q8: Rate Limit Documentation and Headers
 - **Severity**: INFO
-- **Finding**: No event emission. No SNS/SQS/EventBridge/Kafka/webhook integration.
-- **Gap**: No event-driven patterns for proactive agent workflows.
-- **Recommendation**: Add event emission for state changes when service becomes stateful.
-- **Evidence**: No event/webhook code in any repository file
-
-#### API-Q9: Rate Limit Documentation and Headers
-- **Severity**: INFO
-- **Finding**: No rate limiting configuration. No rate limit headers in responses.
-- **Gap**: No self-throttling signal for agents.
-- **Recommendation**: Add rate limit response metadata when rate limiting is implemented.
-- **Evidence**: `main.go` (no rate limiting interceptors)
-
-#### API-Q10: API Latency Profile
-- **Severity**: INFO
-- **Finding**: No latency benchmarks. In-memory computation suggests sub-millisecond P95 but no evidence confirms this.
-- **Gap**: No measured latency profile.
-- **Recommendation**: Add Go benchmarks and production latency metrics.
-- **Evidence**: `quote.go`, `tracker.go`, `main.go`
+- **Finding**: No rate limiting. No documentation.
+- **Gap**: No rate limit feedback.
+- **Recommendation**: Document throughput capacity.
+- **Evidence**: `main.go`, `helm-chart/templates/shippingservice.yaml`
 
 ### 02 — Authentication, Authorization, and Identity
 
 #### AUTH-Q1: Machine Identity Authentication
 - **Severity**: BLOCKER
-- **Finding**: gRPC server created with `grpc.NewServer()` — no interceptors, no TLS, no auth middleware. Any client can connect and invoke RPCs.
-- **Gap**: No machine identity authentication. No principal attribution.
-- **Recommendation**: Add gRPC auth interceptor. Implement mTLS or OAuth2 client credentials.
-- **Evidence**: `main.go` (lines 73–85)
+- **Finding**: `grpc.NewServer()` with no auth. AuthorizationPolicies disabled. Reflection enabled without auth.
+- **Gap**: No machine identity authentication.
+- **Recommendation**: Enable Istio AuthorizationPolicies. Add gRPC interceptor.
+- **Evidence**: `main.go` (line 89, grpc.NewServer(); line 96, reflection.Register), `helm-chart/values.yaml`
 
 #### AUTH-Q2: Scoped Permissions (Least Privilege)
 - **Severity**: RISK
-- **Finding**: No authorization model. Both RPCs accessible to all callers equally.
-- **Gap**: Cannot grant read-only access to `GetQuote` without also granting access to `ShipOrder`.
-- **Recommendation**: Implement method-level authorization via gRPC interceptor.
-- **Evidence**: `main.go`
+- **Finding**: AuthorizationPolicies disabled. Helm template restricts to frontend and checkoutservice but not deployed.
+- **Gap**: No caller restriction.
+- **Recommendation**: Enable AuthorizationPolicies. Create agent-specific service accounts.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/shippingservice.yaml`
 
 #### AUTH-Q3: Action-Level Authorization
 - **Severity**: RISK
-- **Finding**: No action-level authorization. No ABAC, no fine-grained RBAC.
-- **Gap**: Cannot enforce read vs write distinction per caller.
-- **Recommendation**: Add gRPC interceptor mapping principals to allowed methods.
-- **Evidence**: `main.go`, `genproto/demo_grpc.pb.go`
+- **Finding**: No authorization. Both GetQuote (read) and ShipOrder (write) equally accessible.
+- **Gap**: No action-level authorization.
+- **Recommendation**: Enable AuthorizationPolicies. Separate rules for read vs write RPCs.
+- **Evidence**: `main.go`, `helm-chart/values.yaml`
 
-#### AUTH-Q4: Identity Propagation
+#### AUTH-Q4: Identity Propagation and Delegation
+- **Severity**: INFO
+- **Finding**: No identity propagation. Requests contain address and items but no user identity.
+- **Gap**: No identity propagation.
+- **Recommendation**: Add caller identity context.
+- **Evidence**: `genproto/demo.pb.go` (no user identity in requests)
+
+#### AUTH-Q5: Credential Management
 - **Severity**: RISK
-- **Finding**: No JWT parsing, no OAuth2 token exchange, no user context in gRPC metadata.
-- **Gap**: Cannot propagate originating user context through requests.
-- **Recommendation**: Add gRPC metadata extraction for identity tokens.
-- **Evidence**: `main.go`
+- **Finding**: No secrets used. Only PORT env var. Credential-free architecture.
+- **Gap**: No credential management framework.
+- **Recommendation**: Maintain credential-free architecture.
+- **Evidence**: `main.go` (PORT only), `Dockerfile`
 
-#### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-- **Severity**: RISK
-- **Finding**: No distinction between agent identity modes. No separate credentials or audit fields.
-- **Gap**: Cannot differentiate agent-as-self from agent-on-behalf-of-user.
-- **Recommendation**: Define separate credential types for each mode.
-- **Evidence**: `main.go`
-
-#### AUTH-Q6: Credential Management
-- **Severity**: RISK
-- **Finding**: No hardcoded credentials found. No secrets management integration. GCP Profiler uses environment-based auth.
-- **Gap**: No secrets management system for when authentication is added.
-- **Recommendation**: Integrate with AWS Secrets Manager when implementing auth.
-- **Evidence**: `main.go`, `Dockerfile`, `go.mod`
-
-#### AUTH-Q7: Immutable Audit Logging ⚡
+#### AUTH-Q6: Immutable Audit Logging ⚡
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: Structured JSON logging configured (logrus JSONFormatter). Logs are generic with no caller identity. No immutable storage.
-- **Gap**: No principal attribution in logs. No immutable log storage.
-- **Recommendation**: Add caller identity to log entries. Configure immutable log storage.
-- **Evidence**: `main.go` (lines 39–49, 97–110)
+- **Finding**: Logrus JSON logging. No principal attribution. No immutable storage. Tracing is TODO stub.
+- **Gap**: No immutable audit trail.
+- **Recommendation**: Add principal attribution. Forward to immutable store. Implement tracing.
+- **Evidence**: `main.go` (logrus formatter, initTracing TODO)
 
-#### AUTH-Q8: Agent Identity Suspension
+#### AUTH-Q7: Agent Identity Suspension
 - **Severity**: RISK
-- **Finding**: No mechanism for suspending agent identities. No authentication framework to provide suspension.
-- **Gap**: Cannot suspend a misbehaving agent without shutting down the service.
-- **Recommendation**: Implement per-identity revocation when adding authentication.
-- **Evidence**: `main.go`
+- **Finding**: No suspension mechanism. AuthorizationPolicies disabled.
+- **Gap**: No mechanism to suspend misbehaving agent.
+- **Recommendation**: Implement agent-specific ServiceAccounts with AuthorizationPolicy suspension.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/shippingservice.yaml`
 
 ### 03 — State Management and Transactional Integrity
 
 #### STATE-Q1: Compensation and Rollback ⚡
-- **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No compensation or rollback logic. `ShipOrder` generates a random tracking ID — one-way operation.
-- **Gap**: No way to cancel or reverse a shipment.
-- **Recommendation**: Add `CancelShipment` RPC. Implement shipment lifecycle state machine.
-- **Evidence**: `main.go`, `tracker.go`
+- **Severity**: INFO
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: ShipOrder has no compensation. No CancelShipment RPC. Read-only scope mitigates.
+- **Gap**: No compensation for writes.
+- **Recommendation**: No action for read-only scope.
+- **Evidence**: `main.go` (ShipOrder), `genproto/demo.pb.go`
 
 #### STATE-Q2: Queryable Current State
 - **Severity**: RISK
-- **Finding**: Service is entirely stateless. No stored state, no query endpoints.
-- **Gap**: Cannot query shipment status or historical quotes.
-- **Recommendation**: Add `GetShipmentStatus` RPC with persistent data store.
-- **Evidence**: `main.go`, `tracker.go`
+- **Finding**: No persistent state. Tracking IDs and quotes not stored. No query capability.
+- **Gap**: No queryable state.
+- **Recommendation**: Implement GetShipmentStatus RPC.
+- **Evidence**: `main.go` (no persistence), `tracker.go`, `quote.go`
 
-#### STATE-Q3: Concurrency Controls
-- **Severity**: RISK
-- **Finding**: No concurrency controls. Stateless design minimizes risk. Go 1.25+ provides safe global rand.
-- **Gap**: No concurrency controls for future stateful features.
-- **Recommendation**: Implement optimistic locking when adding persistence.
-- **Evidence**: `tracker.go`, `go.mod`, `main.go`
+#### STATE-Q3: Concurrency Controls ⚡
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered. agent_scope is read-only.
+- **Trigger**: agent_scope is write-enabled AND service has persistent state
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### STATE-Q4: Circuit Breakers and Resilience
 - **Severity**: RISK
-- **Finding**: No circuit breakers for core operations. Profiler init has retry logic. No external dependencies for core RPCs.
-- **Gap**: No resilience patterns for future external dependencies.
-- **Recommendation**: Implement circuit breakers when adding external service calls.
-- **Evidence**: `main.go`, `quote.go`, `tracker.go`
+- **Finding**: No resilience patterns. No external dependencies. No graceful shutdown.
+- **Gap**: No resilience infrastructure.
+- **Recommendation**: Add graceful shutdown. Implement circuit breaker for future external APIs.
+- **Evidence**: `main.go` (no circuit breaker, no graceful shutdown)
 
 #### STATE-Q5: Rate Limiting and Throttling
-- **Severity**: RISK
-- **Finding**: No rate limiting. No API Gateway, no WAF, no interceptors for throttling.
-- **Gap**: Runaway agent loop could overwhelm the service.
-- **Recommendation**: Add gRPC rate limiting interceptor.
-- **Evidence**: `main.go`
+- **Severity**: INFO
+- **Finding**: No rate limiting. Resource limits provide coarse ceiling. In-memory operations limit blast radius.
+- **Gap**: No request-level throttling.
+- **Recommendation**: Consider gRPC rate limiting.
+- **Evidence**: `helm-chart/templates/shippingservice.yaml`, `helm-chart/values.yaml`
 
-#### STATE-Q6: Blast Radius and Transaction Limits
-- **Severity**: RISK
-- **Finding**: No transaction limits per agent identity.
-- **Gap**: No configurable blast radius controls.
-- **Recommendation**: Implement per-identity transaction limits.
-- **Evidence**: `main.go`, no configuration files
+#### STATE-Q6: Blast Radius and Transaction Limits ⚡
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No transaction limits. Read-only scope mitigates.
+- **Gap**: N/A for read-only scope.
+- **Recommendation**: No action for current scope.
+- **Evidence**: `main.go`, `tracker.go`
 
 #### STATE-Q7: Infrastructure Capacity for Agent Traffic
-- **Severity**: RISK
-- **Finding**: No load testing, no auto-scaling, no capacity planning.
-- **Gap**: Unknown capacity limits for agent traffic patterns.
-- **Recommendation**: Run load tests. Define auto-scaling policies.
-- **Evidence**: `Dockerfile`
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered. Service is P1 priority, not P0.
+- **Trigger**: Service is P0 priority OR is on the critical path
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 ### 04 — Human-in-the-Loop and Approval Workflows
 
-#### HITL-Q1: Draft/Pending State
-- **Severity**: RISK
-- **Finding**: No draft/pending state. Service is stateless. `ShipOrder` immediately returns a tracking ID.
-- **Gap**: No ability for human review before shipment execution.
-- **Recommendation**: Add `CreatePendingShipment` and `ConfirmShipment` RPCs.
-- **Evidence**: `main.go`
+#### HITL-Q1: Draft/Pending State ⚡
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered. agent_scope is read-only.
+- **Trigger**: agent_scope is write-enabled
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
-#### HITL-Q2: Configurable Approval Gates
-- **Severity**: RISK
-- **Finding**: No approval workflow. No human-in-the-loop gates. No Step Functions with approval tasks.
-- **Gap**: No mechanism to require human approval for high-risk operations.
-- **Recommendation**: Add configurable approval gates at the service level.
-- **Evidence**: No approval-related code in any repository file
+#### HITL-Q2: Configurable Approval Gates ⚡
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered. agent_scope is read-only.
+- **Trigger**: agent_scope is write-enabled
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### HITL-Q3: Sandbox/Staging Environment
-- **Severity**: RISK
-- **Finding**: Dockerfile exists. No docker-compose, no staging config, no seed data, no environment-specific configuration.
-- **Gap**: No sandbox/staging environment for agent testing.
-- **Recommendation**: Create docker-compose.yml and environment-specific configurations.
-- **Evidence**: `Dockerfile`, `README.md`
+- **Severity**: INFO
+- **Finding**: Staging GKE cluster with per-PR namespaces. Full stack via Skaffold.
+- **Gap**: No dedicated agent testing documentation.
+- **Recommendation**: Document staging environment for agent testing.
+- **Evidence**: `.github/workflows/ci-pr.yaml`, `cloudbuild.yaml`
 
 ### 05 — Data Accessibility and Quality
 
 #### DATA-Q1: Sensitive Data Classification
 - **Severity**: BLOCKER
-- **Finding**: `Address` message includes PII fields (street_address, city, state, country, zip_code). The broader proto includes CreditCardInfo and email. No data classification tags or field-level access controls.
-- **Gap**: PII processed without classification or access controls.
-- **Recommendation**: Document data classification. Add field-level access controls via gRPC interceptor.
-- **Evidence**: `genproto/demo.pb.go` (lines 917–927), `main.go` (lines 107–114)
+- **Finding**: PII — physical addresses (street_address, city, state, country, zip_code). Address used as salt for tracking ID generation. No formal classification.
+- **Gap**: PII processed without classification controls.
+- **Recommendation**: Create DATA_CLASSIFICATION.md. Classify Address as CONFIDENTIAL/PII.
+- **Evidence**: `genproto/demo.pb.go` (Address message), `main.go` (line 131, baseAddress), `tracker.go`
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
-- **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No data residency documentation. Service is stateless but processes address PII in transit. No GDPR/LGPD references.
-- **Gap**: No documented data residency requirements.
-- **Recommendation**: Document data residency requirements. Ensure agent orchestration respects jurisdictional boundaries.
-- **Evidence**: `genproto/demo.pb.go` (lines 917–927)
+- **Severity**: INFO
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: Address data in-memory only. Not persisted. GDPR/CCPA may apply.
+- **Gap**: No data residency documentation.
+- **Recommendation**: Document processing region.
+- **Evidence**: `main.go` (in-memory), `helm-chart/values.yaml`
 
 #### DATA-Q3: Selective Query Support
 - **Severity**: RISK
-- **Finding**: Two RPCs with fixed, small responses. No pagination, filtering, or sorting needed.
-- **Gap**: No selective query mechanism (low impact for current API).
-- **Recommendation**: Add pagination if API evolves to return lists.
-- **Evidence**: `genproto/demo.pb.go`
+- **Finding**: Single request/response RPCs. No list/query. No batch limits.
+- **Gap**: No selective query. No batch limits.
+- **Recommendation**: Implement per-caller rate limiting.
+- **Evidence**: `genproto/demo.pb.go` (GetQuote, ShipOrder)
 
 #### DATA-Q4: System of Record Designations
 - **Severity**: RISK
-- **Finding**: No system-of-record documentation. No data ownership definitions.
-- **Gap**: No documented data authority.
-- **Recommendation**: Create data ownership matrix.
-- **Evidence**: No data ownership documentation
+- **Finding**: No persistent data. Not a system of record. Tracking IDs not stored.
+- **Gap**: No system of record for shipping data.
+- **Recommendation**: Implement persistent shipment records.
+- **Evidence**: `tracker.go` (generates, doesn't persist), `main.go` (no database)
 
-#### DATA-Q5: Reliable Timestamps
+#### DATA-Q5: Temporal Metadata and Freshness
 - **Severity**: RISK
-- **Finding**: No timestamps in API responses. Log timestamps exist but not in data model.
-- **Gap**: Agents cannot determine when data was generated.
-- **Recommendation**: Add `google.protobuf.Timestamp` fields to responses.
-- **Evidence**: `genproto/demo.pb.go`, `main.go`
+- **Finding**: No timestamps in responses. No created_at, no shipped_at.
+- **Gap**: No temporal metadata.
+- **Recommendation**: Add timestamps to responses.
+- **Evidence**: `genproto/demo.pb.go` (no timestamps in responses)
 
-#### DATA-Q6: Data Freshness Signaling
-- **Severity**: RISK
-- **Finding**: No freshness signaling. Service computes in real-time. No caching.
-- **Gap**: Protocol does not signal data freshness.
-- **Recommendation**: Add freshness metadata to gRPC responses.
-- **Evidence**: `main.go`, `quote.go`
-
-#### DATA-Q7: PII Redaction in Logs
-- **Severity**: RISK
-- **Finding**: Current logs do not contain PII. Address data used in computation but not logged. No log scrubbing framework.
-- **Gap**: No systematic PII protection in logging.
-- **Recommendation**: Add log scrubbing middleware/hook.
-- **Evidence**: `main.go` (lines 97–112)
-
-#### DATA-Q8: Data Quality Awareness
+#### DATA-Q6: PII Redaction in Logs
 - **Severity**: INFO
-- **Finding**: Service is stateless. No data quality metrics applicable. Hardcoded $8.99 shipping rate.
-- **Gap**: No data quality monitoring (not applicable for current implementation).
-- **Recommendation**: Add quality monitoring when integrating real carrier data.
-- **Evidence**: `quote.go`, `tracker.go`
+- **Finding**: Address data not logged. Logs contain only start/complete messages.
+- **Gap**: None.
+- **Recommendation**: Maintain current practice.
+- **Evidence**: `main.go` (lines 113–114, 128–129)
+
+#### DATA-Q7: Data Quality Awareness
+- **Severity**: INFO
+- **Finding**: Deterministic calculations. No external data source. Minimal input validation.
+- **Gap**: No address validation.
+- **Recommendation**: Consider address validation.
+- **Evidence**: `quote.go`, `tracker.go`, `main.go`
 
 ### 06 — Discoverability and Semantic Readiness
 
-#### DISC-Q1: Schema Documentation and Versioning
+#### DISC-Q1: Schema Versioning and API Contracts
 - **Severity**: RISK
-- **Finding**: Generated protobuf code committed to repo. Source `.proto` external. `protoc v3.6.1` is outdated. No schema versioning.
-- **Gap**: Schema source external. No versioning strategy. Outdated protoc.
-- **Recommendation**: Include `.proto` file. Add CI validation. Update protoc.
-- **Evidence**: `genproto.sh`, `genproto/demo_grpc.pb.go`, `genproto/demo.pb.go`
+- **Finding**: `package hipstershop` — no version suffix. No buf.yaml. No breaking change detection.
+- **Gap**: No proto versioning.
+- **Recommendation**: Add version suffix. Integrate buf breaking.
+- **Evidence**: `genproto/demo.pb.go`, no `buf.yaml`
 
 #### DISC-Q2: Semantically Meaningful Field Names
 - **Severity**: INFO
-- **Finding**: Field names are clear: `product_id`, `quantity`, `street_address`, `city`, `currency_code`, `tracking_id`. No legacy abbreviations.
-- **Gap**: N/A — positive finding.
-- **Recommendation**: Maintain naming conventions. Add field-level comments in proto.
+- **Finding**: Human-readable field names: street_address, city, tracking_id, cost_usd.
+- **Gap**: None.
+- **Recommendation**: No action required.
 - **Evidence**: `genproto/demo.pb.go`
 
 #### DISC-Q3: Data Catalog / Metadata Layer
 - **Severity**: INFO
-- **Finding**: No data catalog. No metadata files. Proto definition serves as de facto metadata.
-- **Gap**: No centralized metadata discovery.
-- **Recommendation**: Consider service catalog (e.g., Backstage) for broader platform.
-- **Evidence**: No metadata files
-
-#### DISC-Q4: Data Lineage
-- **Severity**: INFO
-- **Finding**: No data lineage tools or documentation.
-- **Gap**: Cannot trace data origin through service calls.
-- **Recommendation**: Implement request-level tracing (OBS-Q1) as lightweight lineage.
-- **Evidence**: No lineage documentation
+- **Finding**: No formal data catalog. Proto file as schema documentation.
+- **Gap**: No formal metadata layer.
+- **Recommendation**: No action required.
+- **Evidence**: `genproto/demo.pb.go`
 
 ### 07 — Observability of Target Systems
 
 #### OBS-Q1: Distributed Tracing and Structured Logging
 - **Severity**: RISK
-- **Finding**: Structured JSON logging configured (logrus JSONFormatter with `timestamp`, `severity`, `message`). Distributed tracing NOT implemented — `initTracing()` and `initStats()` are TODO stubs. OpenTelemetry is indirect dependency only. No trace ID propagation, no correlation IDs.
-- **Gap**: No distributed tracing. No correlation IDs in logs.
-- **Recommendation**: Implement OpenTelemetry tracing with `otelgrpc` interceptor. Add trace_id to log entries.
-- **Evidence**: `main.go` (lines 39–49, 124, 128), `go.mod`
+- **Finding**: Tracing disabled (TODO stub). Logrus JSON structured logging. No trace correlation.
+- **Gap**: No distributed tracing. No trace correlation in logs.
+- **Recommendation**: Implement OpenTelemetry Go SDK. Replace TODO stub.
+- **Evidence**: `main.go` (initTracing TODO, logrus formatter)
 
 #### OBS-Q2: Alerting on Error Rates and Latency
 - **Severity**: RISK
-- **Finding**: No alerting configuration. gRPC health checking is implemented but no error rate or latency alerting.
-- **Gap**: No proactive alerting for service degradation.
-- **Recommendation**: Define CloudWatch alarms for gRPC error rates and P95 latency.
-- **Evidence**: `main.go` (lines 87–88)
+- **Finding**: No alerting. Health probes only. initStats is TODO stub.
+- **Gap**: No alerting.
+- **Recommendation**: Configure Prometheus alerting rules.
+- **Evidence**: `main.go` (initStats TODO), `helm-chart/templates/shippingservice.yaml`
 
 #### OBS-Q3: Business Outcome Metrics
 - **Severity**: INFO
-- **Finding**: No custom business metrics. No metric publication code.
-- **Gap**: No business-level signals for agent outcome quality.
-- **Recommendation**: Add custom metrics for quotes/shipments per minute.
-- **Evidence**: `main.go`
+- **Finding**: No custom metrics. initStats TODO stub.
+- **Gap**: No business outcome measurement.
+- **Recommendation**: Implement shipping volume and cost metrics.
+- **Evidence**: `main.go` (initStats TODO)
 
 ### 08 — Engineering and Deployment Maturity
 
-#### ENG-Q1: Infrastructure Governance
+#### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
 - **Severity**: RISK
-- **Finding**: No IaC files in repository. No Terraform, CloudFormation, CDK, Helm, or Kustomize. Dockerfile exists for container build only.
-- **Gap**: Infrastructure not defined as code in this repository.
-- **Recommendation**: Define service infrastructure as IaC. Subject changes to peer review.
-- **Evidence**: No IaC files, `Dockerfile`
+- **Finding**: Helm charts and Terraform with PR review. No drift detection.
+- **Gap**: No drift detection.
+- **Recommendation**: Implement GitOps.
+- **Evidence**: `helm-chart/templates/shippingservice.yaml`, `helm-chart/values.yaml`
 
 #### ENG-Q2: CI/CD with API Contract Testing
 - **Severity**: RISK
-- **Finding**: No CI/CD configuration. No contract testing. No breaking change detection.
-- **Gap**: No automated pipeline for testing or deploying.
-- **Recommendation**: Create CI pipeline with `go test`, `buf breaking`, and contract tests.
-- **Evidence**: No CI/CD files, `shippingservice_test.go`
+- **Finding**: Unit tests exist (shippingservice_test.go). No API contract tests. No proto compatibility checks.
+- **Gap**: No contract testing. No proto breaking change detection.
+- **Recommendation**: Add gRPC integration tests. Integrate buf breaking.
+- **Evidence**: `shippingservice_test.go`, `.github/workflows/ci-pr.yaml`
 
 #### ENG-Q3: Rollback Capability
-- **Severity**: RISK
-- **Finding**: No deployment or rollback configuration. No blue/green, canary, or feature flags.
-- **Gap**: No mechanism to roll back broken deployments.
-- **Recommendation**: Implement deployment strategy with automatic rollback triggers.
-- **Evidence**: `Dockerfile`, no deployment configuration
+- **Severity**: INFO
+- **Finding**: Helm rollback available. K8s rolling update. No automated rollback.
+- **Gap**: No automated rollback triggers.
+- **Recommendation**: Consider Flagger or Argo Rollouts.
+- **Evidence**: `helm-chart/Chart.yaml`, `helm-chart/templates/shippingservice.yaml`
 
 #### ENG-Q4: API Test Coverage
 - **Severity**: RISK
-- **Finding**: 11 unit test functions in `shippingservice_test.go` with good happy-path coverage. No error case tests, no contract tests, no CI pipeline.
-- **Gap**: Missing error case tests and CI integration.
-- **Recommendation**: Add error case tests. Create CI pipeline. Add coverage reporting.
+- **Finding**: Unit tests cover GetQuote, ShipOrder, tracking ID, quote calculation. No error path tests, no integration tests.
+- **Gap**: Happy path coverage only. No integration tests.
+- **Recommendation**: Add error path and integration tests.
 - **Evidence**: `shippingservice_test.go`
 
-#### ENG-Q5: Encryption at Rest
+#### ENG-Q5: Encryption at Rest for Agent-Accessible Data
 - **Severity**: RISK
-- **Finding**: No encryption configuration. Service is stateless with no data stores.
-- **Gap**: No encryption at rest configuration (not applicable currently but needed when persistence is added).
-- **Recommendation**: Ensure encryption at rest when adding data persistence.
-- **Evidence**: No IaC files, `main.go`
+- **Finding**: No persistent data. Address data in-memory only. Log storage encryption depends on K8s node config.
+- **Gap**: No persistent data to encrypt. Log encryption depends on infrastructure.
+- **Recommendation**: Ensure address data not logged. Enable node-level encryption.
+- **Evidence**: `main.go` (no persistence), `tracker.go`, `quote.go`
 
-#### ENG-Q6: Cross-Origin and Network Policies
-- **Severity**: BLOCKER
-- **Finding**: gRPC server listens on port 50051 with no TLS, no network restrictions, no firewall rules, no security groups, no service mesh. Plaintext connections from any source.
-- **Gap**: No network security controls. Plaintext transport including PII.
-- **Recommendation**: Add TLS. Define network policies as IaC.
-- **Evidence**: `main.go` (line 75), `Dockerfile` (EXPOSE 50051)
+---
 
 ## Evidence Index
+
+### Infrastructure as Code
+| File | Questions Referenced |
+|------|---------------------|
+| `helm-chart/templates/shippingservice.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q7, OBS-Q2, ENG-Q1, ENG-Q3, API-Q8, STATE-Q5 |
+| `helm-chart/values.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q5, AUTH-Q6, AUTH-Q7, OBS-Q1, STATE-Q5, ENG-Q1 |
+| `helm-chart/Chart.yaml` | ENG-Q3 |
 
 ### Source Code
 | File | Questions Referenced |
 |------|---------------------|
-| `main.go` | API-Q1, API-Q2, API-Q3, API-Q4, API-Q6, API-Q7, API-Q8, API-Q9, API-Q10, AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q3, STATE-Q4, STATE-Q5, STATE-Q6, HITL-Q1, DATA-Q1, DATA-Q5, DATA-Q6, DATA-Q7, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q5, ENG-Q6 |
-| `quote.go` | API-Q4, API-Q7, API-Q10, STATE-Q4, DATA-Q6, DATA-Q8 |
-| `tracker.go` | API-Q4, API-Q7, API-Q10, STATE-Q1, STATE-Q2, STATE-Q3, STATE-Q4, DATA-Q8 |
+| `main.go` | API-Q1, API-Q2, API-Q3, API-Q4, AUTH-Q1, AUTH-Q3, AUTH-Q5, AUTH-Q6, STATE-Q1, STATE-Q2, STATE-Q4, DATA-Q1, DATA-Q6, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q4 |
+| `quote.go` | STATE-Q2, DATA-Q7 |
+| `tracker.go` | API-Q4, STATE-Q2, DATA-Q1, DATA-Q4 |
 | `shippingservice_test.go` | ENG-Q2, ENG-Q4 |
-| `genproto/demo_grpc.pb.go` | API-Q1, API-Q2, API-Q5, API-Q6, AUTH-Q3 |
-| `genproto/demo.pb.go` | API-Q1, API-Q6, DATA-Q1, DATA-Q2, DATA-Q3, DATA-Q5, DISC-Q1, DISC-Q2 |
+
+### API Specifications
+| File | Questions Referenced |
+|------|---------------------|
+| `genproto/demo.pb.go` | API-Q1, API-Q2, API-Q4, API-Q5, AUTH-Q4, DATA-Q1, DATA-Q2, DATA-Q3, DATA-Q5, DISC-Q1, DISC-Q2, DISC-Q3, STATE-Q1 |
+
+### CI/CD Configurations
+| File | Questions Referenced |
+|------|---------------------|
+| `.github/workflows/ci-pr.yaml` | HITL-Q3, DISC-Q1, ENG-Q2, ENG-Q4 |
+| `cloudbuild.yaml` | ENG-Q2, ENG-Q3, HITL-Q3 |
 
 ### Container Definitions
 | File | Questions Referenced |
 |------|---------------------|
-| `Dockerfile` | AUTH-Q6, STATE-Q7, HITL-Q3, ENG-Q3, ENG-Q6 |
+| `Dockerfile` | AUTH-Q5, ENG-Q3 |
 
 ### Dependency Manifests
 | File | Questions Referenced |
 |------|---------------------|
-| `go.mod` | AUTH-Q6, STATE-Q3, OBS-Q1 |
-
-### Scripts
-| File | Questions Referenced |
-|------|---------------------|
-| `genproto.sh` | API-Q2, DISC-Q1 |
-
-### Documentation
-| File | Questions Referenced |
-|------|---------------------|
-| `README.md` | HITL-Q3 |
+| `go.mod` | API-Q2, OBS-Q1 |

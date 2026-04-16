@@ -12,7 +12,7 @@ author: "AWS"
 
 This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive assessments across your entire service portfolio. Kiro reads your `portfolio-config.yaml`, handles repository cloning when needed, classifies each repository, and coordinates AWS Transform Custom transformations based on the configured `assessment_type`:
 
-- **Agentic Readiness Assessment (ARA)** — 49 questions across 8 sections using BLOCKER/RISK/INFO severity scoring. Evaluates whether systems are safe for autonomous AI agent integration.
+- **Agentic Readiness Assessment (ARA)** — 43 questions across 8 sections using BLOCKER/RISK/INFO severity scoring. Evaluates whether systems are safe for autonomous AI agent integration.
 - **Modernization Readiness Assessment (MOD)** — 37 questions across 5 sections using 1-4 scale scoring. Evaluates cloud architecture maturity and identifies modernization pathways.
 
 The `assessment_type` field in `portfolio-config.yaml` controls which assessments run:
@@ -356,14 +356,14 @@ The `assessment_type` field controls which assessment paths are executed. It is 
 
 | Assessment Type | Description |
 |----------------|-------------|
-| `agentic-readiness` | Run ARA only — evaluates agentic readiness with BLOCKER/RISK/INFO scoring (49 questions, 8 sections) |
+| `agentic-readiness` | Run ARA only — evaluates agentic readiness with BLOCKER/RISK/INFO scoring (43 questions, 8 sections) |
 | `modernization` | Run MOD only — evaluates cloud architecture maturity with 1-4 scale scoring (37 questions, 5 sections) |
 | `full` | Run both ARA and MOD in parallel — produces both sets of reports |
 
 **Assessment Type Validation:**
 - If `assessment_type` is missing → error (required field)
 - If `assessment_type` is not one of the 3 valid values → error
-- The `context` free-text field is optional and provides additional framing for recommendations (e.g., "Building a customer support agent that needs access to order and inventory data"). It replaces the old `goal_context` field and is passed to all TDs.
+- The `context` free-text field is optional and provides additional framing for recommendations (e.g., "Building a customer support agent that needs access to order and inventory data").
 - The `agent_scope` field is optional (enum: `read-only`, `write-enabled`) and is ARA-only — the Power passes it only to ARA ATX configs. It controls conditional BLOCKER severity in the ARA TD.
 
 ### Repo Type Classification
@@ -442,7 +442,7 @@ SOURCE PATH    NO-SOURCE PATH
 
 ### Preferences
 
-The `preferences` object replaces all previous nested constraint objects (`database_constraints`, `deployment_constraints`, `compliance_requirements`, `budget_constraints`, `timeline_constraints`, `modernization_approach`, `custom_constraints`, `avoid_patterns`, `prefer_patterns`, etc.). It uses two flat arrays:
+The `preferences` object uses two flat arrays:
 
 ```yaml
 preferences:
@@ -463,7 +463,7 @@ The full configuration schema is available in `portfolio-config.schema.json`. Ke
 
 - **portfolio_name** (required): Name identifier for the portfolio
 - **assessment_type** (required): One of `agentic-readiness`, `modernization`, `full`
-- **context** (optional): Free-text context for framing recommendations (replaces old `goal_context`)
+- **context** (optional): Free-text context for framing recommendations
 - **agent_scope** (optional): One of `read-only`, `write-enabled` — ARA-only, controls conditional BLOCKER severity
 - **transformation_definitions** (required): Names of the AWS Transform definitions to use
   - `agentic_readiness` (required): Name for per-repository ARA assessments
@@ -492,7 +492,7 @@ The full configuration schema is available in `portfolio-config.schema.json`. Ke
 
 ## Preferences
 
-Control how recommendations are generated using flat `prefer` and `avoid` arrays. These replace all previous nested constraint objects.
+Control how recommendations are generated using flat `prefer` and `avoid` arrays.
 
 ### Global Preferences
 
@@ -875,14 +875,14 @@ atx custom def exec -n <portfolio_modernization> -p . -g file://.atx-config-port
 1. Set `context` from the portfolio config (if present) — free-text framing for recommendations
 2. Build the service inventory from all repositories in the config, including name, priority, path, tags, and repo_type
 3. Include `dependency_overrides` verbatim from the portfolio config
-4. Do NOT include `preferences`, `agent_scope`, or `goal`
+4. Do NOT include `preferences` or `agent_scope`
 
 **How Kiro generates the Portfolio MOD `additionalPlanContext`:**
 1. Set `context` from the portfolio config (if present) — free-text framing for recommendations
 2. Set `preferences` from the global portfolio-level preferences (not merged with per-repo — global only)
 3. Build the service inventory from all repositories in the config, including name, priority, path, tags, and repo_type
 4. Include `dependency_overrides` verbatim from the portfolio config
-5. Do NOT include `agent_scope` or `goal`
+5. Do NOT include `agent_scope`
 
 Portfolio ARA generates:
 ```
@@ -941,7 +941,7 @@ Reports are generated by the TDs — see the individual TD documentation for ful
 
 The TDs define the full question sets, scoring rubrics, pathways, and report templates. The Power only needs to know:
 
-- **ARA**: 49 questions, 8 sections, BLOCKER/RISK/INFO scoring, readiness profiles
+- **ARA**: 43 questions, 8 sections, BLOCKER/RISK/INFO scoring, readiness profiles
 - **MOD**: 37 questions, 5 sections, 1-4 scale scoring, 7 pathways
 
 See the individual TDs for full details on questions, scoring rubrics, pathway triggers, and report content.
@@ -1156,8 +1156,6 @@ repositories:
    - `repo_type` (if specified) is one of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`
    - `priority` (if specified) is one of: `P0`, `P1`, `P2`
 4. Review `portfolio-config.example.yaml` for correct format
-
-> **Note:** V2 config is a breaking change from V1. Old configs using `goal`, `goal_context`, `individual_assessment`, `portfolio_assessment`, `deployment-cicd`, or nested constraint objects must be migrated to the new format. See the migration guide for details.
 
 ### Preferences Not Applied
 

@@ -232,15 +232,18 @@ Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution
 ├── portfolio-config.yaml               # Example portfolio config (full assessment)
 ├── portfolio-config.schema.json        # JSON schema for portfolio config
 ├── example-reports/                    # Generated example reports
-│   └── v2-full-assessment/
+│   ├── v2-full-assessment/             # Full assessment (ARA + MOD) across 5 repos
+│   └── online-boutique/               # Online Boutique (11 microservices) ARA + MOD
 ├── dashboard/                          # HTML dashboards for report visualization
 ├── monolith/                           # Test fixture (PHP app for out-of-box testing)
-└── v2_preparation/                     # Design docs and architecture diagrams
+└── static/                             # Static assets
 ```
 
 ## Example Reports
 
-The `example-reports/v2-full-assessment/` directory contains a complete set of reports from a full assessment (ARA + MOD) across 5 repos:
+The `example-reports/` directory contains complete sets of reports:
+
+### Full Assessment (5 repos)
 
 ```
 example-reports/v2-full-assessment/
@@ -259,6 +262,23 @@ example-reports/v2-full-assessment/
     ├── eks-saas-gitops-mod-report.md
     ├── monolith-mod-report.md
     └── ecommerce-platform-v2-portfolio-mod-report.md
+```
+
+### Online Boutique (11 microservices)
+
+```
+example-reports/online-boutique/
+├── portfolio-config.yaml
+├── agentic-readiness.html              # Interactive dashboard
+├── agentic-readiness-assessment/       # ARA reports (original code)
+│   ├── frontend-ara-report.md
+│   ├── cartservice-ara-report.md
+│   ├── ... (11 individual + 1 portfolio)
+│   └── online-boutique-portfolio-ara-report.md
+├── agentic-readiness-assessment-v2/    # ARA reports (after remediation)
+│   └── currencyservice-ara-report.md   # (remaining in progress)
+└── modernization-assessment/           # MOD reports
+    └── ... (11 individual + 1 portfolio)
 ```
 
 ## Local Monolith (Test Fixture)

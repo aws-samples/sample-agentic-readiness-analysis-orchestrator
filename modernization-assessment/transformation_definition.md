@@ -115,9 +115,7 @@ If `repo_type` is present but not one of the 5 recognized values (`application`,
 
 The MOD TD does **not** read, validate, or apply the following fields from `additionalPlanContext`. If present, they are ignored:
 
-- **`agent_scope`** — The `agent_scope` field (read-only / write-enabled) is an ARA-only concept used to evaluate conditional BLOCKER severity for agent safety questions. The MOD TD evaluates cloud architecture maturity and modernization potential — it does not assess agent integration safety or apply conditional BLOCKER logic.
-- **`goal`** — There is no goal system. Assessment routing is handled by `assessment_type` in the portfolio config, not by the TD. The MOD TD evaluates all 37 questions and all 7 pathways with equal weighting regardless of any goal value. There is no goal-based re-weighting, no conditional sections, and no goal-driven phase naming.
-- **`goal_context`** — Replaced by the `context` field. The MOD TD uses `context` for free-text framing only.
+- **`agent_scope`** — Not used by this TD. Agent scope is an ARA-only concept.
 
 #### 0.4 How Context Fields Are Used
 
@@ -1596,11 +1594,6 @@ When `preferences` (prefer/avoid arrays) are provided in additionalPlanContext:
 - If `avoid: ["serverless"]`, recommendations should not suggest Lambda-based approaches.
 - If no preferences are provided, recommendations use neutral technology language without favoring or avoiding specific technologies.
 
-### C7: No Goal References
+### C7: Ignored Fields
 
-This assessment does NOT use a goal system. The evaluating agent SHALL NOT:
-- Read, validate, or apply any `goal` or `goal_context` field from additionalPlanContext.
-- Apply goal-based re-weighting, conditional sections, or phase naming.
-- Reference goals in findings, recommendations, or pathway evaluations.
-
-Assessment routing is handled by `assessment_type` in the portfolio config, not by the TD. The MOD TD evaluates all 37 questions and all 7 pathways with equal weighting regardless of any goal value.
+The following fields from `additionalPlanContext` are not used by this TD and are ignored if present: `goal`, `goal_context`, `agent_scope`.

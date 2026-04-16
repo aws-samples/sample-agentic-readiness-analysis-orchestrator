@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARA — Online Boutique Agentic Readiness Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f1117;--surface:#1a1d27;--card:#222639;--border:#2d3148;--text:#e2e4ed;--muted:#8b8fa3;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--green-bg:rgba(34,197,94,.12);--yellow-bg:rgba(234,179,8,.12);--orange-bg:rgba(249,115,22,.12);--red-bg:rgba(239,68,68,.12)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline;color:#a5b4fc}
+.container{max-width:1440px;margin:0 auto;padding:24px}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:12px}
+.top-bar h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em}.top-bar h1 span{color:var(--accent2)}
+.meta{font-size:.8rem;color:var(--muted)}
+.grid{display:grid;gap:20px}.grid-4{grid-template-columns:repeat(4,1fr)}.grid-3{grid-template-columns:repeat(3,1fr)}.grid-2{grid-template-columns:repeat(2,1fr)}.grid-12{grid-template-columns:repeat(12,1fr)}
+.span-8{grid-column:span 8}.span-4{grid-column:span 4}.span-6{grid-column:span 6}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s}.card:hover{border-color:var(--accent)}
+.card-title{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-value{font-size:2rem;font-weight:700;letter-spacing:-.03em}
+.card-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+.score-green{color:var(--green)}.score-yellow{color:var(--yellow)}.score-orange{color:var(--orange)}.score-red{color:var(--red)}
+.bg-green{background:var(--green-bg)}.bg-yellow{background:var(--yellow-bg)}.bg-orange{background:var(--orange-bg)}.bg-red{background:var(--red-bg)}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600;white-space:nowrap}
+.pill-green{background:var(--green-bg);color:var(--green)}.pill-yellow{background:var(--yellow-bg);color:var(--yellow)}.pill-orange{background:var(--orange-bg);color:var(--orange)}.pill-red{background:var(--red-bg);color:var(--red)}.pill-blue{background:rgba(99,102,241,.12);color:var(--accent2)}.pill-muted{background:rgba(139,143,163,.12);color:var(--muted)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:10px 12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}
+tr:hover td{background:rgba(99,102,241,.04)}
+.section{margin-bottom:32px}.section-title{font-size:1.1rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.blocker-card{border-left:3px solid var(--red)}
+.risk-card{border-left:3px solid var(--orange)}
+.finding-title{font-weight:600;font-size:.85rem;margin-bottom:4px}
+.finding-desc{font-size:.75rem;color:var(--muted);margin-bottom:6px}
+.finding-footer{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
+/* Clickable rows */
+.svc-row{cursor:pointer;user-select:none}.svc-row td:first-child::before{content:'▶ ';font-size:.7rem;color:var(--muted);transition:transform .2s}
+.svc-row.open td:first-child::before{content:'▼ ';color:var(--accent2)}
+.svc-detail{display:none;background:var(--surface)}
+.svc-detail.open{display:table-row}
+.svc-detail td{padding:16px 20px;border-bottom:2px solid var(--border)}
+.q-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin-top:8px}
+.q-item{padding:8px 12px;border-radius:8px;font-size:.78rem;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.q-item .q-id{font-weight:600;min-width:70px}.q-item .q-name{flex:1;color:var(--muted)}
+.q-item.q-blocker{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.06)}
+.q-item.q-risk{border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.06)}
+.q-item.q-info{border-color:rgba(99,102,241,.2);background:rgba(99,102,241,.04)}
+.q-item.q-na{border-color:var(--border);background:transparent;opacity:.5}
+/* Filter tabs */
+.filter-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.filter-tab{padding:4px 14px;border-radius:8px;font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--muted);transition:all .15s}
+.filter-tab:hover{border-color:var(--accent);color:var(--text)}
+.filter-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Section filter for cross-cutting */
+.cc-section{margin-bottom:16px}
+.cc-section-title{font-size:.88rem;font-weight:600;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.cc-section-title::before{content:'▶';font-size:.65rem;color:var(--muted);transition:transform .2s}
+.cc-section.open .cc-section-title::before{content:'▼';color:var(--accent2)}
+.cc-items{display:none;padding-left:4px}.cc-section.open .cc-items{display:block}
+@media(max-width:1024px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-12 .span-8,.grid-12 .span-4,.grid-12 .span-6{grid-column:span 12}.grid-3{grid-template-columns:1fr}}
+@media(max-width:640px){.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}.q-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="top-bar">
+  <h1>🛡️ <span>Agentic Readiness</span> — Online Boutique</h1>
+  <div class="meta">📅 April 16, 2026 · online-boutique · 11 services · agent_scope: read-only</div>
+</div>
+
+<!-- KPIs -->
+<div class="section"><div class="grid grid-4">
+  <div class="card"><div class="card-title">🛡️ Agent-Ready</div><div class="card-value score-red">0<span style="font-size:1rem;color:var(--muted)"> / 11</span></div><div class="card-sub">0% meet Agent-Ready or Pilot-Ready</div></div>
+  <div class="card"><div class="card-title">🚨 Cross-Cutting BLOCKERs</div><div class="card-value score-red">2</div><div class="card-sub">AUTH-Q1 (11 repos), DATA-Q1 (7 repos)</div></div>
+  <div class="card"><div class="card-title">⚠️ Cross-Cutting RISKs</div><div class="card-value score-orange">32</div><div class="card-sub">Same risk in 3+ repos</div></div>
+  <div class="card"><div class="card-title">📋 Total BLOCKERs</div><div class="card-value score-yellow">19</div><div class="card-sub">Sum across all 11 services</div></div>
+</div></div>
+
+<!-- Readiness Distribution -->
+<div class="section"><div class="section-title"><span>📈</span> Readiness Profile Distribution</div><div class="grid grid-4">
+  <div class="card bg-green" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--green)">0</div><div style="font-size:.82rem;color:var(--green)">✅ Agent-Ready</div><div style="font-size:.72rem;color:var(--muted);margin-top:4px">0 blockers, 0–2 risks</div></div>
+  <div class="card bg-yellow" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--yellow)">0</div><div style="font-size:.82rem;color:var(--yellow)">🟡 Pilot-Ready</div><div style="font-size:.72rem;color:var(--muted);margin-top:4px">0 blockers, 3–5 risks</div></div>
+  <div class="card bg-orange" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--orange)">10</div><div style="font-size:.82rem;color:var(--orange)">🟠 Remediation Required</div><div style="font-size:.72rem;color:var(--muted);margin-top:4px">1–2 blockers each</div></div>
+  <div class="card bg-red" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--red)">1</div><div style="font-size:.82rem;color:var(--red)">❌ Not Agent-Integrable</div><div style="font-size:.72rem;color:var(--muted);margin-top:4px">frontend (3 blockers)</div></div>
+</div></div>
+
+<!-- Charts Row -->
+<div class="section"><div class="grid grid-12">
+  <div class="card span-4"><div class="card-title">🎯 Profile Distribution</div><div style="position:relative;height:260px"><canvas id="profileChart"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">📊 Severity by Service</div><div style="position:relative;height:260px"><canvas id="severityChart"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">🔥 Section Heatmap (BLOCKERs + RISKs)</div><div style="position:relative;height:260px"><canvas id="heatmapChart"></canvas></div></div>
+</div></div>
+
+<!-- Service Summary Table (clickable) -->
+<div class="section"><div class="section-title"><span>🔍</span> Service-by-Service Summary <span style="font-size:.75rem;color:var(--muted);font-weight:400">— click a row to expand</span></div>
+<div class="card"><div class="table-wrap"><table id="svcTable">
+  <thead><tr><th>Service</th><th>Repo Type</th><th>Scope</th><th>Profile</th><th>BLOCKERs</th><th>RISKs</th><th>INFOs</th><th>N/A</th><th>Priority</th></tr></thead>
+  <tbody id="svcBody"></tbody>
+</table></div></div></div>
+
+<!-- Cross-Cutting BLOCKERs -->
+<div class="section"><div class="section-title"><span>🚨</span> Cross-Cutting BLOCKERs (2+ repos)</div>
+<div class="grid grid-2">
+  <div class="card blocker-card">
+    <div class="finding-title">AUTH-Q1: Machine Identity Authentication</div>
+    <div class="finding-desc">No machine identity authentication in any service. gRPC servers use insecure credentials. Istio AuthorizationPolicies exist but are disabled by default.</div>
+    <div class="finding-footer"><span class="pill pill-red">11/11 repos</span><span style="font-size:.72rem;color:var(--muted)">Platform fix · Low effort</span></div>
+    <div style="font-size:.72rem;color:var(--accent2);margin-top:8px">Fix: Set authorizationPolicies.create: true in helm-chart/values.yaml</div>
+  </div>
+  <div class="card blocker-card">
+    <div class="finding-title">DATA-Q1: Sensitive Data Classification</div>
+    <div class="finding-desc">Services processing PII/financial data have no classification. No field-level encryption or PII detection.</div>
+    <div class="finding-footer"><span class="pill pill-red">7/10 repos</span><span style="font-size:.72rem;color:var(--muted)">Hybrid · Medium effort</span></div>
+    <div style="font-size:.72rem;color:var(--accent2);margin-top:8px">Not affected: productcatalogservice, currencyservice, adservice</div>
+  </div>
+</div></div>
+
+<!-- Cross-Cutting RISKs (expandable by section) -->
+<div class="section"><div class="section-title"><span>⚠️</span> Cross-Cutting RISKs (3+ repos) <span style="font-size:.75rem;color:var(--muted);font-weight:400">— click a section to expand</span></div>
+<div class="card" id="ccRisks"></div></div>
+
+<!-- Blocker + Risk Heatmap Table -->
+<div class="section"><div class="section-title"><span>🔥</span> Section Heatmap</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Section</th><th>Repos w/ BLOCKERs</th><th>Repos w/ RISKs</th><th>Top Issues</th></tr></thead>
+  <tbody>
+    <tr><td style="font-weight:600">AUTH</td><td class="score-red">11</td><td class="score-orange">11</td><td>AUTH-Q1 (B), AUTH-Q2–Q8 (R)</td></tr>
+    <tr><td style="font-weight:600">DATA</td><td class="score-red">7</td><td class="score-orange">10</td><td>DATA-Q1 (B), DATA-Q2–Q7 (R)</td></tr>
+    <tr><td style="font-weight:600">API</td><td class="score-yellow">1</td><td class="score-orange">10</td><td>API-Q1 (B, frontend), API-Q2,Q3,Q5,Q7 (R)</td></tr>
+    <tr><td style="font-weight:600">STATE</td><td>0</td><td class="score-orange">10</td><td>STATE-Q1,Q2,Q4,Q5,Q7 (R)</td></tr>
+    <tr><td style="font-weight:600">ENG</td><td>0</td><td class="score-orange">11</td><td>ENG-Q1–Q6 (R)</td></tr>
+    <tr><td style="font-weight:600">OBS</td><td>0</td><td class="score-orange">11</td><td>OBS-Q1,Q2 (R)</td></tr>
+    <tr><td style="font-weight:600">DISC</td><td>0</td><td class="score-orange">10</td><td>DISC-Q1 (R)</td></tr>
+    <tr><td style="font-weight:600">HITL</td><td>0</td><td class="score-orange">10</td><td>HITL-Q3 (R)</td></tr>
+  </tbody>
+</table></div></div></div>
+
+<!-- Remediation Priority -->
+<div class="section"><div class="section-title"><span>🗺️</span> Remediation Priority Order</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>#</th><th>Group</th><th>BLOCKERs</th><th>Services</th><th>Effort</th><th>Why First</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td style="font-weight:600">Identity Foundation</td><td>AUTH-Q1</td><td>All 11</td><td><span class="pill pill-green">Low</span></td><td>Single Helm value enables mTLS across all services. Foundation for all other controls.</td></tr>
+    <tr><td>2</td><td style="font-weight:600">Data Protection</td><td>DATA-Q1</td><td>7 of 10</td><td><span class="pill pill-orange">Med–High</span></td><td>Classify PII/PCI fields before enabling agent data access. Depends on AUTH-Q1.</td></tr>
+    <tr><td>3</td><td style="font-weight:600">API Surface</td><td>API-Q1</td><td>1 of 10</td><td><span class="pill pill-green">Low</span></td><td>Bypass frontend — connect agents directly to backend gRPC services.</td></tr>
+  </tbody>
+</table></div></div></div>
+
+<!-- Path to Pilot-Ready -->
+<div class="section"><div class="section-title"><span>🎯</span> Closest to Pilot-Ready</div>
+<div class="grid grid-3">
+  <div class="card" style="border-left:3px solid var(--yellow)"><div class="finding-title">productcatalogservice</div><div class="finding-desc">1 BLOCKER (AUTH-Q1) · 32 RISKs · P0</div><div style="font-size:.75rem;color:var(--muted);margin-top:6px">Foundation service, 3 consumers. Resolve AUTH-Q1 → candidate for RISK remediation.</div></div>
+  <div class="card" style="border-left:3px solid var(--yellow)"><div class="finding-title">currencyservice</div><div class="finding-desc">1 BLOCKER (AUTH-Q1) · 23 RISKs · P1</div><div style="font-size:.75rem;color:var(--muted);margin-top:6px">Non-sensitive data. Fewest RISKs among application services.</div></div>
+  <div class="card" style="border-left:3px solid var(--yellow)"><div class="finding-title">adservice</div><div class="finding-desc">1 BLOCKER (AUTH-Q1) · 23 RISKs · P2</div><div style="font-size:.75rem;color:var(--muted);margin-top:6px">Non-sensitive data. Low priority for customer support agent use case.</div></div>
+</div></div>
+
+<!-- Dependency Map -->
+<div class="section"><div class="section-title"><span>🔗</span> Service Dependencies</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Service</th><th>Fan-In</th><th>Fan-Out</th><th>Role</th><th>Profile</th></tr></thead>
+  <tbody>
+    <tr><td style="font-weight:600">platform-infra</td><td>11</td><td>0</td><td>Foundation</td><td><span class="pill pill-orange">Remediation (1B)</span></td></tr>
+    <tr><td style="font-weight:600">productcatalogservice</td><td>3</td><td>0</td><td>Foundation</td><td><span class="pill pill-orange">Remediation (1B)</span></td></tr>
+    <tr><td style="font-weight:600">currencyservice</td><td>2</td><td>0</td><td>Foundation</td><td><span class="pill pill-orange">Remediation (1B)</span></td></tr>
+    <tr><td style="font-weight:600">cartservice</td><td>2</td><td>1</td><td>Foundation</td><td><span class="pill pill-orange">Remediation (2B)</span></td></tr>
+    <tr><td style="font-weight:600">shippingservice</td><td>2</td><td>0</td><td>Internal</td><td><span class="pill pill-orange">Remediation (2B)</span></td></tr>
+    <tr><td style="font-weight:600">paymentservice</td><td>1</td><td>0</td><td>Internal</td><td><span class="pill pill-orange">Remediation (2B)</span></td></tr>
+    <tr><td style="font-weight:600">emailservice</td><td>1</td><td>0</td><td>Internal</td><td><span class="pill pill-orange">Remediation (2B)</span></td></tr>
+    <tr><td style="font-weight:600">adservice</td><td>1</td><td>0</td><td>Internal</td><td><span class="pill pill-orange">Remediation (1B)</span></td></tr>
+    <tr><td style="font-weight:600">recommendationservice</td><td>1</td><td>1</td><td>Internal</td><td><span class="pill pill-orange">Remediation (2B)</span></td></tr>
+    <tr><td style="font-weight:600">checkoutservice</td><td>1</td><td>6</td><td>Orchestrator</td><td><span class="pill pill-orange">Remediation (2B)</span></td></tr>
+    <tr><td style="font-weight:600">frontend</td><td>0</td><td>7</td><td>Entry Point</td><td><span class="pill pill-red">Not Integrable (3B)</span></td></tr>
+  </tbody>
+</table></div></div></div>
+
+<!-- High-Risk Dependency Patterns -->
+<div class="section"><div class="section-title"><span>⚡</span> High-Risk Dependency Patterns</div>
+<div class="grid grid-2">
+  <div class="card" style="border-left:3px solid var(--red)"><div class="finding-title">Frontend is Not Agent-Integrable but is the entry point</div><div style="font-size:.78rem;color:var(--muted);margin-top:6px">3 BLOCKERs (API-Q1, AUTH-Q1, DATA-Q1). Bypass frontend — connect agents directly to backend gRPC services.</div></div>
+  <div class="card" style="border-left:3px solid var(--orange)"><div class="finding-title">Checkoutservice has 6 sync dependencies</div><div style="font-size:.78rem;color:var(--muted);margin-top:6px">All 6 deps have AUTH-Q1 BLOCKER. Scope initial pilot to read-only operations (product queries, cart viewing).</div></div>
+</div></div>
+
+<!-- Portfolio-Level Findings -->
+<div class="section"><div class="section-title"><span>🌐</span> Portfolio-Level Findings</div>
+<div class="grid grid-2">
+  <div class="card blocker-card"><div class="finding-title">PORT-ARA-Q1: No Centralized Identity Plane</div><div class="finding-desc">No shared identity provider. K8s ServiceAccounts provide pod-level identity only. Enable Istio AuthorizationPolicies as identity plane.</div><div class="finding-footer"><span class="pill pill-red">BLOCKER</span><span style="font-size:.72rem;color:var(--muted)">All 11 services</span></div></div>
+  <div class="card risk-card"><div class="finding-title">PORT-ARA-Q2: Cross-Service Audit Correlation</div><div class="finding-desc">OpenTelemetry partially instrumented but disabled by default. No consistent trace propagation.</div><div class="finding-footer"><span class="pill pill-orange">RISK</span><span style="font-size:.72rem;color:var(--muted)">All 11 services</span></div></div>
+  <div class="card risk-card"><div class="finding-title">PORT-ARA-Q3: No Portfolio-Level Rate Limiting</div><div class="finding-desc">No WAF, API Gateway, or rate limiting. Frontend exposed via LoadBalancer on port 80.</div><div class="finding-footer"><span class="pill pill-orange">RISK</span><span style="font-size:.72rem;color:var(--muted)">All 11 services</span></div></div>
+  <div class="card risk-card"><div class="finding-title">PORT-ARA-Q4: Transitive Dependency Safety</div><div class="finding-desc">Frontend (Not Integrable) is web entry point. Checkoutservice depends on 6 services all with AUTH-Q1 BLOCKER.</div><div class="finding-footer"><span class="pill pill-orange">RISK</span><span style="font-size:.72rem;color:var(--muted)">frontend, checkoutservice</span></div></div>
+</div></div>
+
+<!-- Programs -->
+<div class="section"><div class="section-title"><span>🎓</span> Agentic Program Eligibility</div>
+<div class="card" style="border-left:3px solid var(--border)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:600;font-size:.9rem">EBA-Agentic AI</div><span class="pill pill-orange">Not Triggered</span></div>
+  <div style="font-size:.82rem;color:var(--muted)">Requires ≥1 service at Agent-Ready or Pilot-Ready. Currently 0/11 qualify. Re-evaluate after AUTH-Q1 remediation. productcatalogservice, currencyservice, adservice are closest (1 BLOCKER each).</div>
+</div></div>
+
+<!-- Readiness Snapshot -->
+<div class="section"><div class="section-title"><span>📋</span> Readiness Snapshot</div>
+<div class="card" style="font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:#a5b4fc;background:#181b24;line-height:1.8">
+assessment_date: 2026-04-16<br>total_services: 11<br>agent_ready: 0<br>pilot_ready: 0<br>remediation_required: 10<br>not_integrable: 1<br>total_blockers: 19<br>total_risks: 313<br>total_infos: 192<br>cross_cutting_blockers: 2<br>cross_cutting_risks: 32<br>portfolio_level_blockers: 1<br>portfolio_level_risks: 4<br>write_enabled_services: 0<br>read_only_services: 11
+</div></div>
+
+</div>
+<script>
+// === DATA ===
+const Q={
+'AUTH-Q1':'Machine Identity Authentication','AUTH-Q2':'Scoped Permissions (Least Privilege)','AUTH-Q3':'Action-Level Authorization','AUTH-Q4':'Identity Propagation','AUTH-Q5':'Agent-as-Self vs Agent-on-Behalf-of-User','AUTH-Q6':'Credential Management','AUTH-Q7':'Immutable Audit Logging','AUTH-Q8':'Agent Identity Suspension',
+'API-Q1':'Documented API Interface','API-Q2':'Machine-Readable API Specification','API-Q3':'Structured Error Responses','API-Q4':'Idempotent Write Operations','API-Q5':'API Versioning and Deprecation','API-Q6':'Structured Response Format','API-Q7':'Asynchronous Operation Support','API-Q8':'Event Emission for State Changes','API-Q9':'Rate Limit Documentation and Headers','API-Q10':'API Latency Profile',
+'STATE-Q1':'Compensation and Rollback','STATE-Q2':'Queryable Current State','STATE-Q3':'Concurrency Controls','STATE-Q4':'Circuit Breakers and Resilience','STATE-Q5':'Rate Limiting and Throttling','STATE-Q6':'Blast Radius and Transaction Limits','STATE-Q7':'Infrastructure Capacity for Agent Traffic',
+'HITL-Q1':'Draft/Pending State','HITL-Q2':'Configurable Approval Gates','HITL-Q3':'Sandbox/Staging Environment',
+'DATA-Q1':'Sensitive Data Classification','DATA-Q2':'Data Residency and Sovereignty','DATA-Q3':'Selective Query Support','DATA-Q4':'System of Record Designations','DATA-Q5':'Reliable Timestamps','DATA-Q6':'Data Freshness Signaling','DATA-Q7':'PII Redaction in Logs','DATA-Q8':'Data Quality Awareness',
+'DISC-Q1':'Schema Documentation and Versioning','DISC-Q2':'Semantically Meaningful Field Names','DISC-Q3':'Data Catalog / Metadata Layer','DISC-Q4':'Data Lineage',
+'OBS-Q1':'Distributed Tracing and Structured Logging','OBS-Q2':'Alerting on Error Rates and Latency','OBS-Q3':'Business Outcome Metrics',
+'ENG-Q1':'Infrastructure Governance','ENG-Q2':'CI/CD with API Contract Testing','ENG-Q3':'Rollback Capability','ENG-Q4':'API Test Coverage','ENG-Q5':'Encryption at Rest','ENG-Q6':'Cross-Origin and Network Policies'
+};
+const SVCS=[
+{id:'frontend',type:'application',scope:'read-only',profile:'Not Integrable',profileClass:'pill-red',b:3,r:32,i:14,na:0,pri:'P0',priClass:'pill-red',
+ blockers:['AUTH-Q1','API-Q1','DATA-Q1'],
+ risks:['API-Q2','API-Q3','API-Q5','API-Q7','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q6','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q2','STATE-Q4','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q3','DATA-Q4','DATA-Q5','DATA-Q6','DATA-Q7','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6'],
+ infos:['API-Q4','API-Q6','API-Q8','API-Q9','API-Q10','HITL-Q1','HITL-Q2','STATE-Q3','STATE-Q6','DATA-Q8','DISC-Q2','DISC-Q3','DISC-Q4','OBS-Q3']},
+{id:'cartservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:2,r:31,i:16,na:0,pri:'P0',priClass:'pill-red',
+ blockers:['AUTH-Q1','DATA-Q1'],
+ risks:['API-Q3','API-Q5','API-Q7','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q6','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q2','STATE-Q4','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q3','DATA-Q4','DATA-Q5','DATA-Q6','DATA-Q7','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6'],
+ infos:['API-Q1','API-Q2','API-Q4','API-Q6','API-Q8','API-Q9','API-Q10','STATE-Q3','STATE-Q6','HITL-Q1','HITL-Q2','DISC-Q2','DISC-Q3','DISC-Q4','DATA-Q8','OBS-Q3']},
+{id:'checkoutservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:2,r:32,i:15,na:0,pri:'P0',priClass:'pill-red',
+ blockers:['AUTH-Q1','DATA-Q1'],
+ risks:['API-Q2','API-Q3','API-Q5','API-Q7','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q6','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q2','STATE-Q4','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q3','DATA-Q4','DATA-Q5','DATA-Q6','DATA-Q7','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6'],
+ infos:['API-Q1','API-Q4','API-Q6','API-Q8','API-Q9','API-Q10','STATE-Q3','STATE-Q6','HITL-Q1','HITL-Q2','DATA-Q8','DISC-Q2','DISC-Q3','DISC-Q4','OBS-Q3']},
+{id:'paymentservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:2,r:31,i:16,na:0,pri:'P0',priClass:'pill-red',
+ blockers:['AUTH-Q1','DATA-Q1'],
+ risks:['API-Q2','API-Q3','API-Q5','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q6','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q2','STATE-Q4','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q3','DATA-Q4','DATA-Q5','DATA-Q6','DATA-Q7','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6'],
+ infos:['API-Q1','API-Q4','API-Q6','API-Q7','API-Q8','API-Q9','API-Q10','STATE-Q3','STATE-Q6','HITL-Q1','HITL-Q2','DATA-Q8','DISC-Q2','DISC-Q3','DISC-Q4','OBS-Q3']},
+{id:'productcatalogservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:1,r:32,i:16,na:0,pri:'P0',priClass:'pill-red',
+ blockers:['AUTH-Q1'],
+ risks:['API-Q2','API-Q3','API-Q5','API-Q7','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q6','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q4','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q1','DATA-Q2','DATA-Q3','DATA-Q4','DATA-Q5','DATA-Q6','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6','DATA-Q7'],
+ infos:['API-Q1','API-Q4','API-Q6','API-Q8','API-Q9','API-Q10','STATE-Q2','STATE-Q3','STATE-Q6','HITL-Q1','HITL-Q2','DATA-Q8','DISC-Q2','DISC-Q3','DISC-Q4','OBS-Q3']},
+{id:'shippingservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:2,r:32,i:15,na:0,pri:'P1',priClass:'pill-orange',
+ blockers:['AUTH-Q1','DATA-Q1'],
+ risks:['API-Q2','API-Q3','API-Q5','API-Q7','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q6','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q2','STATE-Q4','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q3','DATA-Q4','DATA-Q5','DATA-Q6','DATA-Q7','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6'],
+ infos:['API-Q1','API-Q4','API-Q6','API-Q8','API-Q9','API-Q10','STATE-Q3','STATE-Q6','HITL-Q1','HITL-Q2','DISC-Q2','DISC-Q3','DISC-Q4','OBS-Q3','DATA-Q8']},
+{id:'recommendationservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:2,r:32,i:15,na:0,pri:'P1',priClass:'pill-orange',
+ blockers:['AUTH-Q1','DATA-Q1'],
+ risks:['API-Q2','API-Q3','API-Q5','API-Q7','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q6','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q2','STATE-Q4','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q3','DATA-Q4','DATA-Q5','DATA-Q6','DATA-Q7','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6'],
+ infos:['API-Q1','API-Q4','API-Q6','API-Q8','API-Q9','API-Q10','STATE-Q3','STATE-Q6','HITL-Q1','HITL-Q2','DISC-Q2','DISC-Q3','DISC-Q4','DATA-Q8','OBS-Q3']},
+{id:'currencyservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:1,r:23,i:25,na:0,pri:'P1',priClass:'pill-orange',
+ blockers:['AUTH-Q1'],
+ risks:['API-Q3','API-Q5','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q5','DATA-Q6','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q6'],
+ infos:['API-Q1','API-Q2','API-Q4','API-Q6','API-Q7','API-Q8','API-Q9','API-Q10','AUTH-Q6','STATE-Q2','STATE-Q3','STATE-Q4','STATE-Q6','HITL-Q1','HITL-Q2','DATA-Q1','DATA-Q3','DATA-Q4','DATA-Q7','DATA-Q8','DISC-Q2','DISC-Q3','DISC-Q4','OBS-Q3','ENG-Q5']},
+{id:'emailservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:2,r:32,i:15,na:0,pri:'P2',priClass:'pill-yellow',
+ blockers:['AUTH-Q1','DATA-Q1'],
+ risks:['API-Q2','API-Q3','API-Q5','API-Q7','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q6','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q2','STATE-Q4','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q3','DATA-Q4','DATA-Q5','DATA-Q6','DATA-Q7','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6'],
+ infos:['API-Q1','API-Q4','API-Q6','API-Q8','API-Q9','API-Q10','STATE-Q3','STATE-Q6','HITL-Q1','HITL-Q2','DATA-Q8','DISC-Q2','DISC-Q3','DISC-Q4','OBS-Q3']},
+{id:'adservice',type:'application',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:1,r:23,i:25,na:0,pri:'P2',priClass:'pill-yellow',
+ blockers:['AUTH-Q1'],
+ risks:['API-Q3','API-Q5','AUTH-Q2','AUTH-Q3','AUTH-Q4','AUTH-Q5','AUTH-Q7','AUTH-Q8','STATE-Q1','STATE-Q5','STATE-Q7','HITL-Q3','DATA-Q2','DATA-Q4','DATA-Q5','DISC-Q1','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q6'],
+ infos:['API-Q1','API-Q2','API-Q4','API-Q6','API-Q7','API-Q8','API-Q9','API-Q10','AUTH-Q6','STATE-Q2','STATE-Q3','STATE-Q4','STATE-Q6','HITL-Q1','HITL-Q2','DATA-Q1','DATA-Q3','DATA-Q6','DATA-Q7','DATA-Q8','DISC-Q2','DISC-Q3','DISC-Q4','OBS-Q3','ENG-Q5']},
+{id:'platform-infra',type:'infra-only',scope:'read-only',profile:'Remediation Req.',profileClass:'pill-orange',b:1,r:13,i:1,na:34,pri:'—',priClass:'pill-muted',
+ blockers:['AUTH-Q1'],
+ risks:['AUTH-Q2','AUTH-Q3','AUTH-Q6','AUTH-Q7','AUTH-Q8','OBS-Q1','OBS-Q2','ENG-Q1','ENG-Q2','ENG-Q3','ENG-Q4','ENG-Q5','ENG-Q6'],
+ infos:['OBS-Q3']}
+];
+
+// Cross-cutting RISKs data (from portfolio report)
+// === RENDER SERVICE TABLE ===
+const body=document.getElementById('svcBody');
+SVCS.forEach((s,i)=>{
+  const tr=document.createElement('tr');tr.className='svc-row';tr.dataset.idx=i;
+  tr.innerHTML=`<td style="font-weight:600">${s.id}</td><td>${s.type}</td><td>${s.scope}</td><td><span class="pill ${s.profileClass}">${s.profile}</span></td><td class="${s.b>=3?'score-red':s.b>=1?'score-orange':''}">${s.b}</td><td class="${s.r>=30?'score-orange':s.r>=20?'score-yellow':''}">${s.r}</td><td>${s.i}</td><td>${s.na}</td><td><span class="pill ${s.priClass}">${s.pri}</span></td>`;
+  body.appendChild(tr);
+  const detail=document.createElement('tr');detail.className='svc-detail';detail.dataset.idx=i;
+  const td=document.createElement('td');td.colSpan=9;
+  let filterHtml='<div class="filter-tabs"><span class="filter-tab active" data-f="all">All</span><span class="filter-tab" data-f="blocker">BLOCKERs ('+s.b+')</span><span class="filter-tab" data-f="risk">RISKs ('+s.r+')</span><span class="filter-tab" data-f="info">INFOs ('+s.i+')</span>';
+  if(s.na>0) filterHtml+='<span class="filter-tab" data-f="na">N/A ('+s.na+')</span>';
+  filterHtml+='</div>';
+  let gridHtml='<div class="q-grid">';
+  s.blockers.forEach(q=>{gridHtml+=`<div class="q-item q-blocker" data-sev="blocker"><span class="q-id">${q}</span><span class="q-name">${Q[q]||q}</span><span class="pill pill-red" style="font-size:.65rem">B</span></div>`;});
+  s.risks.forEach(q=>{gridHtml+=`<div class="q-item q-risk" data-sev="risk"><span class="q-id">${q}</span><span class="q-name">${Q[q]||q}</span><span class="pill pill-orange" style="font-size:.65rem">R</span></div>`;});
+  s.infos.forEach(q=>{gridHtml+=`<div class="q-item q-info" data-sev="info"><span class="q-id">${q}</span><span class="q-name">${Q[q]||q}</span><span class="pill pill-blue" style="font-size:.65rem">I</span></div>`;});
+  gridHtml+='</div>';
+  td.innerHTML=filterHtml+gridHtml;
+  detail.appendChild(td);body.appendChild(detail);
+  // Toggle
+  tr.addEventListener('click',()=>{
+    const open=tr.classList.toggle('open');detail.classList.toggle('open',open);
+  });
+  // Filter tabs
+  td.querySelectorAll('.filter-tab').forEach(tab=>{
+    tab.addEventListener('click',e=>{
+      e.stopPropagation();
+      td.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');
+      const f=tab.dataset.f;
+      td.querySelectorAll('.q-item').forEach(item=>{item.style.display=(f==='all'||item.dataset.sev===f)?'':'none';});
+    });
+  });
+});
+
+// === RENDER CROSS-CUTTING RISKS ===
+const ccEl=document.getElementById('ccRisks');
+const CC_RISKS={
+'AUTH':[
+  {id:'AUTH-Q2',name:'Scoped Permissions',count:'11/11',desc:'No IAM policies or permission scoping for agent identities. Once network access is granted, all RPCs are callable.'},
+  {id:'AUTH-Q3',name:'Action-Level Authorization',count:'11/11',desc:'No action-level authorization in any application code. No ABAC, RBAC, or permission checks in middleware.'},
+  {id:'AUTH-Q4',name:'Identity Propagation',count:'10/10',desc:'No JWT parsing, no OAuth2 token exchange, no identity propagation through the service chain.'},
+  {id:'AUTH-Q5',name:'Agent-as-Self vs On-Behalf-of-User',count:'10/10',desc:'No distinction between service identity and delegated user identity in any application.'},
+  {id:'AUTH-Q6',name:'Credential Management',count:'9/11',desc:'gRPC uses insecure credentials. Redis has no authentication. No secrets management for rotation.'},
+  {id:'AUTH-Q7',name:'Immutable Audit Logging',count:'11/11',desc:'No immutable audit logging. Unstructured logging, no tamper-evident storage, no CloudTrail.'},
+  {id:'AUTH-Q8',name:'Agent Identity Suspension',count:'11/11',desc:'No mechanism to suspend individual agent identities without broader platform impact.'}
+],
+'API':[
+  {id:'API-Q2',name:'Machine-Readable API Spec',count:'7/10',desc:'No OpenAPI/Swagger/AsyncAPI specs. Proto files serve as gRPC schemas but frontend HTTP endpoints are undocumented.'},
+  {id:'API-Q3',name:'Structured Error Responses',count:'10/10',desc:'Generic gRPC status codes with string messages. No structured error codes, no retryable indicators.'},
+  {id:'API-Q5',name:'API Versioning and Deprecation',count:'10/10',desc:'No API versioning. Proto packages use "hipstershop" with no version qualifier.'},
+  {id:'API-Q7',name:'Asynchronous Operation Support',count:'7/10',desc:'All operations are synchronous request-response. Checkout blocks on 6 sequential gRPC calls.'}
+],
+'STATE':[
+  {id:'STATE-Q1',name:'Compensation and Rollback',count:'10/10',desc:'No saga pattern, compensation logic, or undo endpoints. Multi-step operations leave partial state on failure.'},
+  {id:'STATE-Q2',name:'Queryable Current State',count:'7/10',desc:'State queryable per entity but limited. Frontend returns HTML. No cross-entity queries.'},
+  {id:'STATE-Q4',name:'Circuit Breakers and Resilience',count:'8/10',desc:'No circuit breakers in any application code. No retry policies with exponential backoff.'},
+  {id:'STATE-Q5',name:'Rate Limiting and Throttling',count:'10/10',desc:'No rate limiting at any level. Frontend LoadBalancer exposes port 80 directly to the internet.'},
+  {id:'STATE-Q7',name:'Infrastructure Capacity',count:'10/10',desc:'No load testing or capacity planning. Static resource limits with no HPA. Sized for human-paced interaction.'}
+],
+'DATA':[
+  {id:'DATA-Q2',name:'Data Residency and Sovereignty',count:'10/10',desc:'No data residency requirements documented. Deployed to us-central1 by default. No GDPR/LGPD compliance.'},
+  {id:'DATA-Q3',name:'Selective Query Support',count:'8/10',desc:'No pagination, filtering, or sorting. ListProducts returns all products unbounded.'},
+  {id:'DATA-Q4',name:'System of Record Designations',count:'9/10',desc:'No SOR designations or data ownership documentation.'},
+  {id:'DATA-Q5',name:'Reliable Timestamps',count:'10/10',desc:'No created_at or updated_at timestamp fields on business entities.'},
+  {id:'DATA-Q6',name:'Data Freshness Signaling',count:'9/10',desc:'No Cache-Control headers, no X-Data-Age, no consistency level indicators.'},
+  {id:'DATA-Q7',name:'PII Redaction in Logs',count:'8/10',desc:'userId and PII logged in plaintext. No PII scrubbing middleware or masking libraries.'}
+],
+'DISC':[
+  {id:'DISC-Q1',name:'Schema Documentation and Versioning',count:'10/10',desc:'Proto files define schemas but are not versioned. No schema registry. No breaking change detection.'}
+],
+'OBS':[
+  {id:'OBS-Q1',name:'Distributed Tracing and Structured Logging',count:'11/11',desc:'Tracing maturity varies widely. OpenTelemetry disabled by default. Most services use unstructured logging.'},
+  {id:'OBS-Q2',name:'Alerting on Error Rates and Latency',count:'11/11',desc:'No alerting configuration. No Cloud Monitoring policies, no PagerDuty/OpsGenie, no SLO-based alerting.'}
+],
+'ENG':[
+  {id:'ENG-Q1',name:'Infrastructure Governance',count:'11/11',desc:'IaC exists but no drift detection, no terraform plan review step, no enforced peer review.'},
+  {id:'ENG-Q2',name:'CI/CD with API Contract Testing',count:'11/11',desc:'CI runs unit tests only. No Pact, no proto breaking change detection, no consumer-driven contracts.'},
+  {id:'ENG-Q3',name:'Rollback Capability',count:'11/11',desc:'No automated rollback triggers. Manual kubectl rollout undo available.'},
+  {id:'ENG-Q4',name:'API Test Coverage',count:'11/11',desc:'Tests cover basic happy-path only. No edge case, error scenario, or concurrent access tests.'},
+  {id:'ENG-Q5',name:'Encryption at Rest',count:'9/11',desc:'No explicit encryption at rest. Redis uses ephemeral emptyDir. No CMEK.'},
+  {id:'ENG-Q6',name:'Cross-Origin and Network Policies',count:'11/11',desc:'NetworkPolicies, AuthorizationPolicies, Sidecars all defined but disabled by default.'}
+],
+'HITL':[
+  {id:'HITL-Q3',name:'Sandbox/Staging Environment',count:'10/10',desc:'CI creates ephemeral per-PR namespaces. No permanent sandbox with production-equivalent data.'}
+]
+};
+
+const sectionLabels={'AUTH':'Authentication & Authorization','API':'API Surface','STATE':'State Management','DATA':'Data Accessibility','DISC':'Discoverability','OBS':'Observability','ENG':'Engineering Practices','HITL':'Human-in-the-Loop'};
+Object.keys(CC_RISKS).forEach(sec=>{
+  const items=CC_RISKS[sec];
+  const div=document.createElement('div');div.className='cc-section';
+  div.innerHTML=`<div class="cc-section-title"><span>${sectionLabels[sec]||sec}</span> <span style="font-size:.72rem;color:var(--muted);font-weight:400">(${items.length} risks)</span></div><div class="cc-items"></div>`;
+  const container=div.querySelector('.cc-items');
+  items.forEach(r=>{
+    const card=document.createElement('div');
+    card.style.cssText='padding:10px 14px;border-radius:8px;border:1px solid rgba(249,115,22,.2);background:rgba(249,115,22,.04);margin-bottom:8px;';
+    card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-weight:600;font-size:.82rem">${r.id}: ${r.name}</span><span class="pill pill-orange">${r.count}</span></div><div style="font-size:.75rem;color:var(--muted)">${r.desc}</div>`;
+    container.appendChild(card);
+  });
+  div.querySelector('.cc-section-title').addEventListener('click',()=>div.classList.toggle('open'));
+  ccEl.appendChild(div);
+});
+
+// === CHARTS ===
+new Chart(document.getElementById('profileChart'),{type:'doughnut',data:{labels:['Agent-Ready','Pilot-Ready','Remediation Req.','Not Integrable'],datasets:[{data:[0,0,10,1],backgroundColor:['#22c55e','#eab308','#f97316','#ef4444'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:10}}}}});
+
+new Chart(document.getElementById('severityChart'),{type:'bar',data:{labels:SVCS.map(s=>s.id.replace('service','')),datasets:[{label:'BLOCKERs',data:SVCS.map(s=>s.b),backgroundColor:'#ef4444'},{label:'RISKs',data:SVCS.map(s=>s.r),backgroundColor:'#f97316'},{label:'INFOs',data:SVCS.map(s=>s.i),backgroundColor:'#6366f1'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:'#8b8fa3',font:{size:7},maxRotation:45},grid:{display:false}},y:{stacked:true,ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}}}}});
+
+// Heatmap: count repos with BLOCKERs and RISKs per section
+const sections=['AUTH','API','STATE','DATA','DISC','OBS','ENG','HITL'];
+const blockerCounts=sections.map(sec=>{let c=0;SVCS.forEach(s=>{if(s.blockers.some(q=>q.startsWith(sec+'-')))c++;});return c;});
+const riskCounts=sections.map(sec=>{let c=0;SVCS.forEach(s=>{if(s.risks.some(q=>q.startsWith(sec+'-')))c++;});return c;});
+new Chart(document.getElementById('heatmapChart'),{type:'bar',data:{labels:sections,datasets:[{label:'BLOCKERs',data:blockerCounts,backgroundColor:'#ef4444'},{label:'RISKs',data:riskCounts,backgroundColor:'#f97316'}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:10}}}},scales:{x:{stacked:true,min:0,max:22,ticks:{color:'#8b8fa3',stepSize:2},grid:{color:'#2d3148'}},y:{stacked:true,ticks:{color:'#8b8fa3',font:{size:11}},grid:{display:false}}}}});
+</script>
+</body>
+</html>

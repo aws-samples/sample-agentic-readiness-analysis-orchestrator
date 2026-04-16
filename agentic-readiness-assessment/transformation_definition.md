@@ -8,16 +8,74 @@ Evaluate whether a repository's systems — infrastructure, applications, data, 
 
 ## Summary
 
-This transformation performs a dedicated Agentic Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, and container definitions. It then evaluates what it finds against 49 questions across 8 sections:
+This transformation performs a dedicated Agentic Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, and container definitions. It then evaluates what it finds against 43 questions across 8 sections:
 
-- **API** — API Surface and Interface Design (10 questions)
-- **AUTH** — Authentication, Authorization, and Identity (8 questions)
-- **STATE** — State Management and Transactional Integrity (7 questions)
-- **HITL** — Human-in-the-Loop and Approval Workflows (3 questions)
-- **DATA** — Data Accessibility and Quality (8 questions)
-- **DISC** — Discoverability and Semantic Readiness (4 questions)
-- **OBS** — Observability of Target Systems (3 questions)
-- **ENG** — Engineering and Deployment Maturity (6 questions)
+- **API** — API Surface and Interface Design (8 questions: 4 core + 4 extended)
+- **AUTH** — Authentication, Authorization, and Identity (7 questions: all core)
+- **STATE** — State Management and Transactional Integrity (7 questions: 3 core + 4 extended)
+- **HITL** — Human-in-the-Loop and Approval Workflows (3 questions: 1 core + 2 extended)
+- **DATA** — Data Accessibility and Quality (7 questions: 3 core + 4 extended)
+- **DISC** — Discoverability and Semantic Readiness (3 questions: 1 core + 2 extended)
+- **OBS** — Observability of Target Systems (3 questions: 2 core + 1 extended)
+- **ENG** — Engineering and Deployment Maturity (5 questions: 3 core + 2 extended)
+
+### Evaluation Tiers
+
+Not all 43 questions are evaluated for every service. Questions are organized into two tiers:
+
+**Core (24 questions)** — Always evaluated for applicable repo types. These directly determine whether an agent can safely call this service:
+
+| Section | Core Questions | Why Core |
+|---------|---------------|----------|
+| AUTH | Q1, Q2, Q3, Q4, Q5, Q6, Q7 (all 7) | Identity is always critical for agent safety |
+| API | Q1, Q2, Q3, Q4 | Minimum viable integration surface |
+| STATE | Q1, Q5, Q6 | Write safety and rate protection |
+| DATA | Q1, Q2, Q6 | Data classification, residency, PII protection |
+| OBS | Q1, Q2 | Debuggability of agent-initiated requests |
+| ENG | Q1, Q2, Q3 | Infrastructure governance and deployment safety |
+| HITL | Q3 | Agent testing environment |
+| DISC | Q1 | Schema stability for agent tool bindings |
+
+**Extended (19 questions)** — Evaluated only when triggered by service characteristics (archetype, scope, or detected patterns). When not triggered, recorded as "Not Evaluated (extended)" and excluded from scoring.
+
+| Question | Trigger Condition |
+|----------|------------------|
+| API-Q5 | Always evaluated as INFO |
+| API-Q6 | Service has operations >30s OR long-running workflows |
+| API-Q7 | Service has state changes (stateful-crud, orchestrator) |
+| API-Q8 | Always evaluated as INFO |
+| STATE-Q2 | Service has persistent state (stateful-crud, data-gateway, orchestrator) |
+| STATE-Q3 | agent_scope is write-enabled AND service has persistent state |
+| STATE-Q4 | Service has external dependencies (calls other services or external APIs) |
+| STATE-Q7 | Service is P0 priority OR is on the critical path |
+| HITL-Q1 | agent_scope is write-enabled |
+| HITL-Q2 | agent_scope is write-enabled |
+| DATA-Q3 | Service has list/query endpoints with potentially unbounded results |
+| DATA-Q4 | Service has persistent state (stateful-crud, data-gateway) |
+| DATA-Q5 | Service has persistent state (stateful-crud, data-gateway, orchestrator) |
+| DATA-Q7 | Always evaluated as INFO |
+| DISC-Q2 | Always evaluated as INFO |
+| DISC-Q3 | Always evaluated as INFO |
+| OBS-Q3 | Always evaluated as INFO |
+| ENG-Q4 | Always evaluated (but INFO for stateless-utility) |
+| ENG-Q5 | Service has persistent data stores |
+
+### Evaluation Tier by Repo Type and Archetype
+
+| Configuration | N/A | Core | Extended Triggered | Total Evaluated |
+|--------------|-----|------|--------------------|-----------------|
+| application / stateless-utility / read-only | 0 | 24 | ~3 (INFOs only) | ~27 |
+| application / stateless-utility / write-enabled | 0 | 24 | ~5 | ~29 |
+| application / stateful-crud / read-only | 0 | 24 | ~11 | ~35 |
+| application / stateful-crud / write-enabled | 0 | 24 | ~15 | ~39 |
+| application / orchestrator / read-only | 0 | 24 | ~8 | ~32 |
+| application / orchestrator / write-enabled | 0 | 24 | ~11 | ~35 |
+| application / data-gateway / read-only | 0 | 24 | ~8 | ~32 |
+| application / event-processor / read-only | 0 | 24 | ~4 | ~28 |
+| infrastructure-only | 29 | 14 | 0 | 14 |
+| deployment-config | 35 | 8 | 0 | 8 |
+| library | 5 | 24 | ~9 | ~33 |
+| monorepo | per-service | per-service | per-service | per-service |
 
 Each question is scored using a severity model:
 
@@ -27,9 +85,21 @@ Each question is scored using a severity model:
 | **RISK** | Can proceed with compensating controls, scoped pilots, or human-in-the-loop gates. | Track and remediate on a defined timeline. |
 | **INFO** | No immediate gating impact. Shapes architecture decisions. | Feeds agent design and orchestration decisions. Not a deployment gate. |
 
-Four questions are **conditional BLOCKERs** (⚡) — their severity depends on the `agent_scope` context (write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q7, and DATA-Q2.
+Four questions are **conditional BLOCKERs** (⚡) — their severity depends on the `agent_scope` context (write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q6, and DATA-Q2.
 
-Four additional questions are **scope-calibrated RISKs** (⚡) — they evaluate as RISK when `agent_scope` is `"write-enabled"` but downgrade to INFO when `agent_scope` is `"read-only"` because their concerns are specific to write operations: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6.
+### Service Archetype Classification
+
+Beyond `repo_type` (which determines N/A questions for non-application repos), this assessment classifies application repositories by **service archetype** — a characterization of runtime behavior that determines which extended questions are triggered.
+
+| Archetype | Description | Detection Signals |
+|-----------|-------------|-------------------|
+| **stateless-utility** | Pure-function services with no persistent state, no user-specific data, and no write operations. | No database connections, no cache writes. All operations read-only and deterministic. Data is public or reference-grade. |
+| **stateful-crud** | Services that own persistent state and expose CRUD operations on business entities. | Database connections. Create/Update/Delete endpoints. Entity lifecycle management. User-specific data. |
+| **orchestrator** | Services that coordinate multi-service workflows by calling other services. | High fan-out (calls 3+ downstream services). Saga/workflow patterns. |
+| **data-gateway** | Read-heavy data access layer — APIs over databases, search indexes, or data lakes. | Database queries dominate logic. Pagination, filtering, sorting. Read-heavy traffic. |
+| **event-processor** | Services that consume events/messages and process them asynchronously. | Message queue consumers (SQS, Kafka, SNS). No synchronous API surface (or minimal). |
+
+If the archetype cannot be determined with confidence, default to `stateful-crud` (the most conservative — triggers the most extended questions).
 
 The output is a structured Markdown report saved as `{repo-name}-ara-report.md` containing:
 - Metadata header (repo name, date, repo_type, agent_scope)
@@ -38,7 +108,7 @@ The output is a structured Markdown report saved as `{repo-name}-ara-report.md` 
 - BLOCKERs section with remediation guidance
 - RISKs section with compensating control options
 - INFOs section
-- Detailed findings for all 49 questions (including N/A questions in N/A format)
+- Detailed findings for all 43 questions (including N/A questions in N/A format)
 - Evidence index with file references
 
 The readiness profile is determined by blocker and risk counts:
@@ -73,6 +143,7 @@ Extract the following fields from `additionalPlanContext`:
 |-------|------|----------|---------|-------------|
 | `repo_type` | enum | No | `"application"` | Repository classification. One of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`. Determines which questions are scored as N/A. |
 | `agent_scope` | enum | No | `"read-only"` | The intended agent access level. One of: `read-only`, `write-enabled`. Determines severity of conditional BLOCKER (⚡) questions. |
+| `service_archetype` | enum | No | auto-detected | Service archetype for severity calibration. One of: `stateless-utility`, `stateful-crud`, `orchestrator`, `data-gateway`, `event-processor`. If not provided, auto-detected in Step 1.5. Only applies when `repo_type` is `application`. |
 | `context` | string | No | — | Free-text description of the repository (e.g., "Legacy PHP e-commerce app running on EC2 with MySQL"). Used to frame findings and recommendations throughout the report. |
 | `priority` | enum | No | — | Repository priority within the portfolio. One of: `P0`, `P1`, `P2`. Recorded in report metadata. |
 | `tags` | string[] | No | — | User-defined tags for categorization (e.g., `["monolith", "php", "payment-critical"]`). Recorded in report metadata. |
@@ -94,26 +165,20 @@ If a field is absent from `additionalPlanContext`, apply these defaults:
 
 - **`repo_type`** → `"application"` — This is the most comprehensive assessment (no questions skipped). Defaulting to `application` ensures nothing is missed when classification is unknown.
 - **`agent_scope`** → `"read-only"` — This is the safer default. Conditional BLOCKER questions (⚡) are evaluated as INFO or RISK rather than BLOCKER, avoiding false escalation when the agent use case has not been scoped.
+- **`service_archetype`** → Auto-detected in Step 1.5 based on repository analysis. If auto-detection is inconclusive, defaults to `"stateful-crud"` (the most conservative archetype — no severity downgrades beyond standard scope calibration). Only applies when `repo_type` is `application`.
 - **`context`** → No default. If absent, findings and recommendations are written without additional framing.
 - **`priority`** → No default. If absent, omitted from report metadata.
 - **`tags`** → No default. If absent, omitted from report metadata.
 
 If `repo_type` is present but not one of the 5 recognized values (`application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`), default to `"application"` and include a warning in the report metadata: **"Unrecognized repo_type '{value}', defaulting to application."**
 
-#### 0.3 Fields NOT Read by This TD
-
-The ARA TD does **not** read, validate, or apply the following fields from `additionalPlanContext`. If present, they are ignored:
-
-- **`goal`** — There is no goal system. Assessment routing is handled by `assessment_type` in the portfolio config, not by the TD. The ARA TD evaluates all 49 questions with equal weighting regardless of any goal value.
-- **`goal_context`** — Replaced by the `context` field. The ARA TD uses `context` for free-text framing only.
-- **`preferences`** — The `preferences` field (prefer/avoid arrays) is a MOD-only concept used for technology recommendation steering. The ARA TD evaluates agent safety and operability — it does not make technology recommendations that would be influenced by preferences.
-
-#### 0.4 How Context Fields Are Used
+#### 0.3 How Context Fields Are Used
 
 Record the resolved values from Steps 0.1–0.2 in the assessment context. They will be used in subsequent steps as follows:
 
 - **`repo_type`** → Used in the N/A Mapping (Step 1) to determine which questions are scored as N/A for the detected repo type. Included in the report metadata header.
-- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q7, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
+- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q6, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
+- **`service_archetype`** → Used in Steps 2–9 (Evaluation) to calibrate severity for archetype-sensitive questions. When a question is calibrated to INFO for the detected archetype, it is recorded as INFO (not RISK) and does not count toward the RISK total. Calibration only downgrades severity — it never upgrades. Included in the report metadata header. Only applies when `repo_type` is `application`.
 - **`context`** → Used throughout the report to frame findings and recommendations with repository-specific context.
 - **`priority`** → Recorded in the report metadata header.
 - **`tags`** → Recorded in the report metadata header.
@@ -193,7 +258,7 @@ Skip the following directories during scanning — they contain installed depend
 
 After scanning, compile a structured inventory of what was found. This inventory is referenced throughout Steps 2–9 when evaluating individual questions. Record:
 
-- **IaC files found** — List of Terraform, CloudFormation, CDK, Helm, Kustomize, and other IaC files with their paths. Used by: AUTH-Q1 (IAM/auth config), AUTH-Q6 (secrets in IaC), AUTH-Q7 (CloudTrail config), ENG-Q1 (IaC governance), ENG-Q5 (encryption at rest), ENG-Q6 (network policies), STATE-Q5 (rate limiting in API Gateway), and others.
+- **IaC files found** — List of Terraform, CloudFormation, CDK, Helm, Kustomize, and other IaC files with their paths. Used by: AUTH-Q1 (IAM/auth config), AUTH-Q5 (secrets in IaC), AUTH-Q6 (CloudTrail config), ENG-Q1 (IaC governance), ENG-Q5 (encryption at rest), STATE-Q5 (rate limiting in API Gateway), and others.
 - **Source code files found** — List of application source files by language. Used by: API-Q1 (API endpoints in code), API-Q3 (error handling), API-Q4 (idempotency patterns), AUTH-Q2 (permission checks), STATE-Q3 (concurrency controls), STATE-Q4 (resilience patterns), and others.
 - **API spec files found** — List of OpenAPI, AsyncAPI, GraphQL, and Smithy files. Used by: API-Q1 (documented interface), API-Q2 (machine-readable spec), DISC-Q1 (schema documentation).
 - **CI/CD config files found** — List of pipeline definitions. Used by: ENG-Q2 (CI/CD with contract testing), ENG-Q3 (rollback capability), ENG-Q4 (API test coverage).
@@ -214,7 +279,128 @@ Read all discovered files that are relevant to the assessment. Prioritize readin
 6. **Application source code** — These reveal implementation patterns, error handling, auth logic, and data access
 7. **Configuration files** — These reveal runtime settings, environment configuration, and connection details
 
-For large repositories, focus on files most relevant to the 49 evaluation questions. Not every source file needs to be read in full — prioritize entry points, API route definitions, authentication middleware, data access layers, and error handling patterns.
+For large repositories, focus on files most relevant to the 43 evaluation questions. Not every source file needs to be read in full — prioritize entry points, API route definitions, authentication middleware, data access layers, and error handling patterns.
+
+### Step 1.5: Service Archetype Detection
+
+If `service_archetype` was provided in `additionalPlanContext`, use that value directly and skip auto-detection. Otherwise, analyze the file inventory from Step 1.3 and the file contents from Step 1.4 to classify the service archetype.
+
+#### Auto-Detection Decision Tree
+
+```
+🔍 Analyze Repository
+    │
+    ▼
+┌─────────────────────────────────┐
+│ service_archetype in config?     │
+│  YES → Use config value          │
+│  NO  → Continue ▼                │
+└─────────┬───────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────┐
+│ Has message queue consumers?     │
+│ (SQS, Kafka, SNS handlers,      │
+│  event bridge rules, no/minimal  │
+│  synchronous API surface)        │
+│                                  │
+│  YES → event-processor           │
+│  NO  → Continue ▼                │
+└─────────┬───────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────┐
+│ Calls 3+ downstream services?    │
+│ (HTTP/gRPC clients to other      │
+│  services, service addresses     │
+│  in env vars, fan-out pattern)   │
+│                                  │
+│  YES → orchestrator              │
+│  NO  → Continue ▼                │
+└─────────┬───────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────┐
+│ Has persistent state?            │
+│ (Database connections, Redis     │
+│  writes, DynamoDB, SQL, ORM)     │
+│                                  │
+│  NO  → ▼ (stateless path)       │
+│  YES → ▼ (stateful path)        │
+└──┬──────────────┬───────────────┘
+   │              │
+   ▼              ▼
+STATELESS       STATEFUL
+   │              │
+   ▼              ▼
+┌──────────┐  ┌──────────────────┐
+│ Has write │  │ Primarily read   │
+│ endpoints │  │ queries with     │
+│ or state  │  │ pagination/      │
+│ mutations?│  │ filtering?       │
+│           │  │ Minimal business │
+│ NO →      │  │ logic?           │
+│ stateless │  │                  │
+│ -utility  │  │ YES →            │
+│           │  │ data-gateway     │
+│ YES →     │  │                  │
+│ stateful  │  │ NO →             │
+│ -crud     │  │ stateful-crud    │
+└──────────┘  └──────────────────┘
+```
+
+#### Detection Signals by Archetype
+
+**stateless-utility:**
+- No database connections, no cache writes, no message queue producers
+- All API operations are read-only (GET endpoints, query RPCs)
+- Data comes from static files, environment variables, or in-memory computation
+- No `user_id`, `session`, or user-specific context in request schemas
+- Data is public or reference-grade (exchange rates, product catalogs, configuration)
+- Examples: currency converter, feature flag service, configuration service, health check aggregator
+
+**stateful-crud:**
+- Database connections (SQL, NoSQL, Redis with writes, DynamoDB)
+- Create/Update/Delete endpoints alongside Read
+- Entity lifecycle management (status fields, soft deletes)
+- User-specific data (user_id in requests, session management)
+- Examples: cart service, user profile service, order service, inventory service
+
+**orchestrator:**
+- Calls 3+ downstream services (HTTP clients, gRPC stubs, service addresses in env vars)
+- Sequential or parallel service call patterns
+- Minimal or no persistent state of its own
+- Transaction coordination (saga patterns, compensating actions)
+- Examples: checkout service, order placement service, workflow coordinator
+
+**data-gateway:**
+- Database queries dominate the logic (SQL, Elasticsearch, DynamoDB scans)
+- Pagination, filtering, sorting parameters in API
+- Search endpoints
+- Minimal business logic — primarily data transformation and serialization
+- Read-heavy traffic pattern (>80% reads)
+- Examples: product search service, reporting API, analytics query service
+
+**event-processor:**
+- Message queue consumers (SQS, Kafka, SNS, EventBridge)
+- Event handler functions (Lambda triggers, message listeners)
+- No synchronous API surface (or minimal — health checks only)
+- Batch processing patterns
+- May produce events for downstream consumers
+- Examples: notification service, ETL pipeline, audit log processor, email sender
+
+#### Archetype Recording
+
+Record the detected archetype in the assessment context. Include it in the report metadata:
+
+```markdown
+**Service Archetype**: <archetype> (auto-detected | user-provided)
+```
+
+If auto-detection was used, include a brief justification:
+```markdown
+**Archetype Justification**: <1-2 sentence explanation of why this archetype was selected>
+```
 
 ## N/A Mapping — Repository Type Question Applicability
 
@@ -224,19 +410,19 @@ Before evaluating any question, check the `repo_type` (resolved in Step 0) again
 
 | Repo Type | Questions Scored as N/A |
 |-----------|------------------------|
-| `application` | None — all 49 questions apply |
-| `infrastructure-only` | API-Q1 through API-Q10, AUTH-Q4, AUTH-Q5, STATE-Q1 through STATE-Q7, HITL-Q1 through HITL-Q3, DATA-Q1 through DATA-Q8, DISC-Q1 through DISC-Q4 |
-| `deployment-config` | All questions N/A **except** ENG-Q1 through ENG-Q6 and AUTH-Q1 through AUTH-Q3 |
-| `library` | ENG-Q1 through ENG-Q6 |
-| `monorepo` | None — all 49 questions apply (assessed per-service within the repo) |
+| `application` | None — all 43 questions apply |
+| `infrastructure-only` | API-Q1 through API-Q8, AUTH-Q4, STATE-Q1 through STATE-Q7, HITL-Q1 through HITL-Q3, DATA-Q1 through DATA-Q7, DISC-Q1 through DISC-Q3 |
+| `deployment-config` | All questions N/A **except** ENG-Q1 through ENG-Q5 and AUTH-Q1 through AUTH-Q3 |
+| `library` | ENG-Q1 through ENG-Q5 |
+| `monorepo` | None — all 43 questions apply (assessed per-service within the repo) |
 
 **Rationale by repo type:**
 
-- **`application`** — Full-stack repositories with source code, APIs, data access, and deployment infrastructure. All 49 questions are relevant because agents will interact with the application's APIs, data, auth, and operational surface.
-- **`infrastructure-only`** — Repositories containing only IaC provisioning (Terraform modules, CDK stacks, CloudFormation templates) with no application source code. API, most application-level auth (identity propagation, agent-as-self), state management, human-in-the-loop, data accessibility, and discoverability questions do not apply because there is no application runtime to evaluate. Auth questions AUTH-Q1 through AUTH-Q3 and AUTH-Q6 through AUTH-Q8 still apply (machine identity, scoped permissions, action-level auth, credential management, audit logging, agent suspension) because IaC defines IAM roles, policies, and security controls. OBS and ENG questions still apply because infrastructure repos define observability and deployment maturity.
-- **`deployment-config`** — Repositories containing only CI/CD pipelines, Kubernetes manifests, Helm charts, GitOps configs, or Ansible playbooks — no application source code. Only engineering maturity (ENG-Q1 through ENG-Q6) and foundational auth (AUTH-Q1 through AUTH-Q3) apply. ENG questions evaluate IaC governance, CI/CD pipelines, rollback capability, test coverage, encryption config, and network policies — all present in deployment config repos. AUTH-Q1 through AUTH-Q3 evaluate machine identity, scoped permissions, and action-level authorization defined in deployment manifests.
-- **`library`** — Package repositories with source code but no deployable entry point (no Dockerfile, no IaC, no main()). ENG-Q1 through ENG-Q6 are N/A because libraries have no deployment infrastructure, no CI/CD deployment pipeline, no rollback capability, and no encryption-at-rest or network policy configuration. All other questions apply because libraries expose APIs, handle auth, manage state, and process data that agents may consume through dependent applications.
-- **`monorepo`** — Repositories containing multiple independent services. All 49 questions apply, assessed per-service within the repo. Each service directory is evaluated independently against the full question set.
+- **`application`** — Full-stack repositories with source code, APIs, data access, and deployment infrastructure. All 43 questions are relevant because agents will interact with the application's APIs, data, auth, and operational surface. Severity is further calibrated by `service_archetype`.
+- **`infrastructure-only`** — Repositories containing only IaC provisioning (Terraform modules, CDK stacks, CloudFormation templates) with no application source code. API, most application-level auth (identity propagation), state management, human-in-the-loop, data accessibility, and discoverability questions do not apply because there is no application runtime to evaluate. Auth questions AUTH-Q1 through AUTH-Q3 and AUTH-Q5 through AUTH-Q7 still apply (machine identity, scoped permissions, action-level auth, credential management, audit logging, agent suspension) because IaC defines IAM roles, policies, and security controls. OBS and ENG questions still apply because infrastructure repos define observability and deployment maturity.
+- **`deployment-config`** — Repositories containing only CI/CD pipelines, Kubernetes manifests, Helm charts, GitOps configs, or Ansible playbooks — no application source code. Only engineering maturity (ENG-Q1 through ENG-Q5) and foundational auth (AUTH-Q1 through AUTH-Q3) apply.
+- **`library`** — Package repositories with source code but no deployable entry point (no Dockerfile, no IaC, no main()). ENG-Q1 through ENG-Q5 are N/A because libraries have no deployment infrastructure, no CI/CD deployment pipeline, no rollback capability, and no encryption-at-rest configuration. All other questions apply because libraries expose APIs, handle auth, manage state, and process data that agents may consume through dependent applications.
+- **`monorepo`** — Repositories containing multiple independent services. All 43 questions apply, assessed per-service within the repo. Each service directory is evaluated independently against the full question set.
 
 ### N/A Display Format
 
@@ -262,7 +448,19 @@ N/A questions are **excluded** from the following:
 
 ### N/A Inclusion Rule
 
-All 49 questions **must appear** in the report output. N/A questions are listed in the detailed findings section using the N/A display format above — they are **not omitted** from the report. This ensures the report is a complete record of all 49 questions regardless of repo type, and makes it clear which questions were skipped and why.
+All 43 questions **must appear** in the report output. N/A questions are listed in the detailed findings section using the N/A display format above — they are **not omitted** from the report. Extended questions that were not triggered are listed using the "Not Evaluated" display format:
+
+```markdown
+#### <question_id>: <question topic>
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `<archetype>`, agent_scope: `<scope>`.
+- **Trigger**: <trigger condition from the extended questions table>
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
+```
+
+This ensures the report is a complete record of all 43 questions regardless of repo type or archetype, and makes it clear which questions were evaluated, skipped (N/A), or not triggered (extended).
 
 ### How to Apply the N/A Mapping
 
@@ -274,7 +472,7 @@ For each evaluation step (Steps 2–9), before evaluating a question:
 4. If **all** questions in a section are N/A for the detected repo type, skip the section evaluation entirely but still list all questions from that section in the report using the N/A display format.
 
 
-### Step 2: API Surface and Interface Design (10 questions)
+### Step 2: API Surface and Interface Design (8 questions)
 
 Evaluate the application's API surface — the integration layer that agents will call. APIs are the minimum viable integration surface for agent tools. This section assesses whether the APIs are documented, machine-readable, well-structured, versioned, and operationally ready for autonomous consumption.
 
@@ -344,22 +542,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q5: API Versioning and Deprecation — RISK
-
-**Question:** Are API contracts versioned, and is there a deprecation policy that includes downstream notification?
-
-**Why it matters:** Agent tool schemas break silently when APIs change without notice. Every breaking change requires updating tool definitions and revalidating agent behavior.
-
-**Look for:**
-- `/v1/`, `/v2/` URL patterns
-- `Accept-Version` headers
-- Versioning annotations
-- Changelog files
-- Deprecation notices in API docs
-
----
-
-#### API-Q6: Structured Response Format — INFO
+#### API-Q5: Structured Response Format — INFO
 
 **Question:** What is the response format from service APIs? Structured JSON? XML? Binary?
 
@@ -374,7 +557,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q7: Asynchronous Operation Support — RISK
+#### API-Q6: Asynchronous Operation Support — RISK
 
 **Question:** Does the application support async patterns for long-running tasks (job submission, polling endpoint, or webhook callback)?
 
@@ -390,7 +573,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q8: Event Emission for State Changes — INFO
+#### API-Q7: Event Emission for State Changes — INFO
 
 **Question:** Can the system emit events or webhooks for meaningful state changes that agents may need to react to — such as record updates, status transitions, or completion of long-running operations?
 
@@ -404,7 +587,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q9: Rate Limit Documentation and Headers — INFO
+#### API-Q8: Rate Limit Documentation and Headers — INFO
 
 **Question:** Are API rate limits documented, and does the application return rate limit headers (X-RateLimit-Remaining, Retry-After)?
 
@@ -419,20 +602,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q10: API Latency Profile — INFO
-
-**Question:** What is the P95 response time for the APIs agents will consume?
-
-**Why it matters:** An agent calling 5 tools sequentially, each with a 5-second P95, creates a 25-second minimum response time. This shapes whether to use sync or async patterns.
-
-**Look for:**
-- Performance benchmarks or load test results
-- CloudWatch latency metrics
-- APM dashboards
-- Benchmark: Sub-second P95 ideal. 1–5s acceptable with caching. Over 5s should use async (API-Q7).
-
-
-### Step 3: Authentication, Authorization, and Identity (8 questions)
+### Step 3: Authentication, Authorization, and Identity (7 questions)
 
 Evaluate the application's authentication, authorization, and identity controls — the security layer that determines who (or what) can call the system and what they can do. Agents cannot use human credentials, so the system must support machine identity, scoped permissions, and immutable audit trails.
 
@@ -486,11 +656,23 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### AUTH-Q4: Identity Propagation — RISK
+#### AUTH-Q4: Identity Propagation and Delegation — RISK
 
-**Question:** Does the system support token exchange mechanisms (JWT/OAuth, on-behalf-of flows) that carry the originating user context end-to-end through service calls?
+**Question:** Does the system support identity propagation through service calls (JWT/OAuth token exchange, on-behalf-of flows), and can it distinguish between an agent acting under its own service identity vs. acting on behalf of a specific human user?
 
-**Why it matters:** Without technical identity propagation, the system either cannot personalize responses per user or silently exposes all user data to every agent call.
+**Why it matters:** Without identity propagation, the system either trusts all internal calls equally or requires each service to re-authenticate — both are problematic. Additionally, an agent acting as itself should have tightly scoped permissions, while an agent acting on behalf of a user should be bounded by that user's permissions. Conflating the two is a common source of privilege escalation.
+
+**Archetype calibration:** For `stateless-utility` and `data-gateway` archetypes, downgrade to INFO — stateless services returning public/reference data are not affected by caller identity, and data gateways typically serve as read-only query layers where identity context has minimal security impact.
+
+**Look for:**
+- JWT parsing middleware
+- OAuth2 on-behalf-of flows
+- Token exchange patterns
+- Cognito/Okta integration
+- User context headers (`X-User-Id`, `Authorization Bearer`) passed through service calls
+- Separate IAM roles or API keys for agent-as-self vs agent-on-behalf-of-user
+- Different auth flows for service-to-service vs user-delegated calls
+- Audit log fields distinguishing the two modes cannot personalize responses per user or silently exposes all user data to every agent call.
 
 **Look for:**
 - JWT parsing middleware
@@ -501,20 +683,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User — RISK
-
-**Question:** Can the system distinguish between an agent acting under its own service identity and an agent acting on behalf of a specific human user? Are these two modes logged and authorized separately?
-
-**Why it matters:** These are fundamentally different access patterns. An agent acting as itself should have tightly scoped permissions. An agent acting on behalf of a user should be bounded by that user's permissions, not the agent's broader service account. Conflating the two is a common source of privilege escalation.
-
-**Look for:**
-- Separate IAM roles or API keys for agent-as-self vs agent-on-behalf-of-user
-- Different auth flows for service-to-service vs user-delegated calls
-- Audit log fields distinguishing the two modes
-
----
-
-#### AUTH-Q6: Credential Management — RISK
+#### AUTH-Q5: Credential Management — RISK
 
 **Question:** Are credentials managed through a secrets management system (AWS Secrets Manager, HashiCorp Vault) with rotation, or are they embedded in code, environment variables, or configuration files?
 
@@ -529,7 +698,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### AUTH-Q7: Immutable Audit Logging — BLOCKER ⚡ (Conditional)
+#### AUTH-Q6: Immutable Audit Logging — BLOCKER ⚡ (Conditional)
 
 **Question:** Does the application log the authenticated principal for every write operation, and is that log immutable and tamper-evident?
 
@@ -548,7 +717,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### AUTH-Q8: Agent Identity Suspension — RISK
+#### AUTH-Q7: Agent Identity Suspension — RISK
 
 **Question:** Can individual agent identities be suspended or revoked immediately if anomalous behavior is detected, without taking down the broader platform?
 
@@ -737,7 +906,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Environment-specific IaC
 
 
-### Step 6: Data Accessibility and Quality (8 questions)
+### Step 6: Data Accessibility and Quality (7 questions)
 
 Evaluate the data layer that agents will access — classification, residency, query capabilities, quality, and privacy controls. Agents process data at machine speed, so unclassified sensitive data, unbounded queries, and PII leakage into logs create regulatory and operational risk at scale.
 
@@ -809,35 +978,26 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DATA-Q5: Reliable Timestamps — RISK
+#### DATA-Q5: Temporal Metadata and Freshness — RISK
 
-**Question:** Does the data include reliable, timezone-normalized timestamps for creation, last update, and source event time?
+**Question:** Does the data include reliable timestamps (creation, last update, source event time) with timezone normalization, and can the system signal whether data returned to an agent is current, stale, cached, or eventually consistent?
 
-**Why it matters:** Agents performing time-sensitive reasoning depend on accurate temporal data. Missing or unreliable timestamps cause silent errors.
+**Why it matters:** Agents performing time-sensitive reasoning depend on accurate temporal data. Missing timestamps cause silent errors. If the system cannot signal that data is cached or eventually consistent, the agent has no way to know whether it is reasoning on the current state. Both concerns — temporal accuracy and freshness signaling — serve the same purpose: ensuring agents reason on trustworthy temporal data.
+
+**Archetype calibration:** For `stateless-utility` archetypes, downgrade to INFO — stateless services with static/reference data have fixed temporal characteristics that don't change at runtime.
 
 **Look for:**
 - `created_at`, `updated_at`, `event_time` fields in database schemas
 - Timezone handling (UTC storage)
 - Timestamp format consistency
+- `Cache-Control` headers
+- `X-Data-Age` or `last_refreshed` headers
+- `consistency_level` field (strong / eventual / cached)
 - NTP synchronization configuration
 
 ---
 
-#### DATA-Q6: Data Freshness Signaling — RISK
-
-**Question:** Can the system indicate whether data returned to an agent is current, stale, cached, or eventually consistent? Does it expose cache age, last-refreshed timestamps, or consistency guarantees at the response level?
-
-**Why it matters:** Agents make consequential decisions fast based on data retrieved seconds ago. If the system cannot signal that data is cached or eventually consistent, the agent has no way to know whether it is reasoning on the current state.
-
-**Look for:**
-- `Cache-Control` headers
-- `X-Data-Age` headers
-- `last_refreshed` field
-- `consistency_level` field (strong / eventual / cached)
-
----
-
-#### DATA-Q7: PII Redaction in Logs — RISK
+#### DATA-Q6: PII Redaction in Logs — RISK
 
 **Question:** Is PII redacted from logs, error messages, and observability data?
 
@@ -852,7 +1012,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DATA-Q8: Data Quality Awareness — INFO
+#### DATA-Q7: Data Quality Awareness — INFO
 
 **Question:** Is there a known data quality score or completeness metric for this dataset?
 
@@ -867,7 +1027,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Data quality metrics in observability
 
 
-### Step 7: Discoverability and Semantic Readiness (4 questions)
+### Step 7: Discoverability and Semantic Readiness (3 questions)
 
 Evaluate whether the system's data and APIs are discoverable and semantically meaningful — can an agent (or the team building agent tools) understand what data exists, what it means, and where it came from? This section accelerates tool definition and improves agent reasoning quality.
 
@@ -875,18 +1035,22 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DISC-Q1: Schema Documentation and Versioning — RISK
+#### DISC-Q1: Schema Versioning and API Contracts — RISK
 
-**Question:** Are data schemas documented, versioned, and accessible?
+**Question:** Are data schemas and API contracts documented, versioned, and accessible — with breaking change detection in CI?
 
-**Why it matters:** Agents need to understand data structures. Schema changes without versioning break agent queries silently.
+**Why it matters:** Agents need to understand data structures, and agent tool schemas break silently when APIs change without notice. Schema changes without versioning break agent queries silently. Every breaking change requires updating tool definitions and revalidating agent behavior. This question covers both schema documentation (the discoverability concern) and API versioning (the stability concern) because they serve the same purpose: ensuring agents can reliably bind to and consume the system's interfaces.
 
 **Look for:**
-- JSON Schema files
-- Avro/Protobuf schemas
+- JSON Schema files, Avro/Protobuf schemas
 - Database migration files
 - Schema registry
 - OpenAPI schema definitions
+- `/v1/`, `/v2/` URL patterns or versioned proto packages
+- `Accept-Version` headers
+- Changelog files, deprecation notices
+- Breaking change detection tools (`buf breaking`, OpenAPI diff)
+- Consumer-driven contract tests (Pact)
 
 ---
 
@@ -919,20 +1083,6 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - API catalogs
 
 ---
-
-#### DISC-Q4: Data Lineage — INFO
-
-**Question:** Is there a lineage record showing where each data element originated and how it was transformed?
-
-**Why it matters:** When an agent produces incorrect output due to bad data, lineage is how you trace it.
-
-**Look for:**
-- Data lineage tools (AWS Glue DataBrew, Apache Atlas)
-- ETL pipeline documentation
-- Data flow diagrams
-- Transformation logs
-- Source-to-target mappings
-
 
 ### Step 8: Observability of Target Systems (3 questions)
 
@@ -984,7 +1134,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Business KPI alarms
 
 
-### Step 9: Engineering and Deployment Maturity (6 questions)
+### Step 9: Engineering and Deployment Maturity (5 questions)
 
 Evaluate the engineering and deployment maturity of the target system — infrastructure governance, CI/CD with contract testing, rollback capability, test coverage, encryption, and network policies. These controls determine whether the system can be safely and reliably operated as an agent integration surface.
 
@@ -1064,26 +1214,11 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### ENG-Q6: Cross-Origin and Network Policies — RISK
-
-**Question:** Are CORS policies and network security configurations (security groups, firewall rules, API gateway settings) documented and discoverable, regardless of whether they are defined in application code, infrastructure-as-code repos, or centralized configuration systems?
-
-**Why it matters:** Network policies are a defense-in-depth control that restricts which pods or services can communicate at the network layer. While important for overall security posture, they are an enforcement mechanism for authorization decisions that should be made at the application or service mesh layer (AUTH-Q1, AUTH-Q3). If authentication and authorization are properly implemented, network policies provide a secondary defense layer rather than a primary agent safety gate. CORS is a browser-enforced mechanism irrelevant to machine-to-machine agent traffic. Classified as RISK (not BLOCKER) because the absence of network policies does not directly prevent safe agent integration when identity and authorization controls are in place — it reduces defense depth.
-
-**Look for:**
-- CORS configuration in API Gateway or application middleware
-- Security group rules in IaC
-- Firewall rules
-- Network policies in Kubernetes
-- API gateway access policies
-- WAF rules
-
-
 ## Report Template
 
-After evaluating all 49 questions across Steps 2–9, compile the findings into a structured Markdown report. Save the report as `{repo-name}-ara-report.md` in the repository's output directory.
+After evaluating all 43 questions across Steps 2–9, compile the findings into a structured Markdown report. Save the report as `{repo-name}-ara-report.md` in the repository's output directory.
 
-Create the report file with exactly this structure. Every section is required. All 49 questions must appear in the detailed findings — N/A questions are listed using the N/A display format, not omitted.
+Create the report file with exactly this structure. Every section is required. All 43 questions must appear in the detailed findings — N/A questions are listed using the N/A display format, not omitted.
 
 ### Report Metadata Header
 
@@ -1093,10 +1228,16 @@ Create the report file with exactly this structure. Every section is required. A
 **Date**: <date>
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
 **Repository Type**: <resolved repo_type>
+**Service Archetype**: <resolved service_archetype> (auto-detected | user-provided)
 **Agent Scope**: <resolved agent_scope>
 **Priority**: <priority if provided, otherwise omit this line>
 **Tags**: <tags if provided, otherwise omit this line>
 **Context**: <context if provided, otherwise omit this line>
+```
+
+If `service_archetype` was auto-detected, include:
+```markdown
+**Archetype Justification**: <1-2 sentence explanation>
 ```
 
 If `repo_type` was defaulted due to an unrecognized value, include a warning line:
@@ -1153,10 +1294,14 @@ Display the severity distribution for all non-N/A questions. N/A questions are e
 | RISK | <count> |
 | INFO | <count> |
 | N/A | <count> |
-| **Total** | **49** |
+| Not Evaluated (extended) | <count> |
+| **Total** | **43** |
 
-**Questions Evaluated**: <49 - N/A count>
+**Core Questions Evaluated**: 24 (or fewer if repo_type N/A applies)
+**Extended Questions Triggered**: <count>
+**Extended Questions Not Triggered**: <count>
 **Questions N/A (repo_type: <repo_type>)**: <N/A count>
+**Service Archetype**: <archetype> (auto-detected | user-provided)
 ```
 
 ---
@@ -1248,9 +1393,9 @@ If there are no INFOs, display: "No INFOs identified."
 
 ---
 
-### Detailed Findings — All 49 Questions
+### Detailed Findings — All 43 Questions
 
-List every question from all 8 sections in order (API-Q1 through ENG-Q6). This section is the complete record of the assessment. All 49 questions must appear — including N/A questions.
+List every question from all 8 sections in order (API-Q1 through ENG-Q5). This section is the complete record of the assessment. All 43 questions must appear — including N/A questions.
 
 ```markdown
 ## Detailed Findings
@@ -1271,7 +1416,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q6). This s
 - **Recommendation**: <specific next step, or "N/A">
 - **Evidence**: <files cited, or "N/A">
 
-<Continue for API-Q3 through API-Q10>
+<Continue for API-Q3 through API-Q8>
 
 ### 02 — Authentication, Authorization, and Identity
 
@@ -1282,7 +1427,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q6). This s
 - **Recommendation**: <specific next step, or "N/A">
 - **Evidence**: <files cited, or "N/A">
 
-<Continue for AUTH-Q2 through AUTH-Q8>
+<Continue for AUTH-Q2 through AUTH-Q7>
 
 ### 03 — State Management and Transactional Integrity
 
@@ -1294,11 +1439,11 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q6). This s
 
 ### 05 — Data Accessibility and Quality
 
-<DATA-Q1 through DATA-Q8 in the same format>
+<DATA-Q1 through DATA-Q7 in the same format>
 
 ### 06 — Discoverability and Semantic Readiness
 
-<DISC-Q1 through DISC-Q4 in the same format>
+<DISC-Q1 through DISC-Q3 in the same format>
 
 ### 07 — Observability of Target Systems
 
@@ -1306,7 +1451,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q6). This s
 
 ### 08 — Engineering and Deployment Maturity
 
-<ENG-Q1 through ENG-Q6 in the same format>
+<ENG-Q1 through ENG-Q5 in the same format>
 ```
 
 **For N/A questions**, use the N/A display format defined in the N/A Mapping section:
@@ -1320,7 +1465,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q6). This s
 - **Evidence**: N/A
 ```
 
-**For conditional BLOCKER (⚡) questions** (API-Q4, STATE-Q1, AUTH-Q7, DATA-Q2), include the resolved severity based on `agent_scope`:
+**For conditional BLOCKER (⚡) questions** (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2), include the resolved severity based on `agent_scope`:
 
 ```markdown
 #### <question_id>: <question topic> ⚡
@@ -1411,14 +1556,14 @@ The complete report structure, for reference:
 4. RISKs — Proceed with Compensating Controls
 5. INFOs — Architecture and Design Inputs
 6. Detailed Findings
-   - 01 — API Surface and Interface Design (API-Q1 through API-Q10)
-   - 02 — Authentication, Authorization, and Identity (AUTH-Q1 through AUTH-Q8)
+   - 01 — API Surface and Interface Design (API-Q1 through API-Q8)
+   - 02 — Authentication, Authorization, and Identity (AUTH-Q1 through AUTH-Q7)
    - 03 — State Management and Transactional Integrity (STATE-Q1 through STATE-Q7)
    - 04 — Human-in-the-Loop and Approval Workflows (HITL-Q1 through HITL-Q3)
-   - 05 — Data Accessibility and Quality (DATA-Q1 through DATA-Q8)
-   - 06 — Discoverability and Semantic Readiness (DISC-Q1 through DISC-Q4)
+   - 05 — Data Accessibility and Quality (DATA-Q1 through DATA-Q7)
+   - 06 — Discoverability and Semantic Readiness (DISC-Q1 through DISC-Q3)
    - 07 — Observability of Target Systems (OBS-Q1 through OBS-Q3)
-   - 08 — Engineering and Deployment Maturity (ENG-Q1 through ENG-Q6)
+   - 08 — Engineering and Deployment Maturity (ENG-Q1 through ENG-Q5)
 7. Evidence Index
 ```
 
@@ -1432,10 +1577,11 @@ Strictly follow these rules at all times:
 - **Absence is evidence**: If a search for a specific artifact finds nothing (e.g., no OpenAPI spec, no IaC files, no audit logging configuration), that absence is itself a finding. State it clearly and score accordingly.
 - **Read before judging**: Do not score a question without actually reading relevant files. If relevant files have not been found yet, keep searching.
 - **IaC is ground truth**: Trust IaC definitions over README descriptions. What is deployed is what is defined in the IaC.
-- **Do not skip questions**: All 49 questions must be evaluated and appear in the report. Questions that are N/A for the detected `repo_type` must still appear using the N/A display format — they are listed, not omitted.
-- **N/A scoring rules**: Questions scored as N/A are excluded from BLOCKER, RISK, and INFO counts and from readiness profile determination. N/A questions do not affect the readiness profile.
-- **Conditional BLOCKER rules**: The 4 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q7, DATA-Q2) must be evaluated at the severity determined by `agent_scope`. Do not override the conditional logic.
-- **Scope-calibrated RISK rules**: The 4 scope-calibrated RISK questions (HITL-Q1, HITL-Q2, STATE-Q3, STATE-Q6) must be evaluated as RISK when `agent_scope` is `"write-enabled"` and as INFO when `agent_scope` is `"read-only"`. Do not override the scope calibration logic.
-- **Repo type classification**: Use the `repo_type` from `additionalPlanContext`. If not provided, default to `application`. Apply the N/A mapping table exactly as defined — do not add or remove N/A mappings.
-- **No goal system**: This TD does not use goals, goal_context, preferences, pathways, decomposition strategies, numeric scores, or goal-based re-weighting. If these fields appear in `additionalPlanContext`, ignore them.
-- **Report completeness**: The output report must contain all required sections: metadata header, readiness profile, summary counts, BLOCKERs with remediation, RISKs with compensating controls, INFOs, detailed findings for all 49 questions, and evidence index.
+- **Do not skip questions**: All 43 questions must appear in the report. Questions that are N/A for the detected `repo_type` use the N/A display format. Extended questions that are not triggered use the "Not Evaluated (extended)" display format. Both are listed, not omitted.
+- **N/A scoring rules**: Questions scored as N/A are excluded from BLOCKER, RISK, and INFO counts and from readiness profile determination.
+- **Extended question scoring rules**: Extended questions that are "Not Evaluated" are excluded from all counts and from readiness profile determination — same as N/A. Extended questions that ARE triggered are scored normally (BLOCKER/RISK/INFO) and count toward the readiness profile.
+- **Conditional BLOCKER rules**: The 4 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2) must be evaluated at the severity determined by `agent_scope`. Do not override the conditional logic.
+- **Evaluation tier rules**: Core questions are always evaluated (unless N/A by repo_type). Extended questions are evaluated only when their trigger condition is met. Use the Evaluation Tier tables in the Summary section to determine which extended questions to trigger based on archetype, scope, and service characteristics.
+- **Archetype classification**: Use the `service_archetype` from `additionalPlanContext` if provided. Otherwise, auto-detect in Step 1.5. If auto-detection is inconclusive, default to `stateful-crud`. The archetype determines which extended questions are triggered — it does NOT override severity of core questions.
+- **Repo type classification**: Use the `repo_type` from `additionalPlanContext`. If not provided, default to `application`. Apply the N/A mapping table exactly as defined.
+- **Report completeness**: The output report must contain all required sections: metadata header (including service archetype), readiness profile, summary counts (including extended question counts), BLOCKERs with remediation, RISKs with compensating controls, INFOs, detailed findings for all 43 questions, and evidence index.

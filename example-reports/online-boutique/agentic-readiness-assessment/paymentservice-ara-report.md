@@ -1,9 +1,10 @@
 # Agentic Readiness Assessment Report
 
-**Target**: ./services/microservices-demo/src/paymentservice
-**Date**: 2025-07-15
+**Target**: services/microservices-demo/src/paymentservice
+**Date**: 2026-04-16
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
 **Repository Type**: application
+**Service Archetype**: stateful-crud (user-provided)
 **Agent Scope**: read-only
 **Priority**: P0
 **Tags**: nodejs, grpc, payment
@@ -11,11 +12,11 @@
 
 ---
 
-## Readiness Profile: Not Agent-Integrable
+## Readiness Profile: Remediation Required
 
-**BLOCKERs**: 3 | **RISKs**: 35 | **INFOs**: 11
+**BLOCKERs**: 2 | **RISKs**: 18 | **INFOs**: 12
 
-Exclude from agent toolset or plan major remediation before re-evaluation. Three or more blockers indicate fundamental gaps in authentication, data classification, and network security that must be resolved before any agent — even read-only — can safely interact with this service.
+Resolve all blockers before any agent deployment — including pilots. Estimated runway: 90–180 days. The two blockers (AUTH-Q1: no machine identity authentication; DATA-Q1: PCI data — credit card numbers processed without classification controls) must be resolved before any agent can safely call this service. The 18 RISKs are manageable with compensating controls once blockers are cleared.
 
 ---
 
@@ -23,961 +24,795 @@ Exclude from agent toolset or plan major remediation before re-evaluation. Three
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 3 |
-| RISK | 35 |
-| INFO | 11 |
+| BLOCKER | 2 |
+| RISK | 18 |
+| INFO | 12 |
 | N/A | 0 |
-| **Total** | **49** |
+| Not Evaluated (extended) | 11 |
+| **Total** | **43** |
 
-**Questions Evaluated**: 49
+**Core Questions Evaluated**: 24
+**Extended Questions Triggered**: 8
+**Extended Questions Not Triggered**: 11
 **Questions N/A (repo_type: application)**: 0
+**Service Archetype**: stateful-crud (user-provided)
 
 ---
 
 ## BLOCKERs — Must Resolve Before Agent Deployment
 
-**Remediation Prioritization:** Resolve AUTH-Q1 (identity) first — you cannot enforce data access controls or network policies without knowing who is calling. Then address DATA-Q1 (data classification) and ENG-Q6 (network security) in parallel.
-
 ### AUTH-Q1: Machine Identity Authentication
 
 - **Severity**: BLOCKER
-- **Finding**: The gRPC server in `server.js` binds with `grpc.ServerCredentials.createInsecure()` — no TLS, no authentication mechanism of any kind. There is no OAuth2 client credentials flow, no API key authentication, no mTLS configuration, no service account definitions, no Cognito app clients, and no gRPC interceptors for authentication. Any network-reachable client can invoke the `Charge` RPC without presenting any identity. No audit logs attribute calls to an authenticated principal.
-- **Gap**: No machine identity authentication exists. The service cannot distinguish which agent (or any caller) is making a request. No principal attribution is possible in logs.
+- **Finding**: The gRPC server is created via `grpc.ServerCredentials.createInsecure()` in `server.js` (line 63) with no authentication interceptor, no TLS configuration, and no credential verification. The server accepts all incoming connections on port 50051. Istio AuthorizationPolicies are disabled (`authorizationPolicies.create: false` in `helm-chart/values.yaml`), so there is no mesh-level caller identity enforcement. NetworkPolicies are also disabled (`networkPolicies.create: false`). No OAuth2 client credentials flow, no API key authentication, no mTLS configuration at the application layer.
+- **Gap**: No machine identity authentication exists at any layer. Any network-reachable client can call `Charge` without presenting credentials. An agent cannot be identified, attributed, or distinguished from any other caller.
 - **Remediation**:
-  - **Immediate**: Add gRPC server interceptor for authentication — either mTLS for service-to-service calls or JWT/OAuth2 token validation via a gRPC metadata interceptor. At minimum, require an API key in gRPC metadata with principal attribution.
-  - **Target State**: Every gRPC call is authenticated with a verifiable machine identity. The authenticated principal is logged for every invocation. Unauthenticated calls are rejected with `UNAUTHENTICATED` gRPC status.
-  - **Estimated Effort**: Medium (2–4 weeks for mTLS or JWT interceptor implementation and key/cert management)
-  - **Dependencies**: ENG-Q6 (network security) — TLS is a prerequisite for secure credential transport.
-- **Evidence**: `server.js` (line: `grpc.ServerCredentials.createInsecure()`), absence of any auth interceptor or middleware in all source files.
+  - **Immediate**: Enable Istio AuthorizationPolicies (`authorizationPolicies.create: true` in `helm-chart/values.yaml`) to enforce mTLS-based caller identity at the mesh layer.
+  - **Target State**: Mesh-level mTLS authentication with per-caller AuthorizationPolicy rules. Agent-specific K8s ServiceAccounts with dedicated Istio principals. Application-layer gRPC interceptor for defense-in-depth identity verification.
+  - **Estimated Effort**: Low (Helm value change for immediate), Medium (application-layer interceptor)
+  - **Dependencies**: AUTH-Q2 (scoped permissions require identity first), AUTH-Q6 (audit logging requires principal attribution)
+- **Evidence**: `server.js` (line 63, `grpc.ServerCredentials.createInsecure()`), `helm-chart/values.yaml` (`authorizationPolicies.create: false`, `networkPolicies.create: false`), `helm-chart/templates/paymentservice.yaml` (AuthorizationPolicy template exists but is gated by disabled flag)
 
 ### DATA-Q1: Sensitive Data Classification
 
 - **Severity**: BLOCKER
-- **Finding**: The service processes credit card data — `CreditCardInfo` messages containing `credit_card_number`, `credit_card_cvv`, `credit_card_expiration_year`, and `credit_card_expiration_month` (defined in `proto/demo.proto`). This is PCI-DSS-scoped PII/financial data. There is no data classification, no field-level tagging, no encryption of sensitive fields, no access controls preventing an agent from retrieving credit card data, and no PII detection tooling. Additionally, `charge.js` logs the last 4 digits of the card number and card type to stdout with no redaction controls.
-- **Gap**: Sensitive financial data (credit card numbers, CVV) is processed and partially logged with zero classification, tagging, or field-level access controls.
+- **Finding**: The payment service processes PCI-regulated credit card data. The `ChargeRequest` proto message contains `CreditCardInfo` with `credit_card_number`, `credit_card_cvv`, `credit_card_expiration_year`, and `credit_card_expiration_month`. The `charge.js` module validates the card number using `simple-card-validator`, checks card type (VISA/MasterCard only), validates expiration, and logs the last 4 digits of the card number plus the transaction amount. No formal data classification exists — no `DATA_CLASSIFICATION.md` in the service directory. The `DATA_CLASSIFICATION.md` at the repo root exists but does not provide per-service PCI classification. Credit card numbers are PCI DSS regulated data requiring specific handling controls.
+- **Gap**: PCI-regulated credit card data is processed without formal data classification, without field-level encryption, and without PCI-compliant data handling controls. The service logs partial card numbers (last 4 digits) which may be acceptable under PCI DSS but lacks formal classification to confirm.
 - **Remediation**:
-  - **Immediate**: Classify all `CreditCardInfo` fields as PCI-DSS sensitive data. Implement field-level redaction in logs — remove the last-4-digits logging from `charge.js` or replace with a tokenized reference. Add data classification metadata to the proto definition comments.
-  - **Target State**: All sensitive fields are classified and tagged. Field-level access controls prevent unauthorized retrieval. PII is redacted from all log output. PCI-DSS compliance controls are documented.
-  - **Estimated Effort**: Medium (2–3 weeks for classification, log redaction, and access control implementation)
-  - **Dependencies**: AUTH-Q1 — field-level access controls require authenticated principals to enforce.
-- **Evidence**: `proto/demo.proto` (CreditCardInfo message), `charge.js` (logging with card last-4 digits on line with `logger.info`), absence of any data classification files or PII detection configuration.
+  - **Immediate**: Create a `DATA_CLASSIFICATION.md` documenting that the payment service processes PCI DSS Level 1 data (credit card numbers, CVV, expiration dates). Classify `CreditCardInfo` fields as RESTRICTED/PCI.
+  - **Target State**: Field-level encryption for credit card data in transit beyond TLS. PCI DSS compliant logging (confirm last-4 logging is acceptable). Tokenization of card numbers before processing.
+  - **Estimated Effort**: Medium (classification document), High (tokenization and field-level encryption)
+  - **Dependencies**: AUTH-Q1 (identity required before PCI data access controls), ENG-Q5 (encryption at rest)
+- **Evidence**: `proto/demo.proto` (CreditCardInfo message with `credit_card_number`, `credit_card_cvv`), `charge.js` (lines 63–87, processes credit card data, logs last 4 digits), `DATA_CLASSIFICATION.md` (repo root — exists but no per-service PCI classification)
 
-### ENG-Q6: Cross-Origin and Network Policies
+---
 
-- **Severity**: BLOCKER
-- **Finding**: The gRPC server uses `grpc.ServerCredentials.createInsecure()` in `server.js` — no TLS encryption for data in transit. There are no network security configurations in the repository: no security group rules, no firewall rules, no Kubernetes NetworkPolicy manifests, no API gateway access policies, no WAF rules, and no service mesh configuration. The Dockerfile exposes port 50051 with no network-level access restrictions. CORS is not applicable for gRPC, but the fundamental issue is that the service has no transport security and no documented network boundary controls.
-- **Gap**: No TLS encryption in transit. No network policies, security groups, or firewall rules defined. The service is completely open to any network-reachable client with no transport security.
-- **Remediation**:
-  - **Immediate**: Replace `grpc.ServerCredentials.createInsecure()` with `grpc.ServerCredentials.createSsl()` using proper TLS certificates. Define Kubernetes NetworkPolicy or security group rules restricting inbound traffic to known agent and service identities.
-  - **Target State**: All gRPC traffic is encrypted with TLS. Network policies restrict access to authorized callers only. Network security configuration is defined as IaC and subject to peer review.
-  - **Estimated Effort**: Medium (2–3 weeks for TLS setup, certificate management, and network policy definition)
-  - **Dependencies**: AUTH-Q1 — mTLS provides both authentication and transport security simultaneously.
-- **Evidence**: `server.js` (line: `grpc.ServerCredentials.createInsecure()`), `Dockerfile` (EXPOSE 50051 with no network restrictions), absence of any IaC, Kubernetes manifests, or network policy files.
 ## RISKs — Proceed with Compensating Controls
 
 ### API-Q2: Machine-Readable API Specification
 
 - **Severity**: RISK
-- **Finding**: The `proto/demo.proto` file defines the `PaymentService` with a `Charge` RPC, including `ChargeRequest`, `ChargeResponse`, `CreditCardInfo`, and `Money` message types. This is a machine-readable specification. However, `genproto.sh` reveals the proto is copied from a shared `../../protos/` directory — the local copy may drift from the upstream source. There is no automated validation that the local proto matches the shared definition.
-- **Gap**: Proto file is machine-readable but manually copied (not auto-synced). No validation that the local proto matches the upstream shared definition. No version tracking beyond the copy script.
+- **Finding**: The service API is defined in `proto/demo.proto` using Protocol Buffers. The proto file defines the `PaymentService` with a single `Charge` RPC, along with `ChargeRequest`, `ChargeResponse`, `CreditCardInfo`, and `Money` message types. Protobuf is a machine-readable IDL, but the proto file is a monolithic definition containing all 10 services in the Online Boutique — not a standalone spec for the payment service. No OpenAPI, AsyncAPI, or standalone gRPC reflection is configured. gRPC server reflection is not enabled in `server.js`.
+- **Gap**: No standalone machine-readable spec for the payment service. The proto file is shared across all services and not published independently. No gRPC server reflection enabled for runtime discovery.
 - **Compensating Controls**:
-  - Pin the proto version by including a checksum or commit reference in `genproto.sh`
-  - Add a CI check that validates the local proto matches the shared upstream proto
-- **Remediation Timeline**: 30 days
-- **Recommendation**: Add proto validation to the build process. Consider using a proto registry (e.g., Buf Schema Registry) for version management.
-- **Evidence**: `proto/demo.proto`, `genproto.sh`
+  - The `demo.proto` file can be used directly to generate gRPC client stubs for agent tool definitions
+  - Extract the `PaymentService` definition into a standalone proto file for agent-specific tool generation
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Enable gRPC server reflection. Consider extracting payment service proto definitions into a standalone file.
+- **Evidence**: `proto/demo.proto` (PaymentService definition), `server.js` (no reflection service added), `package.json` (`@grpc/grpc-js`, `@grpc/proto-loader`)
 
 ### API-Q3: Structured Error Responses
 
 - **Severity**: RISK
-- **Finding**: `charge.js` defines custom error classes (`CreditCardError`, `InvalidCreditCard`, `UnacceptedCreditCard`, `ExpiredCreditCard`) with a `code` property set to 400. However, `server.js` passes the raw error object to the gRPC callback (`callback(err)`), which maps to a generic gRPC error. The errors include human-readable messages but lack: (1) a machine-readable error code enum, (2) a retryable boolean, and (3) consistent structured error metadata. An agent receiving a gRPC error cannot programmatically distinguish between an invalid card and an expired card without parsing the error message string.
-- **Gap**: Error responses are not machine-parseable beyond the HTTP-like code 400. No retryable indicator. No structured error code enum for gRPC status details.
+- **Finding**: The `ChargeServiceHandler` in `server.js` catches errors from `charge.js` and passes them to `callback(err)`. The `charge.js` module defines custom error classes (`InvalidCreditCard`, `UnacceptedCreditCard`, `ExpiredCreditCard`) extending `CreditCardError` with a `code: 400` property. However, these are JavaScript errors passed directly to the gRPC callback — not gRPC status codes. The gRPC framework maps these to `UNKNOWN` status. No structured error body, no retryable boolean, no gRPC rich error model (`google.rpc.ErrorInfo`). An agent receiving an error cannot distinguish between invalid card, unsupported card type, or expired card without parsing the error message string.
+- **Gap**: No rich error model. Custom error classes exist but are not mapped to gRPC status codes. Agents must parse error message strings to determine error type.
 - **Compensating Controls**:
-  - Document the error message patterns so agent tool definitions can pattern-match
-  - Add gRPC status codes (INVALID_ARGUMENT, FAILED_PRECONDITION) with structured `google.rpc.Status` details
+  - Wrap agent tool calls with client-side error classification based on error message patterns
+  - Map known error messages to retry/terminal decisions at the agent orchestration layer
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Use gRPC rich error model (`google.rpc.Status` with `ErrorInfo` details) to return machine-readable error codes, retryable flags, and structured metadata.
-- **Evidence**: `charge.js` (error classes), `server.js` (ChargeServiceHandler callback)
-
-### API-Q5: API Versioning and Deprecation
-
-- **Severity**: RISK
-- **Finding**: The proto package is `hipstershop` with no version qualifier (not `hipstershop.v1`). There is no `/v1/`, `/v2/` URL pattern (gRPC uses package names for versioning). No changelog, no deprecation notices, no versioning annotations in the proto file. The `package.json` shows version `0.0.1` but this is the npm package version, not the API version.
-- **Gap**: No API versioning strategy. Proto package name has no version qualifier. No deprecation policy or downstream notification mechanism.
-- **Compensating Controls**:
-  - Treat the current proto as v1 implicitly and add `v1` to the package name (`hipstershop.payment.v1`)
-  - Establish a proto change review process before modifying the shared proto
-- **Remediation Timeline**: 30 days
-- **Recommendation**: Add version qualifier to proto package name. Establish a proto compatibility policy (e.g., no breaking changes within a major version). Use `reserved` fields for deprecated fields.
-- **Evidence**: `proto/demo.proto` (package name: `hipstershop`), `package.json` (version: `0.0.1`)
-
-### API-Q7: Asynchronous Operation Support
-
-- **Severity**: RISK
-- **Finding**: The `Charge` RPC is synchronous — it validates the card, generates a UUID, and returns immediately. There are no background job frameworks (no Celery, Bull, SQS workers), no async/polling patterns, no job status APIs, no Step Functions, and no webhook callback endpoints. The current Charge operation is fast (in-memory simulation), but a real payment processor integration would require async patterns.
-- **Gap**: No async operation support. If the payment processing becomes non-trivial (real payment gateway integration), synchronous-only design will cause agent timeouts.
-- **Compensating Controls**:
-  - Current simulated charge is fast enough for synchronous operation
-  - Document the expected latency profile so agents know the operation is synchronous and sub-second
-- **Remediation Timeline**: 60–90 days (only needed when integrating real payment gateway)
-- **Recommendation**: Plan for async patterns (job submission + polling) when integrating a real payment processor. Consider gRPC server streaming for long-running payment operations.
-- **Evidence**: `charge.js` (synchronous processing), `server.js` (synchronous callback pattern)
+- **Recommendation**: Map `CreditCardError` subclasses to gRPC status codes (INVALID_ARGUMENT for InvalidCreditCard, FAILED_PRECONDITION for ExpiredCreditCard). Implement gRPC rich error model with error codes and retryable flags.
+- **Evidence**: `charge.js` (lines 32–56, custom error classes with code 400), `server.js` (lines 42–50, `callback(err)` without gRPC status mapping)
 
 ### AUTH-Q2: Scoped Permissions (Least Privilege)
 
 - **Severity**: RISK
-- **Finding**: No authorization model exists. There are no IAM policies, no role definitions, no API Gateway resource policies, and no permission checks in any source file. The gRPC server accepts all calls without any authorization. There is no mechanism to grant an agent read-only access to specific resources or restrict operations.
-- **Gap**: No scoped permissions. Any caller can invoke any RPC with any payload. No least-privilege enforcement.
+- **Finding**: Istio AuthorizationPolicies are disabled (`authorizationPolicies.create: false`). The Helm template defines an AuthorizationPolicy that would restrict callers to the `checkoutservice` service account on the `/hipstershop.PaymentService/Charge` path, but this policy is not deployed. No agent-specific service accounts are defined. No IAM policies or application-level RBAC. The K8s ServiceAccount for paymentservice exists but provides no permission scoping without AuthorizationPolicy enforcement.
+- **Gap**: No caller restriction at any layer. No agent-specific service accounts with tailored permissions. No per-RPC scoping. For a PCI-processing service, this is a significant security gap.
 - **Compensating Controls**:
-  - Deploy behind a service mesh (e.g., Istio) that enforces AuthorizationPolicy per caller identity
-  - Use Kubernetes RBAC and NetworkPolicy to restrict which pods can reach the service
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Implement gRPC interceptors that check caller identity against a permission model. Define roles (e.g., `payment:charge`, `payment:read`) and enforce them per RPC method.
-- **Evidence**: `server.js` (no authorization interceptors), absence of IAM policy files or role definitions.
+  - Enable AuthorizationPolicies to activate the existing Helm template restricting callers to the checkoutservice service account
+  - Define agent-specific K8s ServiceAccounts and add them to the AuthorizationPolicy
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Enable `authorizationPolicies.create: true` in `values.yaml`. Create agent-specific service accounts with per-RPC AuthorizationPolicy rules scoping agent access to `Charge`.
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`), `helm-chart/templates/paymentservice.yaml` (AuthorizationPolicy template gated by flag)
 
 ### AUTH-Q3: Action-Level Authorization
 
 - **Severity**: RISK
-- **Finding**: The `Charge` RPC has no permission checks. There is no ABAC, no fine-grained RBAC, no action-level middleware. The service currently only has one write operation (Charge) and one read operation (Health Check), but neither has any authorization logic.
-- **Gap**: No action-level authorization. Cannot restrict an agent to health checks only (read) while denying charge operations (write).
+- **Finding**: The application code has no action-level authorization. The gRPC server in `server.js` accepts all calls that reach it — no middleware for authorization, no role checks, no permission validation. The Helm template defines an AuthorizationPolicy with per-path rules (`/hipstershop.PaymentService/Charge`, method POST, port 50051), but this is disabled. Without the mesh policy, the `Charge` RPC is accessible to any caller.
+- **Gap**: No application-layer action-level authorization. No mesh-layer enforcement (disabled). For a payment processing service, unrestricted access to the `Charge` RPC is a critical security gap.
 - **Compensating Controls**:
-  - Use service mesh AuthorizationPolicy to control which methods each caller identity can invoke
-  - Implement a gRPC interceptor that maps caller identity to allowed RPC methods
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add a gRPC unary interceptor that checks the authenticated principal's permissions against the invoked RPC method name.
-- **Evidence**: `server.js` (ChargeServiceHandler has no auth checks, CheckHandler has no auth checks)
+  - Enable AuthorizationPolicies for mesh-level per-path enforcement
+  - The service exposes only one RPC (`Charge`), limiting the action surface
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Enable AuthorizationPolicies as immediate mitigation. Implement a gRPC interceptor for action-level authorization as defense in depth.
+- **Evidence**: `server.js` (no auth middleware), `helm-chart/templates/paymentservice.yaml` (AuthorizationPolicy template), `helm-chart/values.yaml` (`authorizationPolicies.create: false`)
 
-### AUTH-Q4: Identity Propagation
+### AUTH-Q5: Credential Management
 
 - **Severity**: RISK
-- **Finding**: No token exchange or identity propagation mechanisms exist. There is no JWT parsing, no OAuth2 on-behalf-of flows, no user context headers, no Cognito or Okta integration. The `ChargeRequest` proto message does not include a user identity field — it only contains `amount` and `credit_card`. There is no way to associate a charge with a specific end user at the service level.
-- **Gap**: No identity propagation. The service cannot personalize responses or enforce per-user authorization because no user context is carried in requests.
+- **Finding**: No secrets or credentials are used by the service. Environment variables are `PORT`, `COLLECTOR_SERVICE_ADDR`, `OTEL_SERVICE_NAME`, `ENABLE_TRACING`, and `DISABLE_PROFILER`. No database connections, no external payment gateway API keys. The payment processing is simulated — `charge.js` validates the card and returns a UUID transaction ID without calling any external payment processor. No Secrets Manager or Vault integration. No hardcoded credentials found.
+- **Gap**: No formal credential management framework. While the service currently has no credentials to manage, a real payment service would require payment gateway API keys with proper rotation. No infrastructure for credential lifecycle management.
 - **Compensating Controls**:
-  - Add a `request_context` field to the proto message or use gRPC metadata to carry user identity
-  - Implement identity propagation at the service mesh level
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add gRPC metadata propagation for user identity tokens. Implement JWT validation in a server interceptor.
-- **Evidence**: `proto/demo.proto` (ChargeRequest has no user identity field), `server.js` (no metadata extraction)
+  - Simulated payment processing eliminates current secret rotation concerns
+  - K8s ServiceAccount with Istio mTLS (when enabled) avoids hardcoded credentials
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Maintain credential-free architecture for simulated mode. If a real payment gateway is integrated, use K8s Secrets with external secrets operator or AWS Secrets Manager for API key management.
+- **Evidence**: `server.js` (line 100, `process.env.PORT`), `index.js` (env vars for tracing/profiling), `charge.js` (no external API calls), `Dockerfile` (no secrets)
 
-### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-
-- **Severity**: RISK
-- **Finding**: No authentication exists at all (AUTH-Q1), so the distinction between agent-as-self and agent-on-behalf-of-user is moot. There are no separate IAM roles, no different auth flows, and no audit log fields distinguishing the two modes.
-- **Gap**: Cannot distinguish between an agent acting under its own identity and an agent acting on behalf of a specific user. No separate authorization paths.
-- **Compensating Controls**:
-  - Define the intended access pattern (agent-as-self for payment processing is the likely model)
-  - Document the expected identity model before implementing AUTH-Q1
-- **Remediation Timeline**: 60–90 days (concurrent with AUTH-Q1 remediation)
-- **Recommendation**: Design the identity model to support both modes from the start. Use gRPC metadata to carry both agent identity and delegated user identity.
-- **Evidence**: Absence of any authentication or identity mechanism in all source files.
-
-### AUTH-Q6: Credential Management
-
-- **Severity**: RISK
-- **Finding**: No secrets management system is integrated (no AWS Secrets Manager, no HashiCorp Vault, no parameter store). No hardcoded credentials were found — the service is simulated and does not connect to a real payment gateway. Environment variables used are `PORT`, `ENABLE_TRACING`, `DISABLE_PROFILER`, `COLLECTOR_SERVICE_ADDR`, and `OTEL_SERVICE_NAME` — none contain credentials. However, there is no framework for managing credentials when real payment gateway integration is added.
-- **Gap**: No secrets management infrastructure. When real payment gateway credentials are needed, there is no established pattern for secure credential storage and rotation.
-- **Compensating Controls**:
-  - Current state has no credentials to protect (simulated service)
-  - Establish secrets management pattern before integrating real payment gateway
-- **Remediation Timeline**: 30–60 days (before real payment gateway integration)
-- **Recommendation**: Integrate AWS Secrets Manager or HashiCorp Vault. Define credential rotation policy. Ensure agent continuity during credential rotation.
-- **Evidence**: `index.js` (environment variables: PORT, ENABLE_TRACING, DISABLE_PROFILER, COLLECTOR_SERVICE_ADDR), `Dockerfile` (ENTRYPOINT), absence of any secrets management configuration.
-
-### AUTH-Q7: Immutable Audit Logging ⚡
+### AUTH-Q6: Immutable Audit Logging ⚡
 
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: The service uses `pino` logger (configured in `logger.js` and `charge.js`) outputting structured JSON logs to stdout with a `severity` field. `server.js` logs `PaymentService#Charge invoked with request ${JSON.stringify(call.request)}` — this logs the full request including credit card data. `charge.js` logs transaction details with card last-4 digits. However: (1) no authenticated principal is logged (AUTH-Q1 prerequisite), (2) logs are not immutable — stdout logs can be lost or tampered with, (3) no CloudTrail integration, (4) no S3 object lock or immutable storage, (5) no log retention policy.
-- **Gap**: Logs exist but are not immutable, not attributed to an authenticated principal, and contain PII (credit card data in request logs). No tamper-evident storage.
+- **Finding**: Logging uses `pino` (structured JSON logger) in both `logger.js` and `charge.js`. The `ChargeServiceHandler` logs the full request payload via `JSON.stringify(call.request)` which includes credit card data. The `charge.js` module logs transaction details including card type and last 4 digits. However, no principal attribution exists in any log output — logs do not identify who called the service. Logs are ephemeral container stdout with no immutable storage configuration. No CloudTrail, no S3 with object lock, no CloudWatch log retention policies. Tracing is disabled (`tracing: false` in assessment context).
+- **Gap**: No immutable audit trail. Cannot determine who called the service or attribute actions to specific agent identities. No immutable log storage. Additionally, full credit card data may be logged via `JSON.stringify(call.request)` which is a PCI compliance violation.
 - **Compensating Controls**:
-  - Route pino stdout logs to CloudWatch Logs with retention policies
-  - Enable CloudWatch Logs immutability features
+  - Configure K8s log forwarding to immutable store (e.g., CloudWatch Logs with retention policy, S3 with Object Lock)
+  - Enable Istio access logging for mesh-level request attribution
 - **Remediation Timeline**: 60–90 days
-- **Recommendation**: Configure log shipping to immutable storage (CloudWatch Logs with resource policy or S3 with object lock). Add principal attribution once AUTH-Q1 is resolved. Redact PII from request logging.
-- **Evidence**: `logger.js` (pino config), `charge.js` (transaction logging), `server.js` (request logging with full request body)
+- **Recommendation**: Add structured audit logging with caller identity. Redact credit card data from request logging (remove `JSON.stringify(call.request)` or mask sensitive fields). Forward to immutable store. Enable tracing.
+- **Evidence**: `server.js` (line 44, `JSON.stringify(call.request)` logs full request including credit card), `charge.js` (line 86, logs card type and last 4 digits), `logger.js` (pino JSON logger, no principal attribution)
 
-### AUTH-Q8: Agent Identity Suspension
-
-- **Severity**: RISK
-- **Finding**: No agent identity suspension mechanism exists. There are no API key revocation endpoints, no IAM role deactivation procedures, no service account disable mechanisms. Since there is no authentication (AUTH-Q1), there is no identity to suspend.
-- **Gap**: Cannot isolate a misbehaving agent without shutting down the entire service. No granular identity suspension.
-- **Compensating Controls**:
-  - Use network-level controls (security groups, NetworkPolicy) to block specific callers in an emergency
-  - Implement authentication first (AUTH-Q1), then add suspension capability
-- **Remediation Timeline**: 60–90 days (dependent on AUTH-Q1)
-- **Recommendation**: After implementing AUTH-Q1, add the ability to revoke individual agent credentials or API keys immediately.
-- **Evidence**: Absence of any authentication or identity management mechanism in all source files.
-
-### STATE-Q1: Compensation and Rollback ⚡
+### AUTH-Q7: Agent Identity Suspension
 
 - **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: The `Charge` operation in `charge.js` is stateless — it validates the credit card, generates a UUID transaction ID, and returns. There is no database, no multi-step workflow, no saga pattern, no two-phase commit, no undo endpoints, and no Step Functions. The operation is atomic (validate-and-return) with no partial state risk in the current simulated implementation.
-- **Gap**: No compensation or rollback capability exists. If real payment processing is added with multi-step workflows (authorize → capture → settle), partial failures would leave the system in an inconsistent state.
+- **Finding**: No agent identity suspension mechanism exists. There are no agent-specific identities to suspend (AUTH-Q1 blocker). The Helm template includes an AuthorizationPolicy that could restrict callers, but it is disabled. No API key revocation, no service account disable mechanism, no kill switch for individual agent instances.
+- **Gap**: No mechanism to immediately suspend a misbehaving agent without redeployment. For a payment processing service, inability to quickly revoke agent access is a significant risk.
 - **Compensating Controls**:
-  - Current stateless design has no partial state risk (atomic operation)
-  - For read-only agent scope, compensation is not immediately needed
-- **Remediation Timeline**: 60–90 days (before real payment gateway integration)
-- **Recommendation**: Design compensation patterns (refund/void endpoints) before integrating real payment processing. Consider saga pattern for multi-step payment workflows.
-- **Evidence**: `charge.js` (stateless charge function), absence of database connections or transaction management.
+  - When AuthorizationPolicies are enabled, removing an agent's service account principal from the policy blocks access
+  - K8s NetworkPolicy (when enabled) can block specific pod selectors
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: After resolving AUTH-Q1, implement agent-specific K8s ServiceAccounts. Use AuthorizationPolicy updates to suspend individual agent identities without full redeployment.
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`), `helm-chart/templates/paymentservice.yaml` (AuthorizationPolicy template)
 
 ### STATE-Q2: Queryable Current State
 
 - **Severity**: RISK
-- **Finding**: The service is entirely stateless — it has no database, no persistent state, and no data store. The only queryable endpoint is the gRPC Health Check (`Check` RPC returning `SERVING` status). There are no GET endpoints for payment state, no transaction history queries, and no status lookup by transaction ID. The `transaction_id` returned by `Charge` is a random UUID with no associated persistent record.
-- **Gap**: No queryable state. An agent cannot inspect the current state of a transaction, look up past charges, or verify whether a charge was processed. The transaction_id is ephemeral.
+- **Finding**: The payment service is stateless in the sense that it does not persist transaction records. The `Charge` RPC processes a payment and returns a `transaction_id` (UUID) but does not store it. There is no way to query the status of a previous transaction, verify whether a charge was processed, or retrieve transaction history. The service has no database, no cache, and no persistent storage.
+- **Gap**: No queryable state. An agent cannot verify whether a previous charge was successful or retrieve transaction details after the fact. For a payment service, this means no reconciliation capability.
 - **Compensating Controls**:
-  - For read-only agents, the Health Check endpoint provides basic liveness information
-  - Transaction records would need to come from a downstream system of record
+  - The calling service (checkoutservice) may maintain order records that include the transaction_id
+  - Implement a transaction log as a read-only query surface
 - **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add a transaction store and a `GetTransaction` RPC that allows querying charge status by transaction_id.
-- **Evidence**: `server.js` (Health Check only stateful endpoint), `charge.js` (returns ephemeral UUID with no persistence)
-
-### STATE-Q3: Concurrency Controls
-
-- **Severity**: RISK
-- **Finding**: No concurrency controls exist — no optimistic locking, no version fields, no ETags, no conditional writes, no `SELECT FOR UPDATE`. The service is stateless (no database), so concurrent calls do not conflict on shared data in the current implementation. However, there are no controls to prevent duplicate charges if multiple agents call Charge simultaneously with the same payment intent.
-- **Gap**: No concurrency controls. No idempotency enforcement means concurrent agent calls could result in duplicate charges in a real payment scenario.
-- **Compensating Controls**:
-  - Current stateless simulation does not create real duplicate charges
-  - For read-only agents, concurrency risk is minimal
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Implement idempotency key support in the `ChargeRequest` message and enforce it with a deduplication store.
-- **Evidence**: `charge.js` (no locking or deduplication), `proto/demo.proto` (ChargeRequest has no idempotency_key field)
+- **Recommendation**: Implement a transaction log (even append-only) that records charge attempts and outcomes. Expose a `GetTransaction` RPC for agent reconciliation.
+- **Evidence**: `charge.js` (returns `transaction_id` but does not persist it), `server.js` (no database connection, no state storage)
 
 ### STATE-Q4: Circuit Breakers and Resilience
 
 - **Severity**: RISK
-- **Finding**: No circuit breaker, retry, or timeout patterns exist. The service makes no external dependency calls — the payment processing is entirely simulated in-memory (`charge.js` validates the card and returns a UUID). There is no Resilience4j, no Polly, no retry decorators, no exponential backoff, no timeout configurations on outbound HTTP clients. The `@google-cloud/profiler` in `index.js` makes an outbound call but has no resilience patterns around it.
-- **Gap**: No resilience patterns. If external dependencies are added (payment gateway, fraud detection), there are no circuit breakers to prevent cascading failures.
+- **Finding**: The payment service has no external dependencies (simulated payment — no external payment gateway calls). However, it also has no resilience patterns implemented. No circuit breakers, no retry logic, no timeout configuration, no bulkhead patterns. The gRPC server has no graceful shutdown handling. The `charge.js` module is synchronous and throws exceptions on validation failure without any resilience wrapping.
+- **Gap**: No resilience patterns. While the service currently has no external dependencies, the lack of any resilience infrastructure means adding a real payment gateway would require significant rework.
 - **Compensating Controls**:
-  - Current in-memory simulation has no external dependency failure risk
-  - Monitor for profiler startup failures which could delay service readiness
-- **Remediation Timeline**: 60–90 days (before adding external dependencies)
-- **Recommendation**: Add circuit breaker patterns before integrating external payment gateways. Consider using a resilience library (e.g., `opossum` for Node.js).
-- **Evidence**: `charge.js` (no external calls), `index.js` (profiler startup with no error handling)
-
-### STATE-Q5: Rate Limiting and Throttling
-
-- **Severity**: RISK
-- **Finding**: No rate limiting exists at the application level. The gRPC server in `server.js` has no rate limiting middleware, no throttling configuration, and no per-client request limits. There is no API Gateway in front of the service (no IaC files found), no WAF rate rules, and no usage plan configuration.
-- **Gap**: No rate limiting. A runaway agent loop could send thousands of Charge requests per second, potentially overwhelming the service or downstream systems.
-- **Compensating Controls**:
-  - Deploy behind an API Gateway or service mesh with rate limiting configured
-  - Use Kubernetes resource limits to cap CPU/memory for the pod
+  - Simulated payment processing has no external failure modes
+  - K8s health probes (gRPC readiness/liveness on port 50051) provide basic availability detection
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add gRPC-level rate limiting middleware or deploy behind a service mesh with per-client rate limits. Consider `grpc-rate-limiter` or Envoy proxy with rate limit service.
-- **Evidence**: `server.js` (no rate limiting), absence of API Gateway or WAF configuration files.
-
-### STATE-Q6: Blast Radius and Transaction Limits
-
-- **Severity**: RISK
-- **Finding**: No configurable transaction limits exist. There are no limits on maximum charges per agent per hour, maximum transaction amounts, maximum operations per session, or any other blast radius controls. The `Charge` function in `charge.js` accepts any `Money` amount with no upper bound validation.
-- **Gap**: No blast radius controls. An agent error could issue unlimited charges of unlimited amounts with no guardrails.
-- **Compensating Controls**:
-  - Current simulated service does not process real payments
-  - Deploy with human-in-the-loop approval for charges above a threshold
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add configurable limits: max charge amount, max charges per identity per hour, max total amount per session. Make limits configurable per agent identity.
-- **Evidence**: `charge.js` (no amount validation or limits), absence of any configuration for transaction limits.
+- **Recommendation**: Implement circuit breaker pattern for future external payment gateway integration. Add graceful shutdown handling to the gRPC server.
+- **Evidence**: `charge.js` (synchronous, no resilience), `server.js` (no circuit breaker, no graceful shutdown), `index.js` (no error handling for server startup)
 
 ### STATE-Q7: Infrastructure Capacity for Agent Traffic
 
 - **Severity**: RISK
-- **Finding**: No load testing results, auto-scaling policies, or capacity planning documentation exist. The Dockerfile exposes port 50051 and defines no resource limits (no `--max-old-space-size` for Node.js, no Kubernetes resource limits). The service runs as a single Node.js process with no clustering. There is no evidence of performance testing for agent-scale traffic patterns.
-- **Gap**: No capacity planning for agent traffic. Unknown whether the service can handle burst traffic from multiple concurrent agents.
+- **Finding**: The service is P0 priority. Resource limits are modest (CPU: 100m–200m, memory: 128Mi–256Mi). No Horizontal Pod Autoscaler (HPA) is configured for the payment service. The Deployment has no replica count specified (defaults to 1). No load testing results or capacity benchmarks exist. For a P0 payment processing service, a single replica with no autoscaling is insufficient for agent traffic at machine speed.
+- **Gap**: Single replica, no autoscaling, modest resource limits. P0 service cannot handle burst agent traffic without capacity planning.
 - **Compensating Controls**:
-  - Node.js with gRPC can handle reasonable concurrent connections for a pilot
-  - Deploy with horizontal pod autoscaling in Kubernetes
+  - K8s resource limits prevent runaway resource consumption
+  - gRPC health probes enable K8s to restart unhealthy pods
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Conduct load testing with agent-like traffic patterns (burst, retry, concurrent). Define Kubernetes HPA with CPU/memory targets. Add `--max-old-space-size` to the Node.js runtime in the Dockerfile.
-- **Evidence**: `Dockerfile` (no resource limits, single process), absence of load test configurations or auto-scaling definitions.
-
-### HITL-Q1: Draft/Pending State
-
-- **Severity**: RISK
-- **Finding**: No draft or pending state concept exists. The `Charge` RPC is immediate — it validates and returns a transaction_id in a single synchronous call. There are no draft/pending status fields, no approval workflow endpoints, no two-step commit patterns (create-then-confirm), and no status-based state machines.
-- **Gap**: No ability for an agent to propose a charge for human review before execution. The charge operation is fire-and-forget.
-- **Compensating Controls**:
-  - For read-only agent scope, the agent would not be invoking Charge directly
-  - Implement approval gates at the agent orchestration layer rather than the service layer
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add a `CreatePaymentIntent` RPC that creates a pending charge, and a `ConfirmPaymentIntent` RPC that executes it. This enables human-in-the-loop approval for high-value charges.
-- **Evidence**: `charge.js` (immediate execution), `proto/demo.proto` (single Charge RPC with no pending state)
-
-### HITL-Q2: Configurable Approval Gates
-
-- **Severity**: RISK
-- **Finding**: No configurable approval gates exist. There are no approval API endpoints, no status-based workflows requiring confirmation, no configurable operation-level flags, and no Step Functions with human approval tasks. The service has a single RPC that executes immediately.
-- **Gap**: Cannot require human approval for specific operations or above certain thresholds. All operations execute immediately.
-- **Compensating Controls**:
-  - Implement approval gates at the agent orchestration layer
-  - Use an external workflow engine to gate agent actions before they reach the payment service
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add configurable approval requirements per operation type and threshold (e.g., charges above $1000 require human approval).
-- **Evidence**: `server.js` (immediate execution in ChargeServiceHandler), absence of approval workflow logic.
-
-### HITL-Q3: Sandbox/Staging Environment
-
-- **Severity**: RISK
-- **Finding**: No sandbox or staging environment configuration found. No separate environment configs, no docker-compose for local testing, no seed data scripts, no synthetic data generators, no environment-specific IaC. The Dockerfile builds a single image with no environment differentiation. The service is already a simulated payment processor (no real payment gateway), which functions as an implicit sandbox, but there is no formal environment separation.
-- **Gap**: No formal sandbox/staging environment. Agents cannot be tested against realistic conditions before production promotion.
-- **Compensating Controls**:
-  - The simulated nature of the service means the current implementation IS effectively a sandbox
-  - Deploy the same Docker image in a dedicated staging namespace
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Create environment-specific configuration (staging, sandbox, production) with environment variables. Add a docker-compose.yml for local agent testing.
-- **Evidence**: `Dockerfile` (single image, no environment differentiation), absence of docker-compose or environment-specific configuration files.
-
-### DATA-Q2: Data Residency and Sovereignty ⚡
-
-- **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No data residency or sovereignty controls found. The service processes credit card data (PCI-DSS scope) but has no region-specific deployment configuration, no data residency requirements documented, no GDPR/LGPD compliance references, and no cross-region replication settings. The Dockerfile builds a generic image with no region awareness. Credit card data passes through the service in-memory and is not persisted, but it is logged to stdout.
-- **Gap**: No data residency controls. If credit card data in request logs is shipped to a logging service in a different region, it could create compliance violations. No documentation of data sovereignty requirements.
-- **Compensating Controls**:
-  - Credit card data is not persisted (in-memory only) — residency risk is limited to logs
-  - Ensure log shipping destination is in the same region as the service deployment
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Document data residency requirements for PCI-DSS scoped data. Ensure log shipping and tracing data remain within the required jurisdiction. Add region configuration to deployment manifests.
-- **Evidence**: `charge.js` (in-memory credit card processing), `server.js` (request logging), absence of data residency documentation or region-specific configuration.
+- **Recommendation**: Configure HPA with CPU/memory-based scaling. Set minimum replicas to 2 for P0 availability. Conduct load testing to establish capacity baselines.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml` (Deployment with no replica count, no HPA), `helm-chart/values.yaml` (CPU: 100m–200m, memory: 128Mi–256Mi)
 
 ### DATA-Q3: Selective Query Support
 
 - **Severity**: RISK
-- **Finding**: The `Charge` RPC accepts a single `ChargeRequest` and returns a single `ChargeResponse`. There are no list/search endpoints, no pagination parameters, no filters, no sorting, no GraphQL field selection, and no result size limits. The service has only two RPCs: `Charge` (single request/response) and `Health.Check`.
-- **Gap**: No selective query support. An agent cannot query a subset of data or limit result sets because there are no query endpoints at all.
+- **Finding**: The `Charge` RPC accepts a single `ChargeRequest` and returns a single `ChargeResponse`. There is no list/query endpoint, no pagination, no filtering. However, the service processes credit card data in each request — an agent calling at machine speed could process many charges rapidly without any query-level controls or batch limits.
+- **Gap**: No selective query support. No batch limits on charge processing. An agent could initiate unbounded charge attempts.
 - **Compensating Controls**:
-  - For the current single-charge operation, selective query is not needed
-  - Transaction history queries should be added before agents need to inspect payment data
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add `ListTransactions` and `GetTransaction` RPCs with pagination, filtering by date range, and sorting.
-- **Evidence**: `proto/demo.proto` (only Charge RPC for PaymentService), absence of query endpoints.
+  - Rate limiting at the mesh or API gateway layer can bound charge attempts
+  - The simulated nature of the service limits real financial impact
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Implement per-caller rate limiting on the `Charge` RPC. Add batch/daily limits for agent-initiated charges.
+- **Evidence**: `proto/demo.proto` (single Charge RPC, no list/query), `charge.js` (processes one charge per call, no rate limiting)
 
 ### DATA-Q4: System of Record Designations
 
 - **Severity**: RISK
-- **Finding**: No system of record designations exist. The service generates ephemeral transaction IDs (UUIDs) that are not persisted anywhere. There is no master data management, no data ownership definitions, no conflict resolution logic, and no golden record patterns. The service is a stateless processor — it does not own or store any data.
-- **Gap**: The payment service does not function as a system of record for transactions. Transaction IDs are generated and returned but never stored. There is no authoritative source for payment history.
+- **Finding**: The payment service does not persist any data — it is not a system of record for transactions. The `transaction_id` returned by `Charge` is a randomly generated UUID (`uuidv4()`) that is not stored anywhere. No database, no transaction log, no audit trail. The service cannot serve as a source of truth for payment records.
+- **Gap**: No system of record designation. Transaction IDs are generated but not persisted. No authoritative source for payment history.
 - **Compensating Controls**:
-  - Ensure downstream services that receive the transaction_id persist it as the system of record
-  - Document which service is the authoritative source for payment records
+  - The checkoutservice may record transaction IDs as part of order records
+  - Implement a transaction log for audit and reconciliation
 - **Remediation Timeline**: 60–90 days
-- **Recommendation**: Define the payment service (or its backing store) as the system of record for transaction data. Add a persistent transaction store.
-- **Evidence**: `charge.js` (ephemeral UUID generation with no persistence), absence of database configuration or data store.
+- **Recommendation**: Designate the payment service as the system of record for charge transactions. Implement persistent transaction logging with the generated `transaction_id` as the primary key.
+- **Evidence**: `charge.js` (line 87, `uuidv4()` — generated but not persisted), `server.js` (no database connection)
 
-### DATA-Q5: Reliable Timestamps
-
-- **Severity**: RISK
-- **Finding**: The `ChargeResponse` message in `proto/demo.proto` contains only `transaction_id` — no `created_at`, `updated_at`, or `event_time` fields. The charge function in `charge.js` uses `new Date()` for card expiration validation but does not include timestamps in the response. Pino logs include timestamps by default, but these are log timestamps, not business event timestamps exposed to the caller.
-- **Gap**: No timestamps in API responses. An agent cannot determine when a charge was processed. No timezone normalization documented.
-- **Compensating Controls**:
-  - Pino log timestamps provide approximate event timing for debugging
-  - OpenTelemetry traces include span timestamps
-- **Remediation Timeline**: 30 days
-- **Recommendation**: Add `created_at` (google.protobuf.Timestamp) to ChargeResponse. Store and return UTC timestamps for all transactions.
-- **Evidence**: `proto/demo.proto` (ChargeResponse has only transaction_id), `charge.js` (Date used for validation only, not in response)
-
-### DATA-Q6: Data Freshness Signaling
+### DATA-Q5: Temporal Metadata and Freshness
 
 - **Severity**: RISK
-- **Finding**: No data freshness signaling exists. The service does not return `Cache-Control` headers (gRPC uses trailers, not HTTP headers in the traditional sense), no `X-Data-Age` metadata, no `last_refreshed` fields, and no consistency level indicators. Since the service is stateless and generates fresh responses for each call, freshness is implicit — but not signaled.
-- **Gap**: No freshness signaling. An agent cannot determine whether response data is current, stale, or cached.
+- **Finding**: The `ChargeResponse` contains only `transaction_id` — no timestamp, no `created_at`, no `processed_at` metadata. The service does not record when a charge was processed. No temporal metadata exists in the proto definition or the implementation. An agent cannot determine when a transaction occurred or assess data freshness.
+- **Gap**: No temporal metadata on charge responses. No transaction timestamps.
 - **Compensating Controls**:
-  - Every Charge response is generated fresh (stateless) — no stale data risk for the current implementation
-  - Freshness becomes important when transaction history queries are added
-- **Remediation Timeline**: 60 days (when query endpoints are added)
-- **Recommendation**: When adding query endpoints, include `Cache-Control` equivalent gRPC metadata and `last_updated` timestamps in responses.
-- **Evidence**: `charge.js` (stateless fresh responses), absence of any caching or freshness metadata.
-
-### DATA-Q7: PII Redaction in Logs
-
-- **Severity**: RISK
-- **Finding**: `server.js` logs the full request body: `PaymentService#Charge invoked with request ${JSON.stringify(call.request)}` — this includes the complete credit card number, CVV, and expiration date in plaintext in the logs. `charge.js` logs `Transaction processed: ${cardType} ending ${cardNumber.substr(-4)}` — this logs the card type and last 4 digits. There is no PII redaction middleware, no log scrubbing, no masking library, and no CloudWatch log filters for PII.
-- **Gap**: Credit card numbers (including full PAN and CVV) are logged in plaintext. This is a PCI-DSS violation. No PII redaction exists in the logging pipeline.
-- **Compensating Controls**:
-  - Restrict access to log storage to authorized personnel only
-  - Add log scrubbing at the log aggregation layer (e.g., CloudWatch metric filters to detect PII)
-- **Remediation Timeline**: 14 days (urgent — PCI-DSS violation)
-- **Recommendation**: Immediately remove `JSON.stringify(call.request)` from the request log in `server.js`. Replace with a redacted summary (e.g., card type, last 4, amount only). Add a PII redaction middleware to the pino logger.
-- **Evidence**: `server.js` (line: `logger.info(\`PaymentService#Charge invoked with request ${JSON.stringify(call.request)}\`)`), `charge.js` (line: `logger.info(\`Transaction processed: ${cardType} ending ${cardNumber.substr(-4)}...`)
-
-### DISC-Q1: Schema Documentation and Versioning
-
-- **Severity**: RISK
-- **Finding**: The `proto/demo.proto` file provides schema documentation through protobuf message definitions with field names and types. Some fields have comments (e.g., Money message has detailed field comments). However, the proto is copied from a shared location via `genproto.sh` with no version tracking. There is no schema registry, no migration files, no schema versioning beyond the proto file itself.
-- **Gap**: Schema is documented in proto format but not versioned. No schema registry. No migration tracking for proto changes.
-- **Compensating Controls**:
-  - The proto file itself serves as schema documentation
-  - Track proto changes in version control of the shared protos repository
-- **Remediation Timeline**: 30 days
-- **Recommendation**: Adopt a proto schema registry (e.g., Buf Schema Registry). Add proto linting and breaking change detection to CI.
-- **Evidence**: `proto/demo.proto` (schema definitions with comments), `genproto.sh` (copy from shared protos)
+  - The calling service can record timestamps at the point of invocation
+  - Log timestamps in structured logs provide approximate timing
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Add `processed_at` timestamp to `ChargeResponse`. Record transaction timestamps in the transaction log.
+- **Evidence**: `proto/demo.proto` (ChargeResponse has only `transaction_id`), `charge.js` (no timestamp in response)
 
 ### OBS-Q1: Distributed Tracing and Structured Logging
 
 - **Severity**: RISK
-- **Finding**: The service has **partial observability**: (1) OpenTelemetry is configured in `index.js` with `@opentelemetry/instrumentation-grpc` and `OTLPTraceExporter` — but it is conditional on `ENABLE_TRACING=1` environment variable. When disabled, no tracing exists. (2) Pino logger outputs structured JSON logs with `severity` and `message` fields. However: (a) no explicit `request_id` or `correlation_id` is generated or propagated in logs, (b) OpenTelemetry trace IDs are not injected into pino log entries, (c) there is no way to correlate a log entry with a specific trace span without manual effort.
-- **Gap**: Tracing is conditional (opt-in via env var, not default-on). Structured logs lack correlation IDs. Trace IDs are not propagated into log entries. Cannot reconstruct a full request lifecycle from logs alone.
+- **Finding**: Tracing is disabled (`tracing: false` in assessment context). The `index.js` entry point has OpenTelemetry SDK setup code that initializes when `ENABLE_TRACING == "1"`, using `@opentelemetry/sdk-node` with OTLP gRPC exporter and gRPC instrumentation. However, with tracing disabled, none of this is active. Logging uses `pino` (structured JSON) in both `logger.js` and `charge.js` with severity levels and message keys. Logs lack trace correlation IDs.
+- **Gap**: No distributed tracing active. Structured JSON logs exist but lack trace correlation. Agent-initiated requests cannot be traced through the service.
 - **Compensating Controls**:
-  - Enable ENABLE_TRACING=1 in deployment configuration
-  - OpenTelemetry gRPC instrumentation provides automatic trace context propagation for gRPC calls
-- **Remediation Timeline**: 30 days
-- **Recommendation**: Make tracing default-on (remove the conditional). Inject OpenTelemetry trace IDs into pino log entries using `pino-opentelemetry-transport` or manual injection. Add `request_id` to all log entries.
-- **Evidence**: `index.js` (conditional ENABLE_TRACING setup), `logger.js` (pino config without correlation ID), `package.json` (OpenTelemetry dependencies)
+  - Pino JSON structured logging provides basic log analysis capability
+  - OpenTelemetry SDK is already integrated — enabling tracing requires only a Helm value change
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Enable tracing (`ENABLE_TRACING: "1"` via Helm values). The OpenTelemetry SDK integration in `index.js` is already implemented and will activate automatically.
+- **Evidence**: `index.js` (lines 35–62, OpenTelemetry setup gated by `ENABLE_TRACING`), `logger.js` (pino JSON logger), `helm-chart/values.yaml` (`tracing: false` in assessment context)
 
 ### OBS-Q2: Alerting on Error Rates and Latency
 
 - **Severity**: RISK
-- **Finding**: No alerting configuration exists. There are no CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration, no composite alarms, and no SLO-based alerting. No IaC files define any monitoring resources. The service emits logs and (optionally) traces, but no alerts are triggered on error rates, latency spikes, or availability degradation.
-- **Gap**: No alerting. Target system degradation will not be detected until agents start failing. No error rate or latency thresholds defined.
+- **Finding**: No alerting configuration exists. No CloudWatch alarms, no Prometheus alerting rules, no PagerDuty/OpsGenie integration. The Helm chart defines gRPC health probes (readiness and liveness on port 50051) but no error rate or latency alerting. No custom metrics are published. For a P0 payment processing service, lack of alerting is a significant operational gap.
+- **Gap**: No alerting on error rates or latency. Payment processing failures will not be detected until agents or users start failing.
 - **Compensating Controls**:
-  - Configure CloudWatch alarms on log-based metrics (error rate from structured logs)
-  - Use OpenTelemetry metrics exporter to publish latency metrics
+  - gRPC health probes provide basic availability detection via K8s
+  - Istio sidecar metrics (when enabled) can feed Prometheus alerting
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Define CloudWatch alarms for: gRPC error rate > 1%, P95 latency > 500ms, and service unavailability. Integrate with on-call notification system.
-- **Evidence**: Absence of any alerting configuration, CloudWatch alarm definitions, or monitoring IaC.
+- **Recommendation**: Configure Prometheus alerting rules for gRPC error rates and p99 latency on the `Charge` RPC. Set aggressive thresholds for a P0 payment service. Integrate with alerting system.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml` (health probes only, no alerting), `package.json` (no metrics dependencies beyond OpenTelemetry)
+
+### DISC-Q1: Schema Versioning and API Contracts
+
+- **Severity**: RISK
+- **Finding**: The proto file uses `package hipstershop` with no version suffix (not `hipstershop.v1`). No `buf.yaml` or `buf.lock` exists — no breaking change detection via `buf breaking`. No changelog or deprecation notices. No consumer-driven contract tests (Pact). The CI pipeline has no proto compatibility checks. Proto changes could silently break agent tool bindings.
+- **Gap**: No proto versioning. No breaking change detection in CI. Schema changes can silently break agent integrations.
+- **Compensating Controls**:
+  - Pin agent tool definitions to the current proto schema with explicit integration tests
+  - The proto file is checked into source control, providing change history via git
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Add version suffix to proto package (`hipstershop.v1`). Integrate `buf breaking` into CI to detect breaking changes.
+- **Evidence**: `proto/demo.proto` (line 4, `package hipstershop` — no version), repository-wide: no `buf.yaml` found
 
 ### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
 
 - **Severity**: RISK
-- **Finding**: No infrastructure-as-code exists in this repository. There are no Terraform files, no CloudFormation templates, no CDK stacks, no Helm charts, no Kustomize definitions, and no Kubernetes manifests. The only infrastructure artifact is the Dockerfile. The service's deployment infrastructure — API gateways, IAM roles, secrets, network configurations — is not defined anywhere in this repository.
-- **Gap**: No IaC governance. The infrastructure exposing the service to agents is not defined as code, not subject to peer review, and not monitored for drift.
+- **Finding**: Infrastructure is defined as Helm charts (`helm-chart/templates/paymentservice.yaml`, `helm-chart/values.yaml`) and Terraform (`terraform/`). GitHub Actions CI includes `helm-chart-ci.yaml` and `terraform-validate-ci.yaml` for validation. PR-based review is enforced via GitHub pull request workflow. However, no drift detection is configured.
+- **Gap**: IaC exists and is subject to PR review, but no drift detection monitors whether deployed state matches the Helm chart definitions.
 - **Compensating Controls**:
-  - Infrastructure may be defined in a separate infrastructure repository (not visible in this assessment scope)
-  - The Dockerfile provides basic container definition governance
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Define all infrastructure as code (Terraform or CDK). Include API gateway, IAM roles, network policies, and secrets in IaC. Require PR review for IaC changes. Enable drift detection.
-- **Evidence**: `Dockerfile` (only infrastructure artifact), absence of all IaC files (Terraform, CloudFormation, CDK, Helm, Kustomize, Kubernetes manifests).
+  - Helm chart templates provide declarative infrastructure definition
+  - GitHub PR workflow enforces peer review on IaC changes
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Implement GitOps with ArgoCD or Flux to detect and alert on drift between Helm chart definitions and deployed state.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml`, `helm-chart/values.yaml`, `.github/workflows/helm-chart-ci.yaml`
 
 ### ENG-Q2: CI/CD with API Contract Testing
 
 - **Severity**: RISK
-- **Finding**: No CI/CD pipeline configuration exists in this repository. There are no GitHub Actions workflows, no GitLab CI configuration, no Jenkinsfile, no buildspec.yml, and no CodePipeline definitions. There are no API contract tests, no consumer-driven contract testing (Pact), no OpenAPI spec validation, and no breaking change detection for proto files.
-- **Gap**: No CI/CD pipeline. No API contract testing. Proto changes cannot be detected before they break agent integrations.
+- **Finding**: CI/CD exists via GitHub Actions and Cloud Build. The PR workflow runs tests for some services and deploys to a staging GKE cluster via Skaffold with smoke tests. However, the payment service has no tests — `package.json` defines `"test": "echo \"Error: no test specified\" && exit 1"`. No API contract tests, no proto compatibility checks, no gRPC integration tests.
+- **Gap**: No API contract testing for the payment service. No proto breaking change detection. No tests at all.
 - **Compensating Controls**:
-  - CI/CD may be defined in a separate repository or platform-level configuration
-  - Proto file compatibility can be manually reviewed
+  - Smoke tests via load generator provide basic end-to-end validation
+  - Staging deployment in CI provides a pre-production validation environment
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add a CI/CD pipeline with proto linting (buf lint), breaking change detection (buf breaking), and automated contract tests for the Charge RPC.
-- **Evidence**: Absence of any CI/CD configuration files (.github/workflows/, .gitlab-ci.yml, Jenkinsfile, buildspec.yml).
-
-### ENG-Q3: Rollback Capability
-
-- **Severity**: RISK
-- **Finding**: No rollback capability is defined. There is no blue/green deployment configuration, no CodeDeploy rollback triggers, no Helm rollback, no feature flags, no canary deployment, and no traffic shifting. The Dockerfile defines how to build the image, but no deployment strategy is specified.
-- **Gap**: No rollback capability. If a deployment breaks agent-facing APIs, there is no defined mechanism to revert within 15–30 minutes.
-- **Compensating Controls**:
-  - Container image tags allow redeployment of previous versions
-  - Kubernetes deployment rollback (`kubectl rollout undo`) may be available at the platform level
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement blue/green or canary deployments with automatic rollback triggers based on error rate and latency metrics.
-- **Evidence**: `Dockerfile` (image build only, no deployment strategy), absence of deployment configuration files.
+- **Recommendation**: Add gRPC integration tests for the `Charge` RPC. Add unit tests for `charge.js` validation logic. Integrate `buf breaking` for proto compatibility.
+- **Evidence**: `package.json` (`"test": "echo \"Error: no test specified\" && exit 1"`), `.github/workflows/ci-pr.yaml`
 
 ### ENG-Q4: API Test Coverage
 
 - **Severity**: RISK
-- **Finding**: `package.json` defines the test script as `"echo \"Error: no test specified\" && exit 1"` — there are explicitly no tests. No test files exist anywhere in the repository. No Postman/Newman collections, no pytest API tests, no integration test directories, and no test steps in any CI pipeline (no CI pipeline exists).
-- **Gap**: Zero test coverage. No automated tests for the Charge RPC — no input validation tests, no error response tests, no edge case tests.
+- **Finding**: No automated tests exist for the payment service. The `package.json` test script is a placeholder that exits with error. No test files, no test framework dependencies (no jest, mocha, or similar). The CI pipeline does not run any payment service tests. For a P0 payment processing service, zero test coverage is a significant risk.
+- **Gap**: No API test coverage. Agent tool behavior cannot be validated against expected responses.
 - **Compensating Controls**:
-  - Manual testing of the Charge RPC via grpcurl or similar tools
-  - The simplicity of the simulated charge logic reduces (but does not eliminate) regression risk
+  - The `charge.js` validation logic is straightforward and deterministic
+  - Smoke tests via load generator provide basic end-to-end validation
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add unit tests for `charge.js` (valid card, invalid card, expired card, unaccepted card type, amount validation). Add integration tests for the gRPC server. Add test execution to CI pipeline.
-- **Evidence**: `package.json` (test script: `"echo \"Error: no test specified\" && exit 1"`), absence of any test files.
+- **Recommendation**: Add unit tests for `charge.js` (valid cards, invalid cards, expired cards, unsupported card types). Add gRPC integration tests for the `Charge` RPC.
+- **Evidence**: `package.json` (`"test": "echo \"Error: no test specified\" && exit 1"`), no test files in `src/paymentservice/`
 
 ### ENG-Q5: Encryption at Rest for Agent-Accessible Data
 
 - **Severity**: RISK
-- **Finding**: No encryption at rest configuration exists. There are no KMS key references, no S3 bucket encryption settings, no RDS/DynamoDB encryption configuration, and no EBS encryption. The service is stateless (no persistent data store), but credit card data passes through the service and is logged to stdout — log storage encryption is not configured in this repository.
-- **Gap**: No encryption at rest. While the service itself stores no data, logs containing PCI-DSS data (credit card numbers) require encrypted storage.
+- **Finding**: The payment service does not persist data — no database, no file storage, no cache. Credit card data exists only in-memory during request processing and is not written to disk. However, container logs written to stdout may contain credit card data (via `JSON.stringify(call.request)` in `server.js`) and these logs are stored on the node's filesystem without encryption guarantees.
+- **Gap**: No persistent data store to encrypt. However, log output containing PCI data may be stored on disk without encryption at rest controls.
 - **Compensating Controls**:
-  - Ensure the log aggregation destination (CloudWatch Logs, S3) has encryption at rest enabled at the platform level
-  - The service itself stores no data — encryption at rest applies to the log pipeline
-- **Remediation Timeline**: 30 days
-- **Recommendation**: Ensure all log storage destinations use KMS encryption. If a transaction store is added, configure encryption at rest with customer-managed KMS keys.
-- **Evidence**: Absence of any encryption configuration, KMS key references, or encrypted storage definitions.
+  - In-memory-only processing means credit card data is not persisted to disk by the application
+  - K8s node-level encryption (if configured) covers log storage
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Redact credit card data from log output. Ensure K8s node-level disk encryption is enabled. If a transaction log is implemented (per STATE-Q2), ensure encryption at rest with KMS-managed keys.
+- **Evidence**: `server.js` (line 44, `JSON.stringify(call.request)` logs full request), `charge.js` (no persistent storage)
 
+---
 
 ## INFOs — Architecture and Design Inputs
 
 ### API-Q1: Documented API Interface
 
 - **Severity**: INFO
-- **Finding**: The service exposes a well-documented gRPC interface via `proto/demo.proto`. The `PaymentService` defines a single `Charge` RPC with clearly typed request (`ChargeRequest` containing `Money` and `CreditCardInfo`) and response (`ChargeResponse` containing `transaction_id`). A gRPC Health Check service is also registered. The proto file is copied from a shared upstream source via `genproto.sh`, indicating this is part of a larger microservices ecosystem.
-- **Implication**: The gRPC interface is a valid integration surface for agent tools. Agent tool definitions can be generated from the proto file. The proto serves as the API contract.
-- **Recommendation**: Maintain the proto as the single source of truth. Consider generating agent tool definitions directly from the proto service definition.
-- **Evidence**: `proto/demo.proto` (PaymentService definition), `server.js` (gRPC server setup), `genproto.sh` (proto sourcing)
+- **Finding**: The service exposes a gRPC API defined in `proto/demo.proto`. The `PaymentService` has a single RPC: `Charge(ChargeRequest) returns (ChargeResponse)`. This is a well-defined, typed interface — not direct database access, file-based exchange, or UI automation. The proto IDL serves as both the interface definition and the code generation source.
+- **Implication**: The gRPC interface is agent-consumable. Agent tool definitions can be generated directly from the proto file.
+- **Recommendation**: No action required. The gRPC proto interface is a well-documented, strongly-typed API surface suitable for agent tool binding.
+- **Evidence**: `proto/demo.proto` (PaymentService definition), `server.js` (HipsterShopServer class)
 
 ### API-Q4: Idempotent Write Operations ⚡
 
 - **Severity**: INFO
 - **Conditional**: agent_scope is "read-only" — evaluated as INFO
-- **Finding**: The `Charge` RPC generates a new `uuidv4()` transaction_id on every invocation regardless of request content. Calling Charge twice with the same credit card and amount produces two different transaction IDs. There is no idempotency key support in the `ChargeRequest` message and no deduplication logic. For read-only agent scope, this is informational since agents would not invoke write operations.
-- **Implication**: If agent scope is expanded to write-enabled, idempotency becomes a BLOCKER. Plan for idempotency key support before enabling agent write access.
-- **Recommendation**: Add an optional `idempotency_key` field to `ChargeRequest` in the proto definition. Implement deduplication logic with a TTL-based key store.
-- **Evidence**: `charge.js` (UUID generation: `return { transaction_id: uuidv4() }`), `proto/demo.proto` (ChargeRequest has no idempotency_key)
+- **Finding**: The `Charge` RPC is a write operation (processes a payment). Each call generates a new `transaction_id` via `uuidv4()`. Repeated calls with the same `ChargeRequest` will generate different transaction IDs — the operation is not idempotent. No idempotency key in the request schema. However, with `agent_scope: read-only`, agents are not expected to invoke write operations.
+- **Implication**: Non-idempotent write operation. If agent scope changes to write-enabled, this becomes a BLOCKER.
+- **Recommendation**: No action required for current read-only scope. If write-enabled, add an `idempotency_key` field to `ChargeRequest`.
+- **Evidence**: `proto/demo.proto` (ChargeRequest — no idempotency key), `charge.js` (line 87, `uuidv4()` generates unique ID per call)
 
-### API-Q6: Structured Response Format
-
-- **Severity**: INFO
-- **Finding**: Responses use Protocol Buffers (protobuf) binary format over gRPC. Protobuf is a structured, strongly-typed format with well-defined schemas. While not text-based JSON, protobuf is machine-readable with auto-generated client libraries. The `ChargeResponse` message is simple: `{ transaction_id: string }`. gRPC clients (including agent tools) can deserialize protobuf responses natively.
-- **Implication**: Protobuf is actually better than JSON for agent integration — it's strongly typed with auto-generated clients. Agent tool implementations should use the generated gRPC client stubs rather than parsing raw responses.
-- **Recommendation**: Generate gRPC client libraries from the proto file for agent tool implementations. Consider adding a gRPC-Web or REST transcoding layer if agents need HTTP/JSON access.
-- **Evidence**: `proto/demo.proto` (protobuf message definitions), `package.json` (`@grpc/proto-loader` dependency)
-
-### API-Q8: Event Emission for State Changes
+### API-Q5: Structured Response Format
 
 - **Severity**: INFO
-- **Finding**: No event emission capability exists. There are no webhook endpoints, no SNS/EventBridge/SQS integration, no Kafka topics, no CDC pipelines, and no event publishing code. The `Charge` operation is fire-and-forget with no downstream event notification.
-- **Implication**: Event-driven agent patterns (reacting to payment completions, failures, or refunds) are not possible. Initial agent integration must use request/response only.
-- **Recommendation**: When adding transaction persistence, publish events to EventBridge or SNS for payment state changes (charge.completed, charge.failed, charge.refunded).
-- **Evidence**: Absence of any event publishing, webhook, or message queue integration in all source files.
+- **Finding**: Responses are serialized as Protocol Buffers (binary format) over gRPC. The `ChargeResponse` message contains a single `transaction_id` string field. Protobuf is strongly typed and machine-readable.
+- **Implication**: Protobuf is highly structured and efficient for machine consumption. LLM-based agents may need a JSON transcoding layer.
+- **Recommendation**: Consider adding gRPC-JSON transcoding via Envoy or `grpc-gateway` if agents require JSON responses.
+- **Evidence**: `proto/demo.proto` (ChargeResponse message), `server.js` (gRPC server)
 
-### API-Q9: Rate Limit Documentation and Headers
-
-- **Severity**: INFO
-- **Finding**: No rate limits are documented or enforced. No `X-RateLimit-Remaining` or `Retry-After` headers (or gRPC metadata equivalents) are returned. No API Gateway usage plans or WAF rate rules exist.
-- **Implication**: Agents cannot self-throttle because no rate limit signals are provided. Agent tool definitions should include conservative default request rates.
-- **Recommendation**: Define rate limits per client identity and return remaining quota in gRPC response metadata. Document limits in the service API documentation.
-- **Evidence**: Absence of rate limiting configuration or documentation in all files.
-
-### API-Q10: API Latency Profile
+### API-Q8: Rate Limit Documentation and Headers
 
 - **Severity**: INFO
-- **Finding**: No performance benchmarks, load test results, CloudWatch latency metrics, or APM dashboards exist. The current simulated charge operation is in-memory (card validation + UUID generation) and expected to be sub-millisecond, but this is not measured or documented.
-- **Implication**: Agent orchestration design cannot account for payment service latency without benchmarks. The simulated implementation is fast, but real payment gateway integration will dramatically change the latency profile.
-- **Recommendation**: Conduct baseline performance testing. Publish P50/P95/P99 latency metrics via OpenTelemetry. Document expected latency for agent tool definitions.
-- **Evidence**: Absence of performance test configurations or latency documentation.
+- **Finding**: No rate limiting is configured at any layer. No rate limit documentation exists. For a payment processing service, lack of rate limiting is particularly concerning as agents could initiate charges at machine speed.
+- **Implication**: Agents calling at machine speed have no rate limit feedback. For a payment service, this risk is higher than for stateless services.
+- **Recommendation**: Implement per-caller rate limiting on the `Charge` RPC. Document rate limits for agent consumers.
+- **Evidence**: `server.js` (no rate limiting), `helm-chart/templates/paymentservice.yaml` (no rate limit config)
 
-### DATA-Q8: Data Quality Awareness
+### AUTH-Q4: Identity Propagation and Delegation
 
 - **Severity**: INFO
-- **Finding**: No data quality metrics, profiling reports, null rate monitoring, duplicate detection, or freshness SLAs exist. The service is stateless — it processes transient credit card data and generates ephemeral transaction IDs. Data quality concerns are minimal for the current implementation.
-- **Implication**: Data quality becomes relevant when transaction persistence is added. Plan for quality monitoring before adding a data store.
-- **Recommendation**: When adding transaction persistence, implement data quality monitoring (null rate, duplicate detection, completeness metrics).
-- **Evidence**: Absence of data quality monitoring or metrics in all files.
+- **Finding**: No identity propagation exists. No JWT parsing, no OAuth2 token exchange, no `X-User-Id` headers. The `ChargeRequest` contains `amount` and `credit_card` — no user identity context. The service does not know who is being charged, only the card details. For a stateful-crud archetype processing PCI data, identity propagation would be important for audit trails.
+- **Implication**: No caller identity propagation. The service cannot attribute charges to specific users or agents. This limits audit capability.
+- **Recommendation**: Add caller identity context to `ChargeRequest` or extract from Istio mTLS peer identity when AUTH-Q1 is resolved.
+- **Evidence**: `proto/demo.proto` (ChargeRequest — no user identity field), `server.js` (no identity extraction)
+
+### STATE-Q1: Compensation and Rollback ⚡
+
+- **Severity**: INFO
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: The `Charge` RPC is a write operation with no compensation mechanism. There is no `Refund` RPC, no `VoidCharge` RPC, and no rollback capability. Once a charge is processed (simulated), it cannot be reversed. However, with `agent_scope: read-only`, agents are not expected to invoke write operations.
+- **Implication**: No compensation for read-only scope. If write-enabled, the lack of refund/void capability becomes a significant gap.
+- **Recommendation**: No action required for current read-only scope. If write-enabled, implement `Refund` and `VoidCharge` RPCs.
+- **Evidence**: `proto/demo.proto` (only `Charge` RPC, no refund), `charge.js` (no compensation logic)
+
+### STATE-Q5: Rate Limiting and Throttling
+
+- **Severity**: INFO
+- **Finding**: No rate limiting is enforced at any layer. The Helm chart defines resource limits (CPU: 200m, memory: 256Mi) which provide a coarse resource ceiling but not request-level throttling. For a payment service, rate limiting is critical to prevent runaway agent charge loops.
+- **Implication**: A runaway agent loop could process many charges rapidly. The simulated nature limits real financial impact but the pattern is dangerous.
+- **Recommendation**: Implement per-caller rate limiting on the `Charge` RPC via gRPC interceptor or Istio rate limiting.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml` (resource limits only), `helm-chart/values.yaml`
+
+### STATE-Q6: Blast Radius and Transaction Limits ⚡
+
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: The `Charge` RPC processes payments with no transaction limits, no daily caps, no per-caller spending limits. Each charge can be for any amount. However, with read-only scope, agents are not expected to invoke the Charge RPC.
+- **Implication**: No blast radius concern for read-only scope. If write-enabled, unlimited charge amounts become a critical risk.
+- **Recommendation**: No action required for current scope. If write-enabled, implement per-agent daily charge limits and maximum transaction amounts.
+- **Evidence**: `charge.js` (no amount limits), `proto/demo.proto` (ChargeRequest accepts any Money amount)
+
+### HITL-Q3: Sandbox/Staging Environment
+
+- **Severity**: INFO
+- **Finding**: The CI pipeline deploys PR builds to a staging GKE cluster with per-PR namespaces. The staging environment runs the full microservices stack via Skaffold with smoke tests. This provides a production-equivalent environment for agent testing.
+- **Implication**: A staging environment exists for agent testing. Per-PR namespaces provide isolation.
+- **Recommendation**: Document the staging environment as the designated agent testing environment. For payment testing, ensure test credit card numbers are documented.
+- **Evidence**: `.github/workflows/ci-pr.yaml` (staging GKE deployment), `cloudbuild.yaml` (Skaffold deploy)
+
+### DATA-Q2: Data Residency and Sovereignty ⚡
+
+- **Severity**: INFO
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: Credit card data exists only in-memory during request processing — not persisted to any data store. The service runs in a GKE cluster with region determined by deployment configuration. No data residency configuration exists because no data is stored. However, PCI DSS has specific requirements about where credit card data can be processed, even transiently.
+- **Implication**: Transient PCI data processing may have residency implications depending on regulatory jurisdiction.
+- **Recommendation**: Document the processing region for PCI compliance. Ensure GKE cluster region aligns with PCI DSS requirements.
+- **Evidence**: `charge.js` (in-memory processing only), `helm-chart/values.yaml` (no region config)
+
+### DATA-Q6: PII Redaction in Logs
+
+- **Severity**: INFO
+- **Finding**: The service logs PCI data. `server.js` line 44 logs the full request via `JSON.stringify(call.request)` which includes credit card number, CVV, and expiration. `charge.js` line 86 logs card type and last 4 digits. While last-4 logging may be PCI-compliant, full request logging is not.
+- **Implication**: PCI data is logged without redaction. This is a compliance concern that should be addressed alongside DATA-Q1.
+- **Recommendation**: Redact credit card number and CVV from request logging. Mask to last 4 digits only. Remove `JSON.stringify(call.request)` or implement field-level masking.
+- **Evidence**: `server.js` (line 44, `JSON.stringify(call.request)`), `charge.js` (line 86, logs last 4 digits)
+
+### DATA-Q7: Data Quality Awareness
+
+- **Severity**: INFO
+- **Finding**: The service validates input data quality: card number validation via `simple-card-validator`, card type checking (VISA/MasterCard only), and expiration date validation. Invalid data is rejected with specific error types. Data quality is enforced at the input boundary.
+- **Implication**: Input validation provides data quality assurance. Agents will receive clear error responses for invalid input.
+- **Recommendation**: No action required. Input validation is well-implemented.
+- **Evidence**: `charge.js` (lines 63–85, validation logic)
 
 ### DISC-Q2: Semantically Meaningful Field Names
 
 - **Severity**: INFO
-- **Finding**: Field names in the proto file are human-readable and semantically meaningful: `credit_card_number`, `credit_card_cvv`, `credit_card_expiration_year`, `credit_card_expiration_month`, `transaction_id`, `currency_code`, `units`, `nanos`. No legacy abbreviations or codes requiring a data dictionary. The naming convention follows protobuf `snake_case` standard.
-- **Implication**: Agent LLM reasoning can interpret field names directly without a data dictionary. Field names are self-documenting.
-- **Recommendation**: Maintain the current naming convention. Add field-level comments to the proto for any non-obvious fields.
-- **Evidence**: `proto/demo.proto` (field definitions: credit_card_number, credit_card_cvv, transaction_id, currency_code)
+- **Finding**: Proto field names are human-readable and semantically meaningful: `credit_card_number`, `credit_card_cvv`, `credit_card_expiration_year`, `credit_card_expiration_month`, `transaction_id`, `amount`, `currency_code`, `units`, `nanos`. No legacy abbreviations or codes.
+- **Implication**: Field names are LLM-friendly. An agent can reason about the API surface without a data dictionary.
+- **Recommendation**: No action required.
+- **Evidence**: `proto/demo.proto` (CreditCardInfo, ChargeRequest, ChargeResponse field names)
 
 ### DISC-Q3: Data Catalog / Metadata Layer
 
 - **Severity**: INFO
-- **Finding**: No data catalog or metadata layer exists. There is no AWS Glue Data Catalog, no Collibra/Alation/DataHub, no metadata files, and no API catalog. The proto file serves as the only schema documentation.
-- **Implication**: Tool definition authoring for agents must rely on the proto file as the sole schema source. No programmatic discovery of what data the service holds.
-- **Recommendation**: Register the proto schema in a service catalog (e.g., Backstage, AWS Service Catalog) to enable programmatic discovery of the payment service's capabilities.
-- **Evidence**: `proto/demo.proto` (sole schema documentation), absence of data catalog or metadata files.
-
-### DISC-Q4: Data Lineage
-
-- **Severity**: INFO
-- **Finding**: No data lineage exists. There are no lineage tools, no ETL pipeline documentation, no data flow diagrams, no transformation logs, and no source-to-target mappings. The data flow is simple: `ChargeRequest` (credit card + amount) → validation → `ChargeResponse` (transaction_id). No transformations beyond in-memory validation.
-- **Implication**: For the current simple data flow, lineage is not critical. It becomes important when the payment service integrates with external payment gateways, fraud detection, and transaction stores.
-- **Recommendation**: Document the data flow when adding external integrations. Consider OpenTelemetry span attributes to trace data lineage through the payment pipeline.
-- **Evidence**: `charge.js` (simple request → validation → response flow), absence of lineage documentation.
+- **Finding**: No formal data catalog or metadata layer exists. The proto file serves as the de facto schema documentation. No AWS Glue Data Catalog, no Collibra, no DataHub.
+- **Implication**: For a single-RPC payment service, the proto file provides sufficient schema documentation.
+- **Recommendation**: No action required for current scope.
+- **Evidence**: `proto/demo.proto` (schema documentation)
 
 ### OBS-Q3: Business Outcome Metrics
 
 - **Severity**: INFO
-- **Finding**: No business outcome metrics are published. There are no `cloudwatch.put_metric_data` calls, no custom dashboards, no business KPI alarms. The service logs transaction details (card type, last 4 digits, amount) but does not publish structured metrics for payment success rate, failure rate by error type, average transaction value, or transaction volume.
-- **Implication**: When agents interact with this service, there are no business metrics to determine whether agent-initiated payments produce good outcomes. Cannot measure agent effectiveness.
-- **Recommendation**: Publish custom metrics: `payment.charge.success_count`, `payment.charge.failure_count` (by error type), `payment.charge.amount` (histogram). Use OpenTelemetry metrics exporter.
-- **Evidence**: `charge.js` (transaction logging but no metrics publication), `index.js` (OpenTelemetry configured for traces only, not metrics).
+- **Finding**: No custom business metrics are published. No transaction success rate metrics, no charge amount distribution, no card type breakdown, no error rate by error type.
+- **Implication**: When agents consume the payment service, there is no way to measure transaction success rates or detect anomalous charge patterns.
+- **Recommendation**: Implement transaction success/failure metrics, charge amount distribution, and error type breakdown.
+- **Evidence**: `charge.js` (no metrics), `server.js` (no metrics), `package.json` (OpenTelemetry SDK present but no custom metrics)
+
+### ENG-Q3: Rollback Capability
+
+- **Severity**: INFO
+- **Finding**: Deployment uses Skaffold with Cloud Build for production and Helm for K8s. Helm supports `helm rollback` natively. The Kubernetes Deployment uses standard rolling update strategy. No canary deployment, no blue/green, no automatic rollback triggers.
+- **Implication**: Manual rollback via Helm is available. For a P0 payment service, automated rollback would be preferred.
+- **Recommendation**: Implement Flagger or Argo Rollouts for automated canary deployments with rollback.
+- **Evidence**: `helm-chart/Chart.yaml`, `helm-chart/templates/paymentservice.yaml`, `cloudbuild.yaml`
+
+---
+
 ## Detailed Findings
 
 ### 01 — API Surface and Interface Design
 
 #### API-Q1: Documented API Interface
 - **Severity**: INFO
-- **Finding**: The service exposes a documented gRPC interface via `proto/demo.proto`. The `PaymentService` defines a `Charge` RPC with typed `ChargeRequest` (containing `Money` and `CreditCardInfo`) and `ChargeResponse` (containing `transaction_id`). A gRPC Health Check is also registered in `server.js`. Integration does not require direct database access, file-based exchange, or UI automation — gRPC is the integration surface.
-- **Gap**: The gRPC interface exists and is documented in proto format. No gap identified for API-Q1.
-- **Recommendation**: Maintain the proto as the single source of truth. Consider generating agent tool definitions directly from the proto service definition.
-- **Evidence**: `proto/demo.proto`, `server.js`
+- **Finding**: The service exposes a gRPC API defined in `proto/demo.proto`. The `PaymentService` has a single RPC: `Charge(ChargeRequest) returns (ChargeResponse)`. Well-defined, typed interface using Protocol Buffers.
+- **Gap**: The proto file is a monolithic definition containing all 10 Online Boutique services. No standalone payment service spec exists.
+- **Recommendation**: Consider extracting the `PaymentService` proto definition into a standalone file.
+- **Evidence**: `proto/demo.proto` (PaymentService definition), `server.js` (HipsterShopServer class)
 
 #### API-Q2: Machine-Readable API Specification
 - **Severity**: RISK
-- **Finding**: The `proto/demo.proto` file is a machine-readable specification for the gRPC service. It defines message types, field types, and RPC signatures. However, it is manually copied from a shared `../../protos/` directory via `genproto.sh` — the local copy may drift from the upstream source. There is no automated validation, no schema registry, and no version tracking.
-- **Gap**: Proto is machine-readable but manually synced. Drift risk between local and upstream proto.
-- **Recommendation**: Add proto validation to the build process. Use a proto schema registry for version management.
-- **Evidence**: `proto/demo.proto`, `genproto.sh`
+- **Finding**: The `demo.proto` file is a machine-readable IDL defining the `PaymentService` RPC, request/response messages, and field types. However, it is a monolithic file shared across all services. No OpenAPI, AsyncAPI, or Smithy model exists. gRPC server reflection is not enabled.
+- **Gap**: No standalone machine-readable spec. No gRPC server reflection for runtime discovery.
+- **Recommendation**: Enable gRPC server reflection. Extract payment service proto definitions into a standalone file.
+- **Evidence**: `proto/demo.proto`, `server.js` (no reflection service), `package.json` (`@grpc/grpc-js`)
 
 #### API-Q3: Structured Error Responses
 - **Severity**: RISK
-- **Finding**: `charge.js` defines custom error classes (`CreditCardError` base class, `InvalidCreditCard`, `UnacceptedCreditCard`, `ExpiredCreditCard`) with a `code` property set to 400. `server.js` passes raw error objects to the gRPC callback. Errors include human-readable messages but lack machine-readable error code enums, retryable booleans, or structured gRPC status details. An agent cannot programmatically distinguish error types without string parsing.
-- **Gap**: No machine-readable error codes or retryable indicators in gRPC error responses.
-- **Recommendation**: Use gRPC rich error model (`google.rpc.Status` with `ErrorInfo` details) to return machine-readable error codes and retryable flags.
-- **Evidence**: `charge.js` (error classes), `server.js` (ChargeServiceHandler callback)
+- **Finding**: Custom error classes (`InvalidCreditCard`, `UnacceptedCreditCard`, `ExpiredCreditCard`) exist in `charge.js` but are not mapped to gRPC status codes. Errors are passed directly to `callback(err)` and mapped to `UNKNOWN` status by the gRPC framework.
+- **Gap**: No rich error model. Custom errors not mapped to gRPC status codes.
+- **Recommendation**: Map error classes to gRPC status codes. Implement gRPC rich error model.
+- **Evidence**: `charge.js` (lines 32–56, custom error classes), `server.js` (lines 42–50, `callback(err)`)
 
 #### API-Q4: Idempotent Write Operations ⚡
 - **Severity**: INFO
 - **Conditional**: agent_scope is "read-only" — evaluated as INFO
-- **Finding**: The `Charge` RPC generates a new `uuidv4()` transaction_id on every invocation. No idempotency key support exists in `ChargeRequest`. Duplicate calls produce duplicate transaction IDs. For read-only agent scope, this is informational.
-- **Gap**: No idempotency. Write operations produce new state on every call.
-- **Recommendation**: Add optional `idempotency_key` field to `ChargeRequest`. Implement deduplication logic before enabling write agent access.
-- **Evidence**: `charge.js` (`return { transaction_id: uuidv4() }`), `proto/demo.proto` (ChargeRequest)
+- **Finding**: `Charge` is a non-idempotent write operation. Each call generates a new `transaction_id` via `uuidv4()`. No idempotency key in request schema.
+- **Gap**: Non-idempotent write. Becomes BLOCKER if scope changes to write-enabled.
+- **Recommendation**: No action for read-only scope. Add `idempotency_key` to `ChargeRequest` if write-enabled.
+- **Evidence**: `proto/demo.proto` (ChargeRequest — no idempotency key), `charge.js` (line 87, `uuidv4()`)
 
-#### API-Q5: API Versioning and Deprecation
-- **Severity**: RISK
-- **Finding**: Proto package is `hipstershop` with no version qualifier. No `/v1/` patterns, no changelog, no deprecation notices. `package.json` version (`0.0.1`) is npm package version, not API version.
-- **Gap**: No API versioning strategy. No deprecation policy.
-- **Recommendation**: Add version qualifier to proto package name (`hipstershop.payment.v1`). Establish proto compatibility policy.
-- **Evidence**: `proto/demo.proto` (package: `hipstershop`), `package.json` (version: `0.0.1`)
-
-#### API-Q6: Structured Response Format
+#### API-Q5: Structured Response Format
 - **Severity**: INFO
-- **Finding**: Responses use Protocol Buffers (protobuf) binary format over gRPC. Strongly typed with auto-generated client libraries. `ChargeResponse` is simple: `{ transaction_id: string }`.
-- **Gap**: Protobuf is not human-readable text, but this is a strength for machine integration, not a gap.
-- **Recommendation**: Generate gRPC client libraries for agent tool implementations. Consider gRPC-Web or REST transcoding if needed.
-- **Evidence**: `proto/demo.proto`, `package.json` (`@grpc/proto-loader`)
+- **Finding**: Responses are Protocol Buffers (binary) over gRPC. `ChargeResponse` contains `transaction_id` string. Strongly typed and machine-readable.
+- **Gap**: Binary protobuf may require transcoding for LLM-based agents.
+- **Recommendation**: Consider gRPC-JSON transcoding if agents require JSON.
+- **Evidence**: `proto/demo.proto` (ChargeResponse), `server.js`
 
-#### API-Q7: Asynchronous Operation Support
-- **Severity**: RISK
-- **Finding**: The `Charge` RPC is synchronous. No background job frameworks, async/polling patterns, job status APIs, Step Functions, or webhook callbacks found. Current simulated charge is fast (in-memory), but real payment processing would require async patterns.
-- **Gap**: No async operation support. Synchronous-only design.
-- **Recommendation**: Plan for async patterns (job submission + polling) before real payment gateway integration.
-- **Evidence**: `charge.js`, `server.js`
+#### API-Q6: Asynchronous Operation Support
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service.
+- **Trigger**: Service has operations >30s OR long-running workflows
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
-#### API-Q8: Event Emission for State Changes
+#### API-Q7: Event Emission for State Changes
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. While stateful-crud archetype would normally trigger this, the service does not persist state changes.
+- **Trigger**: Service has state changes (stateful-crud, orchestrator)
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
+
+#### API-Q8: Rate Limit Documentation and Headers
 - **Severity**: INFO
-- **Finding**: No event emission capability. No webhooks, SNS/EventBridge/SQS, Kafka, or CDC pipelines.
-- **Gap**: No event-driven patterns. Agents cannot react to payment state changes.
-- **Recommendation**: Publish events to EventBridge for payment state changes when persistence is added.
-- **Evidence**: Absence of event publishing in all source files.
+- **Finding**: No rate limiting configured. No rate limit documentation. For a payment service, this is particularly concerning.
+- **Gap**: No rate limit feedback for agents.
+- **Recommendation**: Implement per-caller rate limiting. Document rate limits.
+- **Evidence**: `server.js` (no rate limiting), `helm-chart/templates/paymentservice.yaml`
 
-#### API-Q9: Rate Limit Documentation and Headers
-- **Severity**: INFO
-- **Finding**: No rate limits documented or enforced. No rate limit headers or gRPC metadata equivalents returned.
-- **Gap**: Agents cannot self-throttle due to absent rate limit signals.
-- **Recommendation**: Define and document rate limits. Return remaining quota in gRPC response metadata.
-- **Evidence**: Absence of rate limiting in all files.
-
-#### API-Q10: API Latency Profile
-- **Severity**: INFO
-- **Finding**: No performance benchmarks or latency data available. Simulated charge is expected to be sub-millisecond but not measured.
-- **Gap**: Unknown latency profile. Cannot plan agent orchestration timing.
-- **Recommendation**: Conduct performance testing. Publish P50/P95/P99 latency metrics.
-- **Evidence**: Absence of performance test configurations.
 ### 02 — Authentication, Authorization, and Identity
 
 #### AUTH-Q1: Machine Identity Authentication
 - **Severity**: BLOCKER
-- **Finding**: The gRPC server in `server.js` binds with `grpc.ServerCredentials.createInsecure()`. No TLS, no OAuth2, no API keys, no mTLS, no service account support, no gRPC interceptors for authentication. Any network-reachable client can invoke the Charge RPC without identity. No principal attribution in logs.
-- **Gap**: Zero authentication. Cannot identify which agent or caller made a request.
-- **Recommendation**: Add gRPC server interceptor for mTLS or JWT/OAuth2 token validation. Require API key in gRPC metadata with principal attribution.
-- **Evidence**: `server.js` (`grpc.ServerCredentials.createInsecure()`), absence of auth interceptors.
+- **Finding**: `grpc.ServerCredentials.createInsecure()` with no authentication. AuthorizationPolicies disabled. NetworkPolicies disabled. Any network-reachable client can call `Charge`.
+- **Gap**: No machine identity authentication at any layer.
+- **Recommendation**: Enable Istio AuthorizationPolicies. Implement gRPC interceptor for defense-in-depth.
+- **Evidence**: `server.js` (line 63, `createInsecure()`), `helm-chart/values.yaml` (`authorizationPolicies.create: false`)
 
 #### AUTH-Q2: Scoped Permissions (Least Privilege)
 - **Severity**: RISK
-- **Finding**: No authorization model. No IAM policies, role definitions, API Gateway resource policies, or permission checks in code. All callers can invoke all RPCs.
-- **Gap**: No scoped permissions. No least-privilege enforcement.
-- **Recommendation**: Implement gRPC interceptors for role-based access control. Deploy behind service mesh with AuthorizationPolicy.
-- **Evidence**: `server.js` (no authorization interceptors), absence of IAM policy files.
+- **Finding**: AuthorizationPolicies disabled. Helm template restricts to checkoutservice but not deployed. No agent-specific service accounts.
+- **Gap**: No caller restriction. No agent-specific permission scoping.
+- **Recommendation**: Enable `authorizationPolicies.create: true`. Create agent-specific service accounts.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/paymentservice.yaml`
 
 #### AUTH-Q3: Action-Level Authorization
 - **Severity**: RISK
-- **Finding**: No action-level authorization. Charge RPC and Health Check both have zero permission checks. No ABAC, no fine-grained RBAC, no action-level middleware.
-- **Gap**: Cannot restrict agents to read-only operations (Health Check) while denying write operations (Charge).
-- **Recommendation**: Add gRPC interceptor mapping caller identity to allowed RPC methods.
-- **Evidence**: `server.js` (ChargeServiceHandler and CheckHandler have no auth checks)
+- **Finding**: No application-layer authorization. AuthorizationPolicy with per-path rules exists but disabled.
+- **Gap**: No action-level authorization at any layer.
+- **Recommendation**: Enable AuthorizationPolicies. Implement gRPC interceptor.
+- **Evidence**: `server.js` (no auth), `helm-chart/values.yaml` (`authorizationPolicies.create: false`)
 
-#### AUTH-Q4: Identity Propagation
+#### AUTH-Q4: Identity Propagation and Delegation
+- **Severity**: INFO
+- **Finding**: No identity propagation. `ChargeRequest` contains only `amount` and `credit_card` — no user identity. Service cannot attribute charges to users.
+- **Gap**: No identity propagation. Limited audit capability.
+- **Recommendation**: Add caller identity context when AUTH-Q1 is resolved.
+- **Evidence**: `proto/demo.proto` (ChargeRequest — no user identity), `server.js`
+
+#### AUTH-Q5: Credential Management
 - **Severity**: RISK
-- **Finding**: No token exchange or identity propagation. No JWT parsing, no OAuth2 on-behalf-of flows, no user context in gRPC metadata. `ChargeRequest` contains only `amount` and `credit_card` — no user identity field.
-- **Gap**: Cannot associate charges with end users at the service level.
-- **Recommendation**: Add gRPC metadata propagation for user identity tokens. Add user context field to proto or metadata.
-- **Evidence**: `proto/demo.proto` (ChargeRequest), `server.js` (no metadata extraction)
+- **Finding**: No secrets used. Simulated payment — no external payment gateway API keys. No Secrets Manager or Vault.
+- **Gap**: No credential management framework for future needs.
+- **Recommendation**: Maintain credential-free architecture. Use external secrets operator if real gateway is integrated.
+- **Evidence**: `server.js`, `index.js` (env vars only), `charge.js` (no external API calls)
 
-#### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-- **Severity**: RISK
-- **Finding**: No authentication exists (AUTH-Q1), so agent-as-self vs agent-on-behalf-of-user distinction is impossible. No separate IAM roles, auth flows, or audit log fields for the two modes.
-- **Gap**: Cannot distinguish agent access patterns. No separate authorization paths.
-- **Recommendation**: Design identity model to support both modes. Use gRPC metadata for agent identity and delegated user identity.
-- **Evidence**: Absence of authentication or identity mechanism in all files.
-
-#### AUTH-Q6: Credential Management
-- **Severity**: RISK
-- **Finding**: No secrets management (no AWS Secrets Manager, Vault, or parameter store). No hardcoded credentials found (simulated service). Environment variables (`PORT`, `ENABLE_TRACING`, `DISABLE_PROFILER`, `COLLECTOR_SERVICE_ADDR`, `OTEL_SERVICE_NAME`) contain no credentials.
-- **Gap**: No secrets management infrastructure for when real payment gateway credentials are needed.
-- **Recommendation**: Integrate AWS Secrets Manager or Vault before adding real payment gateway credentials.
-- **Evidence**: `index.js` (environment variables), `Dockerfile`, absence of secrets management config.
-
-#### AUTH-Q7: Immutable Audit Logging ⚡
+#### AUTH-Q6: Immutable Audit Logging ⚡
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: Pino logger (`logger.js`, `charge.js`) outputs structured JSON to stdout with `severity` field. `server.js` logs full request body including credit card data. No authenticated principal logged. Logs not immutable — stdout with no CloudTrail, no S3 object lock, no log retention policy.
-- **Gap**: Logs exist but are not immutable, not attributed to principals, and contain PII.
-- **Recommendation**: Route logs to immutable storage. Add principal attribution. Redact PII from request logs.
-- **Evidence**: `logger.js`, `charge.js`, `server.js` (request logging)
+- **Finding**: Pino JSON logging but no principal attribution. Full request logged including credit card data. No immutable storage. Tracing disabled.
+- **Gap**: No immutable audit trail. PCI data in logs without redaction.
+- **Recommendation**: Add principal attribution. Redact PCI data from logs. Forward to immutable store.
+- **Evidence**: `server.js` (line 44, `JSON.stringify(call.request)`), `logger.js`, `charge.js` (line 86)
 
-#### AUTH-Q8: Agent Identity Suspension
+#### AUTH-Q7: Agent Identity Suspension
 - **Severity**: RISK
-- **Finding**: No agent identity suspension mechanism. No API key revocation, no IAM deactivation, no service account disable. No authentication exists to suspend.
-- **Gap**: Cannot isolate misbehaving agent without shutting down the entire service.
-- **Recommendation**: After AUTH-Q1 remediation, add ability to revoke individual agent credentials immediately.
-- **Evidence**: Absence of authentication or identity management in all files.
+- **Finding**: No agent identity suspension mechanism. AuthorizationPolicies disabled. No kill switch.
+- **Gap**: No mechanism to suspend misbehaving agent.
+- **Recommendation**: Implement agent-specific ServiceAccounts with AuthorizationPolicy-based suspension.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/paymentservice.yaml`
+
 ### 03 — State Management and Transactional Integrity
 
 #### STATE-Q1: Compensation and Rollback ⚡
-- **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: The Charge operation in `charge.js` is stateless — validates credit card, generates UUID, returns. No saga pattern, two-phase commit, undo endpoints, or Step Functions. The operation is atomic (validate-and-return) with no partial state risk in current simulated implementation.
-- **Gap**: No compensation or rollback capability for multi-step payment workflows.
-- **Recommendation**: Design compensation patterns (refund/void endpoints) before integrating real payment processing.
-- **Evidence**: `charge.js` (stateless function), absence of database or transaction management.
+- **Severity**: INFO
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: `Charge` is a write operation with no compensation. No `Refund` or `VoidCharge` RPC. Read-only scope means agents won't invoke writes.
+- **Gap**: No compensation for write operations. Becomes critical if write-enabled.
+- **Recommendation**: No action for read-only scope. Implement refund/void if write-enabled.
+- **Evidence**: `proto/demo.proto` (only Charge RPC), `charge.js`
 
 #### STATE-Q2: Queryable Current State
 - **Severity**: RISK
-- **Finding**: Entirely stateless — no database, no persistent state. Only queryable endpoint is Health Check (returns `SERVING`). No GET for payment state, no transaction history, no status lookup by transaction_id. The `transaction_id` is ephemeral with no persistent record.
-- **Gap**: No queryable state. Agent cannot inspect transaction state or verify charges.
-- **Recommendation**: Add transaction store and `GetTransaction` RPC for querying charge status.
-- **Evidence**: `server.js` (Health Check only), `charge.js` (ephemeral UUID)
+- **Finding**: No queryable state. Transaction IDs generated but not persisted. No way to verify previous charges.
+- **Gap**: No transaction query capability. No reconciliation.
+- **Recommendation**: Implement transaction log with `GetTransaction` RPC.
+- **Evidence**: `charge.js` (returns `transaction_id` but doesn't persist), `server.js` (no database)
 
-#### STATE-Q3: Concurrency Controls
-- **Severity**: RISK
-- **Finding**: No concurrency controls — no optimistic locking, version fields, ETags, or conditional writes. Stateless service, so concurrent calls don't conflict on shared data currently. No duplicate charge prevention.
-- **Gap**: No deduplication. Concurrent agents could create duplicate charges in real payment scenario.
-- **Recommendation**: Implement idempotency key support with deduplication store.
-- **Evidence**: `charge.js` (no locking), `proto/demo.proto` (no idempotency_key field)
+#### STATE-Q3: Concurrency Controls ⚡
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered. agent_scope is read-only.
+- **Trigger**: agent_scope is write-enabled AND service has persistent state
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### STATE-Q4: Circuit Breakers and Resilience
 - **Severity**: RISK
-- **Finding**: No circuit breakers, retry, or timeout patterns. Service makes no external dependency calls (simulated). No Resilience4j, Polly, retry decorators, or timeout configurations. `@google-cloud/profiler` in `index.js` makes outbound call with no resilience.
-- **Gap**: No resilience patterns for external dependency failures.
-- **Recommendation**: Add circuit breaker library (e.g., `opossum` for Node.js) before adding external dependencies.
-- **Evidence**: `charge.js` (no external calls), `index.js` (profiler with no error handling)
+- **Finding**: No resilience patterns. No circuit breakers, no retry logic, no timeout configuration. Simulated payment has no external failure modes currently.
+- **Gap**: No resilience infrastructure for future external gateway integration.
+- **Recommendation**: Implement circuit breaker pattern. Add graceful shutdown.
+- **Evidence**: `charge.js` (synchronous, no resilience), `server.js` (no circuit breaker)
 
 #### STATE-Q5: Rate Limiting and Throttling
-- **Severity**: RISK
-- **Finding**: No rate limiting. gRPC server has no rate limiting middleware, no throttling, no per-client limits. No API Gateway, WAF, or usage plan configuration.
-- **Gap**: Runaway agent loop could overwhelm the service at machine speed.
-- **Recommendation**: Add gRPC-level rate limiting or deploy behind service mesh with per-client rate limits.
-- **Evidence**: `server.js` (no rate limiting), absence of API Gateway/WAF config.
+- **Severity**: INFO
+- **Finding**: No rate limiting. Resource limits (CPU: 200m, memory: 256Mi) provide coarse ceiling only.
+- **Gap**: No request-level throttling on payment processing.
+- **Recommendation**: Implement per-caller rate limiting on Charge RPC.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml` (resource limits), `helm-chart/values.yaml`
 
-#### STATE-Q6: Blast Radius and Transaction Limits
-- **Severity**: RISK
-- **Finding**: No configurable transaction limits. No max charges per hour, no max amount, no max operations per session. `charge.js` accepts any `Money` amount with no upper bound.
-- **Gap**: No blast radius controls. Unlimited charges of unlimited amounts possible.
-- **Recommendation**: Add configurable limits per agent identity: max charge amount, max charges per hour, max total per session.
-- **Evidence**: `charge.js` (no amount validation), absence of limit configuration.
+#### STATE-Q6: Blast Radius and Transaction Limits ⚡
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No transaction limits, no daily caps, no per-caller spending limits. Read-only scope mitigates.
+- **Gap**: N/A for read-only scope.
+- **Recommendation**: No action for current scope. Implement limits if write-enabled.
+- **Evidence**: `charge.js` (no amount limits), `proto/demo.proto`
 
 #### STATE-Q7: Infrastructure Capacity for Agent Traffic
 - **Severity**: RISK
-- **Finding**: No load testing, auto-scaling, or capacity planning. Dockerfile exposes port 50051 with no resource limits. Single Node.js process with no clustering.
-- **Gap**: Unknown capacity for agent-scale traffic.
-- **Recommendation**: Load test with agent traffic patterns. Define Kubernetes HPA. Add `--max-old-space-size` to Node.js runtime.
-- **Evidence**: `Dockerfile` (no resource limits), absence of load test or auto-scaling config.
+- **Finding**: P0 service with single replica, no HPA, modest resources (CPU: 100m–200m, memory: 128Mi–256Mi). Insufficient for agent traffic at machine speed.
+- **Gap**: No autoscaling. Single replica for P0 service.
+- **Recommendation**: Configure HPA. Set minimum 2 replicas. Conduct load testing.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml` (no HPA), `helm-chart/values.yaml`
+
 ### 04 — Human-in-the-Loop and Approval Workflows
 
-#### HITL-Q1: Draft/Pending State
-- **Severity**: RISK
-- **Finding**: No draft or pending state. Charge RPC executes immediately — validates and returns transaction_id in single synchronous call. No draft/pending status fields, no approval workflows, no two-step commit patterns.
-- **Gap**: No ability for agent to propose charge for human review before execution.
-- **Recommendation**: Add `CreatePaymentIntent` RPC (creates pending charge) and `ConfirmPaymentIntent` RPC (executes it).
-- **Evidence**: `charge.js` (immediate execution), `proto/demo.proto` (single Charge RPC)
+#### HITL-Q1: Draft/Pending State ⚡
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered. agent_scope is read-only.
+- **Trigger**: agent_scope is write-enabled
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
-#### HITL-Q2: Configurable Approval Gates
-- **Severity**: RISK
-- **Finding**: No configurable approval gates. No approval endpoints, no status-based workflows, no operation-level flags, no Step Functions with human approval tasks.
-- **Gap**: All operations execute immediately. Cannot require human approval for high-value charges.
-- **Recommendation**: Add configurable approval requirements per operation type and threshold.
-- **Evidence**: `server.js` (immediate execution), absence of approval workflow logic.
+#### HITL-Q2: Configurable Approval Gates ⚡
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered. agent_scope is read-only.
+- **Trigger**: agent_scope is write-enabled
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### HITL-Q3: Sandbox/Staging Environment
-- **Severity**: RISK
-- **Finding**: No sandbox/staging configuration. No separate environment configs, no docker-compose for local testing, no seed data, no synthetic data generators. The simulated service is effectively a sandbox (no real payments), but no formal environment separation exists.
-- **Gap**: No formal sandbox/staging environment for agent testing.
-- **Recommendation**: Create environment-specific configuration. Add docker-compose.yml for local agent testing.
-- **Evidence**: `Dockerfile` (single image, no env differentiation), absence of docker-compose or env-specific configs.
+- **Severity**: INFO
+- **Finding**: CI pipeline deploys to staging GKE cluster with per-PR namespaces. Full stack deployed via Skaffold with smoke tests.
+- **Gap**: No dedicated agent testing documentation. No test credit card documentation.
+- **Recommendation**: Document staging environment and test credit card numbers for agent testing.
+- **Evidence**: `.github/workflows/ci-pr.yaml`, `cloudbuild.yaml`
+
 ### 05 — Data Accessibility and Quality
 
 #### DATA-Q1: Sensitive Data Classification
 - **Severity**: BLOCKER
-- **Finding**: Service processes credit card data (`CreditCardInfo`: `credit_card_number`, `credit_card_cvv`, `credit_card_expiration_year`, `credit_card_expiration_month` in `proto/demo.proto`). This is PCI-DSS-scoped PII/financial data. No data classification, no field-level tagging, no encryption of sensitive fields, no access controls. `charge.js` logs card last-4 digits and card type. `server.js` logs the full request body including complete card numbers.
-- **Gap**: PCI-DSS-scoped data processed and logged with zero classification, tagging, or access controls.
-- **Recommendation**: Classify all CreditCardInfo fields as PCI-DSS sensitive. Implement field-level redaction in logs. Add data classification metadata.
-- **Evidence**: `proto/demo.proto` (CreditCardInfo), `charge.js` (logging card details), `server.js` (full request logging)
+- **Finding**: PCI-regulated credit card data processed: `credit_card_number`, `credit_card_cvv`, expiration dates. No formal data classification. Full credit card data logged via `JSON.stringify(call.request)`.
+- **Gap**: PCI data processed without classification controls. PCI data in logs.
+- **Recommendation**: Create DATA_CLASSIFICATION.md. Classify CreditCardInfo as RESTRICTED/PCI. Implement field-level masking.
+- **Evidence**: `proto/demo.proto` (CreditCardInfo), `charge.js` (lines 63–87), `server.js` (line 44)
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
-- **Severity**: RISK
-- **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No data residency controls. Credit card data (PCI-DSS scope) processed in-memory with no region-specific deployment config, no data residency documentation, no GDPR/LGPD references. Data not persisted but logged to stdout — log destination region not controlled.
-- **Gap**: No data residency controls for PCI-DSS scoped data. Log shipping destination region not documented.
-- **Recommendation**: Document data residency requirements. Ensure log shipping stays within required jurisdiction.
-- **Evidence**: `charge.js` (in-memory processing), `server.js` (request logging), absence of residency config.
+- **Severity**: INFO
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: Credit card data in-memory only during processing. No persistent storage. Processing region determined by GKE cluster deployment.
+- **Gap**: No formal data residency documentation for PCI processing.
+- **Recommendation**: Document processing region for PCI compliance.
+- **Evidence**: `charge.js` (in-memory only), `helm-chart/values.yaml`
 
 #### DATA-Q3: Selective Query Support
 - **Severity**: RISK
-- **Finding**: Only two RPCs: `Charge` (single request/response) and `Health.Check`. No list/search endpoints, no pagination, no filters, no sorting, no result size limits.
-- **Gap**: No selective query support. No query endpoints exist.
-- **Recommendation**: Add `ListTransactions` and `GetTransaction` RPCs with pagination and filtering.
-- **Evidence**: `proto/demo.proto` (Charge RPC only), absence of query endpoints.
+- **Finding**: Single `Charge` RPC with no query/list capability. No batch limits on charge processing.
+- **Gap**: No selective query. No batch limits for agent-initiated charges.
+- **Recommendation**: Implement per-caller rate limiting on Charge RPC.
+- **Evidence**: `proto/demo.proto` (single Charge RPC), `charge.js`
 
 #### DATA-Q4: System of Record Designations
 - **Severity**: RISK
-- **Finding**: Service generates ephemeral transaction IDs (UUIDs) not persisted anywhere. No master data management, no data ownership definitions. Service is a stateless processor — does not own or store data.
-- **Gap**: Not a system of record for transactions. No authoritative source for payment history.
-- **Recommendation**: Define system of record for payment transactions. Add persistent transaction store.
-- **Evidence**: `charge.js` (ephemeral UUID, no persistence), absence of database config.
+- **Finding**: Not a system of record. Transaction IDs generated but not persisted. No authoritative source for payment history.
+- **Gap**: No system of record for transactions.
+- **Recommendation**: Implement persistent transaction logging.
+- **Evidence**: `charge.js` (line 87, `uuidv4()` not persisted), `server.js` (no database)
 
-#### DATA-Q5: Reliable Timestamps
+#### DATA-Q5: Temporal Metadata and Freshness
 - **Severity**: RISK
-- **Finding**: `ChargeResponse` contains only `transaction_id` — no `created_at`, `updated_at`, or `event_time`. `charge.js` uses `new Date()` for expiration validation only, not in response. Pino logs include timestamps but these are not exposed to callers.
-- **Gap**: No timestamps in API responses. Agent cannot determine when charge was processed.
-- **Recommendation**: Add `created_at` (google.protobuf.Timestamp) to ChargeResponse. Return UTC timestamps.
-- **Evidence**: `proto/demo.proto` (ChargeResponse), `charge.js` (Date for validation only)
+- **Finding**: `ChargeResponse` contains only `transaction_id`. No timestamp, no `processed_at` metadata.
+- **Gap**: No temporal metadata on charge responses.
+- **Recommendation**: Add `processed_at` timestamp to ChargeResponse.
+- **Evidence**: `proto/demo.proto` (ChargeResponse — transaction_id only), `charge.js`
 
-#### DATA-Q6: Data Freshness Signaling
-- **Severity**: RISK
-- **Finding**: No freshness signaling. No `Cache-Control`, `X-Data-Age`, `last_refreshed`, or consistency level indicators. Service is stateless — responses are generated fresh, but this is not signaled.
-- **Gap**: No freshness metadata. Agent cannot determine if data is current or stale.
-- **Recommendation**: Include freshness metadata in gRPC response trailers when query endpoints are added.
-- **Evidence**: `charge.js` (stateless responses), absence of caching or freshness metadata.
-
-#### DATA-Q7: PII Redaction in Logs
-- **Severity**: RISK
-- **Finding**: `server.js` logs full request body: `PaymentService#Charge invoked with request ${JSON.stringify(call.request)}` — includes complete credit card number, CVV, and expiration in plaintext. `charge.js` logs card type and last 4 digits. No PII redaction middleware, no log scrubbing, no masking.
-- **Gap**: Full credit card numbers (PAN + CVV) logged in plaintext. PCI-DSS violation.
-- **Recommendation**: Immediately remove `JSON.stringify(call.request)` from request log. Add PII redaction middleware to pino logger.
-- **Evidence**: `server.js` (request logging), `charge.js` (transaction logging)
-
-#### DATA-Q8: Data Quality Awareness
+#### DATA-Q6: PII Redaction in Logs
 - **Severity**: INFO
-- **Finding**: No data quality metrics, profiling, or monitoring. Service is stateless with no persistent data. Data quality concerns minimal for current implementation.
-- **Gap**: No data quality awareness. Becomes relevant when persistence is added.
-- **Recommendation**: Implement data quality monitoring when adding transaction persistence.
-- **Evidence**: Absence of data quality monitoring in all files.
+- **Finding**: PCI data logged: full request via `JSON.stringify(call.request)` includes credit card number and CVV. Last 4 digits logged in `charge.js`.
+- **Gap**: PCI data in logs without redaction.
+- **Recommendation**: Redact credit card number and CVV from logs. Mask to last 4 digits only.
+- **Evidence**: `server.js` (line 44), `charge.js` (line 86)
+
+#### DATA-Q7: Data Quality Awareness
+- **Severity**: INFO
+- **Finding**: Input validation enforced: card number validation, card type checking (VISA/MasterCard), expiration date validation. Invalid data rejected with specific errors.
+- **Gap**: None — input validation is well-implemented.
+- **Recommendation**: No action required.
+- **Evidence**: `charge.js` (lines 63–85, validation logic)
+
 ### 06 — Discoverability and Semantic Readiness
 
-#### DISC-Q1: Schema Documentation and Versioning
+#### DISC-Q1: Schema Versioning and API Contracts
 - **Severity**: RISK
-- **Finding**: `proto/demo.proto` provides schema documentation through protobuf message definitions with typed fields. Some fields have comments (Money message has detailed field documentation). Proto is copied from shared location via `genproto.sh` with no version tracking. No schema registry, no migration files.
-- **Gap**: Schema documented in proto but not versioned. No schema registry. No migration tracking.
-- **Recommendation**: Adopt proto schema registry (e.g., Buf). Add breaking change detection to CI.
-- **Evidence**: `proto/demo.proto`, `genproto.sh`
+- **Finding**: Proto uses `package hipstershop` with no version suffix. No `buf.yaml`. No breaking change detection. No contract tests.
+- **Gap**: No proto versioning. No breaking change detection in CI.
+- **Recommendation**: Add version suffix (`hipstershop.v1`). Integrate `buf breaking` into CI.
+- **Evidence**: `proto/demo.proto` (line 4, `package hipstershop`), no `buf.yaml`
 
 #### DISC-Q2: Semantically Meaningful Field Names
 - **Severity**: INFO
-- **Finding**: Field names are human-readable and semantic: `credit_card_number`, `credit_card_cvv`, `credit_card_expiration_year`, `credit_card_expiration_month`, `transaction_id`, `currency_code`, `units`, `nanos`. Follows protobuf `snake_case` convention. No legacy abbreviations.
-- **Gap**: No gap. Field names are self-documenting.
-- **Recommendation**: Maintain naming convention. Add field-level comments for non-obvious fields.
-- **Evidence**: `proto/demo.proto` (field definitions)
+- **Finding**: Proto field names are human-readable: `credit_card_number`, `credit_card_cvv`, `transaction_id`, `amount`, `currency_code`. No legacy abbreviations.
+- **Gap**: None — naming is clear and semantic.
+- **Recommendation**: No action required.
+- **Evidence**: `proto/demo.proto` (CreditCardInfo, ChargeRequest, ChargeResponse)
 
 #### DISC-Q3: Data Catalog / Metadata Layer
 - **Severity**: INFO
-- **Finding**: No data catalog or metadata layer. No AWS Glue Data Catalog, Collibra, Alation, DataHub, or API catalog. Proto file is the sole schema documentation.
-- **Gap**: No programmatic discovery. Tool definition authoring must rely on proto file.
-- **Recommendation**: Register proto in service catalog (e.g., Backstage) for programmatic discovery.
-- **Evidence**: `proto/demo.proto` (sole schema source), absence of catalog/metadata.
+- **Finding**: No formal data catalog. Proto file serves as de facto schema documentation.
+- **Gap**: No formal metadata layer beyond proto file.
+- **Recommendation**: No action required for current scope.
+- **Evidence**: `proto/demo.proto`
 
-#### DISC-Q4: Data Lineage
-- **Severity**: INFO
-- **Finding**: No data lineage tools, ETL documentation, data flow diagrams, or transformation logs. Data flow is simple: ChargeRequest → validation → ChargeResponse. No transformations beyond in-memory validation.
-- **Gap**: No lineage tracking. Simple for current implementation.
-- **Recommendation**: Document data flow when adding external integrations. Use OpenTelemetry span attributes for lineage.
-- **Evidence**: `charge.js` (simple request → response flow), absence of lineage docs.
 ### 07 — Observability of Target Systems
 
 #### OBS-Q1: Distributed Tracing and Structured Logging
 - **Severity**: RISK
-- **Finding**: Partial observability: (1) OpenTelemetry configured in `index.js` with `@opentelemetry/instrumentation-grpc` and `OTLPTraceExporter` — conditional on `ENABLE_TRACING=1`. (2) Pino logger outputs structured JSON with `severity` and `message` fields. Gaps: no `request_id`/`correlation_id` in logs, OpenTelemetry trace IDs not injected into log entries, tracing is opt-in not default-on.
-- **Gap**: Tracing conditional (not default-on). Logs lack correlation IDs. Trace IDs not in logs.
-- **Recommendation**: Make tracing default-on. Inject trace IDs into pino logs. Add request_id to all entries.
-- **Evidence**: `index.js` (ENABLE_TRACING conditional), `logger.js` (pino config), `package.json` (OTel deps)
+- **Finding**: Tracing disabled. OpenTelemetry SDK integrated in `index.js` but gated by `ENABLE_TRACING`. Pino JSON structured logging active but lacks trace correlation.
+- **Gap**: No distributed tracing active. Logs lack trace correlation.
+- **Recommendation**: Enable tracing via Helm values. OpenTelemetry SDK is already integrated.
+- **Evidence**: `index.js` (lines 35–62, OpenTelemetry setup), `logger.js` (pino), `helm-chart/values.yaml`
 
 #### OBS-Q2: Alerting on Error Rates and Latency
 - **Severity**: RISK
-- **Finding**: No alerting. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie, no composite alarms, no SLO-based alerting. No IaC defines monitoring resources. Logs and traces emitted but no alerts triggered on degradation.
-- **Gap**: No alerting. System degradation undetected until agents fail.
-- **Recommendation**: Define CloudWatch alarms for error rate > 1%, P95 latency > 500ms, service unavailability.
-- **Evidence**: Absence of alerting config, CloudWatch alarms, or monitoring IaC.
+- **Finding**: No alerting. Health probes only. No custom metrics. P0 service without alerting.
+- **Gap**: No alerting on error rates or latency.
+- **Recommendation**: Configure Prometheus alerting for Charge RPC error rates and p99 latency.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml` (health probes only)
 
 #### OBS-Q3: Business Outcome Metrics
 - **Severity**: INFO
-- **Finding**: No business metrics published. No `cloudwatch.put_metric_data`, no custom dashboards, no KPI alarms. Logs transaction details but no structured metrics for success rate, failure rate, average amount, or volume.
-- **Gap**: Cannot measure whether agent-initiated payments produce good outcomes.
-- **Recommendation**: Publish custom metrics: `payment.charge.success_count`, `payment.charge.failure_count`, `payment.charge.amount`. Use OTel metrics.
-- **Evidence**: `charge.js` (logging only), `index.js` (traces only, no metrics)
+- **Finding**: No custom business metrics. No transaction success rate, no charge amount distribution.
+- **Gap**: No business outcome measurement.
+- **Recommendation**: Implement transaction success/failure metrics.
+- **Evidence**: `charge.js` (no metrics), `server.js` (no metrics)
+
 ### 08 — Engineering and Deployment Maturity
 
 #### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
 - **Severity**: RISK
-- **Finding**: No IaC in this repository. No Terraform, CloudFormation, CDK, Helm, Kustomize, or Kubernetes manifests. Only infrastructure artifact is `Dockerfile`. Deployment infrastructure (API gateways, IAM roles, secrets, network config) not defined here.
-- **Gap**: No IaC governance. Infrastructure not defined as code, not peer-reviewed, not drift-monitored.
-- **Recommendation**: Define all infrastructure as IaC. Include API gateway, IAM, network policies, secrets. Require PR review. Enable drift detection.
-- **Evidence**: `Dockerfile` (only infra artifact), absence of all IaC files.
+- **Finding**: Helm charts and Terraform with PR-based review. No drift detection.
+- **Gap**: No drift detection.
+- **Recommendation**: Implement GitOps with ArgoCD or Flux.
+- **Evidence**: `helm-chart/templates/paymentservice.yaml`, `helm-chart/values.yaml`
 
 #### ENG-Q2: CI/CD with API Contract Testing
 - **Severity**: RISK
-- **Finding**: No CI/CD pipeline in this repository. No GitHub Actions, GitLab CI, Jenkinsfile, buildspec.yml, or CodePipeline. No API contract tests, no Pact, no proto validation, no breaking change detection.
-- **Gap**: No CI/CD. No contract testing. Proto changes cannot be caught before breaking agents.
-- **Recommendation**: Add CI/CD with proto linting (buf lint), breaking change detection (buf breaking), and automated Charge RPC tests.
-- **Evidence**: Absence of CI/CD config files.
+- **Finding**: CI/CD exists but payment service has no tests. `package.json` test script is a placeholder.
+- **Gap**: No API contract testing. No tests at all.
+- **Recommendation**: Add gRPC integration tests. Add unit tests for charge.js.
+- **Evidence**: `package.json` (`"test": "echo \"Error: no test specified\" && exit 1"`)
 
 #### ENG-Q3: Rollback Capability
-- **Severity**: RISK
-- **Finding**: No rollback capability defined. No blue/green, no CodeDeploy rollback, no Helm rollback, no feature flags, no canary, no traffic shifting. Dockerfile defines image build only.
-- **Gap**: No rollback mechanism. Broken deployment cannot be reverted within 15–30 minutes.
-- **Recommendation**: Implement blue/green or canary deployments with automatic rollback triggers.
-- **Evidence**: `Dockerfile` (build only), absence of deployment config.
+- **Severity**: INFO
+- **Finding**: Helm rollback available. K8s rolling update. No canary or automated rollback.
+- **Gap**: No automated rollback triggers.
+- **Recommendation**: Implement Flagger or Argo Rollouts for P0 service.
+- **Evidence**: `helm-chart/Chart.yaml`, `helm-chart/templates/paymentservice.yaml`, `cloudbuild.yaml`
 
 #### ENG-Q4: API Test Coverage
 - **Severity**: RISK
-- **Finding**: `package.json` test script: `"echo \"Error: no test specified\" && exit 1"`. Zero tests. No test files, no Postman collections, no integration tests, no CI test steps (no CI exists).
-- **Gap**: Zero test coverage. No automated validation of Charge RPC behavior.
-- **Recommendation**: Add unit tests for `charge.js` and integration tests for gRPC server. Add to CI pipeline.
-- **Evidence**: `package.json` (test script exits with error), absence of test files.
+- **Finding**: No automated tests. Test script is placeholder. No test files, no test framework. P0 service with zero test coverage.
+- **Gap**: No API test coverage.
+- **Recommendation**: Add unit tests for charge.js and gRPC integration tests for Charge RPC.
+- **Evidence**: `package.json` (placeholder test script), no test files
 
 #### ENG-Q5: Encryption at Rest for Agent-Accessible Data
 - **Severity**: RISK
-- **Finding**: No encryption at rest config. No KMS keys, no S3 encryption, no RDS/DynamoDB encryption. Service is stateless (no data store), but logs containing credit card data require encrypted storage.
-- **Gap**: No encryption at rest. Logs with PCI-DSS data need encrypted storage.
-- **Recommendation**: Ensure log storage uses KMS encryption. Configure encryption at rest for any future data stores.
-- **Evidence**: Absence of encryption config or KMS references.
+- **Finding**: No persistent data store. Credit card data in-memory only. However, logs containing PCI data may be stored on disk without encryption.
+- **Gap**: Log output with PCI data may lack encryption at rest.
+- **Recommendation**: Redact PCI data from logs. Ensure node-level disk encryption.
+- **Evidence**: `server.js` (line 44, logs full request), `charge.js` (no persistent storage)
 
-#### ENG-Q6: Cross-Origin and Network Policies
-- **Severity**: BLOCKER
-- **Finding**: gRPC server uses `grpc.ServerCredentials.createInsecure()` — no TLS. No security groups, firewall rules, Kubernetes NetworkPolicy, API gateway policies, WAF rules, or service mesh config. Dockerfile exposes port 50051 with no network restrictions. CORS not applicable for gRPC, but no transport security or network boundaries exist.
-- **Gap**: No TLS. No network policies. Service open to any network-reachable client.
-- **Recommendation**: Replace `createInsecure()` with `createSsl()`. Define Kubernetes NetworkPolicy restricting inbound traffic to authorized callers.
-- **Evidence**: `server.js` (`grpc.ServerCredentials.createInsecure()`), `Dockerfile` (EXPOSE 50051), absence of IaC/network config.
+---
+
 ## Evidence Index
+
+### Infrastructure as Code
+| File | Questions Referenced |
+|------|---------------------|
+| `helm-chart/templates/paymentservice.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q7, OBS-Q2, ENG-Q1, ENG-Q3, API-Q8, STATE-Q5, STATE-Q7 |
+| `helm-chart/values.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q5, AUTH-Q6, AUTH-Q7, OBS-Q1, STATE-Q5, ENG-Q1 |
+| `helm-chart/Chart.yaml` | ENG-Q3 |
 
 ### Source Code
 | File | Questions Referenced |
 |------|---------------------|
-| `index.js` | AUTH-Q6, AUTH-Q7, OBS-Q1, OBS-Q3, STATE-Q4 |
-| `server.js` | API-Q1, API-Q3, API-Q7, AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q7, AUTH-Q8, STATE-Q5, HITL-Q1, HITL-Q2, DATA-Q1, DATA-Q2, DATA-Q7, ENG-Q6 |
-| `charge.js` | API-Q3, API-Q4, API-Q7, AUTH-Q7, STATE-Q1, STATE-Q2, STATE-Q3, STATE-Q4, STATE-Q6, HITL-Q1, DATA-Q1, DATA-Q2, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q4, OBS-Q3 |
-| `logger.js` | AUTH-Q7, OBS-Q1 |
+| `server.js` | API-Q1, API-Q2, API-Q3, AUTH-Q1, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, STATE-Q2, STATE-Q4, DATA-Q1, DATA-Q6, OBS-Q1, ENG-Q4, ENG-Q5 |
+| `charge.js` | API-Q3, API-Q4, AUTH-Q6, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q6, DATA-Q1, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, OBS-Q3 |
+| `index.js` | AUTH-Q5, OBS-Q1 |
+| `logger.js` | AUTH-Q6, OBS-Q1 |
 
 ### API Specifications
 | File | Questions Referenced |
 |------|---------------------|
-| `proto/demo.proto` | API-Q1, API-Q2, API-Q4, API-Q5, API-Q6, AUTH-Q4, STATE-Q3, HITL-Q1, DATA-Q1, DATA-Q3, DATA-Q5, DISC-Q1, DISC-Q2 |
-| `proto/grpc/health/v1/health.proto` | API-Q1 |
+| `proto/demo.proto` | API-Q1, API-Q2, API-Q4, API-Q5, AUTH-Q4, DATA-Q1, DATA-Q2, DATA-Q3, DATA-Q5, DISC-Q1, DISC-Q2, DISC-Q3, STATE-Q1, STATE-Q6 |
+
+### CI/CD Configurations
+| File | Questions Referenced |
+|------|---------------------|
+| `.github/workflows/ci-pr.yaml` | HITL-Q3, DISC-Q1, ENG-Q2, ENG-Q4 |
+| `cloudbuild.yaml` | ENG-Q2, ENG-Q3, HITL-Q3 |
 
 ### Container Definitions
 | File | Questions Referenced |
 |------|---------------------|
-| `Dockerfile` | AUTH-Q6, STATE-Q7, HITL-Q3, ENG-Q1, ENG-Q3, ENG-Q6 |
-| `.dockerignore` | — (scanned, no direct question reference) |
+| `Dockerfile` | AUTH-Q5 |
 
 ### Dependency Manifests
 | File | Questions Referenced |
 |------|---------------------|
-| `package.json` | API-Q5, API-Q6, ENG-Q4, OBS-Q1 |
-
-### Configuration Files
-| File | Questions Referenced |
-|------|---------------------|
-| `genproto.sh` | API-Q1, API-Q2, DISC-Q1 |
-
----
-
-*End of Agentic Readiness Assessment Report*
+| `package.json` | API-Q2, AUTH-Q5, OBS-Q1, ENG-Q2, ENG-Q4 |

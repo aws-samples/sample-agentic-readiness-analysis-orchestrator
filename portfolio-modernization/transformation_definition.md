@@ -36,12 +36,7 @@ The output is a detailed Markdown report saved as `portfolio-mod-report.md` cont
 - Learning materials mapped to portfolio skill gaps
 - Service-by-service summary
 
-This portfolio TD does **NOT** include:
-- Readiness profiles (BLOCKER/RISK/INFO severity — that is ARA)
-- Agent scope evaluation
-- Goal-based re-weighting, conditional sections, or goal-driven phase naming
-- Tiered gap classification by goal (4-tier system from v1)
-- Quick Agent Wins aggregation
+This portfolio TD focuses on cross-cutting modernization concerns, dependency-aware roadmaps, and pathway aggregation. It does not include ARA readiness profiles, agent scope evaluation, or Quick Agent Wins aggregation.
 
 ## Entry Criteria
 
@@ -115,9 +110,7 @@ additionalPlanContext: |
 
 The Portfolio MOD TD does **not** read, validate, or apply the following fields from `additionalPlanContext`. If present, they are ignored:
 
-- **`agent_scope`** — The `agent_scope` field (read-only / write-enabled) is an ARA-only concept used to evaluate conditional BLOCKER severity for agent safety questions. The Portfolio MOD TD evaluates modernization readiness patterns — it does not assess agent integration safety.
-- **`goal`** — There is no goal system. The Portfolio MOD TD operates without goal-based re-weighting, conditional sections, or goal-driven phase naming. Roadmap phase names are fixed. Cross-cutting concern classification is based purely on score severity, not on any goal logic.
-- **`goal_context`** — Replaced by the `context` field. The Portfolio MOD TD uses `context` for free-text framing only.
+- **`agent_scope`** — Not used by this TD. Agent scope is an ARA-only concept.
 
 #### 0.4 How Context Fields Are Used
 
@@ -454,7 +447,7 @@ If no dependencies can be inferred from the reports, fall back to the current be
 
 ### Step 5: Identify Cross-Cutting Concerns
 
-Identify modernization gaps that appear across multiple services. Cross-cutting concerns are classified into two tiers based purely on score severity — no goal-based logic.
+Identify modernization gaps that appear across multiple services. Cross-cutting concerns are classified into two tiers based on score severity.
 
 #### 5.1 Two-Tier Classification
 
@@ -503,7 +496,7 @@ for each question_id in all_37_questions:
 - Evaluate tiers in order: Tier 1 → Tier 2. A criterion is classified into the first tier it matches.
 - A criterion that qualifies for Tier 1 (score < 2 in 2+ repos) is classified as Tier 1 even if it also qualifies for Tier 2. Tier 1 takes precedence.
 - N/A scores are excluded from all tier calculations — a service where a criterion is N/A does not count toward any tier's service count.
-- This classification is based purely on score severity. There is no goal-based logic, no goal-specific prerequisites, and no goal deliverables tier.
+- This classification is based on score severity.
 
 #### 5.3 Cross-Cutting Concern Output
 
@@ -521,7 +514,7 @@ For each classified concern, record:
 
 ### Step 6: Generate Dependency-Aware Phased Roadmap
 
-Create a four-phase roadmap with dependency-aware sequencing. Phase names are fixed — there is no goal-driven renaming.
+Create a four-phase roadmap with dependency-aware sequencing.
 
 #### 6.1 Fixed Phase Names
 
@@ -532,7 +525,7 @@ Create a four-phase roadmap with dependency-aware sequencing. Phase names are fi
 | 2 | Foundation | Mo 2–4 |
 | 3 | Advanced | Mo 4–6+ |
 
-These phase names are always the same regardless of any context or preferences. There is no goal-based phase renaming.
+These phase names are fixed.
 
 #### 6.2 Phase Assignment Algorithm
 
@@ -1021,7 +1014,7 @@ If preferences were provided, note alignment with preferred technologies.>
 ## Cross-Cutting Concerns
 
 > Cross-cutting concerns are gaps that appear across multiple services. They are
-> classified into two tiers based purely on score severity — no goal-based logic.
+> classified into two tiers based on score severity.
 
 ### 🚨 Foundational Blockers
 
@@ -1636,13 +1629,9 @@ Strictly follow these rules at all times:
 - **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio report file.
 - **Minimum 2 reports**: The portfolio assessment requires at least 2 valid MOD reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Scores of N/A are excluded from portfolio-level category averages (both numerator and denominator), overall score calculations, and cross-cutting concern analysis. A question that is N/A for a service does not count as a gap for that service.
-- **Two-tier classification only**: Cross-cutting concerns use exactly two tiers — Foundational Blockers (score < 2 in 2+ repos) and Improvement Opportunities (score < 3 in 3+ repos). There is no goal-based tiering, no prerequisites tier, and no deliverables tier.
-- **Fixed phase names**: Roadmap phases are always named Cross-Cutting Foundation, Quick Wins, Foundation, and Advanced. There is no goal-driven phase renaming.
+- **Two-tier classification only**: Cross-cutting concerns use exactly two tiers — Foundational Blockers (score < 2 in 2+ repos) and Improvement Opportunities (score < 3 in 3+ repos).
+- **Fixed phase names**: Roadmap phases are always named Cross-Cutting Foundation, Quick Wins, Foundation, and Advanced.
 - **Dependency-aware ordering**: When dependency information is available, services must not be assigned to a phase earlier than their dependencies. Foundation services (high fan-in) go in Phase 1 or earlier. Within phases, order by priority (P0 → P1 → P2).
-- **No goal system**: This TD does not read, validate, or apply any goal field. There is no goal-based re-weighting, conditional sections, goal-driven phase naming, or goal-specific pathway alignment. The `context` field is used for free-text framing only. The `preferences` field is used for technology steering only.
-- **No agent_scope**: This TD does not read or apply agent_scope. Agent scope is an ARA-only concept.
-- **No readiness profiles**: This TD does not use BLOCKER/RISK/INFO severity or readiness profiles (Agent-Ready, Pilot-Ready, etc.). Those are ARA concepts. This TD uses numeric 1–4 scores.
-- **No Quick Agent Wins**: This TD does not aggregate Quick Agent Wins. That was a goal-dependent feature in v1.
 - **Preferences for framing only**: Technology preferences (prefer/avoid) influence recommendation language and technology suggestions. They do NOT change scores, N/A mappings, pathway trigger logic, or cross-cutting concern classification.
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
 - **All 7 pathways in aggregation**: The pathway aggregation table must include all 7 pathways, even if none are triggered. Every assessed repo must appear in exactly one column per pathway row.

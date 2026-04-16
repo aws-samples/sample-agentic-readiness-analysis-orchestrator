@@ -1,8 +1,8 @@
 # Portfolio Agentic Readiness Assessment Report
 
-**Date**: 2026-04-15
+**Date**: 2026-04-16
 **Services Assessed**: 11
-**Portfolio Context**: Cloud-native e-commerce platform with 11 microservices. Evaluating for autonomous AI agent integration (customer support agent for order tracking, product recommendations, and cart management) and modernization maturity.
+**Portfolio Context**: Cloud-native e-commerce platform with 11 microservices. Evaluating for autonomous AI agent integration (customer support agent for order tracking, product recommendations, and cart management).
 
 ---
 
@@ -14,8 +14,8 @@
 |---------|----------|------------|-------------|
 | ✅ Agent-Ready | 0 | 0% | 0 blockers, 0–2 risks — broad agent deployment |
 | 🟡 Pilot-Ready | 0 | 0% | 0 blockers, 3–5 risks — narrow pilot only |
-| 🟠 Remediation Required | 4 | 36% | 1–2 blockers — remediate before any agent deployment |
-| ❌ Not Agent-Integrable | 7 | 64% | 3+ blockers — deferred or descoped |
+| 🟠 Remediation Required | 10 | 91% | 1–2 blockers — remediate before any agent deployment |
+| ❌ Not Agent-Integrable | 1 | 9% | 3+ blockers — deferred or descoped |
 
 ### Portfolio Summary
 
@@ -24,10 +24,8 @@
 | Total Services Assessed | 11 |
 | Services Ready for Agents (Agent-Ready + Pilot-Ready) | 0 (0%) |
 | Services Requiring Remediation | 11 (100%) |
-| Total Unique BLOCKERs Across Portfolio | 3 (AUTH-Q1, DATA-Q1, ENG-Q6) |
-| Total Unique RISKs Across Portfolio | 36 |
-| Cross-Cutting BLOCKERs (same blocker in 2+ repos) | 3 |
-| Cross-Cutting RISKs (same risk in 3+ repos) | 35 |
+| Cross-Cutting BLOCKERs (same blocker in 2+ repos) | 2 |
+| Cross-Cutting RISKs (same risk in 3+ repos) | 32 |
 | Services with Write-Enabled Agent Scope | 0 (0%) |
 | Services with Read-Only Agent Scope | 11 (100%) |
 
@@ -45,36 +43,34 @@
 
 | Section | Repos Blocked | % of Applicable Repos | Top Blockers |
 |---------|--------------|----------------------|--------------|
-| AUTH | 10 | 91% (10 of 11) | AUTH-Q1 |
-| ENG | 10 | 91% (10 of 11) | ENG-Q6 |
-| DATA | 8 | 80% (8 of 10) | DATA-Q1 |
-| API | 0 | 0% (0 of 10) | — |
-| STATE | 0 | 0% (0 of 10) | — |
-| HITL | 0 | 0% (0 of 10) | — |
-| DISC | 0 | 0% (0 of 10) | — |
-| OBS | 0 | 0% (0 of 11) | — |
+| AUTH | 11 | 100% | AUTH-Q1 |
+| DATA | 7 | 70% | DATA-Q1 |
+| API | 1 | 10% | API-Q1 |
+| STATE | 0 | 0% | — |
+| HITL | 0 | 0% | — |
+| DISC | 0 | 0% | — |
+| OBS | 0 | 0% | — |
+| ENG | 0 | 0% | — |
 
 ### Readiness Snapshot
 
 | Metric | Value |
 |--------|-------|
-| assessment_date | 2026-04-15 |
+| assessment_date | 2026-04-16 |
 | total_services | 11 |
 | agent_ready | 0 |
 | pilot_ready | 0 |
-| remediation_required | 4 |
-| not_integrable | 7 |
-| total_blockers | 28 |
-| total_risks | 346 |
-| total_infos | 131 |
-| cross_cutting_blockers | 3 |
-| cross_cutting_risks | 35 |
+| remediation_required | 10 |
+| not_integrable | 1 |
+| total_blockers | 19 |
+| total_risks | 313 |
+| total_infos | 192 |
+| cross_cutting_blockers | 2 |
+| cross_cutting_risks | 32 |
 | portfolio_level_blockers | 1 |
 | portfolio_level_risks | 4 |
 | write_enabled_services | 0 |
 | read_only_services | 11 |
-
----
 
 ## Cross-Cutting BLOCKERs — Same Blocker in 2+ Repos
 
@@ -84,471 +80,396 @@
 
 ### AUTH-Q1: Machine Identity Authentication
 
-- **Severity**: BLOCKER in 10 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Non-Affected**: platform-infra (scored INFO — infrastructure repo has GCP IAM service account and Kubernetes ServiceAccounts defined)
-- **Common Finding**: All 10 application services use insecure gRPC credentials with zero authentication. Go services use `insecure.NewCredentials()` (frontend, checkoutservice, productcatalogservice, shippingservice), Node.js services use `grpc.ServerCredentials.createInsecure()` (paymentservice, currencyservice), Python services use `server.add_insecure_port()` (emailservice, recommendationservice), C# cartservice has no `AddAuthentication()` middleware, and Java adservice uses `ServerBuilder.forPort(port)` with no auth interceptor. No service has OAuth2 client credentials, API keys, mTLS, or any form of caller identity verification. No audit log in any service attributes requests to an authenticated principal.
-- **Root Cause Pattern**: The Online Boutique was designed as a demo/sample application where inter-service trust is assumed at the network level. No identity provider or authentication middleware was ever integrated. All gRPC connections are plaintext and unauthenticated.
+- **Severity**: BLOCKER in 11 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: Every service in the portfolio — all 10 application services and the infrastructure-only repo — lacks machine identity authentication. gRPC servers are created with insecure credentials (`grpc.NewServer()` in Go, `grpc.ServerCredentials.createInsecure()` in Node.js, `server.add_insecure_port` in Python, `ServerBuilder.forPort(port)` in Java, `MapGrpcService<T>()` with no auth middleware in C#). Kubernetes ServiceAccounts exist per service but provide pod-level identity only — no request-level authentication. The Istio service mesh has optional AuthorizationPolicies defined in Helm chart templates for each service, but these are **disabled by default** (`authorizationPolicies.create: false` in `helm-chart/values.yaml`). No OAuth2, API key, mTLS, Cognito, or API Gateway authorizers exist anywhere in the portfolio.
+- **Root Cause Pattern**: The platform was designed for trusted in-cluster communication without external consumers. All services assume network-level trust (Kubernetes cluster boundary) rather than request-level identity verification. The Istio AuthorizationPolicy infrastructure exists but was never enabled.
 - **Portfolio-Level Remediation**:
-  - **Approach**: Platform-level fix via Istio service mesh mTLS enforcement. The infrastructure already includes Istio Gateway configs, Helm chart AuthorizationPolicy templates (disabled: `authorizationPolicies.create: false`), and per-service Sidecar templates. Enabling mTLS at the mesh level provides transport-level authentication for all 10 services without application code changes.
-  - **Immediate Action**: Set `authorizationPolicies.create: true` and `sidecars.create: true` in `helm-chart/values.yaml`. Deploy Istio PeerAuthentication in STRICT mode for the namespace. This provides mutual TLS between all services with Kubernetes ServiceAccount-based identity.
-  - **Target State**: All inter-service gRPC calls authenticated via mTLS with Istio-managed certificates. Each service has a unique Kubernetes ServiceAccount identity (already defined in manifests). Agent-specific service accounts are created and distinguishable in mesh-level audit logs. For the customer support agent use case, create dedicated ServiceAccounts for agent instances calling frontend, cartservice, and productcatalogservice.
-  - **Estimated Effort**: Medium (2–4 weeks for mesh-level mTLS; additional 4–8 weeks if application-level JWT auth is also required for agent-specific attribution beyond mesh identity)
-  - **Priority**: Critical — Identity is the foundation for all other security controls. Cannot enforce authorization, audit logging, or data access controls without it.
-  - **Dependencies**: None — this is the first blocker to resolve. ENG-Q6 (network policies) should be enabled simultaneously.
+  - **Approach**: Hybrid — platform-level Istio enablement + per-service application-layer hardening
+  - **Immediate Action**: Set `authorizationPolicies.create: true` in `helm-chart/values.yaml`. This single configuration change enables mTLS-based service identity authentication across all 11 services using existing Helm chart templates that already define per-service, per-operation authorization rules.
+  - **Target State**: Every gRPC call between services is authenticated via mTLS with Kubernetes ServiceAccount principals. Agent-specific service accounts are created with scoped access. Authenticated principal is logged in audit trails for every request.
+  - **Estimated Effort**: Low (Istio enablement: 1–2 weeks for platform change) + Medium (per-service application-layer auth: 2–4 weeks per service for defense-in-depth)
+  - **Priority**: Critical — affects all 11 services. No other security control (permissions, audit logging, identity suspension) can be enforced without identity.
+  - **Dependencies**: None — this is the foundation. All other AUTH-section remediations depend on this.
 
-> **Portfolio Context**: PORT-ARA-Q1 found no shared identity provider (Cognito, Okta) across the portfolio. Istio mTLS with Kubernetes ServiceAccounts is the nearest available identity plane. **Verify** that enabling Istio PeerAuthentication STRICT mode does not break existing service communication patterns.
+> **Portfolio Context**: PORT-ARA-Q1 found no shared identity provider across the portfolio. Kubernetes ServiceAccounts exist per service but are not integrated into a centralized identity plane for agent M2M authentication. Enabling Istio AuthorizationPolicies would establish a mesh-level identity plane — **verify** that mTLS is enforced (not permissive mode) and that agent-specific service accounts are created.
 
 ### DATA-Q1: Sensitive Data Classification
 
-- **Severity**: BLOCKER in 8 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, emailservice, frontend, paymentservice, recommendationservice, shippingservice
-- **Non-Affected (INFO)**: currencyservice (handles only public ECB currency rates — no PII/PCI data), productcatalogservice (handles only public product catalog data — no PII/PCI data)
-- **N/A**: platform-infra (infrastructure-only repo — question not applicable)
-- **Common Finding**: Services handling customer data, payment information, and PII have zero data classification. Specific unclassified sensitive data includes:
-  - **PCI-DSS scope**: `credit_card_number`, `credit_card_cvv`, `credit_card_expiration_year/month` (checkoutservice, paymentservice, frontend)
-  - **PII**: `email`, `street_address`, `city`, `state`, `country`, `zip_code` (checkoutservice, emailservice, frontend, shippingservice)
-  - **User identifiers**: `userId` as plain string (cartservice, recommendationservice)
-  - **Ad tracking data**: redirect URLs (adservice — lower sensitivity but still unclassified)
-  - No field-level tags, no PII detection, no data classification framework, no access control policies tied to sensitivity levels
-- **Root Cause Pattern**: The application was built without a data classification policy. Sensitive fields are defined in a shared `demo.proto` with no sensitivity annotations. Data flows through services without classification metadata, making it impossible for agents to programmatically determine what data they are authorized to access.
+- **Severity**: BLOCKER in 7 of 10 applicable services
+- **Affected Services**: frontend, cartservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice
+- **N/A**: platform-infra (infrastructure-only — N/A for this question)
+- **Not Affected (INFO)**: productcatalogservice (catalog data is non-sensitive), currencyservice (exchange rates are public data), adservice (ad categories are non-sensitive)
+- **Common Finding**: Services processing PII (email addresses, street addresses, phone numbers) and financial data (credit card numbers, CVV, expiration dates) have no data classification at any level. The `placeOrderHandler` in frontend and checkoutservice processes highly sensitive checkout data — `credit_card_number`, `credit_card_cvv`, `email`, `street_address` — with no classification tags, no field-level encryption, and no PII detection tools. The cartservice stores `userId` (potentially PII) in Redis without classification. The paymentservice handles credit card charge data. The emailservice processes email addresses and order confirmation details. No data classification policies exist anywhere in the portfolio.
+- **Root Cause Pattern**: The platform was built as a demo/reference architecture without production data governance. No data classification taxonomy was established, and no field-level access controls were implemented. PII and financial data flow in plaintext over insecure gRPC connections.
 - **Portfolio-Level Remediation**:
-  - **Approach**: Hybrid — portfolio-level data classification policy + per-service field tagging
-  - **Immediate Action**: Define a portfolio-wide data classification policy with at least 4 tiers: Public, Internal, Confidential (PII), Restricted (PCI). Annotate the shared `demo.proto` file with field-level sensitivity comments or custom protobuf options. For the customer support agent, explicitly classify which fields the agent may read (e.g., order status, product names) vs. which it must never access (e.g., credit card numbers, CVV).
-  - **Target State**: All proto message fields annotated with sensitivity classification. Runtime field-level access controls enforce classification (e.g., agent role can read order status but not credit card data). PII fields encrypted at rest and masked in logs.
-  - **Estimated Effort**: High (4–8 weeks for classification policy and proto annotation; additional 8–12 weeks for runtime enforcement across 8 services)
-  - **Priority**: High — Must protect data before enabling agent read access to customer information.
-  - **Dependencies**: AUTH-Q1 (machine identity) — need identity to enforce data access controls per principal.
-
-### ENG-Q6: Cross-Origin and Network Policies
-
-- **Severity**: BLOCKER in 10 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, shippingservice, platform-infra
-- **Non-Affected (INFO)**: recommendationservice (has NetworkPolicy restricting ingress to frontend on port 8080 and Istio AuthorizationPolicy restricting to frontend ServiceAccount)
-- **Common Finding**: Network policies exist in infrastructure-as-code but are **disabled by default**. Comprehensive NetworkPolicy definitions exist in `kustomize/components/network-policies/` (deny-all baseline + 13 per-service policies) and in the Helm chart (`networkPolicies.create: false`). Istio AuthorizationPolicies are also disabled (`authorizationPolicies.create: false`). The Istio Gateway accepts `hosts: ["*"]` on HTTP port 80 with no TLS. No CORS configuration exists. All gRPC servers bind with insecure credentials. The security infrastructure is already built — it just needs to be turned on.
-- **Root Cause Pattern**: Security is opt-in rather than default-on. The demo application ships with all security features disabled for ease of initial deployment. Network policies, AuthorizationPolicies, and TLS are all available in IaC but commented out or set to `create: false`.
-- **Portfolio-Level Remediation**:
-  - **Approach**: Platform-level fix — enable existing security infrastructure
-  - **Immediate Action**: (1) Uncomment `components/network-policies` in `kustomize/kustomization.yaml` OR set `networkPolicies.create: true` in Helm values. (2) Configure TLS on the Istio Gateway (replace HTTP port 80 with HTTPS port 443, add TLS certificate). (3) Set `authorizationPolicies.create: true` in Helm values. (4) Add CORS configuration for agent-facing endpoints.
-  - **Target State**: Network policies enforced as mandatory baseline. Istio Gateway configured with TLS and specific host restrictions. AuthorizationPolicies restrict inter-service communication to declared patterns. CORS policy defined for agent-facing endpoints on the frontend.
-  - **Estimated Effort**: Low (1–2 weeks — policies already exist, only need enablement and TLS/CORS additions)
-  - **Priority**: High — Network security should be enabled simultaneously with authentication (AUTH-Q1).
-  - **Dependencies**: AUTH-Q1 (deploy authentication and network policies together for defense in depth). AUTH-Q3 (Istio AuthorizationPolicies provide action-level authorization at mesh level).
+  - **Approach**: Hybrid — portfolio-level classification taxonomy + per-service field-level implementation
+  - **Immediate Action**: Define a portfolio-wide data classification taxonomy with levels: `PUBLIC`, `INTERNAL`, `PII`, `PCI`, `SENSITIVE`. Classify the protobuf fields in `demo.proto` — specifically `CreditCardInfo` (PCI), `Address` (PII), `email` (PII), `userId` (PII-candidate). Document classifications in a shared data dictionary.
+  - **Target State**: All PII and financial fields are classified, tagged in proto definitions, and protected by field-level access controls. Agent identities require explicit authorization to access classified fields. Credit card data is encrypted in transit (mTLS) and at rest (KMS).
+  - **Estimated Effort**: Medium (classification taxonomy: 1–2 weeks) + High (field-level encryption and access controls: 4–8 weeks across 7 services)
+  - **Priority**: High — affects 7 of 10 application services including all P0 services on the critical checkout path (frontend, cartservice, checkoutservice, paymentservice)
+  - **Dependencies**: AUTH-Q1 must be resolved first — you need identity before you can enforce data access controls.
 
 ## Cross-Cutting RISKs — Same Risk in 3+ Repos
 
 > These are RISK-severity questions that appear in 3 or more repositories.
 > They represent portfolio-wide patterns warranting coordinated attention.
 > Questions scored as N/A for a service do not count as gaps for that service.
-> 35 cross-cutting RISKs were identified. They are listed below ordered by number of affected services (most affected first).
 
 ### AUTH-Q2: Scoped Permissions (Least Privilege)
 
 - **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: No scoped permission model exists across any service. All callers have full access to all RPCs.
-- **Compensating Controls**: Istio AuthorizationPolicies (disabled but defined) can restrict which ServiceAccounts can call which services. Network policies (disabled but defined) provide network-level access control.
-- **Portfolio-Level Recommendation**: After resolving AUTH-Q1 (identity), implement role-based access control via Istio AuthorizationPolicies. Define agent-specific roles with least-privilege access to only the RPCs needed for the customer support use case.
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: No IAM policies or permission scoping for agent identities at any service. Once an identity has network access, it can call all RPCs without restriction. Istio AuthorizationPolicies define per-operation rules (when enabled) but are disabled by default.
+- **Compensating Controls**: Enable Istio AuthorizationPolicies per service to restrict agents to specific RPC operations (e.g., `GetCart` only for read-only agents). Restrict agent tool definitions to read-only operations at the orchestration layer.
+- **Portfolio-Level Recommendation**: After AUTH-Q1 is resolved, define agent-specific service accounts with per-operation Istio AuthorizationPolicy rules. Create a shared RBAC model across the portfolio.
 - **Estimated Effort**: Medium
 
 ### AUTH-Q3: Action-Level Authorization
 
 - **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: No action-level authorization. Once a caller can reach a service, they can invoke any RPC.
-- **Compensating Controls**: Istio AuthorizationPolicies can restrict by path/method at the mesh level.
-- **Portfolio-Level Recommendation**: Implement Istio AuthorizationPolicies with per-RPC restrictions. For the customer support agent, restrict to read-only RPCs (GetCart, ListProducts, GetQuote) and block write RPCs (PlaceOrder, EmptyCart) until explicit write enablement.
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: No action-level authorization in any application code. No ABAC, no RBAC, no permission checks in middleware or gRPC interceptors. The Helm chart AuthorizationPolicies define per-operation paths when enabled but are infrastructure-level, not application-level.
+- **Compensating Controls**: For read-only agent scope, restrict agent tool definitions to read operations. Enable Istio AuthorizationPolicy for mesh-level enforcement.
+- **Portfolio-Level Recommendation**: Implement gRPC server interceptors across all services that validate operation-level permissions based on caller identity metadata. Adopt a shared authorization middleware pattern.
 - **Estimated Effort**: Medium
+
+### AUTH-Q4: Identity Propagation
+
+- **Severity**: RISK in 10 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No JWT parsing, no OAuth2 token exchange, no identity propagation through the service chain. User identifiers (e.g., `userId` in cart and checkout) are plain strings passed without verification. No service can verify that a caller is authorized to act on behalf of a specific user.
+- **Compensating Controls**: Restrict agent access to designated test user IDs. Enforce user ID allowlists at the orchestration layer.
+- **Portfolio-Level Recommendation**: Implement JWT/OAuth2 token-based identity propagation through gRPC metadata. Standardize an `x-agent-identity` and `x-on-behalf-of` header pattern across all services.
+- **Estimated Effort**: High
+
+### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
+
+- **Severity**: RISK in 10 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No distinction between service identity and delegated user identity in any application. All sessions are anonymous or use plain string identifiers. No dual authentication flows exist.
+- **Compensating Controls**: Define separate API keys or client credentials for agent-as-self vs. agent-on-behalf-of-user at the API Gateway layer.
+- **Portfolio-Level Recommendation**: Design a portfolio-wide agent identity model with distinct flows for autonomous agent actions vs. user-delegated actions.
+- **Estimated Effort**: High
 
 ### AUTH-Q6: Credential Management
 
-- **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: No credential management infrastructure. No secrets rotation, no vault integration, no managed credential lifecycle.
-- **Compensating Controls**: Kubernetes Secrets provide basic secret storage. GKE Workload Identity can bind to GCP IAM.
-- **Portfolio-Level Recommendation**: Deploy a centralized secrets management solution (AWS Secrets Manager, HashiCorp Vault, or GCP Secret Manager). Establish credential rotation policy for agent service accounts.
+- **Severity**: RISK in 9 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice, platform-infra
+- **Common Finding**: gRPC connections use insecure credentials (`insecure.NewCredentials()` in Go, `grpc.ServerCredentials.createInsecure()` in Node.js, `grpc.insecure_channel()` in Python). Redis has no authentication. No secrets management system for credential rotation. AlloyDB connects as `postgres` superuser.
+- **Compensating Controls**: Network policies restrict access when enabled. Service discovery addresses via environment variables is acceptable for in-cluster communication.
+- **Portfolio-Level Recommendation**: Enable mTLS for all gRPC connections via Istio sidecar injection. Integrate with a secrets management system (GCP Secret Manager) for any new agent credentials. Enable Redis AUTH.
 - **Estimated Effort**: Medium
 
 ### AUTH-Q7: Immutable Audit Logging
 
 - **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: No immutable audit logging. Services log to stdout/stderr with no tamper-proof audit trail. No principal attribution in logs (because AUTH-Q1 has no identity).
-- **Compensating Controls**: OpenTelemetry collector (disabled but defined in Helm chart) can export traces to Google Cloud Trace.
-- **Portfolio-Level Recommendation**: After resolving AUTH-Q1, configure structured audit logging with authenticated principal, action, resource, and timestamp. Export to immutable storage (CloudWatch Logs with retention lock, S3 with Object Lock, or Google Cloud Logging with log sink to locked bucket).
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: No immutable audit logging exists across the portfolio. Frontend has structured JSON logging via logrus but without authenticated principal. Most services use `Console.WriteLine` (C#), `console.log` (Node.js), or basic `print`/`logging` (Python/Go) — unstructured, no immutable storage, no CloudTrail or equivalent. No tamper-evident log storage configured anywhere.
+- **Compensating Controls**: Configure Kubernetes log forwarding to immutable storage (Cloud Logging with retention policy, or S3 with object lock). Enable Istio access logs for request-level audit trails.
+- **Portfolio-Level Recommendation**: Implement a portfolio-wide structured logging standard (JSON format with `request_id`, `trace_id`, `authenticated_principal`, `timestamp`, `operation`, `user_id`). Configure GKE audit logging at the cluster level. Store logs in immutable destinations.
 - **Estimated Effort**: Medium
 
 ### AUTH-Q8: Agent Identity Suspension
 
 - **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: No mechanism to suspend or revoke an agent's access. Without authentication (AUTH-Q1), there is no identity to suspend.
-- **Compensating Controls**: Kubernetes RBAC can delete ServiceAccounts. Network policies can block specific pods.
-- **Portfolio-Level Recommendation**: After resolving AUTH-Q1, implement centralized agent identity registry with suspension capability. Istio AuthorizationPolicies can provide immediate revocation by removing a ServiceAccount from allowed principals.
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: No mechanism to suspend individual agent identities without broader platform impact. No API key revocation endpoints. Istio AuthorizationPolicy changes require Helm/Kubernetes deployment. No immediate kill switch for misbehaving agents.
+- **Compensating Controls**: Network policies can block specific source pods. Agent orchestration layer can implement circuit breakers.
+- **Portfolio-Level Recommendation**: Implement agent identity as distinct Kubernetes ServiceAccounts. Create a runbook for immediate suspension via `kubectl delete serviceaccount` or Istio AuthorizationPolicy update. Consider a centralized agent identity registry.
 - **Estimated Effort**: Medium
 
-### OBS-Q1: Distributed Tracing and Structured Logging
+### API-Q2: Machine-Readable API Specification
 
-- **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: OpenTelemetry is integrated in most services for tracing, but audit-grade structured logging with principal attribution is absent. Traces exist but are not connected to an immutable audit trail.
-- **Compensating Controls**: OpenTelemetry collector defined in Helm chart (disabled by default). Services have basic stdout logging.
-- **Portfolio-Level Recommendation**: Enable OpenTelemetry collector (`opentelemetryCollector.create: true`). Add structured log fields for agent principal, action, and outcome. Implement consistent trace context propagation across all services.
-- **Estimated Effort**: Medium
-
-### OBS-Q2: Alerting on Error Rates and Latency
-
-- **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: No alerting configured on error rates, latency thresholds, or anomaly detection. No SLOs defined.
-- **Compensating Controls**: Google Cloud Operations APIs enabled in Terraform (`monitoring.googleapis.com`, `cloudtrace.googleapis.com`).
-- **Portfolio-Level Recommendation**: Define portfolio-wide SLOs and configure alerting. For agent integration, set alerts on: agent-specific error rates, latency p99, and request volume anomalies.
-- **Estimated Effort**: Medium
-
-### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
-
-- **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: No infrastructure governance for agent-facing surfaces. No policy-as-code, no OPA/Gatekeeper, no compliance scanning.
-- **Compensating Controls**: Kustomize and Helm provide declarative infrastructure. GitHub CI workflow exists.
-- **Portfolio-Level Recommendation**: Implement OPA Gatekeeper or Kyverno policies to enforce agent-facing surface requirements (authentication required, TLS required, network policies required).
-- **Estimated Effort**: Medium
-
-### ENG-Q2: CI/CD with API Contract Testing
-
-- **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: CI/CD exists (GitHub Actions, Skaffold, Cloud Build) but no API contract testing. Proto changes are not validated against consumers.
-- **Compensating Controls**: Shared `demo.proto` provides a single source of truth for API contracts.
-- **Portfolio-Level Recommendation**: Add proto backward-compatibility checks (buf lint, buf breaking) to CI pipeline. Implement contract testing for agent tool definitions.
+- **Severity**: RISK in 7 of 10 applicable services
+- **Affected Services**: frontend, productcatalogservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice
+- **Common Finding**: No OpenAPI, Swagger, or AsyncAPI specifications exist. gRPC services have proto files that serve as machine-readable specs, but the frontend's HTTP endpoints are undocumented. No schema registry for versioned consumption.
+- **Compensating Controls**: Proto files provide machine-readable gRPC schemas. Agent tool definitions can be derived from proto files.
+- **Portfolio-Level Recommendation**: Publish all proto files to a schema registry. Generate OpenAPI specs for any HTTP endpoints. Standardize on proto as the canonical API spec format.
 - **Estimated Effort**: Low
-
-### ENG-Q3: Rollback Capability
-
-- **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: Kubernetes provides basic rollback (rollout undo) but no automated rollback on API contract violations or agent-observable failures.
-- **Compensating Controls**: Kubernetes Deployment rollout history. Skaffold supports rollback.
-- **Portfolio-Level Recommendation**: Implement automated rollback triggers based on error rate SLOs. For agent integration, define rollback criteria for API contract breakage.
-- **Estimated Effort**: Low
-
-### ENG-Q4: API Test Coverage
-
-- **Severity**: RISK in 11 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice, platform-infra
-- **Common Finding**: Limited or no API test coverage. Unit tests exist in some services but integration tests and agent-specific scenario tests are absent.
-- **Compensating Controls**: Some services have unit tests. Load generator exists for end-to-end testing.
-- **Portfolio-Level Recommendation**: Add gRPC integration tests for all agent-facing RPCs. Implement agent scenario tests that validate the customer support agent workflow (get cart, list products, get recommendations).
-- **Estimated Effort**: Medium
-
-### ENG-Q5: Encryption at Rest for Agent-Accessible Data
-
-- **Severity**: RISK in 10 of 11 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, shippingservice, platform-infra
-- **Common Finding**: No explicit encryption at rest. Redis used for cart storage with no encryption. Product catalog loaded from JSON file. No KMS integration.
-- **Compensating Controls**: GKE Autopilot provides default encryption at rest for persistent volumes.
-- **Portfolio-Level Recommendation**: Enable Memorystore Redis encryption at rest (already supported in Terraform config). Add KMS encryption for sensitive data stores.
-- **Estimated Effort**: Low
-
-### AUTH-Q4: Identity Propagation
-
-- **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No identity propagation through service call chains. The `userId` is passed as a plain string parameter, not derived from authenticated identity.
-- **Compensating Controls**: Istio can propagate SPIFFE identity through the service mesh.
-- **Portfolio-Level Recommendation**: After enabling Istio mTLS, configure identity propagation headers. Map agent identities to the userId parameter or add separate agent-identity metadata to gRPC calls.
-- **Estimated Effort**: Medium
-
-### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-
-- **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No distinction between agent-as-self and agent-on-behalf-of-user patterns. No delegation model.
-- **Compensating Controls**: None.
-- **Portfolio-Level Recommendation**: For the customer support agent, define a delegation model where the agent acts on behalf of a user (with user consent). Implement token exchange or scope restriction for delegated access.
-- **Estimated Effort**: High
 
 ### API-Q3: Structured Error Responses
 
 - **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: Services return gRPC status codes but no structured error details. Agents cannot distinguish retriable from terminal errors.
-- **Compensating Controls**: gRPC status codes provide basic error categorization.
-- **Portfolio-Level Recommendation**: Implement `google.rpc.Status` with `ErrorInfo` details including error code enum, message, and `retryable` boolean across all services.
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: All services throw gRPC exceptions with generic status codes (`FailedPrecondition`, `Internal`) and string messages. No structured error codes, no retryable indicators, no error categorization distinguishing transient from permanent failures. Frontend returns HTML error pages even for JSON-expecting clients.
+- **Compensating Controls**: Agent-side retry logic can treat 5xx/FailedPrecondition as retriable with exponential backoff.
+- **Portfolio-Level Recommendation**: Define a portfolio-wide error response standard with structured error metadata in gRPC trailing metadata (`x-error-code`, `x-retryable`). Implement a shared gRPC interceptor pattern.
 - **Estimated Effort**: Medium
 
 ### API-Q5: API Versioning and Deprecation
 
 - **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No API versioning. Proto package is `hipstershop` with no version prefix. No deprecation policy.
-- **Compensating Controls**: Shared proto file provides a single API contract.
-- **Portfolio-Level Recommendation**: Adopt package-level versioning (`hipstershop.v1`). Establish deprecation policy with minimum notice period for agent consumers.
-- **Estimated Effort**: Low
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No API versioning anywhere. Proto packages use `hipstershop` with no version qualifier. No deprecation policies, no changelogs. Breaking changes would silently break agent tool schemas.
+- **Compensating Controls**: Pin agent tool definitions to specific proto schema versions. Add proto schema comparison to CI.
+- **Portfolio-Level Recommendation**: Adopt proto package versioning (e.g., `hipstershop.cart.v1`). Implement `buf` for breaking change detection in CI across all services.
+- **Estimated Effort**: Medium
+
+### API-Q7: Asynchronous Operation Support
+
+- **Severity**: RISK in 7 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, shippingservice, emailservice, recommendationservice
+- **Common Finding**: All operations are synchronous request-response. No async patterns for long-running tasks. The checkout flow blocks on sequential gRPC calls to 6 backend services.
+- **Compensating Controls**: For read-only agent scope, most read operations are fast. Set generous timeouts on agent tool definitions.
+- **Portfolio-Level Recommendation**: Implement async patterns for the checkout flow (job submission + status polling). Consider event-driven patterns for multi-service orchestration.
+- **Estimated Effort**: High
 
 ### STATE-Q1: Compensation and Rollback
 
 - **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No compensation or rollback patterns. Checkout is a multi-service saga with no compensating transactions if a step fails.
-- **Compensating Controls**: Agent scope is read-only, limiting blast radius.
-- **Portfolio-Level Recommendation**: Implement saga pattern with compensating transactions in checkoutservice. For read-only agent scope, this is lower priority but becomes critical if agent scope is elevated to write-enabled.
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No saga pattern, compensation logic, or undo endpoints in any service. Multi-step operations leave partial state on failure. Cart `AddItem` is cumulative with no rollback; `EmptyCart` is destructive with no undo.
+- **Compensating Controls**: For read-only agent scope, agents don't execute write workflows, reducing compensation risk.
+- **Portfolio-Level Recommendation**: Implement compensation endpoints for critical write paths before expanding to write-enabled scope.
 - **Estimated Effort**: High
+
+### STATE-Q2: Queryable Current State
+
+- **Severity**: RISK in 7 of 10 applicable services
+- **Affected Services**: frontend, cartservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice
+- **Common Finding**: State is queryable per entity (e.g., `GetCart` by userId, `GetProduct` by ID) but most responses are limited. Frontend returns HTML for most endpoints. No cross-entity query capabilities. No administrative query interfaces.
+- **Compensating Controls**: gRPC `Get*` operations provide per-entity state queries. Agents can query individual entities by known IDs.
+- **Portfolio-Level Recommendation**: Add JSON-returning endpoints where HTML is currently returned. Add list/search capabilities with pagination.
+- **Estimated Effort**: Medium
 
 ### STATE-Q4: Circuit Breakers and Resilience
 
-- **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No circuit breakers. Some services have basic timeout configuration but no circuit breaker pattern, no bulkhead isolation.
-- **Compensating Controls**: Istio can provide circuit breaking at the mesh level.
-- **Portfolio-Level Recommendation**: Configure Istio DestinationRules with circuit breaker settings for all services. For the customer support agent, set conservative circuit breaker thresholds on critical-path services (checkoutservice, cartservice).
-- **Estimated Effort**: Low
+- **Severity**: RISK in 8 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice
+- **Common Finding**: No circuit breakers in any application code. No retry policies with exponential backoff. No Polly, Resilience4j, or equivalent libraries. Exceptions from dependencies cause cascading failures.
+- **Compensating Controls**: Istio sidecar (if enabled) provides mesh-level circuit breaking. Agent-side circuit breakers can detect sustained failures.
+- **Portfolio-Level Recommendation**: Implement circuit breaker patterns in all services using language-appropriate libraries (Polly for C#, resilience patterns for Go). Alternatively, enable Istio DestinationRules with circuit breaking.
+- **Estimated Effort**: Medium
 
 ### STATE-Q5: Rate Limiting and Throttling
 
 - **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No rate limiting or throttling. Services accept unlimited requests.
-- **Compensating Controls**: Istio can provide rate limiting via EnvoyFilter or Wasm plugins.
-- **Portfolio-Level Recommendation**: Implement rate limiting at the Istio Gateway for agent traffic. Set per-agent rate limits based on expected customer support agent request patterns.
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No rate limiting at any level — no application middleware, no API Gateway throttling, no WAF rules. Services are exposed as ClusterIP services with no request-rate throttling. The frontend LoadBalancer exposes port 80 directly to the internet.
+- **Compensating Controls**: Kubernetes resource limits prevent single-pod resource exhaustion. Agent orchestration layer can enforce per-tool rate limits.
+- **Portfolio-Level Recommendation**: Deploy an API Gateway (Istio ingress or GKE Gateway API) with rate limiting for agent traffic. Implement per-service rate limiting middleware as defense-in-depth.
 - **Estimated Effort**: Medium
 
 ### STATE-Q7: Infrastructure Capacity for Agent Traffic
 
 - **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No capacity planning for agent traffic. Resource limits are set for normal human traffic patterns.
-- **Compensating Controls**: GKE Autopilot provides auto-scaling.
-- **Portfolio-Level Recommendation**: Estimate agent traffic patterns (customer support agent: request volume for order lookups, product queries, cart reads). Validate HPA settings can handle combined human + agent load.
-- **Estimated Effort**: Low
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No load testing results or capacity planning. Static resource limits with no Horizontal Pod Autoscaler (HPA). CI smoke tests validate ~50 requests only. Infrastructure sized for human-paced interaction.
+- **Compensating Controls**: GKE Autopilot provides node-level auto-scaling. Start with conservative agent request limits.
+- **Portfolio-Level Recommendation**: Define HPAs for all services. Conduct load testing simulating agent traffic patterns (burst, concurrent, retry). Size backing stores (Redis) for agent-induced read volume.
+- **Estimated Effort**: Medium
 
 ### DATA-Q2: Data Residency and Sovereignty
 
 - **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No data residency policy. No region restrictions on data storage or processing.
-- **Compensating Controls**: GKE cluster is region-specific (configured in Terraform variables).
-- **Portfolio-Level Recommendation**: Define data residency requirements for customer data. Ensure agent processing remains within designated regions.
-- **Estimated Effort**: Low
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No data residency requirements documented. Deployed to `us-central1` by default. No GDPR/LGPD compliance references. Services process PII and financial data with no residency controls.
+- **Compensating Controls**: Ensure agent LLM endpoints are in the same region as data (`us-central1`). Document data residency posture.
+- **Portfolio-Level Recommendation**: Conduct a portfolio-wide data residency assessment. Document whether customer data is subject to residency or sovereignty requirements. Configure agent LLM endpoints to respect boundaries.
+- **Estimated Effort**: Medium
 
 ### DATA-Q3: Selective Query Support
 
-- **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No field-level filtering in gRPC responses. All fields are returned regardless of caller needs.
-- **Compensating Controls**: Protobuf field masks can be implemented.
-- **Portfolio-Level Recommendation**: Implement gRPC FieldMask support for agent-facing RPCs. Allow agents to request only the fields they need (e.g., order status without payment details).
+- **Severity**: RISK in 8 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice
+- **Common Finding**: No pagination, filtering, or sorting on most query endpoints. `ListProducts` returns all products unbounded. `GetCart` returns all items. No cursor-based pagination or GraphQL field selection.
+- **Compensating Controls**: Current datasets are small enough for unbounded retrieval. Agents can filter client-side.
+- **Portfolio-Level Recommendation**: Add pagination parameters (`limit`, `offset` or cursor-based) to list/query endpoints across all services.
 - **Estimated Effort**: Medium
-
-### DATA-Q5: Reliable Timestamps
-
-- **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No consistent timestamping across services. Some use server time, others have no timestamps on data records.
-- **Compensating Controls**: OpenTelemetry traces include timestamps.
-- **Portfolio-Level Recommendation**: Standardize timestamps using google.protobuf.Timestamp in all proto messages. Ensure NTP synchronization across cluster nodes.
-- **Estimated Effort**: Low
-
-### DATA-Q6: Data Freshness Signaling
-
-- **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: No data freshness metadata. Agents cannot determine if data is stale.
-- **Compensating Controls**: None.
-- **Portfolio-Level Recommendation**: Add `last_updated` timestamps or ETags to responses. For the customer support agent, freshness is critical for order status (must be real-time, not cached).
-- **Estimated Effort**: Low
-
-### DISC-Q1: Schema Documentation and Versioning
-
-- **Severity**: RISK in 10 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, recommendationservice, shippingservice
-- **Common Finding**: Shared `demo.proto` provides schema but no versioning, no changelog, no field-level documentation for agent consumers.
-- **Compensating Controls**: Proto file is a single source of truth. gRPC reflection can be enabled.
-- **Portfolio-Level Recommendation**: Add comprehensive proto comments describing field semantics, constraints, and agent-relevant behavior. Implement proto versioning with changelog.
-- **Estimated Effort**: Low
-
-### API-Q7: Asynchronous Operation Support
-
-- **Severity**: RISK in 9 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, shippingservice
-- **Common Finding**: No async operation support. All RPCs are synchronous request/response.
-- **Compensating Controls**: gRPC supports server streaming which could be leveraged.
-- **Portfolio-Level Recommendation**: For the customer support agent, async operations may be needed for order placement (if elevated to write scope). Implement gRPC server streaming or polling for long-running operations.
-- **Estimated Effort**: Medium
-
-### API-Q2: Machine-Readable API Specification
-
-- **Severity**: RISK in 8 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, emailservice, frontend, paymentservice, productcatalogservice, shippingservice
-- **Common Finding**: `demo.proto` is a shared monolith containing all service definitions. No per-service standalone specs. Agent tool definitions must parse the full monolith.
-- **Compensating Controls**: Proto file is machine-readable. gRPC reflection can expose per-service methods.
-- **Portfolio-Level Recommendation**: Extract per-service proto files. Enable gRPC reflection service in all services for runtime API discovery.
-- **Estimated Effort**: Low
-
-### STATE-Q2: Queryable Current State
-
-- **Severity**: RISK in 8 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, shippingservice
-- **Common Finding**: Limited queryable state. Cart has GetCart. Product catalog has ListProducts. But order status, payment status, and shipping status are not queryable after creation.
-- **Compensating Controls**: Some services have read RPCs.
-- **Portfolio-Level Recommendation**: For the customer support agent, add order status query endpoint to checkoutservice and shipping tracking endpoint to shippingservice.
-- **Estimated Effort**: Medium
-
-### STATE-Q3: Concurrency Controls
-
-- **Severity**: RISK in 8 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, shippingservice
-- **Common Finding**: No optimistic concurrency controls. No ETags, version numbers, or conflict detection on state mutations.
-- **Compensating Controls**: Read-only agent scope reduces concurrency risk.
-- **Portfolio-Level Recommendation**: Implement optimistic concurrency (ETags or version fields) on cart operations and order state. Critical if agent scope is elevated to write-enabled.
-- **Estimated Effort**: Medium
-
-### STATE-Q6: Blast Radius and Transaction Limits
-
-- **Severity**: RISK in 9 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, shippingservice
-- **Common Finding**: No transaction limits or blast radius controls. An agent could theoretically trigger unlimited operations.
-- **Compensating Controls**: Read-only scope limits blast radius.
-- **Portfolio-Level Recommendation**: Implement transaction limits per agent session/identity. For customer support agent: limit concurrent cart reads, rate-limit product queries.
-- **Estimated Effort**: Low
-
-### HITL-Q1: Draft/Pending State
-
-- **Severity**: RISK in 8 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, shippingservice
-- **Common Finding**: No draft/pending state for agent actions. All operations are immediate with no review stage.
-- **Compensating Controls**: Read-only scope means agents cannot make state changes.
-- **Portfolio-Level Recommendation**: If agent scope is elevated to write-enabled, implement draft/pending states for checkout and cart modification operations.
-- **Estimated Effort**: High
-
-### HITL-Q2: Configurable Approval Gates
-
-- **Severity**: RISK in 8 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, shippingservice
-- **Common Finding**: No approval gates. No human-in-the-loop workflow for sensitive operations.
-- **Compensating Controls**: Read-only scope.
-- **Portfolio-Level Recommendation**: Implement approval gates for write operations (order placement, cart modification) when agent scope is elevated.
-- **Estimated Effort**: High
-
-### HITL-Q3: Sandbox/Staging Environment
-
-- **Severity**: RISK in 9 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, shippingservice
-- **Common Finding**: No dedicated sandbox or staging environment for agent testing. Skaffold profiles exist for different deployment targets but no isolated agent testing environment.
-- **Compensating Controls**: Kustomize overlays can create separate environments.
-- **Portfolio-Level Recommendation**: Create a dedicated agent testing environment using Kustomize overlays. Configure it with synthetic data and agent-specific monitoring.
-- **Estimated Effort**: Low
 
 ### DATA-Q4: System of Record Designations
 
 - **Severity**: RISK in 9 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, productcatalogservice, shippingservice
-- **Common Finding**: No system of record designations. Unclear which service is authoritative for each data entity.
-- **Compensating Controls**: Microservice architecture implies ownership, but it's not documented.
-- **Portfolio-Level Recommendation**: Document data ownership: cartservice owns cart data, productcatalogservice owns product data, etc. This helps agents understand which service to query for authoritative data.
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No system-of-record designations or data ownership documentation. Microservice architecture implicitly designates each service as SOR for its domain, but this is not documented.
+- **Compensating Controls**: Document implicit SOR designations based on microservice boundaries.
+- **Portfolio-Level Recommendation**: Publish a data ownership matrix mapping each data domain to its authoritative service.
+- **Estimated Effort**: Low
+
+### DATA-Q5: Reliable Timestamps
+
+- **Severity**: RISK in 10 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: No `created_at` or `updated_at` timestamp fields on business entities. Protobuf messages for Product, Cart, Order have no temporal metadata. Log timestamps exist but entity-level timestamps are absent.
+- **Compensating Controls**: Log timestamps provide request-level temporal context. Backend data is queried fresh per request.
+- **Portfolio-Level Recommendation**: Add timestamp fields to all protobuf messages. Standardize on UTC with RFC3339 format.
+- **Estimated Effort**: Medium
+
+### DATA-Q6: Data Freshness Signaling
+
+- **Severity**: RISK in 9 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice
+- **Common Finding**: No freshness signaling — no `Cache-Control` headers, no `X-Data-Age`, no consistency level indicators. Data is fetched fresh per request (no caching layer) but freshness is not communicated to consumers.
+- **Compensating Controls**: Fresh-fetch behavior means data is implicitly current but not explicitly signaled.
+- **Portfolio-Level Recommendation**: Add freshness metadata to gRPC response trailing metadata and HTTP headers.
 - **Estimated Effort**: Low
 
 ### DATA-Q7: PII Redaction in Logs
 
 - **Severity**: RISK in 8 of 10 applicable services
-- **Affected Services**: adservice, cartservice, checkoutservice, currencyservice, emailservice, frontend, paymentservice, shippingservice
-- **Common Finding**: PII appears in logs without redaction. Some services log full request/response including sensitive fields.
-- **Compensating Controls**: None.
-- **Portfolio-Level Recommendation**: Implement log redaction for PII fields (email, address, credit card). Configure at the OpenTelemetry collector level for portfolio-wide enforcement.
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice
+- **Common Finding**: `Console.WriteLine` and basic logging statements log `userId` and potentially other PII in plaintext. No PII scrubbing middleware or masking libraries. Frontend's chatbot handler uses `fmt.Printf` to print response bodies to stdout.
+- **Compensating Controls**: Middleware logging design avoids logging request bodies in most cases. Verify userId format (opaque UUID vs. PII).
+- **Portfolio-Level Recommendation**: Implement a portfolio-wide structured logging standard with PII-safe logging wrappers. Replace unstructured logging with `ILogger<T>` (C#), structured loggers (Go/Python/Node.js), and configure PII redaction filters.
+- **Estimated Effort**: Medium
+
+### DISC-Q1: Schema Documentation and Versioning
+
+- **Severity**: RISK in 10 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: Proto files define typed schemas but are not versioned (package `hipstershop` with no version qualifier). No schema registry. No database migration files. No proto versioning or backward-compatibility validation.
+- **Compensating Controls**: Proto3 provides implicit backward compatibility for additive changes. Pin agent tool definitions to proto file hashes.
+- **Portfolio-Level Recommendation**: Adopt proto package versioning and publish to a schema registry. Implement `buf` for breaking change detection in CI.
+- **Estimated Effort**: Medium
+
+### OBS-Q1: Distributed Tracing and Structured Logging
+
+- **Severity**: RISK in 11 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: Tracing and structured logging maturity varies widely. Frontend has OpenTelemetry instrumentation (disabled by default). Some Go services have OTel. C# cartservice has no OTel. Most services use unstructured logging. Tracing is opt-in (`ENABLE_TRACING=1`) and disabled by default across the portfolio.
+- **Compensating Controls**: Enable tracing by setting environment variables. Istio sidecar provides basic request-level tracing.
+- **Portfolio-Level Recommendation**: Enable OpenTelemetry tracing by default across all services. Deploy the OpenTelemetry Collector (already defined in Helm chart). Standardize structured JSON logging with correlation IDs.
+- **Estimated Effort**: Medium
+
+### OBS-Q2: Alerting on Error Rates and Latency
+
+- **Severity**: RISK in 11 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: No alerting configuration anywhere. No Cloud Monitoring alerting policies, no PagerDuty/OpsGenie, no SLO-based alerting. gRPC health probes exist for Kubernetes liveness/readiness but not proactive alerting.
+- **Compensating Controls**: Kubernetes health probes detect and restart unhealthy pods. Agent orchestration can implement health monitoring.
+- **Portfolio-Level Recommendation**: Create portfolio-wide Cloud Monitoring alerting policies: gRPC error rate > 1%, P95 latency > 500ms, backing store failures. Configure notification channels.
+- **Estimated Effort**: Medium
+
+### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
+
+- **Severity**: RISK in 11 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: Infrastructure defined as code (Terraform, K8s manifests, Helm). Terraform validation CI exists (syntax check only). No drift detection. No `terraform plan` review step. No enforced peer review for IaC changes.
+- **Compensating Controls**: CI-triggered deployments enforce desired state. PR-based workflow provides opportunity for review.
+- **Portfolio-Level Recommendation**: Add `terraform plan` to PR comments. Implement drift detection. Enforce required reviews for infrastructure changes.
+- **Estimated Effort**: Medium
+
+### ENG-Q2: CI/CD with API Contract Testing
+
+- **Severity**: RISK in 11 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: CI runs unit tests and deployment smoke tests. No API contract testing — no Pact, no proto breaking change detection, no consumer-driven contracts. Breaking changes to proto definitions are not caught until deployment.
+- **Compensating Controls**: Unit tests validate basic API behavior. Smoke tests catch gross deployment failures.
+- **Portfolio-Level Recommendation**: Add `buf` for proto linting and breaking change detection to the shared CI pipeline. Implement consumer-driven contract tests for critical agent-consumed APIs.
+- **Estimated Effort**: Medium
+
+### ENG-Q3: Rollback Capability
+
+- **Severity**: RISK in 11 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: Deployment uses Skaffold with `kubectl apply`. No automated rollback triggers. No blue/green or canary deployment. Manual `kubectl rollout undo` and `helm rollback` available.
+- **Compensating Controls**: Kubernetes rolling deployment provides pod-level health verification. Helm supports one-command rollback.
+- **Portfolio-Level Recommendation**: Implement automated rollback triggers based on error rate metrics. Consider canary deployment with Istio traffic shifting.
+- **Estimated Effort**: Medium
+
+### ENG-Q4: API Test Coverage
+
+- **Severity**: RISK in 11 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: Tests cover basic happy-path scenarios. No edge case tests, no error scenario tests, no concurrent access tests. No API contract tests. No load/performance tests. Coverage gaps are consistent across the portfolio.
+- **Compensating Controls**: Existing tests cover core CRUD operations. Smoke tests validate end-to-end behavior.
+- **Portfolio-Level Recommendation**: Establish a minimum test coverage standard for agent-consumed APIs: happy path, error scenarios, concurrent access, and contract compliance.
+- **Estimated Effort**: High
+
+### ENG-Q5: Encryption at Rest for Agent-Accessible Data
+
+- **Severity**: RISK in 9 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice, platform-infra
+- **Common Finding**: No explicit encryption at rest configuration. Redis uses ephemeral `emptyDir` volume. Memorystore Redis has no CMEK. GCP-managed services use default Google-managed encryption. No customer-managed KMS keys.
+- **Compensating Controls**: GKE Autopilot and GCP-managed services provide default encryption. In-cluster Redis `emptyDir` is ephemeral.
+- **Portfolio-Level Recommendation**: Enable CMEK for Memorystore Redis and GCP-managed databases. Configure transit encryption for all data stores.
+- **Estimated Effort**: Medium
+
+### ENG-Q6: Cross-Origin and Network Policies
+
+- **Severity**: RISK in 11 of 11 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra
+- **Common Finding**: Network policies, AuthorizationPolicies, and Sidecars are all **defined in Helm chart templates and Kustomize components but disabled by default** (`networkPolicies.create: false`, `authorizationPolicies.create: false`, `sidecars.create: false`). The default deployment has no network-level access controls. Frontend is exposed via LoadBalancer to the internet.
+- **Compensating Controls**: Enable policies by setting Helm values. The Kustomize `network-policies` profile enables network policies when used.
+- **Portfolio-Level Recommendation**: Enable NetworkPolicies and AuthorizationPolicies by default in all production deployments. The infrastructure is already built — it just needs to be turned on.
+- **Estimated Effort**: Low
+
+### HITL-Q3: Sandbox/Staging Environment
+
+- **Severity**: RISK in 10 of 10 applicable services
+- **Affected Services**: frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice
+- **Common Finding**: CI creates ephemeral per-PR namespaces for staging. No permanent sandbox with production-equivalent data shape. No synthetic data generators or seed data scripts. No Docker Compose for local testing.
+- **Compensating Controls**: Use PR-based environments for initial agent testing. Helm chart supports full environment deployment.
+- **Portfolio-Level Recommendation**: Create a persistent agent-testing namespace with seed data. Add Docker Compose for self-contained local development. Create synthetic data generators.
 - **Estimated Effort**: Medium
 
 ## Service Dependency Map
 
-> No dependency information was provided in the portfolio configuration. To enable
-> dependency-aware analysis — including identification of high-risk foundation services,
-> transitive blocker propagation, and shared infrastructure impacts — add
-> `dependency_overrides` to the portfolio config.
+> Dependencies were inferred from individual ARA report findings and Kubernetes manifest environment variables (not explicitly provided via `dependency_overrides`). Inferred dependencies may be incomplete — they reflect only what was observable in the assessed code and report context. For authoritative dependency data, add `dependency_overrides` to the portfolio config.
 
-### Observed Architecture Patterns
+### Dependency Overview
 
-While explicit `dependency_overrides` were not provided, the individual ARA reports and service descriptions reveal a microservices architecture with the following patterns:
+| Source Service | Target Service | Type | Description |
+|---------------|---------------|------|-------------|
+| frontend | productcatalogservice | sync | gRPC call to list/get products (`PRODUCT_CATALOG_SERVICE_ADDR`) |
+| frontend | currencyservice | sync | gRPC call for currency conversion (`CURRENCY_SERVICE_ADDR`) |
+| frontend | cartservice | sync | gRPC call to manage cart (`CART_SERVICE_ADDR`) |
+| frontend | recommendationservice | sync | gRPC call for product recommendations (`RECOMMENDATION_SERVICE_ADDR`) |
+| frontend | shippingservice | sync | gRPC call for shipping quotes (`SHIPPING_SERVICE_ADDR`) |
+| frontend | checkoutservice | sync | gRPC call to place orders (`CHECKOUT_SERVICE_ADDR`) |
+| frontend | adservice | sync | gRPC call for contextual ads (`AD_SERVICE_ADDR`) |
+| checkoutservice | cartservice | sync | gRPC call to get/empty cart during checkout |
+| checkoutservice | productcatalogservice | sync | gRPC call to look up product details |
+| checkoutservice | shippingservice | sync | gRPC call for shipping cost and order shipment |
+| checkoutservice | currencyservice | sync | gRPC call for currency conversion |
+| checkoutservice | paymentservice | sync | gRPC call for payment processing |
+| checkoutservice | emailservice | sync | gRPC call to send order confirmation email |
+| recommendationservice | productcatalogservice | sync | gRPC call to get product catalog for recommendations |
+| cartservice | redis-cart | shared_db | Redis backing store for cart data |
+| All services | platform-infra | shared_infra | Shared GKE cluster, Helm chart, Istio mesh, CI/CD pipelines |
 
-- **checkoutservice** is an orchestrator that calls cartservice, productcatalogservice, shippingservice, currencyservice, paymentservice, and emailservice — making it the highest fan-out service
-- **frontend** calls all backend services via gRPC — it is the user-facing (and agent-facing) entry point
-- **recommendationservice** depends on productcatalogservice for product data
-- **cartservice** depends on Redis for state persistence
+### Service Dependency Metrics
 
-These patterns suggest that **checkoutservice** and **frontend** are high-risk nodes: if their blockers are not resolved, agent integration across the entire portfolio is effectively blocked. Conversely, **productcatalogservice** and **currencyservice** are potential foundation services — many other services depend on them.
+| Service | Fan-In | Fan-Out | Role | Readiness Profile |
+|---------|--------|---------|------|-------------------|
+| productcatalogservice | 3 | 0 | Foundation | Remediation Required (1B) |
+| currencyservice | 2 | 0 | Foundation | Remediation Required (1B) |
+| cartservice | 2 | 1 | Foundation | Remediation Required (2B) |
+| paymentservice | 1 | 0 | Internal | Remediation Required (2B) |
+| shippingservice | 2 | 0 | Internal | Remediation Required (2B) |
+| emailservice | 1 | 0 | Internal | Remediation Required (2B) |
+| adservice | 1 | 0 | Internal | Remediation Required (1B) |
+| recommendationservice | 1 | 1 | Internal | Remediation Required (2B) |
+| checkoutservice | 1 | 6 | Leaf / Orchestrator | Remediation Required (2B) |
+| frontend | 0 | 7 | Leaf / Entry Point | Not Agent-Integrable (3B) |
+| platform-infra | 11 | 0 | Foundation | Remediation Required (1B) |
 
-**Recommendation**: Add explicit `dependency_overrides` to the portfolio configuration to enable:
-- Fan-in/fan-out calculations
-- Foundation service and leaf service identification
-- Transitive blocker propagation analysis (PORT-ARA-Q4)
-- Shared infrastructure impact assessment
+### High-Risk Dependency Patterns
 
-Example configuration:
-```yaml
-dependency_overrides:
-  - source: "frontend"
-    target: "cartservice"
-    type: "sync"
-    description: "gRPC call to manage shopping cart"
-  - source: "frontend"
-    target: "productcatalogservice"
-    type: "sync"
-    description: "gRPC call to list/get products"
-  - source: "frontend"
-    target: "recommendationservice"
-    type: "sync"
-    description: "gRPC call to get product recommendations"
-  - source: "frontend"
-    target: "checkoutservice"
-    type: "sync"
-    description: "gRPC call to place orders"
-  - source: "frontend"
-    target: "currencyservice"
-    type: "sync"
-    description: "gRPC call to convert currencies"
-  - source: "frontend"
-    target: "shippingservice"
-    type: "sync"
-    description: "gRPC call to get shipping quotes"
-  - source: "frontend"
-    target: "adservice"
-    type: "sync"
-    description: "gRPC call to get contextual ads"
-  - source: "checkoutservice"
-    target: "cartservice"
-    type: "sync"
-    description: "Get and empty cart during checkout"
-  - source: "checkoutservice"
-    target: "productcatalogservice"
-    type: "sync"
-    description: "Get product details for order"
-  - source: "checkoutservice"
-    target: "currencyservice"
-    type: "sync"
-    description: "Convert currency for order total"
-  - source: "checkoutservice"
-    target: "shippingservice"
-    type: "sync"
-    description: "Get shipping cost for order"
-  - source: "checkoutservice"
-    target: "paymentservice"
-    type: "sync"
-    description: "Process payment for order"
-  - source: "checkoutservice"
-    target: "emailservice"
-    type: "async"
-    description: "Send order confirmation email"
-  - source: "recommendationservice"
-    target: "productcatalogservice"
-    type: "sync"
-    description: "List products for recommendation algorithm"
-  - source: "cartservice"
-    target: "redis-cart"
-    type: "sync"
-    description: "Cart state persistence"
-```
+1. **Frontend is Not Agent-Integrable but is the primary entry point**
+   - **Affected Services**: All backend services are reachable through frontend
+   - **Risk**: The frontend (Not Agent-Integrable with 3 BLOCKERs: API-Q1, AUTH-Q1, DATA-Q1) is the web entry point. However, for agent integration, backend gRPC services can be accessed directly — agents do not need to go through the HTML-rendering frontend. The frontend's Not Agent-Integrable status does NOT block agent integration with backend services.
+   - **Recommendation**: For the customer support agent use case (order tracking, product recommendations, cart management), bypass the frontend and connect agents directly to backend gRPC services (productcatalogservice, cartservice, checkoutservice, recommendationservice). This avoids the frontend's API-Q1 BLOCKER (HTML-only endpoints).
+
+2. **productcatalogservice is a high fan-in Foundation service with 1 BLOCKER**
+   - **Affected Services**: frontend, checkoutservice, recommendationservice (3 consumers)
+   - **Risk**: productcatalogservice is depended on by 3 services and has only 1 BLOCKER (AUTH-Q1). It is the closest Foundation service to becoming agent-integrable.
+   - **Recommendation**: Prioritize AUTH-Q1 remediation for productcatalogservice — resolving this single BLOCKER would make it eligible for Pilot-Ready (depending on RISK count), unlocking product query capabilities for the customer support agent.
+
+3. **checkoutservice is a high fan-out Orchestrator with cascading dependencies**
+   - **Affected Services**: cartservice, productcatalogservice, shippingservice, currencyservice, paymentservice, emailservice
+   - **Risk**: checkoutservice depends synchronously on 6 backend services. If any dependency service is degraded, the entire checkout flow fails. All 6 dependencies have AUTH-Q1 BLOCKER. Checkout integration requires all dependencies to resolve AUTH-Q1 first.
+   - **Recommendation**: Resolve AUTH-Q1 across all checkout path services before attempting agent-driven checkout. For the initial pilot, scope the agent to read-only operations (product queries, cart viewing) that do not require the full checkout dependency chain.
+
+4. **platform-infra is the shared infrastructure Foundation with AUTH-Q1 BLOCKER**
+   - **Affected Services**: All 10 application services
+   - **Risk**: The infrastructure repo defines Kubernetes ServiceAccounts, Istio configs, and Terraform IaC for the entire platform. Its AUTH-Q1 BLOCKER (no agent-facing identity mechanism) cascades to all services — if the platform doesn't support agent identity, no individual service can authenticate agents.
+   - **Recommendation**: Resolve platform-infra's AUTH-Q1 first by enabling Istio AuthorizationPolicies and creating agent-specific ServiceAccounts at the platform level. This unblocks AUTH-Q1 remediation for all application services.
 
 ## Portfolio Remediation Guidance
 
-> Portfolio context: Cloud-native e-commerce platform with 11 microservices. Evaluating for autonomous AI agent integration (customer support agent for order tracking, product recommendations, and cart management) and modernization maturity.
+> Portfolio context: Cloud-native e-commerce platform with 11 microservices evaluating for autonomous AI agent integration — customer support agent for order tracking, product recommendations, and cart management.
 
 ### Remediation Priority Order
 
@@ -561,98 +482,71 @@ Remediation of cross-cutting BLOCKERs should follow this general priority:
 
 ### Coordinated Remediation Plan
 
-#### Group 1: Identity Foundation + Network Security
+#### Identity Foundation
 
-**BLOCKERs addressed**: AUTH-Q1, ENG-Q6
-**Services affected**: 10 application services + platform-infra (all 11)
-
-These two BLOCKERs should be resolved together because authentication without network security (and vice versa) provides incomplete protection.
+**BLOCKERs addressed**: AUTH-Q1
+**Services affected**: All 11 services (frontend, cartservice, productcatalogservice, checkoutservice, paymentservice, currencyservice, shippingservice, emailservice, recommendationservice, adservice, platform-infra)
 
 - **What to do**:
-  1. **Enable Istio mTLS** — Deploy PeerAuthentication in STRICT mode for the namespace. This provides mutual TLS between all services without application code changes. Each service already has a Kubernetes ServiceAccount defined.
-  2. **Enable Network Policies** — Uncomment `components/network-policies` in `kustomize/kustomization.yaml` OR set `networkPolicies.create: true` in `helm-chart/values.yaml`. The deny-all baseline and 13 per-service policies are already defined.
-  3. **Enable AuthorizationPolicies** — Set `authorizationPolicies.create: true` in Helm values. Per-service AuthorizationPolicy templates are already defined in the Helm chart.
-  4. **Configure TLS on Istio Gateway** — Replace HTTP port 80 with HTTPS port 443 in `istio-manifests/frontend-gateway.yaml`. Add TLS certificate (cert-manager or manual).
-  5. **Create agent-specific ServiceAccounts** — For the customer support agent, create dedicated Kubernetes ServiceAccounts (`customer-support-agent-reader`, etc.) and add them to AuthorizationPolicies for the services the agent needs to access (frontend, cartservice, productcatalogservice, recommendationservice).
+  1. **Platform-level (Week 1–2)**: Enable Istio AuthorizationPolicies by setting `authorizationPolicies.create: true` in `helm-chart/values.yaml`. This is a single configuration change that activates mTLS-based service identity authentication across all services using existing Helm chart templates. The templates already define per-service, per-operation authorization rules.
+  2. **Platform-level (Week 2–3)**: Create agent-specific Kubernetes ServiceAccounts (e.g., `agent-reader-v1`) with Istio AuthorizationPolicy rules scoped to read-only operations (`GetCart`, `ListProducts`, `GetProduct`, `ListRecommendations`, `GetQuote`, `GetSupportedCurrencies`).
+  3. **Per-service (Week 3–6)**: For defense-in-depth, add application-layer authentication interceptors in each service (gRPC interceptors in Go/Java/C#/Python/Node.js) that validate caller identity and log authenticated principal.
+  4. **Validation**: Verify that unauthenticated gRPC calls are rejected with `codes.Unauthenticated`. Verify agent ServiceAccount can only call authorized operations.
+- **Expected outcome**: Every service authenticates callers via mTLS. Agent identity is a distinct, auditable principal. Identity foundation enables all subsequent security controls (scoped permissions, audit logging, identity suspension).
+- **Effort**: Low (platform enablement) + Medium (per-service hardening)
 
-- **Expected outcome**: All inter-service communication is authenticated via mTLS. Network policies restrict which services can communicate. The Istio Gateway is TLS-encrypted. Agent identities are distinguishable from service identities. This resolves AUTH-Q1 for all 10 application services and ENG-Q6 for all 10 services + platform-infra.
-
-- **Impact on readiness profiles**: Resolving AUTH-Q1 + ENG-Q6 removes 2 BLOCKERs from:
-  - 7 services currently "Not Agent-Integrable" (3 BLOCKERs) → drops to 1 BLOCKER (DATA-Q1) → moves to "Remediation Required"
-  - currencyservice (2 BLOCKERs: AUTH-Q1 + ENG-Q6) → drops to 0 BLOCKERs → moves to "Pilot-Ready" or better
-  - productcatalogservice (2 BLOCKERs: AUTH-Q1 + ENG-Q6) → drops to 0 BLOCKERs → moves to "Pilot-Ready" or better
-  - recommendationservice (2 BLOCKERs: AUTH-Q1 + DATA-Q1) → drops to 1 BLOCKER (DATA-Q1) → stays "Remediation Required"
-  - platform-infra (1 BLOCKER: ENG-Q6) → drops to 0 BLOCKERs → moves to "Pilot-Ready" or better
-
-- **Effort**: Medium (2–4 weeks — the infrastructure is already built, it needs enablement and testing)
-
-#### Group 2: Data Protection
+#### Data Protection
 
 **BLOCKERs addressed**: DATA-Q1
-**Services affected**: adservice, cartservice, checkoutservice, emailservice, frontend, paymentservice, recommendationservice, shippingservice (8 services)
+**Services affected**: frontend, cartservice, checkoutservice, paymentservice, shippingservice, emailservice, recommendationservice (7 services)
 
 - **What to do**:
-  1. **Define portfolio-wide data classification policy** — Create 4 tiers: Public, Internal, Confidential (PII), Restricted (PCI). Document which fields in `demo.proto` belong to which tier.
-  2. **Annotate shared proto** — Add field-level sensitivity annotations to `demo.proto` (custom proto options or comments). Key classifications:
-     - **Restricted (PCI)**: `CreditCardInfo.credit_card_number`, `CreditCardInfo.credit_card_cvv`
-     - **Confidential (PII)**: `Address.street_address`, `Address.city`, `Address.state`, `Address.country`, `Address.zip_code`, `OrderResult.shipping_tracking_id`, `SendOrderConfirmationRequest.email`
-     - **Internal**: `userId`, `orderId`, `productId`
-     - **Public**: `Product.name`, `Product.description`, `Product.price_usd`, `Money.currency_code`
-  3. **Define agent data access policy** — For the customer support agent (read-only): allow access to Public and Internal data. Require explicit authorization for Confidential (PII) data on a per-user-consent basis. Block all access to Restricted (PCI) data.
-  4. **Implement runtime enforcement** — Add gRPC interceptors or field masks to enforce classification-based access control.
+  1. **Portfolio-level (Week 1)**: Define a data classification taxonomy: `PUBLIC` (product catalog, exchange rates, ads), `INTERNAL` (cart items, shipping quotes), `PII` (email, address, userId), `PCI` (credit card number, CVV, expiration). Document in a shared data dictionary.
+  2. **Portfolio-level (Week 2)**: Annotate the shared `demo.proto` protobuf definitions with classification metadata (comments or custom options) for each message field.
+  3. **Per-service (Week 3–8)**: Implement field-level access controls in services handling PII/PCI data. Ensure agents with read-only scope cannot access PCI fields (credit card data) even if they have network access to paymentservice or checkoutservice.
+  4. **Per-service (Week 4–8)**: Implement field-level encryption for PCI data in transit (mTLS addresses transport encryption) and at rest (CMEK for Redis/databases).
+- **Expected outcome**: All sensitive fields are classified and tagged. Agent identities require explicit authorization to access PII/PCI data. Credit card data is encrypted end-to-end.
+- **Effort**: Medium (classification) + High (field-level access controls and encryption)
 
-- **Expected outcome**: All data fields classified. Agent data access boundaries defined. PCI data protected from agent access. This resolves DATA-Q1 for all 8 affected services.
+#### API Surface (Frontend-Specific)
 
-- **Impact on readiness profiles**: Resolving DATA-Q1 (after Group 1) removes the last BLOCKER from:
-  - adservice, cartservice, checkoutservice, emailservice, frontend, paymentservice, shippingservice → 0 BLOCKERs → move to "Pilot-Ready" or better
-  - recommendationservice → 0 BLOCKERs → moves to "Pilot-Ready" or better
+**BLOCKERs addressed**: API-Q1 (frontend only — not cross-cutting)
+**Services affected**: frontend
 
-- **Effort**: High (4–8 weeks for classification policy; additional 8–12 weeks for runtime enforcement)
-
-### Post-Remediation Portfolio Projection
-
-After resolving all 3 cross-cutting BLOCKERs:
-
-| Profile | Current | Post-Group 1 | Post-Group 2 |
-|---------|---------|-------------|-------------|
-| Agent-Ready | 0 | 0 | 0* |
-| Pilot-Ready | 0 | 3 (currencyservice, productcatalogservice, platform-infra) | Up to 11** |
-| Remediation Required | 4 | 8 | 0 |
-| Not Agent-Integrable | 7 | 0 | 0 |
-
-\* *Whether services achieve Agent-Ready vs. Pilot-Ready depends on how many of the 24-36 RISKs per service are resolved alongside the BLOCKERs.*
-\** *All 11 services would have 0 BLOCKERs. Actual profile depends on RISK count — most services have 30+ RISKs, which exceeds the Pilot-Ready threshold of 3-5 RISKs. Services would need further RISK remediation to reach Agent-Ready.*
+- **What to do**:
+  - **Option A (Recommended for agent use case)**: Bypass the frontend entirely. Connect the customer support agent directly to backend gRPC services (productcatalogservice, cartservice, recommendationservice) via an API Gateway or gRPC proxy. The backend services already expose documented, typed gRPC interfaces suitable for agent tool binding.
+  - **Option B**: Create a dedicated REST API layer on the frontend (`/api/v1/products`, `/api/v1/cart`, `/api/v1/checkout`) returning structured JSON, separate from the HTML-rendering endpoints.
+- **Expected outcome**: Agents have a documented, programmatic API to bind tools against — either gRPC backends directly or a new REST layer on the frontend.
+- **Effort**: Low (Option A — API Gateway configuration) or Medium (Option B — REST API development)
 
 ## Agentic Program Recommendations
 
 > These are engagement-level recommendations based on the portfolio's agentic readiness
 > profile. Discuss with your AWS Solutions Architect to determine eligibility and timing.
 
-> No specific agentic program recommendations based on current findings. Zero services
-> are currently Agent-Ready or Pilot-Ready — the minimum trigger condition for
-> EBA-Agentic AI is at least 1 service with Agent-Ready or Pilot-Ready profile.
+> No specific agentic program recommendations based on current findings. The portfolio has **0 Agent-Ready and 0 Pilot-Ready services** — the EBA-Agentic AI trigger condition (≥1 service at Agent-Ready or Pilot-Ready) is not met. As the portfolio's agentic readiness improves, re-assess to identify program eligibility.
 
-| Program | Trigger Condition | Current Status | Triggered? |
-|---------|-------------------|----------------|------------|
-| EBA-Agentic AI | ≥1 service Agent-Ready or Pilot-Ready | 0 services (0%) | ❌ No |
+### Path to EBA-Agentic AI Eligibility
 
-### Path to Program Eligibility
+The following services are **closest to Pilot-Ready** (fewest BLOCKERs):
 
-After resolving **Group 1** (AUTH-Q1 + ENG-Q6) in the remediation plan:
+| Service | BLOCKERs | BLOCKER Question(s) | Path to Pilot-Ready |
+|---------|----------|---------------------|---------------------|
+| productcatalogservice | 1 | AUTH-Q1 | Resolve AUTH-Q1 (enable Istio AuthorizationPolicy). With 32 RISKs, would need RISK reduction to ≤5 for Pilot-Ready. |
+| currencyservice | 1 | AUTH-Q1 | Resolve AUTH-Q1. With 23 RISKs, would need RISK reduction to ≤5 for Pilot-Ready. |
+| adservice | 1 | AUTH-Q1 | Resolve AUTH-Q1. With 23 RISKs, would need RISK reduction to ≤5 for Pilot-Ready. |
 
-- **currencyservice** drops from 2 BLOCKERs to 0 → potential Pilot-Ready
-- **productcatalogservice** drops from 2 BLOCKERs to 0 → potential Pilot-Ready
-- **platform-infra** drops from 1 BLOCKER to 0 → potential Pilot-Ready
+**Recommended approach**: Focus AUTH-Q1 remediation on **productcatalogservice** first (highest priority Foundation service with P0 priority and 3 consumers). Once AUTH-Q1 is resolved portfolio-wide via Istio enablement, productcatalogservice, currencyservice, and adservice become candidates for accelerated RISK remediation toward Pilot-Ready status.
 
-This would trigger the **EBA-Agentic AI** program (3 services at Pilot-Ready or better).
-
-**Recommended timing**: Re-assess portfolio readiness after completing Group 1 remediation. If 1+ services achieve Pilot-Ready, request EBA-Agentic AI engagement via your AWS Solutions Architect to accelerate agent integration for the customer support use case targeting currencyservice and productcatalogservice as initial pilot services.
+Once any service reaches Pilot-Ready, the portfolio qualifies for **EBA-Agentic AI** engagement.
 
 ### Program Details
 
 #### EBA-Agentic AI (Experience-Based Acceleration for Agentic AI)
 
-The EBA-Agentic AI program is not yet recommended because no services have achieved Pilot-Ready or Agent-Ready status. However, the portfolio's path to eligibility is clear: resolving the identity foundation (AUTH-Q1) and network security (ENG-Q6) BLOCKERs — which can be achieved through enabling existing Istio and Kustomize security infrastructure — would move 3 services to Pilot-Ready status within an estimated 2–4 weeks. At that point, the EBA-Agentic AI program would provide guided acceleration for integrating the customer support agent with the Online Boutique platform, focusing on the product catalog and currency conversion services as initial pilot targets.
+**Not yet eligible.** This program provides guided acceleration for services ready to begin agent integration. The trigger condition requires ≥1 service at Agent-Ready or Pilot-Ready profile. Current portfolio status: 0 Agent-Ready, 0 Pilot-Ready, 10 Remediation Required, 1 Not Agent-Integrable.
+
+**Suggested timing**: Re-assess after completing the Identity Foundation remediation (AUTH-Q1 across all services via Istio AuthorizationPolicy enablement). If productcatalogservice, currencyservice, or adservice achieve Pilot-Ready status, request EBA engagement to accelerate the initial agent pilot for product catalog queries.
 
 ## Portfolio-Level Findings
 
@@ -663,100 +557,65 @@ The EBA-Agentic AI program is not yet recommended because no services have achie
 ### PORT-ARA-Q1: Centralized Identity Plane
 
 - **Severity**: BLOCKER
-- **Finding**: No shared identity provider exists across the portfolio. There is no Cognito User Pool, Cognito Identity Pool, Okta configuration, or shared auth middleware referenced in any repo. The Helm chart defines Istio AuthorizationPolicies that reference Kubernetes ServiceAccount principals (`cluster.local/ns/{namespace}/sa/{service}`), but these are disabled by default (`authorizationPolicies.create: false`). Kubernetes ServiceAccounts exist per-service but are not configured for cross-service authentication — they are used only for pod-level RBAC. No IAM Roles for Service Accounts (IRSA) or GKE Workload Identity bindings exist for application services (only for the GKE cluster service account in `terraform/main.tf`).
-- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`, `sidecars.create: false`), `istio-manifests/frontend-gateway.yaml` (no auth config), `terraform/main.tf` (GKE cluster SA but no per-service identity), `kubernetes-manifests/*.yaml` (ServiceAccounts defined but with no IAM annotations). No Cognito, Okta, or auth middleware found in any service repo.
-- **Recommendation**: Deploy Istio PeerAuthentication in STRICT mode as the portfolio-wide identity plane. This leverages existing Kubernetes ServiceAccounts (already defined per-service) with Istio-managed mTLS certificates. For agent-specific identity, create dedicated ServiceAccounts and add them to AuthorizationPolicies. For external agent callers (outside the mesh), deploy an API Gateway with OAuth2/JWT authentication at the Istio ingress gateway.
+- **Finding**: No shared identity provider exists across the portfolio. Each service has a Kubernetes ServiceAccount (pod-level identity), and the platform-infra repo defines a GCP `google_service_account` for GKE cluster operations (`roles/monitoring.metricWriter`, `roles/logging.logWriter`, etc.). However, these are infrastructure identities — not an agent-facing identity plane. No Cognito User Pools, no Cognito Identity Pools, no Okta configurations, no shared OAuth2 authorization server, and no centralized API key management exist anywhere in the portfolio. The Istio service mesh could provide mTLS-based identity via Kubernetes ServiceAccount principals, but Istio AuthorizationPolicies are disabled by default (`authorizationPolicies.create: false`).
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`), `terraform/main.tf` (GCP service account for monitoring only), all 11 `kubernetes-manifests/*.yaml` files (ServiceAccount definitions without auth enforcement)
+- **Recommendation**: Enable Istio as the centralized identity plane by setting `authorizationPolicies.create: true`. Create agent-specific Kubernetes ServiceAccounts with Istio AuthorizationPolicy rules. For external agent callers, deploy an API Gateway (GKE Gateway API or Istio Ingress Gateway) with OAuth2/API key authentication.
 - **Affected Services**: All 11 services
-- **Contextual Annotations**:
-  > **Portfolio Context**: PORT-ARA-Q1 found no shared identity provider across the portfolio. Istio mTLS with Kubernetes ServiceAccounts (disabled but defined in Helm chart) is the most viable identity plane for this architecture. This provides context for AUTH-Q1 — **verify** that enabling Istio PeerAuthentication STRICT mode with existing ServiceAccounts provides sufficient identity attribution for agent audit requirements.
+- **Contextual Annotations**: This finding directly relates to the AUTH-Q1 cross-cutting BLOCKER. Enabling Istio AuthorizationPolicies would establish a mesh-level identity plane that addresses AUTH-Q1 for all services simultaneously — **verify** that mTLS strict mode is enforced and that agent ServiceAccounts are created with appropriate scoping.
 
 ### PORT-ARA-Q2: Cross-Service Audit Correlation
 
 - **Severity**: RISK
-- **Finding**: OpenTelemetry integration exists across multiple services (Go services use `otelgrpc.NewServerHandler()`, Python services import `opentelemetry` packages, Java services have OTel agent). A centralized OpenTelemetry Collector is defined in the Helm chart (`helm-chart/templates/opentelemetry-collector.yaml`) that aggregates traces from all services and exports to Google Cloud Trace. However, the collector is disabled by default (`opentelemetryCollector.create: false`). When enabled, it provides trace correlation across services via OTLP protocol on port 4317. Google Cloud Operations APIs are enabled in Terraform (`cloudtrace.googleapis.com`). Despite trace infrastructure, **audit-grade log correlation is absent**: no immutable audit trail, no principal attribution in trace spans, and no centralized audit log aggregation with retention policies.
-- **Evidence**: `helm-chart/values.yaml` (`opentelemetryCollector.create: false`, `googleCloudOperations.tracing: false`), `helm-chart/templates/opentelemetry-collector.yaml` (full OTel collector with ConfigMap), `terraform/main.tf` (`cloudtrace.googleapis.com` enabled). Individual service reports confirm OpenTelemetry SDK integration in most services.
-- **Recommendation**: Enable OpenTelemetry Collector (`opentelemetryCollector.create: true`). Enable Google Cloud Operations tracing (`googleCloudOperations.tracing: true`). Add principal identity fields to trace spans after AUTH-Q1 is resolved. Implement a centralized audit log sink with immutable retention.
-- **Affected Services**: All 11 services
-- **Contextual Annotations**:
-  > **Portfolio Context**: PORT-ARA-Q2 found OpenTelemetry infrastructure defined but disabled. Once enabled, it provides trace correlation across all services via a centralized collector. This provides context for AUTH-Q7 (Immutable Audit Logging) — **verify** that enabling the OTel collector with principal attribution in trace spans satisfies audit logging requirements.
+- **Finding**: Cross-service audit correlation is partially supported but not consistently enabled. The frontend has OpenTelemetry SDK instrumentation (`otelhttp.NewHandler`, `otelgrpc.NewClientHandler()`) with trace context propagation (`propagation.TraceContext{}`, `propagation.Baggage{}`) — but tracing is disabled by default (`ENABLE_TRACING=1` opt-in, `googleCloudOperations.tracing: false`). Some Go services (checkoutservice, productcatalogservice, shippingservice) have similar OTel instrumentation. The C# cartservice has **no** OpenTelemetry SDK. The Helm chart defines an optional OpenTelemetry Collector (`opentelemetryCollector.create: false`). No shared CloudTrail trail, no centralized log aggregation with correlation IDs, and no consistent `traceparent` header propagation across all services. GKE provides cluster-level audit logging for Kubernetes API operations but not application-level agent action tracing.
+- **Evidence**: `helm-chart/values.yaml` (`googleCloudOperations.tracing: false`, `opentelemetryCollector.create: false`), `src/frontend/main.go` (`ENABLE_TRACING` conditional), `src/cartservice/cartservice.csproj` (no OTel dependencies)
+- **Recommendation**: Enable OpenTelemetry tracing by default across all services (`ENABLE_TRACING=1` or equivalent). Deploy the OpenTelemetry Collector (`opentelemetryCollector.create: true`). Add OTel SDK to cartservice (C#). Ensure consistent `traceparent` header propagation through all gRPC calls. Configure trace export to a centralized backend (Cloud Trace or Jaeger).
+- **Affected Services**: All 11 services (varying levels of OTel maturity)
+- **Contextual Annotations**: This finding provides context for the OBS-Q1 cross-cutting RISK. Enabling the OpenTelemetry Collector and tracing by default would address OBS-Q1 across all services — **verify** that trace context propagation works end-to-end through the checkout flow (frontend → checkoutservice → cartservice → paymentservice → emailservice).
 
 ### PORT-ARA-Q3: Portfolio-Level Rate Limiting
 
 - **Severity**: RISK
-- **Finding**: No portfolio-level rate limiting. The Istio Gateway (`istio-manifests/frontend-gateway.yaml`) accepts traffic on HTTP port 80 with wildcard hosts (`"*"`) and no rate limiting configuration. No WAF, no API Gateway usage plans, no EnvoyFilter rate limit rules. Individual services have no rate limiting either (STATE-Q5 is RISK in all 10 application services). The Helm chart does not include rate limiting configuration options. The only traffic control mechanism is the network policies (disabled by default) which restrict source/destination but not request rates.
-- **Evidence**: `istio-manifests/frontend-gateway.yaml` (HTTP, wildcard hosts, no rate limiting), `helm-chart/values.yaml` (no rate limiting configuration), `kustomize/kustomization.yaml` (network-policies commented out). No WAF, API Gateway, or rate limiting middleware found in any repo.
-- **Recommendation**: Implement portfolio-level rate limiting at the Istio ingress gateway using EnvoyFilter or Istio Wasm plugins. Set per-identity rate limits: higher limits for the customer support agent during normal operations, with circuit breaker thresholds for abnormal request patterns. Consider adding a shared WAF (AWS WAF or Google Cloud Armor) for the portfolio perimeter.
-- **Affected Services**: All 11 services (any service accessible through the Istio Gateway)
-- **Contextual Annotations**: None — this is a new finding not covered by individual service assessments.
+- **Finding**: No shared WAF, API Gateway, or portfolio-level rate limiting exists. The frontend is exposed directly to the internet via a Kubernetes LoadBalancer service on port 80 with no rate limiting. Individual services have no application-level rate limiting middleware. No `WAF WebACL`, no API Gateway usage plans, no Istio rate limiting EnvoyFilters. Each service relies solely on Kubernetes resource limits (CPU/memory) for isolation — which prevents resource exhaustion but does not prevent request flooding.
+- **Evidence**: `kubernetes-manifests/frontend.yaml` (LoadBalancer service, no rate limiting), `helm-chart/values.yaml` (no rate limit configuration), all service deployment manifests (no rate limiting middleware)
+- **Recommendation**: Deploy an Istio Ingress Gateway or GKE Gateway API with rate limiting for the portfolio perimeter. Define per-identity rate limits for agent traffic. Implement per-service rate limiting as defense-in-depth. For immediate protection, configure agent-side rate limiting in the orchestration layer.
+- **Affected Services**: All 11 services (frontend especially — internet-facing)
+- **Contextual Annotations**: This finding provides context for the STATE-Q5 cross-cutting RISK. A portfolio-level API Gateway with rate limiting would address STATE-Q5 for agent-facing traffic at the perimeter — **verify** that rate limits are configured per agent identity and that rate limit headers are returned to agents for self-throttling.
 
 ### PORT-ARA-Q4: Transitive Dependency Safety
 
 - **Severity**: RISK
-- **Finding**: Limited analysis due to missing `dependency_overrides`. Based on observed architecture patterns (from individual ARA reports): checkoutservice depends synchronously on 6 other services. All 11 services are currently either "Not Agent-Integrable" (7) or "Remediation Required" (4) — **no service is currently Agent-Ready or Pilot-Ready**, so the BLOCKER condition (Agent-Ready service depending on Not Agent-Integrable service) is not met. However, after Group 1 remediation, currencyservice and productcatalogservice may achieve Pilot-Ready status. At that point, transitive dependency analysis becomes critical: if these services are consumed by checkoutservice (which will still be "Remediation Required" due to DATA-Q1), the dependency chain is safe because the blocker is on the caller, not the callee.
-- **Evidence**: Individual ARA reports describe service dependencies. checkoutservice context: "Go gRPC service orchestrating the checkout workflow — calls cart, product, shipping, currency, payment, and email services." No explicit `dependency_overrides` provided.
-- **Recommendation**: Provide `dependency_overrides` in the portfolio configuration to enable full transitive dependency analysis. After Group 1 remediation, re-run the portfolio assessment to evaluate transitive safety with accurate dependency data and updated readiness profiles.
-- **Affected Services**: Primarily checkoutservice (highest fan-out), frontend (user/agent entry point)
-- **Contextual Annotations**: None — requires dependency data for detailed annotations.
+- **Finding**: No services currently have Agent-Ready or Pilot-Ready profiles, so the BLOCKER trigger condition (Agent-Ready/Pilot-Ready service depending synchronously on a Not Agent-Integrable service) is not met. However, a RISK pattern exists: the frontend (Not Agent-Integrable) is the primary web entry point, and its 7 backend dependencies are all Remediation Required. If agents were to integrate through the frontend, the frontend's 3 BLOCKERs would cascade. Additionally, checkoutservice (Remediation Required) depends synchronously on 6 services that all have AUTH-Q1 BLOCKERs — resolving checkoutservice's own BLOCKERs would not make it usable until all 6 dependencies also resolve AUTH-Q1.
+- **Evidence**: Dependency graph from Step 5; readiness profiles from Step 3; frontend (Not Agent-Integrable, 3B) depends on 7 services; checkoutservice depends on 6 services all with AUTH-Q1 BLOCKER
+- **Recommendation**: For the customer support agent pilot, bypass the frontend and connect directly to backend gRPC services. Prioritize AUTH-Q1 remediation for Foundation services (productcatalogservice, currencyservice, cartservice) before attempting agent integration with orchestrator services (checkoutservice) that depend on them.
+- **Affected Services**: frontend (Not Agent-Integrable), checkoutservice (depends on 6 services with AUTH-Q1 BLOCKER)
+- **Contextual Annotations**: This finding provides context for the remediation prioritization. Resolving AUTH-Q1 at the platform level (Istio AuthorizationPolicy) addresses the transitive dependency chain for all services simultaneously — **verify** that after enablement, each service in the checkout chain correctly propagates identity through gRPC calls.
 
 ### PORT-ARA-Q5: Agent Identity Governance
 
 - **Severity**: RISK
-- **Finding**: No centralized mechanism to manage, suspend, or revoke agent identities across the portfolio. There is no agent identity registry, no centralized API key management, and no portfolio-level revocation mechanism. Kubernetes RBAC provides some capability (deleting a ServiceAccount suspends its pods), but this is not designed for agent identity governance and requires kubectl access. The Helm chart's AuthorizationPolicies (when enabled) provide per-service access control but no centralized kill switch. If an agent's credentials are compromised, there is no single action to revoke access across all 11 services simultaneously.
-- **Evidence**: `helm-chart/values.yaml` (ServiceAccounts created per-service but no agent-specific accounts), `kubernetes-manifests/*.yaml` (per-service ServiceAccounts with no centralized management). No Cognito app client registry, no API key management system, no agent identity documentation.
-- **Recommendation**: After resolving AUTH-Q1, establish a centralized agent identity registry. Options: (1) Dedicated Kubernetes namespace for agent ServiceAccounts with RBAC policies, (2) Cognito User Pool with app clients for agent identities, (3) API Gateway with centralized API key management. Implement a "kill switch" — a single AuthorizationPolicy or Kubernetes RBAC change that revokes all agent access portfolio-wide.
+- **Finding**: No centralized mechanism exists to suspend or revoke agent identities across all services simultaneously. Each service manages identities independently — there is no shared Cognito app client registry, no centralized API key management, and no portfolio-level agent identity documentation. The Istio AuthorizationPolicy model (when enabled) binds identities to individual service policies, meaning suspending an agent would require updating AuthorizationPolicies across multiple services. No "kill switch" can revoke an agent's access to all services in a single action.
+- **Evidence**: `helm-chart/values.yaml` (per-service AuthorizationPolicy templates), absence of centralized identity management infrastructure across all repos
+- **Recommendation**: Create a centralized agent identity registry (a shared ConfigMap or dedicated identity service) that maps agent ServiceAccounts to their authorized services and scopes. Implement a portfolio-level suspension runbook: `kubectl delete serviceaccount agent-reader-v1 -n <namespace>` would revoke the agent's mTLS identity, effectively blocking it from all services simultaneously via Istio.
 - **Affected Services**: All 11 services
-- **Contextual Annotations**:
-  > **Portfolio Context**: PORT-ARA-Q5 found no centralized agent identity governance mechanism. This provides context for AUTH-Q8 (Agent Identity Suspension) — **verify** that the identity governance solution chosen for PORT-ARA-Q5 provides individual service-level suspension in addition to portfolio-wide revocation.
+- **Contextual Annotations**: This finding provides context for the AUTH-Q8 cross-cutting RISK (Agent Identity Suspension). Using Kubernetes ServiceAccount deletion as the kill switch mechanism works because Istio AuthorizationPolicies bind to ServiceAccount principals — **verify** that deleting the ServiceAccount immediately invalidates the mTLS certificate and blocks all in-flight requests.
 
 ## Service-by-Service Summary
 
 | Service | Repo Type | Agent Scope | Readiness Profile | BLOCKERs | RISKs | INFOs | N/A |
 |---------|-----------|-------------|-------------------|----------|-------|-------|-----|
-| cartservice | application | read-only | ❌ Not Agent-Integrable | 3 | 35 | 11 | 0 |
-| checkoutservice | application | read-only | ❌ Not Agent-Integrable | 3 | 35 | 11 | 0 |
-| frontend | application | read-only | ❌ Not Agent-Integrable | 3 | 35 | 11 | 0 |
-| paymentservice | application | read-only | ❌ Not Agent-Integrable | 3 | 35 | 11 | 0 |
-| adservice | application | read-only | ❌ Not Agent-Integrable | 3 | 35 | 11 | 0 |
-| emailservice | application | read-only | ❌ Not Agent-Integrable | 3 | 36 | 10 | 0 |
-| shippingservice | application | read-only | ❌ Not Agent-Integrable | 3 | 35 | 11 | 0 |
-| productcatalogservice | application | read-only | 🟠 Remediation Required | 2 | 30 | 17 | 0 |
-| currencyservice | application | read-only | 🟠 Remediation Required | 2 | 34 | 13 | 0 |
-| recommendationservice | application | read-only | 🟠 Remediation Required | 2 | 24 | 23 | 0 |
-| platform-infra | infrastructure-only | read-only | 🟠 Remediation Required | 1 | 12 | 2 | 34 |
+| frontend | application | read-only | ❌ Not Agent-Integrable | 3 | 32 | 14 | 0 |
+| cartservice | application | read-only | 🟠 Remediation Required | 2 | 31 | 16 | 0 |
+| checkoutservice | application | read-only | 🟠 Remediation Required | 2 | 32 | 15 | 0 |
+| paymentservice | application | read-only | 🟠 Remediation Required | 2 | 31 | 16 | 0 |
+| productcatalogservice | application | read-only | 🟠 Remediation Required | 1 | 32 | 16 | 0 |
+| shippingservice | application | read-only | 🟠 Remediation Required | 2 | 32 | 15 | 0 |
+| recommendationservice | application | read-only | 🟠 Remediation Required | 2 | 32 | 15 | 0 |
+| currencyservice | application | read-only | 🟠 Remediation Required | 1 | 23 | 25 | 0 |
+| emailservice | application | read-only | 🟠 Remediation Required | 2 | 32 | 15 | 0 |
+| adservice | application | read-only | 🟠 Remediation Required | 1 | 23 | 25 | 0 |
+| platform-infra | infrastructure-only | read-only | 🟠 Remediation Required | 1 | 13 | 1 | 34 |
 
 ### Individual Service Details
-
-#### cartservice
-
-- **Readiness Profile**: ❌ Not Agent-Integrable
-- **Repo Type**: application
-- **Agent Scope**: read-only
-- **Priority**: P0
-- **BLOCKERs** (3):
-  - AUTH-Q1: No machine identity authentication — gRPC service has no `AddAuthentication()` or `UseAuthorization()` middleware
-  - DATA-Q1: Sensitive data unclassified — `userId` (PII), cart items stored in Redis with no classification or access controls
-  - ENG-Q6: No network policies — `AllowedHosts: "*"`, port 7070 exposed with no security groups or firewall rules
-- **RISKs** (35): AUTH-Q2 through AUTH-Q8, API-Q2/Q3/Q5/Q7, STATE-Q1 through STATE-Q7, HITL-Q1 through HITL-Q3, DATA-Q2 through DATA-Q8, DISC-Q1, OBS-Q1/Q2, ENG-Q1 through ENG-Q5
-- **Key Recommendations**:
-  - Enable Istio mTLS for service mesh-level authentication
-  - Classify `userId` as PII and implement field-level access controls
-  - Enable network policies via Kustomize or Helm
-
-#### checkoutservice
-
-- **Readiness Profile**: ❌ Not Agent-Integrable
-- **Repo Type**: application
-- **Agent Scope**: read-only
-- **Priority**: P0
-- **BLOCKERs** (3):
-  - AUTH-Q1: No authentication — gRPC server with `grpc.NewServer()` and `insecure.NewCredentials()` for all downstream calls
-  - DATA-Q1: Unclassified PCI-DSS data — CreditCardInfo (card number, CVV) flows through without classification
-  - ENG-Q6: No network policies — gRPC on 0.0.0.0:5050 with insecure credentials
-- **RISKs** (35): Full set of AUTH, API, STATE, HITL, DATA, DISC, OBS, and ENG RISKs
-- **Key Recommendations**:
-  - Highest priority for data classification due to PCI-DSS scope
-  - Implement saga pattern for checkout workflow compensation
-  - Enable mTLS and network policies
 
 #### frontend
 
@@ -765,78 +624,67 @@ The EBA-Agentic AI program is not yet recommended because no services have achie
 - **Agent Scope**: read-only
 - **Priority**: P0
 - **BLOCKERs** (3):
-  - AUTH-Q1: Zero authentication — session identity is random UUID in unsigned cookie, `insecure.NewCredentials()` for all backend gRPC calls
-  - DATA-Q1: PCI-relevant data (credit card) flows through `placeOrderHandler` without classification
-  - ENG-Q6: Network policies disabled — frontend exposed to internet with no WAF, CORS, or restrictions
-- **RISKs** (35): Full set across all sections
+  - API-Q1: No documented API interface — HTTP endpoints render HTML, not JSON. Only `/product-meta/{ids}` and `/bot` return JSON.
+  - AUTH-Q1: No machine identity authentication — `ensureSessionID` assigns random UUID cookie, not authentication. gRPC uses `insecure.NewCredentials()`.
+  - DATA-Q1: Sensitive data unclassified — `placeOrderHandler` processes PII and credit card data with no classification or field-level encryption.
+- **RISKs** (32): API-Q2, API-Q3, API-Q5, API-Q7, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
 - **Key Recommendations**:
-  - Primary agent entry point — implement API key or OAuth2 on agent-facing endpoints (`/product-meta/{ids}`, `/bot`)
-  - Enable TLS on Istio Gateway
-  - Add CORS configuration for agent callers
+  - Bypass the frontend for agent integration — connect agents directly to backend gRPC services.
+  - If frontend integration is needed, create a dedicated REST API layer returning JSON.
+  - Resolve AUTH-Q1 via API Gateway with OAuth2 or API key authentication.
+- **Depends On**: productcatalogservice, currencyservice, cartservice, recommendationservice, shippingservice, checkoutservice, adservice
+- **Depended On By**: None (entry point)
 
-#### paymentservice
+#### cartservice
 
-- **Readiness Profile**: ❌ Not Agent-Integrable
+- **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: application
 - **Agent Scope**: read-only
 - **Priority**: P0
-- **BLOCKERs** (3):
-  - AUTH-Q1: No authentication — `grpc.ServerCredentials.createInsecure()` in Node.js
-  - DATA-Q1: PCI-DSS data (`credit_card_number`, `credit_card_cvv`) processed and logged with zero classification
-  - ENG-Q6: No TLS, no network policies, service open to any network-reachable client
-- **RISKs** (35): Full set
+- **BLOCKERs** (2):
+  - AUTH-Q1: No authentication middleware — gRPC endpoints accept any connection on port 7070. Istio AuthorizationPolicy defined but disabled.
+  - DATA-Q1: Cart data (`userId`, `productId`, `quantity`) unclassified — `userId` is potentially PII. No field-level encryption.
+- **RISKs** (31): API-Q3, API-Q5, API-Q7, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
 - **Key Recommendations**:
-  - Critical PCI-DSS scope — data classification is highest priority after identity
-  - Agent should never have direct access to payment data (even read-only)
-  - Implement field-level access controls blocking PCI data from agent callers
+  - Enable Istio AuthorizationPolicy (existing Helm chart templates already define per-operation rules).
+  - Classify `userId` field — determine if it contains PII or is an opaque UUID.
+  - Add OpenTelemetry SDK for distributed tracing.
+- **Depends On**: redis-cart
+- **Depended On By**: frontend, checkoutservice
 
-#### adservice
+#### checkoutservice
 
-- **Readiness Profile**: ❌ Not Agent-Integrable
+- **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: application
 - **Agent Scope**: read-only
-- **Priority**: P2
-- **BLOCKERs** (3):
-  - AUTH-Q1: No authentication — Java `ServerBuilder.forPort(port)` with no interceptor
-  - DATA-Q1: Ad data unclassified — redirect URLs and text without classification framework
-  - ENG-Q6: No network security — port 9555 exposed without encryption
-- **RISKs** (35): Full set
+- **Priority**: P0
+- **BLOCKERs** (2):
+  - AUTH-Q1: gRPC server created with no authentication interceptors, TLS, or mTLS. Uses `insecure.NewCredentials()` for all outbound connections.
+  - DATA-Q1: Processes highly sensitive checkout data (email, address, credit card) with no classification or field-level encryption.
+- **RISKs** (32): API-Q2, API-Q3, API-Q5, API-Q7, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
 - **Key Recommendations**:
-  - Lower sensitivity service — good candidate for early agent pilot after blocker remediation
-  - Enable mTLS and network policies
-  - Consider adding gRPC reflection for agent API discovery
+  - Enable Istio AuthorizationPolicy and mTLS for all 6 outbound gRPC connections.
+  - Classify and encrypt PCI data (credit card fields) in the checkout flow.
+  - Implement async order processing with status polling for agent consumption.
+- **Depends On**: cartservice, productcatalogservice, shippingservice, currencyservice, paymentservice, emailservice
+- **Depended On By**: frontend
 
-#### emailservice
+#### paymentservice
 
-- **Readiness Profile**: ❌ Not Agent-Integrable
+- **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: application
 - **Agent Scope**: read-only
-- **Priority**: P2
-- **BLOCKERs** (3):
-  - AUTH-Q1: No authentication — Python `server.add_insecure_port()` with no interceptors
-  - DATA-Q1: PII (email addresses, shipping addresses) processed without classification
-  - ENG-Q6: gRPC on insecure port with no network security
-- **RISKs** (36): Full set (highest RISK count — 36)
+- **Priority**: P0
+- **BLOCKERs** (2):
+  - AUTH-Q1: gRPC server uses `grpc.ServerCredentials.createInsecure()` — no authentication. Istio AuthorizationPolicy available but disabled.
+  - DATA-Q1: Handles credit card charge data with no classification. Simulated payment processing but real data structures.
+- **RISKs** (31): API-Q3, API-Q5, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
 - **Key Recommendations**:
-  - Classify email address and shipping address as Confidential (PII)
-  - Agent read-only scope means agent should not trigger email sends
-  - Enable mTLS and network policies
-
-#### shippingservice
-
-- **Readiness Profile**: ❌ Not Agent-Integrable
-- **Repo Type**: application
-- **Agent Scope**: read-only
-- **Priority**: P1
-- **BLOCKERs** (3):
-  - AUTH-Q1: No authentication — Go `grpc.NewServer()` with no interceptors
-  - DATA-Q1: PII (address fields) processed without classification
-  - ENG-Q6: Port 50051 with no TLS, no network restrictions
-- **RISKs** (35): Full set
-- **Key Recommendations**:
-  - Agent use case: shipping quote queries and tracking — good candidate for agent tool
-  - Classify address data as Confidential (PII)
-  - Enable mTLS and network policies
+  - Enable Istio AuthorizationPolicy restricting access to checkoutservice only.
+  - Classify credit card data as PCI and implement field-level encryption.
+  - Implement structured JSON logging to replace console.log.
+- **Depends On**: None
+- **Depended On By**: checkoutservice
 
 #### productcatalogservice
 
@@ -844,29 +692,32 @@ The EBA-Agentic AI program is not yet recommended because no services have achie
 - **Repo Type**: application
 - **Agent Scope**: read-only
 - **Priority**: P0
-- **BLOCKERs** (2):
-  - AUTH-Q1: No authentication — `grpc.NewServer()` with `insecure.NewCredentials()`
-  - ENG-Q6: Network policies exist in Kustomize but disabled by default; no TLS on gRPC
-- **RISKs** (30): 30 RISKs (lower than most — many questions scored INFO due to non-sensitive public data)
+- **BLOCKERs** (1):
+  - AUTH-Q1: gRPC server created with `grpc.NewServer()` — no authentication interceptors, TLS, or mTLS. Uses `insecure.NewCredentials()` for outbound.
+- **RISKs** (32): API-Q2, API-Q3, API-Q5, API-Q7, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
 - **Key Recommendations**:
-  - **Best candidate for early agent pilot** — only 2 BLOCKERs (no DATA-Q1 because data is non-sensitive public product info)
-  - Resolving AUTH-Q1 + ENG-Q6 (Group 1) moves this to Pilot-Ready
-  - Agent use case: product catalog queries for customer support recommendations
+  - **Highest priority Foundation service** — resolve AUTH-Q1 first (fewest BLOCKERs, highest fan-in).
+  - Enable Istio AuthorizationPolicy for mTLS-based authentication.
+  - Product catalog data is non-sensitive (INFO for DATA-Q1) — no data classification blocker.
+- **Depends On**: None
+- **Depended On By**: frontend, checkoutservice, recommendationservice
 
-#### currencyservice
+#### shippingservice
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: application
 - **Agent Scope**: read-only
 - **Priority**: P1
 - **BLOCKERs** (2):
-  - AUTH-Q1: No authentication — Node.js `grpc.ServerCredentials.createInsecure()`
-  - ENG-Q6: No network security configuration
-- **RISKs** (34): Full set minus DATA-Q1 (public ECB rates — no sensitive data)
+  - AUTH-Q1: gRPC server created with `grpc.NewServer()` — no authentication. No OAuth2, API key, or mTLS.
+  - DATA-Q1: Shipping data includes address PII (street, city, state, country) with no classification.
+- **RISKs** (32): API-Q2, API-Q3, API-Q5, API-Q7, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
 - **Key Recommendations**:
-  - **Strong pilot candidate** — only 2 BLOCKERs, handles only public currency data
-  - Resolving AUTH-Q1 + ENG-Q6 (Group 1) moves this to Pilot-Ready
-  - Agent use case: currency conversion for international customer support
+  - Enable Istio AuthorizationPolicy.
+  - Classify address fields as PII in the shipping data model.
+  - Add gRPC authentication interceptor for defense-in-depth.
+- **Depends On**: None
+- **Depended On By**: frontend, checkoutservice
 
 #### recommendationservice
 
@@ -875,14 +726,64 @@ The EBA-Agentic AI program is not yet recommended because no services have achie
 - **Agent Scope**: read-only
 - **Priority**: P1
 - **BLOCKERs** (2):
-  - AUTH-Q1: No authentication — Python `grpc.insecure_channel()` and `server.add_insecure_port()`
-  - DATA-Q1: `user_id` field unclassified PII
-- **RISKs** (24): Lowest RISK count among application services (23 INFOs — many questions scored INFO)
+  - AUTH-Q1: gRPC server uses `grpc.insecure_channel()` and `server.add_insecure_port()` — no authentication. Istio AuthorizationPolicy available but disabled.
+  - DATA-Q1: Processes product recommendation data that may include user behavior data with no classification.
+- **RISKs** (32): API-Q2, API-Q3, API-Q5, API-Q7, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
 - **Key Recommendations**:
-  - Strongest readiness profile among services with DATA-Q1 BLOCKER (only 24 RISKs)
-  - Has existing Istio AuthorizationPolicy and NetworkPolicy — only service with ENG-Q6 as INFO
-  - Agent use case: product recommendations for customer support — primary pilot target
-  - Classify `user_id` as PII and implement access control
+  - Enable Istio AuthorizationPolicy.
+  - Key service for customer support agent use case — prioritize for pilot after AUTH-Q1 resolution.
+  - Add OpenTelemetry tracing for end-to-end recommendation query visibility.
+- **Depends On**: productcatalogservice
+- **Depended On By**: frontend
+
+#### currencyservice
+
+- **Readiness Profile**: 🟠 Remediation Required
+- **Repo Type**: application
+- **Agent Scope**: read-only
+- **Priority**: P1
+- **BLOCKERs** (1):
+  - AUTH-Q1: gRPC server uses `grpc.ServerCredentials.createInsecure()` — no authentication. Istio AuthorizationPolicy available but disabled.
+- **RISKs** (23): API-Q3, API-Q5, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q5, DATA-Q6, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q6
+- **Key Recommendations**:
+  - Enable Istio AuthorizationPolicy (single BLOCKER — closest to Pilot-Ready alongside productcatalogservice and adservice).
+  - Currency exchange rates are public data (INFO for DATA-Q1) — no data classification blocker.
+  - Low-risk Foundation service — good candidate for early pilot.
+- **Depends On**: None
+- **Depended On By**: frontend, checkoutservice
+
+#### emailservice
+
+- **Readiness Profile**: 🟠 Remediation Required
+- **Repo Type**: application
+- **Agent Scope**: read-only
+- **Priority**: P2
+- **BLOCKERs** (2):
+  - AUTH-Q1: gRPC server uses `server.add_insecure_port()` — no authentication.
+  - DATA-Q1: Processes email addresses and order confirmation details with no data classification.
+- **RISKs** (32): API-Q2, API-Q3, API-Q5, API-Q7, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q4, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q3, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
+- **Key Recommendations**:
+  - Enable Istio AuthorizationPolicy restricting access to checkoutservice only.
+  - Classify email addresses as PII.
+  - Lower priority for agent integration (P2, downstream notification service).
+- **Depends On**: None
+- **Depended On By**: checkoutservice
+
+#### adservice
+
+- **Readiness Profile**: 🟠 Remediation Required
+- **Repo Type**: application
+- **Agent Scope**: read-only
+- **Priority**: P2
+- **BLOCKERs** (1):
+  - AUTH-Q1: gRPC server uses `ServerBuilder.forPort(port)` with no authentication interceptors. No TLS, mTLS, OAuth2, or API key.
+- **RISKs** (23): API-Q3, API-Q5, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q2, DATA-Q4, DATA-Q5, DATA-Q6, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q6
+- **Key Recommendations**:
+  - Enable Istio AuthorizationPolicy (single BLOCKER — candidate for early remediation).
+  - Ad data is non-sensitive (INFO for DATA-Q1) — no data classification blocker.
+  - Lower priority for customer support agent use case (P2, ads are tangential).
+- **Depends On**: None
+- **Depended On By**: frontend
 
 #### platform-infra
 
@@ -891,41 +792,28 @@ The EBA-Agentic AI program is not yet recommended because no services have achie
 - **Agent Scope**: read-only
 - **Priority**: Not set
 - **BLOCKERs** (1):
-  - ENG-Q6: Network policies comprehensively defined but disabled by default; Istio Gateway permissive (HTTP, wildcard, no TLS)
-- **RISKs** (12): AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, AUTH-Q8, OBS-Q1, OBS-Q2, ENG-Q1 through ENG-Q5
-- **N/A** (34): 34 questions not applicable to infrastructure-only repo
+  - AUTH-Q1: No agent-facing authentication mechanism in infrastructure. Kubernetes ServiceAccounts provide pod-level identity only. No external agent identity support.
+- **RISKs** (13): AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, AUTH-Q8, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, ENG-Q6
+- **N/A** (34): 34 questions not applicable to infrastructure-only repos (API surface, state management, HITL, data accessibility questions)
 - **Key Recommendations**:
-  - Enable network policies (uncomment `components/network-policies` in kustomization.yaml)
-  - Enable AuthorizationPolicies and Sidecars in Helm values
-  - Configure TLS on Istio Gateway
-  - This single infrastructure change resolves ENG-Q6 for platform-infra and contributes to resolving it for all application services
+  - **Top priority**: Enable Istio AuthorizationPolicies (`authorizationPolicies.create: true`) — this single platform change addresses AUTH-Q1 for all 11 services.
+  - Enable NetworkPolicies (`networkPolicies.create: true`) for defense-in-depth.
+  - Deploy the OpenTelemetry Collector (`opentelemetryCollector.create: true`) for portfolio-wide tracing.
+- **Depends On**: None
+- **Depended On By**: All 10 application services
 
 ## Assessment Inventory
 
 | # | Service | Report File | Assessment Date | Repo Type | Agent Scope |
 |---|---------|-------------|-----------------|-----------|-------------|
-| 1 | frontend | ./services/microservices-demo/src/frontend/frontend-ara-report.md | 2026-04-15 | application | read-only |
-| 2 | cartservice | ./services/microservices-demo/src/cartservice/cartservice-ara-report.md | 2025-07-15 | application | read-only |
-| 3 | productcatalogservice | ./services/microservices-demo/src/productcatalogservice/productcatalogservice-ara-report.md | 2026-04-15 | application | read-only |
-| 4 | checkoutservice | ./services/microservices-demo/src/checkoutservice/checkoutservice-ara-report.md | 2026-04-15 | application | read-only |
-| 5 | paymentservice | ./services/microservices-demo/src/paymentservice/paymentservice-ara-report.md | 2025-07-15 | application | read-only |
-| 6 | currencyservice | ./services/microservices-demo/src/currencyservice/currencyservice-ara-report.md | 2026-04-15 | application | read-only |
-| 7 | shippingservice | ./services/microservices-demo/src/shippingservice/shippingservice-ara-report.md | 2026-04-15 | application | read-only |
-| 8 | emailservice | ./services/microservices-demo/src/emailservice/emailservice-ara-report.md | 2026-04-15 | application | read-only |
-| 9 | recommendationservice | ./services/microservices-demo/src/recommendationservice/recommendationservice-ara-report.md | 2026-04-15 | application | read-only |
-| 10 | adservice | ./services/microservices-demo/src/adservice/adservice-ara-report.md | 2026-04-15 | application | read-only |
-| 11 | platform-infra | ./services/microservices-demo/microservices-demo-ara-report.md | 2025-07-15 | infrastructure-only | read-only |
-
-### Discovery Notes
-
-- **Reports discovered**: 17 files matching `*-ara-report.md`
-- **Reports included**: 11 (all under `./services/microservices-demo/`)
-- **Reports excluded**: 6 (under `./example-reports/` — reference reports from other portfolios, not part of this assessment)
-- **Excluded files**:
-  - `./example-reports/v2-full-assessment/agentic-readiness-assessment/aws-microservices-ara-report.md`
-  - `./example-reports/v2-full-assessment/agentic-readiness-assessment/books-api-ara-report.md`
-  - `./example-reports/v2-full-assessment/agentic-readiness-assessment/ecommerce-platform-v2-portfolio-ara-report.md`
-  - `./example-reports/v2-full-assessment/agentic-readiness-assessment/eks-saas-gitops-ara-report.md`
-  - `./example-reports/v2-full-assessment/agentic-readiness-assessment/monolith-ara-report.md`
-  - `./example-reports/v2-full-assessment/agentic-readiness-assessment/MonoToMicroLegacy-ara-report.md`
-- **Service inventory cross-reference**: All 11 services from `service_inventory` in the portfolio configuration have matching ARA reports. No missing reports.
+| 1 | frontend | ./services/microservices-demo/src/frontend/frontend-ara-report.md | 2026-04-16 | application | read-only |
+| 2 | cartservice | ./services/microservices-demo/src/cartservice/cartservice-ara-report.md | 2026-04-16 | application | read-only |
+| 3 | productcatalogservice | ./services/microservices-demo/src/productcatalogservice/productcatalogservice-ara-report.md | 2026-04-16 | application | read-only |
+| 4 | checkoutservice | ./services/microservices-demo/src/checkoutservice/checkoutservice-ara-report.md | 2026-04-16 | application | read-only |
+| 5 | paymentservice | ./services/microservices-demo/src/paymentservice/paymentservice-ara-report.md | 2025-07-16 | application | read-only |
+| 6 | currencyservice | ./services/microservices-demo/src/currencyservice/currencyservice-ara-report.md | 2026-04-16 | application | read-only |
+| 7 | shippingservice | ./services/microservices-demo/src/shippingservice/shippingservice-ara-report.md | 2026-04-16 | application | read-only |
+| 8 | emailservice | ./services/microservices-demo/src/emailservice/emailservice-ara-report.md | 2026-04-16 | application | read-only |
+| 9 | recommendationservice | ./services/microservices-demo/src/recommendationservice/recommendationservice-ara-report.md | 2026-04-16 | application | read-only |
+| 10 | adservice | ./services/microservices-demo/src/adservice/adservice-ara-report.md | 2025-07-16 | application | read-only |
+| 11 | platform-infra | ./services/microservices-demo/microservices-demo-ara-report.md | 2026-04-16 | infrastructure-only | read-only |

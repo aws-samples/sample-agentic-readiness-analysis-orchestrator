@@ -30,20 +30,12 @@ The output is a detailed Markdown report saved as `portfolio-ara-report.md` cont
 - Agentic program recommendations (EBA-Agentic AI)
 - Service-by-service summary (repo name, profile, blocker count, risk count)
 
-This portfolio TD does **NOT** include:
-- Modernization pathways
-- Roadmap phases
-- Numeric scores or score averages
-- Tiered gap classification
-- Goal-based re-weighting
-- Technology preferences
-- Quick Agent Wins aggregation
-- Resource allocation recommendations
+This portfolio TD focuses exclusively on cross-cutting BLOCKER/RISK identification across multiple ARA reports. It does not include modernization pathways, roadmap phases, numeric scores, technology preferences, or resource allocation recommendations.
 
 ## Entry Criteria
 
 - At least 2 individual ARA reports exist in repository directories
-- ARA reports follow the expected structure: readiness profile, BLOCKER/RISK/INFO counts, detailed findings for 49 questions
+- ARA reports follow the expected structure: readiness profile, BLOCKER/RISK/INFO counts, detailed findings
 - Reports are accessible at specified paths or in a common directory structure
 - Write permissions exist to create the output directory and portfolio report file
 
@@ -100,16 +92,6 @@ additionalPlanContext: |
 - **`context`** → No default. If absent, portfolio-level recommendations are written without additional framing.
 - **`service_inventory`** → No default. If absent, service metadata is derived solely from discovered reports.
 - **`dependency_overrides`** → No default. If absent, the service dependency map section notes that no dependency information was provided and recommends the user supply it for richer analysis.
-
-#### 0.3 Fields NOT Read by This TD
-
-The Portfolio ARA TD does **not** read, validate, or apply the following fields from `additionalPlanContext`. If present, they are ignored:
-
-- **`preferences`** — The `preferences` field (prefer/avoid arrays) is a MOD-only concept used for technology recommendation steering. The Portfolio ARA TD evaluates agentic readiness patterns — it does not make technology recommendations.
-- **`agent_scope`** — Agent scope is a per-repo field consumed by individual ARA TDs. The portfolio TD reads agent_scope from individual report metadata, not from its own additionalPlanContext.
-- **`goal`** — There is no goal system. The Portfolio ARA TD operates without goal-based re-weighting, conditional sections, or phase naming.
-- **`goal_context`** — Replaced by the `context` field.
-
 
 ### Step 1: Discovery — Locate ARA Reports
 
@@ -178,7 +160,7 @@ Extract the readiness profile from the "Readiness Profile" section:
 
 #### 2.3 Detailed Findings (Per-Question)
 
-For each of the 49 questions (API-Q1 through ENG-Q6), extract:
+For each question in the report, extract:
 
 - **Question ID** — e.g., API-Q1, AUTH-Q7, ENG-Q3
 - **Severity** — BLOCKER, RISK, INFO, or N/A
@@ -950,13 +932,6 @@ Strictly follow these rules at all times:
 - **Minimum 2 reports**: The portfolio assessment requires at least 2 valid ARA reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Questions scored as N/A for a service do NOT count as gaps for that service in cross-cutting analysis. A question that is N/A for a service is excluded from BLOCKER and RISK counts for cross-cutting identification.
 - **Cross-cutting thresholds**: BLOCKERs require 2+ repos. RISKs require 3+ repos. Do not lower these thresholds.
-- **No pathways**: This portfolio TD does not include AWS Modernization Pathways, pathway aggregation, or pathway-to-learning-materials mapping. Pathways belong in the Portfolio MOD TD.
-- **No roadmap phases**: This portfolio TD does not include phased roadmaps, phase assignment algorithms, or timeline estimates. Roadmaps belong in the Portfolio MOD TD.
-- **No numeric scores**: This portfolio TD does not calculate numeric score averages, category scores, or overall portfolio scores. The ARA assessment uses BLOCKER/RISK/INFO severity, not numeric scales.
-- **No tiered gap classification**: This portfolio TD does not use the 4-tier gap classification (Foundational Blockers, Prerequisites, Goal Deliverables, Improvement Opportunities). That classification is goal-dependent and belongs in the v1 portfolio TD. The v2 Portfolio ARA TD uses simple cross-cutting BLOCKER/RISK identification.
-- **No goal system**: This TD does not read, validate, or apply any goal field. There is no goal-based re-weighting, conditional sections, or phase naming. The `context` field is used for free-text framing only.
-- **No preferences**: This TD does not read or apply technology preferences (prefer/avoid arrays). Preferences are a MOD-only concept.
-- **No agent_scope at portfolio level**: Agent scope is a per-repo field. The portfolio TD reads agent_scope from individual report metadata, not from its own additionalPlanContext.
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
 - **Conditional BLOCKER accuracy**: When counting cross-cutting BLOCKERs for conditional questions (API-Q4, STATE-Q1, AUTH-Q7, DATA-Q2), only count services where the conditional resolved to BLOCKER (write-enabled scope). Do not count services where it resolved to INFO/RISK (read-only scope).
 - **Report completeness**: The output report must contain all required sections: executive dashboard, cross-cutting BLOCKERs, cross-cutting RISKs, service dependency map, remediation guidance, agentic program recommendations, service-by-service summary, and assessment inventory.

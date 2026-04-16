@@ -1,21 +1,22 @@
 # Agentic Readiness Assessment Report
 
-**Target**: ./services/microservices-demo/src/currencyservice
-**Date**: 2026-04-15
+**Target**: services/microservices-demo/src/currencyservice
+**Date**: 2025-07-14
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
 **Repository Type**: application
+**Service Archetype**: stateless-utility (user-provided)
 **Agent Scope**: read-only
 **Priority**: P1
 **Tags**: cpp, grpc, utility
-**Context**: C++ gRPC service converting between currencies. (Note: The actual implementation is Node.js/JavaScript, not C++. The user-provided context references C++ but the codebase uses Node.js with `@grpc/grpc-js`.)
+**Context**: C++ gRPC service converting between currencies. (Note: actual implementation is Node.js/gRPC.)
 
 ---
 
 ## Readiness Profile: Remediation Required
 
-**BLOCKERs**: 2 | **RISKs**: 34 | **INFOs**: 13
+**BLOCKERs**: 1 | **RISKs**: 16 | **INFOs**: 14
 
-Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days.
+Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days. The single BLOCKER (AUTH-Q1: Machine Identity Authentication) must be resolved before any agent can safely call this service. The gRPC server binds with insecure credentials and all mesh-layer identity controls (AuthorizationPolicies, Sidecars, NetworkPolicies) are disabled in the Helm values. Any pod in the cluster can call any RPC without authentication or attribution.
 
 ---
 
@@ -23,14 +24,18 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 2 |
-| RISK | 34 |
-| INFO | 13 |
+| BLOCKER | 1 |
+| RISK | 16 |
+| INFO | 14 |
 | N/A | 0 |
-| **Total** | **49** |
+| Not Evaluated (extended) | 12 |
+| **Total** | **43** |
 
-**Questions Evaluated**: 49
+**Core Questions Evaluated**: 24
+**Extended Questions Triggered**: 7
+**Extended Questions Not Triggered**: 12
 **Questions N/A (repo_type: application)**: 0
+**Service Archetype**: stateless-utility (user-provided)
 
 ---
 
@@ -39,932 +44,684 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 ### AUTH-Q1: Machine Identity Authentication
 
 - **Severity**: BLOCKER
-- **Finding**: The gRPC server is started with `grpc.ServerCredentials.createInsecure()` in `server.js` (line ~153). There is no authentication mechanism of any kind — no OAuth2 client credentials flow, no API key authentication, no mTLS configuration. Any network-reachable client can invoke both `GetSupportedCurrencies` and `Convert` RPCs without presenting credentials. No audit logging of authenticated principals exists because there are no principals to authenticate.
-- **Gap**: No machine identity authentication. No principal attribution in audit logs. No service account or API key authentication. The server accepts all connections without verifying caller identity.
+- **Finding**: The gRPC server in `server.js` binds with `grpc.ServerCredentials.createInsecure()` — no TLS, no mTLS, no authentication of any kind at the application layer. The Helm chart (`helm-chart/templates/currencyservice.yaml`) defines an Istio AuthorizationPolicy and Sidecar resource, but both are gated behind values flags. In `helm-chart/values.yaml`, `authorizationPolicies.create: false`, `sidecars.create: false`, and `networkPolicies.create: false` — all three mesh-layer identity controls are disabled by default. With sidecars disabled, there is no mTLS between pods. With AuthorizationPolicies disabled, there is no caller restriction. Any pod in the namespace can call any RPC on port 7000 without authentication. No OAuth2 client credentials flow, no API key authentication, no service account attribution in audit logs.
+- **Gap**: Zero authentication at both application and mesh layers. No machine identity verification. No principal attribution for any call. An agent calling this service cannot be identified, and a malicious caller cannot be distinguished from a legitimate one.
 - **Remediation**:
-  - **Immediate**: Implement mTLS or gRPC interceptor-based authentication. For mTLS, replace `grpc.ServerCredentials.createInsecure()` with `grpc.ServerCredentials.createSsl()` using CA-signed certificates. Alternatively, add a gRPC metadata interceptor that validates bearer tokens (JWT) or API keys from incoming request metadata.
-  - **Target State**: All gRPC calls are authenticated with a verifiable machine identity. Each request's authenticated principal is logged in structured logs with a `principal_id` field. Service accounts are defined per calling service/agent.
-  - **Estimated Effort**: Medium (2–4 weeks including certificate infrastructure and interceptor implementation)
-  - **Dependencies**: ENG-Q6 (Network Policies) — authentication and network security should be addressed together.
-- **Evidence**: `server.js` line `grpc.ServerCredentials.createInsecure()`
+  - **Immediate**: Enable Istio sidecar injection (`sidecars.create: true`) and AuthorizationPolicies (`authorizationPolicies.create: true`) in `helm-chart/values.yaml`. This activates mTLS between pods and restricts callers to `frontend` and `checkoutservice` service accounts as defined in the Helm template. Add agent-specific K8s ServiceAccounts to the AuthorizationPolicy.
+  - **Target State**: Mesh-level mTLS with per-service principal attribution. AuthorizationPolicy restricts callers to explicitly allowed service accounts. Agent identities are distinct ServiceAccounts with per-RPC path rules. Application-layer gRPC interceptor extracts Istio peer identity for audit logging.
+  - **Estimated Effort**: Medium
+  - **Dependencies**: None — this is the foundational blocker. AUTH-Q2, AUTH-Q3, AUTH-Q6, and AUTH-Q7 all depend on identity being established first.
+- **Evidence**: `server.js` (`grpc.ServerCredentials.createInsecure()`), `helm-chart/values.yaml` (`authorizationPolicies.create: false`, `sidecars.create: false`, `networkPolicies.create: false`), `helm-chart/templates/currencyservice.yaml` (AuthorizationPolicy and Sidecar sections gated by values flags)
 
-### ENG-Q6: Cross-Origin and Network Policies
+---
 
-- **Severity**: BLOCKER
-- **Finding**: The gRPC server binds to all interfaces (`[::]:${PORT}`) with insecure credentials in `server.js`. No security group rules, no network policies, no API gateway access policies, no WAF rules, and no firewall configurations are defined anywhere in the repository. No IaC files exist to define network security boundaries. The Dockerfile exposes port 7000 without any network security configuration.
-- **Gap**: No network security configuration documented or defined. The service is exposed on all interfaces with no access controls. No security groups, no Kubernetes NetworkPolicies, no API gateway, no WAF rules. The entire network surface is open.
-- **Remediation**:
-  - **Immediate**: Define network policies as IaC (Terraform security groups or Kubernetes NetworkPolicies) that restrict ingress to the gRPC port to only known consumer services. Add an API gateway or service mesh (e.g., Istio, AWS App Mesh) in front of the gRPC service for traffic management and security enforcement.
-  - **Target State**: Network policies defined as IaC, restricting access to the CurrencyService to authorized consumer services only. Security group or NetworkPolicy rules are peer-reviewed before deployment. Drift detection is active.
-  - **Estimated Effort**: Medium (2–4 weeks including IaC authoring, testing, and deployment)
-  - **Dependencies**: AUTH-Q1 (Machine Identity Authentication) — network policies and authentication are complementary controls.
-- **Evidence**: `server.js` (bind to `[::]:${PORT}` with `createInsecure()`), `Dockerfile` (`EXPOSE 7000`), absence of any IaC files
 ## RISKs — Proceed with Compensating Controls
 
 ### API-Q3: Structured Error Responses
-
 - **Severity**: RISK
-- **Finding**: The `convert()` function in `server.js` has a try/catch block that passes `err.message` directly to the gRPC callback on failure. There are no structured error codes, no machine-readable error bodies, and no retryable indicators. The `getSupportedCurrencies()` function has no error handling at all. gRPC status codes are not explicitly set — the framework defaults are used.
-- **Gap**: No structured error response format. No explicit gRPC status codes (e.g., `grpc.status.INVALID_ARGUMENT`). No retryable boolean or error category. Agents cannot distinguish retriable errors from terminal errors.
+- **Finding**: The `convert` function in `server.js` catches errors and calls `callback(err.message)` — a plain string with no structured error codes, no gRPC status code mapping, and no retryable indicator. The `getSupportedCurrencies` function has no error handling at all. Neither RPC sets explicit gRPC status codes (e.g., `INVALID_ARGUMENT`, `NOT_FOUND`).
+- **Gap**: Agents cannot distinguish retriable errors (e.g., transient server failure) from terminal errors (e.g., unsupported currency code). No structured error metadata in gRPC responses.
 - **Compensating Controls**:
-  - Implement gRPC error handling at the agent orchestration layer that maps generic gRPC status codes to retry/abort decisions.
-  - Wrap agent tool calls with timeout and retry logic with exponential backoff for `UNAVAILABLE` and `DEADLINE_EXCEEDED` status codes.
+  - Wrap agent tool calls with client-side error classification based on gRPC status codes
+  - Implement retry with exponential backoff for UNKNOWN/UNAVAILABLE status codes at the agent layer
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add explicit gRPC status codes using `grpc.status` enum in error callbacks. Return structured error metadata using gRPC `Metadata` objects with fields for `error_code`, `error_message`, and `retryable`.
-- **Evidence**: `server.js` — `convert()` function, `callback(err.message)` pattern
-
-### API-Q5: API Versioning and Deprecation
-
-- **Severity**: RISK
-- **Finding**: The proto file uses `package hipstershop` with no version number. There are no `/v1/`, `/v2/` URL patterns (gRPC uses package names). No version annotations, no changelog files, and no deprecation notices. The `package.json` shows version `0.1.0` but this is not reflected in the gRPC service definition.
-- **Gap**: No API versioning scheme. No deprecation policy. No downstream notification mechanism for breaking changes. Agent tool schemas could break silently when the proto definition changes.
-- **Compensating Controls**:
-  - Pin agent tool definitions to a specific proto file hash or commit SHA.
-  - Monitor proto file changes in version control and trigger agent tool schema regeneration on changes.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Adopt proto package versioning (e.g., `hipstershop.v1.CurrencyService`). Maintain a `CHANGELOG.md` documenting API changes. Implement proto backward-compatibility checks in CI (e.g., `buf breaking`).
-- **Evidence**: `proto/demo.proto` (`package hipstershop`), `package.json` (`version: 0.1.0`)
-
-### API-Q7: Asynchronous Operation Support
-
-- **Severity**: RISK
-- **Finding**: Both RPCs (`GetSupportedCurrencies`, `Convert`) are synchronous unary calls. No gRPC streaming, no background job frameworks, no async/polling patterns, and no webhook callbacks are implemented. The operations are stateless computations that should complete in milliseconds.
-- **Gap**: No async operation support. While current operations are fast, there is no infrastructure for adding longer-running operations in the future. No timeout configuration on the server side.
-- **Compensating Controls**:
-  - Set gRPC client-side deadlines for all agent-initiated calls (e.g., 5-second deadline).
-  - Current operations are sub-second, so sync patterns are acceptable for the current API surface.
-- **Remediation Timeline**: 60–90 days (if new operations are added that require async patterns)
-- **Recommendation**: Add server-side deadline enforcement. If the service scope expands to include operations that take longer than 1 second, implement gRPC server streaming or a job submission pattern.
-- **Evidence**: `server.js` — both RPC implementations are synchronous, `proto/demo.proto` — unary RPC definitions only
+- **Recommendation**: Refactor error handling to use explicit gRPC status codes (`grpc.status.INVALID_ARGUMENT` for bad currency codes, `grpc.status.NOT_FOUND` for unsupported currencies). Return structured error metadata via gRPC trailing metadata.
+- **Evidence**: `server.js` (convert function catch block, getSupportedCurrencies with no error handling)
 
 ### AUTH-Q2: Scoped Permissions (Least Privilege)
-
 - **Severity**: RISK
-- **Finding**: No authorization model exists in the service. No IAM policies, no role definitions, no permission checks, and no middleware validating caller permissions. All callers who can reach the service have unrestricted access to both RPCs. No distinction between callers with different permission levels.
-- **Gap**: No scoped permissions. No least-privilege enforcement. No ability to grant an agent read-only access to specific RPCs while denying others.
+- **Finding**: AuthorizationPolicies are disabled (`authorizationPolicies.create: false` in `helm-chart/values.yaml`). The Helm template defines per-path rules restricting callers to `frontend` and `checkoutservice` service accounts, but this configuration is not active. With policies disabled, any pod in the namespace can call both RPCs. No IAM policies, no application-level RBAC, no agent-specific service accounts.
+- **Gap**: No permission scoping at any layer. All callers have unrestricted access to all RPCs.
 - **Compensating Controls**:
-  - Enforce scoped permissions at the infrastructure layer (Kubernetes RBAC, service mesh authorization policies) rather than within the application.
-  - Use network segmentation to restrict which services can reach the CurrencyService.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Implement gRPC interceptor-based authorization that validates caller identity against a permission matrix. Define per-RPC authorization rules (e.g., agent X can call `GetSupportedCurrencies` but not `Convert`).
-- **Evidence**: `server.js` — no authorization middleware, no permission checks
+  - Enable AuthorizationPolicies as part of AUTH-Q1 remediation to activate caller restrictions
+  - Define agent-specific K8s ServiceAccounts with per-RPC AuthorizationPolicy rules
+- **Remediation Timeline**: 30–60 days (concurrent with AUTH-Q1)
+- **Recommendation**: Enable AuthorizationPolicies and create agent-specific service accounts with per-RPC path rules (e.g., agent can call `Convert` but not `GetSupportedCurrencies`, or vice versa).
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`), `helm-chart/templates/currencyservice.yaml` (AuthorizationPolicy section — defined but inactive)
 
 ### AUTH-Q3: Action-Level Authorization
-
 - **Severity**: RISK
-- **Finding**: No action-level authorization exists. Both RPCs are accessible to anyone who can connect. No middleware checks, no ABAC policies, no fine-grained RBAC. The `server.addService()` call registers handlers without any authorization layer.
-- **Gap**: No ability to enforce action-level authorization (e.g., allow read of supported currencies but deny conversion requests for a specific caller).
+- **Finding**: The gRPC server in `server.js` accepts all calls that reach it — no authorization checks, no interceptors, no middleware. The Helm template defines per-path AuthorizationPolicy rules for `/hipstershop.CurrencyService/Convert` and `/hipstershop.CurrencyService/GetSupportedCurrencies`, but these are disabled (`authorizationPolicies.create: false`). No application-layer action-level authorization exists.
+- **Gap**: No action-level authorization at any layer. If AuthorizationPolicies are enabled (AUTH-Q1), mesh-level per-path rules activate, but application-layer authorization remains absent.
 - **Compensating Controls**:
-  - Implement action-level controls at the service mesh or API gateway layer using method-level authorization policies.
-  - For a read-only agent scope, both RPCs are read operations, so the immediate risk is lower.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add a gRPC interceptor that maps authenticated principals to allowed RPC methods. Use an authorization policy file or external authorization service (e.g., OPA/Rego).
-- **Evidence**: `server.js` — `server.addService(shopProto.CurrencyService.service, {getSupportedCurrencies, convert})`
+  - Enabling AuthorizationPolicies (AUTH-Q1) provides mesh-level per-path authorization
+  - Implement a gRPC server interceptor for defense-in-depth application-layer authorization
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Enable AuthorizationPolicies first (AUTH-Q1). Then implement a gRPC server interceptor that validates caller identity and authorized actions as defense in depth beyond the mesh layer.
+- **Evidence**: `server.js` (no authorization logic), `helm-chart/templates/currencyservice.yaml` (per-path rules defined but inactive), `helm-chart/values.yaml`
 
-### AUTH-Q4: Identity Propagation
-
+### AUTH-Q5: Credential Management
 - **Severity**: RISK
-- **Finding**: No JWT parsing, no OAuth2 flows, no token exchange mechanisms, and no user context headers in `server.js`. gRPC metadata is not inspected for user identity. No Cognito or Okta integration. The service has no concept of the originating user behind a request.
-- **Gap**: No identity propagation. The service cannot personalize responses per user or enforce user-level access controls. When an agent acts on behalf of a user, the CurrencyService cannot know which user is involved.
+- **Finding**: No secrets or credentials are used by the service — it reads static JSON data with no database connections. Google Cloud Profiler uses implicit Workload Identity (no hardcoded credentials). No Secrets Manager, Vault, or external secrets operator integration. No `.env` files committed. No hardcoded passwords or API keys in source code. However, no credential management framework exists for future agent API keys or service credentials.
+- **Gap**: No formal credential management system. While the service currently has no credentials to manage, there is no framework for credential lifecycle management if credentials are introduced.
 - **Compensating Controls**:
-  - For a currency conversion service processing public data, identity propagation is less critical than for services handling user-specific data.
-  - Propagate user context in gRPC metadata at the orchestration layer for audit logging purposes.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add gRPC metadata extraction for user identity tokens. Log the originating user context alongside the calling service identity.
-- **Evidence**: `server.js` — no metadata inspection, no JWT parsing
+  - Credential-free architecture eliminates current secret rotation concerns
+  - Workload Identity for GCP libraries avoids hardcoded credentials
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Maintain credential-free architecture. If credentials are introduced (e.g., agent API keys), use K8s Secrets with an external secrets operator or AWS Secrets Manager with rotation.
+- **Evidence**: `server.js`, `data/currency_conversion.json`, `package.json`
 
-### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-
-- **Severity**: RISK
-- **Finding**: No distinction between agent acting under its own identity and agent acting on behalf of a user. No separate IAM roles, no different auth flows, and no audit log fields distinguishing the two modes. The service has no authentication at all (AUTH-Q1), so this distinction cannot be made.
-- **Gap**: Cannot distinguish agent-as-self from agent-on-behalf-of-user. No separate authorization paths for the two modes.
-- **Compensating Controls**:
-  - The CurrencyService returns public data (exchange rates) that is not user-specific, reducing the risk of this gap.
-  - Implement the distinction at the orchestration layer by passing different gRPC metadata headers for each mode.
-- **Remediation Timeline**: 90–120 days (depends on AUTH-Q1 resolution first)
-- **Recommendation**: After implementing authentication (AUTH-Q1), define separate service accounts for agent-as-self and agent-on-behalf-of-user modes. Log the mode in structured logs.
-- **Evidence**: `server.js` — no authentication, no identity distinction
-
-### AUTH-Q6: Credential Management
-
-- **Severity**: RISK
-- **Finding**: No credentials are hardcoded in the codebase — no passwords, API keys, or secrets are found in `server.js`, `package.json`, or any configuration files. However, no secrets management integration exists either (no AWS Secrets Manager, no HashiCorp Vault). The service does not connect to external services requiring credentials (reads static JSON), but the Google Cloud Profiler configuration in `server.js` relies on implicit credentials.
-- **Gap**: No secrets management system integration. No credential rotation capability. While no credentials are currently hardcoded, there is no framework for managing credentials when authentication is added (AUTH-Q1).
-- **Compensating Controls**:
-  - Current risk is low because the service has no external credential dependencies.
-  - When authentication is added, ensure credentials are managed via a secrets manager from the start.
-- **Remediation Timeline**: 30–60 days (aligned with AUTH-Q1 implementation)
-- **Recommendation**: Integrate AWS Secrets Manager or HashiCorp Vault for credential management before adding authentication. Ensure rotation does not break agent continuity.
-- **Evidence**: `server.js` — no hardcoded credentials, no secrets manager integration; `package.json` — `@google-cloud/profiler` dependency uses implicit credentials
-
-### AUTH-Q7: Immutable Audit Logging ⚡
-
+### AUTH-Q6: Immutable Audit Logging ⚡
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: Pino logger is configured in `server.js` with structured JSON output and severity levels. Logs are written to stdout. No CloudTrail configuration, no immutable log storage (S3 object lock), no log file validation, and no CloudWatch log retention policies. Logs are not tamper-evident. The logger does not record the authenticated principal (because AUTH-Q1 — no authentication exists).
-- **Gap**: No immutable audit logging. Logs are ephemeral stdout streams with no persistence guarantees. No principal attribution in logs. No tamper-evidence.
+- **Finding**: No audit logging exists. Pino logs operational messages only (startup, conversion success/failure) with no principal attribution. Logs are ephemeral container stdout with no immutable storage configuration. No CloudTrail or equivalent. OpenTelemetry tracing is disabled by default (`opentelemetryCollector.create: false`, `tracing: false` in `helm-chart/values.yaml`). The tracing code in `server.js` is gated behind `ENABLE_TRACING == "1"` which is not set when `googleCloudOperations.tracing` is false.
+- **Gap**: No immutable audit trail. No principal attribution in any log output. No tracing. Cannot determine who called the service or attribute actions to specific agent identities.
 - **Compensating Controls**:
-  - Route stdout logs to a centralized logging system (CloudWatch Logs, ELK) with retention policies.
-  - Enable CloudWatch Logs Insights for forensic queries.
+  - Configure K8s log forwarding to immutable store (e.g., CloudWatch Logs with retention policy, S3 with Object Lock)
+  - Enable OpenTelemetry tracing to provide request-level trace context as a partial audit signal
 - **Remediation Timeline**: 60–90 days
-- **Recommendation**: Configure log shipping to CloudWatch Logs with a retention policy. Enable S3 export with object lock for immutability. Add principal identity fields to log entries after AUTH-Q1 is resolved.
-- **Evidence**: `server.js` — Pino logger configuration, absence of CloudTrail or immutable log storage
+- **Recommendation**: Enable tracing (`opentelemetryCollector.create: true`, `tracing: true`). Add structured audit logging with caller identity (extracted from Istio mTLS peer identity once AUTH-Q1 is resolved). Forward to immutable store.
+- **Evidence**: `server.js` (Pino logger with no audit fields, tracing gated behind env var), `helm-chart/values.yaml` (`opentelemetryCollector.create: false`, `tracing: false`)
 
-### AUTH-Q8: Agent Identity Suspension
-
+### AUTH-Q7: Agent Identity Suspension
 - **Severity**: RISK
-- **Finding**: No mechanism to suspend or revoke individual agent identities. No API key revocation endpoints, no IAM role deactivation procedures, no service account disable mechanisms. The service has no authentication (AUTH-Q1), so there are no identities to suspend.
-- **Gap**: Cannot isolate a misbehaving agent without taking down the service entirely. No per-identity suspension capability.
+- **Finding**: AuthorizationPolicies are disabled, so there is no mechanism to deny specific service accounts. NetworkPolicies are also disabled. No API key revocation, no service account disable endpoint, no automated suspension mechanism. Even if policies were enabled, changes would require Helm value updates or manual kubectl edits — no automated or rapid suspension path exists.
+- **Gap**: No suspension mechanism at any layer. Cannot isolate a misbehaving agent without manual intervention and redeployment.
 - **Compensating Controls**:
-  - Use network-level controls (security group modifications, NetworkPolicy updates) to block specific agent source IPs.
-  - Implement a deny-list at the service mesh or API gateway layer.
-- **Remediation Timeline**: 90–120 days (depends on AUTH-Q1 resolution)
-- **Recommendation**: After implementing authentication (AUTH-Q1), add API key or certificate revocation capability. Implement a per-identity deny-list that can be updated without service restart.
-- **Evidence**: `server.js` — no authentication, no identity management
+  - Enable AuthorizationPolicies and NetworkPolicies (AUTH-Q1) to create a foundation for identity-based blocking
+  - Manual kubectl patch of AuthorizationPolicy or NetworkPolicy as emergency measure
+- **Remediation Timeline**: 60–90 days
+- **Recommendation**: Enable AuthorizationPolicies and NetworkPolicies first (AUTH-Q1). Then implement automated suspension via AuthorizationPolicy updates triggered by anomaly detection. Consider an operator or webhook that can instantly deny a service account.
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`, `networkPolicies.create: false`), `helm-chart/templates/currencyservice.yaml`
 
 ### STATE-Q1: Compensation and Rollback ⚡
-
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No multi-step operations exist in the service. Both RPCs are stateless: `GetSupportedCurrencies` reads from a static JSON file, and `Convert` performs an arithmetic calculation. No saga pattern, no two-phase commit, no undo endpoints, no Step Functions. The service has no persistent state to roll back.
-- **Gap**: No compensation or rollback capability. While the service is currently stateless, there is no infrastructure for handling multi-step operations if the service scope expands.
+- **Finding**: Service is stateless — reads static JSON and performs arithmetic. No multi-step write operations. No state mutations to compensate. No saga pattern, no undo endpoints, no Step Functions.
+- **Gap**: No compensation mechanisms exist, though no state mutations require compensation. The RISK rating reflects the absence of the mechanism, not an active threat.
 - **Compensating Controls**:
-  - The service is inherently safe for read-only agent operations because it has no mutable state.
-  - No compensating controls needed for the current API surface.
-- **Remediation Timeline**: Low priority — revisit if write operations are added
-- **Recommendation**: If write operations are added in the future, implement compensation patterns. For the current read-only surface, this risk is mitigated by the service's stateless nature.
-- **Evidence**: `server.js` — stateless RPC implementations, `data/currency_conversion.json` — static data
-
-### STATE-Q2: Queryable Current State
-
-- **Severity**: RISK
-- **Finding**: The service exposes current state through `GetSupportedCurrencies` (returns all supported currency codes) and `Convert` (performs conversion with current rates). The currency data is loaded from `data/currency_conversion.json` and is queryable. However, the data is static (embedded JSON file) and there is no mechanism to query rate update timestamps or data version.
-- **Gap**: No state versioning. No ability to query when rates were last updated. An agent cannot determine if the conversion rates are current.
-- **Compensating Controls**:
-  - Document the data staleness externally (e.g., in an agent tool definition noting rates are static/embedded).
-  - Cross-reference conversion results with a live exchange rate API for validation.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add a `GetRateMetadata` RPC that returns the data source, last update timestamp, and version. Alternatively, include metadata fields in the existing RPC responses.
-- **Evidence**: `server.js` — `_getCurrencyData()` function, `data/currency_conversion.json` — 33 currencies with EUR-based rates
-
-### STATE-Q3: Concurrency Controls
-
-- **Severity**: RISK
-- **Finding**: No concurrency controls are implemented. No optimistic locking, no ETags, no version fields, no conflict resolution logic. The service is stateless and read-only — it reads a static JSON file loaded into memory at startup. Multiple concurrent requests read the same in-memory data without mutation.
-- **Gap**: No concurrency controls. While not needed for the current read-only, stateless design, there is no infrastructure for safe concurrent writes if the service scope expands.
-- **Compensating Controls**:
-  - The service is inherently safe for concurrent read operations because no data is mutated.
-  - No compensating controls needed for the current API surface.
-- **Remediation Timeline**: Low priority — revisit if mutable state is added
-- **Recommendation**: If mutable state is added (e.g., custom rate overrides), implement optimistic locking with version fields.
-- **Evidence**: `server.js` — `_getCurrencyData()` reads static JSON, no database writes
-
-### STATE-Q4: Circuit Breakers and Resilience
-
-- **Severity**: RISK
-- **Finding**: No circuit breakers, no retry logic, no timeout configurations, and no resilience patterns are implemented. The service has no external dependency calls — it reads a local JSON file. However, there are no graceful degradation patterns, no health-check-based circuit breaking, and no backpressure mechanisms.
-- **Gap**: No resilience patterns implemented. While the service has no external dependencies that would cascade failures, there is no protection against the service itself becoming overwhelmed.
-- **Compensating Controls**:
-  - The service's simplicity (static JSON, arithmetic only) reduces the likelihood of cascading failures.
-  - Implement circuit breakers at the calling service or agent orchestration layer.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add gRPC server-side request limits (max concurrent streams). Implement a health check endpoint that can signal backpressure. Add graceful shutdown handling.
-- **Evidence**: `server.js` — no resilience libraries, no timeout configuration; `package.json` — `async` dependency present but not used for resilience
+  - Stateless nature means compensation is not operationally needed
+  - Document stateless architecture for agent integration teams
+- **Remediation Timeline**: No immediate action; revisit if write operations are added
+- **Recommendation**: Maintain stateless architecture documentation. Implement compensation if write operations are added.
+- **Evidence**: `server.js`, `data/currency_conversion.json`
 
 ### STATE-Q5: Rate Limiting and Throttling
-
 - **Severity**: RISK
-- **Finding**: No rate limiting at any layer. No API Gateway, no WAF, no application-level rate limiting middleware. The gRPC server accepts unlimited concurrent connections and requests. No `express-rate-limit` or equivalent gRPC rate limiting.
-- **Gap**: No rate limiting. A runaway agent loop could overwhelm the service with requests at machine speed. No protection against agent-induced DDoS.
+- **Finding**: No application-level rate limiting. No gRPC interceptor for request throttling. K8s resource limits cap CPU (200m) and memory (256Mi) but not request rates. ClusterIP service with no API Gateway. Istio sidecar is disabled (`sidecars.create: false`), so no Envoy-level rate limiting is possible. No WAF rules.
+- **Gap**: Runaway agent loop could overwhelm the service at machine speed. No per-caller rate limiting at any layer.
 - **Compensating Controls**:
-  - Implement rate limiting at the infrastructure layer (API gateway, service mesh, or load balancer).
-  - Set gRPC client-side concurrency limits in agent tool definitions.
+  - Enable Istio sidecars and configure Envoy rate limiting per source service account
+  - Configure agent-side request rate caps in the agent orchestration layer
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add gRPC server-side rate limiting via an interceptor or deploy behind an API gateway (e.g., AWS API Gateway with gRPC support, or Envoy proxy with rate limiting filter). Define per-client rate limits.
-- **Evidence**: `server.js` — no rate limiting, absence of API Gateway or WAF configuration
-
-### STATE-Q6: Blast Radius and Transaction Limits
-
-- **Severity**: RISK
-- **Finding**: No configurable transaction limits. No per-agent limits on request frequency or volume. The service is read-only, so blast radius from writes is not applicable. However, there are no limits preventing an agent from issuing thousands of conversion requests per second, potentially starving other consumers.
-- **Gap**: No configurable limits on agent-initiated actions. No per-identity request caps.
-- **Compensating Controls**:
-  - Implement per-agent rate limits at the orchestration layer.
-  - The read-only nature limits blast radius to availability impact only (no data corruption risk).
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: After implementing authentication (AUTH-Q1), add per-identity request quotas. Define `max_requests_per_minute` per agent identity.
-- **Evidence**: `server.js` — no transaction limits, no per-client quotas
-
-### STATE-Q7: Infrastructure Capacity for Agent Traffic
-
-- **Severity**: RISK
-- **Finding**: No load test results, no auto-scaling policies, and no capacity planning documentation. The Dockerfile runs a single Node.js process (`node server.js`) on Alpine Linux. No horizontal scaling configuration. No Kubernetes HPA (Horizontal Pod Autoscaler) definitions. No connection pool sizing.
-- **Gap**: Unknown capacity limits. The service has not been load-tested for agent traffic patterns. A single Node.js process has known concurrency limits.
-- **Compensating Controls**:
-  - Node.js event loop handles concurrent I/O well for CPU-light operations like currency conversion.
-  - Deploy multiple replicas behind a load balancer for redundancy.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Conduct load testing to establish baseline capacity. Define Kubernetes resource limits and HPA policies. Consider Node.js clustering or multiple replicas.
-- **Evidence**: `Dockerfile` — single `node server.js` process, `EXPOSE 7000`, absence of scaling configuration
-
-### HITL-Q1: Draft/Pending State
-
-- **Severity**: RISK
-- **Finding**: No draft or pending state concept exists. The service is stateless and read-only. Both RPCs return immediate results — there is no concept of creating a draft conversion or pending approval. No approval workflow endpoints, no status-based state machines.
-- **Gap**: No draft/pending state for agent-proposed actions. For a read-only currency conversion service, this is a design limitation rather than a safety gap.
-- **Compensating Controls**:
-  - For read-only operations returning public data, draft states are less critical.
-  - Implement draft/approval patterns at the orchestration layer if conversion results feed into downstream write operations.
-- **Remediation Timeline**: Low priority for read-only service
-- **Recommendation**: If conversion results are used as inputs to financial transactions, implement a confirmation pattern at the orchestration layer where a human approves the conversion before the downstream write is executed.
-- **Evidence**: `server.js` — both RPCs return immediate results, no state management
-
-### HITL-Q2: Configurable Approval Gates
-
-- **Severity**: RISK
-- **Finding**: No approval gates exist. No configurable operation-level flags. No Step Functions with human approval tasks. The service has no mechanism for requiring human approval before executing an operation.
-- **Gap**: No ability to configure human approval gates for specific operations. While both RPCs are read-only, there is no framework for adding approval gates if the service scope expands.
-- **Compensating Controls**:
-  - Implement approval gates at the agent orchestration layer rather than within the service.
-  - For read-only currency conversion, approval gates are less critical.
-- **Remediation Timeline**: Low priority for read-only service
-- **Recommendation**: Implement approval gates at the orchestration layer for any downstream actions that depend on conversion results (e.g., executing a payment after currency conversion).
-- **Evidence**: `server.js` — no approval logic, no configurable flags
+- **Recommendation**: Enable Istio sidecars (AUTH-Q1). Add gRPC interceptor for application-level rate limiting or configure Istio/Envoy rate limiting per source service account.
+- **Evidence**: `server.js` (no rate limiting), `helm-chart/values.yaml` (`sidecars.create: false`), `helm-chart/templates/currencyservice.yaml` (resource limits only)
 
 ### HITL-Q3: Sandbox/Staging Environment
-
 - **Severity**: RISK
-- **Finding**: No separate environment configurations found. No Docker Compose for local testing. No seed data scripts. No synthetic data generators. No environment-specific IaC. The service reads a static JSON file, making local testing straightforward (`node server.js`), but no formal sandbox or staging environment is configured.
-- **Gap**: No formal sandbox/staging environment definition. No production-equivalent test environment for agent validation.
+- **Finding**: Skaffold provides local development via Docker build. CI deploys per-PR to ephemeral namespaces on `prs-gke-cluster` (`.github/workflows/ci-pr.yaml`). Smoke tests run via loadgenerator. No persistent agent testing environment with production-equivalent data shape.
+- **Gap**: No dedicated agent testing environment. Ephemeral PR namespaces are transient and not designed for agent integration testing.
 - **Compensating Controls**:
-  - The service's simplicity (static JSON, no database, no external dependencies) makes local testing trivial.
-  - Agents can be tested against a locally-running instance of the service.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Create a Docker Compose file for local testing. Define environment-specific configurations (at minimum: local, staging, production) with different port bindings and logging levels.
-- **Evidence**: `Dockerfile` — single environment definition, `data/currency_conversion.json` — static data file, absence of Docker Compose or environment configs
+  - Use Skaffold for local instance with Docker build for isolated testing
+  - Leverage per-PR ephemeral namespaces for integration testing
+- **Remediation Timeline**: 30 days
+- **Recommendation**: Create a persistent staging namespace for agent integration testing with production-equivalent configuration.
+- **Evidence**: `.github/workflows/ci-pr.yaml` (ephemeral PR deployment), `Dockerfile`, `cloudbuild.yaml`
 
 ### DATA-Q2: Data Residency and Sovereignty ⚡
-
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No data residency requirements are documented. The currency conversion rates in `data/currency_conversion.json` are publicly available data from the European Central Bank. This data is not subject to GDPR, LGPD, HIPAA, or sector-specific data sovereignty requirements. No region-specific configurations found.
-- **Gap**: No documented data residency policy. While the data is public and non-regulated, there is no explicit classification confirming this, which could cause confusion for compliance teams.
+- **Finding**: Static, publicly available ECB exchange rates embedded in `data/currency_conversion.json`. No regulated data (no PII, PHI, or financial account data). No explicit residency requirements or documentation. No `DATA_CLASSIFICATION.md` in the currencyservice directory. The parent repo has a `DATA_CLASSIFICATION.md` at the root but it does not cover per-service residency posture.
+- **Gap**: No formal data residency documentation for this service. Public ECB rates have no residency restrictions, but no formal assessment exists.
 - **Compensating Controls**:
-  - Document that the data is publicly available ECB exchange rates, not subject to residency constraints.
-  - The data contains no PII, PHI, or confidential business data.
-- **Remediation Timeline**: 30 days (documentation only)
-- **Recommendation**: Add a `DATA_CLASSIFICATION.md` file documenting that the currency data is public, non-regulated European Central Bank reference data.
-- **Evidence**: `data/currency_conversion.json` — public exchange rates, `server.js` — comment "Uses public data from European Central Bank"
-
-### DATA-Q3: Selective Query Support
-
-- **Severity**: RISK
-- **Finding**: `GetSupportedCurrencies` returns all 33 currency codes in a single response — no pagination, no filtering, no sorting. `Convert` takes specific input parameters (`from` currency, `to_code`) and returns a single result. No `limit`, `offset`, or `cursor` parameters.
-- **Gap**: No pagination or filtering on `GetSupportedCurrencies`. The result set is small (33 currencies), so this is a low-severity gap.
-- **Compensating Controls**:
-  - The result set is small enough (33 currency codes) to fit within any LLM context window.
-  - `Convert` already accepts specific parameters, limiting results to a single conversion.
-- **Remediation Timeline**: Low priority (result sets are small)
-- **Recommendation**: If the currency list grows significantly, add filtering support. For the current 33-currency list, this is acceptable.
-- **Evidence**: `proto/demo.proto` — `GetSupportedCurrenciesResponse` returns `repeated string currency_codes`, `data/currency_conversion.json` — 33 currencies
-
-### DATA-Q4: System of Record Designations
-
-- **Severity**: RISK
-- **Finding**: No system-of-record designation documented. A code comment in `server.js` mentions "Uses public data from European Central Bank," but there is no formal data ownership documentation, no master data management references, and no conflict resolution logic.
-- **Gap**: No formal system-of-record designation. No documentation of data provenance or ownership. No process for resolving conflicts if rates differ from other sources.
-- **Compensating Controls**:
-  - The ECB is a well-known authoritative source for EUR-based exchange rates.
-  - Document the data source and update frequency in the service README.
-- **Remediation Timeline**: 30 days (documentation only)
-- **Recommendation**: Add data provenance documentation specifying that the European Central Bank is the authoritative source, the update frequency, and the process for refreshing rates.
-- **Evidence**: `server.js` — comment "Uses public data from European Central Bank", `data/currency_conversion.json`
-
-### DATA-Q5: Reliable Timestamps
-
-- **Severity**: RISK
-- **Finding**: No timestamps in the data or API responses. The `data/currency_conversion.json` file contains only currency-to-EUR conversion rates with no `updated_at`, `effective_date`, or `captured_at` field. The `Money` response message in `proto/demo.proto` contains only `currency_code`, `units`, and `nanos` — no temporal fields.
-- **Gap**: No timestamps on currency rates. An agent cannot determine when the rates were captured or whether they are current. This is critical for a currency conversion service where rates change daily.
-- **Compensating Controls**:
-  - Document the rate capture date externally (e.g., in the agent tool definition).
-  - Cross-reference conversion results with a live exchange rate API for time-critical operations.
+  - Document that current data (ECB public rates) has no residency restrictions
+  - Implement residency controls proactively if user-specific or regulated data is added
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add an `effective_date` or `last_updated` field to the currency data JSON. Include timestamp metadata in API responses (add a `rate_timestamp` field to the `Money` message or create a new response wrapper).
-- **Evidence**: `data/currency_conversion.json` — no timestamp fields, `proto/demo.proto` — `Money` message has no temporal fields
-
-### DATA-Q6: Data Freshness Signaling
-
-- **Severity**: RISK
-- **Finding**: No cache headers, no data age indicators, no `last-refreshed` timestamps, and no consistency guarantees. The static JSON file is loaded into memory via `require('./data/currency_conversion.json')` (Node.js module cache). The service cannot signal whether data is current, stale, or cached. An agent has no way to determine data freshness.
-- **Gap**: No data freshness signaling. The service returns conversion results with no indication of when the underlying rates were captured. For a currency conversion service, rate staleness is a material risk.
-- **Compensating Controls**:
-  - Document the known data freshness characteristics in agent tool definitions.
-  - Implement freshness checks at the orchestration layer by comparing results with a reference rate API.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add a gRPC response metadata header (or response field) indicating `rate_effective_date` and `data_source_version`. Implement a periodic rate refresh mechanism.
-- **Evidence**: `server.js` — `require('./data/currency_conversion.json')` cached by Node.js module loader, `data/currency_conversion.json` — no freshness metadata
-
-### DATA-Q7: PII Redaction in Logs
-
-- **Severity**: RISK
-- **Finding**: The Pino logger logs conversion request success/failure messages. The data processed (currency codes and monetary amounts) is not PII. No PII redaction middleware is implemented, but the service does not handle PII — it processes only currency codes (e.g., "CHF", "EUR") and numerical amounts.
-- **Gap**: No PII redaction framework. While the current data is non-PII, there is no protection if PII is inadvertently passed in request metadata or if the service scope expands to handle user-specific data.
-- **Compensating Controls**:
-  - Current data is non-PII (currency codes and amounts), reducing immediate risk.
-  - Monitor log output to ensure no PII leakage if the service evolves.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Add a log scrubbing middleware or Pino serializer that redacts sensitive patterns. This provides defense-in-depth even if the current data is non-PII.
-- **Evidence**: `server.js` — Pino logger with `logger.info('conversion request successful')`, `logger.error()` patterns
-
-### DISC-Q1: Schema Documentation and Versioning
-
-- **Severity**: RISK
-- **Finding**: `proto/demo.proto` provides schema documentation with proto3 syntax, typed message definitions, and inline comments (especially on the `Money` message). The schema is well-documented with field descriptions. However, there is no formal schema versioning — no `v1/v2` package directories, no schema registry, and no changelog. The proto file includes service definitions for 8 other services (CartService, RecommendationService, etc.) in addition to CurrencyService.
-- **Gap**: No schema versioning. No changelog tracking schema changes. Schema changes could break agent tool definitions without warning.
-- **Compensating Controls**:
-  - Pin agent tool schemas to a specific proto file version (commit SHA).
-  - Use `buf breaking` in CI to detect backward-incompatible schema changes.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement proto package versioning (e.g., `hipstershop.currency.v1`). Add `buf` for schema linting and breaking change detection. Maintain a schema changelog.
-- **Evidence**: `proto/demo.proto` — `package hipstershop`, `syntax = "proto3"`, detailed comments on `Money` message
-
-### OBS-Q1: Distributed Tracing and Structured Logging
-
-- **Severity**: RISK
-- **Finding**: OpenTelemetry SDK is configured in `server.js` with gRPC instrumentation (`@opentelemetry/instrumentation-grpc`, `@opentelemetry/sdk-node`). Tracing is conditional on `ENABLE_TRACING=1` environment variable and exports to an OTLP gRPC collector. Pino logger produces structured JSON logs with `severity` field and `message` key. However, no `correlation_id` or `request_id` field is present in log entries, and traces are not correlated with log entries.
-- **Gap**: Tracing exists but is opt-in (disabled by default). Logs are structured JSON but lack `correlation_id`/`request_id` for linking related log entries. No trace-log correlation (trace IDs are not embedded in log entries).
-- **Compensating Controls**:
-  - Enable `ENABLE_TRACING=1` in deployment configuration.
-  - OpenTelemetry gRPC instrumentation automatically propagates trace context headers.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Enable tracing by default (or at least in staging/production). Add `trace_id` and `request_id` fields to Pino log entries using OpenTelemetry context propagation. Set up trace-log correlation.
-- **Evidence**: `server.js` — OpenTelemetry SDK configuration, `ENABLE_TRACING` env var, Pino logger setup; `package.json` — `@opentelemetry/*` dependencies
-
-### OBS-Q2: Alerting on Error Rates and Latency
-
-- **Severity**: RISK
-- **Finding**: No alerting configuration found. No CloudWatch alarms, no anomaly detection, no PagerDuty or OpsGenie integration, no SLO-based alerting, and no composite alarms. Metrics are available via OpenTelemetry (if tracing is enabled) but no alerting thresholds are defined.
-- **Gap**: No alerting on error rates or latency. Degradation of the CurrencyService would not be detected proactively.
-- **Compensating Controls**:
-  - Monitor the health check endpoint (`grpc.health.v1.Health/Check`) from an external monitoring system.
-  - Set up infrastructure-level alerts (container restart count, CPU/memory) at the deployment layer.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Configure CloudWatch alarms (or equivalent) on gRPC error rates and P95 latency. Set up alerting thresholds: >1% error rate → warning, >5% error rate → critical. Integrate with PagerDuty or OpsGenie for on-call notification.
-- **Evidence**: `server.js` — health check endpoint defined, absence of any alerting configuration
-
-### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
-
-- **Severity**: RISK
-- **Finding**: No IaC files found in the repository. No Terraform, CloudFormation, CDK, Helm, or Kustomize definitions. The only infrastructure artifact is the `Dockerfile`. The infrastructure exposing this service to agents — API gateways, IAM roles, secrets, network configurations — is not defined in this repository.
-- **Gap**: No infrastructure-as-code governance. No peer review on infrastructure changes (because there is no IaC). No drift detection. The entire agent-facing surface is undefined from an IaC perspective.
-- **Compensating Controls**:
-  - Infrastructure may be defined in a separate IaC repository (common in microservices architectures).
-  - The Dockerfile provides reproducible container builds.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Define the service's infrastructure as IaC — at minimum: Kubernetes Deployment, Service, NetworkPolicy, and HPA. Add PR review requirements for all IaC changes. Enable drift detection (AWS Config rules or equivalent).
-- **Evidence**: Absence of IaC files (no `.tf`, `.cfn.yaml`, `cdk.json`, `Chart.yaml`, `kustomization.yaml`), `Dockerfile` present
+- **Recommendation**: Document data residency posture formally in a service-level `DATA_CLASSIFICATION.md`. Implement residency-aware controls if the service scope expands to include regulated or user-specific data.
+- **Evidence**: `data/currency_conversion.json`, `server.js`
 
 ### ENG-Q2: CI/CD with API Contract Testing
-
 - **Severity**: RISK
-- **Finding**: No CI/CD pipeline configuration found. No GitHub Actions workflows (`.github/workflows/`), no GitLab CI (`.gitlab-ci.yml`), no Jenkinsfile, no buildspec.yml. No contract tests, no schema validation in build, and no breaking change detection. The `package.json` test script outputs "Error: no test specified."
-- **Gap**: No CI/CD pipeline. No automated testing of any kind. No API contract testing. Proto breaking changes are not detected before deployment.
+- **Finding**: CI exists via Cloud Build (`cloudbuild.yaml`) and GitHub Actions (`.github/workflows/ci-pr.yaml`). Smoke tests run via loadgenerator in ephemeral PR namespaces. However, the proto uses unversioned `package hipstershop` (no version suffix). No `buf.yaml` exists for proto linting or breaking change detection. No `buf breaking` in CI. No currencyservice-specific unit tests — `package.json` has `"test": "echo \"Error: no test specified\" && exit 1"`. CI PR workflow runs Go and C# tests only; Node.js currencyservice is not tested.
+- **Gap**: No automated breaking change detection for proto schemas. No service-specific contract tests. No proto linting. Unversioned proto package means no formal versioning contract.
 - **Compensating Controls**:
-  - CI/CD may be defined in a parent repository or shared pipeline configuration.
-  - Manual testing via `client.js` provides basic smoke testing.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Create a CI/CD pipeline (GitHub Actions or equivalent). Add `buf breaking` for proto compatibility checking. Implement integration tests against the gRPC service. Add the pipeline to the repository.
-- **Evidence**: Absence of CI/CD files, `package.json` — `"test": "echo \"Error: no test specified\" && exit 1"`, `client.js` — manual test client
+  - Protobuf wire compatibility provides implicit backward compatibility for additive changes
+  - Loadgenerator smoke tests catch gross integration failures
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Add `buf.yaml` for proto linting. Add `buf breaking` to CI pipeline for breaking change detection. Add CurrencyService-specific contract tests. Version the proto package (e.g., `hipstershop.v1`).
+- **Evidence**: `proto/demo.proto` (`package hipstershop` — no version), `package.json` (stub test script), `.github/workflows/ci-pr.yaml` (no Node.js tests), `cloudbuild.yaml`
 
 ### ENG-Q3: Rollback Capability
-
 - **Severity**: RISK
-- **Finding**: No deployment configuration found. No blue/green deployment, no canary deployment, no CodeDeploy rollback triggers, no Helm rollback, no feature flags, and no traffic shifting configuration. The Dockerfile enables building container images, but no deployment strategy is defined.
-- **Gap**: No rollback capability defined in this repository. A broken deployment cannot be rolled back using artifacts in this repo.
+- **Finding**: K8s Deployment with rollout history. Skaffold deployment via Cloud Build. No automated rollback triggers. Manual rollback via `kubectl rollout undo` only. No canary deployment, no Flagger, no Argo Rollouts. No feature flags.
+- **Gap**: No automated rollback on service degradation. Manual rollback only. No canary analysis.
 - **Compensating Controls**:
-  - Container image tags enable rolling back to a previous image version.
-  - Deployment and rollback may be managed by a separate deployment pipeline or GitOps repository.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Define a deployment strategy (blue/green or canary) in IaC. Implement automatic rollback triggers based on health check failures. Target: rollback within 15 minutes.
-- **Evidence**: `Dockerfile` — container image build only, absence of deployment configuration
-
-### ENG-Q4: API Test Coverage
-
-- **Severity**: RISK
-- **Finding**: No test files found in the repository. The `package.json` test script is `"echo \"Error: no test specified\" && exit 1"` — explicitly indicating no tests exist. The `client.js` file is a manual test client but is excluded from the Docker image (`.dockerignore` lists `client.js`) and is not part of any automated test suite.
-- **Gap**: Zero test coverage. No automated tests for either RPC. No input validation tests, no error response tests, no edge case tests (e.g., division by zero for unsupported currency codes, negative amounts, overflow).
-- **Compensating Controls**:
-  - `client.js` provides a manual smoke test for basic functionality.
-  - The service's simplicity (two RPCs, arithmetic logic) reduces the likelihood of subtle bugs.
+  - K8s rollout history enables manual rollback within minutes
+  - Liveness/readiness gRPC probes prevent traffic to unhealthy pods
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Write automated gRPC tests for both RPCs. Test: (1) valid conversion, (2) unsupported currency code, (3) zero amount, (4) negative amount, (5) very large amount (overflow), (6) GetSupportedCurrencies returns all expected currencies. Add tests to CI pipeline.
-- **Evidence**: `package.json` — `"test": "echo \"Error: no test specified\" && exit 1"`, `client.js` — manual test client
+- **Recommendation**: Configure automated rollback triggers using Flagger or Argo Rollouts with canary analysis. Add health-based rollback triggers.
+- **Evidence**: `helm-chart/templates/currencyservice.yaml` (Deployment with probes), `cloudbuild.yaml` (Skaffold deploy)
 
-### ENG-Q5: Encryption at Rest for Agent-Accessible Data
-
+### OBS-Q1: Distributed Tracing and Structured Logging
 - **Severity**: RISK
-- **Finding**: No encryption configuration found. No KMS keys, no encryption settings in Dockerfile or configuration. The data (`data/currency_conversion.json`) is embedded in the container image as a plain-text JSON file. No S3, RDS, DynamoDB, or EBS encryption configuration exists because there is no IaC.
-- **Gap**: No encryption at rest configuration. While the data is public (ECB exchange rates), there is no framework for encryption if sensitive data is added. The container image contains unencrypted data.
+- **Finding**: OpenTelemetry SDK is present in `package.json` and `server.js` with gRPC instrumentation registered unconditionally. However, trace export is gated behind `ENABLE_TRACING == "1"`, and the Helm values have `opentelemetryCollector.create: false` and `tracing: false` — so the `ENABLE_TRACING` and `COLLECTOR_SERVICE_ADDR` environment variables are not set. Tracing is effectively disabled. Pino provides structured JSON logging with `severity` field, but no `correlation_id`, `request_id`, or `trace_id` in log entries.
+- **Gap**: Tracing disabled by default. No trace context in logs. Agent-initiated requests cannot be traced end-to-end across services.
 - **Compensating Controls**:
-  - The data is publicly available ECB exchange rates — not sensitive or confidential.
-  - Encryption at rest is typically enforced at the infrastructure layer (encrypted EBS volumes, encrypted container registries).
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Define encryption-at-rest requirements in IaC. Ensure the container registry encrypts images at rest. If the service ever accesses a database, enforce KMS encryption.
-- **Evidence**: `data/currency_conversion.json` — plain-text data file, `Dockerfile` — no encryption configuration, absence of IaC with encryption settings
+  - Enable tracing by setting `opentelemetryCollector.create: true` and `tracing: true` in values.yaml
+  - gRPC instrumentation is already registered — enabling the collector activates trace propagation
+- **Remediation Timeline**: 30 days
+- **Recommendation**: Enable OpenTelemetry tracing in Helm values. Add trace_id to Pino log entries for log-to-trace correlation.
+- **Evidence**: `server.js` (OpenTelemetry setup gated behind env var), `helm-chart/values.yaml` (`opentelemetryCollector.create: false`, `tracing: false`), `package.json` (OpenTelemetry dependencies present)
+
+### OBS-Q2: Alerting on Error Rates and Latency
+- **Severity**: RISK
+- **Finding**: No alerting configured. No CloudWatch alarms, no Prometheus alerting rules, no PagerDuty/OpsGenie integration. Metrics collection is disabled (`metrics: false` in `helm-chart/values.yaml`). K8s liveness/readiness gRPC probes provide pod availability detection only. No HPA configured — fixed replica count with no auto-scaling based on metrics. No monitoring alerts of any kind.
+- **Gap**: No alerting on error rates or latency. Service degradation will not be detected until agents start failing.
+- **Compensating Controls**:
+  - K8s liveness/readiness probes restart unhealthy pods automatically
+  - Agent-side timeout and retry logic provides client-side detection
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Enable metrics collection (`metrics: true`). Configure alerting on gRPC error rates and p99 latency. Add HPA for auto-scaling based on CPU/request metrics.
+- **Evidence**: `helm-chart/values.yaml` (`metrics: false`), `helm-chart/templates/currencyservice.yaml` (probes only, no HPA)
+
+### DISC-Q1: Schema Versioning and API Contracts
+- **Severity**: RISK
+- **Finding**: Proto uses unversioned `package hipstershop` — no version suffix (e.g., `hipstershop.v1`). No `buf.yaml` for proto linting or governance. No breaking change detection tools in CI. No changelog or deprecation notices. The proto file is a shared monolith defining all services in a single file — a breaking change to any service's messages affects all consumers.
+- **Gap**: No schema versioning. No breaking change detection. Agent tool schemas will break silently on proto changes.
+- **Compensating Controls**:
+  - Protobuf wire compatibility provides implicit backward compatibility for additive changes
+  - Pin agent tool definitions to specific proto field numbers
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Version the proto package (e.g., `hipstershop.v1`). Add `buf.yaml` for proto linting. Add `buf breaking` to CI for breaking change detection.
+- **Evidence**: `proto/demo.proto` (`package hipstershop` — no version, shared monolith proto)
+
+### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
+- **Severity**: RISK
+- **Finding**: IaC exists across multiple layers: Helm chart, Terraform. CODEOWNERS enforces peer review. GitHub Actions CI on PRs. However, all security-relevant infrastructure controls are disabled by default: AuthorizationPolicies, NetworkPolicies, and Sidecars are all `create: false` in `helm-chart/values.yaml`. No drift detection configured.
+- **Gap**: Security policies defined in IaC but disabled. No drift detection. The integration surface is exposed without any IaC-enforced security controls active.
+- **Compensating Controls**:
+  - IaC definitions exist and can be enabled by changing values flags
+  - CODEOWNERS enforces peer review on IaC changes
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Enable all security policies in `helm-chart/values.yaml`. Implement drift detection via ArgoCD or Flux.
+- **Evidence**: `helm-chart/values.yaml` (policies disabled), `helm-chart/templates/currencyservice.yaml`, `.github/CODEOWNERS`, `.github/terraform/main.tf`
+
+---
+
 ## INFOs — Architecture and Design Inputs
 
 ### API-Q1: Documented API Interface
-
 - **Severity**: INFO
-- **Finding**: The service exposes a well-documented gRPC interface defined in `proto/demo.proto`. The `CurrencyService` declares two RPCs: `GetSupportedCurrencies(Empty) returns (GetSupportedCurrenciesResponse)` and `Convert(CurrencyConversionRequest) returns (Money)`. Both RPCs are implemented in `server.js`. The proto file is the authoritative interface definition — gRPC's proto-based contracts are equivalent to REST OpenAPI specifications. A health check endpoint is also defined via `proto/grpc/health/v1/health.proto`.
-- **Implication**: The gRPC proto definition serves as the machine-readable contract for agent tool definition generation. Agent frameworks that support gRPC (or gRPC-to-REST transcoding) can consume this interface directly. For frameworks requiring REST, a gRPC-gateway or Envoy transcoding proxy may be needed.
-- **Recommendation**: If REST-based agent frameworks are required, consider adding a gRPC-gateway or Envoy sidecar for HTTP/JSON transcoding of the gRPC service.
-- **Evidence**: `proto/demo.proto` — `CurrencyService` definition, `server.js` — `server.addService(shopProto.CurrencyService.service, {getSupportedCurrencies, convert})`
+- **Finding**: Well-documented gRPC interface in `proto/demo.proto` with `CurrencyService` defining two RPCs: `GetSupportedCurrencies(Empty) returns (GetSupportedCurrenciesResponse)` and `Convert(CurrencyConversionRequest) returns (Money)`. Proto messages include detailed comments (e.g., ISO 4217 currency codes, nanos precision). Implemented faithfully in `server.js`. Positive finding.
+- **Implication**: gRPC interface can be used directly as agent tool binding. Proto enables auto-generated client code in any language.
+- **Recommendation**: No remediation needed.
+- **Evidence**: `proto/demo.proto`, `server.js`
 
 ### API-Q2: Machine-Readable API Specification
-
 - **Severity**: INFO
-- **Finding**: The `proto/demo.proto` file IS the machine-readable API specification. Protobuf definitions are strongly typed, self-documenting, and can be used to auto-generate client libraries and tool schemas. The specification is current with the implementation — `server.js` implements exactly the two RPCs defined in the proto. The `Money` message includes detailed inline comments explaining each field (e.g., currency_code is "The 3-letter currency code defined in ISO 4217").
-- **Implication**: The proto file can be used to auto-generate gRPC client stubs for agent tools. The specification is well-maintained and matches the implementation.
-- **Recommendation**: Consider generating OpenAPI documentation from the proto file (using tools like `protoc-gen-openapiv2`) for teams that need REST-compatible documentation.
-- **Evidence**: `proto/demo.proto` — complete service, message, and field definitions; `server.js` — implements `getSupportedCurrencies` and `convert` matching proto exactly
+- **Finding**: `proto/demo.proto` is a machine-readable specification. Protobuf is strongly typed with field numbers, explicit data types (`int64`, `int32`, `string`), and inline documentation comments. Spec is current with implementation — `server.js` loads `demo.proto` and implements exactly the two RPCs defined. No `buf.yaml` for proto governance, but the proto itself is a valid machine-readable spec. Positive finding.
+- **Implication**: Agent tool definitions can be auto-generated from proto. gRPC reflection could enable runtime schema discovery.
+- **Recommendation**: Consider enabling gRPC server reflection for runtime schema discovery. Add `buf.yaml` for proto linting governance.
+- **Evidence**: `proto/demo.proto`, `server.js`
 
 ### API-Q4: Idempotent Write Operations ⚡
-
 - **Severity**: INFO
 - **Conditional**: agent_scope is "read-only" — evaluated as INFO
-- **Finding**: Both RPCs are inherently read-only operations. `GetSupportedCurrencies` returns a list of currency codes from static data. `Convert` performs a pure arithmetic calculation with no side effects. No write endpoints exist in the CurrencyService. There is no state mutation, no database writes, and no external system modifications.
-- **Implication**: Idempotency is not a concern for the current API surface because all operations are stateless reads. If write operations are added in the future, idempotency patterns should be implemented.
-- **Recommendation**: No action needed for the current read-only API surface. If write operations are added, implement idempotency keys.
-- **Evidence**: `proto/demo.proto` — both RPCs return data without mutation, `server.js` — `convert()` and `getSupportedCurrencies()` are pure functions
+- **Finding**: Both RPCs are read-only, stateless, and inherently idempotent. `GetSupportedCurrencies` returns static currency codes from `data/currency_conversion.json`. `Convert` performs deterministic arithmetic on static exchange rates. Same input always produces same output. No write side effects.
+- **Implication**: No idempotency concerns for read-only scope. Pure functions with no state mutations.
+- **Recommendation**: No action needed.
+- **Evidence**: `server.js` (getSupportedCurrencies, convert functions), `data/currency_conversion.json`
 
-### API-Q6: Structured Response Format
-
+### AUTH-Q4: Identity Propagation and Delegation
 - **Severity**: INFO
-- **Finding**: gRPC uses Protocol Buffers (protobuf) binary format with well-defined, strongly-typed message schemas. The `Money` message has typed fields: `string currency_code`, `int64 units`, `int32 nanos`. The `GetSupportedCurrenciesResponse` has `repeated string currency_codes`. All response types are defined in `proto/demo.proto` with explicit field types and documentation.
-- **Implication**: Protobuf is structured and strongly typed — ideal for agent consumption. However, it is a binary format that requires a proto definition to deserialize. LLMs cannot directly parse protobuf binary data. Agent tool wrappers must deserialize protobuf responses to JSON/text before passing to an LLM.
-- **Recommendation**: For LLM-based agents, implement a tool wrapper that deserializes protobuf responses to JSON. Consider gRPC-JSON transcoding for direct JSON responses.
-- **Evidence**: `proto/demo.proto` — `Money` message, `GetSupportedCurrenciesResponse` message, `CurrencyConversionRequest` message
+- **Archetype-Calibrated**: stateless-utility — downgraded to INFO
+- **Finding**: No JWT parsing, no token exchange, no user context headers. No identity context in gRPC calls. The service does not inspect caller identity at any layer. With Istio sidecars disabled, there is no implicit caller identity from mTLS either.
+- **Implication**: For a stateless-utility returning public reference data (ECB exchange rates), identity propagation has minimal security impact — responses are not user-specific and data is public. Identity propagation becomes relevant only if the service evolves to handle user-specific data.
+- **Recommendation**: No immediate action. Implement identity propagation if the service evolves to handle user-specific data.
+- **Evidence**: `server.js`, `helm-chart/values.yaml` (`sidecars.create: false`)
 
-### API-Q8: Event Emission for State Changes
-
+### STATE-Q6: Blast Radius and Transaction Limits ⚡
 - **Severity**: INFO
-- **Finding**: No event emission mechanisms found. No webhook endpoints, no SNS/EventBridge/SQS integration, no Kafka topics, and no CDC pipelines. The service is a stateless computation service — it does not manage mutable state, so there are no state changes to emit events for.
-- **Implication**: Event emission is not relevant for the current stateless design. Currency rates are static (embedded JSON). If the service evolves to support dynamic rate updates, event emission would become important (e.g., emitting a "rates updated" event).
-- **Recommendation**: No action needed for the current stateless design. If dynamic rate updates are implemented, add EventBridge events for rate change notifications.
-- **Evidence**: `server.js` — no event publishing, `data/currency_conversion.json` — static data
-
-### API-Q9: Rate Limit Documentation and Headers
-
-- **Severity**: INFO
-- **Finding**: No rate limiting configuration found. No API Gateway throttle settings, no WAF rate rules, no rate limiting middleware, and no `X-RateLimit-Remaining` or `Retry-After` headers. gRPC does not natively support HTTP-style rate limit headers — rate limit information would need to be conveyed via gRPC trailing metadata.
-- **Implication**: Agents calling this service have no rate limit awareness. They will call at machine speed until they are rejected or the service becomes unavailable. This overlaps with STATE-Q5 (rate limiting enforcement).
-- **Recommendation**: If rate limiting is implemented (STATE-Q5), expose rate limit information via gRPC trailing metadata (e.g., `x-ratelimit-remaining`, `x-ratelimit-reset`).
-- **Evidence**: `server.js` — no rate limit headers or metadata, absence of API Gateway configuration
-
-### API-Q10: API Latency Profile
-
-- **Severity**: INFO
-- **Finding**: No performance benchmarks, load test results, CloudWatch latency metrics, or APM dashboards found. The service performs in-memory JSON lookup and arithmetic calculations — both operations are computationally trivial. The currency data is loaded via `require('./data/currency_conversion.json')` which is cached by the Node.js module loader after the first call, making subsequent reads instant (in-memory).
-- **Implication**: Expected latency is sub-millisecond for the computation itself, with gRPC serialization/network overhead adding microseconds to low-single-digit milliseconds. This is well within the sub-second ideal threshold for agent tool calls. Sequential agent workflows involving this service will not be bottlenecked by latency.
-- **Recommendation**: Conduct baseline latency benchmarking to confirm expectations and establish P95/P99 baselines. Use OpenTelemetry metrics (once enabled) to track latency in production.
-- **Evidence**: `server.js` — `_getCurrencyData()` uses `require()` (cached), `convert()` performs arithmetic, `data/currency_conversion.json` — 33-entry JSON object
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No writes, deletes, or modifications. Minimal blast radius. Read-only operations on public static data. No transaction limits needed.
+- **Implication**: Transaction limits not applicable for read-only operations on public data.
+- **Recommendation**: Implement if write operations are added.
+- **Evidence**: `server.js`
 
 ### DATA-Q1: Sensitive Data Classification
-
 - **Severity**: INFO
-- **Finding**: The service handles currency conversion rates from `data/currency_conversion.json` containing 33 EUR-based exchange rates. This is publicly available data from the European Central Bank (referenced in a code comment in `server.js`). No PII, PHI, financial records, or credentials are stored or processed. The service does not access any database or external data store — only the embedded static JSON file.
-- **Implication**: The data is inherently non-sensitive (public reference data). No field-level encryption, data classification tagging, or PII detection is needed for the current data. However, no formal data classification policy exists, which could cause confusion if the service scope expands.
-- **Recommendation**: Add a data classification label (e.g., "PUBLIC" or "NON-SENSITIVE") to the service documentation. This prevents future misclassification when other teams assess the service.
-- **Evidence**: `data/currency_conversion.json` — 33 public exchange rates, `server.js` — comment "Uses public data from European Central Bank"
+- **Finding**: Handles public ECB exchange rates and monetary amounts only. `data/currency_conversion.json` contains 33 currency-to-EUR conversion rates — all publicly available from the European Central Bank. No PII, PHI, or financial account data. Proto messages contain `currency_code` (ISO 4217), `units`, and `nanos` — no user identifiers, no account numbers, no sensitive fields. No `DATA_CLASSIFICATION.md` at the service level, but the data is inherently public.
+- **Implication**: No data classification controls needed for current data. No PII exposure risk. Positive finding for agent integration — no data sensitivity gates.
+- **Recommendation**: Implement classification if user-specific financial data is added. Consider creating a service-level `DATA_CLASSIFICATION.md` documenting the public nature of the data.
+- **Evidence**: `data/currency_conversion.json`, `proto/demo.proto` (Money, CurrencyConversionRequest messages)
 
-### DATA-Q8: Data Quality Awareness
-
+### DATA-Q6: PII Redaction in Logs
 - **Severity**: INFO
-- **Finding**: No data quality metrics, data profiling reports, null rate monitoring, duplicate detection, or data freshness SLAs found. The static JSON file contains 33 currency entries, all with non-null string values for exchange rates. The data quality is implicitly high (complete, no nulls, consistent format) but not monitored.
-- **Implication**: For a static dataset of 33 entries, data quality issues are unlikely but unmonitored. If the data source is updated (from ECB feeds), quality monitoring would become important.
-- **Recommendation**: Add basic data validation (e.g., all rates are positive numbers, all currencies are valid ISO 4217 codes) to the service startup or a CI check.
-- **Evidence**: `data/currency_conversion.json` — 33 entries, all non-null
+- **Finding**: Pino logs contain operational messages only: startup messages, "Getting supported currencies...", "conversion request successful", and "conversion request failed: {err}". No request details (currency codes, amounts) are logged. No PII in the data model. No PII leakage risk.
+- **Implication**: No PII redaction needed. Positive finding.
+- **Recommendation**: No action needed. If request details are added to logs in the future, ensure no sensitive data is included.
+- **Evidence**: `server.js` (Pino logger calls)
+
+### API-Q5: Structured Response Format
+- **Severity**: INFO
+- **Finding**: gRPC Protocol Buffers — strongly-typed binary format with explicit types (`int64 units`, `int32 nanos`, `string currency_code`), field numbers, and inline documentation comments. `Money` message is well-documented with precision semantics for nanos.
+- **Implication**: Protobuf is more structured than JSON. Excellent for agent integration with auto-generated client code. Binary format requires gRPC client libraries but provides type safety.
+- **Recommendation**: No action needed.
+- **Evidence**: `proto/demo.proto` (Money, CurrencyConversionRequest, GetSupportedCurrenciesResponse messages)
+
+### API-Q8: Rate Limit Documentation and Headers
+- **Severity**: INFO
+- **Finding**: No rate limit headers or gRPC trailing metadata. Internal ClusterIP service with no API Gateway. K8s resource limits (CPU: 200m, memory: 256Mi) provide implicit resource capping but not request-rate signaling. No `X-RateLimit-Remaining` or `Retry-After` equivalent in gRPC responses.
+- **Implication**: Agents cannot self-throttle based on server-side rate limit signals. Must rely on client-side rate configuration.
+- **Recommendation**: Add gRPC trailing metadata with rate limit status when rate limiting is implemented (see STATE-Q5).
+- **Evidence**: `server.js`, `helm-chart/templates/currencyservice.yaml` (resource limits)
+
+### DATA-Q7: Data Quality Awareness
+- **Severity**: INFO
+- **Finding**: No quality metrics or validation. 33 static currency entries in `data/currency_conversion.json`. No validation that rates are positive or within expected ranges. No freshness indicator — rates are fixed at build time (embedded in container image). No data profiling or quality dashboards.
+- **Implication**: Quality is static and deterministic — no runtime degradation risk. However, stale exchange rates could cause incorrect conversions if the data file is not updated.
+- **Recommendation**: Add validation that rates are positive and within expected ranges. Consider a freshness mechanism (e.g., periodic update from ECB API or a `last_updated` timestamp).
+- **Evidence**: `data/currency_conversion.json`
 
 ### DISC-Q2: Semantically Meaningful Field Names
-
 - **Severity**: INFO
-- **Finding**: Field names in `proto/demo.proto` are clear and semantically meaningful: `currency_code`, `units`, `nanos`, `from`, `to_code`. The `Money` message includes detailed comments explaining each field's semantics (e.g., "The 3-letter currency code defined in ISO 4217", "Number of nano (10^-9) units of the amount"). No legacy abbreviations or cryptic codes.
-- **Implication**: Field names are LLM-friendly. An agent can reason about `currency_code` and `units` without a data dictionary. The proto documentation comments provide additional semantic context for tool definition authoring.
-- **Recommendation**: No action needed. Field naming is already well-suited for agent consumption.
-- **Evidence**: `proto/demo.proto` — `Money` message fields with documentation comments, `CurrencyConversionRequest` message
+- **Finding**: Clear semantic names throughout: `currency_code`, `units`, `nanos`, `to_code`, `from`, `currency_codes`. Detailed inline comments explain semantics (e.g., "The 3-letter currency code defined in ISO 4217", "Number of nano (10^-9) units of the amount"). No legacy abbreviations or opaque codes.
+- **Implication**: LLMs can interpret fields directly without a data dictionary. Field names are self-documenting.
+- **Recommendation**: No action needed.
+- **Evidence**: `proto/demo.proto` (Money, CurrencyConversionRequest messages with comments)
 
 ### DISC-Q3: Data Catalog / Metadata Layer
-
 - **Severity**: INFO
-- **Finding**: No data catalog (AWS Glue, Collibra, Alation, DataHub) found. No metadata files beyond the proto definitions. The proto file serves as a de facto schema catalog for the gRPC service, but no broader data catalog describes what data the service holds or its semantic meaning outside the proto.
-- **Implication**: For a single-purpose service (currency conversion), a full data catalog may be unnecessary. The proto file provides sufficient schema documentation. However, for portfolio-wide agent tool discovery, a catalog entry would help.
-- **Recommendation**: Register the CurrencyService in a centralized API/service catalog if one exists in the organization. Include the proto file as the schema reference.
-- **Evidence**: `proto/demo.proto` — service and message definitions, absence of data catalog configuration
-
-### DISC-Q4: Data Lineage
-
-- **Severity**: INFO
-- **Finding**: No data lineage tools (AWS Glue DataBrew, Apache Atlas) found. No ETL pipeline documentation, no data flow diagrams, no transformation logs. A code comment in `server.js` mentions "Uses public data from European Central Bank" — this is the only provenance information. The `genproto.sh` script copies proto files from a shared `../../protos/` directory, providing some lineage for the proto definition.
-- **Implication**: Data lineage is minimal but adequate for the current service. The data source (ECB) is documented informally. If an agent produces incorrect conversion results, the source can be traced to the static JSON file.
-- **Recommendation**: Add a formal data lineage record in the README documenting: (1) data source (European Central Bank), (2) data capture date, (3) transformation applied (EUR-based rates), (4) update process.
-- **Evidence**: `server.js` — comment "Uses public data from European Central Bank", `genproto.sh` — proto source lineage, `data/currency_conversion.json`
+- **Finding**: No formal data catalog. Proto file serves as informal schema documentation with inline comments. `data/currency_conversion.json` is self-describing (ISO 4217 currency codes as keys, EUR-relative rates as values). No Glue Data Catalog, no DataHub, no API catalog registration.
+- **Implication**: Sufficient for a single-purpose utility service. Proto documentation is adequate for agent tool definition.
+- **Recommendation**: Register in organization API catalog if part of a larger service mesh or data platform.
+- **Evidence**: `proto/demo.proto`, `data/currency_conversion.json`
 
 ### OBS-Q3: Business Outcome Metrics
-
 - **Severity**: INFO
-- **Finding**: No custom business metrics found. No `cloudwatch.put_metric_data`, no custom dashboards, no business KPI alarms. The service logs conversion request success/failure at the info/error level but does not publish metrics on conversion volume, error rates by currency pair, or request patterns.
-- **Implication**: Without business metrics, there is no visibility into whether agent-initiated conversions produce correct results or whether specific currency pairs have higher error rates. Infrastructure metrics alone cannot answer business outcome questions.
-- **Recommendation**: Add custom metrics for: (1) conversion request count by currency pair, (2) error rate by error type, (3) request volume over time. Publish to CloudWatch or OpenTelemetry metrics backend.
-- **Evidence**: `server.js` — `logger.info('conversion request successful')` (log only, no metric), absence of metrics publishing
+- **Finding**: No custom business metrics. Pino logs conversion success/failure counts implicitly but does not publish metrics. No CloudWatch custom metrics, no Prometheus counters for conversion volume by currency pair. Metrics collection is disabled (`metrics: false`).
+- **Implication**: No business outcome monitoring. For a utility service, operational metrics may suffice initially.
+- **Recommendation**: Enable metrics collection. Publish counters for conversion volume by currency pair if business analytics are needed.
+- **Evidence**: `server.js` (logger.info for conversion success), `helm-chart/values.yaml` (`metrics: false`)
+
+### ENG-Q4: API Test Coverage
+- **Severity**: INFO
+- **Archetype-Calibrated**: stateless-utility — evaluated as INFO
+- **Finding**: Zero test files. `package.json` has `"test": "echo \"Error: no test specified\" && exit 1"` — a stub that exits with error. CI PR workflow (`.github/workflows/ci-pr.yaml`) runs Go and C# tests only; Node.js currencyservice is not tested. No unit tests for `convert`, `_carry`, or `getSupportedCurrencies` functions. No gRPC integration tests.
+- **Implication**: For a stateless-utility with simple arithmetic logic (`_carry` function, EUR-relative conversion), the risk of zero test coverage is lower than for stateful services. However, the `_carry` function has edge cases (negative amounts, overflow) that are untested.
+- **Recommendation**: Add unit tests for `convert` function, `_carry` helper (especially edge cases: negative amounts, zero, large values), and `getSupportedCurrencies`. Add gRPC integration tests.
+- **Evidence**: `package.json` (stub test script), `.github/workflows/ci-pr.yaml` (no Node.js tests), `server.js`
+
+---
+
 ## Detailed Findings
 
 ### 01 — API Surface and Interface Design
 
 #### API-Q1: Documented API Interface
 - **Severity**: INFO
-- **Finding**: The service exposes a well-documented gRPC interface defined in `proto/demo.proto`. The `CurrencyService` declares two RPCs: `GetSupportedCurrencies(Empty) returns (GetSupportedCurrenciesResponse)` and `Convert(CurrencyConversionRequest) returns (Money)`. Both are implemented in `server.js`. A health check endpoint is also available via `proto/grpc/health/v1/health.proto`. The interface is a documented, stable, machine-readable contract.
-- **Gap**: gRPC may not be directly consumable by all agent frameworks — some require REST. This is a design consideration, not a gap.
-- **Recommendation**: If REST-based agent frameworks are required, consider adding a gRPC-gateway or Envoy sidecar for HTTP/JSON transcoding.
+- **Finding**: Well-documented gRPC interface in `proto/demo.proto` with `CurrencyService` defining `GetSupportedCurrencies(Empty) returns (GetSupportedCurrenciesResponse)` and `Convert(CurrencyConversionRequest) returns (Money)`. Proto messages include detailed comments. Implemented in `server.js`. Positive finding — BLOCKER criteria satisfied.
+- **Gap**: None.
+- **Recommendation**: No remediation needed.
 - **Evidence**: `proto/demo.proto`, `server.js`
 
 #### API-Q2: Machine-Readable API Specification
 - **Severity**: INFO
-- **Finding**: `proto/demo.proto` IS the machine-readable specification. It is strongly typed, self-documenting with inline comments, and current with the implementation. The `Money` message includes detailed field documentation (ISO 4217 currency codes, nano-precision amounts).
-- **Gap**: No gap. The proto file is the specification.
-- **Recommendation**: Consider generating OpenAPI docs from the proto using `protoc-gen-openapiv2` for broader tooling compatibility.
+- **Finding**: `proto/demo.proto` is a machine-readable spec. Protobuf is strongly typed with field numbers, explicit data types, and inline documentation. Current with implementation. Positive finding.
+- **Gap**: None.
+- **Recommendation**: Consider enabling gRPC server reflection. Add `buf.yaml` for proto governance.
 - **Evidence**: `proto/demo.proto`, `server.js`
 
 #### API-Q3: Structured Error Responses
 - **Severity**: RISK
-- **Finding**: The `convert()` function has a try/catch that passes `err.message` to the gRPC callback. No explicit gRPC status codes, no structured error metadata, no retryable indicators. `getSupportedCurrencies()` has no error handling.
-- **Gap**: No structured error codes. Agents cannot distinguish retriable from terminal errors.
-- **Recommendation**: Add explicit gRPC status codes and structured error metadata using gRPC `Metadata` objects.
-- **Evidence**: `server.js` — `callback(err.message)` in `convert()`, no error handling in `getSupportedCurrencies()`
+- **Finding**: `convert` calls `callback(err.message)` — plain string. No gRPC status codes set explicitly. `getSupportedCurrencies` has no error handling.
+- **Gap**: Agents cannot distinguish retriable from terminal errors.
+- **Recommendation**: Use explicit gRPC status codes and structured error metadata.
+- **Evidence**: `server.js` (convert function catch block)
 
 #### API-Q4: Idempotent Write Operations ⚡
 - **Severity**: INFO
 - **Conditional**: agent_scope is "read-only" — evaluated as INFO
-- **Finding**: Both RPCs are inherently read-only. `GetSupportedCurrencies` returns static data. `Convert` performs pure arithmetic with no side effects. No write endpoints exist.
+- **Finding**: Both RPCs are read-only, stateless, inherently idempotent. Same input always produces same output. No write side effects.
 - **Gap**: N/A — no write operations.
-- **Recommendation**: No action needed. If write operations are added, implement idempotency keys.
-- **Evidence**: `proto/demo.proto`, `server.js`
-
-#### API-Q5: API Versioning and Deprecation
-- **Severity**: RISK
-- **Finding**: Proto package is `hipstershop` with no version number. No versioning scheme, no changelog, no deprecation notices. `package.json` version `0.1.0` is not reflected in the gRPC service definition.
-- **Gap**: No API versioning. No deprecation policy.
-- **Recommendation**: Adopt proto package versioning (e.g., `hipstershop.v1.CurrencyService`). Add `buf breaking` checks in CI.
-- **Evidence**: `proto/demo.proto` — `package hipstershop`, `package.json` — `version: 0.1.0`
-
-#### API-Q6: Structured Response Format
-- **Severity**: INFO
-- **Finding**: gRPC uses protobuf binary format with strongly-typed message schemas. `Money` has `string currency_code`, `int64 units`, `int32 nanos`. All types are well-defined in the proto.
-- **Gap**: Protobuf binary requires deserialization before LLM consumption.
-- **Recommendation**: Implement tool wrappers that deserialize protobuf to JSON for LLM agents.
-- **Evidence**: `proto/demo.proto` — message definitions
-
-#### API-Q7: Asynchronous Operation Support
-- **Severity**: RISK
-- **Finding**: Both RPCs are synchronous unary calls. No streaming, no async patterns, no webhook callbacks. Operations are sub-second stateless computations.
-- **Gap**: No async support. Not needed for current operations but limits future extensibility.
-- **Recommendation**: Add server-side deadline enforcement. Implement async patterns if longer-running operations are added.
-- **Evidence**: `server.js`, `proto/demo.proto` — unary RPC definitions
-
-#### API-Q8: Event Emission for State Changes
-- **Severity**: INFO
-- **Finding**: No event emission. The service is stateless with no mutable state to emit events for.
-- **Gap**: No event emission — not applicable for current stateless design.
-- **Recommendation**: No action needed. Add events if dynamic rate updates are implemented.
+- **Recommendation**: No action needed.
 - **Evidence**: `server.js`, `data/currency_conversion.json`
 
-#### API-Q9: Rate Limit Documentation and Headers
+#### API-Q5: Structured Response Format
 - **Severity**: INFO
-- **Finding**: No rate limit configuration or headers. gRPC does not natively support HTTP-style rate limit headers.
-- **Gap**: No rate limit awareness for agent callers.
-- **Recommendation**: Expose rate limit info via gRPC trailing metadata if rate limiting is implemented (STATE-Q5).
-- **Evidence**: `server.js`
+- **Finding**: gRPC Protocol Buffers — strongly-typed binary format with explicit types, field numbers, and documentation comments.
+- **Gap**: None.
+- **Recommendation**: No action needed.
+- **Evidence**: `proto/demo.proto`
 
-#### API-Q10: API Latency Profile
+#### API-Q6: Asynchronous Operation Support
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service has operations >30s OR long-running workflows
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
+
+#### API-Q7: Event Emission for State Changes
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service has state changes (stateful-crud, orchestrator)
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
+
+#### API-Q8: Rate Limit Documentation and Headers
 - **Severity**: INFO
-- **Finding**: No benchmarks found. Service performs in-memory JSON lookup and arithmetic. Expected sub-millisecond computation latency. Node.js `require()` caches the JSON data.
-- **Gap**: No documented latency profile.
-- **Recommendation**: Conduct baseline latency benchmarking. Use OpenTelemetry metrics for production monitoring.
-- **Evidence**: `server.js` — `_getCurrencyData()` uses `require()`, `data/currency_conversion.json` — 33 entries
+- **Finding**: No rate limit headers or gRPC trailing metadata. Internal ClusterIP service. K8s resource limits provide implicit capping only.
+- **Gap**: Agents cannot self-throttle based on server-side rate limit signals.
+- **Recommendation**: Add gRPC trailing metadata with rate limit status when rate limiting is implemented.
+- **Evidence**: `server.js`, `helm-chart/templates/currencyservice.yaml`
+
 ### 02 — Authentication, Authorization, and Identity
 
 #### AUTH-Q1: Machine Identity Authentication
 - **Severity**: BLOCKER
-- **Finding**: The gRPC server uses `grpc.ServerCredentials.createInsecure()` — no authentication of any kind. No OAuth2, no API key, no mTLS. Any network-reachable client can invoke all RPCs. No audit logging of authenticated principals.
-- **Gap**: No machine identity authentication. No principal attribution.
-- **Recommendation**: Implement mTLS (`grpc.ServerCredentials.createSsl()`) or gRPC interceptor-based JWT/API key authentication.
-- **Evidence**: `server.js` — `grpc.ServerCredentials.createInsecure()`
+- **Finding**: The gRPC server binds with `grpc.ServerCredentials.createInsecure()` — no TLS, no mTLS, no authentication at the application layer. All mesh-layer identity controls are disabled: `authorizationPolicies.create: false`, `sidecars.create: false`, `networkPolicies.create: false` in `helm-chart/values.yaml`. Any pod in the namespace can call any RPC on port 7000 without authentication. No OAuth2 client credentials, no API keys, no service account attribution.
+- **Gap**: Zero authentication at both application and mesh layers. No machine identity verification. No principal attribution.
+- **Recommendation**: Enable Istio sidecars and AuthorizationPolicies. Add agent-specific K8s ServiceAccounts to the AuthorizationPolicy. Implement gRPC interceptor for application-layer identity extraction.
+- **Evidence**: `server.js` (`grpc.ServerCredentials.createInsecure()`), `helm-chart/values.yaml` (all policies disabled), `helm-chart/templates/currencyservice.yaml`
 
 #### AUTH-Q2: Scoped Permissions (Least Privilege)
 - **Severity**: RISK
-- **Finding**: No authorization model. No IAM policies, no role definitions, no permission checks. All callers have unrestricted access to both RPCs.
-- **Gap**: No scoped permissions. No least-privilege enforcement.
-- **Recommendation**: Implement gRPC interceptor-based authorization with per-RPC permission rules.
-- **Evidence**: `server.js` — no authorization middleware
+- **Finding**: AuthorizationPolicies disabled. No permission scoping at any layer. All callers have unrestricted access to all RPCs.
+- **Gap**: No per-RPC scoping. No agent-specific permissions.
+- **Recommendation**: Enable AuthorizationPolicies. Create agent-specific service accounts with per-RPC path rules.
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`), `helm-chart/templates/currencyservice.yaml`
 
 #### AUTH-Q3: Action-Level Authorization
 - **Severity**: RISK
-- **Finding**: No action-level authorization. Both RPCs are accessible to all callers. No ABAC, no fine-grained RBAC, no middleware checks.
-- **Gap**: Cannot restrict specific RPCs per caller identity.
-- **Recommendation**: Add gRPC interceptor mapping authenticated principals to allowed RPC methods.
-- **Evidence**: `server.js` — `server.addService()` with no authorization layer
+- **Finding**: No authorization checks in `server.js`. AuthorizationPolicy per-path rules defined in Helm template but disabled. No application-layer action-level authorization.
+- **Gap**: No action-level authorization at any layer.
+- **Recommendation**: Enable AuthorizationPolicies. Implement gRPC server interceptor for defense-in-depth.
+- **Evidence**: `server.js`, `helm-chart/templates/currencyservice.yaml`, `helm-chart/values.yaml`
 
-#### AUTH-Q4: Identity Propagation
+#### AUTH-Q4: Identity Propagation and Delegation
+- **Severity**: INFO
+- **Archetype-Calibrated**: stateless-utility — downgraded to INFO
+- **Finding**: No JWT parsing, token exchange, or user context headers. Istio sidecars disabled — no implicit mTLS caller identity. Service returns public data with no user-specific context.
+- **Gap**: No identity propagation. Minimal impact for stateless-utility returning public data.
+- **Recommendation**: No immediate action. Implement if service evolves to handle user-specific data.
+- **Evidence**: `server.js`, `helm-chart/values.yaml` (`sidecars.create: false`)
+
+#### AUTH-Q5: Credential Management
 - **Severity**: RISK
-- **Finding**: No JWT parsing, no OAuth2 flows, no token exchange, no user context headers. gRPC metadata is not inspected for identity. No Cognito/Okta integration.
-- **Gap**: No identity propagation. Service cannot know which user is behind an agent request.
-- **Recommendation**: Add gRPC metadata extraction for user identity tokens.
-- **Evidence**: `server.js` — no metadata inspection
+- **Finding**: No secrets or credentials used. Static JSON data, no database connections. Google Cloud Profiler uses Workload Identity. No Secrets Manager or Vault integration. No hardcoded credentials found.
+- **Gap**: No credential management framework for future agent credentials.
+- **Recommendation**: Maintain credential-free architecture. Use K8s Secrets with external secrets operator if credentials are introduced.
+- **Evidence**: `server.js`, `data/currency_conversion.json`, `package.json`
 
-#### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-- **Severity**: RISK
-- **Finding**: No distinction between modes. No authentication exists (AUTH-Q1), so no identity distinction is possible.
-- **Gap**: Cannot distinguish agent-as-self from agent-on-behalf-of-user.
-- **Recommendation**: After AUTH-Q1, define separate service accounts for each mode.
-- **Evidence**: `server.js` — no authentication, no identity distinction
-
-#### AUTH-Q6: Credential Management
-- **Severity**: RISK
-- **Finding**: No hardcoded credentials found. No secrets management integration (no AWS Secrets Manager, no Vault). Service has no external credential dependencies currently. Google Cloud Profiler uses implicit credentials.
-- **Gap**: No secrets management framework for when auth is added.
-- **Recommendation**: Integrate secrets management before implementing AUTH-Q1.
-- **Evidence**: `server.js` — no hardcoded credentials, `package.json` — `@google-cloud/profiler`
-
-#### AUTH-Q7: Immutable Audit Logging ⚡
+#### AUTH-Q6: Immutable Audit Logging ⚡
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: Pino logger configured with structured JSON output to stdout. No CloudTrail, no immutable log storage, no log validation, no principal attribution in logs.
-- **Gap**: No immutable audit logging. Logs are ephemeral stdout with no persistence or tamper-evidence.
-- **Recommendation**: Ship logs to CloudWatch Logs with retention policy. Enable S3 export with object lock.
-- **Evidence**: `server.js` — Pino logger configuration
+- **Finding**: No audit logging. Pino logs operational messages only with no principal attribution. Tracing disabled (`opentelemetryCollector.create: false`, `tracing: false`). Logs are ephemeral container stdout.
+- **Gap**: No immutable audit trail. No principal attribution. No tracing.
+- **Recommendation**: Enable tracing. Add structured audit logging with caller identity. Forward to immutable store.
+- **Evidence**: `server.js` (Pino logger), `helm-chart/values.yaml` (`opentelemetryCollector.create: false`, `tracing: false`)
 
-#### AUTH-Q8: Agent Identity Suspension
+#### AUTH-Q7: Agent Identity Suspension
 - **Severity**: RISK
-- **Finding**: No mechanism to suspend agent identities. No API key revocation, no IAM deactivation. No authentication exists, so no identities to suspend.
-- **Gap**: Cannot isolate a misbehaving agent without taking down the service.
-- **Recommendation**: After AUTH-Q1, add per-identity revocation capability.
-- **Evidence**: `server.js` — no authentication or identity management
+- **Finding**: AuthorizationPolicies and NetworkPolicies both disabled. No mechanism to deny specific service accounts. No automated suspension capability.
+- **Gap**: No suspension mechanism at any layer.
+- **Recommendation**: Enable AuthorizationPolicies and NetworkPolicies. Implement automated suspension via policy updates triggered by anomaly detection.
+- **Evidence**: `helm-chart/values.yaml` (`authorizationPolicies.create: false`, `networkPolicies.create: false`), `helm-chart/templates/currencyservice.yaml`
+
 ### 03 — State Management and Transactional Integrity
 
 #### STATE-Q1: Compensation and Rollback ⚡
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No multi-step operations exist. Service is stateless — reads static JSON and performs arithmetic. No saga pattern, no two-phase commit, no undo endpoints. No persistent state to roll back.
-- **Gap**: No compensation/rollback capability. Mitigated by stateless, read-only design.
-- **Recommendation**: Revisit if write operations are added.
-- **Evidence**: `server.js` — stateless RPC implementations, `data/currency_conversion.json`
+- **Finding**: Stateless service — reads static JSON, performs arithmetic. No multi-step write operations. No state mutations to compensate.
+- **Gap**: No compensation mechanisms, though none operationally needed.
+- **Recommendation**: Maintain stateless architecture. Implement compensation if write operations are added.
+- **Evidence**: `server.js`, `data/currency_conversion.json`
 
 #### STATE-Q2: Queryable Current State
-- **Severity**: RISK
-- **Finding**: `GetSupportedCurrencies` returns all currency codes. `Convert` uses current rates. Data is queryable but static (embedded JSON). No state versioning or rate update timestamps.
-- **Gap**: No ability to query when rates were last updated.
-- **Recommendation**: Add a `GetRateMetadata` RPC returning data source, last update timestamp, and version.
-- **Evidence**: `server.js` — `_getCurrencyData()`, `data/currency_conversion.json`
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service has persistent state (stateful-crud, data-gateway, orchestrator)
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### STATE-Q3: Concurrency Controls
-- **Severity**: RISK
-- **Finding**: No concurrency controls (no optimistic locking, ETags, or version fields). Service is stateless — reads in-memory cached JSON. Multiple concurrent requests are safe because no data mutation occurs.
-- **Gap**: No concurrency controls. Not needed for current read-only design.
-- **Recommendation**: Implement optimistic locking if mutable state is added.
-- **Evidence**: `server.js` — `_getCurrencyData()` reads static JSON
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: agent_scope is write-enabled AND service has persistent state
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### STATE-Q4: Circuit Breakers and Resilience
-- **Severity**: RISK
-- **Finding**: No circuit breakers, retry logic, or timeout configurations. No external dependency calls (reads local JSON). No graceful degradation or backpressure.
-- **Gap**: No resilience patterns. Low risk due to service simplicity.
-- **Recommendation**: Add gRPC server-side request limits and graceful shutdown handling.
-- **Evidence**: `server.js` — no resilience libraries, `package.json`
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service has external dependencies (calls other services or external APIs)
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### STATE-Q5: Rate Limiting and Throttling
 - **Severity**: RISK
-- **Finding**: No rate limiting at any layer. No API Gateway, no WAF, no application-level rate limiting. Server accepts unlimited connections.
-- **Gap**: No protection against agent-induced DDoS.
-- **Recommendation**: Deploy behind an API gateway with rate limiting or add gRPC interceptor-based rate limiting.
-- **Evidence**: `server.js` — no rate limiting
+- **Finding**: No application-level rate limiting. No gRPC interceptor. Istio sidecars disabled — no Envoy-level rate limiting. K8s resource limits cap CPU/memory only. No WAF rules.
+- **Gap**: Runaway agent loop could overwhelm the service. No per-caller rate limiting.
+- **Recommendation**: Enable Istio sidecars. Add gRPC interceptor or Envoy rate limiting per source service account.
+- **Evidence**: `server.js`, `helm-chart/values.yaml` (`sidecars.create: false`), `helm-chart/templates/currencyservice.yaml`
 
-#### STATE-Q6: Blast Radius and Transaction Limits
-- **Severity**: RISK
-- **Finding**: No configurable transaction limits. No per-agent request caps. Read-only service limits blast radius to availability impact.
-- **Gap**: No per-identity request quotas.
-- **Recommendation**: After AUTH-Q1, add per-identity request quotas.
-- **Evidence**: `server.js` — no transaction limits
+#### STATE-Q6: Blast Radius and Transaction Limits ⚡
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No writes, deletes, or modifications. Read-only operations on public static data. Minimal blast radius.
+- **Gap**: N/A for read-only scope.
+- **Recommendation**: Implement if write operations are added.
+- **Evidence**: `server.js`
 
 #### STATE-Q7: Infrastructure Capacity for Agent Traffic
-- **Severity**: RISK
-- **Finding**: No load tests, no auto-scaling, no capacity planning. Dockerfile runs single Node.js process. No HPA definitions.
-- **Gap**: Unknown capacity limits. Single process has concurrency constraints.
-- **Recommendation**: Conduct load testing. Define Kubernetes HPA policies. Consider multiple replicas.
-- **Evidence**: `Dockerfile` — single `node server.js` process
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service is P0 priority OR is on the critical path
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
+
 ### 04 — Human-in-the-Loop and Approval Workflows
 
 #### HITL-Q1: Draft/Pending State
-- **Severity**: RISK
-- **Finding**: No draft or pending state concept. Service is stateless and read-only. Both RPCs return immediate results. No approval workflows.
-- **Gap**: No draft/pending state. Low impact for read-only service.
-- **Recommendation**: Implement confirmation patterns at the orchestration layer if results feed into financial transactions.
-- **Evidence**: `server.js` — immediate-response RPCs
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: agent_scope is write-enabled
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### HITL-Q2: Configurable Approval Gates
-- **Severity**: RISK
-- **Finding**: No approval gates. No configurable operation-level flags. No Step Functions with human approval tasks.
-- **Gap**: No approval gate framework. Low priority for read-only operations.
-- **Recommendation**: Implement approval gates at the orchestration layer for downstream write actions.
-- **Evidence**: `server.js` — no approval logic
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: agent_scope is write-enabled
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### HITL-Q3: Sandbox/Staging Environment
 - **Severity**: RISK
-- **Finding**: No separate environment configurations. No Docker Compose. No seed data scripts. Local testing is straightforward due to static JSON data.
-- **Gap**: No formal sandbox/staging environment.
-- **Recommendation**: Create Docker Compose for local testing. Define environment-specific configurations.
-- **Evidence**: `Dockerfile` — single environment, absence of Docker Compose
+- **Finding**: Skaffold for local development. CI deploys per-PR to ephemeral namespaces on `prs-gke-cluster`. Smoke tests via loadgenerator. No persistent agent testing environment.
+- **Gap**: No dedicated agent testing environment.
+- **Recommendation**: Create persistent staging namespace for agent integration testing.
+- **Evidence**: `.github/workflows/ci-pr.yaml`, `Dockerfile`, `cloudbuild.yaml`
+
 ### 05 — Data Accessibility and Quality
 
 #### DATA-Q1: Sensitive Data Classification
 - **Severity**: INFO
-- **Finding**: Service handles publicly available ECB currency conversion rates. No PII, PHI, financial records, or credentials stored or processed. Data is non-sensitive public reference data. No formal data classification tagging exists.
-- **Gap**: No formal data classification policy. Data is inherently non-sensitive.
-- **Recommendation**: Add a "PUBLIC" data classification label to service documentation.
-- **Evidence**: `data/currency_conversion.json`, `server.js` — comment "Uses public data from European Central Bank"
+- **Finding**: Public ECB exchange rates and monetary amounts only. No PII, PHI, or financial account data. No `DATA_CLASSIFICATION.md` at service level. Data is inherently public.
+- **Gap**: No formal data classification document, but data is public reference data.
+- **Recommendation**: Create service-level `DATA_CLASSIFICATION.md` documenting public nature of data.
+- **Evidence**: `data/currency_conversion.json`, `proto/demo.proto`
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK
 - **Conditional**: agent_scope is "read-only" — evaluated as RISK
-- **Finding**: No data residency requirements documented. Currency rates are public ECB data, not subject to GDPR/LGPD/HIPAA. No region-specific configurations.
-- **Gap**: No documented data residency policy. Low risk for public data.
-- **Recommendation**: Document that the data is public, non-regulated ECB reference data.
+- **Finding**: Static, publicly available ECB exchange rates. No regulated data. No explicit residency documentation.
+- **Gap**: No formal data residency documentation.
+- **Recommendation**: Document data residency posture formally.
 - **Evidence**: `data/currency_conversion.json`, `server.js`
 
 #### DATA-Q3: Selective Query Support
-- **Severity**: RISK
-- **Finding**: `GetSupportedCurrencies` returns all 33 currencies (no pagination/filtering). `Convert` accepts specific parameters for single conversion. Small result sets.
-- **Gap**: No pagination on currency list. Acceptable for 33 entries.
-- **Recommendation**: Add filtering if currency list grows significantly.
-- **Evidence**: `proto/demo.proto`, `data/currency_conversion.json` — 33 currencies
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service has list/query endpoints with potentially unbounded results
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### DATA-Q4: System of Record Designations
-- **Severity**: RISK
-- **Finding**: No formal system-of-record designation. Code comment references ECB as source. No data ownership documentation or conflict resolution.
-- **Gap**: No documented data provenance or ownership.
-- **Recommendation**: Add data provenance documentation specifying ECB as authoritative source.
-- **Evidence**: `server.js` — comment "Uses public data from European Central Bank"
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service has persistent state (stateful-crud, data-gateway)
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
-#### DATA-Q5: Reliable Timestamps
-- **Severity**: RISK
-- **Finding**: No timestamps in data or API responses. JSON file has no `updated_at` or `effective_date`. `Money` message has no temporal fields. Critical gap for currency rates that change daily.
-- **Gap**: No timestamps on currency rates. Agent cannot determine rate currency.
-- **Recommendation**: Add `effective_date` field to currency data. Include timestamp metadata in API responses.
-- **Evidence**: `data/currency_conversion.json`, `proto/demo.proto` — `Money` message
+#### DATA-Q5: Temporal Metadata and Freshness
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service has persistent state (stateful-crud, data-gateway, orchestrator)
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
-#### DATA-Q6: Data Freshness Signaling
-- **Severity**: RISK
-- **Finding**: No cache headers, data age indicators, or freshness metadata. Static JSON loaded via `require()` (cached by Node.js). Agent cannot determine data freshness.
-- **Gap**: No data freshness signaling. Material risk for currency conversion.
-- **Recommendation**: Add `rate_effective_date` response metadata. Implement periodic rate refresh.
-- **Evidence**: `server.js` — `require('./data/currency_conversion.json')`, `data/currency_conversion.json`
-
-#### DATA-Q7: PII Redaction in Logs
-- **Severity**: RISK
-- **Finding**: No PII redaction implemented. Service processes only currency codes and amounts (non-PII). Pino logs success/failure messages without sensitive data.
-- **Gap**: No PII redaction framework. Low risk for current non-PII data.
-- **Recommendation**: Add log scrubbing middleware for defense-in-depth.
-- **Evidence**: `server.js` — Pino logger patterns
-
-#### DATA-Q8: Data Quality Awareness
+#### DATA-Q6: PII Redaction in Logs
 - **Severity**: INFO
-- **Finding**: No data quality metrics or monitoring. Static JSON has 33 entries, all non-null with consistent format. Quality is implicitly high but unmonitored.
-- **Gap**: No data quality monitoring.
-- **Recommendation**: Add basic data validation at startup (positive rates, valid ISO 4217 codes).
-- **Evidence**: `data/currency_conversion.json` — 33 entries
+- **Finding**: Logs contain operational messages only. No request details logged. No PII in data model. No PII leakage risk.
+- **Gap**: None.
+- **Recommendation**: No action needed.
+- **Evidence**: `server.js`
+
+#### DATA-Q7: Data Quality Awareness
+- **Severity**: INFO
+- **Finding**: No quality metrics. 33 static currency entries. No validation of rate ranges. Quality fixed at build time.
+- **Gap**: No freshness indicator or validation.
+- **Recommendation**: Add validation that rates are positive and within expected ranges.
+- **Evidence**: `data/currency_conversion.json`
+
 ### 06 — Discoverability and Semantic Readiness
 
-#### DISC-Q1: Schema Documentation and Versioning
+#### DISC-Q1: Schema Versioning and API Contracts
 - **Severity**: RISK
-- **Finding**: `proto/demo.proto` provides schema documentation with proto3 syntax, typed messages, and inline comments. Well-documented `Money` message. No formal schema versioning (no v1/v2 directories), no schema registry, no changelog.
-- **Gap**: No schema versioning. No changelog for schema changes.
-- **Recommendation**: Implement proto package versioning. Add `buf` for breaking change detection. Maintain a schema changelog.
-- **Evidence**: `proto/demo.proto` — `package hipstershop`, `syntax = "proto3"`
+- **Finding**: Proto uses unversioned `package hipstershop` — no version suffix. No `buf.yaml`. No breaking change detection in CI. Shared monolith proto defining all services in a single file.
+- **Gap**: No schema versioning. No breaking change detection. Agent tool schemas will break silently on proto changes.
+- **Recommendation**: Version the proto package. Add `buf.yaml` and `buf breaking` to CI. Consider splitting monolith proto.
+- **Evidence**: `proto/demo.proto` (`package hipstershop`)
 
 #### DISC-Q2: Semantically Meaningful Field Names
 - **Severity**: INFO
-- **Finding**: Field names are clear: `currency_code`, `units`, `nanos`, `from`, `to_code`. `Money` message has detailed documentation comments. No legacy abbreviations.
-- **Gap**: No gap. Field names are LLM-friendly.
+- **Finding**: Clear semantic names: `currency_code`, `units`, `nanos`, `to_code`, `from`, `currency_codes`. Detailed inline comments with ISO 4217 references. No legacy abbreviations.
+- **Gap**: None.
 - **Recommendation**: No action needed.
-- **Evidence**: `proto/demo.proto` — `Money` message, `CurrencyConversionRequest`
+- **Evidence**: `proto/demo.proto`
 
 #### DISC-Q3: Data Catalog / Metadata Layer
 - **Severity**: INFO
-- **Finding**: No data catalog (Glue, Collibra, DataHub). Proto file serves as de facto schema catalog. No broader metadata layer.
-- **Gap**: No centralized catalog entry. Proto provides sufficient schema documentation for this service.
-- **Recommendation**: Register CurrencyService in a centralized API catalog if available.
-- **Evidence**: `proto/demo.proto`, absence of data catalog
+- **Finding**: No formal catalog. Proto file serves as informal documentation. Self-describing JSON data with ISO 4217 keys.
+- **Gap**: No formal catalog registration.
+- **Recommendation**: Register in organization API catalog if part of larger data mesh.
+- **Evidence**: `proto/demo.proto`, `data/currency_conversion.json`
 
-#### DISC-Q4: Data Lineage
-- **Severity**: INFO
-- **Finding**: No data lineage tools. Code comment mentions ECB as data source. `genproto.sh` copies protos from shared directory (proto lineage). No formal lineage record.
-- **Gap**: Minimal lineage. Adequate for current service.
-- **Recommendation**: Add formal data lineage record documenting source, capture date, transformation, and update process.
-- **Evidence**: `server.js` — ECB comment, `genproto.sh`, `data/currency_conversion.json`
 ### 07 — Observability of Target Systems
 
 #### OBS-Q1: Distributed Tracing and Structured Logging
 - **Severity**: RISK
-- **Finding**: OpenTelemetry SDK configured with gRPC instrumentation (`@opentelemetry/instrumentation-grpc`, `@opentelemetry/sdk-node`). Tracing conditional on `ENABLE_TRACING=1`. Pino logger produces structured JSON with `severity` field. No `correlation_id`/`request_id` in logs. No trace-log correlation.
-- **Gap**: Tracing is opt-in (disabled by default). Logs lack correlation IDs. No trace-log linkage.
-- **Recommendation**: Enable tracing by default. Add `trace_id` and `request_id` to Pino log entries.
-- **Evidence**: `server.js` — OpenTelemetry setup, Pino config; `package.json` — `@opentelemetry/*` dependencies
+- **Finding**: OpenTelemetry SDK present with gRPC instrumentation registered. Trace export gated behind `ENABLE_TRACING == "1"` — disabled by default (`opentelemetryCollector.create: false`, `tracing: false`). Pino provides structured JSON logging but no trace_id or correlation_id in log entries.
+- **Gap**: Tracing disabled. No trace context in logs. Agent-initiated requests not traceable.
+- **Recommendation**: Enable OpenTelemetry tracing. Add trace_id to Pino log entries.
+- **Evidence**: `server.js`, `helm-chart/values.yaml`, `package.json`
 
 #### OBS-Q2: Alerting on Error Rates and Latency
 - **Severity**: RISK
-- **Finding**: No alerting configuration. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie. Metrics available via OpenTelemetry if enabled, but no thresholds defined.
-- **Gap**: No alerting on error rates or latency. No proactive degradation detection.
-- **Recommendation**: Configure alerting on gRPC error rates and P95 latency. Integrate with on-call notification.
-- **Evidence**: `server.js` — health check endpoint, absence of alerting config
+- **Finding**: No alerting configured. Metrics disabled (`metrics: false`). No HPA. No monitoring alerts. K8s probes provide pod availability only.
+- **Gap**: No alerting on error rates or latency.
+- **Recommendation**: Enable metrics. Configure alerting on gRPC error rates and p99 latency. Add HPA.
+- **Evidence**: `helm-chart/values.yaml` (`metrics: false`), `helm-chart/templates/currencyservice.yaml`
 
 #### OBS-Q3: Business Outcome Metrics
 - **Severity**: INFO
-- **Finding**: No custom business metrics. Service logs success/failure but does not publish metrics on conversion volume, error rates by currency pair, or request patterns.
-- **Gap**: No business outcome visibility.
-- **Recommendation**: Add custom metrics for conversion count by currency pair, error rate by type, and request volume.
-- **Evidence**: `server.js` — log-only observability
+- **Finding**: No custom business metrics. Pino logs conversion success/failure. Metrics collection disabled.
+- **Gap**: No business outcome monitoring.
+- **Recommendation**: Enable metrics. Publish conversion volume by currency pair if needed.
+- **Evidence**: `server.js`, `helm-chart/values.yaml`
+
 ### 08 — Engineering and Deployment Maturity
 
 #### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
 - **Severity**: RISK
-- **Finding**: No IaC files found (no Terraform, CloudFormation, CDK, Helm, Kustomize). Only a Dockerfile exists. Infrastructure for API gateways, IAM roles, secrets, and networking is not defined in this repository.
-- **Gap**: No IaC governance. No peer review on infrastructure. No drift detection.
-- **Recommendation**: Define Kubernetes Deployment, Service, NetworkPolicy, and HPA as IaC. Add PR review requirements. Enable drift detection.
-- **Evidence**: Absence of IaC files, `Dockerfile` present
+- **Finding**: IaC exists (Helm, Terraform). CODEOWNERS enforces peer review. GitHub Actions CI. However, all security policies disabled by default in values.yaml. No drift detection.
+- **Gap**: Security policies defined but disabled. No drift detection.
+- **Recommendation**: Enable all security policies. Implement drift detection via ArgoCD or Flux.
+- **Evidence**: `helm-chart/values.yaml`, `helm-chart/templates/currencyservice.yaml`, `.github/CODEOWNERS`, `.github/terraform/main.tf`
 
 #### ENG-Q2: CI/CD with API Contract Testing
 - **Severity**: RISK
-- **Finding**: No CI/CD pipeline configuration. No GitHub Actions, GitLab CI, Jenkinsfile, or buildspec.yml. No contract tests. `package.json` test script outputs "Error: no test specified."
-- **Gap**: No CI/CD. No contract testing. No breaking change detection.
-- **Recommendation**: Create CI/CD pipeline. Add `buf breaking` for proto compatibility. Implement integration tests.
-- **Evidence**: Absence of CI/CD files, `package.json` — test script placeholder
+- **Finding**: CI exists (Cloud Build, GitHub Actions). Smoke tests via loadgenerator. Unversioned proto (`package hipstershop`). No `buf.yaml`. No `buf breaking` in CI. No currencyservice-specific tests. CI runs Go and C# tests only.
+- **Gap**: No breaking change detection. No service-specific contract tests. No proto linting.
+- **Recommendation**: Add `buf.yaml`, `buf breaking` to CI. Add CurrencyService contract tests. Version proto package.
+- **Evidence**: `proto/demo.proto`, `package.json`, `.github/workflows/ci-pr.yaml`, `cloudbuild.yaml`
 
 #### ENG-Q3: Rollback Capability
 - **Severity**: RISK
-- **Finding**: No deployment configuration. No blue/green, no canary, no CodeDeploy, no Helm rollback, no feature flags.
-- **Gap**: No rollback capability in this repository.
-- **Recommendation**: Define deployment strategy in IaC. Implement automatic rollback triggers.
-- **Evidence**: `Dockerfile` only, absence of deployment configuration
+- **Finding**: K8s Deployment with rollout history. Skaffold deployment. No automated rollback triggers. Manual `kubectl rollout undo` only. No canary, no Flagger, no Argo Rollouts.
+- **Gap**: No automated rollback on service degradation.
+- **Recommendation**: Configure automated rollback with Flagger or Argo Rollouts.
+- **Evidence**: `helm-chart/templates/currencyservice.yaml`, `cloudbuild.yaml`
 
 #### ENG-Q4: API Test Coverage
-- **Severity**: RISK
-- **Finding**: Zero test coverage. `package.json` test script: `"echo \"Error: no test specified\" && exit 1"`. `client.js` is a manual test client excluded from Docker image.
-- **Gap**: No automated tests. No input validation, error response, or edge case tests.
-- **Recommendation**: Write automated gRPC tests for both RPCs covering valid, invalid, edge-case, and overflow scenarios. Add to CI.
-- **Evidence**: `package.json` — test script, `client.js` — manual client, `.dockerignore` — excludes `client.js`
+- **Severity**: INFO
+- **Archetype-Calibrated**: stateless-utility — evaluated as INFO
+- **Finding**: Zero test files. Stub test script in `package.json`. CI skips currencyservice. No unit tests for `convert`, `_carry`, or `getSupportedCurrencies`.
+- **Gap**: Zero test coverage. Edge cases in `_carry` function untested.
+- **Recommendation**: Add unit tests for `convert`, `_carry` (edge cases), and `getSupportedCurrencies`. Add gRPC integration tests.
+- **Evidence**: `package.json`, `server.js`, `.github/workflows/ci-pr.yaml`
 
 #### ENG-Q5: Encryption at Rest for Agent-Accessible Data
-- **Severity**: RISK
-- **Finding**: No encryption configuration. No KMS keys. Data embedded as plain-text JSON in container image. No IaC with encryption settings.
-- **Gap**: No encryption at rest. Data is public (ECB rates), low sensitivity.
-- **Recommendation**: Ensure container registry encrypts images. Enforce KMS encryption if database access is added.
-- **Evidence**: `data/currency_conversion.json`, `Dockerfile`, absence of IaC
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateless-utility`, agent_scope: `read-only`.
+- **Trigger**: Service has persistent data stores
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
-#### ENG-Q6: Cross-Origin and Network Policies
-- **Severity**: BLOCKER
-- **Finding**: gRPC server binds to `[::]:${PORT}` with `grpc.ServerCredentials.createInsecure()`. No security groups, no NetworkPolicies, no API gateway, no WAF, no firewall rules. No IaC defining network boundaries. Dockerfile exposes port 7000 without security controls.
-- **Gap**: No network security configuration. Entire network surface is open.
-- **Recommendation**: Define network policies as IaC restricting ingress to authorized consumers only. Add API gateway or service mesh.
-- **Evidence**: `server.js` — `createInsecure()`, bind to `[::]:${PORT}`, `Dockerfile` — `EXPOSE 7000`
+---
+
 ## Evidence Index
+
+### Infrastructure as Code
+| File | Questions Referenced |
+|------|---------------------|
+| `helm-chart/values.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, STATE-Q5, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q1, DISC-Q1 |
+| `helm-chart/templates/currencyservice.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q7, STATE-Q5, API-Q8, OBS-Q2, ENG-Q1, ENG-Q3 |
+| `.github/terraform/main.tf` | ENG-Q1 |
 
 ### Source Code
 | File | Questions Referenced |
 |------|---------------------|
-| `server.js` | API-Q1, API-Q2, API-Q3, API-Q4, API-Q5, API-Q6, API-Q7, API-Q8, API-Q9, API-Q10, AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q1, STATE-Q2, STATE-Q3, STATE-Q4, STATE-Q5, STATE-Q6, HITL-Q1, HITL-Q2, DATA-Q1, DATA-Q2, DATA-Q4, DATA-Q5, DATA-Q6, DATA-Q7, DISC-Q4, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q6 |
-| `client.js` | ENG-Q2, ENG-Q4 |
+| `server.js` | API-Q1, API-Q2, API-Q3, API-Q4, API-Q5, API-Q8, AUTH-Q1, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, STATE-Q1, STATE-Q5, STATE-Q6, DATA-Q1, DATA-Q2, DATA-Q6, OBS-Q1, OBS-Q3, ENG-Q4 |
+| `client.js` | API-Q1 |
 
 ### API Specifications
 | File | Questions Referenced |
 |------|---------------------|
-| `proto/demo.proto` | API-Q1, API-Q2, API-Q4, API-Q5, API-Q6, API-Q7, API-Q8, DATA-Q3, DATA-Q5, DISC-Q1, DISC-Q2, DISC-Q3 |
-| `proto/grpc/health/v1/health.proto` | API-Q1 |
+| `proto/demo.proto` | API-Q1, API-Q2, API-Q4, API-Q5, DATA-Q1, DISC-Q1, DISC-Q2, DISC-Q3, ENG-Q2 |
+
+### CI/CD Configurations
+| File | Questions Referenced |
+|------|---------------------|
+| `.github/workflows/ci-pr.yaml` | HITL-Q3, ENG-Q2, ENG-Q4 |
+| `cloudbuild.yaml` | HITL-Q3, ENG-Q2, ENG-Q3 |
+| `.github/CODEOWNERS` | ENG-Q1 |
 
 ### Container Definitions
 | File | Questions Referenced |
 |------|---------------------|
-| `Dockerfile` | AUTH-Q6, STATE-Q7, HITL-Q3, ENG-Q1, ENG-Q3, ENG-Q5, ENG-Q6 |
-| `.dockerignore` | ENG-Q4 |
+| `Dockerfile` | HITL-Q3 |
 
 ### Dependency Manifests
 | File | Questions Referenced |
 |------|---------------------|
-| `package.json` | API-Q5, AUTH-Q6, STATE-Q4, OBS-Q1, ENG-Q2, ENG-Q4 |
+| `package.json` | AUTH-Q5, OBS-Q1, ENG-Q2, ENG-Q4 |
 
 ### Configuration Files
 | File | Questions Referenced |
 |------|---------------------|
-| `data/currency_conversion.json` | API-Q8, API-Q10, STATE-Q1, STATE-Q2, DATA-Q1, DATA-Q2, DATA-Q3, DATA-Q5, DATA-Q6, DATA-Q8, DISC-Q4, ENG-Q5 |
-
-### Scripts
-| File | Questions Referenced |
-|------|---------------------|
-| `genproto.sh` | DISC-Q4 |
+| `data/currency_conversion.json` | API-Q4, AUTH-Q5, STATE-Q1, DATA-Q1, DATA-Q7, DISC-Q3 |
