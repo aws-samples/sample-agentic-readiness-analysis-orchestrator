@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARA — ecommerce-platform-v2 Agentic Readiness Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f1117;--surface:#1a1d27;--card:#222639;--border:#2d3148;--text:#e2e4ed;--muted:#8b8fa3;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--green-bg:rgba(34,197,94,.12);--yellow-bg:rgba(234,179,8,.12);--orange-bg:rgba(249,115,22,.12);--red-bg:rgba(239,68,68,.12)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline;color:#a5b4fc}
+.container{max-width:1440px;margin:0 auto;padding:24px}
+nav{display:flex;align-items:center;gap:6px;margin-bottom:24px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--border)}
+nav a{padding:8px 18px;font-size:.82rem;font-weight:600;color:var(--muted);border-radius:8px;border:1px solid var(--border);background:var(--surface);transition:all .2s;white-space:nowrap;text-decoration:none}
+nav a:hover{border-color:var(--accent);color:var(--text)}nav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:12px}
+.top-bar h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em}.top-bar h1 span{color:var(--accent2)}
+.grid{display:grid;gap:20px}.grid-4{grid-template-columns:repeat(4,1fr)}.grid-3{grid-template-columns:repeat(3,1fr)}.grid-2{grid-template-columns:repeat(2,1fr)}.grid-12{grid-template-columns:repeat(12,1fr)}
+.span-8{grid-column:span 8}.span-4{grid-column:span 4}.span-6{grid-column:span 6}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s}.card:hover{border-color:var(--accent)}
+.card-title{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-value{font-size:2rem;font-weight:700;letter-spacing:-.03em}
+.card-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+.score-green{color:var(--green)}.score-yellow{color:var(--yellow)}.score-orange{color:var(--orange)}.score-red{color:var(--red)}
+.bg-green{background:var(--green-bg)}.bg-yellow{background:var(--yellow-bg)}.bg-orange{background:var(--orange-bg)}.bg-red{background:var(--red-bg)}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600}
+.pill-green{background:var(--green-bg);color:var(--green)}.pill-yellow{background:var(--yellow-bg);color:var(--yellow)}.pill-orange{background:var(--orange-bg);color:var(--orange)}.pill-red{background:var(--red-bg);color:var(--red)}.pill-blue{background:rgba(99,102,241,.12);color:var(--accent2)}.pill-muted{background:rgba(139,143,163,.12);color:var(--muted)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:10px 12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}tr:hover td{background:rgba(99,102,241,.04)}
+.section{margin-bottom:32px}.section-title{font-size:1.1rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+details{margin-bottom:8px}details summary{cursor:pointer;padding:8px 12px;background:var(--surface);border-radius:8px;font-weight:600;font-size:.85rem;list-style:none;display:flex;align-items:center;gap:8px}
+details summary::before{content:'▸';transition:transform .2s}details[open] summary::before{transform:rotate(90deg)}
+details .detail-body{padding:12px;font-size:.82rem;color:var(--muted);line-height:1.7}
+@media(max-width:1024px){.grid-4{grid-template-columns:repeat(2,1fr)}.grid-12 .span-8,.grid-12 .span-4,.grid-12 .span-6{grid-column:span 12}.grid-3{grid-template-columns:1fr}}
+@media(max-width:640px){.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="top-bar">
+  <h1>🛡️ <span>Agentic Readiness</span> — ecommerce-platform-v2</h1>
+  <div style="font-size:.8rem;color:var(--muted)">📅 April 16, 2026 · ecommerce-platform-v2 · agent_scope: read-only</div>
+</div>
+<nav>
+  <a href="agentic-readiness.html" class="active">🛡️ Agentic Readiness (ARA)</a>
+  <a href="modernization.html">📐 Modernization (MOD)</a>
+</nav>
+<div id="main"></div>
+</div>
+<script>
+/* ── DATA ── */
+const D={
+  agentReady:0,pilotReady:1,remReq:4,notInt:0,
+  blockers:7,risks:106,infos:60,
+  ccBlockers:2,ccRisks:26,
+  services:[
+    {id:'local-monolith',type:'application',arch:'—',profile:'Remediation Req.',pc:'pill-orange',b:2,r:24,i:15,pri:'P0',prc:'pill-red'},
+    {id:'unishop-monolith',type:'application',arch:'—',profile:'Remediation Req.',pc:'pill-orange',b:2,r:26,i:12,pri:'P0',prc:'pill-red'},
+    {id:'aws-microservices',type:'application',arch:'—',profile:'Remediation Req.',pc:'pill-orange',b:2,r:27,i:11,pri:'P0',prc:'pill-red'},
+    {id:'books-api',type:'application',arch:'—',profile:'Remediation Req.',pc:'pill-orange',b:1,r:18,i:19,pri:'P1',prc:'pill-orange'},
+    {id:'eks-saas-gitops',type:'infra-only',arch:'—',profile:'Pilot-Ready',pc:'pill-yellow',b:0,r:11,i:3,pri:'P1',prc:'pill-orange'}
+  ],
+  heatmap:[
+    {sec:'AUTH',b:4,r:5},{sec:'DATA',b:3,r:4},{sec:'API',b:0,r:4},{sec:'STATE',b:0,r:4},
+    {sec:'HITL',b:0,r:3},{sec:'DISC',b:0,r:4},{sec:'OBS',b:0,r:5},{sec:'ENG',b:0,r:5}
+  ],
+  ccBlockerList:[
+    {id:'AUTH-Q1',title:'Machine Identity Authentication',repos:4,desc:'No machine identity authentication across 4 application services. Session-based, permitAll(), or no auth.'},
+    {id:'DATA-Q1',title:'Sensitive Data Classification',repos:3,desc:'Unclassified PII in databases across 3 services — customer names, emails, payment records exposed without field-level controls.'}
+  ],
+  ccRiskList:[
+    {id:'AUTH-Q6',cat:'AUTH',title:'Immutable Audit Logging',repos:5,desc:'No immutable, tamper-evident audit logging in any service. No CloudTrail configuration.'},
+    {id:'AUTH-Q7',cat:'AUTH',title:'Agent Identity Suspension',repos:5,desc:'No mechanism to rapidly suspend individual agent identities in any service.'},
+    {id:'AUTH-Q3',cat:'AUTH',title:'Action-Level Authorization',repos:5,desc:'No fine-grained action-level authorization in any service.'},
+    {id:'OBS-Q1',cat:'OBS',title:'Distributed Tracing',repos:5,desc:'Only books-api has X-Ray tracing. All other services have zero distributed tracing.'},
+    {id:'OBS-Q2',cat:'OBS',title:'Alerting on Error Rates',repos:5,desc:'No operational alerting configured in any service.'},
+    {id:'ENG-Q1',cat:'ENG',title:'Infrastructure Governance',repos:5,desc:'No drift detection, no AWS Config rules deployed for any service.'},
+    {id:'ENG-Q2',cat:'ENG',title:'CI/CD with Contract Testing',repos:5,desc:'Only books-api has a functional CI/CD pipeline. No service has API contract testing.'},
+    {id:'AUTH-Q2',cat:'AUTH',title:'Scoped Permissions',repos:4,desc:'No agent-specific RBAC roles in 4 services. Only books-api has well-scoped IAM.'},
+    {id:'AUTH-Q4',cat:'AUTH',title:'Identity Propagation',repos:4,desc:'No service propagates caller identity through the request chain.'},
+    {id:'AUTH-Q5',cat:'AUTH',title:'Credential Management',repos:4,desc:'Hardcoded credentials, env vars without rotation, or no secrets management.'},
+    {id:'API-Q2',cat:'API',title:'Machine-Readable API Spec',repos:4,desc:'No OpenAPI, AsyncAPI, or machine-readable API specification in any service.'},
+    {id:'API-Q3',cat:'API',title:'Structured Error Responses',repos:4,desc:'No structured error codes or retryable indicators in responses.'},
+    {id:'DATA-Q2',cat:'DATA',title:'Data Residency',repos:4,desc:'No documented data residency requirements in any service.'},
+    {id:'DATA-Q3',cat:'DATA',title:'Selective Query Support',repos:4,desc:'All services return unbounded result sets with no pagination or filtering.'},
+    {id:'DATA-Q5',cat:'DATA',title:'Temporal Metadata',repos:4,desc:'Timestamps inconsistent or absent. No Cache-Control or Last-Modified headers.'},
+    {id:'DISC-Q1',cat:'DISC',title:'Schema Versioning',repos:4,desc:'No API versioning, schema versioning, or breaking change detection.'},
+    {id:'STATE-Q1',cat:'STATE',title:'Compensation and Rollback',repos:4,desc:'No saga patterns, compensating transactions, or undo endpoints.'},
+    {id:'STATE-Q5',cat:'STATE',title:'Rate Limiting',repos:4,desc:'No per-client rate limiting in any service.'},
+    {id:'ENG-Q4',cat:'ENG',title:'API Test Coverage',repos:4,desc:'Zero test files in 3 services. Only books-api has good multi-level testing.'},
+    {id:'DATA-Q4',cat:'DATA',title:'System of Record',repos:3,desc:'No explicit system-of-record designations for data domains.'},
+    {id:'DATA-Q6',cat:'DATA',title:'PII Redaction in Logs',repos:3,desc:'PII logged without masking in 3 services.'},
+    {id:'STATE-Q4',cat:'STATE',title:'Circuit Breakers',repos:3,desc:'No circuit breaker patterns in any service.'},
+    {id:'STATE-Q7',cat:'STATE',title:'Infrastructure Capacity',repos:3,desc:'Undersized infrastructure for agent traffic patterns.'},
+    {id:'HITL-Q3',cat:'HITL',title:'Sandbox/Staging',repos:3,desc:'No production-equivalent staging environment in 3 services.'},
+    {id:'ENG-Q3',cat:'ENG',title:'Rollback Capability',repos:3,desc:'Manual rollback only in 3 services.'},
+    {id:'ENG-Q5',cat:'ENG',title:'Encryption at Rest',repos:3,desc:'Default or no encryption on data stores containing PII.'}
+  ],
+  remPriority:[
+    {order:1,group:'Identity Foundation (AUTH-Q1)',services:'4 of 5',effort:'Medium-High',rationale:'Deploy shared Cognito User Pool with client_credentials. Foundation for all other security controls.'},
+    {order:2,group:'Data Protection (DATA-Q1)',services:'3 of 4 applicable',effort:'Medium',rationale:'Classify PII, implement field-level response filtering for agent endpoints.'},
+    {order:3,group:'Observability Stack',services:'All 5',effort:'Medium',rationale:'Deploy X-Ray/ADOT, structured logging, CloudWatch alerting portfolio-wide.'},
+    {order:4,group:'CI/CD & Contract Testing',services:'4 of 5',effort:'High',rationale:'Establish CI/CD pipelines with API contract testing. books-api as template.'},
+    {order:5,group:'API Surface & Versioning',services:'4 of 4 applicable',effort:'Medium',rationale:'Generate OpenAPI specs, add /v1/ versioning, structured error responses.'}
+  ],
+  pilotCandidates:[
+    {rank:1,service:'eks-saas-gitops',risks:11,relevance:'Infrastructure platform — 0 BLOCKERs, Pilot-Ready'}
+  ],
+  portfolioFindings:[
+    {id:'PORT-ARA-Q1',title:'Centralized Identity Plane',sev:'BLOCKER',sc:'pill-red',desc:'No shared identity provider for agent M2M authentication across the portfolio.'},
+    {id:'PORT-ARA-Q2',title:'Cross-Service Audit Correlation',sev:'RISK',sc:'pill-orange',desc:'Audit logs cannot be correlated across services. Only books-api has X-Ray tracing.'},
+    {id:'PORT-ARA-Q3',title:'Portfolio-Level Rate Limiting',sev:'RISK',sc:'pill-orange',desc:'No shared API gateway or WAF protects the portfolio perimeter from agent traffic.'},
+    {id:'PORT-ARA-Q4',title:'Transitive Dependency Safety',sev:'RISK',sc:'pill-orange',desc:'No hard transitive BLOCKER propagation, but inferred dependencies may be incomplete.'},
+    {id:'PORT-ARA-Q5',title:'Agent Identity Governance',sev:'RISK',sc:'pill-orange',desc:'No centralized mechanism to suspend or revoke agent identities across all services.'}
+  ],
+  programs:{agentStorming:true,asReason:'80% Remediation Required — refine agent scope before remediation',axe:true,axeReason:'Customer support agent experience goal without implementation roadmap',eba:false}
+};
+
+const DEPS=[
+  {svc:'eks-saas-gitops',fi:2,fo:0,role:'Foundation'},
+  {svc:'aws-microservices',fi:0,fo:0,role:'Internal'},
+  {svc:'local-monolith',fi:0,fo:1,role:'Leaf'},
+  {svc:'unishop-monolith',fi:0,fo:1,role:'Leaf'},
+  {svc:'books-api',fi:0,fo:0,role:'Standalone'}
+];
+const ARCHETYPES=[{name:'application',count:4},{name:'infrastructure-only',count:1}];
+
+function p(cls,txt){return `<span class="pill ${cls}">${txt}</span>`;}
+
+const el=document.getElementById('main');
+const d=D;
+const risksByCat={};d.ccRiskList.forEach(r=>{(risksByCat[r.cat]=risksByCat[r.cat]||[]).push(r);});
+
+el.innerHTML=`
+<!-- 1. KPI Cards -->
+<div class="section"><div class="grid grid-4">
+  <div class="card"><div class="card-title">🛡️ Agent-Ready</div><div class="card-value score-red">${d.agentReady}<span style="font-size:1rem;color:var(--muted)"> / 5</span></div><div class="card-sub">${d.agentReady} services with 0 BLOCKERs and ≤2 RISKs</div></div>
+  <div class="card"><div class="card-title">🚨 Cross-Cutting BLOCKERs</div><div class="card-value score-red">${d.ccBlockers}</div><div class="card-sub">Same BLOCKER in 2+ repos</div></div>
+  <div class="card"><div class="card-title">⚠️ Cross-Cutting RISKs</div><div class="card-value score-orange">${d.ccRisks}</div><div class="card-sub">Same RISK in 3+ repos</div></div>
+  <div class="card"><div class="card-title">📋 Total BLOCKERs</div><div class="card-value score-yellow">${d.blockers}</div><div class="card-sub">Sum across all 5 services</div></div>
+</div></div>
+<!-- 2. Readiness Profile Distribution -->
+<div class="section"><div class="section-title"><span>📈</span> Readiness Profile Distribution</div><div class="grid grid-4">
+  <div class="card bg-green" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--green)">${d.agentReady}</div><div style="font-size:.82rem;color:var(--green)">✅ Agent-Ready</div></div>
+  <div class="card bg-yellow" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--yellow)">${d.pilotReady}</div><div style="font-size:.82rem;color:var(--yellow)">🟡 Pilot-Ready</div></div>
+  <div class="card bg-orange" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--orange)">${d.remReq}</div><div style="font-size:.82rem;color:var(--orange)">🟠 Remediation Req.</div></div>
+  <div class="card bg-red" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--red)">${d.notInt}</div><div style="font-size:.82rem;color:var(--red)">❌ Not Integrable</div></div>
+</div></div>
+<!-- 3. Charts Row -->
+<div class="section"><div class="grid grid-12">
+  <div class="card span-4"><div class="card-title">🎯 Profile Distribution</div><div style="position:relative;height:260px"><canvas id="c-prof"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">📊 Severity by Service</div><div style="position:relative;height:260px"><canvas id="c-sev"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">🔥 Section Heatmap</div><div style="position:relative;height:260px"><canvas id="c-heat"></canvas></div></div>
+</div></div>
+<!-- 4. Service-by-Service Summary -->
+<div class="section"><div class="section-title"><span>🔍</span> Service-by-Service Summary</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Service</th><th>Repo Type</th><th>Profile</th><th>BLOCKERs</th><th>RISKs</th><th>INFOs</th><th>Priority</th></tr></thead>
+  <tbody>${d.services.map(s=>`<tr><td style="font-weight:600">${s.id}</td><td>${s.type}</td><td>${p(s.pc,s.profile)}</td><td class="${s.b>=3?'score-red':s.b>=1?'score-orange':''}">${s.b}</td><td class="${s.r>=20?'score-orange':s.r>=10?'score-yellow':''}">${s.r}</td><td>${s.i}</td><td>${p(s.prc,s.pri)}</td></tr>`).join('')}</tbody>
+</table></div></div></div>
+<!-- 5. Cross-Cutting BLOCKERs -->
+<div class="section"><div class="section-title"><span>🚨</span> Cross-Cutting BLOCKERs</div>
+<div class="grid grid-2">${d.ccBlockerList.map(b=>`<div class="card" style="border-left:3px solid var(--red)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-weight:700">${b.id}: ${b.title}</span>${p('pill-red',b.repos+' repos')}</div><div style="font-size:.82rem;color:var(--muted)">${b.desc}</div></div>`).join('')}</div>
+</div>
+<!-- 6. Cross-Cutting RISKs -->
+<div class="section"><div class="section-title"><span>⚠️</span> Cross-Cutting RISKs (${d.ccRisks})</div>
+${Object.entries(risksByCat).map(([cat,items])=>`<details><summary>${cat} <span style="color:var(--muted);font-weight:400;font-size:.8rem">(${items.length} risks)</span></summary><div class="detail-body">${items.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span><strong>${r.id}</strong>: ${r.title}</span><span>${p('pill-orange',r.repos+' repos')}</span></div><div style="font-size:.78rem;color:var(--muted);padding:2px 0 8px">${r.desc}</div>`).join('')}</div></details>`).join('')}
+</div>
+<!-- 7. Remediation Priority -->
+<div class="section"><div class="section-title"><span>🎯</span> Remediation Priority</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>#</th><th>Group</th><th>Services</th><th>Effort</th><th>Rationale</th></tr></thead>
+  <tbody>${d.remPriority.map(r=>`<tr><td style="font-weight:700">${r.order}</td><td style="font-weight:600">${r.group}</td><td>${r.services}</td><td>${p('pill-blue',r.effort)}</td><td style="font-size:.82rem;color:var(--muted)">${r.rationale}</td></tr>`).join('')}</tbody>
+</table></div></div></div>
+<!-- 8. Pilot Candidate Ranking -->
+<div class="section"><div class="section-title"><span>🏆</span> Pilot Candidate Ranking</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Rank</th><th>Service</th><th>RISKs</th><th>Relevance</th></tr></thead>
+  <tbody>${d.pilotCandidates.map(c=>`<tr><td style="font-weight:700">${c.rank}</td><td style="font-weight:600">${c.service}</td><td>${c.risks}</td><td style="font-size:.82rem;color:var(--muted)">${c.relevance}</td></tr>`).join('')}</tbody>
+</table></div></div></div>
+<!-- 9. Repo Type Distribution -->
+<div class="section"><div class="section-title"><span>🧩</span> Repo Type Distribution</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">${ARCHETYPES.map(a=>`<div class="card" style="padding:12px 18px;text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--accent2)">${a.count}</div><div style="font-size:.78rem;color:var(--muted)">${a.name}</div></div>`).join('')}</div></div>
+<!-- 10. Dependency Map -->
+<div class="section"><div class="section-title"><span>🔗</span> Dependency Map</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Service</th><th>Fan-In</th><th>Fan-Out</th><th>Role</th><th>Profile</th></tr></thead>
+  <tbody>${DEPS.map(dep=>{const s=d.services.find(x=>x.id===dep.svc);return `<tr><td style="font-weight:600">${dep.svc}</td><td>${dep.fi}</td><td>${dep.fo}</td><td>${dep.role}</td><td>${s?p(s.pc,s.profile):''}</td></tr>`;}).join('')}</tbody>
+</table></div></div></div>
+<!-- 11. Agentic Program Recommendations -->
+<div class="section"><div class="section-title"><span>🚀</span> Agentic Program Recommendations</div>
+<div class="grid grid-3">
+  <div class="card" style="border-top:3px solid ${d.programs.agentStorming?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">AgentStorming</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Collaborative agent design workshop</div>${d.programs.agentStorming?p('pill-green','TRIGGERED — '+d.programs.asReason):p('pill-muted','Not Triggered')}</div>
+  <div class="card" style="border-top:3px solid ${d.programs.axe?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">AXE</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Agentic Experience Workshop</div>${d.programs.axe?p('pill-green','TRIGGERED — '+d.programs.axeReason):p('pill-muted','Not Triggered')}</div>
+  <div class="card" style="border-top:3px solid ${d.programs.eba?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">EBA on Agentic AI</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Triggered when cross-cutting BLOCKERs affect 5+ repos</div>${d.programs.eba?p('pill-green','TRIGGERED'):p('pill-muted','Not Triggered')}</div>
+</div></div>
+<!-- 12. Portfolio-Level Findings -->
+<div class="section"><div class="section-title"><span>📑</span> Portfolio-Level Findings</div>
+<div class="grid grid-3">${d.portfolioFindings.map(f=>`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-weight:700;font-size:.85rem">${f.id}</span>${p(f.sc,f.sev)}</div><div style="font-weight:600;font-size:.85rem;margin-bottom:4px">${f.title}</div><div style="font-size:.78rem;color:var(--muted)">${f.desc}</div></div>`).join('')}</div></div>
+<!-- 13. Readiness Snapshot -->
+<div class="section"><div class="section-title"><span>📋</span> Readiness Snapshot</div>
+<div class="card" style="font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:#a5b4fc;background:#181b24;line-height:1.8;padding:16px;white-space:pre">assessment_date: 2026-04-16
+total_services: 5
+agent_ready: 0
+pilot_ready: 1
+remediation_required: 4
+not_integrable: 0
+total_blockers: 7
+total_risks: 106
+total_infos: 60
+cross_cutting_blockers: 2
+cross_cutting_risks: 26
+portfolio_level_blockers: 1
+portfolio_level_risks: 4
+write_enabled_services: 0
+read_only_services: 5</div></div>`;
+
+/* Charts */
+new Chart(document.getElementById('c-prof'),{type:'doughnut',data:{labels:['Agent-Ready','Pilot-Ready','Remediation Req.','Not Integrable'],datasets:[{data:[d.agentReady,d.pilotReady,d.remReq,d.notInt],backgroundColor:['#22c55e','#eab308','#f97316','#ef4444'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:10}}}}});
+new Chart(document.getElementById('c-sev'),{type:'bar',data:{labels:d.services.map(s=>s.id),datasets:[{label:'BLOCKERs',data:d.services.map(s=>s.b),backgroundColor:'#ef4444'},{label:'RISKs',data:d.services.map(s=>s.r),backgroundColor:'#f97316'},{label:'INFOs',data:d.services.map(s=>s.i),backgroundColor:'#6366f1'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:'#8b8fa3',font:{size:7},maxRotation:45},grid:{display:false}},y:{stacked:true,ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}}}}});
+new Chart(document.getElementById('c-heat'),{type:'bar',data:{labels:d.heatmap.map(h=>h.sec),datasets:[{label:'BLOCKERs',data:d.heatmap.map(h=>h.b),backgroundColor:'#ef4444'},{label:'RISKs',data:d.heatmap.map(h=>h.r),backgroundColor:'#f97316'}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}},y:{stacked:true,ticks:{color:'#8b8fa3',font:{size:11}},grid:{display:false}}}}});
+</script>
+</body>
+</html>
