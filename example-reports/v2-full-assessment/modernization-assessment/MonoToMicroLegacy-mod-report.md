@@ -3,12 +3,12 @@
 | Field | Value |
 |-------|-------|
 | **Repository** | MonoToMicroLegacy |
-| **Date** | 2026-04-15 |
+| **Date** | 2026-04-17 |
 | **Repo Type** | application |
 | **Priority** | P0 |
 | **Tags** | monolith, java, ec2, decomposition-target |
 | **Context** | Legacy Java Spring Boot monolith on EC2 with MySQL — primary decomposition target. The agent needs access to order and return data through discrete service APIs. |
-| **Overall Score** | 1.43 / 4.0 |
+| **Overall Score** | **1.4 / 4.0** |
 
 ---
 
@@ -16,12 +16,12 @@
 
 | Category | Score | Rating |
 |----------|-------|--------|
-| Infrastructure, Platform, and DevOps (INF) | 1.00 / 4.0 | ❌ Not Present |
-| Application Architecture (APP) | 1.67 / 4.0 | 🟠 Needs Work |
-| Data Platform Modernization (DATA) | 2.50 / 4.0 | 🟡 Partial |
-| Security Baseline (SEC) | 1.00 / 4.0 | ❌ Not Present |
-| Operations & Observability (OPS) | 1.00 / 4.0 | ❌ Not Present |
-| **Overall** | **1.43 / 4.0** | **❌ Not Present** |
+| Infrastructure, Platform, and DevOps (INF) | 1.0 / 4.0 | ❌ Not Present |
+| Application Architecture (APP) | 1.5 / 4.0 | 🟠 Needs Work |
+| Data Platform Modernization (DATA) | 2.5 / 4.0 | 🟡 Partial |
+| Security Baseline (SEC) | 1.0 / 4.0 | ❌ Not Present |
+| Operations & Observability (OPS) | 1.0 / 4.0 | ❌ Not Present |
+| **Overall** | **1.4 / 4.0** | **❌ Not Present** |
 
 ---
 
@@ -29,11 +29,11 @@
 
 | # | Question | Score | Gap Summary | Impact |
 |---|----------|-------|-------------|--------|
-| 1 | INF-Q10: Infrastructure as Code Coverage | 1 | Zero IaC files — 100% of infrastructure is manually created (ClickOps). No Terraform, CloudFormation, CDK, Helm, or Kustomize. | Blocks reproducible deployments, disaster recovery, and environment consistency. Foundation for all other modernization pathways. |
-| 2 | INF-Q11: CI/CD Automation | 1 | No CI/CD pipeline definitions. No GitHub Actions, Jenkinsfile, buildspec, or CodePipeline. Builds are local Gradle only. | Manual deployments are error-prone, slow, and block rapid iteration. Required for containers, GitOps, and safe decomposition. |
-| 3 | INF-Q1: Managed Compute | 1 | All compute runs on raw EC2 instances. No ECS, EKS, Fargate, or managed container orchestration. | High operational overhead for patching, scaling, and capacity management. Blocks containerization and cloud-native pathways. |
-| 4 | INF-Q2: Managed Databases | 1 | MySQL is self-managed (likely on EC2). No RDS, Aurora, or managed database service. No automated failover or backups. | Manual patching, backup, and scaling burden. Single point of failure. Blocks managed database migration pathway. |
-| 5 | SEC-Q5: Secrets Management | 1 | Database credentials hardcoded in `application.properties` in plaintext (`MonoToMicroUser` / `MonoToMicroPassword`). Committed to version control. | Critical security vulnerability. Credential exposure risk. Must be remediated before any production modernization. |
+| 1 | INF-Q10: Infrastructure as Code Coverage | 1 | Zero IaC — all infrastructure manually created (ClickOps) | Blocks reproducible environments, disaster recovery, and automated deployments. Foundation for all other modernization pathways. |
+| 2 | INF-Q11: CI/CD Automation | 1 | No CI/CD pipeline — all deployments are manual | Prevents continuous delivery, blocks safe decomposition, and makes every release a risk event. |
+| 3 | APP-Q2: Monolith vs Microservices | 1 | Tightly-coupled monolith with single deployable unit, shared database, and no module boundaries | Prevents independent scaling, independent deployment, and team autonomy. Primary decomposition target per context. |
+| 4 | SEC-Q5: Secrets Management | 1 | Database credentials hardcoded in plaintext in application.properties | Critical security vulnerability — credentials exposed in version control. Blocks compliance and production hardening. |
+| 5 | INF-Q1: Managed Compute | 1 | All compute on raw EC2 with no managed container orchestration | Manual patching, no elastic scaling, no container orchestration. Blocks containerization and decomposition pathways. |
 
 ---
 
@@ -41,12 +41,17 @@
 
 ### Data Query Agent
 
-- **Prerequisite:** DATA-Q2 = 3 (≥ 2 required). The repository pattern with MyBatis mappers (`UnicornMapper`, `UserMapper`, `HealthMapper`) provides a clean, centralized data access layer through well-defined repository interfaces (`UnicornRepository`, `UserRepository`, `HealthRepository`).
-- **What it enables:** A natural-language-to-SQL agent that queries the unicorn product catalog, user basket contents, and user account data through the structured repository layer. This directly supports the stated context requirement: "The agent needs access to order and return data through discrete service APIs."
-- **Additional steps:** Generate an OpenAPI specification from the Spring Boot controllers (`/unicorns`, `/unicorns/basket/{userUuid}`, `/user`, `/user/login`) to enable full tool discovery for the agent. The controllers return structured JSON responses (Jackson serialization) which are agent-friendly.
-- **Effort:** Medium — the data access layer exists and is well-structured, but an OpenAPI spec must be generated and the controllers need API versioning before agent integration is production-ready.
+- **Prerequisite:** DATA-Q2 = 3 (≥ 2). The application uses a consistent Controller → Service → Repository → MyBatis Mapper pattern. All SQL is centralized in mapper XMLs (`UnicornMapper.xml`, `UserMapper.xml`, `HealthMapper.xml`), and the database schema is clearly defined in `database/create_tables.sql` with 3 well-structured tables (`unicorns`, `unicorns_basket`, `unicorn_user`).
+- **What it enables:** A natural-language-to-SQL agent that can query unicorn catalog data, basket/order data, and user data through the existing MyBatis data access layer. This directly supports the context requirement: "The agent needs access to order and return data through discrete service APIs."
+- **Additional steps:** Generate an OpenAPI specification from the existing Spring Boot REST endpoints to enable full API tool discovery. The current schema is simple enough for an agent to query directly via Amazon Bedrock with Aurora MySQL (post-migration).
+- **Effort:** Medium
 
-> **Note:** 5 of 6 potential Quick Agent Wins are not available due to missing foundations: no API documentation (blocks API-aware agent), no CI/CD pipeline (blocks DevOps agent), insufficient documentation (blocks RAG knowledge agent), no workflow orchestration (blocks workflow agent), and no distributed tracing (blocks observability agent). Prioritize the Modern DevOps pathway to unlock these wins.
+### RAG-Based Knowledge Agent
+
+- **Prerequisite:** Documentation exists in the repository — `README.md` (minimal, links to workshop), `database/create_tables.sql` (schema definition with 3 tables and seed data), `application.properties` (configuration), and extensive Javadoc comments across all 48 Java source files providing class and method documentation.
+- **What it enables:** A knowledge agent that indexes the codebase documentation, schema definitions, and code comments to answer developer questions about the application architecture, data model, and API behavior during the decomposition process.
+- **Additional steps:** Aggregate documentation into a structured corpus. The existing documentation is minimal — enrich with auto-generated API documentation (e.g., Springfox/SpringDoc) and architecture decision records before indexing.
+- **Effort:** Medium
 
 ---
 
@@ -54,15 +59,13 @@
 
 | # | Pathway | Status | Priority | Est. Effort | Key Trigger Criteria |
 |---|---------|--------|----------|-------------|---------------------|
-| 1 | Move to Cloud Native | Triggered | High | High | APP-Q2=2, INF-Q1=1, APP-Q3=1, APP-Q4=1 — monolith on EC2 with all-sync communication |
-| 2 | Move to Containers | Triggered | Medium | Medium | INF-Q1=1, no container definitions found — raw EC2 with no Dockerfile |
-| 3 | Move to Open Source | Not Triggered | — | — | DATA-Q4=4 (no stored procedures); MySQL is already open-source; no commercial DB engines detected |
-| 4 | Move to Managed Databases | Triggered | High | Medium | INF-Q2=1, DATA-Q3=2 — self-managed MySQL with uncontrolled engine version |
-| 5 | Move to Managed Analytics | Not Triggered | — | — | Contextual guard: no data processing workloads, ETL, streaming, or analytics artifacts found — simple CRUD e-commerce app |
-| 6 | Move to Modern DevOps | Triggered | High | Medium | INF-Q10=1, INF-Q11=1, OPS-Q5=1, OPS-Q6=1 — zero IaC, zero CI/CD, no deployment strategy, no tests |
-| 7 | Move to AI | Triggered | Medium | Medium | No AI/agent frameworks, no vector DB, no RAG, no agent eval framework detected |
-
----
+| 1 | Move to Cloud Native | Triggered | High | High | APP-Q2=1 (monolith), INF-Q1=1 (raw EC2), APP-Q3=1 (all sync), APP-Q4=1 (all sync) |
+| 2 | Move to Containers | Triggered | Medium | Medium | INF-Q1=1 (raw EC2), no container definitions found; compute is EC2 (not Lambda/Fargate/ECS) |
+| 3 | Move to Open Source | Not Triggered | — | — | DATA-Q4=4 (no stored procedures); MySQL is already open source — no commercial DB engines detected |
+| 4 | Move to Managed Databases | Triggered | High | Medium | INF-Q2=1 (self-managed MySQL), DATA-Q3=2 (version not pinned in IaC) |
+| 5 | Move to Managed Analytics | Not Triggered | — | — | No data processing workloads found — application is a CRUD e-commerce API with no analytics or streaming |
+| 6 | Move to Modern DevOps | Triggered | High | Medium | INF-Q10=1 (zero IaC), INF-Q11=1 (no CI/CD), OPS-Q5=1 (no deployment strategy), OPS-Q6=1 (no tests) |
+| 7 | Move to AI | Triggered | Medium | Medium | Context contains "agent" (AI intent confirmed); no AI/agent frameworks, no vector DB, no RAG, no eval framework detected |
 
 ### Pathway: Move to Cloud Native
 
@@ -70,33 +73,19 @@
 **Priority:** High
 **Estimated Effort:** High
 
-**Current Architecture State:**
-The application is a Spring Boot 2.1.x monolith (APP-Q2 = 2) deployed on a single EC2 instance. The `Application.java` entry point bootstraps a single `@SpringBootApplication` process. The `HealthController` uses `EC2MetadataUtils.getInstanceInfo()` confirming raw EC2 deployment. The codebase has identifiable module boundaries — `UnicornController`/`BasketController` (product catalog + basket), `UserController` (user management), and `HealthController`/`DataReplicationController` (operational endpoints) — but these modules share a single MySQL database (`unishop` schema) and the `UnicornService` combines both catalog and basket logic in a single service class.
+**Current Architecture State:** The application is a tightly-coupled Java Spring Boot monolith (APP-Q2=1) deployed on raw EC2 instances. `HealthController.java` uses `EC2MetadataUtils` to fetch instance metadata (accountId, AZ, instanceID, instanceType, region), confirming direct EC2 deployment. A single `build.gradle` produces one `bootJar` containing all domains: Unicorn catalog, Basket/Orders, User management, Health checks, and Data replication.
 
-**Compute Model Gaps (INF-Q1 = 1):**
-All compute is raw EC2. No ECS, EKS, or managed container orchestration exists. No IaC defines compute resources.
+**Compute Model Gaps:** All compute runs on raw EC2 (INF-Q1=1). No ECS, EKS, or container orchestration is present. No auto-scaling (INF-Q7=1), no load balancer or API Gateway (INF-Q6=1).
 
-**Communication Pattern Gaps (APP-Q3 = 1, APP-Q4 = 1):**
-All inter-component communication is synchronous HTTP request-response. No async messaging patterns exist. No EventBridge, SQS, or event-driven handlers. Every controller endpoint blocks until the MySQL query completes.
+**Communication Pattern Gaps:** All communication is synchronous HTTP request/response (APP-Q3=1). No messaging, event publishing, or async patterns exist. `DataReplicationController.replicate()` executes synchronously despite being potentially long-running (APP-Q4=1).
 
-**Recommended Decomposition Approach:**
-Strangler Fig with EKS (see Decomposition Strategy section below). Extract the Basket/Order service first to satisfy the agent's need for discrete service APIs for order and return data.
+**Recommended Decomposition Approach:** Strangler Fig (Parallel Track) — see Decomposition Strategy section below. Three service boundaries are identifiable: (1) Unicorn Catalog Service, (2) Basket/Order Service, (3) User Service. Extract the Basket/Order service first to expose discrete order APIs for agent access per the stated context.
 
-**Representative AWS Services:**
-- **EKS** (preferred) for container orchestration of decomposed microservices
-- **API Gateway** (preferred) as the unified entry point with request routing, throttling, and authentication
-- **EventBridge** (preferred) for event-driven communication between extracted services
-- **Aurora MySQL** (preferred) as per-service managed database after data separation
+**Representative AWS Services:** Amazon EKS (preferred per user preferences), Amazon API Gateway (preferred), Amazon EventBridge (preferred for async communication), Amazon DynamoDB (preferred for basket data), AWS App Mesh for service mesh.
 
-**Recommended Patterns:**
-- Strangler Fig pattern for incremental extraction
-- Anti-corruption Layer between new services and legacy monolith
-- Event Sourcing with EventBridge for basket/order events
-- Saga pattern for distributed transactions spanning Catalog, Basket, and User services
+**Recommended Patterns:** Strangler Fig, Anti-corruption Layer, Event Sourcing, Saga, Hexagonal Architecture.
 
-**AWS Prescriptive Guidance:**
-- [Strangler Fig pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/strangler-fig.html)
-- [Decompose monoliths into microservices](https://docs.aws.amazon.com/prescriptive-guidance/latest/modernization-decomposing-monoliths/welcome.html)
+**Prescriptive Guidance:** [Strangler Fig pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/strangler-fig.html) · [Cloud Design Patterns](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html)
 
 ---
 
@@ -106,30 +95,17 @@ Strangler Fig with EKS (see Decomposition Strategy section below). Extract the B
 **Priority:** Medium
 **Estimated Effort:** Medium
 
-**Current Compute Model (INF-Q1 = 1):**
-The application runs on raw EC2 instances. `HealthController.java` directly calls `EC2MetadataUtils.getInstanceInfo()` to report EC2 instance metadata (account ID, AZ, instance ID, instance type, region). No Dockerfile exists — the `docker` task in `build.gradle` is commented out. No `docker-compose.yml` or Kubernetes manifests exist.
+**Current Compute Model:** The Spring Boot application runs directly on raw EC2. `HealthController.java` fetches EC2 instance metadata. No Dockerfile, docker-compose.yml, Kubernetes manifests, or Helm charts exist in the repository. A commented-out `docker` block in `build.gradle` indicates containerization was considered but never implemented.
 
-**Container Readiness Indicators:**
-- ✅ Spring Boot fat JAR with `bootJar { launchScript() }` — self-contained, single artifact deployment
-- ✅ Application port externalized (`server.port=8080` in `application.properties`)
-- ✅ Database endpoint via environment variable (`MONO_TO_MICRO_DB_ENDPOINT`) — partially externalized config
-- ⚠️ Database credentials hardcoded in `application.properties` — must be externalized to secrets before containerization
-- ⚠️ `EC2MetadataUtils` usage in `HealthController` — must be replaced with container-aware health checks
-- ⚠️ Java 8 source compatibility — consider upgrading to Java 17+ for better container support (GC tuning, container-aware memory limits)
+**Container Readiness Indicators:** The Spring Boot bootJar with `launchScript()` is a self-contained executable. The application reads its database endpoint from the `MONO_TO_MICRO_DB_ENDPOINT` environment variable, indicating some config externalization. Port 8080 is configured in `application.properties`. These are positive indicators for containerization — the application is nearly container-ready with minimal changes.
 
-**Recommended Container Orchestration:**
-**EKS** (preferred) with Terraform (preferred) for IaC. Avoid self-managed Kubernetes (per preferences).
+**Recommended Container Orchestration Platform:** Amazon EKS (preferred per user preferences — avoids self-managed Kubernetes and serverless/Lambda). Deploy the Spring Boot application as a Kubernetes Deployment with a Service on EKS. Use Amazon ECR for container image registry.
 
-**Migration Approach:**
-Lift-and-containerize first — create a Dockerfile for the existing monolith, deploy to EKS, then extract services incrementally (Strangler Fig).
+**Migration Approach:** Lift-and-containerize first — create a Dockerfile for the existing monolith, deploy to EKS, and validate. This is a prerequisite for the Strangler Fig decomposition (Move to Cloud Native pathway). Then refactor-and-extract services as decomposition progresses.
 
-**Representative AWS Services:**
-- **Amazon EKS** (preferred) for Kubernetes orchestration
-- **Amazon ECR** for container image registry
-- **AWS App Runner** as a simpler alternative for initial containerization
+**Representative AWS Services:** Amazon EKS, Amazon ECR, AWS App Runner (alternative), EKS managed node groups with Graviton instances for cost optimization.
 
-**AWS Container Migration Guidance:**
-- [Containerize Java applications on AWS](https://docs.aws.amazon.com/prescriptive-guidance/latest/modernization-containers/welcome.html)
+**Prescriptive Guidance:** [Containerize and Migrate Applications](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/containerize-and-migrate-applications.html)
 
 ---
 
@@ -139,28 +115,19 @@ Lift-and-containerize first — create a Dockerfile for the existing monolith, d
 **Priority:** High
 **Estimated Effort:** Medium
 
-**Current Database Topology (INF-Q2 = 1):**
-MySQL is self-managed — `application.properties` connects to `jdbc:mysql://${MONO_TO_MICRO_DB_ENDPOINT}:3306/unishop` with no RDS or Aurora resource definitions in IaC (no IaC exists). The database likely runs on EC2 with manual patching, backup, and scaling. Connection uses `mysql-connector-java:8.0.11`.
+**Current Database Topology:** Self-managed MySQL accessed via JDBC connection string `jdbc:mysql://${MONO_TO_MICRO_DB_ENDPOINT}:3306/unishop`. The database runs on unknown infrastructure (no IaC defines it). Three tables: `unicorns`, `unicorns_basket`, `unicorn_user` in the `unishop` schema. MySQL connector version 8.0.11 (2018) is pinned in `build.gradle`, but actual server version is unknown (INF-Q2=1, DATA-Q3=2).
 
-**Engine Versions and EOL Status (DATA-Q3 = 2):**
-MySQL connector 8.0.11 is pinned in `build.gradle`, but the actual MySQL server engine version is unknown — no IaC controls it. MySQL 8.0 is supported, but without version pinning in infrastructure, the server may be running any version including EOL releases (MySQL 5.6 and 5.7 are past EOL).
+**Engine Version and EOL Status:** MySQL connector 8.0.11 dates from 2018 and is significantly outdated. The server version is unknown because no IaC defines the database. MySQL 8.0 is still supported, but the exact server version needs discovery before migration.
 
-**Data Access Patterns (DATA-Q2 = 3):**
-Clean, consistent repository pattern via MyBatis mappers. All queries use standard ANSI SQL with no stored procedures (DATA-Q4 = 4). Schema is simple: 3 tables (`unicorns`, `unicorns_basket`, `unicorn_user`) with straightforward JOINs. This makes migration highly feasible with minimal query rewriting.
+**Data Access Patterns:** Consistent Repository → MyBatis Mapper pattern (DATA-Q2=3). All SQL is standard (SELECT, INSERT, DELETE) with no stored procedures, triggers, or proprietary constructs (DATA-Q4=4). The `getUnicornBasket` query performs a JOIN between `unicorns` and `unicorns_basket` tables.
 
-**Recommended Managed Database Target:**
-**Aurora MySQL** (preferred) — wire-compatible with MySQL, zero query changes required. Provides automated backups, Multi-AZ failover, auto-scaling storage, and managed patching.
+**Recommended Migration Target:** Amazon Aurora MySQL (preferred per user preferences for "aurora" and "aurora-mysql"). Aurora MySQL is wire-compatible with MySQL, enabling a drop-in migration with minimal application changes. For the Basket/Order service (post-decomposition), consider Amazon DynamoDB (preferred) for the `unicorns_basket` table to enable independent scaling.
 
-**Migration Tools:**
-- **AWS Database Migration Service (DMS)** for online data migration with minimal downtime
-- Connection string update: change `MONO_TO_MICRO_DB_ENDPOINT` from EC2 MySQL host to Aurora MySQL cluster endpoint
+**Migration Tools:** AWS Database Migration Service (DMS) for the initial data migration. No AWS Schema Conversion Tool (SCT) needed since MySQL → Aurora MySQL is homogeneous.
 
-**Representative AWS Services:**
-- **Amazon Aurora MySQL** (preferred) for the primary relational database
-- **Amazon DynamoDB** (preferred) as a future option for the basket service after decomposition (key-value access pattern)
+**Representative AWS Services:** Amazon Aurora MySQL, Amazon DynamoDB (for basket data post-decomposition), AWS DMS, Amazon RDS Proxy for connection pooling.
 
-**AWS Managed Database Migration Guidance:**
-- [Migrate MySQL to Aurora MySQL](https://docs.aws.amazon.com/prescriptive-guidance/latest/migration-mysql-to-aurora-mysql/welcome.html)
+**Prescriptive Guidance:** [Migrate MySQL to Aurora MySQL](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/migrate-from-mysql-to-amazon-aurora-mysql.html)
 
 ---
 
@@ -170,39 +137,24 @@ Clean, consistent repository pattern via MyBatis mappers. All queries use standa
 **Priority:** High
 **Estimated Effort:** Medium
 
-**Current IaC Coverage (INF-Q10 = 1):**
-Zero infrastructure-as-code files exist in the repository. No `.tf`, CloudFormation, CDK, Helm, or Kustomize files. All infrastructure is manually created (ClickOps). This is the most foundational gap — every other modernization pathway depends on having infrastructure defined in code.
+**Current IaC Coverage:** Zero (INF-Q10=1). No Terraform, CloudFormation, CDK, Helm charts, or any IaC exists. All infrastructure is manually created. This is the most critical gap — without IaC, no other modernization pathway can be executed safely or reproducibly.
 
-**Current CI/CD State (INF-Q11 = 1):**
-No CI/CD pipeline definitions. No `.github/workflows`, `Jenkinsfile`, `buildspec.yml`, or CodePipeline. The only build mechanism is a local `build.gradle` with Gradle wrapper. Deployments are entirely manual.
+**Current CI/CD State:** None (INF-Q11=1). No GitHub Actions, GitLab CI, Jenkinsfile, buildspec.yml, or CodePipeline definitions. The `build.gradle` provides a Gradle build but deployment is entirely manual. `spring-boot-starter-test` is a declared dependency but no test files exist in `src/test/`.
 
-**Deployment Strategy Gaps (OPS-Q5 = 1):**
-No deployment strategy — no blue/green, canary, or rolling deployments. No CodeDeploy, Helm releases, or Argo Rollouts. Direct-to-production deployment with no staged rollout.
+**Deployment Strategy Gaps:** No deployment strategy (OPS-Q5=1). Direct-to-production with no canary, blue/green, or rolling updates. No feature flags.
 
-**Testing Gaps (OPS-Q6 = 1):**
-No automated tests exist. `spring-boot-starter-test` is declared in `build.gradle`, but no `src/test` directory or test files exist. No integration tests, no API test suites, no test containers.
+**Testing Gaps:** No integration tests (OPS-Q6=1). No test files exist in the repository despite `spring-boot-starter-test` being declared as a dependency.
 
-**Recommended DevOps Toolchain (respecting preferences):**
-- **Terraform** (preferred) for all infrastructure provisioning (EKS cluster, Aurora MySQL, VPC, IAM, etc.)
-- **GitOps** (preferred) with ArgoCD or Flux for Kubernetes deployment automation
-- **GitHub Actions** or **AWS CodePipeline + CodeBuild** for CI pipeline (build, test, security scan)
-- Canary deployments via Argo Rollouts on EKS (preferred)
+**Recommended DevOps Toolchain:**
+1. **IaC:** Terraform (preferred per user preferences) for all AWS infrastructure — VPC, EKS cluster, Aurora MySQL, API Gateway, EventBridge, ECR.
+2. **GitOps:** ArgoCD or Flux on EKS (preferred per user preferences for "gitops") for Kubernetes deployment management.
+3. **CI/CD:** GitHub Actions or AWS CodePipeline with CodeBuild for build, test, container image build, and push to ECR. Avoid manual deployments (per preferences).
+4. **Deployment Strategy:** Progressive delivery with ArgoCD Rollouts (canary/blue-green) on EKS.
+5. **Testing:** Add JUnit integration tests, API contract tests, and container security scanning before any decomposition begins.
 
-**Implementation Order:**
-1. **IaC foundation** — Define VPC, subnets, security groups, EKS cluster, and Aurora MySQL in Terraform
-2. **CI pipeline** — Add GitHub Actions or CodeBuild for automated build, unit test, and container image creation
-3. **CD pipeline** — Implement GitOps with ArgoCD for EKS deployments
-4. **Integration tests** — Add test suites before decomposition to establish regression safety net
-5. **Deployment strategy** — Configure canary deployments via Argo Rollouts
+**Representative AWS Services:** AWS CodePipeline, AWS CodeBuild, Amazon ECR, Terraform with S3 backend, ArgoCD on EKS, AWS X-Ray for observability.
 
-**Representative AWS Services:**
-- **AWS CodeBuild** for CI builds
-- **AWS CodePipeline** for pipeline orchestration
-- **Amazon EKS** (preferred) as deployment target
-- **AWS CloudWatch** for pipeline monitoring
-
-**AWS DevOps Prescriptive Guidance:**
-- [Getting Started with DevOps on AWS](https://docs.aws.amazon.com/prescriptive-guidance/latest/strategy-migration/dev-ops.html)
+**Prescriptive Guidance:** [Getting Started with DevOps on AWS](https://docs.aws.amazon.com/prescriptive-guidance/latest/strategy-migration/devops.html)
 
 ---
 
@@ -212,94 +164,85 @@ No automated tests exist. `spring-boot-starter-test` is declared in `build.gradl
 **Priority:** Medium
 **Estimated Effort:** Medium
 
-**Current AI/Agent Infrastructure State:**
-No AI or agent framework usage detected in the repository:
-- ❌ No Bedrock SDK, LangChain, Strands, OpenAI, Spring AI, HuggingFace, or SageMaker imports
-- ❌ No vector database infrastructure (no OpenSearch vector engine, Pinecone, pgvector, Weaviate, or Qdrant)
-- ❌ No RAG implementation patterns (no embedding generation, vector store queries, or retrieval chains)
-- ❌ No agent evaluation frameworks (no Ragas, DeepEval, or custom eval harness)
+**Contextual Guard Check:** The context explicitly states: "The agent needs access to order and return data through discrete service APIs." The term "agent" is a recognized AI-related signal term. AI intent is confirmed — `has_ai_intent = true`.
 
-The AWS SDK v1 (`aws-java-sdk:1.11.567`) is present in `build.gradle` but does not include Bedrock client (which requires AWS SDK v2).
+**Current AI/Agent Infrastructure State:** No AI/agent framework usage detected. No Bedrock SDK, LangChain, Strands, OpenAI, Spring AI, or HuggingFace imports in any of the 48 Java source files. No vector database infrastructure. No RAG implementation. No agent evaluation framework. The `build.gradle` contains only the AWS SDK v1 (`aws-java-sdk:1.11.567`) with no AI service clients.
 
-**Application Domain and Potential AI Use Cases:**
-The Unicorn Shop is an e-commerce application with a product catalog, shopping basket, and user management. Potential AI integrations:
-1. **Product recommendation engine** — Use Bedrock (preferred) to generate personalized unicorn recommendations based on basket history
-2. **Natural language product search** — Agent-powered search over the unicorn catalog using Bedrock embeddings
-3. **Order/return data agent** — Aligns directly with stated context: "The agent needs access to order and return data through discrete service APIs." After decomposition, the Basket/Order microservice API becomes a tool the agent can invoke.
+**Application Domain and Potential AI Use Cases:** The context explicitly requires agent access to order and return data. Post-decomposition, the Basket/Order service API can serve as a tool endpoint for a Bedrock agent. Potential use cases:
+- **Order Data Agent:** An Amazon Bedrock agent that queries order/basket data through the extracted Order Service API, enabling natural language queries against order history.
+- **Product Catalog Agent:** A Bedrock agent that searches the unicorn product catalog for product information, pricing, and availability.
+- **Customer Support Agent:** Combine order and user data APIs as agent tools for customer support automation.
 
-**Quick Wins:** See Quick Agent Wins section — the Data Query Agent is immediately viable given the clean data access layer (DATA-Q2 = 3).
+**Foundation Requirements (must be in place before AI integration):**
+1. Decompose the monolith to expose discrete REST APIs (Move to Cloud Native pathway — extract Basket/Order service first).
+2. Generate OpenAPI specifications for extracted service APIs (enables Bedrock agent tool definition).
+3. Implement API authentication (SEC-Q3=1 currently — APIs are open).
+4. Migrate to Aurora MySQL (Move to Managed Databases pathway) to enable pgvector or OpenSearch for future RAG capabilities.
 
-**Foundation Requirements Before AI Integration:**
-1. Upgrade to AWS SDK v2 (Bedrock requires `software.amazon.awssdk:bedrockruntime`)
-2. Generate OpenAPI specifications from Spring controllers for agent tool discovery
-3. Implement API authentication (SEC-Q3) before exposing endpoints as agent tools
-4. Add structured logging (OPS-Q1) for agent action traceability
+**Quick Wins:** See Quick Agent Wins section — the Data Query Agent can be an early proof-of-concept once the database is migrated to Aurora MySQL.
 
-**Recommended AI Services:**
-- **Amazon Bedrock** (preferred) for foundation model access and agent orchestration
-- **Amazon Bedrock AgentCore** for agent runtime management
-- **Amazon OpenSearch Service** with vector engine for semantic product search
+**Representative AWS Services:** Amazon Bedrock (preferred per user preferences), Amazon Bedrock AgentCore, Amazon Q Developer for code modernization assistance, Amazon OpenSearch Service (for future vector search/RAG).
 
-**AWS AI/ML Prescriptive Guidance:**
-- [Amazon Bedrock Getting Started](https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-bedrock.html)
-
----
+**Prescriptive Guidance:** [Amazon Bedrock Agents](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html)
 
 ## Decomposition Strategy
 
-> **Condition:** APP-Q2 = 2 (< 3) — Monolith with identifiable modules but significant coupling through shared database.
+> **Condition:** APP-Q2 = 1 (tightly-coupled monolith). This section provides concrete decomposition guidance.
 
-### Recommended Approach: Strangler Fig (Parallel Track)
+### Architecture Analysis
 
-**Why this approach:** APP-Q2 = 2 indicates the monolith has identifiable module boundaries that can be extracted incrementally. The controller/service/repository layering provides natural seams for extraction. The stated context — "The agent needs access to order and return data through discrete service APIs" — makes the Basket/Order module the highest-priority extraction candidate.
+The MonoToMicroLegacy application is a single-process Java Spring Boot monolith with the following structure:
 
-**Extraction Sequence:**
+- **Single deployable unit:** One `build.gradle` produces one `bootJar` with `launchScript()`.
+- **Single entry point:** `Application.java` with `@SpringBootApplication`.
+- **3 domain areas identified:**
+  1. **Unicorn Catalog** — `UnicornController` → `UnicornService` → `UnicornRepository` → `UnicornMapper` (product CRUD)
+  2. **Basket/Orders** — `BasketController` → `UnicornService` (add/remove/get basket) → `UnicornRepository` → `UnicornMapper` (basket operations)
+  3. **User Management** — `UserController` → `UserService` → `UserRepository` → `UserMapper` (user CRUD, login)
+- **Cross-cutting:** `HealthController` (health checks), `DataReplicationController` (data export), `CoreController` (shared base), `CoreModel` (shared model base)
+- **Data coupling:** `unicorns_basket` table JOINs `unicorns` table (`UnicornMapper.xml` — `getUnicornBasket` query). All 3 tables share the single `unishop` MySQL schema.
+- **Shared base classes:** `CoreModel` is extended by `Unicorn` and `User`; `CoreController` is extended by all controllers.
 
-| Phase | Service to Extract | Source Module | Target | Timeline |
-|-------|-------------------|---------------|--------|----------|
-| 0 | Containerize monolith as-is | Entire app | EKS (preferred) | 2–4 weeks |
-| 1 | Basket/Order Service | `BasketController` + basket operations from `UnicornServiceImpl` + `unicorns_basket` table | EKS microservice + DynamoDB (preferred) or Aurora MySQL (preferred) | 3–4 months |
-| 2 | User Service | `UserController` + `UserServiceImpl` + `unicorn_user` table | EKS microservice + Aurora MySQL (preferred) | 2–3 months |
-| 3 | Product Catalog Service | `UnicornController` + catalog operations from `UnicornServiceImpl` + `unicorns` table | EKS microservice + Aurora MySQL (preferred) | 2–3 months |
+### Decomposition Approach Options
 
-**Phase 0** is the Conditional/Adaptive quick win — containerize the monolith first to gain immediate benefits (portability, consistent environments, EKS deployment) before starting decomposition.
-
-### Alternative Approach: Conditional / Adaptive
-
-Containerize the monolith as-is first (Phase 0), then selectively extract only the Basket/Order service (Phase 1) to satisfy the immediate agent API requirement. Defer User and Catalog extraction until business need arises. This approach takes 4–6 months for the first discrete service API.
-
-### Approach NOT Recommended: Big-Bang Rewrite
-
-⚠️ **Not recommended.** The monolith has identifiable module boundaries (APP-Q2 = 2), making incremental extraction viable. A big-bang rewrite introduces high risk of scope creep, feature parity gaps, and failed cutover. The 9–15 month timeline for Strangler Fig is lower risk with incremental value delivery.
+| Approach | Description | When to Use | Level of Effort | Recommendation |
+|----------|-------------|-------------|-----------------|----------------|
+| **Strangler Fig (Parallel Track)** | Incrementally extract services from the monolith while keeping it running. New features as services; existing features migrated over time. The monolith shrinks as services grow. | APP-Q2=1, but identifiable domain boundaries exist (Unicorn Catalog, Basket, User). Repository pattern provides separation. | **Medium to High** — 6-18 months. Each extraction is bounded. | ✅ **Recommended.** Lowest risk, incremental value delivery. Extract Basket/Order service first to enable agent access to order data. Run monolith and services side-by-side on EKS. |
+| **Conditional / Adaptive** | Containerize monolith as-is on EKS, then selectively extract high-value services based on business priority. Some modules may remain in the monolith permanently. | Team has limited capacity. Business pressure requires quick wins before full architectural change. | **Low to Medium** — containerization in 2-4 weeks, selective extraction over 3-12 months. | ✅ **Recommended as Phase 1.** Containerize the monolith first on EKS, then extract Basket/Order service using Strangler Fig. |
+| **Big-Bang Rewrite** | Rewrite the entire application as microservices from scratch, replacing the monolith in a single cutover. | Almost never. Only when the monolith is so degraded that incremental extraction is impossible. | **Very High** — 12-24+ months. High risk of scope creep, feature parity gaps, and failed cutover. | ⚠️ **Recommended against.** The existing code is structured enough (repository pattern, clean domain separation) for incremental extraction. |
 
 ### Pattern Recommendations
 
-| Pattern | Purpose | When to Apply |
-|---------|---------|---------------|
-| **Anti-corruption Layer (ACL)** | Isolate extracted Basket Service from monolith's `UnicornMapper` queries. Prevent monolith schema assumptions from leaking into new service. | Phase 1: Place ACL between new Basket Service and monolith's `unishop` schema. Translate `unicorns_basket` JOINs to dedicated basket data model. |
-| **Saga Pattern** | Manage distributed transactions for basket operations that currently rely on single-database ACID transactions. | Phase 1: When basket operations need to coordinate with catalog (e.g., checking unicorn existence via `unicorns` table JOIN in `getUnicornBasket`). Use EventBridge (preferred) for saga coordination. |
-| **Event Sourcing** | Capture basket add/remove events as an immutable event stream instead of current CRUD-only pattern. | Phase 1: Replace `addUnicornToBasket`/`removeUnicornFromBasket` with events published to EventBridge (preferred). Enables audit trail and cross-service event consumption. |
-| **Hexagonal Architecture** | Structure each new microservice with clear ports and adapters — business logic core separated from HTTP controllers and database adapters. | Every extracted service — ensures testability and infrastructure portability. |
+| Pattern | Purpose | When to Apply | AWS Prescriptive Guidance |
+|---------|---------|---------------|---------------------------|
+| **Anti-corruption Layer (ACL)** | Isolate extracted services from the monolith's data model. Prevent monolith design decisions from leaking into new services. | Every extraction — place ACL between the new Basket/Order service and the monolith to translate between models. | [Strangler Fig pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/strangler-fig.html) |
+| **Saga Pattern** | Manage distributed transactions across services that were previously a single DB transaction. | When extracting the Basket service — add-to-basket involves both `unicorns` and `unicorns_basket` tables. Post-decomposition, this spans two services. | [Saga pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga.html) |
+| **Event Sourcing** | Capture basket/order changes as events via Amazon EventBridge (preferred). Enable audit trails and event-driven integration. | When extracting Basket/Order service — publish basket events (item added, item removed) to EventBridge for downstream consumers and the agent. | [Event sourcing pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/event-sourcing.html) |
+| **Hexagonal Architecture** | Structure each new service with clear boundaries: business logic core, external interface ports, infrastructure adapters. | Every new extracted service — ensures testability, portability, and decoupling from EKS/Aurora/DynamoDB specifics. | [Cloud Design Patterns](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html) |
 
-**AWS Prescriptive Guidance:**
-- [Strangler Fig pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/strangler-fig.html)
-- [Saga pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga.html)
-- [Event sourcing pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/event-sourcing.html)
+### Effort Estimation Factors (Calibrated to This Codebase)
 
-### Effort Calibration
+| Factor | Signal | Evidence | Impact on Effort |
+|--------|--------|----------|------------------|
+| Module boundaries | ✅ LOW effort | Repository pattern provides identifiable domain boundaries: `UnicornRepository`, `UserRepository`, `HealthRepository` with separate interfaces per domain. | Extraction boundaries are clear — each domain has its own Controller → Service → Repository stack. |
+| Data coupling | 🟠 HIGH effort | `unicorns_basket` table JOINs `unicorns` table in `UnicornMapper.xml`. All 3 tables share the `unishop` schema on a single MySQL instance. | Basket extraction requires breaking the JOIN — either duplicate the unicorn data or use an API call. Schema separation needed. |
+| Stored procedures | ✅ LOW effort | No stored procedures, triggers, or proprietary SQL (DATA-Q4=4). All SQL is standard INSERT/SELECT/DELETE in MyBatis mappers. | No database-layer business logic to extract. Clean migration path. |
+| Communication patterns | 🟠 HIGH effort | All synchronous HTTP (APP-Q3=1). No async patterns, no event publishing, no message queues. | Must introduce EventBridge (preferred) for inter-service communication during decomposition. |
+| CI/CD maturity | 🔴 HIGH effort | No CI/CD exists (INF-Q11=1). No build pipeline, no deployment automation. | Must build CI/CD pipeline from scratch before decomposition can begin safely. |
+| Test coverage | 🔴 HIGH effort | No automated tests (OPS-Q6=1). `spring-boot-starter-test` declared but no test files in `src/test/`. | No safety net for extraction — must add tests before extracting any service. |
 
-| Factor | Assessment | Effort Signal |
-|--------|-----------|---------------|
-| Module boundaries | Clear controller/service/repository layers. However, `UnicornService` handles both catalog AND basket — coupling. | Moderate |
-| Data coupling | Single shared `unishop` MySQL schema. `getUnicornBasket` JOINs `unicorns` and `unicorns_basket` tables. All 3 domain models share one `DataSource`. | High |
-| Stored procedures | None — DATA-Q4 = 4. All business logic in Java. | Low |
-| Communication patterns | 100% synchronous HTTP — APP-Q3 = 1. Must introduce async patterns (EventBridge preferred) from scratch. | High |
-| CI/CD maturity | No pipeline — INF-Q11 = 1. Must build CI/CD from scratch before safe multi-service deployment. | High |
-| Test coverage | Zero tests — OPS-Q6 = 1. No regression safety net for extraction. Must add tests before cutting. | High |
+### Calibrated Effort Estimate
 
-**Calibrated Estimate:** 9–15 months for full Strangler Fig decomposition across all 3 phases. Shorter (4–6 months) if using Conditional approach targeting only Basket/Order Service extraction.
+**Overall Effort: High.** While module boundaries exist and there are no stored procedures (both positive), the complete absence of CI/CD, testing, and container infrastructure means significant foundational work is needed before decomposition can begin safely.
 
----
+**Recommended Phased Approach:**
+
+1. **Phase 0 — Foundation (4-6 weeks):** Terraform IaC for VPC, EKS cluster, Aurora MySQL, ECR. CI/CD pipeline with GitHub Actions or CodePipeline. Containerize monolith with Dockerfile, deploy to EKS.
+2. **Phase 1 — Migrate Database (2-4 weeks):** Migrate self-managed MySQL to Aurora MySQL using DMS. Update connection string. Validate.
+3. **Phase 2 — Add Tests (2-4 weeks):** Add JUnit integration tests for Basket/Order and User workflows. Establish test baseline before extraction.
+4. **Phase 3 — Extract Basket/Order Service (6-10 weeks):** Strangler Fig extraction of BasketController + basket-related UnicornService methods into a new Basket/Order microservice on EKS. New service uses DynamoDB (preferred) for basket data. API Gateway routes basket requests to new service, all other requests to monolith.
+5. **Phase 4 — Agent Integration (4-6 weeks):** Generate OpenAPI spec for Basket/Order service. Configure Amazon Bedrock agent with order API as a tool. Implement API authentication (Cognito + API Gateway authorizer).
+6. **Phase 5 — Extract Remaining Services (8-12 weeks):** Extract Unicorn Catalog service and User service. Introduce EventBridge for inter-service events.
 
 ## Detailed Findings
 
@@ -310,112 +253,110 @@ Containerize the monolith as-is first (Phase 0), then selectively extract only t
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | All compute runs on raw EC2 instances. `HealthController.java` uses `EC2MetadataUtils.getInstanceInfo()` to retrieve EC2 instance metadata (account ID, AZ, instance ID, instance type, region), confirming direct EC2 deployment. No ECS, EKS, Fargate, or Lambda resources found. No IaC exists to define any managed compute. The `docker` task in `build.gradle` is commented out, indicating containerization was considered but never implemented. |
-| **Gap** | 100% of compute is raw EC2 with no managed container orchestration or serverless. |
-| **Recommendation** | Containerize the Spring Boot application on EKS (preferred). Create a Dockerfile for the fat JAR, set up ECR for image storage, and deploy to an EKS cluster provisioned via Terraform (preferred). Replace `EC2MetadataUtils` calls in `HealthController` with Kubernetes-native health probes. |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (EC2MetadataUtils usage), `build.gradle` (commented docker task), `src/main/resources/application.properties` (server.port=8080) |
+| **Finding** | All compute runs on raw EC2. `HealthController.java` uses `EC2MetadataUtils.getInstanceInfo()` to fetch accountId, AZ, instanceID, instanceType, and region — confirming direct EC2 deployment. No ECS, EKS, Lambda, or Fargate resources found. No container definitions exist. A commented-out `docker` block in `build.gradle` was never activated. |
+| **Gap** | 100% of compute is unmanaged EC2 with no container orchestration, no auto-scaling, and no managed runtime. |
+| **Recommendation** | Containerize the Spring Boot application and deploy to Amazon EKS (preferred). Create a Dockerfile, push to Amazon ECR, deploy as a Kubernetes Deployment. Use EKS managed node groups with Graviton instances for cost optimization. |
+| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (EC2MetadataUtils usage), `build.gradle` (commented-out docker block), absence of Dockerfile/K8s manifests |
 
 #### INF-Q2: Managed Databases
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | `application.properties` connects to MySQL via `jdbc:mysql://${MONO_TO_MICRO_DB_ENDPOINT}:3306/unishop`. The database endpoint is provided via environment variable, but no RDS, Aurora, or managed database IaC resources exist (no IaC exists at all). Connection uses `mysql-connector-java:8.0.11`. The database is likely self-managed MySQL installed on EC2 with manual patching, backup, and scaling. |
-| **Gap** | Database is fully self-managed with no automated failover, no managed backups, no auto-scaling storage. |
-| **Recommendation** | Migrate to Aurora MySQL (preferred) using AWS DMS for minimal-downtime migration. Aurora MySQL is wire-compatible with MySQL — zero query changes required given the standard SQL usage. Update `MONO_TO_MICRO_DB_ENDPOINT` environment variable to point to the Aurora cluster endpoint. Define the Aurora cluster in Terraform (preferred). |
-| **Evidence** | `src/main/resources/application.properties` (JDBC connection string), `build.gradle` (mysql-connector-java:8.0.11) |
+| **Finding** | The database is self-managed MySQL. `application.properties` shows JDBC connection to `jdbc:mysql://${MONO_TO_MICRO_DB_ENDPOINT}:3306/unishop` with hardcoded credentials. No IaC exists to define managed database resources (`aws_rds_*`, `aws_dynamodb_*`). The database endpoint is configured via environment variable but the database itself is not provisioned through any managed service configuration in the repository. |
+| **Gap** | Database is entirely self-managed — no managed service, no automated failover, no automated backups configured in the repository. |
+| **Recommendation** | Migrate to Amazon Aurora MySQL (preferred). Use AWS DMS for data migration. Define Aurora cluster in Terraform with Multi-AZ, automated backups, and RDS Proxy for connection pooling. |
+| **Evidence** | `src/main/resources/application.properties` (JDBC connection string, hardcoded credentials), `database/create_tables.sql` (MySQL schema), `build.gradle` (mysql-connector-java:8.0.11), absence of IaC |
 
 #### INF-Q3: Workflow Orchestration
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No workflow orchestration service detected. No Step Functions, Temporal, Camunda, or workflow engine imports. All business logic is hardcoded in the service layer: `UnicornServiceImpl` handles catalog queries and basket CRUD operations, `UserServiceImpl` handles user creation and login. Business flows follow a simple request → service → repository → mapper → database pattern with no orchestration. |
-| **Gap** | All workflow logic is hardcoded in application code with no dedicated orchestration service. |
-| **Recommendation** | As microservices are extracted (see Decomposition Strategy), introduce AWS Step Functions for cross-service business workflows (e.g., order processing that spans Basket, Catalog, and User services). For the current monolith, this is lower priority than IaC, CI/CD, and containerization. |
-| **Evidence** | `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java`, `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java` |
+| **Finding** | No workflow orchestration service detected. No Step Functions, Temporal, Camunda, or workflow engine imports in code or dependencies. All business logic follows a direct Controller → Service → Repository → Mapper chain with no orchestration layer. `UnicornServiceImpl.java` and `UserServiceImpl.java` implement business logic as direct synchronous method calls. |
+| **Gap** | All workflow logic is hardcoded in application code with no dedicated orchestration, no visual workflow management, and no built-in retry/error handling. |
+| **Recommendation** | For the Basket/Order service post-decomposition, consider AWS Step Functions for order workflow orchestration (order placement → payment → fulfillment). For the data replication workflow (`DataReplicationController`), use Step Functions to manage the long-running replication process. |
+| **Evidence** | `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java`, `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java`, `build.gradle` (no workflow dependencies) |
 
 #### INF-Q4: Async Messaging and Streaming
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No messaging or streaming infrastructure detected. No SQS, SNS, EventBridge, MSK, or Kinesis references in any file. All controller endpoints (`UnicornController`, `BasketController`, `UserController`, `DataReplicationController`) are synchronous HTTP request-response. The event classes in `com.monoToMicro.core.events` package are internal POJO wrappers for method return values — not actual messaging events. No message publishing or consumption patterns exist. |
-| **Gap** | Zero async communication — all inter-component communication is synchronous HTTP with no messaging infrastructure. |
-| **Recommendation** | Introduce EventBridge (preferred) for event-driven communication between extracted microservices. Publish basket events (add/remove unicorn) to EventBridge for cross-service consumption. Avoid self-managed Kafka (per preferences). |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (sync HTTP), `src/main/java/com/monoToMicro/core/events/` (internal POJOs, not messaging events) |
+| **Finding** | No messaging or streaming infrastructure. No SQS, SNS, EventBridge, MSK, or Kinesis in dependencies or IaC. No message publishing patterns in code. All 5 controllers (`BasketController`, `UnicornController`, `UserController`, `DataReplicationController`, `HealthController`) use synchronous HTTP request/response exclusively. `build.gradle` contains no messaging SDK dependencies. |
+| **Gap** | All communication is synchronous HTTP with no async patterns, no event-driven architecture, and no decoupled messaging. |
+| **Recommendation** | Introduce Amazon EventBridge (preferred) for inter-service events during decomposition. Publish basket events (item added, item removed) as EventBridge events. Use SQS for reliable async processing of data replication. |
+| **Evidence** | All controller files (synchronous patterns only), `build.gradle` (no messaging dependencies), absence of messaging configuration |
 
 #### INF-Q5: Network Security
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No VPC, subnet, security group, or NACL configuration found. No IaC exists to define network topology. The application listens on port 8080 with no evidence of network segmentation. `ResourceServerConfig` and `Application.java` configure CORS to allow all origins and methods — `registry.addMapping("/**").allowedMethods("HEAD", "GET", "PUT", "POST", "DELETE", "PATCH", "OPTIONS")`. |
-| **Gap** | No network security configuration. Application may be directly exposed to the internet without VPC controls. |
-| **Recommendation** | Define VPC with public and private subnets in Terraform (preferred). Place the EKS cluster (preferred) in private subnets. Use an API Gateway (preferred) or ALB in public subnets as the entry point. Configure security groups with least-privilege rules. Restrict CORS origins to known domains. |
-| **Evidence** | `src/main/java/com/monoToMicro/config/MVCConfig.java` (open CORS), `src/main/java/com/monoToMicro/Application.java` (CORS workaround) |
+| **Finding** | No VPC, subnet, security group, or NACL definitions found. No IaC exists at all. The application exposes port 8080 directly (`server.port=8080` in `application.properties`). No network security configuration is present in the repository. `ResourceServerConfig.java` permits all requests with `anyRequest().permitAll()`. |
+| **Gap** | No network segmentation, no security groups, no private subnets. Services potentially exposed directly to the internet with no network-level protection. |
+| **Recommendation** | Define VPC with private subnets in Terraform (preferred). Deploy EKS worker nodes in private subnets. Use ALB Ingress Controller for external access with security groups restricting inbound traffic. Implement Kubernetes NetworkPolicies for pod-to-pod traffic control. |
+| **Evidence** | `src/main/resources/application.properties` (server.port=8080), `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (permitAll), absence of any IaC or network configuration |
 
 #### INF-Q6: API Entry Point
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No API Gateway, ALB, or CloudFront detected. The application listens directly on `server.port=8080`. No IaC defines load balancers or API gateway resources. `HealthController` exposes EC2 instance metadata directly via the `/health/ping` endpoint, suggesting the application is accessed directly on the EC2 instance without any managed entry point. |
-| **Gap** | Services exposed directly with no gateway, load balancer, throttling, or authentication at the entry point. |
-| **Recommendation** | Deploy API Gateway (preferred) as the unified entry point for all API endpoints. Configure throttling, request validation, and authentication (Cognito authorizer) on the gateway. Route traffic to the EKS cluster (preferred) via VPC link. |
-| **Evidence** | `src/main/resources/application.properties` (server.port=8080), `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (direct EC2 metadata exposure) |
+| **Finding** | No API Gateway, ALB, or CloudFront defined. The Spring Boot application exposes port 8080 directly with no gateway, no throttling, no request validation, and no authentication at the entry point. `ResourceServerConfig.java` uses `permitAll()` with CORS enabled on all origins. `MVCConfig.java` allows all HTTP methods on all paths. |
+| **Gap** | Services exposed directly with no managed entry point, no throttling, no authentication layer, and no request validation. |
+| **Recommendation** | Deploy Amazon API Gateway (preferred) as the managed entry point. Configure throttling, request validation, and Cognito authorizer. During decomposition, API Gateway routes requests to appropriate backend services on EKS via ALB. |
+| **Evidence** | `src/main/resources/application.properties` (server.port=8080), `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`, `src/main/java/com/monoToMicro/config/MVCConfig.java`, absence of gateway/ALB IaC |
 
 #### INF-Q7: Auto-Scaling
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No auto-scaling configuration detected. No ASG (Auto Scaling Group), Application Auto Scaling, ECS service auto-scaling, or Lambda concurrency limits. The application runs on a static EC2 instance with no ability to scale in response to traffic changes. No IaC exists to define scaling policies. |
-| **Gap** | All capacity is statically provisioned. No auto-scaling mechanism exists. |
-| **Recommendation** | When deploying to EKS (preferred), configure Horizontal Pod Autoscaler (HPA) for the application pods based on CPU/memory utilization. Add Cluster Autoscaler or Karpenter for node-level scaling. Define scaling policies in Terraform (preferred). |
-| **Evidence** | `src/main/resources/application.properties` (static port), No IaC files found |
+| **Finding** | No auto-scaling configuration found. No ASG, application auto-scaling, Lambda concurrency limits, or HPA (Horizontal Pod Autoscaler) definitions. `HealthController.java` fetches single-instance EC2 metadata, suggesting a single-instance deployment with no scaling capability. |
+| **Gap** | All capacity is statically provisioned with no ability to respond to traffic spikes or scale down during low demand. |
+| **Recommendation** | Deploy on EKS (preferred) with Horizontal Pod Autoscaler (HPA) based on CPU/memory utilization. Configure EKS Cluster Autoscaler or Karpenter for node-level scaling. Define resource requests and limits in Kubernetes manifests. |
+| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (single instance metadata), absence of IaC or scaling configuration |
 
 #### INF-Q8: Backup and Recovery
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No backup configuration found. No `aws_backup_plan`, no `backup_retention_period`, no S3 versioning, no EBS snapshot lifecycle policies. No IaC exists. The self-managed MySQL database has no documented backup strategy — no automated backups, no PITR, no restore testing evidence. |
-| **Gap** | No backup configuration for any data store. No disaster recovery capability. |
-| **Recommendation** | Aurora MySQL (preferred) provides automated backups with configurable retention (up to 35 days) and continuous PITR by default. After migrating to Aurora, verify backup retention is set appropriately and test restore procedures. Define backup configuration in Terraform (preferred). |
-| **Evidence** | No IaC files found, `database/create_tables.sql` (schema definition with no backup references) |
+| **Finding** | No backup configuration found. No `aws_backup_plan`, no `backup_retention_period`, no PITR configuration, no S3 versioning. No IaC exists to define any backup strategy. The self-managed MySQL database has no backup automation defined in the repository. |
+| **Gap** | No automated backups, no point-in-time recovery, no restore procedures. A data loss event would have no recovery path defined in the repository. |
+| **Recommendation** | Migrate to Aurora MySQL (preferred) which includes automated backups with configurable retention and PITR by default. Define backup retention period in Terraform. For additional protection, configure AWS Backup with cross-region backup copies. |
+| **Evidence** | Absence of any IaC, backup configuration, or backup-related code |
 
 #### INF-Q9: High Availability and Fault Isolation
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No multi-AZ configuration detected. `HealthController` reports a single EC2 instance with one availability zone. No load balancer distributes traffic across AZs. No IaC defines multi-AZ deployment. A single AZ failure would take down the entire application and database. |
-| **Gap** | All resources in a single AZ. No fault isolation or automatic recovery from AZ failure. |
-| **Recommendation** | Deploy EKS (preferred) across at least 2 AZs with pods distributed across AZ-aware node groups. Aurora MySQL (preferred) provides Multi-AZ by default with automatic failover. Define multi-AZ subnet configuration in Terraform (preferred). |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (single instance AZ reporting) |
+| **Finding** | No multi-AZ configuration found. `HealthController.java` fetches a single EC2 instance's availability zone, suggesting single-instance, single-AZ deployment. No load balancer distributes traffic across AZs. No IaC defines multi-AZ database or compute resources. |
+| **Gap** | Single-AZ deployment — an AZ failure would take down the entire application with no automatic recovery. |
+| **Recommendation** | Deploy EKS (preferred) with worker nodes across 2+ AZs. Configure Aurora MySQL (preferred) with Multi-AZ for automatic failover. Use Kubernetes pod anti-affinity rules to spread pods across AZs. |
+| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (single AZ in instance metadata), absence of IaC or multi-AZ configuration |
 
 #### INF-Q10: Infrastructure as Code Coverage
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | Zero IaC files exist in the repository. No `.tf` (Terraform), CloudFormation templates, CDK stacks, Helm charts, or Kustomize files found. The entire infrastructure — EC2 instances, MySQL database, networking, security groups — is manually created (ClickOps). The repository contains only application source code, build configuration, and database DDL. |
-| **Gap** | 0% IaC coverage. All infrastructure is manually provisioned and non-reproducible. |
-| **Recommendation** | Adopt Terraform (preferred) immediately as the foundational modernization step. Start by codifying the existing infrastructure (VPC, subnets, security groups, EC2 instances, MySQL). Then evolve to target-state IaC (EKS cluster, Aurora MySQL, API Gateway). Use GitOps (preferred) for IaC deployment automation. |
-| **Evidence** | Repository-wide scan: no `.tf`, `.cfn.yaml`, `.cfn.json`, `cdk.json`, `Chart.yaml`, `kustomization.yaml` files found |
+| **Finding** | Zero IaC coverage. No Terraform (`.tf`), CloudFormation (`.cfn.yaml`), CDK (`cdk.json`), Helm charts (`Chart.yaml`), Kustomize (`kustomization.yaml`), or Ansible playbooks found anywhere in the repository. All infrastructure — EC2 instances, MySQL database, networking — appears to be manually created (ClickOps). |
+| **Gap** | 0% IaC coverage. Infrastructure changes are manual, error-prone, non-reproducible, and unauditable. No disaster recovery capability via IaC re-creation. |
+| **Recommendation** | Adopt Terraform (preferred) for all infrastructure: VPC, subnets, security groups, EKS cluster, Aurora MySQL, ECR repositories, API Gateway, EventBridge. Store Terraform state in S3 with DynamoDB locking. This is the highest-priority gap — all other modernization pathways depend on IaC. |
+| **Evidence** | Absence of any `.tf`, `.cfn.yaml`, `cdk.json`, `Chart.yaml`, `kustomization.yaml` files in the entire repository |
 
 #### INF-Q11: CI/CD Automation
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No CI/CD pipeline definitions exist. No `.github/workflows/`, `Jenkinsfile`, `buildspec.yml`, `.gitlab-ci.yml`, or CodePipeline definitions in IaC. The only build mechanism is `build.gradle` with Gradle wrapper (`gradlew`), which provides local compilation and packaging only. No automated test, build, deploy, or security scanning stages. |
-| **Gap** | No CI/CD — all deployments are manual. No automated testing, building, or deployment pipeline. |
-| **Recommendation** | Create a CI/CD pipeline using GitHub Actions or AWS CodePipeline + CodeBuild. Pipeline stages: (1) build with Gradle, (2) run unit and integration tests, (3) security scan (SAST + dependency), (4) build container image and push to ECR, (5) deploy to EKS via GitOps (preferred) with ArgoCD. Avoid manual deployments (per preferences). |
-| **Evidence** | `build.gradle` (local Gradle build only), Repository-wide scan: no CI/CD config files found |
-
----
+| **Finding** | No CI/CD pipeline found. No GitHub Actions (`.github/workflows/`), GitLab CI (`.gitlab-ci.yml`), Jenkins (`Jenkinsfile`), CodeBuild (`buildspec.yml`), or CodePipeline definitions. The `build.gradle` provides a Gradle build with Spring Boot plugin, but there is no automation around build, test, or deploy. `spring-boot-starter-test` is declared as a dependency but no test files exist in `src/test/`. |
+| **Gap** | All deployments are manual. No automated build, test, or deploy pipeline. No quality gates, no automated rollback, no deployment tracking. |
+| **Recommendation** | Implement CI/CD with GitHub Actions or AWS CodePipeline + CodeBuild (avoid manual deployments per preferences). Pipeline stages: (1) Build Gradle project, (2) Run JUnit tests, (3) Build Docker image, (4) Push to ECR, (5) Deploy to EKS via ArgoCD (GitOps preferred). Add security scanning (SAST, dependency scanning) as pipeline gates. |
+| **Evidence** | `build.gradle` (Gradle build exists but no CI/CD), absence of `.github/workflows/`, `Jenkinsfile`, `buildspec.yml`, or any pipeline configuration |
 
 ### Application Architecture
 
@@ -424,62 +365,60 @@ Containerize the monolith as-is first (Phase 0), then selectively extract only t
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | Java 8 (`sourceCompatibility = 1.8`) with Spring Boot 2.1.x. Java has a mature cloud-native ecosystem with extensive AWS SDK support, container tooling, microservices frameworks (Spring Cloud, Micronaut, Quarkus), and one of the largest developer communities. Dependencies include Spring Boot Web, Spring Security, MyBatis, AWS SDK v1, and Jackson for JSON serialization. |
-| **Gap** | Java 8 is functional but nearing the end of community support. Spring Boot 2.1.x is EOL. AWS SDK v1 is in maintenance mode. |
-| **Recommendation** | Upgrade to Java 17+ and Spring Boot 3.x during containerization. Migrate from AWS SDK v1 (`com.amazonaws`) to AWS SDK v2 (`software.amazon.awssdk`) which is required for Bedrock integration. These upgrades can be bundled with the containerization effort. |
-| **Evidence** | `build.gradle` (sourceCompatibility = 1.8, springBootVersion = '2.1.0.RELEASE', aws-java-sdk:1.11.567) |
+| **Finding** | Java is the primary and only language. Spring Boot 2.1.6 framework with `sourceCompatibility = 1.8` (Java 8). Java has a mature cloud-native ecosystem: excellent container support, extensive AWS SDK coverage (v1 and v2), rich Spring Cloud ecosystem, large community, strong tooling (Maven/Gradle, JUnit, IntelliJ/Eclipse). 48 Java source files under `src/main/java/com/monoToMicro/`. |
+| **Gap** | Java 8 is at end-of-life. Spring Boot 2.1.6 is significantly outdated (2019). AWS SDK v1 (1.11.567) is in maintenance mode. These are version gaps, not language gaps — Java itself scores 4. |
+| **Recommendation** | Upgrade to Java 17+ (LTS) and Spring Boot 3.x during containerization. Migrate from AWS SDK v1 to AWS SDK v2 for better performance and non-blocking I/O. These upgrades should be done before or during the containerization phase. |
+| **Evidence** | `build.gradle` (Java, sourceCompatibility=1.8, Spring Boot 2.1.6, aws-java-sdk:1.11.567), all `.java` source files |
 
 #### APP-Q2: Monolith vs Microservices
 
 | Field | Value |
 |-------|-------|
-| **Score** | 2 |
-| **Finding** | Single deployable unit — one `build.gradle`, one `Application.java` `@SpringBootApplication` entry point, one `bootJar` artifact. The code has identifiable modules with layered architecture: controllers (`UnicornController`, `BasketController`, `UserController`, `HealthController`, `DataReplicationController`), service interfaces + implementations (`UnicornService/Impl`, `UserService/Impl`, `HealthService/Impl`), repository interfaces + implementations, and MyBatis mappers. **Coupling:** `UnicornService` handles both product catalog AND basket operations through a single `UnicornRepository`, combining two distinct business domains. All modules share a single MySQL database (`unishop` schema) with 3 tables. `getUnicornBasket` in `UnicornMapper.xml` JOINs `unicorns` and `unicorns_basket` tables, creating data coupling between catalog and basket domains. |
-| **Gap** | Monolith with identifiable modules but significant coupling through shared database and combined service boundaries (catalog + basket in one service). |
-| **Recommendation** | Execute Strangler Fig decomposition (see Decomposition Strategy). Priority 1: Extract Basket/Order service from `UnicornServiceImpl` to provide discrete APIs for agent access. Priority 2: Extract User service. Priority 3: Extract Product Catalog service. Use EKS (preferred) for each microservice. |
-| **Evidence** | `src/main/java/com/monoToMicro/Application.java` (single entry point), `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` (combined catalog + basket), `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (cross-domain JOIN), `database/create_tables.sql` (shared schema) |
+| **Score** | 1 |
+| **Finding** | Tightly-coupled monolith with a single deployable unit. Single `@SpringBootApplication` entry point in `Application.java`. Single `build.gradle` produces one `bootJar`. All domains — Unicorn catalog, Basket/Orders, User management, Health checks, Data replication — share the same database (`unishop` schema), same deployment, and same JVM process. Shared database coupling: `unicorns_basket` table JOINs `unicorns` table in `UnicornMapper.xml`. Models share `CoreModel` base class. Controllers share `CoreController` base class. `UnicornService` handles both catalog and basket operations (mixed responsibilities). |
+| **Gap** | No decomposition, no module boundaries, pervasive shared state through single MySQL database, shared base classes creating inheritance coupling. Cannot independently scale, deploy, or evolve any domain. |
+| **Recommendation** | Execute Strangler Fig decomposition (see Decomposition Strategy section). Extract Basket/Order service first to enable agent access to order data. Use API Gateway (preferred) to route traffic between monolith and extracted services on EKS. |
+| **Evidence** | `src/main/java/com/monoToMicro/Application.java`, `build.gradle` (single bootJar), all controller/service/repository files in single deployment, `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (JOIN between tables) |
 
 #### APP-Q3: Async vs Sync Communication
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | All communication is synchronous HTTP request-response. Every controller method blocks until the database query completes and returns a `ResponseEntity`. No message publishing, event-driven handlers, or async patterns exist. The event classes (`ReadUnicornsEvent`, `UnicornsReadEvent`, etc.) in the `core.events` package are synchronous method parameter/return wrappers — not actual messaging events. No SQS, SNS, or EventBridge SDK imports. |
-| **Gap** | 100% synchronous — no async communication patterns at all. |
-| **Recommendation** | Introduce EventBridge (preferred) for event-driven communication between extracted microservices. Key async candidates: basket add/remove events (publish to EventBridge for inventory tracking, analytics), user creation events (publish for welcome emails, onboarding). Avoid self-managed Kafka (per preferences). |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (sync POST/DELETE/GET), `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (sync GET), `src/main/java/com/monoToMicro/core/events/` (internal POJOs) |
+| **Finding** | 100% synchronous HTTP communication. All controllers return `ResponseEntity` synchronously: `BasketController.addUnicornToBasket()`, `UnicornController.getUnicorns()`, `UserController.createUser()`, `UserController.login()`, `DataReplicationController.replicate()`. No `CompletableFuture`, `@Async`, messaging SDK imports, event publishing patterns, or queue consumers in any source file. No SQS, SNS, or EventBridge usage. |
+| **Gap** | All communication is synchronous with no async patterns. Creates tight coupling, cascading failure risk, and timeout vulnerability for operations like data replication. |
+| **Recommendation** | Introduce Amazon EventBridge (preferred) for inter-service events during decomposition. Basket operations (add/remove) should publish events for downstream consumers. Data replication should be async via SQS. Avoid self-managed Kafka (per preferences). |
+| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/BasketController.java`, `UnicornController.java`, `UserController.java`, `DataReplicationController.java` (all synchronous ResponseEntity returns), `build.gradle` (no messaging dependencies) |
 
 #### APP-Q4: Long-Running Process Handling
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | All operations are synchronous regardless of duration. Every controller endpoint blocks on database queries via MyBatis mapper calls. No background job frameworks, no async/polling patterns, no Step Functions. The `DataReplicationController.replicate()` method retrieves all baskets synchronously — a potentially long-running operation with no async handling. `UserRepositoryImpl.create()` uses a `synchronized` keyword, creating a blocking bottleneck. |
-| **Gap** | All operations are synchronous with no async job processing for potentially long-running operations. |
-| **Recommendation** | After extracting microservices, implement async patterns for operations like data replication (`DataReplicationController`) using Step Functions or EventBridge (preferred). For the basket operations that may grow with scale, use async processing with status polling. |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` (sync bulk query), `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` (synchronized create) |
+| **Finding** | All operations are synchronous regardless of duration. `DataReplicationController.replicate()` fetches all baskets via `unicornService.getAllBaskets()` synchronously — this could be long-running for large datasets but has no async handling, no progress tracking, and no timeout management. No background job frameworks (Celery, Bull, SQS workers). No `@Async` annotations. No job status APIs. No Step Functions integration. |
+| **Gap** | No async handling for potentially long-running operations. Data replication runs synchronously with no timeout protection, no progress reporting, and no retry capability. |
+| **Recommendation** | Implement async job processing with SQS and EKS worker pods for data replication. Use Step Functions for complex multi-step workflows. Expose job status endpoints for progress tracking. |
+| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` (synchronous replicate), `build.gradle` (no async framework dependencies) |
 
 #### APP-Q5: API Versioning Strategy
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No API versioning. Endpoints use unversioned paths: `/unicorns` (GET), `/unicorns/basket` (POST/DELETE), `/unicorns/basket/{userUuid}` (GET), `/user` (POST), `/user/login` (POST), `/health/ping` (GET), `/health/ishealthy` (GET), `/health/dbping` (GET), `/data` (GET). No `/v1/` or `/v2/` URL prefixes. No `Accept-Version` headers. No OpenAPI specification. No changelog or API versioning documentation. |
-| **Gap** | No versioning strategy — breaking changes would affect all consumers simultaneously. |
-| **Recommendation** | Introduce URL-path versioning (e.g., `/v1/unicorns`, `/v1/basket`) during decomposition. Generate OpenAPI 3.0 specifications from the Spring controllers using Springdoc. This is prerequisite for both API Gateway (preferred) integration and agent tool discovery. |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (@RequestMapping("/unicorns")), `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (@RequestMapping("/unicorns/basket")), `src/main/java/com/monoToMicro/rest/controller/UserController.java` (@RequestMapping("/user")) |
+| **Finding** | No API versioning strategy. Endpoints: `/unicorns` (GET), `/unicorns/basket` (POST, DELETE, GET), `/user` (POST), `/user/login` (POST), `/health/ping` (GET), `/health/ishealthy` (GET), `/health/dbping` (GET), `/data` (GET). None use `/v1/` prefix, versioning headers, or query parameters. No OpenAPI specification exists. No changelog files. |
+| **Gap** | No versioning — any breaking API change would break all consumers simultaneously. No API documentation or specification. |
+| **Recommendation** | Introduce URL-based versioning (`/v1/unicorns`, `/v1/basket`) during decomposition. Generate OpenAPI specifications using SpringDoc/Springfox. This is a prerequisite for Bedrock agent integration (agents require API specs for tool definition). |
+| **Evidence** | All `@RequestMapping` annotations in controller files (unversioned paths), absence of `openapi.yaml`, `swagger.yaml`, or changelog files |
 
 #### APP-Q6: Service Discovery
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No service discovery mechanism. The application is a single monolith — service-to-service communication is internal Java method calls, not network calls. The only external endpoint reference is the database, accessed via the `MONO_TO_MICRO_DB_ENDPOINT` environment variable. No AWS Service Discovery, App Mesh, Istio, Consul, or service registry. No DNS-based discovery. |
-| **Gap** | No service discovery. When decomposed into microservices, hard-coded endpoints will create deployment coupling. |
-| **Recommendation** | When deploying microservices to EKS (preferred), use Kubernetes-native service discovery (ClusterIP services + DNS). For external-facing APIs, route through API Gateway (preferred). For service mesh capabilities, evaluate AWS App Mesh or Istio on EKS. |
-| **Evidence** | `src/main/resources/application.properties` (MONO_TO_MICRO_DB_ENDPOINT env var), No service discovery configuration found |
-
----
+| **Finding** | No service discovery mechanism. The application is a monolith — there is no inter-service communication because it IS the single service. The database endpoint is configured via the `MONO_TO_MICRO_DB_ENDPOINT` environment variable in `application.properties`, which is a basic configuration approach. No AWS Cloud Map, App Mesh, Consul, or Istio. No API Gateway serving as a service catalog. |
+| **Gap** | No service discovery infrastructure. As decomposition proceeds, extracted services will need dynamic discovery to avoid hard-coded endpoints. |
+| **Recommendation** | During decomposition, implement service discovery via Kubernetes DNS (built into EKS) for internal service-to-service communication. Use API Gateway (preferred) as the external service catalog and entry point. Consider AWS App Mesh for advanced traffic management as the number of services grows. |
+| **Evidence** | `src/main/resources/application.properties` (MONO_TO_MICRO_DB_ENDPOINT env var), absence of service discovery configuration |
 
 ### Data Platform Modernization
 
@@ -488,42 +427,40 @@ Containerize the monolith as-is first (Phase 0), then selectively extract only t
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No S3 bucket definitions or unstructured data storage. AWS SDK S3 dependency (`aws-java-sdk-s3:1.11.567`) exists in `build.gradle` but no S3 usage found in source code — no `AmazonS3Client`, no `putObject`, no bucket references. The application stores only structured data in MySQL: product catalog (`unicorns` table), basket items (`unicorns_basket` table), and users (`unicorn_user` table). Product images are stored as name references only (`image` column is `varchar(256)` containing names like 'UnicornFloat'), not actual binary file storage. No Textract, document parsing, or file processing. |
-| **Gap** | No managed object storage. Product image references suggest images may be served from local file system or CDN outside the application, but no S3 integration exists. |
-| **Recommendation** | Store product images and any future unstructured content in S3. Integrate S3 with CloudFront for CDN delivery. After AI pathway adoption, S3 becomes the foundation for document storage that feeds RAG pipelines. |
-| **Evidence** | `build.gradle` (aws-java-sdk-s3 dependency, unused), `database/create_tables.sql` (image column as varchar), `src/main/java/com/monoToMicro/core/model/Unicorn.java` (image field is String) |
+| **Finding** | No S3 usage for unstructured data. AWS SDK S3 dependency exists in `build.gradle` (`aws-java-sdk-s3:1.11.567`) but no S3 client code, bucket operations, or document processing logic found in any source file. The application deals exclusively with structured MySQL data (3 relational tables). No Textract, Tika, or document parsing libraries. Product images are referenced by name string only (`image` column in `unicorns` table) — actual image storage is not managed by this application. |
+| **Gap** | No managed object storage for unstructured data. Product images are stored externally with no parsing pipeline. S3 SDK is imported but unused. |
+| **Recommendation** | During decomposition, store product images in Amazon S3. If the application needs document processing capabilities in the future, integrate Amazon Textract or Rekognition. Remove unused S3 SDK dependency or implement S3 integration for product images. |
+| **Evidence** | `build.gradle` (aws-java-sdk-s3:1.11.567 — unused), `database/create_tables.sql` (image column is varchar, not binary), absence of S3 client code in source files |
 
 #### DATA-Q2: Unified Data Access Layer
 
 | Field | Value |
 |-------|-------|
 | **Score** | 3 |
-| **Finding** | The repository pattern is consistently applied across all data access. All database queries flow through a clean, centralized architecture: Controllers → Service interfaces/implementations → Repository interfaces/implementations → MyBatis Mapper interfaces → MyBatis XML mapper SQL. `MyBatisConfig.java` creates all mappers centrally through a single `SqlSessionFactory` and `DataSource`. No direct JDBC calls or scattered database imports exist outside the repository layer. **Minor gap:** All 3 domain models (Unicorn, User, Health) share a single `DataSource` and `SqlSessionFactory`, and `UnicornRepository` handles both catalog and basket operations — conflating two bounded contexts. |
-| **Gap** | Clean pattern but all mappers share one DataSource. UnicornRepository handles both catalog and basket — no per-domain data access separation. |
-| **Recommendation** | During decomposition, split the single `UnicornRepository` into separate Catalog and Basket repositories with their own data sources. Each extracted microservice should own its data access layer. The existing MyBatis pattern is a strong foundation — maintain it in each new service. |
-| **Evidence** | `src/main/java/com/monoToMicro/config/MyBatisConfig.java` (centralized mapper config), `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java`, `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java`, `src/main/java/com/monoToMicro/core/repository/HealthRepositoryImpl.java` |
+| **Finding** | The application uses a consistent Repository pattern: Controller → Service → Repository Interface → Repository Implementation → MyBatis Mapper → XML SQL. Three domain repositories exist: `UnicornRepository`/`UnicornRepositoryImpl`, `UserRepository`/`UserRepositoryImpl`, `HealthRepository`/`HealthRepositoryImpl`. All SQL is centralized in MyBatis mapper XML files (`UnicornMapper.xml`, `UserMapper.xml`, `HealthMapper.xml`). `MyBatisConfig.java` wires all mappers through a single `SqlSessionFactory` with one `DataSource`. No scattered database connections. |
+| **Gap** | While the repository pattern is consistent, there is no single unified data access contract. Each domain has its own repository interface. `UnicornService` handles both catalog and basket operations (mixed responsibility in the data access path). |
+| **Recommendation** | During decomposition, each extracted service should own its data access layer completely. The existing repository pattern provides a clean extraction boundary — each service gets its own repository, mapper, and database. |
+| **Evidence** | `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java`, `UserRepositoryImpl.java`, `HealthRepositoryImpl.java`, `src/main/java/com/monoToMicro/config/MyBatisConfig.java`, mapper XMLs |
 
 #### DATA-Q3: Database Engine Version and EOL
 
 | Field | Value |
 |-------|-------|
 | **Score** | 2 |
-| **Finding** | MySQL connector version 8.0.11 is explicitly pinned in `build.gradle` (`mysql:mysql-connector-java:8.0.11`), indicating the application targets MySQL 8.0. However, no IaC exists to define or control the actual MySQL server engine version. The server-side engine version is unknown and unmanaged through code. MySQL 8.0.11 connector is outdated (released 2018) and may have known CVEs. The MySQL server version running on the EC2 instance could be any version including EOL releases (MySQL 5.6 EOL Feb 2021, MySQL 5.7 EOL Oct 2023). |
-| **Gap** | Client connector pinned but server engine version uncontrolled. Connector version is outdated (2018). |
-| **Recommendation** | After migrating to Aurora MySQL (preferred), the engine version is managed by AWS with automated minor version upgrades. Pin the Aurora engine version in Terraform (preferred) and upgrade the MySQL connector to the latest 8.x version. Aurora MySQL 3.x (MySQL 8.0 compatible) is the recommended target. |
-| **Evidence** | `build.gradle` (mysql:mysql-connector-java:8.0.11), No IaC files defining database engine version |
+| **Finding** | MySQL connector version is explicitly pinned in `build.gradle`: `mysql-connector-java:8.0.11`. This indicates MySQL 8.x compatibility. However, the actual MySQL server version is unknown — no IaC defines the database server. The connector version 8.0.11 dates from April 2018 and is significantly outdated (current is 8.x.35+). The `CREATE TABLE` statements in `create_tables.sql` use `ENGINE=InnoDB` and `UTF8MB4` charset — both MySQL 8.0 features. |
+| **Gap** | Connector version is pinned but outdated (2018). Server version is unknown and unmanaged. No IaC pins the database engine version. EOL risk cannot be fully assessed without knowing the server version. |
+| **Recommendation** | Discover the actual MySQL server version. Migrate to Aurora MySQL (preferred) with explicit engine version pinning in Terraform. Update mysql-connector-java to the latest 8.x version. Aurora MySQL provides automatic minor version upgrades. |
+| **Evidence** | `build.gradle` (mysql-connector-java:8.0.11), `database/create_tables.sql` (InnoDB, UTF8MB4), absence of IaC with engine version |
 
 #### DATA-Q4: Stored Procedures and Schema Complexity
 
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | No stored procedures, triggers, or proprietary SQL. `create_tables.sql` contains only standard DDL: `CREATE SCHEMA`, `CREATE TABLE`, and `INSERT` statements. MyBatis mapper XML files (`UnicornMapper.xml`, `UserMapper.xml`, `HealthMapper.xml`) use standard ANSI SQL: `SELECT`, `INSERT`, `DELETE`, `JOIN`. No MySQL-specific constructs beyond `INSERT IGNORE` (which is standard MySQL syntax, not proprietary PL/SQL). No `CREATE PROCEDURE`, `CREATE TRIGGER`, or `CREATE FUNCTION` statements anywhere in the repository. All business logic resides in the Java service layer (`UnicornServiceImpl`, `UserServiceImpl`). |
-| **Gap** | None — this is best practice. All business logic is in the application layer. |
-| **Recommendation** | Maintain this pattern during decomposition. The absence of stored procedures means database migration to Aurora MySQL (preferred) requires no stored procedure extraction or rewriting — only schema and data migration via DMS. |
-| **Evidence** | `database/create_tables.sql` (DDL only), `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (standard SQL), `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml`, `src/main/resources/com/monoToMicro/core/repository/mappers/HealthMapper.xml` |
-
----
+| **Finding** | No stored procedures, triggers, or proprietary SQL constructs. `database/create_tables.sql` contains only `CREATE SCHEMA`, `CREATE TABLE`, and `INSERT` statements — standard SQL with no vendor-specific extensions. All MyBatis mapper XMLs use standard SQL: `SELECT *`, `INSERT IGNORE INTO`, `DELETE FROM`, `JOIN` — all ANSI-compatible. All business logic resides in the application layer (`UnicornServiceImpl`, `UserServiceImpl`). No `CREATE PROCEDURE`, `CREATE TRIGGER`, or `CREATE FUNCTION` found anywhere. |
+| **Gap** | None — this is a strength. No stored procedure coupling, no proprietary SQL, clean separation of business logic from database layer. |
+| **Recommendation** | Maintain this pattern during decomposition. Keep all business logic in the application layer. This clean separation enables straightforward database migration (MySQL → Aurora MySQL) with no logic extraction required. |
+| **Evidence** | `database/create_tables.sql`, `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`, `UserMapper.xml`, `HealthMapper.xml` |
 
 ### Security Baseline
 
@@ -532,72 +469,70 @@ Containerize the monolith as-is first (Phase 0), then selectively extract only t
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No CloudTrail or audit logging configuration. No IaC exists to define logging infrastructure. The application uses only `System.out.println` for basic console output in `HealthController` ("No instance found"). Spring Boot Actuator is included as a dependency but provides only infrastructure metrics, not audit logging. No CloudWatch log groups, no log retention policies, no structured logging framework (Logback/Log4j2 configuration is absent). |
-| **Gap** | No audit logging. No ability to trace actions or perform forensic analysis after incidents. |
-| **Recommendation** | Define CloudTrail in Terraform (preferred) with log file validation and immutable storage (S3 with Object Lock). Add structured logging (Logback with JSON output) to the application for CloudWatch Logs integration. Replace `System.out.println` with SLF4J logger. |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (System.out.println only), No IaC or logging configuration found |
+| **Finding** | No CloudTrail configuration found. No IaC exists to define audit logging. Application-level logging is limited to `System.out.println()` in `HealthController.java` for instance info output and exception stack traces via `e.printStackTrace()` in repository implementations. No structured logging framework (SLF4J/Logback configured by Spring Boot but not customized). No log aggregation or immutable log storage. |
+| **Gap** | No audit logging — no CloudTrail, no immutable logs, no structured application logging. Actions cannot be traced or forensically analyzed. |
+| **Recommendation** | Enable CloudTrail with log file validation and S3 Object Lock for immutable storage via Terraform. Configure structured logging with SLF4J/Logback in the Spring Boot application. Ship application logs to CloudWatch Logs via the EKS Fluent Bit DaemonSet. |
+| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (System.out.println), absence of IaC or logging configuration |
 
 #### SEC-Q2: Encryption at Rest
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No KMS keys or encryption configuration. No IaC exists to define encrypted data stores. The MySQL connection string in `application.properties` (`jdbc:mysql://${MONO_TO_MICRO_DB_ENDPOINT}:3306/unishop?useUnicode=true&characterEncoding=UTF8&&serverTimezone=UTC`) shows no SSL/TLS parameters (`useSSL`, `requireSSL` are absent). No S3 bucket encryption, no EBS volume encryption, no RDS storage encryption configuration. |
-| **Gap** | No encryption at rest for the database or any data store. No encryption in transit for database connections. |
-| **Recommendation** | Aurora MySQL (preferred) supports encryption at rest with KMS by default. Enable `storage_encrypted = true` with a customer-managed KMS key in Terraform (preferred). Add SSL/TLS parameters to the JDBC connection string for encryption in transit. |
-| **Evidence** | `src/main/resources/application.properties` (no SSL params in JDBC URL), No IaC with encryption configuration |
+| **Finding** | No KMS configuration found. No encryption at rest on any data store. No IaC exists to configure encryption. No `kms_key_id` references, no `aws_kms_key` resources, no encryption configuration on databases or storage. The self-managed MySQL database's encryption state is unknown and unmanaged by this repository. |
+| **Gap** | No encryption at rest configured. Sensitive data (user emails, order data) stored without encryption guarantees. |
+| **Recommendation** | Aurora MySQL (preferred) supports encryption at rest by default with AWS-managed keys. Define customer-managed KMS keys in Terraform for sensitive data stores. Enable encryption on all EBS volumes, S3 buckets, and database storage. |
+| **Evidence** | Absence of any IaC, KMS configuration, or encryption-related code |
 
 #### SEC-Q3: API Authentication
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | Spring Security OAuth2 dependencies exist in `build.gradle` (`spring-boot-starter-security`, `spring-security-oauth2-autoconfigure`, `spring-security-jwt`, `spring-cloud-starter-oauth2`), and `ResourceServerConfig.java` uses `@EnableResourceServer`. However, the security configuration effectively disables all authentication: `http.requestMatchers().and().authorizeRequests().anyRequest().permitAll().and().cors()`. Every controller method uses `@PreAuthorize("permitAll()")`, allowing unauthenticated access to all endpoints including user creation and basket operations. `Application.java` ignores all OPTIONS requests for CORS workaround. |
-| **Gap** | Security framework present but configured to permit everything. All API endpoints are open with no authentication. |
-| **Recommendation** | Integrate with Amazon Cognito for OAuth2/JWT authentication. Configure API Gateway (preferred) with Cognito authorizer for all endpoints. Update `ResourceServerConfig` to validate JWT tokens. Remove `permitAll()` from controllers and apply role-based access control. |
-| **Evidence** | `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (permitAll()), `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (@PreAuthorize("permitAll()")), `build.gradle` (OAuth2 dependencies) |
+| **Finding** | Security is configured but effectively disabled. Spring Security OAuth2 dependencies exist in `build.gradle` (`spring-boot-starter-security`, `spring-security-oauth2-autoconfigure`, `spring-cloud-starter-oauth2`, `spring-security-jwt`). However, `ResourceServerConfig.java` uses `.authorizeRequests().anyRequest().permitAll()` — all requests are permitted. Every controller endpoint uses `@PreAuthorize("permitAll()")`. `Application.java` contains `CorsOptionsRequestSecurityConfigurationAdapter` that ignores all OPTIONS requests. The comment "workaround to get CORS working with this old version, not recommended for production usage!" confirms this is intentionally insecure. |
+| **Gap** | All API endpoints are unauthenticated. Security framework is present but fully disabled. Anyone can access any endpoint without credentials. |
+| **Recommendation** | Implement API authentication via Amazon Cognito user pool integrated with API Gateway (preferred). Add JWT validation middleware in the Spring Boot application. Remove `permitAll()` from `ResourceServerConfig.java` and all `@PreAuthorize` annotations. This is a prerequisite for agent integration — agents must authenticate to access APIs. |
+| **Evidence** | `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (permitAll), `src/main/java/com/monoToMicro/Application.java` (OPTIONS workaround), all controllers (@PreAuthorize("permitAll()")), `build.gradle` (security dependencies present but unused) |
 
 #### SEC-Q4: Centralized Identity Integration
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No centralized identity provider integration. No Cognito, Okta, Ping, or SAML/OIDC configuration. The application manages its own user table (`unicorn_user`) with basic create and email-lookup operations. `UserController.login()` performs email lookup only — `userRepository.getByEmail(email)` — with no password validation, no token issuance, and no session management. `CoreConfig.java` creates a `BCryptPasswordEncoder` bean but it's unused — no password field exists in the User model or database schema. |
-| **Gap** | Application manages its own authentication entirely. No external IdP integration, no SSO, no password validation. |
-| **Recommendation** | Integrate with Amazon Cognito for centralized identity management. Replace the custom `unicorn_user` table-based auth with Cognito user pools. Configure OIDC federation for SSO. This is a prerequisite for secure API Gateway (preferred) integration and agent-safe endpoint exposure. |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/UserController.java` (email-only login), `src/main/java/com/monoToMicro/config/CoreConfig.java` (unused BCryptPasswordEncoder), `database/create_tables.sql` (unicorn_user table with no password column) |
+| **Finding** | No centralized identity provider integration. No Cognito, Okta, OIDC, SAML, or SSO configuration. OAuth2 dependencies are present but not configured with any identity provider. The application manages its own user authentication via `UserController.login()` — a simple email lookup (`userService.getByEmail()`) with no password validation, no token issuance, and no session management. User registration in `UserController.createUser()` stores only email, first name, and last name — no password field exists. |
+| **Gap** | Application has no real authentication. The "login" endpoint merely looks up a user by email with no password check. No integration with any identity provider. |
+| **Recommendation** | Integrate Amazon Cognito (user pool) as the centralized identity provider. Use Cognito hosted UI for user registration and login. Configure API Gateway authorizer with Cognito JWT tokens. Remove the custom login endpoint — delegate authentication entirely to Cognito. |
+| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/UserController.java` (login method — email lookup only), `database/create_tables.sql` (unicorn_user table has no password column), absence of IdP configuration |
 
 #### SEC-Q5: Secrets Management
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | Database credentials are hardcoded in plaintext in `application.properties`: `spring.datasource.username: MonoToMicroUser` and `spring.datasource.password: MonoToMicroPassword`. These are committed to version control. The database endpoint uses an environment variable (`MONO_TO_MICRO_DB_ENDPOINT`) which is a slight improvement, but credentials are fully exposed. No AWS Secrets Manager, no HashiCorp Vault, no encrypted configuration. No credential rotation mechanism. |
-| **Gap** | Critical — credentials hardcoded in source code and committed to version control. No secrets management. |
-| **Recommendation** | Immediately migrate credentials to AWS Secrets Manager. Use Spring Cloud AWS Secrets Manager integration or EKS secrets store CSI driver to inject secrets at runtime. Rotate the exposed credentials. Define secrets rotation in Terraform (preferred). Remove hardcoded credentials from `application.properties`. |
-| **Evidence** | `src/main/resources/application.properties` (plaintext username and password) |
+| **Finding** | Database credentials are hardcoded in plaintext in `application.properties`: `spring.datasource.username: MonoToMicroUser` and `spring.datasource.password: MonoToMicroPassword`. These credentials are committed to version control. The database endpoint uses an environment variable (`MONO_TO_MICRO_DB_ENDPOINT`) but the username and password are plaintext in the configuration file. No AWS Secrets Manager, HashiCorp Vault, Parameter Store, or any secrets management system is used. |
+| **Gap** | **Critical security vulnerability.** Database credentials are hardcoded in a file committed to version control. No secrets rotation, no access audit trail, no encryption of credentials at rest. |
+| **Recommendation** | **Immediate action required.** Rotate the compromised credentials. Migrate secrets to AWS Secrets Manager with automated rotation via Terraform. Reference secrets in the application using the AWS Secrets Manager Spring Boot integration or environment variable injection from EKS Secrets Store CSI Driver. Remove hardcoded credentials from `application.properties`. |
+| **Evidence** | `src/main/resources/application.properties` (hardcoded username=MonoToMicroUser, password=MonoToMicroPassword) |
 
 #### SEC-Q6: Compute Hardening and Patching
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No evidence of compute hardening or patching strategy. No SSM Patch Manager, AWS Inspector, or vulnerability scanning configuration. No hardened AMI references (CIS, Bottlerocket). No EC2 Image Builder pipelines. The EC2 instance running the application has no documented patching cadence. The application runs Java 8 and Spring Boot 2.1.x which have known CVEs. MySQL connector 8.0.11 is from 2018 and likely has known vulnerabilities. |
-| **Gap** | No patching strategy, no vulnerability scanning, no hardened base images. Known-vulnerable dependency versions. |
-| **Recommendation** | When containerizing on EKS (preferred), use Bottlerocket or Amazon Linux 2023 as base OS for EKS nodes. Use ECR image scanning to detect vulnerabilities in container images. Add AWS Inspector for runtime vulnerability assessment. Upgrade Java and Spring Boot versions to address known CVEs. |
-| **Evidence** | `build.gradle` (Java 8, Spring Boot 2.1.x, MySQL connector 8.0.11 — all outdated), No patching or hardening configuration found |
+| **Finding** | No evidence of patching strategy. No SSM Patch Manager, AWS Inspector, Snyk, or vulnerability scanning. No hardened AMI references (CIS, Bottlerocket). No EC2 Image Builder. The application uses outdated dependencies: Spring Boot 2.1.6 (2019), AWS SDK v1.11.567 (2019), mysql-connector-java 8.0.11 (2018), MyBatis 3.2.2 (2013) — all with known CVEs. `spring-security-jwt:1.0.9` and `spring-cloud-starter-oauth2:2.0.1` are also outdated. |
+| **Gap** | No patching automation, no vulnerability scanning, no hardened base images. Multiple outdated dependencies with known CVEs. |
+| **Recommendation** | When containerizing on EKS (preferred), use Bottlerocket OS for worker nodes (CIS-hardened, minimal attack surface). Enable Amazon ECR image scanning. Add dependency vulnerability scanning (Snyk, Trivy) to the CI/CD pipeline. Upgrade all outdated dependencies during the Java 17 / Spring Boot 3.x migration. |
+| **Evidence** | `build.gradle` (outdated dependency versions), absence of any IaC, security scanning, or hardening configuration |
 
 #### SEC-Q7: Application Security Pipeline
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No SAST, DAST, or dependency vulnerability scanning. No CI/CD pipeline exists to integrate security scanning into. No Dependabot configuration, no `.snyk` policy file, no SonarQube configuration, no `npm audit` or equivalent. No container image scanning (no containers exist). The `build.gradle` dependencies include multiple libraries from 2018-2019 with no evidence of vulnerability assessment. |
-| **Gap** | No security scanning at any stage — no dependency scanning, no SAST, no container scanning. |
-| **Recommendation** | When creating the CI/CD pipeline, integrate security scanning: (1) OWASP Dependency-Check or Snyk for Java dependency scanning in the Gradle build, (2) Semgrep or Amazon CodeGuru Reviewer for SAST, (3) ECR image scanning for container vulnerabilities, (4) security gates that block deployment on critical findings. |
-| **Evidence** | `build.gradle` (outdated dependencies, no security plugins), No CI/CD or security scanning configuration found |
-
----
+| **Finding** | No security scanning in any CI/CD pipeline — because no CI/CD pipeline exists. No SonarQube, Semgrep, CodeGuru Reviewer, Dependabot, `npm audit`, `pip-audit`, or Snyk configuration. No `.snyk` policy files. No ECR image scanning configuration. No SAST, DAST, or dependency scanning of any kind. |
+| **Gap** | No automated security validation. Vulnerabilities in dependencies and application code reach production undetected. |
+| **Recommendation** | When implementing CI/CD (Move to Modern DevOps pathway), integrate: (1) SAST — SonarQube or Amazon CodeGuru Reviewer, (2) Dependency scanning — Snyk or OWASP Dependency-Check in Gradle, (3) Container scanning — Amazon ECR image scanning or Trivy, (4) Security gates — block deployment on critical findings. Add Dependabot or Renovate for automated dependency updates. |
+| **Evidence** | Absence of CI/CD pipeline, `.snyk` files, SonarQube config, Dependabot config, or any security scanning configuration |
 
 ### Operations & Observability
 
@@ -606,94 +541,94 @@ Containerize the monolith as-is first (Phase 0), then selectively extract only t
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No distributed tracing instrumentation. No X-Ray SDK, OpenTelemetry SDK, or tracing library in `build.gradle`. No trace ID propagation headers (`traceparent`, `X-Amzn-Trace-Id`) in controller or config code. No tracing configuration files. As a monolith, cross-service tracing is not yet needed, but application-level request tracing and performance profiling are absent. |
-| **Gap** | No tracing — no ability to trace request flows, identify bottlenecks, or diagnose performance issues. |
-| **Recommendation** | Add OpenTelemetry Java agent or AWS X-Ray SDK to the application. When deploying to EKS (preferred), use the ADOT (AWS Distro for OpenTelemetry) collector as a sidecar for automated trace collection. This is prerequisite for the Observability Agent quick win. |
-| **Evidence** | `build.gradle` (no tracing dependencies), No tracing configuration found |
+| **Finding** | No distributed tracing instrumented. No OpenTelemetry SDK, X-Ray agent, or tracing library in `build.gradle` dependencies. No trace ID propagation headers (`traceparent`, `X-Amzn-Trace-Id`). Spring Boot Actuator (`spring-boot-starter-actuator`) is present and provides basic health/info/metrics endpoints but no distributed tracing. No tracing configuration files. |
+| **Gap** | No distributed tracing — debugging failures requires manual log correlation. No request flow visibility. |
+| **Recommendation** | Add OpenTelemetry Java auto-instrumentation agent to the container image. Configure OTLP exporter to AWS X-Ray via the ADOT (AWS Distro for OpenTelemetry) collector on EKS. This provides trace correlation across services during and after decomposition. |
+| **Evidence** | `build.gradle` (spring-boot-starter-actuator present, no tracing dependencies), absence of tracing configuration |
 
 #### OPS-Q2: SLO Definitions
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No SLO definitions. No CloudWatch alarms for latency, availability, or error rates. No error budget tracking. No SLO files or configurations. Spring Boot Actuator is included as a dependency but not configured with custom health indicators or SLO-aligned metrics. |
-| **Gap** | No SLOs — no formal definition of acceptable service levels for the Unicorn Shop. |
-| **Recommendation** | Define SLOs for critical user journeys: product catalog browsing (p99 latency < 500ms, availability > 99.9%), basket operations (p99 latency < 300ms), user login (p99 latency < 200ms). Implement CloudWatch alarms for these SLOs. Track error budgets to prioritize reliability vs feature work. |
-| **Evidence** | `build.gradle` (spring-boot-starter-actuator, unconfigured), No SLO definitions or CloudWatch alarms found |
+| **Finding** | No SLOs defined. No CloudWatch alarms on latency (p99/p95), error rates, or availability. No error budget tracking. No SLO definition files. No monitoring configuration of any kind in the repository. The `HealthController` provides basic `/health/ishealthy` and `/health/dbping` endpoints but these are not connected to any monitoring or alerting system. |
+| **Gap** | No formal SLOs — no definition of acceptable service levels, no measurement of whether the system meets user expectations. |
+| **Recommendation** | Define SLOs for critical user journeys: catalog browsing (p99 latency < 500ms), basket operations (availability > 99.9%), user login (p99 latency < 200ms). Implement SLO monitoring with CloudWatch Synthetics and Application Signals on EKS. Configure error budget alerts. |
+| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (basic health endpoints, not connected to monitoring), absence of monitoring configuration |
 
 #### OPS-Q3: Business Metrics
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No custom business metrics. No `cloudwatch.put_metric_data` or equivalent calls. The application uses only `System.out.println` for basic output. Spring Boot Actuator provides default JVM and HTTP metrics (request count, response times) but no custom business metrics are defined — no basket conversion rate, no items-per-basket, no user registration rate. |
-| **Gap** | No business outcome metrics. Only default infrastructure metrics via Actuator (if configured). |
-| **Recommendation** | Add Micrometer (Spring Boot's metrics facade) with CloudWatch exporter. Publish business metrics: basket additions/removals per minute, unique active users, catalog page views, basket-to-order conversion rate. These metrics drive informed modernization and decomposition decisions. |
-| **Evidence** | `build.gradle` (spring-boot-starter-actuator), `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (System.out.println only) |
+| **Finding** | No custom business metrics published. No `cloudwatch.put_metric_data` calls or custom metric annotations. Spring Boot Actuator provides default JVM and HTTP metrics only (heap usage, thread count, request counts) — no business-specific metrics like "baskets created," "unicorns added to basket," or "user registrations." No custom dashboards. |
+| **Gap** | Infrastructure metrics only. No business outcome metrics to drive informed modernization decisions or measure business value. |
+| **Recommendation** | Add Micrometer custom metrics for business events: `basket.items.added`, `basket.items.removed`, `user.registrations`, `user.logins`, `catalog.views`. Publish to CloudWatch via the Micrometer CloudWatch registry. Create business dashboards. |
+| **Evidence** | `build.gradle` (spring-boot-starter-actuator — default metrics only), absence of custom metric publishing in source code |
 
 #### OPS-Q4: Anomaly Detection and Alerting
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No anomaly detection or alerting. No CloudWatch alarms (static or anomaly-based). No PagerDuty, OpsGenie, or on-call integration. No composite alarms. No error rate or latency monitoring. The application has no mechanism to detect or alert on degraded performance, increased error rates, or unusual traffic patterns. |
-| **Gap** | No alerting — degraded service goes undetected until user complaints. |
-| **Recommendation** | Configure CloudWatch alarms for error rates (5xx responses), latency (p99 > threshold), and database connection failures. Add anomaly detection on key metrics after establishing baselines. Integrate with SNS and PagerDuty/OpsGenie for on-call notifications. |
-| **Evidence** | No IaC or monitoring configuration found |
+| **Finding** | No alerting configured. No CloudWatch alarms (static threshold or anomaly detection). No PagerDuty, OpsGenie, or SNS alerting integration. No composite alarms. No error rate or latency monitoring. The application silently swallows exceptions via `e.printStackTrace()` in all repository implementations with no alerting on failure conditions. |
+| **Gap** | No alerting at all. Production failures go unnoticed until users report them. No anomaly detection for gradual degradation. |
+| **Recommendation** | Configure CloudWatch alarms for EKS pod health, Aurora MySQL performance, and API Gateway error rates. Enable CloudWatch anomaly detection on p99 latency and 5xx error rates. Integrate with SNS for alert notifications. |
+| **Evidence** | Repository implementation files (e.printStackTrace() — silent exception handling), absence of monitoring/alerting configuration |
 
 #### OPS-Q5: Deployment Strategy
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No deployment strategy. No blue/green, canary, or rolling deployment configuration. No CodeDeploy, Helm releases, Argo Rollouts, or feature flags. No CI/CD pipeline exists to define deployment stages. Deployments are likely manual — copy the fat JAR to the EC2 instance and restart the process. The `bootJar { launchScript() }` in `build.gradle` creates a self-executing JAR for direct Linux service deployment. |
-| **Gap** | Direct-to-production deployment with no staged rollout, no rollback capability, no traffic shifting. |
-| **Recommendation** | When deploying to EKS (preferred), implement canary deployments with Argo Rollouts. Define progressive delivery stages: 5% canary → automated analysis → 25% → 50% → 100%. Use GitOps (preferred) with ArgoCD for declarative deployment management. Avoid manual deployments (per preferences). |
-| **Evidence** | `build.gradle` (bootJar with launchScript — manual deployment artifact), No CI/CD or deployment configuration found |
+| **Finding** | No deployment strategy. No CI/CD pipeline exists. No CodeDeploy, Helm canary, ArgoCD Rollouts, Lambda traffic shifting, ALB weighted target groups, or feature flags. Deployments appear to be direct-to-production with no staged rollout, no health check validation, and no automated rollback. |
+| **Gap** | Direct-to-production deployment with no staged rollout. Every deployment is a full risk event with no ability to catch regressions before they affect all users. |
+| **Recommendation** | Implement progressive delivery with ArgoCD Rollouts on EKS (GitOps preferred per user preferences). Configure canary deployments with automated analysis gates. For initial setup, use Kubernetes rolling updates with readiness/liveness probes as a baseline. |
+| **Evidence** | Absence of CI/CD pipeline, deployment configuration, ArgoCD/Helm/Flux definitions, or feature flag configuration |
 
 #### OPS-Q6: Integration Testing
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No integration tests or automated tests of any kind. `spring-boot-starter-test` is declared in `build.gradle` as `testImplementation`, but no `src/test` directory exists in the repository. No test files found anywhere. No test containers, no Postman/Newman API tests, no contract tests, no end-to-end test pipelines. |
-| **Gap** | Zero automated tests — no regression safety net for any changes or decomposition. |
-| **Recommendation** | Before starting decomposition, establish a test foundation: (1) Integration tests for all API endpoints using Spring Boot Test with TestContainers for MySQL, (2) Contract tests for the API surface that becomes the service boundary, (3) End-to-end tests for critical user journeys (browse catalog → add to basket → checkout). Tests are essential before extracting services to prevent regression. |
-| **Evidence** | `build.gradle` (spring-boot-starter-test declared but unused), No `src/test` directory or test files found |
+| **Finding** | No integration tests found. `build.gradle` declares `spring-boot-starter-test` as a `testImplementation` dependency, but no test files exist in `src/test/`. No integration test directories, no API test suites (Postman/Newman), no contract tests, no end-to-end test pipelines. Zero test coverage. |
+| **Gap** | No automated tests of any kind. No safety net for code changes, deployments, or service extraction. Regression risk is unmanaged. |
+| **Recommendation** | Before any decomposition, add: (1) JUnit integration tests for basket operations (add/remove/get), user creation/login, and catalog listing, (2) Spring Boot `@WebMvcTest` for controller-level API tests, (3) Testcontainers with MySQL for repository-level integration tests. Run all tests in the CI/CD pipeline. |
+| **Evidence** | `build.gradle` (spring-boot-starter-test declared), absence of any test files in `src/test/` |
 
 #### OPS-Q7: Incident Response Automation
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No incident response automation. No runbooks (markdown, YAML, JSON, or SSM Automation documents). No self-healing patterns. No Lambda-based remediation. No Step Functions for incident workflows. The `/health/ishealthy` and `/health/dbping` endpoints provide basic health checks but are not connected to any automated incident response. |
-| **Gap** | No runbooks — incident response is entirely ad hoc. No automated remediation. |
-| **Recommendation** | Create runbooks for common incidents: database connection failure (detected via `/health/dbping`), high latency, out-of-memory. Implement SSM Automation documents for EC2/EKS remediation. After deploying to EKS (preferred), configure pod restart policies and health probe-based auto-healing. |
-| **Evidence** | `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (basic health endpoints, not connected to automation) |
+| **Finding** | No runbooks, SSM Automation documents, or self-healing patterns. No incident response automation. No Lambda-based remediation. No Step Functions for incident workflows. Exception handling in the codebase is limited to `try/catch` blocks with `e.printStackTrace()` — no structured error handling, no incident escalation, no automated recovery. |
+| **Gap** | Incident response is entirely ad hoc. No runbooks, no automation, no self-healing. Mean-time-to-recovery depends entirely on manual intervention. |
+| **Recommendation** | Create runbooks for common incident scenarios (database connectivity failure, high latency, out-of-memory). Implement Kubernetes liveness and readiness probes for automatic pod restart on EKS. Use SSM Automation for infrastructure-level remediation. |
+| **Evidence** | Absence of runbook files, SSM documents, or incident automation; repository implementations use e.printStackTrace() with no structured error handling |
 
 #### OPS-Q8: Observability Ownership
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No observability ownership structure. No CODEOWNERS file. No per-service dashboards (no dashboards at all). No alarm ownership or team attribution. No SLO definitions with named owners. The repository has no documentation of who is responsible for monitoring, alerting, or operational health of the application. |
-| **Gap** | No observability ownership — monitoring responsibility is undefined. |
-| **Recommendation** | Add CODEOWNERS file with observability owners. As microservices are extracted, assign per-service observability ownership: each service team owns their dashboards, alarms, and SLOs. Create CloudWatch dashboards with team tags for the Unicorn Shop service. |
-| **Evidence** | No CODEOWNERS file, no dashboards, no alarm configurations found |
+| **Finding** | No observability ownership defined. No per-service dashboards, no alarms with named owners, no CODEOWNERS file referencing observability assets. No team attribution on any monitoring or alerting resources (none exist). No SLO definitions with team ownership. |
+| **Gap** | No observability ownership. No dashboards, no alarms, no monitoring assets exist to own. |
+| **Recommendation** | Establish observability ownership as part of the decomposition process. Each extracted service team should own their dashboards, alarms, and SLOs. Add a CODEOWNERS file that includes observability configuration paths. Define on-call ownership for each service. |
+| **Evidence** | Absence of CODEOWNERS file, dashboards, alarms, or any observability assets |
 
 #### OPS-Q9: Resource Tagging Governance
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No resource tagging. No IaC exists to define tags on any AWS resource. No `default_tags` in Terraform provider (no Terraform exists). No tag enforcement via AWS Config rules or SCPs. No cost allocation tags. Resources cannot be attributed to the Unicorn Shop for cost tracking, ownership identification, or environment classification. |
-| **Gap** | No tags on any resources — impossible to track costs, identify ownership, or distinguish environments. |
-| **Recommendation** | Define a tagging standard (minimum: `Project`, `Environment`, `Owner`, `CostCenter`) and enforce it in Terraform (preferred) via `default_tags` on the AWS provider. Add AWS Config rule `required-tags` for enforcement. Tag all resources for the Unicorn Shop: `Project=UnicornShop`, `Environment=production`, `Owner=platform-team`. |
-| **Evidence** | No IaC files found, no tagging configuration |
-
----
+| **Finding** | No resource tagging found. No IaC exists to apply tags. No `default_tags` in Terraform provider (no Terraform exists). No `tags` on any resources. No Config rules for tag enforcement. No tag policies in AWS Organizations. |
+| **Gap** | No resource tagging. Cannot track costs per workload, identify resource ownership during incidents, or enforce budget controls. |
+| **Recommendation** | Define a tagging standard in Terraform `default_tags`: `Environment`, `Service`, `Team`, `CostCenter`, `Project`. Apply to all resources. Enforce with AWS Config `required-tags` rule. Enable cost allocation tags in AWS Billing. |
+| **Evidence** | Absence of any IaC or tagging configuration |
 
 ## Learning Materials
+
+The following learning resources are mapped to the 5 triggered pathways:
 
 | Pathway | Learning Resources |
 |---------|-------------------|
@@ -709,27 +644,27 @@ Containerize the monolith as-is first (Phase 0), then selectively extract only t
 
 | File Path | Referenced By | Context |
 |-----------|--------------|---------|
-| `build.gradle` | INF-Q1, INF-Q2, INF-Q11, APP-Q1, APP-Q2, APP-Q3, DATA-Q1, DATA-Q3, DATA-Q4, SEC-Q3, SEC-Q6, SEC-Q7, OPS-Q1, OPS-Q2, OPS-Q3, OPS-Q5, OPS-Q6 | Gradle build configuration — defines Java 8, Spring Boot 2.1.x, all dependencies (MySQL connector, AWS SDK, Spring Security OAuth2, MyBatis, Actuator), commented docker task |
-| `src/main/resources/application.properties` | INF-Q1, INF-Q2, INF-Q5, INF-Q6, SEC-Q2, SEC-Q5 | Application configuration — server port 8080, JDBC connection string with hardcoded credentials, environment variable for DB endpoint |
-| `database/create_tables.sql` | INF-Q2, INF-Q8, APP-Q2, DATA-Q1, DATA-Q4, SEC-Q4 | MySQL DDL — `unishop` schema with 3 tables (unicorns, unicorns_basket, unicorn_user), seed data inserts, no stored procedures |
-| `src/main/java/com/monoToMicro/Application.java` | INF-Q1, INF-Q5, APP-Q2, SEC-Q3 | Spring Boot entry point — `@SpringBootApplication`, CORS configuration, OPTIONS request ignoring |
-| `src/main/java/com/monoToMicro/rest/controller/HealthController.java` | INF-Q1, INF-Q6, INF-Q9, SEC-Q1, OPS-Q3, OPS-Q7 | Health endpoints — EC2MetadataUtils usage confirming EC2 deployment, System.out.println logging, basic health check endpoints |
-| `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` | APP-Q2, APP-Q3, APP-Q5, SEC-Q3 | Product catalog endpoint — GET /unicorns, @PreAuthorize("permitAll()"), synchronous response |
-| `src/main/java/com/monoToMicro/rest/controller/BasketController.java` | APP-Q2, APP-Q3, APP-Q4, APP-Q5 | Basket endpoints — POST/DELETE/GET /unicorns/basket, synchronous operations, no versioning |
-| `src/main/java/com/monoToMicro/rest/controller/UserController.java` | APP-Q5, SEC-Q3, SEC-Q4 | User endpoints — POST /user (create), POST /user/login (email-only lookup, no password), @PreAuthorize("permitAll()") |
-| `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` | APP-Q4 | Data replication endpoint — GET /data, synchronous bulk basket query |
-| `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` | INF-Q3, APP-Q2, APP-Q3 | Business logic — combined catalog + basket service, synchronous operations, constructor injection |
-| `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java` | INF-Q3, APP-Q2 | User business logic — user creation with UUID generation, email lookup |
-| `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` | APP-Q2, DATA-Q2 | Data access — MyBatis mapper delegation, @Transactional, exception handling with e.printStackTrace() |
-| `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` | APP-Q4, DATA-Q2 | Data access — synchronized create method, MyBatis mapper delegation |
-| `src/main/java/com/monoToMicro/core/repository/HealthRepositoryImpl.java` | DATA-Q2 | Health data access — database reachability check via MyBatis mapper |
-| `src/main/java/com/monoToMicro/config/MyBatisConfig.java` | DATA-Q2 | Centralized MyBatis configuration — single SqlSessionFactory, single DataSource, all mappers registered centrally |
-| `src/main/java/com/monoToMicro/config/MVCConfig.java` | INF-Q5 | MVC configuration — open CORS allowing all methods on all paths |
-| `src/main/java/com/monoToMicro/config/CoreConfig.java` | SEC-Q4 | Core configuration — unused BCryptPasswordEncoder bean |
-| `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` | SEC-Q3 | Security configuration — @EnableResourceServer with permitAll() on all requests |
-| `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` | APP-Q2, DATA-Q4 | MyBatis SQL — standard SELECT/INSERT/DELETE/JOIN, cross-domain JOIN between unicorns and unicorns_basket tables |
-| `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml` | DATA-Q4 | MyBatis SQL — standard INSERT and SELECT for user operations |
-| `src/main/resources/com/monoToMicro/core/repository/mappers/HealthMapper.xml` | DATA-Q4 | MyBatis SQL — simple SELECT count(*) for database health check |
-| `src/main/java/com/monoToMicro/core/model/Unicorn.java` | DATA-Q1 | Model — image field as String (name reference, not file storage) |
-| `src/main/java/com/monoToMicro/core/events/` (package) | APP-Q3, INF-Q4 | Internal POJO event wrappers — not actual messaging events, used as method parameters/return values |
-| `README.md` | Quick Agent Wins | Minimal documentation — redirect URL only, insufficient for RAG knowledge base |
+| `build.gradle` | INF-Q1, INF-Q2, INF-Q4, INF-Q11, APP-Q1, APP-Q2, APP-Q3, APP-Q4, DATA-Q1, DATA-Q3, SEC-Q3, SEC-Q6, OPS-Q1, OPS-Q3, OPS-Q6 | Primary dependency manifest — Spring Boot 2.1.6, Java 8, MySQL connector, AWS SDK v1, security dependencies, no messaging/tracing/AI deps |
+| `src/main/resources/application.properties` | INF-Q2, INF-Q5, INF-Q6, APP-Q6, SEC-Q5 | Application configuration — JDBC connection string, hardcoded credentials (MonoToMicroUser/MonoToMicroPassword), server port 8080 |
+| `database/create_tables.sql` | INF-Q2, DATA-Q1, DATA-Q3, DATA-Q4 | MySQL schema — 3 tables (unicorns, unicorns_basket, unicorn_user), InnoDB engine, UTF8MB4, seed data, no stored procedures |
+| `src/main/java/com/monoToMicro/Application.java` | APP-Q2, SEC-Q3 | Spring Boot entry point — single @SpringBootApplication, CORS config, OPTIONS security bypass |
+| `src/main/java/com/monoToMicro/rest/controller/HealthController.java` | INF-Q1, INF-Q7, INF-Q9, SEC-Q1, OPS-Q2 | EC2MetadataUtils usage confirms raw EC2 deployment, System.out.println logging, health endpoints |
+| `src/main/java/com/monoToMicro/rest/controller/BasketController.java` | APP-Q2, APP-Q3, APP-Q5 | Basket CRUD — synchronous ResponseEntity returns, @PreAuthorize("permitAll()"), unversioned /unicorns/basket path |
+| `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` | APP-Q2, APP-Q3, APP-Q5 | Catalog listing — synchronous GET /unicorns, no versioning |
+| `src/main/java/com/monoToMicro/rest/controller/UserController.java` | APP-Q2, APP-Q5, SEC-Q3, SEC-Q4 | User CRUD and login — email-only lookup with no password validation, @PreAuthorize("permitAll()") |
+| `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` | APP-Q4 | Synchronous data replication — potentially long-running getAllBaskets() with no async handling |
+| `src/main/java/com/monoToMicro/rest/controller/CoreController.java` | APP-Q2 | Shared controller base class — inheritance coupling across all controllers |
+| `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` | INF-Q5, INF-Q6, SEC-Q3 | OAuth2 resource server — anyRequest().permitAll(), security effectively disabled |
+| `src/main/java/com/monoToMicro/config/MVCConfig.java` | INF-Q6 | MVC configuration — CORS on all paths, all HTTP methods allowed |
+| `src/main/java/com/monoToMicro/config/MyBatisConfig.java` | DATA-Q2 | MyBatis configuration — single SqlSessionFactory, single DataSource, all mapper beans wired |
+| `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` | INF-Q3, APP-Q2, APP-Q3 | Unicorn + Basket service — synchronous method calls, mixed catalog and basket responsibilities |
+| `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java` | INF-Q3, APP-Q2 | User service — synchronous create and getByEmail, UUID generation in application layer |
+| `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` | DATA-Q2 | Repository pattern implementation — delegates to UnicornMapper, try/catch with printStackTrace |
+| `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` | DATA-Q2 | Repository pattern implementation — delegates to UserMapper, synchronized create method |
+| `src/main/java/com/monoToMicro/core/repository/HealthRepositoryImpl.java` | DATA-Q2 | Repository pattern implementation — delegates to HealthMapper for DB connectivity check |
+| `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` | APP-Q2, DATA-Q2, DATA-Q4 | MyBatis SQL — standard SELECT/INSERT/DELETE, JOIN between unicorns and unicorns_basket tables |
+| `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml` | DATA-Q2, DATA-Q4 | MyBatis SQL — standard INSERT/SELECT for user operations |
+| `src/main/resources/com/monoToMicro/core/repository/mappers/HealthMapper.xml` | DATA-Q2, DATA-Q4 | MyBatis SQL — SELECT COUNT(*) for database health check |
+| `src/main/java/com/monoToMicro/core/model/CoreModel.java` | APP-Q2 | Shared model base class — id, dates, audit fields; extended by Unicorn and User (inheritance coupling) |
+| `README.md` | Quick Agent Wins | Minimal documentation — links to external workshop URL |
+| `gradle/wrapper/gradle-wrapper.properties` | APP-Q1 | Gradle 7.4 wrapper distribution |

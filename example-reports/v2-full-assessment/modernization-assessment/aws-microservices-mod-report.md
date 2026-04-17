@@ -3,12 +3,12 @@
 | Field | Value |
 |-------|-------|
 | **Repository** | aws-microservices |
-| **Date** | 2026-04-15 |
+| **Date** | 2026-04-17 |
 | **Repo Type** | application |
 | **Priority** | P0 |
 | **Tags** | microservices, serverless, event-driven |
 | **Context** | Event-driven serverless microservices (product, basket, ordering) with Lambda, DynamoDB, EventBridge, SQS. The agent will invoke these as tools for order status lookups and return processing. |
-| **Overall Score** | **2.24 / 4.0** |
+| **Overall Score** | 2.27 / 4.0 |
 
 ---
 
@@ -19,9 +19,9 @@
 | Infrastructure, Platform, and DevOps (INF) | 2.64 / 4.0 | 🟡 Partial |
 | Application Architecture (APP) | 3.00 / 4.0 | 🟡 Partial |
 | Data Platform Modernization (DATA) | 3.00 / 4.0 | 🟡 Partial |
-| Security Baseline (SEC) | 1.57 / 4.0 | 🟠 Needs Work |
+| Security Baseline (SEC) | 1.71 / 4.0 | 🟠 Needs Work |
 | Operations & Observability (OPS) | 1.00 / 4.0 | ❌ Not Present |
-| **Overall** | **2.24 / 4.0** | **🟠 Needs Work** |
+| **Overall** | **2.27 / 4.0** | **🟠 Needs Work** |
 
 ---
 
@@ -29,11 +29,11 @@
 
 | # | Question | Score | Gap Summary | Impact |
 |---|----------|-------|-------------|--------|
-| 1 | INF-Q11: CI/CD Automation | 1 | No CI/CD pipeline exists — all deployments are manual `cdk deploy` | Triggers Move to Modern DevOps pathway. Manual deployments are error-prone, slow, and prevent safe iterative modernization of this P0 service. |
-| 2 | SEC-Q3: API Authentication | 1 | All three API Gateway endpoints (Product, Basket, Order) are completely open with no authentication | Critical security vulnerability — any internet-facing endpoint can be invoked without authorization. Blocks production readiness and agent integration. |
-| 3 | OPS-Q5: Deployment Strategy | 1 | No canary, blue/green, or staged deployment strategy — direct-to-production via `cdk deploy` | No safety net for regressions. A bad deployment affects all users instantly with no rollback mechanism. |
-| 4 | INF-Q8: Backup and Recovery | 1 | No DynamoDB point-in-time recovery (PITR) enabled; `removalPolicy: DESTROY` on all tables — data is deleted on stack deletion | Data loss risk — a stack deletion or corruption event destroys all product, basket, and order data with no recovery path. |
-| 5 | SEC-Q1: Audit Logging | 1 | No CloudTrail or structured audit logging configured in CDK | No ability to trace API calls, detect unauthorized access, or perform forensic analysis. Compliance gap. |
+| 1 | INF-Q11: CI/CD Automation | 1 | No CI/CD pipeline — all deployments are manual `cdk deploy` | Blocks safe, repeatable deployments; triggers Move to Modern DevOps pathway |
+| 2 | INF-Q5: Network Security | 1 | No VPC, security groups, or network segmentation configured | Lambda functions and API Gateway endpoints lack network-level protection |
+| 3 | SEC-Q3: API Authentication | 1 | No authentication on any API Gateway endpoint | All REST endpoints are publicly accessible without auth — critical security gap |
+| 4 | OPS-Q5: Deployment Strategy | 1 | Manual `cdk deploy` with no blue/green, canary, or rolling strategy | No safe rollback; production changes are all-or-nothing; supports Move to Modern DevOps |
+| 5 | SEC-Q1: Audit Logging | 1 | No CloudTrail or audit logging configured in IaC | No ability to trace API calls, diagnose incidents, or meet compliance requirements |
 
 ---
 
@@ -41,17 +41,17 @@
 
 ### Data Query Agent
 
-- **Prerequisite:** Database with clear, documented schema (DATA-Q2 = 3). Each microservice has a dedicated `ddbClient.js` module with consistent DynamoDB access patterns via `@aws-sdk/client-dynamodb`. Three well-defined DynamoDB tables: `product` (PK: id), `basket` (PK: userName), `order` (PK: userName, SK: orderDate).
-- **What it enables:** An AI agent (powered by Amazon Bedrock) can query DynamoDB tables as tools for order status lookups, product catalog searches, and basket content retrieval. The existing `getOrder`, `getProduct`, `getBasket` functions provide natural tool interfaces that an agent can invoke.
-- **Additional steps:** Generate data schema documentation describing each table's key schema, attributes, and access patterns. Create OpenAPI specifications for the existing API Gateway endpoints to enable full agent tool discovery. Add API Gateway authentication before exposing to agent workloads.
-- **Effort:** Medium
+- **Prerequisite:** DATA-Q2 = 3 (≥ 2). DynamoDB tables have clear, well-defined schemas in `lib/database.ts` — product (PK: id), basket (PK: userName), order (PK: userName, SK: orderDate). Each service has a dedicated `ddbClient.js` module.
+- **What it enables:** A natural-language-to-DynamoDB query agent that translates user questions like "What orders has user X placed?" or "Show me product details for ID Y" into DynamoDB `GetItem`, `Query`, or `Scan` operations. This directly supports the stated goal of agents invoking these services as tools for order status lookups and return processing.
+- **Additional steps:** No OpenAPI spec exists — generate OpenAPI specifications for the three API Gateway endpoints (Product, Basket, Order) to enable full tool discovery. Consider adding Amazon Bedrock SDK (`@aws-sdk/client-bedrock-runtime`) to a new agent Lambda function.
+- **Effort:** Medium — DynamoDB schemas are clean but API documentation needs to be generated; agent Lambda function needs to be created with Bedrock integration.
 
-### RAG-based Knowledge Agent
+### RAG-Based Knowledge Agent
 
-- **Prerequisite:** Documentation exists in repository. `README.md` contains architecture description, API endpoint documentation (Product, Basket, Order URLs), prerequisite instructions, and useful CDK commands. Code comments in `lib/apigateway.ts` and `lib/database.ts` document API routes and DynamoDB schemas.
-- **What it enables:** A RAG-based knowledge agent (using Amazon Bedrock with knowledge bases) can index the README, code comments, and inline documentation to answer developer questions about the architecture, API endpoints, deployment procedures, and data models.
-- **Additional steps:** Enrich documentation — the current README is minimal. Add architecture decision records (ADRs), API documentation with request/response examples, and operational runbooks. Store enriched documentation in S3 for Bedrock Knowledge Base indexing.
-- **Effort:** Medium
+- **Prerequisite:** README.md exists with architecture documentation, API endpoint descriptions, and deployment instructions. `src/basket/checkoutbasketevents.json` provides event schema examples.
+- **What it enables:** A RAG-based knowledge agent that indexes the existing documentation (README, code comments, event schemas) to answer developer questions about the architecture, API usage, and checkout flow without reading source code directly.
+- **Additional steps:** Current documentation corpus is limited (README.md only). Expand with generated API documentation, architecture decision records, and operational runbooks. Index documentation into Amazon Bedrock Knowledge Base with S3 as the data source.
+- **Effort:** Medium — documentation corpus needs expansion; Bedrock Knowledge Base setup required.
 
 ---
 
@@ -59,119 +59,120 @@
 
 | # | Pathway | Status | Priority | Est. Effort | Key Trigger Criteria |
 |---|---------|--------|----------|-------------|---------------------|
-| 1 | Move to Cloud Native | Not Triggered | — | — | APP-Q2 = 4 — application is already decomposed into independently deployable serverless microservices with event-driven communication. |
-| 2 | Move to Containers | Not Triggered | — | — | INF-Q1 = 4 — compute is already 100% serverless (Lambda). Contextual guard: compute is Lambda/Fargate-class, not EC2/VM-based. |
-| 3 | Move to Open Source | Not Triggered | — | — | DATA-Q4 = 4 — no stored procedures or proprietary SQL. No commercial database engines detected (DynamoDB is AWS-native NoSQL). |
-| 4 | Move to Managed Databases | Not Triggered | — | — | INF-Q2 = 4 — all databases are fully managed DynamoDB with PAY_PER_REQUEST billing. |
-| 5 | Move to Managed Analytics | Not Triggered | — | — | INF-Q4 = 3 — messaging is already managed (EventBridge + SQS). No data processing workloads detected (no ETL, data pipelines, or analytics). |
-| 6 | Move to Modern DevOps | **Triggered** | High | Medium | INF-Q11 = 1 (no CI/CD pipeline). Supporting: OPS-Q5 = 1 (no deployment strategy), OPS-Q6 = 1 (no integration testing). |
-| 7 | Move to AI | **Triggered** | Medium | Medium | No AI/agent framework usage detected in source code or dependencies. No vector DB, no RAG, no agent eval framework. |
+| 1 | Move to Cloud Native | Not Triggered | — | — | APP-Q2 = 3 — application already uses microservices with Lambda, DynamoDB, EventBridge, SQS |
+| 2 | Move to Containers | Not Triggered | — | — | INF-Q1 = 4 — compute is already serverless (Lambda); contextual guard: SHALL NOT trigger for Lambda/Fargate |
+| 3 | Move to Open Source | Not Triggered | — | — | DATA-Q4 = 4 — no stored procedures or proprietary SQL; no commercial DB engines (DynamoDB is AWS-native) |
+| 4 | Move to Managed Databases | Not Triggered | — | — | INF-Q2 = 4 — all databases are fully managed DynamoDB |
+| 5 | Move to Managed Analytics | Not Triggered | — | — | INF-Q4 = 4 — messaging is managed (EventBridge, SQS); no data processing workloads detected |
+| 6 | Move to Modern DevOps | **Triggered** | High | Medium | INF-Q11 = 1 (< 3) — no CI/CD automation; OPS-Q5 = 1 — no deployment strategy; OPS-Q6 = 1 — no integration tests |
+| 7 | Move to AI | **Triggered** | Medium | Medium | No AI/agent frameworks detected; context mentions "agent" for order status lookups and return processing |
 
 ---
 
 ### Pathway: Move to Modern DevOps
 
-**Status:** Triggered  
-**Priority:** High  
+**Status:** Triggered
+**Priority:** High
 **Estimated Effort:** Medium
 
 #### Current State
 
-- **IaC Coverage (INF-Q10 = 4):** All infrastructure is defined in AWS CDK (TypeScript) across 6 construct files: `lib/aws-microservices-stack.ts`, `lib/database.ts`, `lib/microservice.ts`, `lib/apigateway.ts`, `lib/eventbus.ts`, `lib/queue.ts`. IaC is a strength — 100% of provisioned resources are in code.
-- **CI/CD State (INF-Q11 = 1):** No CI/CD pipeline exists anywhere in the repository. No `.github/workflows/`, no `buildspec.yml`, no `Jenkinsfile`, no `CodePipeline` definition in CDK. All deployments are performed manually via `cdk deploy` from a developer workstation.
-- **Deployment Strategy (OPS-Q5 = 1):** `cdk deploy` performs a direct CloudFormation stack update with no staged rollout, no canary analysis, and no automated rollback. Lambda function updates are deployed to all traffic immediately.
-- **Integration Testing (OPS-Q6 = 1):** The test file `test/aws-microservices.test.ts` exists but is entirely commented out. Jest configuration is present (`jest.config.js`) but no runnable tests exist. No API tests, no contract tests, no end-to-end tests.
+- **IaC Coverage (INF-Q10 = 4):** All infrastructure is defined in AWS CDK (TypeScript) — Lambda functions, DynamoDB tables, API Gateway, EventBridge bus, SQS queue. This is a strong foundation.
+- **CI/CD State (INF-Q11 = 1):** No CI/CD pipeline exists. The only deployment method is manual `cdk deploy` from a developer workstation, as documented in `README.md`. No `.github/workflows/`, no `buildspec.yml`, no `Jenkinsfile`, no CodePipeline resource in CDK.
+- **Deployment Strategy (OPS-Q5 = 1):** No blue/green, canary, or rolling deployment. Manual `cdk deploy` deploys all resources at once with no staged rollout or automated rollback.
+- **Testing (OPS-Q6 = 1):** The test file `test/aws-microservices.test.ts` has all tests commented out. No integration tests, no API contract tests, no automated test execution.
 
 #### Recommendations
 
-Given the preferences for **Terraform** and **GitOps**, and the preference to **avoid manual deployments**:
-
 1. **Implement CI/CD Pipeline with GitOps:**
-   - Create a GitHub Actions workflow (or AWS CodePipeline) that triggers on pull request merges to the main branch.
-   - Pipeline stages: lint → unit test → `cdk synth` → `cdk diff` (plan review) → `cdk deploy` to staging → integration test → `cdk deploy` to production.
-   - Consider migrating from CDK to **Terraform** (preferred) for infrastructure definition to align with organizational preferences and enable Terraform-native GitOps tooling.
-   - Adopt a GitOps model where infrastructure changes flow through pull requests with automated plan previews.
+   - Create a GitHub Actions workflow (`.github/workflows/deploy.yml`) or AWS CodePipeline with CodeBuild for automated build, test, and deploy stages.
+   - Adopt a GitOps model: changes merged to `main` trigger automated `cdk diff` → `cdk deploy` with approval gates for production.
+   - Use CDK Pipelines (`aws-cdk-lib/pipelines`) to define the deployment pipeline as CDK code — keeping everything in IaC.
+   - Consider migrating IaC to Terraform (per preferences) with Terraform Cloud or Atlantis for GitOps-based infrastructure management.
 
 2. **Add Deployment Safety:**
-   - Configure Lambda function aliases with **AWS CodeDeploy** traffic shifting (canary or linear deployment) to enable gradual rollouts with automatic rollback on CloudWatch alarm triggers.
-   - Use API Gateway stage variables to route traffic between canary and production Lambda versions.
+   - Configure Lambda function aliases with weighted traffic shifting for canary deployments using AWS CodeDeploy.
+   - Implement CloudWatch alarms as deployment rollback triggers (error rate, latency thresholds).
+   - Add pre-deployment `cdk diff` review step in the pipeline.
 
-3. **Establish Testing Foundation:**
-   - Uncomment and extend the existing CDK test in `test/aws-microservices.test.ts` to validate CloudFormation template correctness.
-   - Add integration tests that invoke API Gateway endpoints with test data and validate responses.
-   - Add contract tests for the EventBridge event schema (`com.swn.basket.checkoutbasket` / `CheckoutBasket`).
+3. **Enable Automated Testing:**
+   - Uncomment and implement CDK assertion tests in `test/aws-microservices.test.ts` to validate infrastructure changes.
+   - Add integration tests using tools like Newman (Postman CLI) or custom test scripts that validate API Gateway endpoints after deployment.
+   - Implement contract tests for the EventBridge event schema (`com.swn.basket.checkoutbasket` / `CheckoutBasket`).
 
 4. **Add Security Scanning to Pipeline:**
    - Integrate `npm audit` for dependency vulnerability scanning.
-   - Add Dependabot or Snyk for automated dependency updates.
-   - Integrate SAST tooling (e.g., Semgrep, Amazon CodeGuru Reviewer) for code quality and security analysis.
+   - Add CDK-nag for IaC security and compliance validation.
+   - Consider Semgrep or SonarQube for SAST scanning of Lambda handler code.
 
 #### Representative AWS Services
 - AWS CodePipeline, AWS CodeBuild, AWS CodeDeploy
-- GitHub Actions (alternative)
-- AWS CloudFormation / Terraform (IaC)
-- Amazon CloudWatch (deployment alarms for canary rollbacks)
-
-#### Learning Resources
-- [Move to Modern DevOps](https://skillbuilder.aws/learning-plan/1FGEQKGPQD)
-- [Getting Started with DevOps on AWS](https://skillbuilder.aws/learn/R4B13K95YQ)
+- CDK Pipelines (`aws-cdk-lib/pipelines`)
+- AWS CloudFormation (CDK backend)
+- Amazon CloudWatch (deployment alarms and rollback triggers)
 
 ---
 
 ### Pathway: Move to AI
 
-**Status:** Triggered  
-**Priority:** Medium  
+**Status:** Triggered
+**Priority:** Medium
 **Estimated Effort:** Medium
 
 #### Current AI/Agent Infrastructure State
 
-No AI or agent infrastructure exists in the repository:
-- **AI/Agent Frameworks:** No Bedrock SDK, LangChain, Strands, OpenAI, or SageMaker SDK imports detected in any source file or dependency manifest.
-- **Vector Database:** No OpenSearch, Pinecone, pgvector, Weaviate, or Qdrant infrastructure or client libraries.
+No AI/agent infrastructure exists in the repository:
+- **AI Frameworks:** No imports of Bedrock SDK, LangChain, Strands, OpenAI, Spring AI, HuggingFace, or SageMaker SDK in any source file.
+- **Vector Database:** No OpenSearch with vector engine, Pinecone, pgvector, Weaviate, or Qdrant.
 - **RAG Implementation:** No embedding generation, vector store queries, or retrieval chain patterns.
-- **Agent Evaluation:** No Ragas, DeepEval, or custom evaluation harness.
+- **Agent Evaluation:** No Ragas, DeepEval, or custom evaluation harnesses.
 
-#### Application Domain and AI Opportunities
+#### Contextual Trigger
 
-The e-commerce domain (product catalog, shopping basket, order management) offers strong AI integration opportunities, particularly given the stated context that "the agent will invoke these as tools for order status lookups and return processing":
+The assessment context explicitly states: *"The agent will invoke these as tools for order status lookups and return processing."* The term "agent" is an AI-related signal term that confirms AI/agent intent for this service.
 
-1. **Agent Tool Integration (Highest Priority):**
-   - The existing API Gateway endpoints (`/product`, `/basket`, `/order`) are natural tool interfaces for an AI agent.
-   - An **Amazon Bedrock Agent** can invoke these endpoints as tools for conversational order status lookups, product search, and basket management.
-   - **Prerequisite:** Add API Gateway authentication (SEC-Q3 gap) before exposing endpoints as agent tools. Generate OpenAPI specifications for tool discovery.
+#### Application Domain and AI Use Cases
 
-2. **Customer Service Agent:**
-   - Build a Bedrock-powered agent that handles order status inquiries, product recommendations, and return processing via the existing microservices.
-   - Use EventBridge to publish agent action events (e.g., `com.swn.agent.returnrequest`) that flow through the existing event-driven architecture.
+The e-commerce microservices architecture presents natural agent integration opportunities:
 
-3. **Product Recommendation Engine:**
-   - Use Amazon Bedrock foundation models to generate product recommendations based on basket contents and order history.
-   - DynamoDB's basket and order tables provide the data foundation.
+1. **Order Status Lookup Agent:** An Amazon Bedrock-powered agent that queries the Order service API (`GET /order/{userName}`) to provide natural-language order status responses.
+2. **Return Processing Agent:** An agent that orchestrates the checkout-in-reverse flow — querying orders, initiating returns via the Basket service, and creating refund records.
+3. **Product Discovery Agent:** An agent that uses the Product service API (`GET /product?category=...`) to help customers find products through conversational search.
 
-4. **RAG Knowledge Base:**
-   - Index product catalog data and order policies into an Amazon Bedrock Knowledge Base for retrieval-augmented generation.
-   - Enable natural language queries against product and order data.
+#### Recommendations
 
-#### Foundation Requirements Before AI Integration
+1. **Start with Amazon Bedrock Agents:**
+   - Create Bedrock agent action groups that map to the existing API Gateway endpoints (Product, Basket, Order).
+   - Define OpenAPI specs for each service to enable Bedrock Agents tool discovery.
+   - Use Amazon Bedrock with Claude or Nova models for natural language understanding.
 
-Before adding AI capabilities, address these foundational gaps:
-- **API Authentication (SEC-Q3):** Agent tool invocation requires authenticated endpoints.
-- **API Specifications (APP-Q5):** Generate OpenAPI specs for agent tool discovery and schema validation.
-- **Observability (OPS-Q1):** Add distributed tracing (X-Ray) to track agent-initiated request flows across microservices.
-- **CI/CD Pipeline (INF-Q11):** Automated deployment is needed to safely iterate on AI features.
+2. **Generate API Specifications:**
+   - Create OpenAPI 3.0 specs for the three API Gateway REST APIs. This is a prerequisite for both Bedrock Agents and the API-aware Quick Agent Win.
+   - Document request/response schemas based on the DynamoDB table structures defined in `lib/database.ts`.
+
+3. **Add Agent Infrastructure to CDK:**
+   - Add `@aws-sdk/client-bedrock-runtime` and `@aws-sdk/client-bedrock-agent-runtime` to a new agent Lambda function.
+   - Define Bedrock Agent resources in CDK (or consider Amazon Bedrock AgentCore for managed agent hosting).
+   - Configure IAM roles with least-privilege access to invoke the existing Lambda functions or API Gateway endpoints.
+
+4. **Implement Agent Evaluation:**
+   - Set up an evaluation framework (e.g., Ragas or DeepEval) to measure agent accuracy on order status lookups and return processing scenarios.
+   - Create a test dataset of sample queries and expected responses.
 
 #### Representative AWS Services
 - Amazon Bedrock (foundation models, agents, knowledge bases)
-- Amazon Bedrock AgentCore (agent runtime and tool orchestration)
-- Amazon Q (developer productivity)
-- Amazon OpenSearch Service (vector engine for RAG)
-- Amazon S3 (knowledge base document storage)
+- Amazon Bedrock AgentCore (managed agent hosting)
+- Amazon API Gateway (existing — used as tool endpoints for agents)
+- Amazon DynamoDB (existing — data source for agent queries)
+- Amazon EventBridge (existing — event-driven orchestration for return processing)
 
-#### Learning Resources
-- [Move to AI](https://skillbuilder.aws/learning-plan/VDFEE4ACCV)
-- [Amazon Bedrock Getting Started](https://skillbuilder.aws/learn/63KTRM86DQ)
-- [Introduction to Agentic AI on AWS](https://skillbuilder.aws/learn/DNBD5MT8ZD)
+#### Foundation Requirements
+Before AI integration, address these prerequisites:
+- **API Documentation:** Generate OpenAPI specs (currently absent — APP-Q5 = 1).
+- **API Authentication:** Add Cognito or IAM-based auth to API Gateway (currently absent — SEC-Q3 = 1). Agent requests must be authenticated.
+- **Observability:** Add distributed tracing (OPS-Q1 = 1) to trace agent invocations through the microservice chain.
+
+---
 
 ## Detailed Findings
 
@@ -182,111 +183,110 @@ Before adding AI capabilities, address these foundational gaps:
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | 100% of compute workloads use AWS Lambda (serverless). Three `NodejsFunction` Lambda functions are defined in `lib/microservice.ts`: `productLambdaFunction`, `basketLambdaFunction`, `orderingLambdaFunction`. All use `Runtime.NODEJS_14_X`. No EC2 instances, no ECS tasks, no EKS pods. The application is fully serverless. |
-| **Gap** | The Lambda runtime `NODEJS_14_X` is past end-of-life (EOL April 2023). While compute is fully managed, the runtime version is a significant technical debt item. |
-| **Recommendation** | Upgrade Lambda runtime from `NODEJS_14_X` to `NODEJS_20_X` or `NODEJS_22_X` in `lib/microservice.ts`. Update the `aws-sdk` external module bundling configuration since newer runtimes use AWS SDK v3 natively. |
-| **Evidence** | `lib/microservice.ts` — `runtime: Runtime.NODEJS_14_X` on lines for all three Lambda functions. |
+| **Finding** | All compute workloads use AWS Lambda (100% serverless). Three Lambda functions are defined via `NodejsFunction` in `lib/microservice.ts`: `productLambdaFunction`, `basketLambdaFunction`, and `orderingLambdaFunction`. Runtime is `Runtime.NODEJS_14_X`. No EC2 instances, ECS tasks, or EKS workloads. |
+| **Gap** | Lambda runtime `NODEJS_14_X` is end-of-life (since November 2023). While this doesn't affect the managed compute score (Lambda is fully managed), it is a runtime currency issue scored under SEC-Q6. |
+| **Recommendation** | Upgrade Lambda runtime to `Runtime.NODEJS_20_X` or `Runtime.NODEJS_22_X` in `lib/microservice.ts`. Consider configuring Lambda reserved concurrency to protect downstream DynamoDB tables from traffic spikes. |
+| **Evidence** | `lib/microservice.ts` — `Runtime.NODEJS_14_X`, `NodejsFunction` construct |
 
 #### INF-Q2: Managed Databases
 
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | All three databases are fully managed DynamoDB tables defined in `lib/database.ts`: `product` (PK: id), `basket` (PK: userName), `order` (PK: userName, SK: orderDate). All use `BillingMode.PAY_PER_REQUEST` (on-demand, auto-scaling). No self-managed databases. |
-| **Gap** | No gaps for managed database criterion. DynamoDB is fully managed with automated failover across AZs. |
-| **Recommendation** | Consider enabling DynamoDB global tables for multi-region resilience if the workload expands internationally. Current single-region setup is appropriate for the current scale. |
-| **Evidence** | `lib/database.ts` — `new Table(this, 'product', {...})`, `new Table(this, 'basket', {...})`, `new Table(this, 'order', {...})` all with `billingMode: BillingMode.PAY_PER_REQUEST`. |
+| **Finding** | All three databases are Amazon DynamoDB tables with `BillingMode.PAY_PER_REQUEST` (on-demand). Defined in `lib/database.ts`: `product` (PK: id), `basket` (PK: userName), `order` (PK: userName, SK: orderDate). No self-managed databases on EC2 or in containers. |
+| **Gap** | None for managed database status. DynamoDB is fully managed with automated failover. However, `RemovalPolicy.DESTROY` is set on all tables — production data would be deleted on stack deletion. |
+| **Recommendation** | Change `RemovalPolicy.DESTROY` to `RemovalPolicy.RETAIN` for production tables. Enable Point-in-Time Recovery (PITR) for data protection (see INF-Q8). |
+| **Evidence** | `lib/database.ts` — `Table` construct, `BillingMode.PAY_PER_REQUEST`, `RemovalPolicy.DESTROY` |
 
 #### INF-Q3: Workflow Orchestration
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No dedicated workflow orchestration service is used. The checkout flow is an event chain: basket Lambda → EventBridge (`SwnEventBus`) → SQS (`OrderQueue`) → ordering Lambda. This is event-driven choreography, not orchestration. No Step Functions, Temporal, Camunda, or other workflow service detected. |
-| **Gap** | The checkout workflow (basket checkout → order creation) has no centralized state management, error handling with compensation, or retry orchestration. If the ordering Lambda fails to process an SQS message after retries, there is no dead-letter queue configured and no compensating action (e.g., restoring the deleted basket). |
-| **Recommendation** | Implement AWS Step Functions to orchestrate the checkout workflow: (1) validate basket, (2) calculate total, (3) publish event, (4) create order, (5) delete basket. Step Functions provides built-in retry, error handling, compensation, and visual workflow monitoring. Use EventBridge for inter-service events but Step Functions for multi-step business workflows. |
-| **Evidence** | `lib/eventbus.ts` — EventBridge rule `CheckoutBasketRule` routes to SQS. `lib/queue.ts` — `OrderQueue` with `visibilityTimeout: 30s` but no dead-letter queue. `src/basket/index.js` — `checkoutBasket()` deletes basket after publishing event (no compensation on failure). |
+| **Finding** | No workflow orchestration service is used. The checkout flow follows a simple event chain: Basket Lambda → EventBridge (`PutEventsCommand`) → SQS (`OrderQueue`) → Ordering Lambda. This is a linear event-driven flow, not a multi-step orchestrated workflow with error handling, retries, or branching logic. No Step Functions, Temporal, or Camunda detected. |
+| **Gap** | The checkout flow lacks explicit error handling, retry logic, compensation actions, and state management. If the ordering Lambda fails after the basket is deleted, there is no recovery mechanism. |
+| **Recommendation** | Implement AWS Step Functions to orchestrate the checkout workflow with explicit error handling, retry policies, and compensation steps. This would provide visual workflow management and a clear audit trail. Use EventBridge as the trigger and Step Functions for orchestration. |
+| **Evidence** | `lib/eventbus.ts` — EventBridge rule targets SQS directly; `src/basket/index.js` — `checkoutBasket` deletes basket before confirming order creation |
 
 #### INF-Q4: Async Messaging and Streaming
 
 | Field | Value |
 |-------|-------|
-| **Score** | 3 |
-| **Finding** | Managed messaging infrastructure is in use: EventBridge (`SwnEventBus`) for event publishing and SQS (`OrderQueue`) for message queuing, both defined in CDK. The checkout flow is fully asynchronous: basket Lambda publishes `CheckoutBasket` event → EventBridge rule → SQS queue → ordering Lambda. However, API Gateway calls to all three Lambda functions are synchronous HTTP request/response. |
-| **Gap** | Messaging is managed but limited to one flow (checkout). Product CRUD and basket CRUD operations are entirely synchronous. No streaming infrastructure (Kinesis, MSK) for real-time data flows. |
-| **Recommendation** | The current mix of sync API calls and async checkout flow is appropriate for this e-commerce pattern. Consider adding EventBridge events for product catalog changes and basket updates to enable downstream consumers (analytics, recommendations, audit). |
-| **Evidence** | `lib/eventbus.ts` — `new EventBus(this, 'SwnEventBus')`, `new Rule(this, 'CheckoutBasketRule')`. `lib/queue.ts` — `new Queue(this, 'OrderQueue')`. `src/basket/index.js` — `publishCheckoutBasketEvent()` uses `PutEventsCommand`. |
+| **Score** | 4 |
+| **Finding** | Managed messaging services are used for inter-service communication. Amazon EventBridge (`SwnEventBus`) is defined in `lib/eventbus.ts` with a rule (`CheckoutBasketRule`) that routes `CheckoutBasket` events from source `com.swn.basket.checkoutbasket` to an SQS queue. Amazon SQS (`OrderQueue`) is defined in `lib/queue.ts` with `visibilityTimeout: 30s` and `batchSize: 1`. The Basket service publishes events via `PutEventsCommand` in `src/basket/index.js`, and the Ordering service consumes from SQS via `SqsEventSource` in `lib/queue.ts`. |
+| **Gap** | No dead-letter queue (DLQ) configured on the SQS queue for failed message handling. No EventBridge archive for event replay. |
+| **Recommendation** | Add a dead-letter queue to `OrderQueue` for failed messages. Enable EventBridge archive on `SwnEventBus` for event replay capability. Consider adding EventBridge schema registry for event contract documentation. |
+| **Evidence** | `lib/eventbus.ts` — `EventBus`, `Rule`, `SqsQueue` target; `lib/queue.ts` — `Queue`, `SqsEventSource`; `src/basket/eventBridgeClient.js` — `EventBridgeClient` |
 
 #### INF-Q5: Network Security
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No VPC configuration found in any CDK construct. Lambda functions are deployed without VPC attachment — they run in the AWS Lambda service VPC with internet access by default. DynamoDB is accessed via public endpoints (no VPC endpoint). API Gateway has no WAF, no IP restrictions, no resource policies. No security groups, no private subnets, no network segmentation defined. |
-| **Gap** | All services operate on public AWS endpoints with no network-level access controls. While Lambda-to-DynamoDB communication uses IAM for authorization, there is no defense-in-depth at the network layer. API Gateway endpoints are internet-facing with no WAF protection. |
-| **Recommendation** | Add a WAF WebACL to the API Gateway endpoints to protect against common web exploits (SQL injection, XSS, rate limiting). For defense-in-depth, consider configuring Lambda functions within a VPC with VPC endpoints for DynamoDB and EventBridge to eliminate internet traversal for internal service communication. Add API Gateway resource policies to restrict access to known IP ranges or VPC endpoints. |
-| **Evidence** | `lib/microservice.ts` — No `vpc` property on `NodejsFunctionProps`. `lib/apigateway.ts` — No WAF, no resource policy on `LambdaRestApi`. `lib/aws-microservices-stack.ts` — No `Vpc` construct imported or instantiated. |
+| **Finding** | No VPC, subnets, security groups, or NACLs are defined in the CDK stack. Lambda functions run in the default AWS Lambda service VPC (no customer VPC configuration). API Gateway has no WAF association, no throttling configuration, and no network-level access controls. No `aws_vpc`, `aws_subnet`, or `aws_security_group` equivalent CDK constructs found. |
+| **Gap** | Lambda functions accessing DynamoDB traverse the public AWS network rather than VPC endpoints. API Gateway endpoints are publicly accessible with no network restrictions. No WAF protection against common web exploits. |
+| **Recommendation** | For a serverless architecture, configure VPC endpoints for DynamoDB to keep traffic within the AWS network. Add AWS WAF to API Gateway for protection against SQL injection, XSS, and rate-based attacks. Configure API Gateway throttling limits. Consider VPC Lambda configuration if the services need to access private resources in the future. |
+| **Evidence** | `lib/aws-microservices-stack.ts` — no VPC constructs; `lib/apigateway.ts` — `LambdaRestApi` with no WAF, throttling, or network config |
 
 #### INF-Q6: API Entry Point
 
 | Field | Value |
 |-------|-------|
 | **Score** | 2 |
-| **Finding** | Three separate `LambdaRestApi` gateways are defined in `lib/apigateway.ts`: "Product Service", "Basket Service", "Order Service". API Gateway serves as the HTTP entry point with defined routes (`/product`, `/product/{id}`, `/basket`, `/basket/{userName}`, `/basket/checkout`, `/order`, `/order/{userName}`). However, configuration is minimal — no throttling, no authentication, no request validation, no usage plans. |
-| **Gap** | API Gateway is present but under-configured. No throttling to prevent abuse, no request body validation to reject malformed input, no authentication to restrict access. Three separate API Gateways instead of a consolidated entry point create management overhead. |
-| **Recommendation** | Consolidate into a single API Gateway (preferred) with resource-based routing, or keep per-service gateways with shared configuration. Add throttling limits, request validators (JSON schema), and usage plans. Consider migrating to HTTP API (API Gateway v2) for lower latency and cost if REST API features are not needed. |
-| **Evidence** | `lib/apigateway.ts` — `new LambdaRestApi(this, 'productApi', { restApiName: 'Product Service', handler: productMicroservice, proxy: false })` and similar for basket and order. No `requestValidator`, no `apiKey`, no `usagePlan`, no `throttle` properties. |
+| **Finding** | Three separate API Gateway REST APIs (`LambdaRestApi`) serve as entry points in `lib/apigateway.ts`: Product Service (`/product`), Basket Service (`/basket`, `/basket/{userName}`, `/basket/checkout`), and Order Service (`/order`, `/order/{userName}`). API Gateway provides basic routing and Lambda proxy integration. |
+| **Gap** | No authentication (no authorizers configured). No throttling or usage plans. No request validation. No WAF protection. Three separate API Gateway instances instead of a unified gateway with consolidated routing. `proxy: false` is set but no request/response models are defined for validation. |
+| **Recommendation** | Consolidate to a single API Gateway with path-based routing to reduce management overhead. Add Cognito authorizer or Lambda authorizer for authentication. Configure usage plans and throttling limits. Add request models for input validation. Associate AWS WAF for web exploit protection. |
+| **Evidence** | `lib/apigateway.ts` — three `LambdaRestApi` instances with `proxy: false` but no authorizers, throttling, or validation |
 
 #### INF-Q7: Auto-Scaling
 
 | Field | Value |
 |-------|-------|
-| **Score** | 4 |
-| **Finding** | All compute and data tiers auto-scale inherently via serverless managed services. Lambda functions auto-scale concurrency based on incoming requests (default account concurrency limit). DynamoDB uses `BillingMode.PAY_PER_REQUEST` (on-demand), which auto-scales read/write capacity to match traffic. SQS auto-scales message processing via Lambda event source mapping. No manual capacity provisioning is required. |
-| **Gap** | No explicit Lambda reserved concurrency or provisioned concurrency configured — functions rely on default account-level limits. No DynamoDB auto-scaling alarms for capacity monitoring. |
-| **Recommendation** | Consider setting Lambda reserved concurrency limits to prevent one service from starving others during traffic spikes. Add CloudWatch alarms on Lambda concurrent executions and DynamoDB consumed capacity for visibility. |
-| **Evidence** | `lib/microservice.ts` — `NodejsFunction` with no `reservedConcurrentExecutions`. `lib/database.ts` — `billingMode: BillingMode.PAY_PER_REQUEST`. `lib/queue.ts` — `SqsEventSource` with `batchSize: 1`. |
+| **Score** | 3 |
+| **Finding** | Lambda functions auto-scale by default (managed by AWS with up to 1000 concurrent executions per region). DynamoDB tables use `BillingMode.PAY_PER_REQUEST` (on-demand mode) which scales automatically. API Gateway scales automatically. SQS and EventBridge scale automatically. All compute and data tiers benefit from serverless auto-scaling. |
+| **Gap** | No Lambda reserved concurrency or provisioned concurrency configured. No explicit concurrency limits to protect downstream services from traffic spikes. No SQS `maxReceiveCount` for retry limiting. |
+| **Recommendation** | Configure Lambda reserved concurrency on each function to prevent one service's traffic from consuming the account-wide concurrency pool. Consider provisioned concurrency for latency-sensitive endpoints. Set `maxReceiveCount` on SQS queue with a DLQ for retry management. |
+| **Evidence** | `lib/microservice.ts` — `NodejsFunction` with no concurrency settings; `lib/database.ts` — `BillingMode.PAY_PER_REQUEST`; `lib/queue.ts` — `Queue` with no DLQ or maxReceiveCount |
 
 #### INF-Q8: Backup and Recovery
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No backup configuration exists for any data store. All three DynamoDB tables are created with `removalPolicy: RemovalPolicy.DESTROY`, which deletes the table and all data when the CloudFormation stack is deleted. No point-in-time recovery (PITR) is enabled. No AWS Backup plan is defined. No S3 backup buckets. |
-| **Gap** | Critical data loss risk. A `cdk destroy` or accidental stack deletion will permanently delete all product catalog, basket, and order data. No PITR means no recovery from accidental item-level deletions or corruption. For a P0 service handling order data, this is a high-severity gap. |
-| **Recommendation** | Immediately enable DynamoDB PITR on all three tables by adding `pointInTimeRecovery: true` to each Table construct in `lib/database.ts`. Change `removalPolicy` to `RemovalPolicy.RETAIN` for production tables to prevent accidental data deletion. Consider adding an AWS Backup plan with daily backups and 30-day retention. |
-| **Evidence** | `lib/database.ts` — `removalPolicy: RemovalPolicy.DESTROY` on all three tables (`product`, `basket`, `order`). No `pointInTimeRecovery` property. No `aws_backup` constructs in any CDK file. |
+| **Finding** | All three DynamoDB tables are created with `RemovalPolicy.DESTROY` and no backup configuration. No Point-in-Time Recovery (PITR) enabled. No `aws_backup_plan` or equivalent CDK constructs. No S3 buckets with versioning (no S3 in the stack). Stack deletion would permanently destroy all data. |
+| **Gap** | Complete absence of backup and recovery strategy. Production data loss risk on stack deletion. No ability to restore to any point in time. No documented restore procedures. |
+| **Recommendation** | Enable DynamoDB Point-in-Time Recovery (PITR) on all three tables by adding `pointInTimeRecovery: true` in `lib/database.ts`. Change `RemovalPolicy.DESTROY` to `RemovalPolicy.RETAIN` for production. Consider adding AWS Backup plans for cross-region backup replication. |
+| **Evidence** | `lib/database.ts` — `removalPolicy: RemovalPolicy.DESTROY` on all three tables; no `pointInTimeRecovery` setting; no backup resources |
 
 #### INF-Q9: High Availability and Fault Isolation
 
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | All services are inherently multi-AZ through AWS managed services. Lambda functions execute across multiple AZs within the region automatically. DynamoDB replicates data across 3 AZs within the region by default. API Gateway is a regional service with multi-AZ redundancy. EventBridge and SQS are also regionally distributed across AZs. |
-| **Gap** | No multi-region fault isolation. All resources are in a single region (region not explicitly specified in `bin/aws-microservices.ts` — defaults to CLI-configured region). For a P0 service, consider multi-region resilience. |
-| **Recommendation** | For regional resilience, the current architecture is well-positioned — all services are multi-AZ by default. For additional resilience, consider enabling DynamoDB global tables and deploying a secondary region stack for disaster recovery. |
-| **Evidence** | `lib/microservice.ts` — Lambda (inherently multi-AZ). `lib/database.ts` — DynamoDB (inherently multi-AZ). `lib/apigateway.ts` — API Gateway (regional, multi-AZ). `bin/aws-microservices.ts` — No explicit `env` (region) configuration. |
+| **Finding** | All services are fully serverless and inherently multi-AZ. AWS Lambda executes across multiple AZs automatically. DynamoDB replicates data across multiple AZs within a region. API Gateway, EventBridge, and SQS are all regional services with built-in multi-AZ availability. No single-AZ compute or data store configurations. |
+| **Gap** | No multi-region configuration for disaster recovery (DR). Single-region deployment only. |
+| **Recommendation** | For a P0 service, consider DynamoDB global tables for multi-region replication. Add cross-region backup replication for disaster recovery. |
+| **Evidence** | `lib/microservice.ts` — Lambda (multi-AZ by default); `lib/database.ts` — DynamoDB (multi-AZ by default); `lib/apigateway.ts` — API Gateway (regional, multi-AZ) |
 
 #### INF-Q10: Infrastructure as Code Coverage
 
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | 100% of infrastructure is defined in AWS CDK (TypeScript). Six CDK construct files comprehensively cover all resources: DynamoDB tables (`lib/database.ts`), Lambda functions (`lib/microservice.ts`), API Gateways (`lib/apigateway.ts`), EventBridge bus and rules (`lib/eventbus.ts`), SQS queue (`lib/queue.ts`), and stack orchestration (`lib/aws-microservices-stack.ts`). CDK configuration is in `cdk.json` with feature flags. |
-| **Gap** | IaC coverage is excellent. Minor gap: CDK version is `2.17.0` (early 2022 release), which is significantly outdated. Many CDK improvements, security fixes, and new construct features have been released since. |
-| **Recommendation** | Update `aws-cdk-lib` from `2.17.0` to the latest v2 release in `package.json`. Consider migrating to Terraform if organizational preferences favor Terraform-based GitOps workflows. |
-| **Evidence** | `lib/aws-microservices-stack.ts` — Stack composition. `package.json` — `"aws-cdk-lib": "2.17.0"`. `cdk.json` — CDK app configuration. All 6 `lib/*.ts` files define CDK constructs. |
+| **Finding** | 100% of infrastructure is defined in AWS CDK (TypeScript). The complete stack includes: 3 DynamoDB tables (`lib/database.ts`), 3 Lambda functions (`lib/microservice.ts`), 3 API Gateway REST APIs (`lib/apigateway.ts`), 1 EventBridge bus with rule (`lib/eventbus.ts`), 1 SQS queue with event source (`lib/queue.ts`). All resources are composed in `lib/aws-microservices-stack.ts` and deployed via `bin/aws-microservices.ts`. IAM permissions are granted using CDK grant methods (e.g., `grantReadWriteData`, `grantPutEventsTo`). |
+| **Gap** | CDK version 2.17.0 is outdated (current CDK is 2.170+). The CDK code uses well-structured constructs but could benefit from Stack-level tags and environment-specific configuration. No CDK Pipelines construct for automated deployment. |
+| **Recommendation** | Upgrade `aws-cdk-lib` from 2.17.0 to the latest version. Add CDK Pipelines for automated deployment (supports GitOps model). Consider migrating to Terraform (per preferences) for broader IaC ecosystem compatibility and GitOps tooling. Add `cdk.Tags.of(this).add()` for resource tagging. |
+| **Evidence** | `lib/aws-microservices-stack.ts`, `lib/database.ts`, `lib/microservice.ts`, `lib/apigateway.ts`, `lib/eventbus.ts`, `lib/queue.ts`, `package.json` — `aws-cdk-lib: 2.17.0` |
 
 #### INF-Q11: CI/CD Automation
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No CI/CD pipeline exists in the repository. No `.github/workflows/` directory, no `buildspec.yml`, no `Jenkinsfile`, no CodePipeline definition in CDK, no GitLab CI config. The `package.json` scripts section contains only `build`, `watch`, `test`, and `cdk` — no deploy automation scripts. Deployment is performed manually via `cdk deploy` from a developer workstation. |
-| **Gap** | All deployments are manual, requiring a developer to run `cdk deploy` locally. This creates inconsistency (different developer environments), no audit trail of deployments, no automated quality gates, and no rollback mechanism. For a P0 service, manual deployment is a critical operational risk. |
-| **Recommendation** | Implement a CI/CD pipeline (GitHub Actions or AWS CodePipeline) with stages: lint → test → synth → diff → deploy-staging → integration-test → deploy-production. Adopt GitOps practices where infrastructure changes are reviewed via pull requests before deployment. Add deployment notifications to track who deployed what and when. Avoid manual `cdk deploy` for production environments. |
-| **Evidence** | No `.github/workflows/` directory. No `buildspec.yml`. No `Jenkinsfile`. No CodePipeline in CDK. `package.json` — `"scripts": { "build": "tsc", "watch": "tsc -w", "test": "jest", "cdk": "cdk" }`. |
-
+| **Finding** | No CI/CD pipeline exists. No `.github/workflows/` directory, no `.gitlab-ci.yml`, no `Jenkinsfile`, no `buildspec.yml`, no CodePipeline resource in CDK. The README instructs developers to run `cdk deploy` manually from their workstation. The `package.json` defines `build` (tsc), `test` (jest), and `cdk` scripts but no deployment automation. |
+| **Gap** | All deployments are manual. No automated build, test, or deploy pipeline. No deployment gates, no automated rollback, no environment promotion. This is the most impactful gap in the repository — it blocks all other operational improvements. |
+| **Recommendation** | Implement CI/CD pipeline immediately. Option 1: CDK Pipelines (stays in CDK ecosystem, GitOps-friendly). Option 2: GitHub Actions with `cdk deploy` steps (align with GitOps preferences). Option 3: AWS CodePipeline + CodeBuild with `buildspec.yml`. Include stages: lint → build → unit test → cdk diff → approval → cdk deploy → integration test → canary promote. |
+| **Evidence** | No CI/CD files found in repository; `README.md` — manual `cdk deploy` instructions; `package.json` — no deploy script |
 
 ### Application Architecture
 
@@ -295,60 +295,60 @@ Before adding AI capabilities, address these foundational gaps:
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | JavaScript (Node.js ES6 modules) is used for all three Lambda functions (`src/product/index.js`, `src/basket/index.js`, `src/ordering/index.js`). TypeScript is used for CDK infrastructure code (`lib/*.ts`). Node.js/JavaScript has a mature cloud-native ecosystem with excellent AWS SDK support, Lambda runtime availability, and extensive community libraries. |
-| **Gap** | Lambda source code uses JavaScript (not TypeScript), missing type safety benefits. TypeScript is used only for IaC. |
-| **Recommendation** | Consider migrating Lambda function source code from JavaScript to TypeScript for type safety, better IDE support, and consistency with the CDK codebase. The CDK `NodejsFunction` construct already supports TypeScript Lambda functions natively with built-in bundling. |
-| **Evidence** | `src/product/index.js`, `src/basket/index.js`, `src/ordering/index.js` — JavaScript with ES6 imports. `lib/*.ts` — TypeScript CDK constructs. `package.json` — `typescript: ~3.9.7`. |
+| **Finding** | JavaScript (ES6 modules) is used for all Lambda handler source code (`src/product/index.js`, `src/basket/index.js`, `src/ordering/index.js`, `src/*/ddbClient.js`). TypeScript is used for CDK infrastructure code (`lib/*.ts`, `bin/aws-microservices.ts`). Both are mature cloud-native languages with excellent AWS SDK v3 support. Dependencies use `@aws-sdk/client-dynamodb`, `@aws-sdk/client-eventbridge`, and `@aws-sdk/util-dynamodb` (AWS SDK v3 modular packages). |
+| **Gap** | Lambda handlers are JavaScript, not TypeScript — no compile-time type safety for application logic. TypeScript version pinned at `~3.9.7` which is outdated. |
+| **Recommendation** | Migrate Lambda handlers from JavaScript to TypeScript for type safety. Upgrade TypeScript from 3.9.7 to 5.x. Update `@aws-sdk` packages from ^3.55.0 to latest v3. |
+| **Evidence** | `src/product/index.js`, `src/basket/index.js`, `src/ordering/index.js` — JavaScript ES6; `tsconfig.json` — TypeScript config; `package.json` — `typescript: ~3.9.7` |
 
 #### APP-Q2: Monolith vs Microservices
 
 | Field | Value |
 |-------|-------|
-| **Score** | 4 |
-| **Finding** | The application is decomposed into three independently deployable microservices: **Product** (CRUD operations on product catalog), **Basket** (shopping cart management + checkout event publishing), and **Ordering** (order creation from events + order queries). Each service has its own: (1) Lambda function entry point, (2) `package.json` with independent dependencies, (3) dedicated DynamoDB table, (4) dedicated API Gateway. Cross-service communication uses EventBridge events (not shared database queries), enforcing loose coupling. No circular dependencies detected. |
-| **Gap** | All three services are deployed as a single CloudFormation stack (`AwsMicroservicesStack`). True independent deployability would require separate stacks per service. The current single-stack approach means a change to the product service redeploys the entire infrastructure. |
-| **Recommendation** | Consider splitting into per-service CDK stacks (e.g., `ProductStack`, `BasketStack`, `OrderingStack`) with cross-stack references for shared resources (EventBridge bus). This enables independent deployment and reduces blast radius of changes. |
-| **Evidence** | `src/product/` — Independent service directory with own `package.json`. `src/basket/` — Independent service with EventBridge integration. `src/ordering/` — Independent service consuming SQS events. `lib/database.ts` — Per-service DynamoDB tables. `lib/apigateway.ts` — Per-service API Gateways. |
+| **Score** | 3 |
+| **Finding** | Three independently-scoped microservices with clear domain boundaries: Product (CRUD operations), Basket (cart management + checkout), Ordering (order creation + queries). Each service has its own Lambda function, DynamoDB table, `package.json`, and `ddbClient.js`. No shared database access — each service owns its data. Inter-service communication is event-driven via EventBridge/SQS (not synchronous HTTP). |
+| **Gap** | All three services are deployed as a single CDK stack (`AwsMicroservicesStack`), creating a shared deployment lifecycle. A change to one service requires redeploying the entire stack. No independent deployment pipelines per service. This is a shared deployment coupling, not a data or logic coupling. |
+| **Recommendation** | Split into three CDK stacks (one per service) with shared infrastructure (EventBridge bus) in a separate stack. This enables independent deployment lifecycles. Use CDK stack outputs and cross-stack references for shared resources. |
+| **Evidence** | `lib/aws-microservices-stack.ts` — single stack; `src/product/`, `src/basket/`, `src/ordering/` — separate service directories; `lib/database.ts` — separate tables per service |
 
 #### APP-Q3: Async vs Sync Communication
 
 | Field | Value |
 |-------|-------|
 | **Score** | 3 |
-| **Finding** | The checkout flow (the primary cross-service workflow) is fully asynchronous: basket Lambda publishes a `CheckoutBasket` event to EventBridge → EventBridge rule routes to SQS `OrderQueue` → ordering Lambda consumes from SQS. API Gateway invocations to all three Lambdas are synchronous HTTP request/response. The ordering service handles both async (SQS/EventBridge) and sync (API Gateway) invocations via runtime detection (`event.Records` vs `event.httpMethod`). |
-| **Gap** | Only one cross-service flow (checkout) is async. Product and basket CRUD operations are synchronous. If additional cross-service communication is needed in the future (e.g., inventory updates, price changes), there is no established pattern for adding more async flows. |
-| **Recommendation** | The current mix is appropriate for this architecture. For future growth, publish domain events for product catalog changes (`ProductCreated`, `ProductUpdated`, `PriceChanged`) and basket mutations to EventBridge to enable event-driven downstream processing. |
-| **Evidence** | `src/basket/index.js` — `publishCheckoutBasketEvent()` publishes to EventBridge. `src/ordering/index.js` — `sqsInvocation()` and `eventBridgeInvocation()` handle async events; `apiGatewayInvocation()` handles sync HTTP. `lib/eventbus.ts` — `CheckoutBasketRule` event pattern. |
+| **Finding** | The checkout flow is fully asynchronous: Basket Lambda publishes a `CheckoutBasket` event to EventBridge → EventBridge rule routes to SQS `OrderQueue` → Ordering Lambda consumes from SQS. The Ordering Lambda handles both async invocations (SQS events via `sqsInvocation`, EventBridge events via `eventBridgeInvocation`) and sync invocations (API Gateway via `apiGatewayInvocation`). Product and Basket services handle sync API Gateway requests only (no inter-service HTTP calls). |
+| **Gap** | No async patterns for product queries or basket operations. The checkout flow has a fire-and-forget pattern — the Basket service deletes the basket immediately after publishing the event without waiting for order confirmation (no status callback or polling). Clients have no way to check checkout status. |
+| **Recommendation** | Add an order status endpoint that clients can poll after checkout (e.g., `GET /order/{userName}/status`). Consider adding a checkout status field to the basket or order table. For future inter-service queries, use EventBridge request-response pattern or Step Functions. |
+| **Evidence** | `src/basket/index.js` — `publishCheckoutBasketEvent` + `deleteBasket`; `src/ordering/index.js` — `sqsInvocation` and `eventBridgeInvocation` handlers; `lib/eventbus.ts` — EventBridge → SQS routing |
 
 #### APP-Q4: Long-Running Process Handling
 
 | Field | Value |
 |-------|-------|
-| **Score** | 3 |
-| **Finding** | The checkout process (the most complex operation) is handled asynchronously: the basket Lambda publishes an event and immediately returns a 200 response, while order creation happens asynchronously via SQS → ordering Lambda. Lambda functions are inherently short-lived (15-minute maximum). No long-running synchronous operations were detected — all DynamoDB operations complete in milliseconds. |
-| **Gap** | The async checkout flow is fire-and-forget — the basket Lambda returns a 200 response after publishing the event but provides no mechanism for the client to track order creation status. There is no status polling endpoint (e.g., `GET /order/status/{orderId}`) or callback/webhook mechanism. |
-| **Recommendation** | Add an order status tracking mechanism: (1) Generate an orderId in the basket Lambda before publishing the event, (2) include orderId in the EventBridge event payload, (3) create a `GET /order/status/{orderId}` endpoint for status polling. This enables both human users and AI agents to track order completion. |
-| **Evidence** | `src/basket/index.js` — `checkoutBasket()` publishes event then deletes basket, returns no orderId. `src/ordering/index.js` — `createOrder()` generates orderDate as sort key but no unique orderId for tracking. |
+| **Score** | 4 |
+| **Finding** | The checkout is the primary long-running operation and it is handled asynchronously. The Basket service publishes a `CheckoutBasket` event to EventBridge, which routes via SQS to the Ordering Lambda. All other operations (product CRUD, basket CRUD, order queries) are fast DynamoDB operations that complete well within Lambda timeout limits. No synchronous blocking calls for long-running operations. |
+| **Gap** | No explicit timeout configuration on Lambda functions (defaults apply). No explicit status tracking for the async checkout flow — clients must query the Order service to determine if checkout completed. |
+| **Recommendation** | Add explicit Lambda timeout configuration appropriate for each service. Implement checkout status tracking (e.g., a status field in the order record that transitions from "pending" to "confirmed"). |
+| **Evidence** | `src/basket/index.js` — async checkout via EventBridge; `src/ordering/index.js` — SQS event processing; `lib/microservice.ts` — no explicit timeout config |
 
 #### APP-Q5: API Versioning Strategy
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No API versioning strategy detected. API Gateway routes are unversioned: `/product`, `/product/{id}`, `/basket`, `/basket/{userName}`, `/basket/checkout`, `/order`, `/order/{userName}`. No `/v1/` URL prefix, no `Accept-Version` headers, no versioning annotations, no changelog files. The API Gateway deploys to a single `prod` stage. |
-| **Gap** | Any breaking API change (request/response format, route changes) will break all consumers simultaneously with no migration path. No OpenAPI specification exists to document the API contract. This is critical for agent integration — agents need stable, versioned API contracts to function as tools. |
-| **Recommendation** | Implement URL-based versioning (e.g., `/v1/product`) in `lib/apigateway.ts`. Generate an OpenAPI specification documenting all endpoints, request/response schemas, and error formats. Use API Gateway stages (`v1`, `v2`) to manage versioned deployments. This is a prerequisite for exposing these APIs as agent tools. |
-| **Evidence** | `lib/apigateway.ts` — Routes defined without version prefix: `apigw.root.addResource('product')`, `apigw.root.addResource('basket')`, `apigw.root.addResource('order')`. No OpenAPI import. No changelog. |
+| **Finding** | No API versioning strategy. API Gateway routes are defined as `/product`, `/product/{id}`, `/basket`, `/basket/{userName}`, `/basket/checkout`, `/order`, `/order/{userName}` — no version prefix (e.g., `/v1/product`). No `Accept-Version` headers. No changelog or API evolution documentation. |
+| **Gap** | Any breaking API change will affect all consumers immediately with no migration path. No backward compatibility guarantees. No mechanism for API deprecation. |
+| **Recommendation** | Add API versioning using URL path prefix (e.g., `/v1/product`, `/v1/basket`, `/v1/order`). Define this in `lib/apigateway.ts` by adding a version resource before service resources. Alternatively, use API Gateway stage variables for version management. Create OpenAPI specs for each API version. |
+| **Evidence** | `lib/apigateway.ts` — routes defined without version prefix: `addResource('product')`, `addResource('basket')`, `addResource('order')` |
 
 #### APP-Q6: Service Discovery
 
 | Field | Value |
 |-------|-------|
 | **Score** | 3 |
-| **Finding** | Cross-service communication uses EventBridge (event-driven, not direct service calls), which naturally decouples services — the basket service publishes to EventBridge bus name `SwnEventBus` via environment variable, not to a hard-coded ordering service endpoint. Within each service, DynamoDB table names are injected via CDK environment variables (`DYNAMODB_TABLE_NAME`, `EVENT_BUSNAME`). No hard-coded service-to-service endpoints exist. |
-| **Gap** | No formal service registry or API catalog. Three separate API Gateways mean consumers must know each gateway's URL independently. No AWS Cloud Map, no App Mesh, no centralized API catalog for discovering available services. |
-| **Recommendation** | Register services in AWS Cloud Map for DNS-based service discovery. Consider publishing an API catalog (using API Gateway's built-in export capabilities) that lists all available endpoints. For agent integration, generate a unified tool catalog documenting all three services' capabilities. |
-| **Evidence** | `lib/microservice.ts` — Environment variables: `DYNAMODB_TABLE_NAME`, `EVENT_BUSNAME`, `EVENT_SOURCE`, `EVENT_DETAILTYPE`. `src/basket/index.js` — `process.env.EVENT_BUSNAME` (not hard-coded). `lib/eventbus.ts` — EventBridge decouples basket→ordering communication. |
+| **Finding** | Services communicate via EventBridge events — no direct HTTP calls between services. The Basket service uses environment variables for EventBridge configuration: `EVENT_SOURCE`, `EVENT_DETAILTYPE`, `EVENT_BUSNAME` (set in `lib/microservice.ts`). DynamoDB table names are passed via `DYNAMODB_TABLE_NAME` environment variable. Services do not hard-code each other's endpoints — the event-driven architecture avoids the need for service-to-service endpoint discovery. |
+| **Gap** | Environment variables for EventBridge configuration contain hard-coded string values (e.g., `EVENT_BUSNAME: "SwnEventBus"`) rather than dynamic references. API Gateway endpoints per service are separate and not discoverable through a service registry or API catalog. |
+| **Recommendation** | Use CDK cross-stack references or SSM Parameter Store for service configuration instead of hard-coded environment variable values. Consider adding an API catalog (e.g., API Gateway export or Backstage service catalog) for endpoint documentation. |
+| **Evidence** | `lib/microservice.ts` — environment variables: `EVENT_BUSNAME: "SwnEventBus"`, `DYNAMODB_TABLE_NAME: basketTable.tableName`; `src/basket/index.js` — `process.env.EVENT_BUSNAME` |
 
 ### Data Platform Modernization
 
@@ -357,40 +357,40 @@ Before adding AI capabilities, address these foundational gaps:
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No unstructured data storage patterns found. No S3 buckets defined in any CDK construct. No file upload handling in any Lambda function. No Textract, Tika, or document parsing libraries in any dependency manifest. The application stores only structured data (product catalog, basket items, orders) in DynamoDB. |
-| **Gap** | No capability to handle unstructured data (product images, order documents, invoices, receipts). The product table schema includes an `imageFile` attribute (per comments in `lib/database.ts`) but no S3 storage or CDN is configured for serving images. |
-| **Recommendation** | Add an S3 bucket for product images and order-related documents. Configure CloudFront for image delivery. For future AI integration, S3-stored product images and documents can be processed by Amazon Textract or indexed into a Bedrock Knowledge Base. |
-| **Evidence** | `lib/database.ts` — Comment: `product : PK: id -- name - description - imageFile - price - category` (references imageFile but no S3). No S3 bucket in any CDK file. No file handling in Lambda functions. |
+| **Finding** | No unstructured data storage capability detected. No S3 buckets defined in CDK. No file upload handlers in Lambda functions. No document processing (no Textract, no PDF parsing). The application exclusively uses DynamoDB for structured data (product catalog, baskets, orders). |
+| **Gap** | No capability to store or process unstructured data (documents, images, files). Product items reference `imageFile` in the schema comments (`lib/database.ts`), but there is no S3 bucket or image storage infrastructure. |
+| **Recommendation** | If product images or documents are needed, create an S3 bucket with CloudFront distribution for image serving. Add pre-signed URL generation in the Product Lambda for secure uploads. Consider Amazon Textract if document processing is needed for returns/invoices. |
+| **Evidence** | `lib/database.ts` — schema comment mentions `imageFile` field but no S3 bucket; no S3 constructs in any CDK file |
 
 #### DATA-Q2: Unified Data Access Layer
 
 | Field | Value |
 |-------|-------|
 | **Score** | 3 |
-| **Finding** | Each microservice has a dedicated `ddbClient.js` module that creates and exports a `DynamoDBClient()` instance. All DynamoDB operations within each service use this shared client. The product service has 6 data access functions, the basket service has 5, and the ordering service has 4 — all using consistent `marshall`/`unmarshall` patterns with the `@aws-sdk/client-dynamodb` and `@aws-sdk/util-dynamodb` packages. Per-service data ownership is maintained (each service accesses only its own table). |
-| **Gap** | No DAO/repository abstraction layer — DynamoDB `marshall`/`unmarshall` calls and raw `TableName`, `Key`, `ExpressionAttributeValues` parameters are spread throughout each service's `index.js`. This creates duplication and makes it harder to change the data access pattern (e.g., adding caching, switching to DynamoDB Document Client). |
-| **Recommendation** | Extract data access logic into per-service repository modules (e.g., `productRepository.js`, `basketRepository.js`, `orderRepository.js`) that encapsulate DynamoDB operations behind a clean interface. This improves testability, reduces duplication, and makes future data layer changes easier. |
-| **Evidence** | `src/product/ddbClient.js`, `src/basket/ddbClient.js`, `src/ordering/ddbClient.js` — Shared DynamoDB client modules. `src/product/index.js` — Direct DynamoDB operations (GetItemCommand, ScanCommand, etc.) with marshall/unmarshall. |
+| **Finding** | Each microservice has a dedicated `ddbClient.js` module that creates a DynamoDB client (`src/product/ddbClient.js`, `src/basket/ddbClient.js`, `src/ordering/ddbClient.js`). Each service imports its client and uses DynamoDB SDK v3 commands directly in the handler (e.g., `GetItemCommand`, `PutItemCommand`, `ScanCommand`). The pattern is consistent across services — dedicated client module + direct SDK usage in handler with `marshall`/`unmarshall` utilities. |
+| **Gap** | No abstraction layer or repository pattern. DynamoDB commands are constructed directly in handler functions, mixing business logic with data access concerns. Each handler builds `params` objects with `TableName`, `Key`, and expression attributes inline. Duplicate patterns exist across services (e.g., scan-all-items pattern appears in all three services). |
+| **Recommendation** | Extract a repository/DAO layer per service (e.g., `productRepository.js`, `basketRepository.js`, `orderRepository.js`) that encapsulates DynamoDB operations. This improves testability, reduces duplication, and creates a cleaner separation of concerns. |
+| **Evidence** | `src/product/ddbClient.js`, `src/basket/ddbClient.js`, `src/ordering/ddbClient.js` — identical DynamoDB client pattern; `src/product/index.js`, `src/basket/index.js`, `src/ordering/index.js` — inline DynamoDB command construction |
 
 #### DATA-Q3: Database Engine Version and EOL
 
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | All databases are DynamoDB — a fully managed serverless database service with no user-configurable engine version. AWS manages all engine versioning, patching, and lifecycle concerns. There is no version to pin and no EOL risk. No RDS, DocumentDB, ElastiCache, or other versioned database engines are used. |
-| **Gap** | No gaps. DynamoDB's serverless model eliminates engine version management entirely. |
-| **Recommendation** | No action needed. DynamoDB's managed lifecycle is a strength. If relational data needs emerge in the future, consider Amazon Aurora Serverless v2 (preferred per preferences) with explicit engine version pinning. |
-| **Evidence** | `lib/database.ts` — DynamoDB `Table` constructs with no engine version parameter (DynamoDB does not have one). No RDS or other versioned database in any CDK file. |
+| **Finding** | All databases are Amazon DynamoDB — a fully managed, serverless database service with no engine version to manage. DynamoDB does not have version pinning, EOL dates, or engine upgrade cycles. AWS manages all underlying infrastructure, patching, and feature updates transparently. |
+| **Gap** | None. DynamoDB's serverless model eliminates engine version lifecycle management concerns entirely. |
+| **Recommendation** | No action needed for DynamoDB engine versioning. Continue using DynamoDB on-demand mode for cost efficiency at current scale. |
+| **Evidence** | `lib/database.ts` — DynamoDB `Table` construct with no engine version parameter (not applicable for DynamoDB) |
 
 #### DATA-Q4: Stored Procedures and Schema Complexity
 
 | Field | Value |
 |-------|-------|
 | **Score** | 4 |
-| **Finding** | DynamoDB is a NoSQL database with no support for stored procedures, triggers, or proprietary SQL. All business logic resides in the application layer (Lambda functions): price calculation (`prepareOrderPayload` in `src/basket/index.js`), data transformation (`marshall`/`unmarshall`), and query construction. No `.sql` files, no stored procedures, no proprietary SQL constructs anywhere in the repository. |
-| **Gap** | No gaps. All business logic is in the application layer, which is the desired state for cloud-native applications. |
-| **Recommendation** | No action needed. Maintain the pattern of keeping business logic in Lambda functions rather than introducing database-level logic. |
-| **Evidence** | `src/basket/index.js` — `prepareOrderPayload()` calculates totalPrice in application code. `src/product/index.js` — All CRUD logic in JavaScript. No `.sql` files in repository. |
+| **Finding** | No stored procedures, triggers, or proprietary SQL constructs. All business logic resides in the Lambda application layer (JavaScript handler functions). DynamoDB is a NoSQL database — it does not support stored procedures, triggers, or SQL. Data access uses DynamoDB API operations (`GetItem`, `PutItem`, `Scan`, `Query`, `UpdateItem`, `DeleteItem`) via AWS SDK v3. No `.sql` files found in the repository. |
+| **Gap** | None. The application architecture cleanly separates business logic (Lambda) from data storage (DynamoDB). |
+| **Recommendation** | No action needed. Continue keeping business logic in the application layer. |
+| **Evidence** | `src/product/index.js`, `src/basket/index.js`, `src/ordering/index.js` — all business logic in Lambda handlers; no `.sql` files in repository |
 
 ### Security Baseline
 
@@ -399,70 +399,70 @@ Before adding AI capabilities, address these foundational gaps:
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No CloudTrail configuration found in any CDK construct. No `aws_cloudtrail.Trail` or equivalent logging infrastructure. Lambda functions use `console.log()` for application-level logging (which flows to CloudWatch Logs by default), but there is no structured audit trail for API calls, data access, or administrative actions. |
-| **Gap** | No CloudTrail means no record of who called which API, who deployed stack changes, or who accessed DynamoDB data. For a P0 e-commerce service handling order and payment data, this is a compliance and security gap. |
-| **Recommendation** | Add a CloudTrail trail in CDK with log file validation enabled and S3 bucket with object lock for immutable storage. Enable CloudTrail data events for DynamoDB to track all read/write operations on the product, basket, and order tables. Enable API Gateway access logging. |
-| **Evidence** | `lib/aws-microservices-stack.ts` — No CloudTrail import or construct. No `Trail` resource in any CDK file. `src/*/index.js` — Only `console.log()` and `console.error()` (no structured audit logging). |
+| **Finding** | No CloudTrail configuration in any CDK file. No `aws_cloudtrail` or equivalent CDK construct. No log file validation, no immutable log storage (S3 Object Lock), no CloudWatch log retention policies defined. Lambda functions produce CloudWatch Logs by default, but there is no structured audit logging or centralized log management. |
+| **Gap** | No ability to audit API Gateway requests, Lambda invocations, DynamoDB operations, or EventBridge events at the infrastructure level. No immutable log trail for compliance or incident investigation. |
+| **Recommendation** | Add CloudTrail with S3 log storage and log file validation enabled. Enable DynamoDB Streams for data change audit logging. Configure CloudWatch Logs retention policies for Lambda function logs (currently unlimited retention = unnecessary cost). Consider CloudWatch Logs Insights for log analysis. |
+| **Evidence** | No CloudTrail resources in `lib/aws-microservices-stack.ts` or any CDK file; no logging configuration in any construct |
 
 #### SEC-Q2: Encryption at Rest
 
 | Field | Value |
 |-------|-------|
 | **Score** | 3 |
-| **Finding** | DynamoDB provides AWS-managed encryption at rest by default using an AWS-owned key. All three tables (`product`, `basket`, `order`) benefit from this default encryption without explicit configuration. However, no customer-managed KMS keys (CMKs) are configured on any resource. |
-| **Gap** | No customer-managed KMS keys. AWS-owned encryption provides baseline protection but does not offer customer control over key rotation, access policies, or audit trails via CloudTrail KMS events. For a P0 service handling order data (payment methods, addresses), customer-managed encryption provides better governance. |
-| **Recommendation** | Create a customer-managed KMS key and apply it to all DynamoDB tables via the `encryption` and `encryptionKey` properties in `lib/database.ts`. Configure key rotation and key policies with least-privilege access. |
-| **Evidence** | `lib/database.ts` — No `encryption` or `encryptionKey` property on Table constructs. DynamoDB default encryption applies automatically. |
+| **Finding** | DynamoDB tables in `lib/database.ts` do not specify an `encryption` property. By default, DynamoDB encrypts all data at rest using AWS-owned keys (no additional configuration needed). This provides encryption at rest but with AWS-managed keys, not customer-managed KMS keys. No explicit `aws_kms_key` resources defined in CDK. SQS queue in `lib/queue.ts` does not specify encryption. |
+| **Gap** | Using AWS-owned keys rather than customer-managed KMS keys. No control over key rotation policies, key access policies, or audit trails. SQS queue messages are not encrypted at rest. No explicit encryption configuration on any resource. |
+| **Recommendation** | Create customer-managed KMS keys and apply them to DynamoDB tables (`encryption: TableEncryption.CUSTOMER_MANAGED`) and SQS queue (`encryptionMasterKey`). This provides key rotation control, access policies, and CloudTrail key usage audit trails. |
+| **Evidence** | `lib/database.ts` — no `encryption` property on Table constructs; `lib/queue.ts` — no encryption on Queue; no `aws_kms_key` in any CDK file |
 
 #### SEC-Q3: API Authentication
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No authentication is configured on any API Gateway endpoint. All three REST APIs (Product Service, Basket Service, Order Service) are completely open to the internet. No Cognito authorizer, no Lambda authorizer, no API key requirement, no IAM authorization, no OAuth2/JWT validation. Any entity can invoke any endpoint without credentials. |
-| **Gap** | Critical security vulnerability. All CRUD operations (including POST /product, DELETE /product/{id}, POST /basket/checkout) are accessible without authentication. An attacker can create/delete products, manipulate baskets, and trigger checkout flows. This blocks production readiness and agent integration (agents need authenticated endpoints). |
-| **Recommendation** | Implement API Gateway authentication immediately. Options (in order of preference): (1) Amazon Cognito authorizer for user-facing endpoints with JWT validation, (2) IAM authorization for service-to-service and agent-to-service calls, (3) Lambda authorizer for custom auth logic. At minimum, add API keys with usage plans for rate limiting while implementing full auth. |
-| **Evidence** | `lib/apigateway.ts` — `new LambdaRestApi(this, 'productApi', {...})` — no `defaultMethodOptions` with authorization. No `addAuthorizer()` calls. No Cognito user pool in any CDK file. |
+| **Finding** | No authentication configured on any of the three API Gateway REST APIs. No Cognito authorizers, no Lambda authorizers, no API key requirements, no IAM authorization. All methods (`GET`, `POST`, `PUT`, `DELETE`) are publicly accessible. The `addMethod()` calls in `lib/apigateway.ts` do not specify any `authorizationType` or `authorizer` options. |
+| **Gap** | Critical security vulnerability — all CRUD endpoints are publicly accessible. Anyone can create, read, update, and delete products, baskets, and orders. The checkout endpoint (`POST /basket/checkout`) is also unauthenticated. Error responses in Lambda handlers expose stack traces (`errorStack: e.stack`) which leaks implementation details. |
+| **Recommendation** | Implement Amazon Cognito User Pool with API Gateway authorizer for user authentication. Add `authorizationType: AuthorizationType.COGNITO` to all API methods. Remove error stack traces from production error responses. Consider API key requirements for partner/service-to-service access. |
+| **Evidence** | `lib/apigateway.ts` — `addMethod('GET')`, `addMethod('POST')`, etc. with no authorization parameters; `src/product/index.js` — `errorStack: e.stack` in error responses |
 
 #### SEC-Q4: Centralized Identity Integration
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No identity provider integration exists. No Amazon Cognito user pool, no OIDC configuration, no SAML federation, no SSO setup. The application has no concept of user authentication — the `userName` field in basket and order operations is a client-provided string with no identity verification. |
-| **Gap** | No centralized identity means no user authentication, no session management, no access control. The `userName` parameter in basket/order operations is trusted from the client without verification — any caller can claim any userName. |
-| **Recommendation** | Implement Amazon Cognito User Pool for user authentication. Configure Cognito as API Gateway authorizer. Use Cognito tokens to derive userName from authenticated identity rather than trusting client-provided values. For agent access, configure IAM-based authorization with Cognito identity pools. |
-| **Evidence** | `lib/apigateway.ts` — No Cognito authorizer. `src/basket/index.js` — `event.pathParameters.userName` used without identity verification. `src/ordering/index.js` — `event.pathParameters.userName` trusted from client. No Cognito in any CDK file. |
+| **Finding** | No identity provider integration. No Amazon Cognito User Pool, no OIDC/SAML configuration, no SSO setup. The application uses `userName` as a plain string parameter (e.g., `GET /basket/{userName}`, `GET /order/{userName}`) with no identity verification — any caller can query any user's basket or orders by guessing usernames. |
+| **Gap** | No centralized identity management. No user authentication or identity verification. The `userName` parameter in basket and order operations is not tied to an authenticated identity — it is a freeform string passed in the URL path. |
+| **Recommendation** | Implement Amazon Cognito User Pool for user identity management. Map `userName` to authenticated Cognito identity (e.g., `event.requestContext.authorizer.claims.sub`). Enforce that users can only access their own baskets and orders by validating the authenticated identity against the `userName` parameter. |
+| **Evidence** | No Cognito resources in any CDK file; `lib/apigateway.ts` — `{userName}` path parameter with no identity binding; `src/basket/index.js` — `event.pathParameters.userName` used without auth validation |
 
 #### SEC-Q5: Secrets Management
 
 | Field | Value |
 |-------|-------|
-| **Score** | 2 |
-| **Finding** | Environment variables used in Lambda functions contain only non-sensitive configuration: DynamoDB table names (`DYNAMODB_TABLE_NAME`), DynamoDB key names (`PRIMARY_KEY`, `SORT_KEY`), and EventBridge configuration (`EVENT_SOURCE`, `EVENT_DETAILTYPE`, `EVENT_BUSNAME`). No hardcoded credentials, API keys, or connection strings found in source code. DynamoDB access uses IAM roles (granted via `table.grantReadWriteData()`). |
-| **Gap** | While no secrets are currently hardcoded, no secrets management infrastructure exists. If the application needs to integrate with external services (payment processing, email, third-party APIs), there is no Secrets Manager or Vault to store those credentials securely. The `removalPolicy: DESTROY` on tables could be considered a form of "insecure configuration." |
-| **Recommendation** | Provision AWS Secrets Manager infrastructure in CDK now, even if not immediately needed. Establish the pattern for future secret storage with automated rotation. This is especially important for agent integration — agents may need API keys or tokens to authenticate with these services. |
-| **Evidence** | `lib/microservice.ts` — `environment: { PRIMARY_KEY: 'id', DYNAMODB_TABLE_NAME: productTable.tableName }` (non-sensitive). IAM grants: `productTable.grantReadWriteData(productFunction)`. No Secrets Manager in CDK. No hardcoded passwords in source code. |
+| **Score** | 3 |
+| **Finding** | No hardcoded secrets detected in source code. Lambda functions use environment variables for non-sensitive configuration: `DYNAMODB_TABLE_NAME`, `PRIMARY_KEY`, `SORT_KEY`, `EVENT_SOURCE`, `EVENT_DETAILTYPE`, `EVENT_BUSNAME`. DynamoDB access uses IAM roles (CDK `grantReadWriteData`) — no database credentials needed. EventBridge access uses IAM roles (`grantPutEventsTo`). |
+| **Gap** | While no secrets are currently needed (IAM-based authentication for all AWS services), there is no Secrets Manager or Vault infrastructure for future secrets needs (e.g., third-party API keys for payment processing, email service credentials). No secrets rotation capability. |
+| **Recommendation** | When external service credentials are needed (payment gateways, email providers), use AWS Secrets Manager with automatic rotation. Define Secrets Manager resources in CDK proactively. Lambda functions can retrieve secrets via the Secrets Manager SDK or Lambda layer. |
+| **Evidence** | `lib/microservice.ts` — environment variables contain non-sensitive config only; `src/product/ddbClient.js` — `new DynamoDBClient()` uses IAM credentials; no hardcoded secrets in any source file |
 
 #### SEC-Q6: Compute Hardening and Patching
 
 | Field | Value |
 |-------|-------|
 | **Score** | 2 |
-| **Finding** | Lambda is managed compute — AWS handles OS-level patching and security updates for the underlying execution environment. However, all three Lambda functions use `Runtime.NODEJS_14_X`, which reached end-of-life in April 2023 and end-of-support in March 2024. No vulnerability scanning is configured (no Dependabot, no Snyk, no AWS Inspector). No dependency audit process exists. |
-| **Gap** | EOL Lambda runtime is a significant security gap. Node.js 14 no longer receives security patches. The `@aws-sdk/client-dynamodb: ^3.55.0` and related packages are from early 2022 and may contain known vulnerabilities. CDK version `2.17.0` is also outdated. |
-| **Recommendation** | Upgrade Lambda runtime to `NODEJS_20_X` or `NODEJS_22_X`. Update all `@aws-sdk/*` dependencies to latest v3 versions. Update `aws-cdk-lib` to latest v2. Enable Dependabot or Snyk for automated dependency vulnerability scanning. Consider using Lambda Powertools for Node.js which includes security best practices. |
-| **Evidence** | `lib/microservice.ts` — `runtime: Runtime.NODEJS_14_X` on all three functions. `src/product/package.json` — `@aws-sdk/client-dynamodb: ^3.55.0`. `package.json` — `aws-cdk-lib: 2.17.0`, `typescript: ~3.9.7`. |
+| **Finding** | Lambda runtime `NODEJS_14_X` is specified in `lib/microservice.ts` for all three functions. Node.js 14.x reached end-of-life in April 2023. AWS Lambda deprecated the Node.js 14 runtime, meaning it no longer receives security patches. No vulnerability scanning configured (no AWS Inspector, no Snyk integration). Lambda manages the runtime environment, but the selected runtime is past EOL. |
+| **Gap** | All three Lambda functions run on an EOL runtime with no security patches. No vulnerability scanning for Lambda function code or dependencies. No hardened runtime configuration. AWS SDK v3 dependencies (`^3.55.0`) are significantly outdated (current is 3.700+). |
+| **Recommendation** | Immediately upgrade Lambda runtime from `NODEJS_14_X` to `NODEJS_20_X` or `NODEJS_22_X` in `lib/microservice.ts`. Update `@aws-sdk` dependencies to latest v3 in all three service `package.json` files. Enable AWS Inspector for Lambda function vulnerability scanning. Run `npm audit` regularly on all service packages. |
+| **Evidence** | `lib/microservice.ts` — `runtime: Runtime.NODEJS_14_X` on all three functions; `src/product/package.json` — `@aws-sdk/client-dynamodb: ^3.55.0`; `src/basket/package.json` — `@aws-sdk/client-eventbridge: ^3.58.0` |
 
 #### SEC-Q7: Application Security Pipeline
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No security scanning tools are integrated into any pipeline (no pipeline exists). No Dependabot configuration (`.github/dependabot.yml`), no Snyk policy (`.snyk`), no SonarQube configuration, no npm audit in build scripts, no SAST tools. The `package.json` `test` script runs Jest but there are no security-focused tests. |
-| **Gap** | Dependencies with known vulnerabilities can be deployed without detection. No automated security gates exist at any point in the development or deployment process. |
-| **Recommendation** | When implementing the CI/CD pipeline (INF-Q11 recommendation): add `npm audit --audit-level=high` as a pipeline stage, configure Dependabot for automated dependency updates, integrate Amazon CodeGuru Reviewer or Semgrep for SAST analysis, and add a security gate that blocks deployment on critical findings. |
-| **Evidence** | No `.github/dependabot.yml`. No `.snyk`. No security scanning in `package.json` scripts. No SonarQube or CodeGuru configuration. No security-related test files. |
+| **Finding** | No CI/CD pipeline exists, therefore no security scanning is integrated into any pipeline. No SAST tools (no SonarQube, Semgrep, CodeGuru). No dependency scanning (no Dependabot configuration, no `.snyk` file, no `npm audit` in any script). No container scanning (no containers to scan). No CDK-nag for IaC security validation. |
+| **Gap** | Complete absence of automated security scanning. Vulnerabilities in dependencies or application code reach production undetected. No security gates in any workflow. |
+| **Recommendation** | Implement security scanning as part of the CI/CD pipeline (see INF-Q11). Add `npm audit` step in build pipeline. Add CDK-nag (`cdk-nag`) as a CDK aspect for IaC security compliance. Configure Dependabot or Renovate for automated dependency updates. Consider Semgrep for SAST scanning of Lambda handler code. |
+| **Evidence** | No CI/CD files in repository; no `.snyk`, no `.dependabot/`, no security scanning configuration; `package.json` — no security-related scripts |
 
 ### Operations & Observability
 
@@ -471,100 +471,109 @@ Before adding AI capabilities, address these foundational gaps:
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No distributed tracing is instrumented. No AWS X-Ray SDK, no OpenTelemetry SDK, no tracing libraries in any Lambda function dependency manifest. No tracing configuration on API Gateway. No trace ID propagation between services. The checkout flow (basket → EventBridge → SQS → ordering) has no mechanism to correlate a request across the three services. |
-| **Gap** | Debugging cross-service failures is impossible without tracing. If a checkout event fails in the ordering Lambda, there is no way to trace it back to the original basket API call. For agent-initiated requests (future state), tracing is essential to understand end-to-end request flows. |
-| **Recommendation** | Enable AWS X-Ray tracing on all Lambda functions (add `tracing: Tracing.ACTIVE` in CDK) and API Gateway stages. Add X-Ray SDK to Lambda dependencies for trace propagation. Propagate trace IDs through EventBridge event metadata and SQS message attributes. Consider adopting Lambda Powertools for Node.js which provides built-in X-Ray integration. |
-| **Evidence** | `src/product/package.json`, `src/basket/package.json`, `src/ordering/package.json` — No X-Ray or OpenTelemetry dependencies. `lib/microservice.ts` — No `tracing` property on `NodejsFunctionProps`. `lib/apigateway.ts` — No `deployOptions.tracingEnabled`. |
+| **Finding** | No distributed tracing instrumentation. No X-Ray SDK, no OpenTelemetry SDK, no tracing libraries in any `package.json`. Lambda functions use only `console.log` for logging. No trace ID propagation between services. The EventBridge → SQS → Lambda flow has no correlation ID to trace a checkout request from the Basket service through to the Ordering service. |
+| **Gap** | No ability to trace requests across service boundaries. Debugging the checkout flow (Basket → EventBridge → SQS → Ordering) requires manually correlating CloudWatch Logs from multiple Lambda functions with no shared trace ID. |
+| **Recommendation** | Enable AWS X-Ray tracing on Lambda functions (`tracing: Tracing.ACTIVE` in CDK). Add `@aws-sdk/client-xray` or use the Lambda X-Ray active tracing feature. Alternatively, adopt OpenTelemetry with the AWS Lambda OpenTelemetry layer for vendor-neutral instrumentation. Propagate a correlation ID through the EventBridge event detail for end-to-end tracing. |
+| **Evidence** | `src/product/package.json`, `src/basket/package.json`, `src/ordering/package.json` — no tracing SDK dependencies; `lib/microservice.ts` — no `tracing` property on Lambda functions |
 
 #### OPS-Q2: SLO Definitions
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No SLO definitions found anywhere in the repository. No CloudWatch alarms, no SLO configuration files, no error budget tracking, no availability or latency targets defined. |
-| **Gap** | Without SLOs, there is no objective measure of whether the service is meeting user expectations. For a P0 service, SLOs are critical for prioritizing operational investments and detecting degradation. |
-| **Recommendation** | Define SLOs for critical user journeys: (1) Product listing latency (p99 < 500ms), (2) Checkout success rate (> 99.5%), (3) Order query availability (> 99.9%). Implement as CloudWatch composite alarms with error budget tracking. |
-| **Evidence** | No CloudWatch alarm resources in any CDK file. No SLO definition files. No error budget configuration. |
+| **Finding** | No SLO definitions found. No CloudWatch alarms, no error rate thresholds, no latency percentile targets, no error budget tracking. No SLO configuration files or dashboards. For a P0 service, this is a critical gap — there is no way to measure whether the service is meeting user expectations. |
+| **Gap** | No formal service level objectives. No measurement of availability, latency, or error rate targets. No error budget to guide operational investment decisions. |
+| **Recommendation** | Define SLOs for each service: e.g., Product API p99 latency < 200ms, Order API availability > 99.9%, Checkout success rate > 99.5%. Create CloudWatch alarms for SLO indicators. Implement error budget tracking. Use CloudWatch Application Signals or create custom SLO dashboards. |
+| **Evidence** | No CloudWatch alarm resources in any CDK file; no SLO definition files in repository |
 
 #### OPS-Q3: Business Metrics
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No custom business metrics are published. All three Lambda functions use `console.log()` for logging, which generates CloudWatch Logs but no custom CloudWatch metrics. No `PutMetricData` calls, no EMF (Embedded Metric Format) logs, no custom dashboards. Only default Lambda metrics (invocations, errors, duration) are available. |
-| **Gap** | No visibility into business outcomes: checkout conversion rates, average order value, product catalog size, basket abandonment. Only infrastructure metrics (Lambda invocations, errors) are available. |
-| **Recommendation** | Publish custom business metrics using CloudWatch EMF (Embedded Metric Format) in Lambda functions: checkouts per minute, average order value, products created, basket add-to-cart events. Use Lambda Powertools for Node.js metrics utility for simplified EMF integration. Create a CloudWatch dashboard for business KPIs. |
-| **Evidence** | `src/product/index.js`, `src/basket/index.js`, `src/ordering/index.js` — Only `console.log()` and `console.error()` calls. No CloudWatch metrics SDK imports. No `PutMetricData` or EMF patterns. |
+| **Finding** | No custom business metrics published. Lambda functions use `console.log` for operational logging but do not emit CloudWatch custom metrics. No `putMetricData` calls. No tracking of business outcomes such as: orders created per minute, checkout success/failure rate, basket abandonment rate, total order value. Only default Lambda metrics (invocations, duration, errors) are available. |
+| **Gap** | No business outcome visibility. Cannot measure whether the e-commerce platform is delivering value. Default infrastructure metrics (CPU, memory, invocations) indicate system health but not business health. |
+| **Recommendation** | Add CloudWatch custom metrics for key business events: `OrderCreated`, `CheckoutInitiated`, `CheckoutFailed`, `BasketAbandoned`, `TotalOrderValue`. Use CloudWatch Embedded Metric Format (EMF) in Lambda for zero-overhead metric publishing. Create a business dashboard showing order volume, revenue, and error rates. |
+| **Evidence** | `src/product/index.js`, `src/basket/index.js`, `src/ordering/index.js` — only `console.log` and `console.error` statements; no `putMetricData` or EMF format logging |
 
 #### OPS-Q4: Anomaly Detection and Alerting
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No alerting or anomaly detection configured. No CloudWatch alarms in any CDK construct. No SNS topics for notifications. No PagerDuty, OpsGenie, or other incident management integration. No composite alarms, no anomaly detection models. |
-| **Gap** | No proactive detection of issues. If error rates spike, latency increases, or the checkout flow breaks, there is no automated notification. Issues are discovered only when users report them. |
-| **Recommendation** | Add CloudWatch alarms for: (1) Lambda error rate > 1% per function, (2) Lambda p99 duration > 3 seconds, (3) SQS `ApproximateAgeOfOldestMessage` > 60 seconds (checkout backlog), (4) DynamoDB throttled requests > 0. Route alarms to an SNS topic connected to a team notification channel. Enable CloudWatch anomaly detection on error rates for adaptive alerting. |
-| **Evidence** | No `Alarm` construct in any CDK file. No `aws_cloudwatch` imports beyond what CDK uses internally. No SNS topic for alerting. No incident management configuration. |
+| **Finding** | No alerting configured. No CloudWatch alarms, no anomaly detection, no composite alarms. No PagerDuty, OpsGenie, or SNS notification integration. No error rate or latency thresholds defined. A failed deployment, Lambda error spike, or SQS DLQ growth would go unnoticed. |
+| **Gap** | Complete absence of alerting. Production issues are only discoverable through manual log inspection. No proactive notification for error spikes, latency degradation, or checkout failures. |
+| **Recommendation** | Create CloudWatch alarms for: Lambda error rate > 1%, Lambda p99 duration > 5s, SQS `ApproximateNumberOfMessagesVisible` > 100 (queue backup), DynamoDB throttled requests > 0. Add SNS topic for alarm notifications. Consider CloudWatch anomaly detection for baseline-adaptive alerting on key metrics. |
+| **Evidence** | No CloudWatch alarm resources in any CDK file; no SNS topics; no alerting configuration |
 
 #### OPS-Q5: Deployment Strategy
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No deployment strategy exists. Deployment is performed manually via `cdk deploy`, which performs a direct CloudFormation stack update. Lambda function code is updated to all traffic immediately with no canary, blue/green, or linear deployment. No CodeDeploy configuration, no Lambda aliases, no traffic shifting, no automated rollback. |
-| **Gap** | Any deployment goes directly to all production traffic with no safety net. If a code change introduces a regression, all users are impacted immediately with no automated rollback. For a P0 e-commerce service, this is a high-risk operational gap. |
-| **Recommendation** | Implement Lambda deployment preferences using AWS CodeDeploy integration: configure `currentVersionOptions` and `autoDeploymentGroup` in CDK for canary deployments (10% traffic for 5 minutes, then 100%). Add CloudWatch alarms on error rates as rollback triggers. Use API Gateway canary deployments for routing-level traffic shifting. |
-| **Evidence** | No CodeDeploy configuration in CDK. No Lambda aliases or versions. No deployment preferences on `NodejsFunction`. `package.json` — Only `cdk deploy` via manual CLI. |
+| **Finding** | No deployment strategy configured. The only deployment method is manual `cdk deploy` from a developer workstation (documented in `README.md`: "run below command: `cdk deploy`"). No blue/green, canary, or rolling deployments. No Lambda aliases with traffic shifting. No CodeDeploy configuration. No feature flags. A deployment updates all three services simultaneously with no staged rollout. |
+| **Gap** | All-or-nothing production deployments with no safety net. A bad deployment affects all services simultaneously. No automated rollback capability. No canary to detect regressions before full traffic cutover. |
+| **Recommendation** | Implement Lambda alias-based canary deployments using AWS CodeDeploy. Configure `LambdaDeploymentGroup` with `Linear10PercentEvery1Minute` or `Canary10Percent5Minutes` traffic shifting. Add pre/post deployment hooks for automated validation. Use CloudWatch alarms as automatic rollback triggers. |
+| **Evidence** | `README.md` — "run below command: `cdk deploy`"; no CodeDeploy resources in CDK; no deployment configuration files |
 
 #### OPS-Q6: Integration Testing
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | A test file exists at `test/aws-microservices.test.ts` but is entirely commented out. The file contains a single test case (`'SQS Queue Created'`) with all assertions commented. Jest configuration exists (`jest.config.js`) pointing to the `test/` directory with `ts-jest` transform, but there are no runnable tests. No integration tests, no API contract tests, no end-to-end tests. |
-| **Gap** | Zero automated test coverage. No regression detection for CDK template changes, API behavior changes, or event schema changes. The EventBridge event contract (`com.swn.basket.checkoutbasket` / `CheckoutBasket`) is undocumented and untested. |
-| **Recommendation** | Implement a testing pyramid: (1) **CDK snapshot tests** — Uncomment and extend `test/aws-microservices.test.ts` to validate CloudFormation template output. (2) **Unit tests** — Test Lambda handler logic (data transformation, error handling) with mocked DynamoDB client. (3) **Integration tests** — Test API Gateway endpoints with test data using real deployed infrastructure. (4) **Contract tests** — Validate EventBridge event schema (`checkoutbasketevents.json` provides a starting point). |
-| **Evidence** | `test/aws-microservices.test.ts` — Entirely commented out. `jest.config.js` — Configured but no runnable tests. `src/basket/checkoutbasketevents.json` — Sample event payload (could serve as contract test fixture). |
+| **Finding** | The test file `test/aws-microservices.test.ts` has all test code commented out. The only active test is an empty placeholder: `test('SQS Queue Created', () => {})`. Jest is configured (`jest.config.js`, `ts-jest`) but no tests execute. No integration tests, no API contract tests, no end-to-end tests. No test scripts that validate deployed endpoints. |
+| **Gap** | Zero automated test coverage. No regression detection capability. Changes to Lambda handlers, DynamoDB access patterns, or EventBridge event schemas cannot be validated automatically. The commented-out test was a CDK assertion test for SQS queue properties — even infrastructure validation is not active. |
+| **Recommendation** | Implement three layers of testing: 1) CDK assertion tests (uncomment and expand `test/aws-microservices.test.ts`) to validate infrastructure. 2) Unit tests for Lambda handler business logic (e.g., `prepareOrderPayload`, `checkoutBasket` logic). 3) Integration tests that invoke deployed API Gateway endpoints and validate responses. Use EventBridge test events (`src/basket/checkoutbasketevents.json` provides sample events). |
+| **Evidence** | `test/aws-microservices.test.ts` — all tests commented out; `jest.config.js` — jest configured but no tests pass; `src/basket/checkoutbasketevents.json` — sample events available but not used in tests |
 
 #### OPS-Q7: Incident Response Automation
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No incident response automation exists. No runbooks (markdown, YAML, or SSM Automation documents), no self-healing patterns, no automated remediation Lambda functions, no Step Functions for incident workflows. No DLQ (dead-letter queue) for failed SQS messages — failed checkout events are silently dropped after SQS retry exhaustion. |
-| **Gap** | All incident response is ad hoc. Failed checkout events (SQS messages that can't be processed) are lost with no notification or remediation. No documented procedures for common failure scenarios (DynamoDB throttling, Lambda timeouts, EventBridge delivery failures). |
-| **Recommendation** | Add a dead-letter queue (DLQ) for the `OrderQueue` to capture failed checkout events. Create an alarm on DLQ message count. Write operational runbooks for: (1) failed checkout remediation, (2) DynamoDB throttling response, (3) Lambda error spike investigation. Implement SSM Automation documents for automated remediation of common issues. |
-| **Evidence** | `lib/queue.ts` — `new Queue(this, 'OrderQueue', {...})` — No `deadLetterQueue` property. No runbook files in repository. No SSM documents. No remediation Lambda functions. |
+| **Finding** | No incident response automation. No runbooks (markdown, YAML, or JSON). No SSM Automation documents. No self-healing patterns. No Lambda-based remediation functions. No Step Functions for incident workflows. No on-call integration (PagerDuty, OpsGenie). |
+| **Gap** | All incident response is ad hoc. When production issues occur, there is no documented procedure, no automated remediation, and no escalation path. For a P0 service, this is a significant operational risk. |
+| **Recommendation** | Create operational runbooks for common scenarios: Lambda throttling, DynamoDB throttling, SQS queue backup, API Gateway 5xx spike. Implement SSM Automation documents for common remediations. Define incident escalation procedures. Consider adding a DLQ consumer Lambda that automatically retries or alerts on failed orders. |
+| **Evidence** | No runbook files in repository; no SSM resources in CDK; no incident response documentation |
 
 #### OPS-Q8: Observability Ownership
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No observability ownership structure exists. No per-service dashboards, no alarms with named owners, no CODEOWNERS file, no team attribution on any resources. No SLO definitions with team ownership. No documentation of who is responsible for each service's operational health. |
-| **Gap** | No clear ownership means monitoring gaps are not detected and addressed. When the checkout flow fails, there is no defined escalation path or on-call rotation. |
-| **Recommendation** | Create a CODEOWNERS file mapping each service directory to a team. Define per-service CloudWatch dashboards with key metrics. Tag all resources with `team` and `service` tags. Define on-call ownership for each service. |
-| **Evidence** | No `.github/CODEOWNERS` file. No CloudWatch dashboard definitions in CDK. No team tags on any resources. No ownership documentation. |
+| **Finding** | No observability ownership defined. No CODEOWNERS file. No per-service dashboards. No alarm ownership attribution. No team tags on any resources. No SLO definitions with team ownership. The repository has a single author (per README) with no team structure indicated. |
+| **Gap** | No clear ownership of monitoring, alerting, or incident response. No team attribution for observability assets. When alarms fire (once they exist), there is no defined owner to respond. |
+| **Recommendation** | Create a CODEOWNERS file mapping service directories to team members. Define observability ownership per service. Create per-service CloudWatch dashboards (Product, Basket, Ordering). Add owner tags to resources. Establish on-call rotation for P0 service ownership. |
+| **Evidence** | No CODEOWNERS file; no dashboard definitions; no team tags on any resource |
 
 #### OPS-Q9: Resource Tagging Governance
 
 | Field | Value |
 |-------|-------|
 | **Score** | 1 |
-| **Finding** | No tags are applied to any CDK resource. DynamoDB tables, Lambda functions, API Gateways, EventBridge bus, SQS queue — all created without any tags. No `Tags.of()` calls in CDK, no default tags, no tag enforcement. |
-| **Gap** | No cost allocation, no ownership attribution, no environment identification. AWS cost reports cannot attribute costs to this service. During incidents, there is no way to identify which team owns which resources. |
-| **Recommendation** | Add default tags at the stack level in `bin/aws-microservices.ts` using `Tags.of(app).add()`: `Environment` (prod/staging/dev), `Service` (aws-microservices), `Team` (owning team), `CostCenter`, `Priority` (P0). This propagates tags to all resources automatically. Add AWS Config rule `required-tags` for enforcement. |
-| **Evidence** | `lib/aws-microservices-stack.ts` — No `Tags` import or usage. `lib/database.ts` — No tags on Table constructs. `lib/microservice.ts` — No tags on Lambda functions. `bin/aws-microservices.ts` — No `Tags.of()` calls. |
+| **Finding** | No resource tags defined on any CDK construct. No `cdk.Tags.of(this).add()` calls. No `default_tags` equivalent. No tag enforcement. DynamoDB tables, Lambda functions, API Gateway, EventBridge bus, and SQS queue are all untagged. No cost allocation tags, no environment tags, no ownership tags. |
+| **Gap** | No ability to track costs per service, identify resource ownership during incidents, or enforce budget controls. Resources are not identifiable by environment (dev/staging/prod), service, team, or cost center. |
+| **Recommendation** | Add resource tags using CDK's `cdk.Tags.of(this).add()` at the stack level. Define standard tags: `Environment`, `Service`, `Team`, `CostCenter`, `Priority`. Apply tags in `lib/aws-microservices-stack.ts` constructor. Consider AWS Config rules for tag enforcement (`required-tags`). |
+| **Evidence** | `lib/aws-microservices-stack.ts` — no tag definitions; `lib/database.ts`, `lib/microservice.ts`, `lib/queue.ts`, `lib/eventbus.ts`, `lib/apigateway.ts` — no tags on any construct |
 
+---
 
 ## Learning Materials
 
-Learning materials are included for the 2 triggered pathways: **Move to Modern DevOps** and **Move to AI**.
+### Move to Modern DevOps (Triggered)
 
-| Pathway | Learning Resources |
-|---------|-------------------|
-| **Move to Modern DevOps** | [Move to Modern DevOps](https://skillbuilder.aws/learning-plan/1FGEQKGPQD) · [Getting Started with DevOps on AWS](https://skillbuilder.aws/learn/R4B13K95YQ) |
-| **Move to AI** | [Move to AI](https://skillbuilder.aws/learning-plan/VDFEE4ACCV) · [Amazon Bedrock Getting Started](https://skillbuilder.aws/learn/63KTRM86DQ) · [Introduction to Agentic AI on AWS](https://skillbuilder.aws/learn/DNBD5MT8ZD) |
+- [Move to Modern DevOps — AWS SkillBuilder Learning Plan](https://skillbuilder.aws/learning-plan/1FGEQKGPQD)
+- [Getting Started with DevOps on AWS](https://skillbuilder.aws/learn/R4B13K95YQ)
+- [AWS CDK Pipelines Documentation](https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html)
+- [GitOps on AWS — EKS Workshop](https://www.eksworkshop.com/docs/automation/gitops/) (applicable patterns for CDK/Terraform GitOps)
+
+### Move to AI (Triggered)
+
+- [Move to AI — AWS SkillBuilder Learning Plan](https://skillbuilder.aws/learning-plan/VDFEE4ACCV)
+- [Amazon Bedrock Getting Started](https://skillbuilder.aws/learn/63KTRM86DQ)
+- [Introduction to Agentic AI on AWS](https://skillbuilder.aws/learn/DNBD5MT8ZD)
+- [Building with Amazon Bedrock Agents](https://docs.aws.amazon.com/bedrock/latest/userguide/agents.html)
+- [Amazon Bedrock AgentCore Documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/agentcore.html)
 
 ---
 
@@ -572,27 +581,32 @@ Learning materials are included for the 2 triggered pathways: **Move to Modern D
 
 | File Path | Referenced By | Context |
 |-----------|--------------|---------|
-| `bin/aws-microservices.ts` | INF-Q9, INF-Q10 | CDK app entry point; no explicit region configuration |
-| `cdk.json` | INF-Q10 | CDK configuration with feature flags |
-| `jest.config.js` | OPS-Q6 | Jest configuration (tests exist but are commented out) |
-| `package.json` | INF-Q10, INF-Q11, SEC-Q6, SEC-Q7 | Root dependencies: aws-cdk-lib 2.17.0, TypeScript ~3.9.7; no security scanning scripts |
-| `lib/apigateway.ts` | INF-Q5, INF-Q6, SEC-Q3, SEC-Q4, APP-Q5, APP-Q6 | Three LambdaRestApi gateways with no auth, no throttling, no versioning, no WAF |
-| `lib/aws-microservices-stack.ts` | INF-Q10, SEC-Q1, OPS-Q8, OPS-Q9 | Stack composition; no CloudTrail, no tags, no observability |
-| `lib/database.ts` | INF-Q2, INF-Q8, SEC-Q2, DATA-Q1, DATA-Q3, OPS-Q9 | Three DynamoDB tables with PAY_PER_REQUEST, DESTROY removal policy, no PITR, no KMS, no tags |
-| `lib/eventbus.ts` | INF-Q3, INF-Q4, APP-Q3, APP-Q6 | EventBridge bus (SwnEventBus) and CheckoutBasketRule routing to SQS |
-| `lib/microservice.ts` | INF-Q1, INF-Q7, SEC-Q5, SEC-Q6, OPS-Q9 | Three Lambda functions with NODEJS_14_X runtime, environment variables, no tracing, no tags |
-| `lib/queue.ts` | INF-Q4, OPS-Q7 | SQS OrderQueue with 30s visibility timeout, no DLQ |
-| `src/basket/checkoutbasketevents.json` | OPS-Q6 | Sample EventBridge event payload (potential contract test fixture) |
-| `src/basket/ddbClient.js` | DATA-Q2 | DynamoDB client module for basket service |
-| `src/basket/eventBridgeClient.js` | INF-Q4, APP-Q3 | EventBridge client module for async event publishing |
-| `src/basket/index.js` | APP-Q2, APP-Q3, APP-Q4, DATA-Q4, OPS-Q1, OPS-Q3 | Basket Lambda handler: CRUD + checkout with EventBridge publish, console.log only |
-| `src/basket/package.json` | APP-Q1, OPS-Q1 | Basket dependencies: @aws-sdk/client-dynamodb ^3.55.0, @aws-sdk/client-eventbridge ^3.58.0 |
-| `src/ordering/ddbClient.js` | DATA-Q2 | DynamoDB client module for ordering service |
-| `src/ordering/index.js` | APP-Q2, APP-Q3, APP-Q4, DATA-Q4, OPS-Q1, OPS-Q3 | Ordering Lambda handler: SQS/EventBridge/API Gateway invocation routing, console.log only |
-| `src/ordering/package.json` | APP-Q1, OPS-Q1 | Ordering dependencies: @aws-sdk/client-dynamodb ^3.58.0 |
-| `src/product/ddbClient.js` | DATA-Q2 | DynamoDB client module for product service |
-| `src/product/index.js` | APP-Q2, APP-Q3, DATA-Q2, DATA-Q4, OPS-Q1, OPS-Q3 | Product Lambda handler: full CRUD with DynamoDB, console.log only |
-| `src/product/package.json` | APP-Q1, OPS-Q1 | Product dependencies: @aws-sdk/client-dynamodb ^3.55.0 |
-| `test/aws-microservices.test.ts` | OPS-Q6 | Entirely commented-out test file — no runnable tests |
-| `README.md` | Quick Agent Wins (RAG) | Architecture description, API endpoint documentation, deployment instructions |
-| `tsconfig.json` | APP-Q1 | TypeScript configuration (ES2018 target) |
+| `lib/aws-microservices-stack.ts` | INF-Q5, INF-Q10, OPS-Q9 | Main CDK stack composing all constructs; no VPC, no tags |
+| `lib/database.ts` | INF-Q2, INF-Q8, INF-Q9, DATA-Q1, DATA-Q2, DATA-Q3, DATA-Q4 | DynamoDB table definitions (product, basket, order); RemovalPolicy.DESTROY; PAY_PER_REQUEST; no PITR |
+| `lib/microservice.ts` | INF-Q1, INF-Q7, APP-Q2, APP-Q6, SEC-Q6, OPS-Q1 | Lambda function definitions; Runtime.NODEJS_14_X; environment variables; no concurrency config; no tracing |
+| `lib/apigateway.ts` | INF-Q5, INF-Q6, APP-Q5, SEC-Q3, SEC-Q4 | Three API Gateway REST APIs; no auth, no throttling, no versioning, no WAF |
+| `lib/eventbus.ts` | INF-Q3, INF-Q4, APP-Q3, APP-Q6 | EventBridge bus + CheckoutBasketRule; SQS target; no DLQ; no archive |
+| `lib/queue.ts` | INF-Q4, INF-Q7 | SQS OrderQueue; visibilityTimeout 30s; batchSize 1; no DLQ; no encryption |
+| `bin/aws-microservices.ts` | INF-Q10 | CDK app entry point; no environment-specific configuration |
+| `src/product/index.js` | APP-Q1, APP-Q3, DATA-Q2, DATA-Q4, SEC-Q3, OPS-Q3 | Product Lambda handler; CRUD operations; inline DynamoDB commands; error stack exposure |
+| `src/product/ddbClient.js` | DATA-Q2 | Product DynamoDB client module |
+| `src/product/package.json` | APP-Q1, SEC-Q6, OPS-Q1 | @aws-sdk/client-dynamodb ^3.55.0; no tracing SDK |
+| `src/basket/index.js` | APP-Q3, APP-Q4, INF-Q3, DATA-Q2, DATA-Q4, OPS-Q3 | Basket Lambda handler; checkout flow; EventBridge publish; async pattern |
+| `src/basket/ddbClient.js` | DATA-Q2 | Basket DynamoDB client module |
+| `src/basket/eventBridgeClient.js` | INF-Q4, APP-Q3 | EventBridge client for checkout event publishing |
+| `src/basket/package.json` | APP-Q1, SEC-Q6 | @aws-sdk/client-eventbridge ^3.58.0 |
+| `src/basket/checkoutbasketevents.json` | OPS-Q6 | Sample EventBridge events for testing (not used in automated tests) |
+| `src/ordering/index.js` | APP-Q3, APP-Q4, DATA-Q2, DATA-Q4, OPS-Q3 | Ordering Lambda handler; SQS + EventBridge + API Gateway invocation patterns |
+| `src/ordering/ddbClient.js` | DATA-Q2 | Ordering DynamoDB client module |
+| `src/ordering/package.json` | APP-Q1, SEC-Q6 | @aws-sdk/client-dynamodb ^3.58.0 |
+| `test/aws-microservices.test.ts` | OPS-Q6 | Test file with all tests commented out; empty placeholder test only |
+| `jest.config.js` | OPS-Q6 | Jest configuration; test runner configured but no tests execute |
+| `package.json` | INF-Q10, INF-Q11, APP-Q1 | Root package.json; aws-cdk-lib 2.17.0; typescript ~3.9.7; no deploy script |
+| `README.md` | INF-Q11, OPS-Q5 | Manual `cdk deploy` instructions; architecture documentation |
+| `cdk.json` | INF-Q10 | CDK configuration; feature flags; app entry point |
+| `tsconfig.json` | APP-Q1 | TypeScript compiler configuration; ES2018 target |
+
+
+
+
+

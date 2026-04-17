@@ -1,22 +1,23 @@
 # Agentic Assessment Orchestrator
 
-> Automated assessment of your service portfolio for agentic AI readiness and cloud-native modernization — two dedicated assessments (ARA + MOD) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, and consolidated reports.
+> Automated assessment of your service portfolio for agentic AI readiness and cloud-native modernization — two dedicated assessments (ARA + MOD) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, a unified bridge report, and consolidated reports.
 
-This project provides four [AWS Transform](https://docs.aws.amazon.com/transform/) (ATX) custom transformation definitions and a [Kiro](https://kiro.dev) Power that orchestrates them across multiple repositories.
+This project provides five [AWS Transform](https://docs.aws.amazon.com/transform/) (ATX) custom transformation definitions and a [Kiro](https://kiro.dev) Power that orchestrates them across multiple repositories.
 
 ## Architecture
 
 There are two layers:
 
-1. **ATX Custom Transformation Definitions** — the assessment logic published to your AWS Transform registry (4 TDs)
+1. **ATX Custom Transformation Definitions** — the assessment logic published to your AWS Transform registry (5 TDs)
 2. **Kiro Power** — an orchestrator that reads `portfolio-config.yaml`, classifies repos, generates ATX configs, spawns parallel subagents, and consolidates reports
 
-### Two-Assessment Architecture
+### Two-Assessment Architecture (+ Bridge)
 
 | Assessment | Questions | Scoring | Focus |
 |---|---|---|---|
 | **ARA** (Agentic Readiness) | 43 across 8 sections | BLOCKER / RISK / INFO | Is this system safe for autonomous AI agents? |
 | **MOD** (Modernization Readiness) | 37 across 5 sections | 1-4 scale | How mature is the cloud architecture? |
+| **Bridge** | — | Cross-reference | What work is shared? What's the modernization dividend for agentic readiness? |
 
 Zero question overlap between ARA and MOD. The `assessment_type` field routes which assessments run:
 - `agentic-readiness` → ARA only
@@ -46,6 +47,13 @@ flowchart TB
 
     A_PORT --> A_OUT[📋 ARA Portfolio Report]
     M_PORT --> M_OUT[📋 MOD Portfolio Report]
+
+    A_OUT --> BRIDGE{full + bridge configured?}
+    M_OUT --> BRIDGE
+    BRIDGE -->|Yes| BRIDGE_TD[🟡 Bridge TD]
+    BRIDGE_TD --> BRIDGE_OUT[📋 Bridge Report]
+    BRIDGE -->|No| DONE[✅ Done]
+    BRIDGE_OUT --> DONE
 ```
 
 ### Repo Classification
@@ -116,7 +124,11 @@ flowchart LR
         MR2[repo-b-mod-report.md]
         MR3[portfolio-mod-report.md]
     end
+
+    BRIDGE[📋 portfolio-bridge-report.md]
 ```
+
+> The bridge report is generated at the portfolio root when `assessment_type: full` and `portfolio_bridge` is configured. It cross-references the ARA and MOD portfolio reports to produce shared remediation mappings, agentic readiness delta, and deduplicated findings.
 
 ## Getting Started
 
@@ -141,6 +153,10 @@ atx custom def publish -n portfolio-agentic-readiness --sd portfolio-agentic-rea
 
 atx custom def publish -n portfolio-modernization --sd portfolio-modernization \
   --description "Aggregate MOD reports into portfolio-level roadmap and analysis"
+
+# Bridge (optional — for full assessments)
+atx custom def publish -n portfolio-agentic-modernization-bridge --sd portfolio-agentic-modernization-bridge \
+  --description "Cross-reference portfolio ARA and MOD reports into a unified bridge report"
 ```
 
 Verify: `atx custom def list`
@@ -164,6 +180,7 @@ transformation_definitions:
   modernization: "modernization-assessment"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  portfolio_bridge: "portfolio-agentic-modernization-bridge"  # optional — for full assessments
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
@@ -213,6 +230,9 @@ atx custom def exec -n portfolio-agentic-readiness -p . -g file://atx-portfolio-
 
 # Portfolio MOD (after all individual MOD assessments)
 atx custom def exec -n portfolio-modernization -p . -g file://atx-portfolio-mod-config.yaml -x -t
+
+# Bridge (after both portfolio assessments — full assessment only)
+atx custom def exec -n portfolio-agentic-modernization-bridge -p . -g file://atx-config-bridge.yaml -x -t
 ```
 
 Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution.
@@ -228,12 +248,14 @@ Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution
 │   └── transformation_definition.md
 ├── portfolio-modernization/            # Portfolio MOD TD (dependency-aware roadmap)
 │   └── transformation_definition.md
+├── portfolio-agentic-modernization-bridge/  # Bridge TD (cross-reference ARA + MOD)
+│   └── transformation_definition.md
 ├── agentic-assessment-orchestrator/    # Kiro Power (orchestration logic)
 │   └── POWER.md
 ├── portfolio-config.yaml               # Example portfolio config (full assessment)
 ├── portfolio-config.schema.json        # JSON schema for portfolio config
 ├── example-reports/                    # Generated example reports
-│   ├── v2-full-assessment/             # Full assessment (ARA + MOD) across 5 repos
+│   ├── v2-full-assessment/             # Full assessment (ARA + MOD + Bridge) across 5 repos
 │   └── online-boutique/               # Online Boutique (11 microservices) with delta tracking
 ├── dashboard/                          # HTML dashboards (deployed to CloudFront)
 │   ├── agentic-readiness.html          # ARA dashboard with run selector and delta comparison
@@ -253,6 +275,7 @@ The `example-reports/` directory contains complete sets of reports:
 ```
 example-reports/v2-full-assessment/
 ├── portfolio-config.yaml
+├── ecommerce-platform-v2-bridge-report.md
 ├── agentic-readiness-assessment/
 │   ├── MonoToMicroLegacy-ara-report.md
 │   ├── aws-microservices-ara-report.md
@@ -321,6 +344,11 @@ atx custom def list
 atx custom def delete -n agentic-readiness-assessment
 atx custom def publish -n agentic-readiness-assessment --sd agentic-readiness-assessment \
   --description "Evaluate a repository against 43 agentic readiness criteria (BLOCKER/RISK/INFO)"
+
+# Update bridge TD
+atx custom def delete -n portfolio-agentic-modernization-bridge
+atx custom def publish -n portfolio-agentic-modernization-bridge --sd portfolio-agentic-modernization-bridge \
+  --description "Cross-reference portfolio ARA and MOD reports into a unified bridge report"
 
 # Get details
 atx custom def get -n agentic-readiness-assessment

@@ -1,21 +1,24 @@
 # Agentic Readiness Assessment Report
 
-**Target**: MonoToMicroLegacy
-**Date**: 2026-04-15
+**Target**: MonoToMicroLegacy (./services/unishop-monolith-to-microservices/MonoToMicroLegacy)
+**Date**: 2026-04-17
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
 **Repository Type**: application
-**Agent Scope**: write-enabled
+**Service Archetype**: stateful-crud (auto-detected)
+**Agent Scope**: read-only
 **Priority**: P0
 **Tags**: monolith, java, ec2, decomposition-target
 **Context**: Legacy Java Spring Boot monolith on EC2 with MySQL — primary decomposition target. The agent needs access to order and return data through discrete service APIs.
 
+**Archetype Justification**: The application has MySQL database connections via MyBatis, exposes CRUD operations (POST/GET/DELETE on baskets, POST for users), and manages user-specific data with entity lifecycle fields (creation_date, last_modified_date, active). This matches the stateful-crud archetype.
+
 ---
 
-## Readiness Profile: Not Agent-Integrable
+## Readiness Profile: Remediation Required
 
-**BLOCKERs**: 7 | **RISKs**: 32 | **INFOs**: 10
+**BLOCKERs**: 2 | **RISK-SAFETY**: 8 | **RISK-QUALITY**: 14 | **INFOs**: 13
 
-Exclude from agent toolset or plan major remediation before re-evaluation. With 7 unresolved BLOCKERs spanning authentication, data safety, write-operation integrity, and network security, this system cannot safely support autonomous agent integration — including scoped pilots. A phased remediation plan targeting identity, data classification, and network hardening is required before re-assessment.
+Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days. The two BLOCKERs (AUTH-Q1: no machine identity authentication, DATA-Q1: unclassified PII) represent fundamental gaps that must be addressed before any agent — even a read-only pilot — can safely interact with this system.
 
 ---
 
@@ -23,14 +26,20 @@ Exclude from agent toolset or plan major remediation before re-evaluation. With 
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 7 |
-| RISK | 32 |
-| INFO | 10 |
+| BLOCKER | 2 |
+| RISK-SAFETY | 8 |
+| RISK-QUALITY | 14 |
+| RISK | 4 |
+| INFO | 13 |
 | N/A | 0 |
-| **Total** | **49** |
+| Not Evaluated (extended) | 2 |
+| **Total** | **43** |
 
-**Questions Evaluated**: 49
+**Core Questions Evaluated**: 24
+**Extended Questions Triggered**: 9 (STATE-Q2, STATE-Q7, DATA-Q3, DATA-Q4, DATA-Q5, ENG-Q4, ENG-Q5, API-Q7, API-Q8 — note: API-Q5, API-Q7, API-Q8, DATA-Q7, DISC-Q2, DISC-Q3, OBS-Q3, ENG-Q4 are always-evaluated INFO/extended)
+**Extended Questions Not Triggered**: 2 (API-Q6, STATE-Q4)
 **Questions N/A (repo_type: application)**: 0
+**Service Archetype**: stateful-crud (auto-detected)
 
 ---
 
@@ -39,931 +48,840 @@ Exclude from agent toolset or plan major remediation before re-evaluation. With 
 ### AUTH-Q1: Machine Identity Authentication
 
 - **Severity**: BLOCKER
-- **Finding**: The application has Spring Security OAuth2 configured (`ResourceServerConfig.java` with `@EnableResourceServer`) but `authorizeRequests().anyRequest().permitAll()` — effectively disabling all authentication. No machine identity authentication is enforced. No client credentials flow, no API key authentication, no mTLS. Every endpoint uses `@PreAuthorize("permitAll()")`. The OAuth2 resource server is present in dependencies (`spring-security-oauth2-autoconfigure`, `spring-cloud-starter-oauth2`, `spring-security-jwt`) but the security configuration permits all requests without requiring any credential.
-- **Gap**: No authentication mechanism is enforced. Any caller — human, agent, or attacker — can invoke any endpoint without presenting credentials. There is no way to identify which agent made a call.
+- **Finding**: The application uses Spring Security OAuth2 with `@EnableResourceServer` in `ResourceServerConfig.java`, but the security configuration is entirely disabled: `authorizeRequests().anyRequest().permitAll()`. Every controller method uses `@PreAuthorize("permitAll()")`. There are no service accounts, no machine identity authentication, no API key authentication, no mTLS configuration, and no principal attribution. The OAuth2 framework is present as a dependency but provides zero effective authentication.
+- **Gap**: No machine identity authentication exists. Any caller — human, agent, or malicious actor — can invoke any endpoint without identifying themselves. There is no way to distinguish which agent made a call, and no principal to record in audit logs.
 - **Remediation**:
-  - **Immediate**: Enable OAuth2 resource server validation in `ResourceServerConfig.java` — replace `permitAll()` with `.authenticated()` and configure a JWT issuer (Amazon Cognito or external IdP). Create a Cognito User Pool with an app client using client_credentials grant for machine identity.
-  - **Target State**: All API endpoints require a valid OAuth2 bearer token. Agent identities are registered as Cognito app clients with unique client IDs. Audit logs attribute every request to a specific principal.
-  - **Estimated Effort**: Medium (2–4 weeks)
-  - **Dependencies**: AUTH-Q7 (audit logging requires authenticated principals to log), AUTH-Q2 (scoped permissions require identity to bind to)
-- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`, `build.gradle`, `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (all controllers use `@PreAuthorize("permitAll()")`)
-
-### API-Q4: Idempotent Write Operations ⚡
-
-- **Severity**: BLOCKER
-- **Conditional**: agent_scope is "write-enabled" — evaluated as BLOCKER
-- **Finding**: Write endpoints (`POST /unicorns/basket`, `DELETE /unicorns/basket`, `POST /user`) have no idempotency key support. The basket `INSERT IGNORE` in `UnicornMapper.xml` provides partial duplicate protection via the UNIQUE constraint on `(uuid, unicornUuid)`, but this is a database-level constraint — not an application-level idempotency contract. The user creation endpoint (`POST /user`) generates a random UUID server-side (`UUID.randomUUID().toString()` in `UserServiceImpl.java`) with no client-provided idempotency key — retrying the same POST creates a new user record each time (protected only by the email UNIQUE constraint, which returns a silent `INSERT IGNORE` rather than an idempotency response). No idempotency middleware or decorators exist.
-- **Gap**: No client-facing idempotency key support on any write endpoint. Agent retries on `POST /user` with identical payloads will silently succeed via `INSERT IGNORE` but return inconsistent UUIDs. No `Idempotency-Key` header support.
-- **Remediation**:
-  - **Immediate**: Add an `Idempotency-Key` header to all write endpoints. Implement idempotency middleware that stores the key-to-response mapping (e.g., in a DynamoDB table or MySQL table) and returns the cached response on duplicate requests.
-  - **Target State**: All write endpoints accept a client-provided `Idempotency-Key` header. Duplicate requests with the same key return the original response without side effects. `POST /user` returns the existing user record if the idempotency key matches a previous creation.
-  - **Estimated Effort**: Medium (2–3 weeks)
-  - **Dependencies**: None
-- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (INSERT IGNORE), `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java` (UUID.randomUUID()), `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
-
-### STATE-Q1: Compensation and Rollback ⚡
-
-- **Severity**: BLOCKER
-- **Conditional**: agent_scope is "write-enabled" — evaluated as BLOCKER
-- **Finding**: No compensation or rollback logic for multi-step operations. The basket add/remove operations are single SQL statements (`INSERT IGNORE` / `DELETE`), and the repository layer uses `@Transactional` annotations but only for individual operations — no cross-operation transaction coordination. There is no saga pattern, no compensating transactions, no explicit undo endpoints, no Step Functions with rollback states. If an agent performs a multi-step workflow (e.g., create user → add items to basket → process order), a failure mid-sequence leaves the system in a partial state with no automated recovery.
-- **Gap**: No compensation or rollback mechanism exists for multi-step agent workflows. The application has no concept of workflow-level transactions.
-- **Remediation**:
-  - **Immediate**: Implement explicit undo/compensation endpoints for write operations (e.g., `DELETE /user/{uuid}` to compensate a failed workflow after user creation). For the basket, the existing `DELETE /unicorns/basket` serves as a manual compensation endpoint.
-  - **Target State**: All multi-step write workflows have compensating actions defined. Consider implementing AWS Step Functions with error handling and compensation states for complex agent workflows that span multiple API calls.
-  - **Estimated Effort**: High (4–8 weeks)
-  - **Dependencies**: API-Q4 (idempotency is a prerequisite for safe compensation — you must be able to retry compensation actions)
-- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` (@Transactional on individual ops), `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java`, `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`
-
-### AUTH-Q7: Immutable Audit Logging ⚡
-
-- **Severity**: BLOCKER
-- **Conditional**: agent_scope is "write-enabled" — evaluated as BLOCKER
-- **Finding**: No audit logging is configured in the application. The CloudFormation template defines CloudWatch Logs (`InstanceLogGroup` with 7-day retention) for application stdout (`app.log`), but this captures only `System.out.println()` output and `e.printStackTrace()` stack traces — not structured audit records of authenticated principals performing write operations. There is no CloudTrail configuration in the CloudFormation stack for application-level audit. Logs are not immutable — no S3 object lock, no CloudTrail log file validation, no tamper-evident storage. Since authentication is disabled (AUTH-Q1), there is no principal to log even if audit logging were implemented.
-- **Gap**: No structured audit trail of who performed what write operation and when. Logs are unstructured, mutable, and retain for only 7 days. No immutable storage. No principal attribution.
-- **Remediation**:
-  - **Immediate**: Implement structured audit logging (JSON format) for all write operations, including the authenticated principal, action performed, resource affected, and timestamp. Ship logs to CloudWatch Logs with extended retention (minimum 90 days for compliance). Enable CloudTrail for API-level audit.
-  - **Target State**: Every write operation logs the authenticated principal (agent identity or user identity), the action performed, the resource affected, the request payload hash, and a UTC timestamp. Logs are shipped to S3 with object lock (WORM) for immutability. CloudTrail log file validation is enabled.
-  - **Estimated Effort**: Medium (2–4 weeks)
-  - **Dependencies**: AUTH-Q1 (must have authenticated principals before audit logging is meaningful)
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (InstanceLogGroup with 7-day retention, no CloudTrail), `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (no logging on write operations)
+  - **Immediate**: Enable the existing Spring Security OAuth2 resource server configuration with a real OAuth2 provider (e.g., Amazon Cognito). Replace `permitAll()` with `authenticated()` as the default policy. Create a dedicated Cognito App Client (client_credentials grant) for agent authentication with a unique `client_id` that is logged with every request.
+  - **Target State**: All API endpoints require a valid OAuth2 Bearer token. Agent identities are represented as Cognito App Clients with unique `client_id` values that appear in request logs and CloudTrail.
+  - **Estimated Effort**: Medium (2–4 weeks) — OAuth2 infrastructure exists in dependencies, needs activation and provider configuration.
+  - **Dependencies**: Interacts with AUTH-Q2 (scoped permissions), AUTH-Q6 (audit logging), AUTH-Q7 (identity suspension). Solving AUTH-Q1 enables solutions for all three.
+- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (permitAll config), `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (@PreAuthorize("permitAll()")), `build.gradle` (spring-security-oauth2-autoconfigure dependency)
 
 ### DATA-Q1: Sensitive Data Classification
 
 - **Severity**: BLOCKER
-- **Finding**: No sensitive data classification exists. The `unicorn_user` table contains PII fields (`email`, `first_name`, `last_name`) stored in plaintext in MySQL with no field-level classification, no field-level encryption, and no column-level access controls. No Amazon Macie integration for automated PII detection. No data classification tags on any resources in the CloudFormation template (RDS cluster, S3 buckets, EC2 instances have no classification tags). The `User.java` model exposes all PII fields directly in API responses via Jackson serialization with no redaction or filtering.
-- **Gap**: PII is stored, transmitted, and exposed via API without classification, encryption, or access controls. An agent with read access to the `/user/login` endpoint receives full PII (email, first_name, last_name) in the response body.
+- **Finding**: The `unicorn_user` table stores PII fields: `email` (VARCHAR(64), UNIQUE constraint), `first_name` (VARCHAR(64)), and `last_name` (VARCHAR(64)). The `User.java` model class exposes these fields in API responses via `getEmail()`, `getFirstName()`, `getLastName()` without any classification, masking, or access control. The `POST /user/login` endpoint returns the full User object including PII. There are no data classification tags, no field-level encryption, no column-level access controls, and no Amazon Macie integration.
+- **Gap**: PII (email, first_name, last_name) is stored, processed, and returned in API responses without classification, access controls, or encryption. An agent with read access to the `/user/login` endpoint receives unredacted PII with no governance boundary.
 - **Remediation**:
-  - **Immediate**: Classify all data fields in the `unicorn_user` table. Tag PII fields (email, first_name, last_name) at the database level and in API response documentation. Enable Amazon Macie on the S3 buckets. Add classification tags to CloudFormation resources.
-  - **Target State**: All PII fields are classified, tagged, and subject to field-level access controls. API responses support field-level filtering based on the caller's authorization scope. RDS encryption at rest is enabled. Macie monitors S3 buckets for PII exposure.
-  - **Estimated Effort**: Medium (3–4 weeks)
-  - **Dependencies**: AUTH-Q1 (field-level access controls require authenticated identity to enforce), ENG-Q5 (encryption at rest)
-- **Evidence**: `database/create_tables.sql` (unicorn_user table with PII columns), `src/main/java/com/monoToMicro/core/model/User.java` (PII fields exposed), `../MonoToMicroAssets/MonoToMicroCF.yaml` (no classification tags)
+  - **Immediate**: Classify the `email`, `first_name`, and `last_name` fields as PII in a data classification document. Implement field-level response filtering to exclude PII from agent-accessible responses. Add `@JsonIgnore` to PII fields in `User.java` for agent-facing API responses, or create a separate DTO that excludes PII.
+  - **Target State**: All PII fields are classified and tagged. API responses to agents exclude or mask PII unless explicitly authorized. Field-level encryption is applied to PII at rest in MySQL. Amazon Macie is configured to scan for PII exposure.
+  - **Estimated Effort**: Medium (2–4 weeks for classification and response filtering; 4–8 weeks for field-level encryption).
+  - **Dependencies**: Requires AUTH-Q1 (machine identity) to enforce per-caller PII access controls. Without identity, you cannot restrict which callers see PII.
+- **Evidence**: `database/create_tables.sql` (unicorn_user table with email, first_name, last_name), `src/main/java/com/monoToMicro/core/model/User.java` (PII fields exposed), `src/main/java/com/monoToMicro/rest/controller/UserController.java` (login returns full User object), `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml` (getByEmail returns all user fields)
 
-### DATA-Q2: Data Residency and Sovereignty ⚡
+**Remediation Prioritization**: Resolve AUTH-Q1 (machine identity) first — you cannot enforce data access controls (DATA-Q1) without knowing who is calling. Once identity is in place, implement PII classification and response filtering. Consider scoping the initial agent to read-only operations on the `/unicorns` endpoint (which contains no PII) while remediating both BLOCKERs.
+## RISKs
 
-- **Severity**: BLOCKER
-- **Conditional**: agent_scope is "write-enabled" — evaluated as BLOCKER
-- **Finding**: No data residency or sovereignty controls are documented or enforced. The CloudFormation template deploys to a single AWS region (parameterized, no region restriction) but does not enforce data residency constraints. No GDPR, LGPD, or sector-specific compliance references exist in the codebase. No cross-region replication safeguards. User PII (email, first_name, last_name) stored in the MySQL database could be sent to an LLM endpoint in any jurisdiction by an agent without controls. The DMS replication configuration copies data between MySQL instances but has no region-restriction controls.
-- **Gap**: No data residency policy, no sovereignty controls, no documentation of applicable regulatory requirements. A write-enabled agent could transmit user PII to an LLM provider in a different region/jurisdiction without any guardrails.
-- **Remediation**:
-  - **Immediate**: Document the applicable data residency requirements for this application's user data. Define which regions and services are approved for data processing. Implement an API-level data residency filter that prevents PII from being returned to callers outside the approved region.
-  - **Target State**: Data residency requirements are documented and enforced at the infrastructure level (S3 bucket policies with region restrictions, RDS in approved regions only). Agent configurations specify approved LLM endpoints in the same jurisdiction. PII fields are masked or excluded from agent responses unless the agent's identity has explicit PII access authorization.
-  - **Estimated Effort**: Medium (2–4 weeks)
-  - **Dependencies**: DATA-Q1 (data must be classified before residency controls can be scoped to sensitive fields)
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (no region restrictions, no data residency controls), `database/create_tables.sql` (PII in unicorn_user), `src/main/resources/application.properties`
+### RISK-SAFETY — Must Address for Agent Safety
 
-### ENG-Q6: Cross-Origin and Network Policies
+#### AUTH-Q2: Scoped Permissions (Least Privilege) — RISK-SAFETY
 
-- **Severity**: BLOCKER
-- **Finding**: CORS is configured permissively across multiple locations. `MVCConfig.java` allows all HTTP methods (`HEAD`, `GET`, `PUT`, `POST`, `DELETE`, `PATCH`, `OPTIONS`) on all paths (`/**`) with no origin restriction. `Application.java` also configures CORS allowing `GET`, `POST`, `OPTIONS` on all paths. The `WebSecurityConfigurerAdapter` in `Application.java` ignores all `OPTIONS` requests with an explicit comment: "workaround to get CORS working with this old version, not recommended for production usage!" Security groups in CloudFormation allow inbound 80/443 from `0.0.0.0/0` (entire internet). No WAF, no API Gateway access policies, no network policies restricting agent traffic to specific origins or CIDR ranges.
-- **Gap**: Any origin can call any endpoint with any HTTP method. Network security groups allow unrestricted inbound access from the internet. No origin allowlist, no IP-based restrictions, no WAF rules.
-- **Remediation**:
-  - **Immediate**: Restrict CORS `allowedOrigins` in `MVCConfig.java` to specific known origins (the UI bucket domain and agent platform endpoints). Restrict security group inbound rules to known CIDR ranges. Deploy an API Gateway or ALB in front of the EC2 instance with WAF rules.
-  - **Target State**: CORS is restricted to an explicit allowlist of origins. An API Gateway sits in front of the application with WAF rules enforcing IP-based restrictions, rate limiting, and request validation. Security groups restrict inbound traffic to the API Gateway only — no direct internet access to the EC2 instance. Network policies are documented and discoverable.
-  - **Estimated Effort**: Medium (2–3 weeks)
-  - **Dependencies**: STATE-Q5 (rate limiting should be implemented at the API Gateway level)
-- **Evidence**: `src/main/java/com/monoToMicro/config/MVCConfig.java` (permissive CORS), `src/main/java/com/monoToMicro/Application.java` (CORS + OPTIONS workaround), `../MonoToMicroAssets/MonoToMicroCF.yaml` (EC2SecurityGroup inbound 0.0.0.0/0)
-
----
-
-## RISKs — Proceed with Compensating Controls
-
-### API-Q2: Machine-Readable API Specification
-- **Severity**: RISK
-- **Finding**: No OpenAPI, Swagger, AsyncAPI, GraphQL, or Smithy specification files exist anywhere in the repository. The API is defined solely through Spring Boot `@RestController` and `@RequestMapping` annotations in Java source code. No machine-readable spec is generated or maintained.
-- **Gap**: No machine-readable API specification. Agent tool definitions must be authored manually by inspecting Java source code, creating drift risk.
+- **Severity**: RISK-SAFETY
+- **Finding**: The authorization model is `permitAll()` across all endpoints in `ResourceServerConfig.java`. There are no IAM policies scoping permissions, no role-per-service configuration, no API Gateway resource policies, and no condition keys. Every caller has full access to every endpoint — there are no permission boundaries whatsoever.
+- **Gap**: No least-privilege enforcement. An agent identity (once created via AUTH-Q1 remediation) would inherit access to all endpoints including user PII endpoints, basket modifications, and health/diagnostic endpoints.
 - **Compensating Controls**:
-  - Manually author an OpenAPI 3.0 spec from the existing controller annotations and commit it to the repository.
-  - Use `springdoc-openapi` library to auto-generate an OpenAPI spec from the existing Spring annotations at build time.
-- **Remediation Timeline**: 1–2 weeks
-- **Recommendation**: Add `springdoc-openapi-ui` dependency to `build.gradle` and configure it to auto-generate and serve an OpenAPI 3.0 spec at `/v3/api-docs`.
-- **Evidence**: `build.gradle` (no springdoc/swagger dependency), repository-wide search found no `.yaml`/`.json` API spec files
+  - Deploy an API Gateway in front of the EC2 application with resource policies that restrict the agent's API key to specific read-only paths (e.g., `GET /unicorns` only).
+  - Use network-level controls (security groups) to limit which agent infrastructure can reach the application.
+- **Remediation Timeline**: 30–60 days (implement after AUTH-Q1)
+- **Recommendation**: After enabling OAuth2 authentication (AUTH-Q1), implement role-based access control with Spring Security. Define an `AGENT_READER` role with access limited to `GET /unicorns` and `GET /unicorns/basket/{uuid}`. Deny access to `POST /user`, `POST /user/login`, and write endpoints.
+- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (permitAll), all controller classes (@PreAuthorize("permitAll()"))
 
-### API-Q3: Structured Error Responses
-- **Severity**: RISK
-- **Finding**: Error responses are bare HTTP status codes with no structured error body. All controllers return `ResponseEntity` with only `HttpStatus.BAD_REQUEST` — no error code, error message, or retryable indicator. Exceptions in repositories are caught with `e.printStackTrace()` and return `null`/`false`, which cascades to generic `BAD_REQUEST` responses. The `DataReplicationController.replicate()` method returns `null` on failure instead of a proper error response.
-- **Gap**: Agents cannot distinguish between invalid input, server errors, or retriable failures. All failures appear as `400 Bad Request` with an empty body.
-- **Compensating Controls**:
-  - Implement a global `@ControllerAdvice` exception handler that returns structured JSON error responses with `errorCode`, `message`, and `retryable` fields.
-  - As an interim measure, document known error conditions and expected HTTP status codes for each endpoint.
-- **Remediation Timeline**: 1–2 weeks
-- **Recommendation**: Create a `GlobalExceptionHandler` class with `@ControllerAdvice` that catches all exceptions and returns a standardized error JSON body.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`, `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java`
+#### AUTH-Q3: Action-Level Authorization — RISK-SAFETY
 
-### API-Q5: API Versioning and Deprecation
-- **Severity**: RISK
-- **Finding**: No API versioning exists. Endpoints use bare paths (`/unicorns`, `/user`, `/health`). No `/v1/` URL patterns, no `Accept-Version` headers, no versioning annotations, no changelog files, no deprecation notices.
-- **Gap**: Any breaking API change will silently break agent tool definitions. No versioning contract protects agents from incompatible changes.
+- **Severity**: RISK-SAFETY
+- **Finding**: No action-level authorization exists. All endpoints use `@PreAuthorize("permitAll()")`. There are no ABAC policies, no fine-grained RBAC definitions, no permission matrices, and no `canRead`/`canWrite`/`canDelete` checks in any controller or service class.
+- **Gap**: An agent cannot be granted read-only access to a resource while being denied write/delete access to the same resource type. The basket resource supports GET, POST, and DELETE — all are equally accessible.
 - **Compensating Controls**:
-  - Add URL path-based versioning (`/v1/unicorns`) to all endpoints before any agent integration.
-  - Alternatively, add `Accept-Version` header support with a default version fallback.
-- **Remediation Timeline**: 2–3 weeks
-- **Recommendation**: Introduce `/v1/` prefix to all endpoints. Establish a deprecation policy that requires 90-day notice before removing API versions.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (@RequestMapping("/unicorns")), `src/main/java/com/monoToMicro/rest/controller/UserController.java` (@RequestMapping("/user"))
+  - Use API Gateway method-level authorization to restrict agent API keys to GET methods only.
+  - Configure the agent orchestration layer to only invoke GET endpoints, enforced by the agent tool definitions.
+- **Remediation Timeline**: 30–60 days (implement alongside AUTH-Q2)
+- **Recommendation**: Implement Spring Security method-level authorization with distinct roles for read vs. write operations. Apply `@PreAuthorize("hasRole('READER')")` to GET endpoints and `@PreAuthorize("hasRole('WRITER')")` to POST/DELETE endpoints.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (POST, DELETE, GET all permitAll), `src/main/java/com/monoToMicro/rest/controller/UserController.java` (POST permitAll)
 
-### API-Q7: Asynchronous Operation Support
-- **Severity**: RISK
-- **Finding**: No async patterns found in the application. All operations are synchronous request/response. No background job frameworks (no Celery/Bull/SQS worker equivalent), no polling endpoints, no webhook callbacks, no Step Functions integration, no async Spring patterns (`@Async`, `DeferredResult`, `CompletableFuture`).
-- **Gap**: If any operation exceeds 30 seconds (e.g., bulk basket operations, data replication), agents will hit timeout limits and potentially create orphaned processes.
-- **Compensating Controls**:
-  - For the current simple CRUD operations, synchronous patterns are acceptable — operations should complete in sub-second times.
-  - Implement async patterns when adding longer-running operations (e.g., order processing, bulk operations).
-- **Remediation Timeline**: 30–60 days (before adding complex agent workflows)
-- **Recommendation**: Implement a job submission + status polling pattern for any operation that may exceed 5 seconds. Consider Spring's `@Async` or AWS Step Functions.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (synchronous only), `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` (synchronous replication)
+#### AUTH-Q6: Immutable Audit Logging ⚡ — RISK-SAFETY
 
-### AUTH-Q2: Scoped Permissions (Least Privilege)
-- **Severity**: RISK
-- **Finding**: The CloudFormation template defines an IAM role (`S3Role`/`MonoToMicroRole`) with S3 permissions scoped to specific buckets (`UIBucket`, `AssetBucket`) plus `AmazonSSMManagedInstanceCore` and `CloudWatchAgentServerPolicy` managed policies. However, the application itself has no authorization model — `@PreAuthorize("permitAll()")` on every endpoint. No role-based or resource-scoped permissions exist at the application level.
-- **Gap**: At the application level, there is no permission model. Any authenticated caller (once AUTH-Q1 is fixed) inherits full access to all endpoints and all data.
+- **Severity**: RISK-SAFETY
+- **Conditional**: agent_scope is "read-only" — evaluated as RISK-SAFETY (would be BLOCKER if write-enabled)
+- **Finding**: No audit logging exists. The only logging in the application is `System.out.println` in `HealthController.java` for EC2 instance metadata. No CloudTrail configuration exists (no IaC in the repository). No CloudWatch log retention policies. No immutable log storage. Exception handling uses `e.printStackTrace()` which goes to stderr with no structured format.
+- **Gap**: No audit trail for any API call. If an agent reads user PII or modifies a basket, there is no log recording which principal performed the action, when, or what data was accessed.
 - **Compensating Controls**:
-  - Implement API Gateway resource policies that restrict specific agent identities to specific HTTP methods and paths.
-  - Use IAM policies at the infrastructure level to scope agent access until application-level RBAC is implemented.
+  - Add a Spring Boot request logging filter that records method, path, timestamp, and caller IP for every request to stdout (captured by EC2 instance logs).
+  - Configure CloudWatch Logs agent on EC2 to capture application logs with a 90-day retention policy.
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement Spring Security role-based access control. Define roles (e.g., `AGENT_READ`, `AGENT_WRITE`, `ADMIN`) and map them to endpoint-level `@PreAuthorize` annotations.
-- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (permitAll), `../MonoToMicroAssets/MonoToMicroCF.yaml` (S3Policy scoped to buckets)
+- **Recommendation**: Replace `System.out.println` with SLF4J/Logback structured JSON logging. Add a request interceptor that logs the authenticated principal (after AUTH-Q1), HTTP method, endpoint, timestamp, and response status for every request. Ship logs to CloudWatch Logs with object lock retention. Enable CloudTrail for the AWS account.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (System.out.println), `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` (e.printStackTrace()), `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` (e.printStackTrace())
 
-### AUTH-Q3: Action-Level Authorization
-- **Severity**: RISK
-- **Finding**: No action-level authorization exists. All endpoints use `@PreAuthorize("permitAll()")`. No ABAC policies, no fine-grained RBAC, no permission checks differentiating read vs write operations. An agent that can read unicorns can also add/remove items from any user's basket and create users.
-- **Gap**: No ability to grant an agent read-only access to unicorns while denying basket modifications. All actions are equally permitted.
+#### AUTH-Q7: Agent Identity Suspension — RISK-SAFETY
+
+- **Severity**: RISK-SAFETY
+- **Finding**: No agent identity concept exists in the application. Since all endpoints are `permitAll()`, there is no identity to suspend. There are no API key revocation endpoints, no IAM role deactivation procedures, no service account disable mechanisms, and no Cognito user pool integration.
+- **Gap**: If an agent exhibits anomalous behavior, there is no mechanism to suspend or revoke its access without taking down the entire application or modifying network rules.
 - **Compensating Controls**:
-  - At the API Gateway level, restrict HTTP methods per agent identity (allow GET, deny POST/DELETE).
-  - Implement middleware that checks the caller's role before executing write operations.
+  - Use network-level controls (security group rules) to block agent traffic by source IP as an emergency kill switch.
+  - If API Gateway is added (per AUTH-Q2 compensating control), use API key disabling as the suspension mechanism.
+- **Remediation Timeline**: 30–60 days (implement alongside AUTH-Q1)
+- **Recommendation**: When implementing Cognito App Clients for agent identity (AUTH-Q1), ensure each agent has a unique App Client. Suspension is then achieved by disabling the specific App Client in Cognito without affecting other agents or users.
+- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (no identity model), `build.gradle` (OAuth2 dependency exists but unused)
+
+#### STATE-Q1: Compensation and Rollback ⚡ — RISK-SAFETY
+
+- **Severity**: RISK-SAFETY
+- **Conditional**: agent_scope is "read-only" — evaluated as RISK-SAFETY (would be BLOCKER if write-enabled)
+- **Finding**: No saga patterns, no two-phase commit, no explicit undo endpoints, and no compensating transactions exist in the codebase. Basket operations (`addUnicornToBasket`, `removeUnicornFromBasket`) are simple INSERT/DELETE SQL operations in `UnicornMapper.xml` with no multi-step coordination. User creation in `UserServiceImpl.java` performs a single INSERT with no rollback logic.
+- **Gap**: No compensation or rollback mechanism for any operation. If a multi-step agent workflow fails mid-sequence, there is no way to undo prior steps.
+- **Compensating Controls**:
+  - Scope the agent to read-only operations only (current agent_scope), which eliminates the need for write rollback.
+  - For future write-enabled scope, implement compensating actions at the agent orchestration layer (e.g., agent removes basket item if subsequent step fails).
+- **Remediation Timeline**: 60–90 days (required before expanding to write-enabled scope)
+- **Recommendation**: Before expanding agent_scope to write-enabled, implement explicit undo endpoints (e.g., `DELETE /unicorns/basket` already exists) and document compensating transaction patterns for multi-step workflows.
+- **Evidence**: `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` (no compensation logic), `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (simple INSERT/DELETE)
+
+#### STATE-Q5: Rate Limiting and Throttling — RISK-SAFETY
+
+- **Severity**: RISK-SAFETY
+- **Finding**: No rate limiting exists at any layer. The application runs directly on EC2 (port 8080) with no API Gateway, no WAF, and no application-level rate limiting middleware. There is no `spring-boot-starter-web` rate limiter, no Bucket4j, no Resilience4j rate limiter. The Spring Boot application accepts unlimited concurrent requests.
+- **Gap**: A runaway agent loop or misconfigured agent could send thousands of requests per second directly to the application, potentially overwhelming the EC2 instance and MySQL database.
+- **Compensating Controls**:
+  - Deploy an AWS API Gateway in front of the EC2 application with usage plans and throttling (e.g., 100 requests/second default, 50 requests/second per agent API key).
+  - Configure an AWS WAF rate-based rule to limit requests from any single IP to 2000 per 5-minute window.
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Add API Gateway with throttling as the immediate fix. This also provides the infrastructure for AUTH-Q1 (API key authentication) and AUTH-Q2 (resource policies). For defense in depth, add application-level rate limiting with Bucket4j or Spring Cloud Gateway.
+- **Evidence**: `build.gradle` (no rate limiting dependencies), `src/main/resources/application.properties` (server.port=8080, direct EC2 exposure), absence of any IaC defining API Gateway or WAF
+
+#### DATA-Q2: Data Residency and Sovereignty ⚡ — RISK-SAFETY
+
+- **Severity**: RISK-SAFETY
+- **Conditional**: agent_scope is "read-only" — evaluated as RISK-SAFETY (would be BLOCKER if write-enabled)
+- **Finding**: No data residency documentation or controls exist. The MySQL database endpoint is parameterized via `MONO_TO_MICRO_DB_ENDPOINT` environment variable in `application.properties`, but there are no region constraints, no GDPR/LGPD compliance references, and no cross-region replication controls. The database stores PII (email, names) with no documented residency requirements.
+- **Gap**: If the agent transmits user PII (email, names) to an LLM provider endpoint in a different region or jurisdiction, it may create a compliance violation. The absence of residency documentation means the compliance boundary is unknown.
+- **Compensating Controls**:
+  - Document the AWS region where the MySQL database is deployed and establish a data residency policy.
+  - Configure the agent to use Amazon Bedrock in the same region as the database to ensure PII does not cross regional boundaries.
+- **Remediation Timeline**: 14–30 days (documentation); 30–60 days (enforcement)
+- **Recommendation**: Document data residency requirements for the unicorn_user table PII. If GDPR applies, ensure all agent-LLM communication stays within the same AWS region. Use Amazon Bedrock's regional endpoints to guarantee data locality.
+- **Evidence**: `src/main/resources/application.properties` (MONO_TO_MICRO_DB_ENDPOINT env var, no region constraint), `database/create_tables.sql` (unicorn_user table with PII)
+
+#### DATA-Q6: PII Redaction in Logs — RISK-SAFETY
+
+- **Severity**: RISK-SAFETY
+- **Finding**: No PII redaction exists in any logging path. The application uses `System.out.println` and `e.printStackTrace()` for all logging. Exception handlers in `UnicornRepositoryImpl.java` and `UserRepositoryImpl.java` call `e.printStackTrace()` which dumps full stack traces that may contain user data (email addresses in SQL queries, user objects in method parameters). There is no log scrubbing middleware, no PII masking library, no CloudWatch log filters, and no Amazon Macie integration.
+- **Gap**: If an agent triggers an error on the `/user/login` endpoint, the `e.printStackTrace()` may dump the user's email address into the application's stderr stream. Agent-initiated requests processing PII will leak that PII into observable log surfaces.
+- **Compensating Controls**:
+  - Add a log sanitization filter that redacts email patterns (`[^@]+@[^@]+\.[^@]+`) and name fields from all log output before writing.
+  - Restrict log access to authorized security personnel only.
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Replace all `e.printStackTrace()` calls with SLF4J/Logback structured logging that applies PII masking patterns. Implement a custom Logback encoder that redacts email addresses, names, and other PII patterns. Configure CloudWatch Logs metric filters to alert on PII patterns that escape redaction.
+- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` (e.printStackTrace()), `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` (e.printStackTrace()), `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (System.out.println)
+
+### RISK-QUALITY — Address as Capacity Allows
+
+#### API-Q2: Machine-Readable API Specification — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy specification files exist anywhere in the repository. The API surface is defined exclusively through Spring annotations in Java controller classes (`@RequestMapping`, `@RestController`, `@Controller`). The spec is not auto-generated from annotations — no Springdoc or SpringFox dependencies are present in `build.gradle`.
+- **Gap**: Agent frameworks cannot auto-generate tool definitions from the API. Every integration requires manual tool authoring based on reading Java source code, which will drift from actual behavior over time.
+- **Compensating Controls**:
+  - Manually create agent tool definitions based on the controller annotations until an OpenAPI spec is generated.
+  - Add Springdoc OpenAPI dependency to auto-generate a spec from existing annotations.
+- **Remediation Timeline**: 7–14 days
+- **Recommendation**: Add `springdoc-openapi-ui` dependency to `build.gradle` and annotate controllers with `@Operation` and `@ApiResponse`. This auto-generates an OpenAPI 3.0 spec at `/v3/api-docs` from existing Spring annotations.
+- **Evidence**: `build.gradle` (no springdoc/springfox dependency), absence of any `openapi.yaml`, `swagger.yaml`, or `.graphql` files in the repository
+
+#### API-Q3: Structured Error Responses — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: Error responses use only HTTP status codes with no structured body. Controllers return `ResponseEntity<Void>(HttpStatus.BAD_REQUEST)` for errors — an empty body with a 400 status. There are no error codes, no error messages, no retryable indicators, and no consistent error response format. Success responses return the model object or `HttpStatus.OK`/`HttpStatus.CREATED`.
+- **Gap**: An agent receiving a 400 response cannot determine whether the error is due to invalid input (terminal), a missing resource (terminal), or a transient condition (retryable). The agent must guess, leading to unnecessary retries or premature failures.
+- **Compensating Controls**:
+  - Define error interpretation rules in the agent tool definitions (e.g., "400 = terminal, do not retry; 500 = retryable with backoff").
+  - Add a Spring `@ControllerAdvice` exception handler that returns structured JSON error bodies.
+- **Remediation Timeline**: 7–14 days
+- **Recommendation**: Implement a global `@ControllerAdvice` exception handler that returns a consistent JSON error body: `{"error_code": "BASKET_NOT_FOUND", "message": "...", "retryable": false}`. Map all existing exception paths to structured error responses.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (ResponseEntity<Void>(HttpStatus.BAD_REQUEST)), `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (HttpStatus.BAD_REQUEST with no body)
+
+#### HITL-Q3: Sandbox/Staging Environment — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No separate environment configurations exist in the repository. There is no docker-compose for local testing, no environment-specific application properties (e.g., `application-staging.properties`), no seed data scripts beyond the initial `create_tables.sql`, no synthetic data generators, and no staging environment references.
+- **Gap**: There is no safe environment to test agent behavior before production. The first time an agent interacts with this system will be against live data.
+- **Compensating Controls**:
+  - Create a separate MySQL instance with anonymized data for agent testing.
+  - Use the `MONO_TO_MICRO_DB_ENDPOINT` environment variable to point the application at a test database.
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Create a `docker-compose.yml` with MySQL and the application for local agent testing. Add `application-staging.properties` with a staging database endpoint. Create a seed data script with synthetic (non-PII) test data.
+- **Evidence**: `src/main/resources/application.properties` (single environment config), `database/create_tables.sql` (production seed data only), absence of Docker or environment-specific configuration files
+
+#### DATA-Q3: Selective Query Support — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: The `GET /unicorns` endpoint executes `SELECT * FROM unicorns` with no pagination, filtering, or sorting (per `UnicornMapper.xml`). The `GET /data` endpoint in `DataReplicationController.java` retrieves all baskets via `getAllBaskets()` which also has no pagination. The `GET /unicorns/basket/{userUuid}` endpoint returns all items for a user with no limit.
+- **Gap**: An agent retrieving unicorns gets the entire table in a single response. As the product catalog grows, this will exhaust LLM context windows and increase token costs. There is no way for an agent to request "the first 10 unicorns" or "unicorns under $50".
+- **Compensating Controls**:
+  - Implement pagination at the agent orchestration layer by parsing full responses and processing in chunks.
+  - The current dataset is small (10 unicorn records) — this is not an immediate operational risk but will become one at scale.
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Add pagination parameters (`?limit=20&offset=0`) to the `GET /unicorns` endpoint. Update `UnicornMapper.xml` to use `LIMIT` and `OFFSET` in the SQL query. Add filter parameters for price range and name search.
+- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (SELECT * FROM unicorns, no LIMIT), `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` (getAllBaskets with no pagination)
+
+#### DATA-Q4: System of Record Designations — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No system-of-record designations exist. There is no documentation identifying this application as the authoritative source for unicorn products, user accounts, or basket data. No master data management references, no data ownership documentation, and no conflict resolution logic exist in the codebase.
+- **Gap**: An agent querying multiple systems may encounter conflicting product or user data. Without a golden record designation, the agent cannot determine which source to trust.
+- **Compensating Controls**:
+  - Document in the agent tool definitions that this system is the authoritative source for unicorn product data and user basket data.
+- **Remediation Timeline**: 7–14 days (documentation only)
+- **Recommendation**: Create a data ownership document identifying this monolith as the system of record for unicorns, user accounts, and baskets. As decomposition proceeds, update ownership as each microservice assumes authority for its domain.
+- **Evidence**: Absence of any data ownership or system-of-record documentation in the repository
+
+#### DATA-Q5: Temporal Metadata and Freshness — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: Database tables have `creation_date` (TIMESTAMP DEFAULT CURRENT_TIMESTAMP) and `last_modified_date` (TIMESTAMP NULL) columns in `create_tables.sql`. The `CoreModel.java` base class has `DateTime creationDate` and `DateTime lastModifiedDate` fields with `DateTimeTypeHandler` for UTC conversion. However, both fields are annotated `@JsonIgnore` — they exist in the database but are **not exposed** in API responses. No `Cache-Control` headers, no `X-Data-Age` headers, and no freshness signaling exist.
+- **Gap**: An agent has no way to know when data was last updated. The timestamps exist in the database but are hidden from API consumers. An agent cannot reason about data freshness or detect stale data.
+- **Compensating Controls**:
+  - Remove `@JsonIgnore` from `creationDate` and `lastModifiedDate` in `CoreModel.java` to expose temporal metadata in API responses.
+- **Remediation Timeline**: 7–14 days (simple code change)
+- **Recommendation**: Remove `@JsonIgnore` from temporal fields in `CoreModel.java`, or create response DTOs that include `createdAt` and `updatedAt` fields. Add `Cache-Control` response headers to indicate data freshness.
+- **Evidence**: `database/create_tables.sql` (creation_date, last_modified_date columns), `src/main/java/com/monoToMicro/core/model/CoreModel.java` (@JsonIgnore on creationDate, lastModifiedDate), `src/main/java/com/monoToMicro/config/DateTimeTypeHandler.java` (UTC conversion)
+
+#### DISC-Q1: Schema Versioning and API Contracts — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No schema versioning exists. There are no JSON Schema files, no schema registry, no Avro/Protobuf schemas, and no database migration files (only `create_tables.sql` with no versioning). API URLs have no version prefix (`/unicorns` instead of `/v1/unicorns`). No changelog files, no deprecation notices, and no breaking change detection tools exist.
+- **Gap**: Agent tool schemas will break silently when API changes are deployed. There is no mechanism to detect breaking changes before they affect agent behavior, and no versioning to allow gradual migration.
+- **Compensating Controls**:
+  - Pin agent tool definitions to specific response field expectations and add validation in the agent orchestration layer.
+  - Add OpenAPI spec (per API-Q2 recommendation) with spec diff comparison in any future CI/CD pipeline.
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Add API version prefix (`/v1/`) to all endpoints. Generate an OpenAPI spec and commit it to the repository. Add a schema comparison step to any future CI/CD pipeline to detect breaking changes.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (@RequestMapping("/unicorns") — no version prefix), absence of any schema files or migration tools
+
+#### OBS-Q1: Distributed Tracing and Structured Logging — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No distributed tracing exists — no OpenTelemetry SDK, no AWS X-Ray instrumentation, no `traceparent` header propagation. Logging is exclusively `System.out.println` (in `HealthController.java`) and `e.printStackTrace()` (in repository implementations). Logs are unstructured plain text with no JSON format, no correlation IDs, and no `request_id` fields.
+- **Gap**: When an agent-initiated request fails, there is no way to trace it through the system. The unstructured logs cannot be queried, correlated, or filtered to diagnose agent-specific issues.
+- **Compensating Controls**:
+  - Add SLF4J/Logback with JSON formatting as an immediate improvement to enable log querying.
+  - Add a Spring request interceptor that generates and logs a `request_id` for every inbound request.
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Replace all `System.out.println` and `e.printStackTrace()` with SLF4J logging. Configure Logback with JSON encoder (logstash-logback-encoder). Add AWS X-Ray SDK to `build.gradle` for distributed tracing. Add a Spring `HandlerInterceptor` that generates and propagates `X-Request-Id`.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (System.out.println), `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` (e.printStackTrace()), `build.gradle` (no tracing dependencies)
+
+#### OBS-Q2: Alerting on Error Rates and Latency — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No alerting configuration exists anywhere in the repository. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration, no composite alarms, and no SLO-based alerting. The only health check is the `GET /health/ishealthy` endpoint returning a static string. Spring Boot Actuator is included as a dependency but no custom health indicators or metrics are configured.
+- **Gap**: If the system degrades (high error rates, increased latency), there is no alert to notify operators. Agents will continue calling a degraded system, cascading failures without anyone being notified.
+- **Compensating Controls**:
+  - Configure CloudWatch alarms on EC2 instance metrics (CPU, memory) as a proxy for application health.
+  - Use Spring Boot Actuator's `/actuator/health` endpoint with a monitoring tool to detect application-level issues.
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: Configure CloudWatch alarms for HTTP 5xx error rate > 5% and P99 latency > 2 seconds on the endpoints agents will consume. Integrate with SNS for alert notification. Add custom CloudWatch metrics from the application using the AWS SDK.
+- **Evidence**: `build.gradle` (spring-boot-starter-actuator dependency), `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (basic health endpoints), absence of any CloudWatch alarm configuration
+
+#### ENG-Q1: Infrastructure Governance — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No Infrastructure as Code files exist in the repository. No Terraform, CloudFormation, CDK, Helm, or Kustomize definitions were found. The application runs on EC2 but the infrastructure is not defined as code — there are no peer review requirements for infrastructure changes and no drift detection. The context confirms this is an EC2 deployment with MySQL.
+- **Gap**: The agent-facing integration surface (EC2 instance, security groups, MySQL database) is not governed by IaC. Changes to the infrastructure are manual, unreviewed, and untracked. A misconfigured security group could expose the application without any code review.
+- **Compensating Controls**:
+  - Document the existing infrastructure configuration manually and implement change management procedures.
+  - Implement AWS Config rules to detect drift from the expected configuration.
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement action-level authorization checks in controller methods. Use `@PreAuthorize("hasRole('WRITE')")` for write endpoints and `@PreAuthorize("hasRole('READ')")` for read endpoints.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`, `src/main/java/com/monoToMicro/rest/controller/UserController.java`
+- **Recommendation**: Define the application infrastructure in CloudFormation or CDK: EC2 instance, security groups, RDS MySQL, and (new) API Gateway. Store IaC in this repository. Require PR review for all IaC changes. Enable AWS Config for drift detection.
+- **Evidence**: Absence of any `.tf`, `.cfn.yaml`, `cdk.json`, `Chart.yaml`, or `kustomization.yaml` files in the repository
 
-### AUTH-Q4: Identity Propagation
-- **Severity**: RISK
-- **Finding**: Spring Security OAuth2 libraries are present in dependencies (`spring-boot-starter-security`, `spring-security-oauth2-autoconfigure`, `spring-cloud-starter-oauth2`, `spring-security-jwt`). However, the configuration in `ResourceServerConfig.java` permits all requests without extracting or propagating any user identity. No JWT parsing middleware active, no token exchange, no user context headers (`X-User-Id`, `Authorization Bearer`) propagated through service calls.
-- **Gap**: No identity propagation mechanism. The application cannot distinguish between requests made on behalf of different users or agents.
+#### ENG-Q2: CI/CD with API Contract Testing — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No CI/CD pipeline files exist in the repository. No GitHub Actions, GitLab CI, Jenkins, CodeBuild, or any other pipeline configuration was found. There are no API contract tests, no consumer-driven contract testing (Pact), no OpenAPI spec validation, and no schema comparison tools.
+- **Gap**: API changes can be deployed without any automated validation. Agent tool bindings may break on deployment with no pre-production detection. There is no automated build, test, or deployment process.
 - **Compensating Controls**:
-  - Enable JWT validation in `ResourceServerConfig.java` to extract the `sub` claim from OAuth2 tokens.
-  - Pass user context as a request attribute through the Spring Security context.
+  - Manual deployment with checklist review until CI/CD is implemented.
+  - Document the API contract in agent tool definitions and manually validate after each deployment.
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Configure the OAuth2 resource server to validate and extract JWT claims. Use `SecurityContextHolder` to propagate user identity to service and repository layers.
-- **Evidence**: `build.gradle` (OAuth2 dependencies present but unused), `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (permitAll, no JWT extraction)
+- **Recommendation**: Create a GitHub Actions or CodePipeline CI/CD pipeline. Include build, unit test, API contract test (once OpenAPI spec exists), and deployment stages. Add breaking change detection with OpenAPI diff on PR.
+- **Evidence**: Absence of any `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, or `buildspec.yml` files in the repository
 
-### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-- **Severity**: RISK
-- **Finding**: No distinction between agent-as-self and agent-on-behalf-of-user exists. The application has no identity model at all — all requests are anonymous via `permitAll`. There are no separate IAM roles or API keys for different access modes. No audit log fields distinguish the two modes.
-- **Gap**: No ability to differentiate whether an agent is acting under its own service identity or on behalf of a specific human user. Both modes would be treated identically.
+#### ENG-Q3: Rollback Capability — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No deployment or rollback configuration exists. No blue/green deployment, no CodeDeploy rollback triggers, no Helm rollback, no feature flags, no canary deployment, and no traffic shifting. The application is deployed directly on EC2 with no evident deployment orchestration.
+- **Gap**: If a deployment breaks agent-facing APIs, there is no automated mechanism to roll back to the previous version. Recovery requires manual intervention on the EC2 instance.
 - **Compensating Controls**:
-  - Design the Cognito integration (AUTH-Q1 remediation) with separate app clients for agent-as-self vs agent-on-behalf-of-user.
-  - Include an `X-On-Behalf-Of` header convention for delegated calls.
+  - Maintain a backup of the previous application JAR on the EC2 instance for manual rollback.
+  - Use EC2 AMI snapshots before deployments as a rollback mechanism.
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Implement CodeDeploy with blue/green deployment for the EC2 application. Configure automatic rollback on CloudWatch alarm triggers (e.g., 5xx rate exceeds threshold). Target rollback time: 15 minutes.
+- **Evidence**: Absence of any deployment configuration files, `build.gradle` (bootJar task with launchScript — suggests direct JAR deployment on EC2)
+
+#### ENG-Q4: API Test Coverage — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No test files exist in the repository. While `spring-boot-starter-test` is declared as a `testImplementation` dependency in `build.gradle`, no actual test classes were found. No test directories (`src/test/`), no Postman/Newman collections, no pytest API tests, no REST Assured test classes, and no contract tests exist.
+- **Gap**: There are zero automated tests for the APIs agents will consume. Any code change could break agent-facing endpoints without detection.
+- **Compensating Controls**:
+  - Manually test API endpoints after each deployment using curl or Postman.
+  - Define agent tool definitions with response validation that detects unexpected changes.
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Create integration tests for all agent-facing endpoints using Spring Boot Test with MockMvc or REST Assured. Prioritize tests for `GET /unicorns` and `GET /unicorns/basket/{uuid}` — the endpoints the agent will consume. Include tests for error responses and edge cases.
+- **Evidence**: `build.gradle` (testImplementation('org.springframework.boot:spring-boot-starter-test')), absence of any `src/test/` directory or test files
+
+#### ENG-Q5: Encryption at Rest — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: No encryption at rest configuration exists. No `kms_key_id` settings, no customer-managed KMS keys, and no encryption configuration in IaC (no IaC exists). The MySQL connection string in `application.properties` uses `jdbc:mysql://` with no SSL/TLS parameters (no `useSSL=true`, no `requireSSL=true`). The database stores PII (email, names) and financial data (prices) without evident encryption.
+- **Gap**: Data at rest in the MySQL database (including PII) is not demonstrably encrypted. Data in transit between the application and MySQL is not encrypted. An agent accessing this data through the API is reading from potentially unencrypted storage.
+- **Compensating Controls**:
+  - Enable MySQL encryption at rest using Amazon RDS encryption (if using RDS) or LUKS on EC2 EBS volumes.
+  - Add `useSSL=true&requireSSL=true` to the JDBC connection string for encryption in transit.
+- **Remediation Timeline**: 14–30 days
+- **Recommendation**: If using Amazon RDS, enable encryption at rest with a KMS customer-managed key. Add SSL parameters to the JDBC connection string. If using EC2 with self-managed MySQL, encrypt the EBS volume. Document the encryption configuration in IaC.
+- **Evidence**: `src/main/resources/application.properties` (jdbc:mysql:// with no SSL parameters), absence of any IaC with KMS or encryption configuration
+
+#### AUTH-Q4: Identity Propagation and Delegation — RISK
+
+- **Severity**: RISK
+- **Finding**: No identity propagation exists. Beyond the disabled OAuth2 resource server in `ResourceServerConfig.java`, there is no JWT parsing middleware, no on-behalf-of flows, no token exchange patterns, no Cognito/Okta integration, and no user context headers passed through service calls. The application cannot distinguish between an agent acting under its own identity vs. acting on behalf of a specific user.
+- **Gap**: If an agent queries basket data on behalf of a user, the system has no mechanism to propagate the user's identity or enforce the user's permission scope. The agent's access is undifferentiated.
+- **Compensating Controls**:
+  - In the read-only agent scope, pass user context as a query parameter (e.g., `GET /unicorns/basket/{userUuid}`) rather than relying on identity propagation.
+  - Document that the agent acts under its own service identity for all operations.
 - **Remediation Timeline**: 60–90 days
-- **Recommendation**: Implement two OAuth2 flows: client_credentials for agent-as-self, and authorization_code with token exchange for agent-on-behalf-of-user. Log the distinction in audit records.
-- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`, `src/main/java/com/monoToMicro/Application.java`
+- **Recommendation**: When implementing OAuth2 (AUTH-Q1), add support for JWT token exchange so the system can distinguish agent-as-self vs. agent-on-behalf-of-user. Log both identities in audit records.
+- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (disabled OAuth2), absence of JWT parsing or token exchange logic
 
-### AUTH-Q6: Credential Management
-- **Severity**: RISK
-- **Finding**: Credentials are hardcoded in `application.properties` (`spring.datasource.username: MonoToMicroUser`, `spring.datasource.password: MonoToMicroPassword`). The DB endpoint uses an environment variable (`MONO_TO_MICRO_DB_ENDPOINT`) but username/password are plaintext in the committed file. The CloudFormation template also contains hardcoded MySQL passwords in the `cfn-init` commands (`MonoToMicroPassword`) and in the RDS cluster definition (`MasterUserPassword: MonoToMicroPassword`). DMS endpoints also have hardcoded credentials. No Secrets Manager, no Vault integration.
-- **Gap**: Database credentials are committed to source code in plaintext. CloudFormation template contains hardcoded passwords. No secret rotation mechanism.
-- **Compensating Controls**:
-  - Rotate the hardcoded credentials immediately and move them to AWS Secrets Manager.
-  - Use CloudFormation dynamic references (`{{resolve:secretsmanager:...}}`) for database credentials.
-- **Remediation Timeline**: 1–2 weeks (urgent)
-- **Recommendation**: Create an AWS Secrets Manager secret for the MySQL credentials. Update `application.properties` to use environment variables populated from Secrets Manager at startup. Update CloudFormation to use dynamic references. Enable automatic rotation.
-- **Evidence**: `src/main/resources/application.properties` (plaintext credentials), `../MonoToMicroAssets/MonoToMicroCF.yaml` (hardcoded passwords in cfn-init, RDSCluster, DMS endpoints)
+#### AUTH-Q5: Credential Management — RISK
 
-### AUTH-Q8: Agent Identity Suspension
 - **Severity**: RISK
-- **Finding**: No agent identity suspension mechanism exists. Since authentication is effectively disabled (`permitAll`), there are no agent identities to suspend. No API key revocation endpoints, no service account disable mechanisms, no Cognito user pool management. If an agent misbehaves, the only recourse is to shut down the entire application or block at the network level.
-- **Gap**: No ability to isolate or suspend a misbehaving agent without taking down the entire platform.
+- **Finding**: Database credentials are hardcoded in `application.properties`: `spring.datasource.username: MonoToMicroUser`, `spring.datasource.password: MonoToMicroPassword`. Only the database endpoint is parameterized via `MONO_TO_MICRO_DB_ENDPOINT` environment variable. No AWS Secrets Manager, no HashiCorp Vault, no credential rotation mechanism exists. The password is committed to the Git repository in plain text.
+- **Gap**: Hardcoded credentials in source code are a security vulnerability. A prompt injection attack or agent bug that exposes configuration could leak database credentials. There is no credential rotation, meaning a compromised password requires a code change and redeployment.
 - **Compensating Controls**:
-  - When implementing auth (AUTH-Q1), use Cognito app clients — these can be disabled individually.
-  - Implement IP-based blocking at the security group or WAF level as an emergency control.
-- **Remediation Timeline**: 30–60 days (aligned with AUTH-Q1 remediation)
-- **Recommendation**: Design agent identities as individual Cognito app clients or API Gateway API keys that can be revoked independently. Implement an admin endpoint or runbook for immediate agent suspension.
-- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` (no auth, no identities to suspend)
+  - Rotate the database password and move it to an environment variable as an immediate step (still not ideal but better than hardcoded).
+  - Restrict repository access to limit credential exposure.
+- **Remediation Timeline**: 7–14 days
+- **Recommendation**: Move database credentials to AWS Secrets Manager. Update `application.properties` to use Spring Cloud AWS Secrets Manager integration or environment variable injection from Secrets Manager. Enable automatic credential rotation with a 30-day schedule. Remove hardcoded credentials from the repository and rotate the current password immediately.
+- **Evidence**: `src/main/resources/application.properties` (spring.datasource.username: MonoToMicroUser, spring.datasource.password: MonoToMicroPassword)
 
-### STATE-Q2: Queryable Current State
-- **Severity**: RISK
-- **Finding**: GET endpoints exist for resource state: `GET /unicorns` returns all unicorns, `GET /unicorns/basket/{userUuid}` returns a user's basket. These allow agents to query current state before taking action. However, the query capabilities are limited — no individual unicorn GET by ID (`GET /unicorns/{uuid}`), no user GET endpoint, no basket status endpoint.
-- **Gap**: Partial state queryability. Agents can read product listings and baskets but cannot look up individual resources by ID or query user details.
-- **Compensating Controls**:
-  - Agents can use `GET /unicorns` and filter client-side (acceptable for small datasets).
-  - Add a `GET /unicorns/{uuid}` endpoint for individual resource lookup.
-- **Remediation Timeline**: 1–2 weeks
-- **Recommendation**: Add individual resource GET endpoints (`GET /unicorns/{uuid}`, `GET /user/{uuid}`) to support agent read-before-write patterns.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (GET /unicorns only), `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (GET /unicorns/basket/{userUuid})
+#### STATE-Q2: Queryable Current State — RISK
 
-### STATE-Q3: Concurrency Controls
 - **Severity**: RISK
-- **Finding**: Limited concurrency controls. `UserRepositoryImpl.create()` uses the `synchronized` keyword, providing basic thread-level locking for user creation. The `unicorns_basket` table has a UNIQUE constraint on `(uuid, unicornUuid)` which prevents duplicate basket entries at the database level. However, no optimistic locking exists (no version fields, no ETags, no `If-Match` headers), no `SELECT FOR UPDATE` patterns, no DynamoDB conditional writes.
-- **Gap**: No application-level concurrency controls beyond `synchronized` and UNIQUE constraints. Concurrent agent instances modifying the same basket could create race conditions for operations not protected by UNIQUE constraints.
+- **Finding**: Basic state query support exists via GET endpoints: `GET /unicorns` returns all unicorn products, `GET /unicorns/basket/{userUuid}` returns a user's basket contents, and `GET /health/dbping` returns database connectivity status. However, there are no comprehensive status APIs, no resource versioning, and no ETag support for conditional reads.
+- **Gap**: An agent can query basic resource state but cannot perform conditional reads (If-None-Match), cannot detect concurrent modifications, and has no way to verify the freshness of the data it reads without timestamps (see DATA-Q5).
 - **Compensating Controls**:
-  - The UNIQUE constraint on `unicorns_basket` prevents the most common concurrent-write scenario (duplicate basket items).
-  - Limit agent concurrency to 1 instance per user scope during initial pilot.
+  - The existing GET endpoints provide sufficient read access for a read-only agent pilot.
+  - Add ETag headers in a future iteration for conditional reads.
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add optimistic locking with version fields to database tables. Return `ETag` headers on GET responses and require `If-Match` on write requests.
-- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` (synchronized), `database/create_tables.sql` (UNIQUE constraints)
+- **Recommendation**: Add ETag support (based on `last_modified_date`) to GET responses. Add `If-None-Match` header support to avoid unnecessary data transfer. Expose temporal metadata (see DATA-Q5 recommendation).
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (GET /unicorns), `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (GET /unicorns/basket/{userUuid})
 
-### STATE-Q4: Circuit Breakers and Resilience
+#### STATE-Q7: Infrastructure Capacity for Agent Traffic — RISK
+
 - **Severity**: RISK
-- **Finding**: No circuit breakers or resilience patterns. No Resilience4j, no retry decorators, no exponential backoff, no timeout configurations on the MySQL connection or HTTP clients. Exception handling in repositories is basic `try/catch` with `e.printStackTrace()` — no retry logic, no fallback behavior. The `HealthController.ping()` catches exceptions but only prints "No instance found".
-- **Gap**: If the MySQL database becomes slow or unresponsive, the application will cascade failures to all callers (including agents) with no circuit breaking or degraded-mode behavior.
+- **Finding**: No load test results, no auto-scaling policies, no capacity planning documentation, and no circuit breakers exist. The application runs on a single EC2 instance (confirmed by `HealthController.java` using `EC2MetadataUtils`). There is no evidence of auto-scaling groups, load balancers, or any capacity planning for additional traffic.
+- **Gap**: The single EC2 instance is not sized or tested for agent traffic patterns. Agent-generated traffic (burst reads, exploratory queries, retries) may overwhelm the instance, especially the MySQL connection pool.
 - **Compensating Controls**:
-  - Configure MySQL connection pool timeouts in `application.properties` (e.g., `spring.datasource.hikari.connection-timeout=5000`).
-  - Implement health check monitoring via the existing `/health/dbping` endpoint to detect database issues.
+  - Rate limit agent traffic at API Gateway (see STATE-Q5) to cap maximum requests per second.
+  - Monitor EC2 CPU/memory during initial agent pilot and scale if needed.
 - **Remediation Timeline**: 30–60 days
-- **Recommendation**: Add Resilience4j dependency and implement circuit breakers on all database calls. Configure connection pool timeouts and query timeouts.
-- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` (bare try/catch), `src/main/resources/application.properties` (no timeout config)
-
-### STATE-Q5: Rate Limiting and Throttling
-- **Severity**: RISK
-- **Finding**: No rate limiting at any layer. The application runs directly on EC2 port 8080 behind nginx with no API Gateway, no WAF, no rate limiting middleware. Nginx configuration in CloudFormation is a simple proxy pass (`proxy_pass http://127.0.0.1:8080/`) with no rate limiting directives. No Spring Boot rate limiting library (no `bucket4j`, no `resilience4j-ratelimiter`).
-- **Gap**: A runaway agent loop can DDoS the application at machine speed with no throttling protection.
-- **Compensating Controls**:
-  - Add nginx rate limiting directives (`limit_req_zone`) as an immediate control.
-  - Deploy an API Gateway with usage plans in front of the application.
-- **Remediation Timeline**: 1–2 weeks
-- **Recommendation**: Deploy AWS API Gateway in front of the application with usage plans and throttling limits per API key (agent identity). Set default limits at 100 requests/second with burst to 200.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (nginx proxy_pass, no rate limiting)
-
-### STATE-Q6: Blast Radius and Transaction Limits
-- **Severity**: RISK
-- **Finding**: No configurable transaction limits per agent identity. No `max_records_per_operation`, no `max_spend_per_hour`, no blast radius controls of any kind. The `GET /unicorns` endpoint returns all unicorns with `SELECT *` (no limit). The `DELETE /unicorns/basket` endpoint deletes by specific user+unicorn UUID (naturally bounded), but there is no limit on how many times an agent can call it.
-- **Gap**: No business-level transaction limits. An agent error could repeatedly add/remove basket items or create users without any cap.
-- **Compensating Controls**:
-  - Implement agent-specific API Gateway usage plans with daily/hourly request quotas.
-  - Add application-level rate limiting per user UUID to prevent excessive basket modifications.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement configurable transaction limits at the API Gateway level (per agent identity) and at the application level (per resource scope).
-- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (SELECT * with no LIMIT), `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
-
-### STATE-Q7: Infrastructure Capacity for Agent Traffic
-- **Severity**: RISK
-- **Finding**: The CloudFormation template deploys a single `t3.small` EC2 instance with no auto-scaling group, no load balancer, no capacity planning. The infrastructure is designed for a workshop/demo, not production agent traffic. No load test results or configurations found. The RDS cluster uses `db.r6i.2xlarge` (oversized for demo) but the application tier is severely undersized.
-- **Gap**: A single t3.small instance cannot handle unpredictable agent traffic patterns. No auto-scaling, no redundancy, no load testing.
-- **Compensating Controls**:
-  - Limit agent concurrency to match the single-instance capacity (~10 concurrent requests).
-  - Implement health checks via `/health/ishealthy` and monitor instance metrics.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Deploy the application behind an ALB with an Auto Scaling Group (minimum 2 instances, scale on CPU/request count). Run load tests simulating agent traffic patterns.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (single t3.small EC2Instance, no ASG, no ALB)
-
-### HITL-Q1: Draft/Pending State
-- **Severity**: RISK
-- **Finding**: No draft or pending state concept. The application performs immediate writes — `POST /unicorns/basket` directly inserts into the database, `POST /user` directly creates the user record. No two-step commit, no status-based state machine, no approval workflow. The `EventContext.java` class defines a `State` enum with `PENDING` and `IN_PROGRESS` values, but these states are never used in any controller or service — only `SUCCESS` and `FAILED` are used.
-- **Gap**: All write operations are immediately committed. No draft state for agents to propose changes for human review before execution.
-- **Compensating Controls**:
-  - Implement human-in-the-loop gates at the agent orchestration layer (not the application) for high-risk operations.
-  - Use the existing `EventContext.State.PENDING` enum to implement a pending state in the basket workflow.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement a `status` field on basket and user records that supports `DRAFT`/`PENDING`/`CONFIRMED` states. Write operations create records in `DRAFT` status; a separate confirmation endpoint commits them.
-- **Evidence**: `src/main/java/com/monoToMicro/core/events/EventContext.java` (PENDING/IN_PROGRESS defined but unused), `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (immediate writes)
-
-### HITL-Q2: Configurable Approval Gates
-- **Severity**: RISK
-- **Finding**: No configurable approval gates. No approval API endpoints, no human approval tasks, no operation-level flags requiring confirmation before execution. No Step Functions with `waitForTaskToken` patterns. All operations execute immediately upon request.
-- **Gap**: No application-level mechanism to require human approval before executing high-risk operations (e.g., bulk basket modifications, user deletions).
-- **Compensating Controls**:
-  - Implement approval gates at the agent orchestration layer using Step Functions with human approval tasks.
-  - Add a confirmation header requirement (`X-Confirm: true`) for destructive operations.
-- **Remediation Timeline**: 60–90 days
-- **Recommendation**: Implement a lightweight approval workflow for destructive operations. Consider AWS Step Functions with `waitForTaskToken` for human approval gates.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (no approval logic)
-
-### HITL-Q3: Sandbox/Staging Environment
-- **Severity**: RISK
-- **Finding**: No sandbox or staging environment configuration. The CloudFormation template deploys a single environment with no staging/sandbox variants. No Docker Compose for local testing. No seed data scripts beyond the initial `create_tables.sql` with sample data. No environment-specific configuration files (`application-staging.properties`, `application-dev.properties`). The only environment variable is `MONO_TO_MICRO_DB_ENDPOINT`.
-- **Gap**: No safe environment for testing agent behavior before production deployment. The first time an agent bug is discovered will be in production.
-- **Compensating Controls**:
-  - Deploy a second CloudFormation stack with a different stack name as a staging environment.
-  - Use the existing `create_tables.sql` to seed a local MySQL instance for development testing.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Create environment-specific CloudFormation parameter files (staging, production). Add `application-staging.properties` with staging database credentials. Implement a Docker Compose file for local development.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (single environment), `src/main/resources/application.properties` (no profile support)
-
-### DATA-Q3: Selective Query Support
-- **Severity**: RISK
-- **Finding**: No pagination, filtering, or sorting on any endpoint. `GET /unicorns` executes `SELECT * FROM unicorns` with no `LIMIT`, no `OFFSET`, no `WHERE` clause, no `ORDER BY`. `GET /unicorns/basket/{userUuid}` returns all items in a user's basket with no pagination. No query parameters for filtering or sorting in any controller.
-- **Gap**: Agents retrieving product listings receive the full dataset regardless of need. As the unicorns table grows, this will exhaust LLM context windows and increase latency/cost.
-- **Compensating Controls**:
-  - The current dataset is small (10 unicorns) so full retrieval is acceptable during initial pilot.
-  - Add `limit` and `offset` query parameters to GET endpoints.
-- **Remediation Timeline**: 2–3 weeks
-- **Recommendation**: Add pagination support (`?limit=20&offset=0`) to all GET list endpoints. Add filter parameters (e.g., `?name=...&priceMin=...&priceMax=...`) for product search.
-- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (SELECT * with no LIMIT), `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`
-
-### DATA-Q4: System of Record Designations
-- **Severity**: RISK
-- **Finding**: No system-of-record designations. No master data management documentation, no data ownership definitions, no conflict resolution logic. The MySQL database is the only data store, but there is no documentation designating it as the authoritative source for unicorn products or user data. The DMS replication to Aurora creates a second copy with no documented system-of-record hierarchy.
-- **Gap**: With DMS replication creating data copies, there is no documented authoritative source. An agent querying both systems could receive conflicting data.
-- **Compensating Controls**:
-  - Document the MySQL instance on the EC2 DB instance as the system of record for unicorn and user data.
-  - Treat the Aurora RDS cluster as a read replica only.
-- **Remediation Timeline**: 1–2 weeks (documentation)
-- **Recommendation**: Create a data ownership document that designates the MySQL database as the system of record for all entities. Define which system wins in case of conflicts.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (DMS replication between MySQL and Aurora), `database/create_tables.sql`
-
-### DATA-Q5: Reliable Timestamps
-- **Severity**: RISK
-- **Finding**: Database tables include `creation_date` (`DEFAULT CURRENT_TIMESTAMP`) and `last_modified_date` fields. The JDBC URL includes `serverTimezone=UTC`, which is good. However, the `CoreModel.java` marks `creationDate` and `lastModifiedDate` as `@JsonIgnore`, so these timestamps are never exposed in API responses. The application code never sets `last_modified_date` on update operations. The `INSERT` statements in `UserMapper.xml` include `#{creationDate}` but the service layer (`UserServiceImpl.java`) does not set `creationDate` before calling create.
-- **Gap**: Timestamps exist in the database but are not exposed via the API. `last_modified_date` is never updated on modifications. Agents cannot determine when data was last changed.
-- **Compensating Controls**:
-  - Remove `@JsonIgnore` from `creationDate` and `lastModifiedDate` in `CoreModel.java` to expose timestamps in API responses.
-  - Add MySQL triggers or MyBatis update hooks to set `last_modified_date` on every UPDATE.
-- **Remediation Timeline**: 1–2 weeks
-- **Recommendation**: Expose `creationDate` and `lastModifiedDate` in API responses. Implement automatic `last_modified_date` updates using MySQL `ON UPDATE CURRENT_TIMESTAMP` or MyBatis interceptors.
-- **Evidence**: `database/create_tables.sql` (timestamp columns), `src/main/java/com/monoToMicro/core/model/CoreModel.java` (@JsonIgnore on timestamps), `src/main/resources/application.properties` (serverTimezone=UTC)
-
-### DATA-Q6: Data Freshness Signaling
-- **Severity**: RISK
-- **Finding**: No data freshness signaling. No `Cache-Control` headers, no `X-Data-Age` headers, no `last_refreshed` fields, no `consistency_level` indicators in API responses. All responses are served directly from the database with no caching layer, so data is current — but there is no way for an agent to verify this programmatically.
-- **Gap**: Agents have no mechanism to determine whether returned data is current, cached, or stale.
-- **Compensating Controls**:
-  - Since data is served directly from MySQL with no caching, it is always current — document this guarantee.
-  - Add `Cache-Control: no-cache` headers to make the freshness guarantee explicit.
-- **Remediation Timeline**: 1–2 weeks
-- **Recommendation**: Add `Cache-Control: no-cache` and `Last-Modified` headers to all GET responses. Expose `last_modified_date` (DATA-Q5) as a response field.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (no Cache-Control headers)
-
-### DATA-Q7: PII Redaction in Logs
-- **Severity**: RISK
-- **Finding**: No PII redaction in logs. Exception handling uses `e.printStackTrace()` which dumps full stack traces to stdout (shipped to CloudWatch via CloudWatch Agent). User email addresses could appear in stack traces when `UserMapper.getByEmail()` fails. The `HealthController.ping()` logs EC2 metadata including `accountId` and `instanceID` via `System.out.println()`. No log scrubbing middleware, no PII masking libraries, no CloudWatch log filters for PII.
-- **Gap**: PII (user email, potentially names) could leak into application logs and be shipped to CloudWatch Logs without masking.
-- **Compensating Controls**:
-  - Replace `e.printStackTrace()` calls with a structured logging framework (SLF4J/Logback) with PII masking patterns.
-  - Add CloudWatch Logs metric filters to detect and alert on PII patterns in log streams.
-- **Remediation Timeline**: 2–3 weeks
-- **Recommendation**: Replace `System.out.println()` and `e.printStackTrace()` with SLF4J/Logback structured logging. Implement a log masking pattern that redacts email addresses and names from log output.
-- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` (e.printStackTrace()), `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` (e.printStackTrace()), `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (System.out.println with metadata)
-
-### DISC-Q1: Schema Documentation and Versioning
-- **Severity**: RISK
-- **Finding**: No data schemas are documented or versioned independently. The database schema is defined in `create_tables.sql` but there is no schema versioning tool (no Flyway, no Liquibase, no schema registry). MyBatis XML mappers define result mappings but these are not versioned API schemas. No JSON Schema files. Schema changes would be applied directly to the database with no migration tracking.
-- **Gap**: No schema versioning or migration tracking. Schema changes could break agent queries silently.
-- **Compensating Controls**:
-  - Use `create_tables.sql` as the baseline schema reference for agent tool definition.
-  - Add Flyway or Liquibase for schema migration tracking.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Add Flyway dependency to `build.gradle` and convert `create_tables.sql` to a Flyway migration (`V1__initial_schema.sql`). Document the API response schema in the OpenAPI spec (API-Q2).
-- **Evidence**: `database/create_tables.sql` (unversioned schema), `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (MyBatis result mappings), `build.gradle` (no Flyway/Liquibase dependency)
-
-### OBS-Q1: Distributed Tracing and Structured Logging
-- **Severity**: RISK
-- **Finding**: No distributed tracing. No OpenTelemetry SDK, no X-Ray instrumentation, no `traceparent` header propagation. Logging is entirely unstructured — `System.out.println()` and `e.printStackTrace()` to stdout, collected by CloudWatch Agent as plain text. No JSON log format, no correlation IDs (`request_id`, `trace_id`), no structured fields.
-- **Gap**: Agent-initiated requests cannot be traced through the application. Failures produce unstructured stack traces with no correlation to the originating request.
-- **Compensating Controls**:
-  - Add AWS X-Ray SDK to the application for distributed tracing.
-  - Implement a servlet filter that generates and logs a `request_id` for each inbound request.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Add X-Ray SDK and SLF4J/Logback to `build.gradle`. Configure structured JSON logging with `request_id`, `trace_id`, `user_id`, and `action` fields. Add X-Ray instrumentation to Spring Boot via the `aws-xray-recorder-sdk-spring` library.
-- **Evidence**: `build.gradle` (no X-Ray, no SLF4J), `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (System.out.println)
-
-### OBS-Q2: Alerting on Error Rates and Latency
-- **Severity**: RISK
-- **Finding**: No alerting thresholds configured for error rates or latency. The CloudFormation template creates a CloudWatch log group (`InstanceLogGroup` with 7-day retention) but no CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration, no composite alarms. No SLO-based alerting. The application exposes no metrics — Spring Boot Actuator is included in dependencies but no custom metrics are published.
-- **Gap**: Application degradation affecting agent operations would go undetected until agents start failing.
-- **Compensating Controls**:
-  - Create CloudWatch alarms on EC2 instance CPU utilization and status checks as a minimum.
-  - Monitor the `/health/dbping` endpoint externally.
-- **Remediation Timeline**: 2–3 weeks
-- **Recommendation**: Configure CloudWatch alarms for: (1) EC2 CPU > 80%, (2) error log patterns in CloudWatch Logs, (3) `/health/ishealthy` external health check. Enable Spring Boot Actuator metrics endpoint and publish to CloudWatch.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (InstanceLogGroup, no alarms), `build.gradle` (spring-boot-starter-actuator dependency)
-
-### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
-- **Severity**: RISK
-- **Finding**: Partial IaC governance. (1) **IaC exists**: The CloudFormation template (`MonoToMicroCF.yaml`) defines VPC, EC2, RDS, IAM, and S3 resources as code — PASS. (2) **Change review**: The GitHub Actions workflow runs cfn-nag security scanning on push (`cfn-security.yml`), but only scans `MonoToMicroAssets/` and there are no explicit PR review requirements configured in the repository — PARTIAL. (3) **Drift detection**: No AWS Config rules, no CloudFormation drift detection configuration — FAIL. Only 1 of 3 sub-checks fully passes.
-- **Gap**: No drift detection. No mandatory peer review for IaC changes. Security scanning exists but does not cover all infrastructure.
-- **Compensating Controls**:
-  - Enable CloudFormation drift detection as a scheduled check.
-  - Add branch protection rules requiring PR approval before merge.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Enable CloudFormation drift detection on a daily schedule. Add branch protection rules requiring at least 1 reviewer. Extend cfn-nag to scan all CloudFormation templates.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`, `../.github/workflows/cfn-security.yml` (scans MonoToMicroAssets only)
-
-### ENG-Q2: CI/CD with API Contract Testing
-- **Severity**: RISK
-- **Finding**: No CI/CD pipeline for the application itself. The GitHub Actions workflow (`cfn-security.yml`) only runs cfn-nag on CloudFormation templates on push. No application build pipeline, no test execution, no API contract testing, no breaking change detection. The application is built manually via `gradlew clean build` on the EC2 instance during CloudFormation `cfn-init` initialization — not through a CI/CD pipeline.
-- **Gap**: No automated pipeline builds or tests the application. API-breaking changes cannot be detected before deployment.
-- **Compensating Controls**:
-  - Create a GitHub Actions workflow that builds the application with `gradlew clean build` and runs tests (once tests exist — ENG-Q4).
-  - Add OpenAPI spec validation to the CI pipeline (once the spec exists — API-Q2).
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Create a CI pipeline that: (1) builds the application, (2) runs unit/integration tests, (3) validates the OpenAPI spec against the implementation, (4) checks for breaking API changes.
-- **Evidence**: `../.github/workflows/cfn-security.yml` (cfn-nag only), `../MonoToMicroAssets/MonoToMicroCF.yaml` (gradlew build in cfn-init)
-
-### ENG-Q3: Rollback Capability
-- **Severity**: RISK
-- **Finding**: No rollback capability. Single EC2 instance deployment with no blue/green, no canary, no CodeDeploy, no feature flags, no traffic shifting. The application is deployed via CloudFormation `cfn-init` which clones the repository and builds on the instance at stack creation time. Rollback requires redeploying the entire CloudFormation stack, which takes 15–30 minutes and includes full infrastructure recreation.
-- **Gap**: No fast rollback. A broken deployment affecting agent-facing APIs requires full stack redeployment.
-- **Compensating Controls**:
-  - Use CloudFormation stack update rollback (automatic on failure).
-  - Pre-build the application JAR and store in S3; deploy from S3 artifact instead of building on-instance.
-- **Remediation Timeline**: 30–60 days
-- **Recommendation**: Implement blue/green deployment using CodeDeploy or deploy behind an ALB with rolling updates. Pre-build JAR artifacts in CI and deploy from S3.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (single EC2Instance, cfn-init build-on-instance)
-
-### ENG-Q4: API Test Coverage
-- **Severity**: RISK
-- **Finding**: No automated tests found. No `src/test/` directory exists. `build.gradle` includes `spring-boot-starter-test` as a `testImplementation` dependency, but no test files exist anywhere in the source tree. No API test suites, no contract tests, no integration tests, no Postman/Newman collections.
-- **Gap**: Zero test coverage. API behavior changes cannot be caught by automated testing.
-- **Compensating Controls**:
-  - Write basic smoke tests against the running application endpoints as a first step.
-  - Create Postman/Newman API test collections for the existing endpoints.
-- **Remediation Timeline**: 2–4 weeks
-- **Recommendation**: Create `src/test/` directory with: (1) unit tests for services, (2) integration tests for controllers using `@SpringBootTest`, (3) API contract tests validating request/response schemas. Target minimum 80% coverage of controller endpoints.
-- **Evidence**: `build.gradle` (spring-boot-starter-test dependency, no test files), repository-wide search found no test files
-
-### ENG-Q5: Encryption at Rest for Agent-Accessible Data
-- **Severity**: RISK
-- **Finding**: No encryption at rest configured. The RDS cluster (`RDSCluster` in CloudFormation) does not specify `StorageEncrypted: true` or `KmsKeyId`. S3 buckets (`UIBucket`, `AssetBucket`) do not specify server-side encryption configuration. The EC2 instance has no EBS encryption specified. User PII (email, first_name, last_name) is stored unencrypted at rest.
-- **Gap**: All data at rest (MySQL database, S3 buckets, EBS volumes) is unencrypted. A breach exposes all data the agent can access.
-- **Compensating Controls**:
-  - Enable default EBS encryption at the account level.
-  - Enable S3 default encryption on both buckets.
-- **Remediation Timeline**: 1–2 weeks
-- **Recommendation**: Add `StorageEncrypted: true` to the RDS cluster in CloudFormation. Add `BucketEncryption` with `aws:kms` to both S3 buckets. Enable account-level EBS encryption default.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (RDSCluster without StorageEncrypted, UIBucket/AssetBucket without BucketEncryption)
-
----
-
+- **Recommendation**: Conduct load testing with representative agent traffic patterns (burst reads of /unicorns at 50–100 requests/second). Implement an Auto Scaling Group behind an ALB. Size the MySQL connection pool for concurrent agent access.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/HealthController.java` (EC2MetadataUtils — single instance), absence of auto-scaling or load testing configuration
 ## INFOs — Architecture and Design Inputs
 
 ### API-Q1: Documented API Interface
+
 - **Severity**: INFO
-- **Finding**: The application exposes REST endpoints via Spring Boot `@RestController` and `@Controller` annotations. Endpoints found: `GET /unicorns`, `POST /unicorns/basket`, `DELETE /unicorns/basket`, `GET /unicorns/basket/{userUuid}`, `POST /user`, `POST /user/login`, `GET /health/ping`, `GET /health/ishealthy`, `GET /health/dbping`, `GET /data`. These are genuine REST APIs with JSON serialization — no direct database access, file-based exchange, or UI automation required by consumers. The API surface is functional but minimal and undocumented.
-- **Implication**: REST APIs exist and can serve as agent tool endpoints. The surface is small enough to define as agent tools with manageable effort. However, the APIs lack documentation (API-Q2) and the endpoint design is consumer-facing (e-commerce UI) rather than service-facing (agent-optimized).
-- **Recommendation**: Consider designing agent-specific API endpoints (e.g., `/api/v1/orders`, `/api/v1/returns`) that expose order and return data optimized for agent consumption, rather than repurposing the existing UI-facing endpoints.
+- **Finding**: The application exposes a documented REST interface via Spring Boot `@RestController` and `@Controller` annotations. Endpoints: `GET /unicorns` (product catalog), `POST /unicorns/basket` (add to basket), `DELETE /unicorns/basket` (remove from basket), `GET /unicorns/basket/{userUuid}` (view basket), `POST /user` (register), `POST /user/login` (authenticate), `GET /health/ping` (instance info), `GET /health/ishealthy` (health check), `GET /health/dbping` (database health), `GET /data` (all baskets). Integration is via REST APIs — no direct database access, file-based exchange, or UI automation required.
+- **Implication**: The REST API surface is the minimum viable integration point for agent tools. Agents can bind to these endpoints. The agent's primary read endpoints are `GET /unicorns` and `GET /unicorns/basket/{userUuid}`.
+- **Recommendation**: For the agent's intended use case (order and return data access), the current endpoints provide basket data. Consider adding dedicated order/return endpoints if those concepts are distinct from baskets in the domain model.
 - **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`, `src/main/java/com/monoToMicro/rest/controller/UserController.java`, `src/main/java/com/monoToMicro/rest/controller/HealthController.java`, `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java`
 
-### API-Q6: Structured Response Format
+### API-Q4: Idempotent Write Operations ⚡
+
 - **Severity**: INFO
-- **Finding**: Responses are JSON format via Jackson serialization (Spring Boot default). Model classes use `@JsonInclude(JsonInclude.Include.NON_NULL)` for clean serialization and `@JsonSerialize(include = JsonSerialize.Inclusion.NON_NULL)` on `CoreModel`. Fields are standard Java types (String, Double, Long, Boolean, List). JSON responses are well-structured for agent consumption.
-- **Implication**: JSON responses are LLM-friendly and can be consumed directly by agent tools without format conversion. The `NON_NULL` serialization strategy keeps responses clean.
-- **Recommendation**: No action required. JSON is the preferred format for agent consumption.
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: Write endpoints use `INSERT IGNORE` in `UnicornMapper.xml` for basket adds (partial idempotency — duplicate inserts are silently ignored due to UNIQUE constraint on `(uuid, unicornUuid)`). User creation also uses `INSERT IGNORE` in `UserMapper.xml`. However, there are no explicit idempotency key headers, no idempotency middleware, and no idempotency tokens. The `DELETE` endpoint for basket removal is inherently idempotent.
+- **Implication**: For the current read-only agent scope, idempotency of write endpoints is informational. If agent_scope is expanded to write-enabled, the `INSERT IGNORE` pattern provides basic safety for basket adds but not for all write operations.
+- **Recommendation**: If expanding to write-enabled scope, add explicit idempotency key support (e.g., `Idempotency-Key` header) for all POST endpoints.
+- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (INSERT IGNORE), `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml` (insert ignore)
+
+### API-Q5: Structured Response Format
+
+- **Severity**: INFO
+- **Finding**: API responses are structured JSON, which is the default for Spring Boot with Jackson. Model classes use `@JsonInclude(JsonInclude.Include.NON_NULL)` to exclude null fields from responses. `@JsonSerialize(include = JsonSerialize.Inclusion.NON_NULL)` is used on `CoreModel`. Responses are standard JSON objects and arrays.
+- **Implication**: JSON responses are optimal for LLM consumption. Agents can parse responses directly without format conversion. The `NON_NULL` inclusion policy keeps responses clean.
+- **Recommendation**: No action needed. JSON responses are the preferred format for agent tool integration.
 - **Evidence**: `src/main/java/com/monoToMicro/core/model/Unicorn.java` (@JsonInclude), `src/main/java/com/monoToMicro/core/model/CoreModel.java` (@JsonSerialize)
 
-### API-Q8: Event Emission for State Changes
-- **Severity**: INFO
-- **Finding**: No event emission capability exists. No webhook endpoints, no SNS/EventBridge/SQS integration, no Kafka topics, no CDC pipelines in the application code. The DMS replication configured in CloudFormation performs database-level replication but this is not an application event system. State changes (basket additions/removals, user creation) are only reflected in the database.
-- **Implication**: Agents must use request/response polling patterns to detect state changes. Proactive agent behaviors (e.g., reacting to basket changes or new user registrations) are not possible without implementing an event system. This limits initial agent deployments to request-driven patterns.
-- **Recommendation**: When adding order processing capabilities, implement EventBridge integration to emit events for state changes (e.g., `basket.item.added`, `user.created`, `order.placed`). This enables event-driven agent patterns.
-- **Evidence**: `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` (no event emission), `../MonoToMicroAssets/MonoToMicroCF.yaml` (DMS replication only)
+### API-Q7: Event Emission for State Changes
 
-### API-Q9: Rate Limit Documentation and Headers
 - **Severity**: INFO
-- **Finding**: No rate limit documentation or rate limit headers found in the application code. The application runs directly on EC2 port 8080 behind nginx with no API Gateway in front. No `X-RateLimit-Remaining` or `Retry-After` headers in response code. No `aws_api_gateway_usage_plan` in IaC. No rate limiting middleware in the application.
-- **Implication**: Agents calling this API have no visibility into rate limits and cannot self-throttle. When rate limiting is implemented (STATE-Q5), agents will need headers to respect limits.
-- **Recommendation**: When implementing API Gateway (STATE-Q5 remediation), configure usage plans with rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `Retry-After`) that agents can consume.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` (no rate limit headers), `../MonoToMicroAssets/MonoToMicroCF.yaml` (no API Gateway)
+- **Finding**: No event emission patterns exist. There are no webhook endpoints, no SNS/EventBridge/SQS integration, no Kafka topic producers, and no CDC pipelines. The application has internal event classes (`CreateEvent`, `ReadEvent`, `WriteUnicornsBasketEvent`, etc.) in `com.monoToMicro.core.events`, but these are in-memory domain events used for internal service communication — they are not published externally.
+- **Implication**: Agents cannot subscribe to state changes proactively. They must poll endpoints to detect changes. For the current read-only scope (reading product catalog and basket data), polling `GET /unicorns` is sufficient.
+- **Recommendation**: As the decomposition proceeds, consider adding SNS/EventBridge event publishing for basket state changes. This enables reactive agent patterns (e.g., agent notified when a basket is modified).
+- **Evidence**: `src/main/java/com/monoToMicro/core/events/` (internal event classes only), absence of SNS/SQS/EventBridge/Kafka dependencies in `build.gradle`
 
-### API-Q10: API Latency Profile
-- **Severity**: INFO
-- **Finding**: No performance benchmarks, load test results, or APM configuration found. The application is a simple Spring Boot app with MyBatis SQL queries against a MySQL database. Operations are simple CRUD — `SELECT *` for listings, `INSERT IGNORE` for basket additions, `DELETE` for removals. Based on the operation complexity, P95 latency is likely sub-second for all current endpoints, but there is no measured evidence to confirm.
-- **Implication**: The simple CRUD operations should be suitable for synchronous agent tool patterns. If the agent chains 5 sequential calls, total latency should remain under 5 seconds. However, without APM data, latency spikes under load are unpredictable.
-- **Recommendation**: Add APM instrumentation (X-Ray or Spring Boot Actuator metrics) to measure P95 latency per endpoint. Establish latency baselines before agent integration.
-- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (simple SQL queries), `build.gradle` (spring-boot-starter-actuator dependency, but no metrics configuration)
+### API-Q8: Rate Limit Documentation and Headers
 
-### DATA-Q8: Data Quality Awareness
 - **Severity**: INFO
-- **Finding**: No data quality metrics, dashboards, or profiling exist. No null rate monitoring, no duplicate detection beyond UNIQUE constraints, no data freshness SLAs, no data quality scoring. The database enforces basic integrity through NOT NULL constraints on key fields (uuid) and UNIQUE constraints on business keys (uuid, email).
-- **Implication**: Agents acting on incomplete or stale data will propagate errors. The current dataset is small and seed-generated (10 unicorns), so quality is implicitly high. As the dataset grows or is populated from external sources, data quality monitoring becomes critical.
-- **Recommendation**: Implement data quality checks (null rate, duplicate rate, freshness) as part of the observability stack. Consider AWS Glue DataBrew for data profiling.
-- **Evidence**: `database/create_tables.sql` (UNIQUE/NOT NULL constraints), `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`
+- **Finding**: No rate limit documentation exists. No `X-RateLimit-Remaining` or `Retry-After` headers are returned in any API response. No API Gateway throttle settings, no WAF rate rules, and no rate limiting middleware are configured. The application accepts unlimited requests with no self-throttle signaling.
+- **Implication**: Agents have no visibility into rate limits and cannot self-throttle based on server feedback. This must be addressed when adding rate limiting infrastructure (STATE-Q5).
+- **Recommendation**: When adding API Gateway with throttling (STATE-Q5), configure it to return `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers. Document rate limits in the OpenAPI spec (API-Q2).
+- **Evidence**: All controller classes (no rate limit headers in ResponseEntity), `build.gradle` (no rate limiting dependencies)
+
+### STATE-Q3: Concurrency Controls ⚡
+
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: Minimal concurrency controls exist. `UserRepositoryImpl.create()` uses the `synchronized` keyword for thread-level mutual exclusion. `UnicornMapper.xml` uses `INSERT IGNORE` which handles duplicate key conflicts silently. However, there is no optimistic locking (no version fields, no ETags, no `If-Match` headers), no pessimistic locking (`SELECT FOR UPDATE`), and no DynamoDB conditional writes.
+- **Implication**: For read-only agent scope, concurrency controls for write operations are informational. If expanded to write-enabled, the `synchronized` keyword provides basic protection for user creation but does not scale across multiple instances.
+- **Recommendation**: If expanding to write-enabled scope, implement optimistic locking with a `version` column in database tables and ETags in API responses.
+- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` (synchronized create method), `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (INSERT IGNORE)
+
+### STATE-Q6: Blast Radius and Transaction Limits ⚡
+
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No configurable transaction limits exist. There are no maximum records per operation, no maximum spend limits, no per-agent action caps. The application does not enforce any business-logic limits on agent-initiated actions.
+- **Implication**: For read-only agent scope, transaction limits for write operations are informational. The only risk is unbounded read queries (addressed in DATA-Q3). If expanded to write-enabled, transaction limits become critical.
+- **Recommendation**: If expanding to write-enabled scope, implement configurable per-agent limits (e.g., `max_basket_adds_per_hour=100`).
+- **Evidence**: All service implementation classes (no limit enforcement logic), all controller classes (no per-request limits)
+
+### HITL-Q1: Draft/Pending State ⚡
+
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No draft or pending state concepts exist. Basket operations (`addUnicornToBasket`, `removeUnicornFromBasket`) take effect immediately. User creation is immediate with no confirmation step. There are no status fields, no approval workflows, and no two-step commit patterns.
+- **Implication**: For read-only agent scope, draft states are informational. If expanded to write-enabled, the absence of draft states means all agent-initiated writes are immediately committed with no human review.
+- **Recommendation**: If expanding to write-enabled scope, add a `status` field to the `unicorns_basket` table (e.g., `PENDING`, `CONFIRMED`) and require a separate confirmation step for agent-initiated basket modifications.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (immediate write), `database/create_tables.sql` (no status fields)
+
+### HITL-Q2: Configurable Approval Gates ⚡
+
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No approval gate mechanism exists. There are no approval API endpoints, no status-based workflows requiring explicit confirmation, no configurable operation-level flags, and no Step Functions with human approval tasks.
+- **Implication**: For read-only agent scope, approval gates are informational. If expanded to write-enabled, high-risk operations (e.g., basket checkout, user deletion) should require human approval.
+- **Recommendation**: If expanding to write-enabled scope, implement a configurable approval gate using Amazon Step Functions with `waitForTaskToken` for high-value operations.
+- **Evidence**: All controller classes (no approval logic), absence of Step Functions or workflow definitions
+
+### DATA-Q7: Data Quality Awareness
+
+- **Severity**: INFO
+- **Finding**: No data quality metrics, dashboards, profiling reports, null rate monitoring, or duplicate detection logic exist. The only data quality mechanism is the UNIQUE constraint on `uuid` in the unicorns table and `email` in the unicorn_user table. Initial seed data in `create_tables.sql` contains 10 hardcoded unicorn records with uniform pricing ($100 each).
+- **Implication**: An agent cannot assess data quality before acting on it. With uniform pricing and limited product data, the current dataset quality is high but synthetic. Real production data may have quality issues that the agent cannot detect.
+- **Recommendation**: Add data profiling for key fields (null rates, uniqueness, completeness) as the dataset grows. Consider adding a `/data/quality` endpoint that returns basic statistics for agent consumption.
+- **Evidence**: `database/create_tables.sql` (UNIQUE constraints, seed data), absence of data quality tooling
 
 ### DISC-Q2: Semantically Meaningful Field Names
+
 - **Severity**: INFO
-- **Finding**: Field names are mostly human-readable and semantically meaningful: `uuid`, `name`, `description`, `price`, `image`, `email`, `first_name`, `last_name`, `creation_date`, `last_modified_date`, `active`. The database column `unicornUuid` uses camelCase in a SQL context (unconventional but readable). No legacy abbreviations requiring a data dictionary. The `CoreModel` uses standard Java naming conventions.
-- **Implication**: LLM-based agents can interpret field names without a data dictionary lookup. The naming conventions are agent-friendly and reduce the risk of misinterpretation.
-- **Recommendation**: Maintain the current naming conventions. When adding new fields, continue using descriptive, unabbreviated names.
-- **Evidence**: `database/create_tables.sql` (column names), `src/main/java/com/monoToMicro/core/model/Unicorn.java` (field names), `src/main/java/com/monoToMicro/core/model/User.java`
+- **Finding**: Field names are reasonably semantic and human-readable. Java model fields use camelCase: `uuid`, `name`, `description`, `price`, `image`, `email`, `firstName`, `lastName`. Database columns use snake_case: `first_name`, `last_name`, `creation_date`, `last_modified_date`. No legacy abbreviations or cryptic codes were found. MyBatis mappers handle the camelCase-to-snake_case translation transparently.
+- **Implication**: LLM-based agents can interpret field names without a data dictionary. The naming conventions are consistent and self-documenting.
+- **Recommendation**: No action needed. Maintain these naming conventions as the application is decomposed into microservices.
+- **Evidence**: `src/main/java/com/monoToMicro/core/model/Unicorn.java` (uuid, name, description, price, image), `src/main/java/com/monoToMicro/core/model/User.java` (uuid, email, firstName, lastName), `database/create_tables.sql` (snake_case columns)
 
 ### DISC-Q3: Data Catalog / Metadata Layer
-- **Severity**: INFO
-- **Finding**: No data catalog or metadata layer exists. No AWS Glue Data Catalog, no Collibra/Alation/DataHub integration, no metadata files, no data dictionaries, no API catalogs. The only schema documentation is the `create_tables.sql` file.
-- **Implication**: When building agent tools, developers must inspect source code and SQL files to understand data structures. This slows tool definition and increases the risk of misinterpreting data semantics.
-- **Recommendation**: Create a basic data dictionary documenting each table, its columns, data types, and business meaning. Consider AWS Glue Data Catalog for automated schema discovery.
-- **Evidence**: `database/create_tables.sql` (only schema reference)
 
-### DISC-Q4: Data Lineage
 - **Severity**: INFO
-- **Finding**: No data lineage records exist. No data lineage tools (no AWS Glue DataBrew, no Apache Atlas), no ETL documentation, no data flow diagrams, no transformation logs, no source-to-target mappings. The DMS replication configuration in CloudFormation copies data from MySQL to Aurora but there is no lineage documentation for this data flow.
-- **Implication**: When an agent produces incorrect output due to bad data, there is no lineage to trace the data origin. The DMS replication creates a second data copy with no documented lineage.
-- **Recommendation**: Document the data flow: seed data → MySQL (EC2) → DMS → Aurora. When adding new data sources, implement lineage tracking.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml` (DMS replication, no lineage), `database/create_tables.sql` (seed data)
+- **Finding**: No data catalog or metadata layer exists. No AWS Glue Data Catalog, no Collibra, no Alation, no DataHub, no metadata files, no data dictionaries beyond what is implied by the schema definition in `create_tables.sql`.
+- **Implication**: Tool definition for agents must be done manually by reading the schema and controller code. There is no machine-readable catalog describing what data the system holds.
+- **Recommendation**: As the decomposition proceeds, create an AWS Glue Data Catalog entry for the MySQL database. Document data semantics in the OpenAPI spec descriptions (per API-Q2 recommendation).
+- **Evidence**: Absence of any data catalog configuration, `database/create_tables.sql` (schema is the only metadata source)
 
 ### OBS-Q3: Business Outcome Metrics
+
 - **Severity**: INFO
-- **Finding**: No business outcome metrics are published. No `cloudwatch.put_metric_data` calls for business events. No custom dashboards tracking basket conversion rates, user registration rates, or order completion rates. Spring Boot Actuator is included as a dependency but no custom metrics endpoints are configured.
-- **Implication**: When agents consume this system, there will be no business-level signal for whether agent interactions produce good outcomes. Infrastructure metrics alone cannot indicate whether agents are successfully serving customers.
-- **Recommendation**: Define and publish custom CloudWatch metrics for key business outcomes: basket add rate, user creation rate, basket abandonment rate. These become the primary signal for agent effectiveness.
-- **Evidence**: `build.gradle` (spring-boot-starter-actuator, no custom metrics), `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (no metrics emission)
-
----
-
+- **Finding**: No custom business metrics exist. No `cloudwatch.put_metric_data` calls, no custom dashboards, and no business KPI alarms. Spring Boot Actuator is included as a dependency (`spring-boot-starter-actuator` in `build.gradle`), providing default infrastructure metrics (JVM, HTTP request counts), but no custom business outcome metrics are configured.
+- **Implication**: When agents interact with the system, there is no way to measure whether those interactions produce good business outcomes (e.g., basket conversion rate, user registration success rate). Only infrastructure metrics are available.
+- **Recommendation**: Add custom CloudWatch metrics for key business events: baskets created, items added to basket, user registrations. These metrics become the primary signal for agent effectiveness when agents start consuming the API.
+- **Evidence**: `build.gradle` (spring-boot-starter-actuator dependency), absence of custom metric publishing code
 ## Detailed Findings
 
 ### 01 — API Surface and Interface Design
 
 #### API-Q1: Documented API Interface
-- **Severity**: INFO
-- **Finding**: The application exposes REST endpoints via Spring Boot `@RestController` and `@Controller` annotations: `GET /unicorns`, `POST /unicorns/basket`, `DELETE /unicorns/basket`, `GET /unicorns/basket/{userUuid}`, `POST /user`, `POST /user/login`, `GET /health/ping`, `GET /health/ishealthy`, `GET /health/dbping`, `GET /data`. Genuine REST APIs with JSON serialization. No direct DB access or UI automation required.
-- **Gap**: API surface exists but is undocumented. No formal API documentation beyond source code.
-- **Recommendation**: Create formal API documentation and consider agent-specific endpoints for order and return data.
+- **Severity**: INFO (passes BLOCKER check — REST API exists)
+- **Finding**: The application exposes REST endpoints via Spring Boot `@RestController` and `@Controller` annotations. Endpoints: `GET /unicorns`, `POST /unicorns/basket`, `DELETE /unicorns/basket`, `GET /unicorns/basket/{userUuid}`, `POST /user`, `POST /user/login`, `GET /health/*`, `GET /data`. Integration is via documented REST APIs — no direct database access, file-based exchange, or UI automation required.
+- **Gap**: N/A — REST API surface exists.
+- **Recommendation**: For the agent's intended use case (order and return data), consider adding dedicated order/return endpoints if distinct from baskets.
 - **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`, `src/main/java/com/monoToMicro/rest/controller/UserController.java`, `src/main/java/com/monoToMicro/rest/controller/HealthController.java`, `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java`
 
 #### API-Q2: Machine-Readable API Specification
-- **Severity**: RISK
-- **Finding**: No OpenAPI, Swagger, AsyncAPI, GraphQL, or Smithy specification files found. API defined solely through Spring annotations.
-- **Gap**: No machine-readable API spec for automated agent tool generation.
-- **Recommendation**: Add `springdoc-openapi-ui` to `build.gradle` for auto-generated OpenAPI 3.0 spec.
-- **Evidence**: `build.gradle` (no springdoc/swagger dependency)
+- **Severity**: RISK-QUALITY
+- **Finding**: No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy specification files exist. API surface defined only through Spring annotations in Java code. No Springdoc or SpringFox dependencies in `build.gradle`.
+- **Gap**: No machine-readable API specification for agent tool auto-generation.
+- **Recommendation**: Add `springdoc-openapi-ui` to `build.gradle` for OpenAPI 3.0 auto-generation.
+- **Evidence**: `build.gradle` (no spec generation dependency), absence of spec files
 
 #### API-Q3: Structured Error Responses
-- **Severity**: RISK
-- **Finding**: Error responses are bare `HttpStatus.BAD_REQUEST` with no structured body. Repositories catch exceptions with `e.printStackTrace()` and return `null`/`false`.
-- **Gap**: No error codes, messages, or retryable indicators for agents.
-- **Recommendation**: Implement `@ControllerAdvice` global exception handler with structured JSON error responses.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`, `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java`
+- **Severity**: RISK-QUALITY
+- **Finding**: Error responses use only HTTP status codes (`HttpStatus.BAD_REQUEST`) with empty bodies. No structured error codes, messages, or retryable indicators. Controllers return `ResponseEntity<Void>(HttpStatus.BAD_REQUEST)` for all error cases.
+- **Gap**: Agents cannot distinguish retriable from terminal errors.
+- **Recommendation**: Implement `@ControllerAdvice` with structured JSON error bodies.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java`, `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`
 
 #### API-Q4: Idempotent Write Operations ⚡
-- **Severity**: BLOCKER
-- **Conditional**: agent_scope is "write-enabled" — evaluated as BLOCKER
-- **Finding**: No idempotency key support on write endpoints. `INSERT IGNORE` provides partial DB-level protection. `POST /user` generates server-side UUID with no client idempotency key.
-- **Gap**: No client-facing idempotency contract. Agent retries can cause inconsistent state.
-- **Recommendation**: Implement `Idempotency-Key` header support on all write endpoints.
-- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`, `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java`
-
-#### API-Q5: API Versioning and Deprecation
-- **Severity**: RISK
-- **Finding**: No API versioning. Bare paths (`/unicorns`, `/user`). No `Accept-Version` headers, no changelog.
-- **Gap**: Breaking API changes will silently break agent tool definitions.
-- **Recommendation**: Add `/v1/` URL prefix to all endpoints. Establish deprecation policy.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`, `src/main/java/com/monoToMicro/rest/controller/UserController.java`
-
-#### API-Q6: Structured Response Format
 - **Severity**: INFO
-- **Finding**: JSON responses via Jackson serialization. `@JsonInclude(NON_NULL)` on models. Standard Java types.
-- **Gap**: N/A — JSON format is agent-friendly.
-- **Recommendation**: No action required.
+- **Conditional**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: Write endpoints use `INSERT IGNORE` (partial idempotency via UNIQUE constraints). No explicit idempotency keys or middleware. `DELETE` is inherently idempotent.
+- **Gap**: No formal idempotency mechanism — informational for read-only scope.
+- **Recommendation**: Add `Idempotency-Key` header support before expanding to write-enabled scope.
+- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` (INSERT IGNORE)
+
+#### API-Q5: Structured Response Format
+- **Severity**: INFO
+- **Finding**: JSON responses via Spring Boot Jackson defaults. `@JsonInclude(NON_NULL)` on model classes. Standard JSON objects and arrays.
+- **Gap**: N/A — JSON is the preferred format.
+- **Recommendation**: No action needed.
 - **Evidence**: `src/main/java/com/monoToMicro/core/model/Unicorn.java`, `src/main/java/com/monoToMicro/core/model/CoreModel.java`
 
-#### API-Q7: Asynchronous Operation Support
-- **Severity**: RISK
-- **Finding**: All operations are synchronous. No async patterns, no job frameworks, no polling endpoints, no webhooks.
-- **Gap**: Long-running operations would block agents.
-- **Recommendation**: Implement async patterns for operations exceeding 5 seconds.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java`, `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java`
+#### API-Q6: Asynchronous Operation Support
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateful-crud`, agent_scope: `read-only`.
+- **Trigger**: Service has operations >30s OR long-running workflows. This is a simple CRUD app with direct MySQL queries — no operations exceed 30 seconds.
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
-#### API-Q8: Event Emission for State Changes
+#### API-Q7: Event Emission for State Changes
 - **Severity**: INFO
-- **Finding**: No event emission capability. No webhooks, SNS, EventBridge, SQS, or Kafka integration.
-- **Gap**: N/A — agents limited to request/response patterns initially.
-- **Recommendation**: Implement EventBridge events for state changes when adding complex workflows.
-- **Evidence**: `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java`
+- **Finding**: No event emission patterns. Internal event classes exist (`com.monoToMicro.core.events`) but are in-memory only — not published externally. No SNS, SQS, EventBridge, Kafka, or webhook code.
+- **Gap**: Agents cannot subscribe to state changes proactively.
+- **Recommendation**: Add SNS/EventBridge publishing for basket state changes during decomposition.
+- **Evidence**: `src/main/java/com/monoToMicro/core/events/` (internal only), `build.gradle` (no messaging dependencies)
 
-#### API-Q9: Rate Limit Documentation and Headers
+#### API-Q8: Rate Limit Documentation and Headers
 - **Severity**: INFO
-- **Finding**: No rate limit headers or documentation. No API Gateway. No rate limiting middleware.
-- **Gap**: N/A — agents cannot self-throttle without rate limit signals.
-- **Recommendation**: Include rate limit headers when implementing API Gateway.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`
-
-#### API-Q10: API Latency Profile
-- **Severity**: INFO
-- **Finding**: No performance benchmarks or APM data. Simple CRUD operations likely sub-second but unmeasured.
-- **Gap**: N/A — no measured latency data available.
-- **Recommendation**: Add X-Ray or Actuator metrics instrumentation.
-- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`, `build.gradle`
+- **Finding**: No rate limit documentation, headers, or middleware. Application accepts unlimited requests with no self-throttle signaling.
+- **Gap**: Agents cannot self-throttle based on server feedback.
+- **Recommendation**: Configure rate limit headers when adding API Gateway (STATE-Q5).
+- **Evidence**: All controller classes (no rate limit headers)
 
 ### 02 — Authentication, Authorization, and Identity
 
 #### AUTH-Q1: Machine Identity Authentication
 - **Severity**: BLOCKER
-- **Finding**: Spring Security OAuth2 configured (`@EnableResourceServer`) but `authorizeRequests().anyRequest().permitAll()` disables authentication. Every endpoint uses `@PreAuthorize("permitAll()")`.
-- **Gap**: No authentication enforced. Any caller invokes any endpoint without credentials.
-- **Recommendation**: Enable OAuth2 validation, configure Cognito app clients for machine identity.
+- **Finding**: Spring Security OAuth2 with `@EnableResourceServer` is present but disabled: `authorizeRequests().anyRequest().permitAll()`. All controllers use `@PreAuthorize("permitAll()")`. No machine identity, no API keys, no mTLS, no principal attribution.
+- **Gap**: No machine identity authentication exists. Any caller can invoke any endpoint without identification.
+- **Recommendation**: Enable OAuth2 with Cognito App Clients for agent machine identity.
 - **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`, `build.gradle`
 
 #### AUTH-Q2: Scoped Permissions (Least Privilege)
-- **Severity**: RISK
-- **Finding**: IAM role in CloudFormation scoped to S3 buckets. Application has no authorization model — `permitAll()` on all endpoints.
-- **Gap**: No application-level permission model.
-- **Recommendation**: Implement Spring Security RBAC with `AGENT_READ`/`AGENT_WRITE` roles.
-- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`, `../MonoToMicroAssets/MonoToMicroCF.yaml`
-
-#### AUTH-Q3: Action-Level Authorization
-- **Severity**: RISK
-- **Finding**: No action-level authorization. All endpoints use `@PreAuthorize("permitAll()")`. No read vs write differentiation.
-- **Gap**: Cannot grant read-only access to an agent.
-- **Recommendation**: Implement `@PreAuthorize("hasRole('WRITE')")` for write endpoints.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
-
-#### AUTH-Q4: Identity Propagation
-- **Severity**: RISK
-- **Finding**: OAuth2 libraries present but unused. No JWT extraction, no token exchange, no user context propagation.
-- **Gap**: Application cannot distinguish requests from different users or agents.
-- **Recommendation**: Configure OAuth2 resource server JWT validation. Use `SecurityContextHolder` for identity propagation.
-- **Evidence**: `build.gradle`, `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`
-
-#### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User
-- **Severity**: RISK
-- **Finding**: No identity model exists. All requests are anonymous. No distinction between access modes.
-- **Gap**: Cannot differentiate agent-as-self from agent-on-behalf-of-user.
-- **Recommendation**: Design separate OAuth2 flows for each mode.
+- **Severity**: RISK-SAFETY
+- **Finding**: `permitAll()` across all endpoints. No IAM policies, no role-per-service, no API Gateway resource policies. Zero permission boundaries.
+- **Gap**: No least-privilege enforcement for agent identities.
+- **Recommendation**: Implement RBAC with `AGENT_READER` role after AUTH-Q1 remediation.
 - **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`
 
-#### AUTH-Q6: Credential Management
-- **Severity**: RISK
-- **Finding**: Plaintext credentials in `application.properties` and CloudFormation template. No Secrets Manager, no Vault.
-- **Gap**: Database credentials committed to source code.
-- **Recommendation**: Migrate credentials to AWS Secrets Manager with automatic rotation.
-- **Evidence**: `src/main/resources/application.properties`, `../MonoToMicroAssets/MonoToMicroCF.yaml`
+#### AUTH-Q3: Action-Level Authorization
+- **Severity**: RISK-SAFETY
+- **Finding**: No action-level authorization. All methods use `@PreAuthorize("permitAll()")`. No ABAC, no fine-grained RBAC.
+- **Gap**: Cannot restrict agent to read-only access on resources that support both read and write.
+- **Recommendation**: Apply method-level Spring Security with read/write role separation.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java` (GET, POST, DELETE all permitAll)
 
-#### AUTH-Q7: Immutable Audit Logging ⚡
-- **Severity**: BLOCKER
-- **Conditional**: agent_scope is "write-enabled" — evaluated as BLOCKER
-- **Finding**: No audit logging. CloudWatch Logs captures `System.out.println()` only. 7-day retention. No immutable storage, no principal attribution.
-- **Gap**: No structured audit trail of write operations.
-- **Recommendation**: Implement structured JSON audit logging. Ship to S3 with object lock.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
-
-#### AUTH-Q8: Agent Identity Suspension
+#### AUTH-Q4: Identity Propagation and Delegation
 - **Severity**: RISK
-- **Finding**: No agent identity suspension mechanism. No identities exist to suspend (auth disabled).
-- **Gap**: Cannot isolate a misbehaving agent.
-- **Recommendation**: Design agent identities as individually revocable Cognito app clients.
+- **Finding**: No identity propagation. Disabled OAuth2 resource server. No JWT parsing, no token exchange, no user context headers.
+- **Gap**: Cannot distinguish agent-as-self vs. agent-on-behalf-of-user.
+- **Recommendation**: Implement JWT token exchange when enabling OAuth2 (AUTH-Q1).
+- **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`
+
+#### AUTH-Q5: Credential Management
+- **Severity**: RISK
+- **Finding**: Database credentials hardcoded in `application.properties`: username `MonoToMicroUser`, password `MonoToMicroPassword`. Only DB endpoint uses environment variable. No Secrets Manager, no Vault, no rotation.
+- **Gap**: Credentials in source code — security vulnerability. No credential rotation.
+- **Recommendation**: Move to AWS Secrets Manager with automatic rotation.
+- **Evidence**: `src/main/resources/application.properties`
+
+#### AUTH-Q6: Immutable Audit Logging ⚡
+- **Severity**: RISK-SAFETY
+- **Conditional**: agent_scope is "read-only" — evaluated as RISK-SAFETY
+- **Finding**: No audit logging. Only `System.out.println` and `e.printStackTrace()`. No CloudTrail, no CloudWatch log retention, no immutable storage.
+- **Gap**: No audit trail for any API call. Cannot prove who accessed what.
+- **Recommendation**: Implement SLF4J/Logback JSON logging with request interceptor and CloudWatch Logs.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/HealthController.java`, `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java`
+
+#### AUTH-Q7: Agent Identity Suspension
+- **Severity**: RISK-SAFETY
+- **Finding**: No identity concept exists to suspend. `permitAll()` means no identity is tracked. No API key revocation, no service account disable.
+- **Gap**: Cannot suspend a misbehaving agent without application-wide disruption.
+- **Recommendation**: Use per-agent Cognito App Clients with individual disable capability.
 - **Evidence**: `src/main/java/com/monoToMicro/security/ResourceServerConfig.java`
 
 ### 03 — State Management and Transactional Integrity
 
 #### STATE-Q1: Compensation and Rollback ⚡
-- **Severity**: BLOCKER
-- **Conditional**: agent_scope is "write-enabled" — evaluated as BLOCKER
-- **Finding**: No compensation or rollback for multi-step operations. `@Transactional` on individual operations only. No saga, no undo endpoints, no Step Functions.
-- **Gap**: Multi-step agent workflows leave partial state on failure.
-- **Recommendation**: Implement compensation endpoints and consider Step Functions for workflow orchestration.
-- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java`, `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java`
+- **Severity**: RISK-SAFETY
+- **Conditional**: agent_scope is "read-only" — evaluated as RISK-SAFETY
+- **Finding**: No saga, two-phase commit, undo endpoints, or compensating transactions. Operations are simple INSERT/DELETE with no multi-step coordination.
+- **Gap**: No compensation for failed multi-step operations.
+- **Recommendation**: Implement compensating transaction patterns before expanding to write-enabled scope.
+- **Evidence**: `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java`, `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`
 
 #### STATE-Q2: Queryable Current State
 - **Severity**: RISK
-- **Finding**: `GET /unicorns` and `GET /unicorns/basket/{userUuid}` provide state queries. No individual resource GETs, no user query endpoint.
-- **Gap**: Partial state queryability. No individual resource lookup.
-- **Recommendation**: Add `GET /unicorns/{uuid}` and `GET /user/{uuid}` endpoints.
+- **Finding**: Basic state queryable via `GET /unicorns` and `GET /unicorns/basket/{userUuid}`. No resource versioning, no ETags, no conditional reads.
+- **Gap**: No conditional read support (If-None-Match, ETags).
+- **Recommendation**: Add ETag support and expose temporal metadata.
 - **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
 
-#### STATE-Q3: Concurrency Controls
-- **Severity**: RISK
-- **Finding**: `synchronized` keyword on user creation. UNIQUE constraints prevent duplicate basket entries. No optimistic locking, no ETags.
-- **Gap**: No application-level concurrency controls beyond basic mechanisms.
-- **Recommendation**: Add version fields and ETag support for optimistic locking.
-- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java`, `database/create_tables.sql`
+#### STATE-Q3: Concurrency Controls ⚡
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: `synchronized` keyword on user creation. `INSERT IGNORE` for conflict resolution. No optimistic/pessimistic locking.
+- **Gap**: Minimal — informational for read-only scope.
+- **Recommendation**: Add optimistic locking before expanding to write-enabled scope.
+- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java`, `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`
 
 #### STATE-Q4: Circuit Breakers and Resilience
-- **Severity**: RISK
-- **Finding**: No circuit breakers. Bare `try/catch` with `e.printStackTrace()`. No timeouts, no retry logic, no fallbacks.
-- **Gap**: Database failures cascade to all callers with no protection.
-- **Recommendation**: Add Resilience4j circuit breakers and configure connection pool timeouts.
-- **Evidence**: `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java`, `src/main/resources/application.properties`
+- **Severity**: Not Evaluated (extended)
+- **Finding**: Extended question not triggered for this service. Archetype: `stateful-crud`, agent_scope: `read-only`.
+- **Trigger**: Service has external dependencies (calls other services or external APIs). This monolith is self-contained — only MySQL dependency, no external service calls.
+- **Gap**: Not evaluated
+- **Recommendation**: Not evaluated
+- **Evidence**: Not evaluated
 
 #### STATE-Q5: Rate Limiting and Throttling
-- **Severity**: RISK
-- **Finding**: No rate limiting at any layer. Direct EC2 behind nginx. No API Gateway, no WAF.
-- **Gap**: No protection against runaway agent loops.
-- **Recommendation**: Deploy API Gateway with usage plans and throttling.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`
+- **Severity**: RISK-SAFETY
+- **Finding**: No rate limiting at any layer. Direct EC2 exposure on port 8080. No API Gateway, WAF, or application-level rate limiter.
+- **Gap**: No protection against runaway agent traffic.
+- **Recommendation**: Deploy API Gateway with throttling as immediate fix.
+- **Evidence**: `build.gradle`, `src/main/resources/application.properties`
 
-#### STATE-Q6: Blast Radius and Transaction Limits
-- **Severity**: RISK
-- **Finding**: No configurable transaction limits. No per-agent quotas.
-- **Gap**: No business-level caps on agent operations.
-- **Recommendation**: Implement agent-specific transaction limits via API Gateway usage plans.
-- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
+#### STATE-Q6: Blast Radius and Transaction Limits ⚡
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No configurable transaction limits. No per-agent action caps.
+- **Gap**: Informational for read-only scope.
+- **Recommendation**: Implement per-agent limits before expanding to write-enabled scope.
+- **Evidence**: All service and controller classes
 
 #### STATE-Q7: Infrastructure Capacity for Agent Traffic
 - **Severity**: RISK
-- **Finding**: Single t3.small EC2 instance. No ASG, no ALB, no load testing. Workshop-grade infrastructure.
-- **Gap**: Cannot handle unpredictable agent traffic.
-- **Recommendation**: Deploy behind ALB with Auto Scaling Group. Conduct load testing.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`
+- **Finding**: Single EC2 instance. No load tests, no auto-scaling, no capacity planning. Uses `EC2MetadataUtils` confirming EC2 deployment.
+- **Gap**: Not sized for agent traffic patterns.
+- **Recommendation**: Load test, implement Auto Scaling Group, size MySQL connection pool.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/HealthController.java`
 
 ### 04 — Human-in-the-Loop and Approval Workflows
 
-#### HITL-Q1: Draft/Pending State
-- **Severity**: RISK
-- **Finding**: No draft/pending state. Writes commit immediately. `EventContext.State` enum defines `PENDING`/`IN_PROGRESS` but neither is used.
-- **Gap**: No draft state for agent proposals requiring human review.
-- **Recommendation**: Implement `DRAFT`/`PENDING`/`CONFIRMED` status on records.
-- **Evidence**: `src/main/java/com/monoToMicro/core/events/EventContext.java`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
+#### HITL-Q1: Draft/Pending State ⚡
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No draft/pending state concepts. All operations are immediate. No status fields in database tables.
+- **Gap**: Informational for read-only scope.
+- **Recommendation**: Add status fields before expanding to write-enabled scope.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java`, `database/create_tables.sql`
 
-#### HITL-Q2: Configurable Approval Gates
-- **Severity**: RISK
-- **Finding**: No approval gates. All operations execute immediately. No Step Functions approval tasks.
-- **Gap**: No mechanism to require human approval for high-risk operations.
-- **Recommendation**: Implement Step Functions with `waitForTaskToken` for approval workflows.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
+#### HITL-Q2: Configurable Approval Gates ⚡
+- **Severity**: INFO
+- **Scope-Calibrated**: agent_scope is "read-only" — evaluated as INFO
+- **Finding**: No approval gates. No approval endpoints, no Step Functions, no configurable flags.
+- **Gap**: Informational for read-only scope.
+- **Recommendation**: Implement Step Functions with `waitForTaskToken` for write-enabled scope.
+- **Evidence**: All controller classes
 
 #### HITL-Q3: Sandbox/Staging Environment
-- **Severity**: RISK
-- **Finding**: Single environment deployment. No staging/sandbox. No Docker Compose. No environment-specific configs.
-- **Gap**: No safe testing environment for agent behavior.
-- **Recommendation**: Create staging CloudFormation parameter files and Docker Compose for local dev.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`, `src/main/resources/application.properties`
+- **Severity**: RISK-QUALITY
+- **Finding**: No staging environment. Single `application.properties`. No docker-compose, no seed data scripts beyond `create_tables.sql`.
+- **Gap**: No safe environment to test agent behavior before production.
+- **Recommendation**: Create docker-compose with MySQL for local agent testing.
+- **Evidence**: `src/main/resources/application.properties`, `database/create_tables.sql`
 
 ### 05 — Data Accessibility and Quality
 
 #### DATA-Q1: Sensitive Data Classification
 - **Severity**: BLOCKER
-- **Finding**: No data classification. `unicorn_user` table contains PII (email, first_name, last_name) in plaintext. No field-level encryption, no Macie, no classification tags on CloudFormation resources.
-- **Gap**: PII stored and exposed without classification or access controls.
-- **Recommendation**: Classify all PII fields. Enable Macie. Add field-level access controls.
-- **Evidence**: `database/create_tables.sql`, `src/main/java/com/monoToMicro/core/model/User.java`, `../MonoToMicroAssets/MonoToMicroCF.yaml`
+- **Finding**: PII (email, first_name, last_name) in `unicorn_user` table. Exposed in API responses without classification, masking, or access controls. No field-level encryption, no Macie.
+- **Gap**: Unclassified PII exposed to all callers.
+- **Recommendation**: Classify PII fields. Implement response filtering for agent-facing endpoints.
+- **Evidence**: `database/create_tables.sql`, `src/main/java/com/monoToMicro/core/model/User.java`, `src/main/java/com/monoToMicro/rest/controller/UserController.java`
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
-- **Severity**: BLOCKER
-- **Conditional**: agent_scope is "write-enabled" — evaluated as BLOCKER
-- **Finding**: No data residency controls. No GDPR/LGPD references. PII could be sent to any jurisdiction by an agent.
-- **Gap**: No data residency policy or enforcement.
-- **Recommendation**: Document residency requirements. Enforce region-restricted data processing.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`, `database/create_tables.sql`
+- **Severity**: RISK-SAFETY
+- **Conditional**: agent_scope is "read-only" — evaluated as RISK-SAFETY
+- **Finding**: No data residency documentation or controls. DB endpoint parameterized via env var but no region constraints. PII stored with no residency policy.
+- **Gap**: Compliance boundary unknown for agent-LLM data transmission.
+- **Recommendation**: Document residency requirements. Use same-region Bedrock endpoints.
+- **Evidence**: `src/main/resources/application.properties`, `database/create_tables.sql`
 
 #### DATA-Q3: Selective Query Support
-- **Severity**: RISK
-- **Finding**: No pagination, filtering, or sorting. `SELECT *` with no LIMIT on all queries.
-- **Gap**: Unbounded result sets will exhaust agent context windows.
-- **Recommendation**: Add `?limit=20&offset=0` pagination to GET endpoints.
-- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`, `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`
+- **Severity**: RISK-QUALITY
+- **Finding**: `GET /unicorns` returns `SELECT * FROM unicorns` with no pagination. `GET /data` returns all baskets. No filters, sorting, or limits.
+- **Gap**: Unbounded result sets for agent queries.
+- **Recommendation**: Add pagination (`?limit=20&offset=0`) and filter parameters.
+- **Evidence**: `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml`
 
 #### DATA-Q4: System of Record Designations
-- **Severity**: RISK
-- **Finding**: No SoR designations. DMS replication creates data copies with no documented hierarchy.
-- **Gap**: No authoritative data source documented.
-- **Recommendation**: Document MySQL as system of record. Treat Aurora as read replica.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`, `database/create_tables.sql`
+- **Severity**: RISK-QUALITY
+- **Finding**: No system-of-record designations. No data ownership documentation.
+- **Gap**: No golden record designation for agent decision-making.
+- **Recommendation**: Document this monolith as system of record for unicorns, users, baskets.
+- **Evidence**: Absence of data ownership documentation
 
-#### DATA-Q5: Reliable Timestamps
-- **Severity**: RISK
-- **Finding**: `creation_date` and `last_modified_date` exist in DB but are `@JsonIgnore` in `CoreModel.java`. `last_modified_date` never updated. `serverTimezone=UTC` in JDBC URL.
-- **Gap**: Timestamps exist but are not exposed via API or maintained on updates.
-- **Recommendation**: Remove `@JsonIgnore` from timestamps. Add `ON UPDATE CURRENT_TIMESTAMP`.
-- **Evidence**: `database/create_tables.sql`, `src/main/java/com/monoToMicro/core/model/CoreModel.java`, `src/main/resources/application.properties`
+#### DATA-Q5: Temporal Metadata and Freshness
+- **Severity**: RISK-QUALITY
+- **Finding**: `creation_date` and `last_modified_date` columns exist in DB. `CoreModel.java` has DateTime fields but annotated `@JsonIgnore`. Timestamps not exposed in API responses. No Cache-Control headers.
+- **Gap**: Timestamps exist but hidden from API consumers.
+- **Recommendation**: Remove `@JsonIgnore` from temporal fields or create DTOs that include them.
+- **Evidence**: `database/create_tables.sql`, `src/main/java/com/monoToMicro/core/model/CoreModel.java`
 
-#### DATA-Q6: Data Freshness Signaling
-- **Severity**: RISK
-- **Finding**: No `Cache-Control`, `X-Data-Age`, or freshness headers. Data served directly from DB (always current).
-- **Gap**: No programmatic freshness verification for agents.
-- **Recommendation**: Add `Cache-Control: no-cache` and `Last-Modified` headers.
-- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`
-
-#### DATA-Q7: PII Redaction in Logs
-- **Severity**: RISK
-- **Finding**: `e.printStackTrace()` dumps stack traces with potential PII. No log scrubbing, no PII masking.
-- **Gap**: PII can leak into CloudWatch Logs.
-- **Recommendation**: Replace with SLF4J structured logging with PII masking patterns.
+#### DATA-Q6: PII Redaction in Logs
+- **Severity**: RISK-SAFETY
+- **Finding**: No PII redaction. `e.printStackTrace()` may dump email addresses in SQL errors. `System.out.println` for logging. No log scrubbing, no masking.
+- **Gap**: PII leaks into observable log surfaces on errors.
+- **Recommendation**: Replace `e.printStackTrace()` with SLF4J with PII masking.
 - **Evidence**: `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java`, `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java`
 
-#### DATA-Q8: Data Quality Awareness
+#### DATA-Q7: Data Quality Awareness
 - **Severity**: INFO
-- **Finding**: No data quality metrics. UNIQUE/NOT NULL constraints provide basic integrity. Small seed dataset.
-- **Gap**: N/A — dataset is small and seed-generated.
-- **Recommendation**: Implement data quality monitoring as dataset grows.
+- **Finding**: No data quality metrics. UNIQUE constraints provide basic deduplication. Seed data is synthetic with uniform pricing.
+- **Gap**: Agent cannot assess data quality.
+- **Recommendation**: Add data profiling for key fields as dataset grows.
 - **Evidence**: `database/create_tables.sql`
 
 ### 06 — Discoverability and Semantic Readiness
 
-#### DISC-Q1: Schema Documentation and Versioning
-- **Severity**: RISK
-- **Finding**: Schema in `create_tables.sql` only. No Flyway/Liquibase. No JSON Schema. No schema registry.
-- **Gap**: No schema versioning. Changes break agent queries silently.
-- **Recommendation**: Add Flyway for migration tracking. Document API schemas in OpenAPI spec.
-- **Evidence**: `database/create_tables.sql`, `build.gradle`
+#### DISC-Q1: Schema Versioning and API Contracts
+- **Severity**: RISK-QUALITY
+- **Finding**: No schema versioning. No JSON Schema, no schema registry, no migration tools. No API version prefixes. No breaking change detection.
+- **Gap**: Agent tool schemas break silently on API changes.
+- **Recommendation**: Add `/v1/` prefix and OpenAPI spec with diff detection.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/UnicornController.java`
 
 #### DISC-Q2: Semantically Meaningful Field Names
 - **Severity**: INFO
-- **Finding**: Fields are human-readable: `uuid`, `name`, `description`, `price`, `email`, `first_name`, `last_name`. No legacy abbreviations.
-- **Gap**: N/A — naming is agent-friendly.
-- **Recommendation**: Maintain current conventions.
-- **Evidence**: `database/create_tables.sql`, `src/main/java/com/monoToMicro/core/model/Unicorn.java`, `src/main/java/com/monoToMicro/core/model/User.java`
+- **Finding**: Semantic field names: `uuid`, `name`, `description`, `price`, `email`, `firstName`, `lastName`. No legacy abbreviations.
+- **Gap**: N/A — names are self-documenting.
+- **Recommendation**: Maintain naming conventions during decomposition.
+- **Evidence**: `src/main/java/com/monoToMicro/core/model/Unicorn.java`, `src/main/java/com/monoToMicro/core/model/User.java`
 
 #### DISC-Q3: Data Catalog / Metadata Layer
 - **Severity**: INFO
-- **Finding**: No data catalog. No Glue Data Catalog, no Collibra, no metadata files.
-- **Gap**: N/A — developers must inspect source code for data structures.
-- **Recommendation**: Create a basic data dictionary. Consider AWS Glue Data Catalog.
+- **Finding**: No data catalog. Schema in `create_tables.sql` is the only metadata source.
+- **Gap**: No machine-readable catalog for tool definition.
+- **Recommendation**: Create Glue Data Catalog entry during decomposition.
 - **Evidence**: `database/create_tables.sql`
-
-#### DISC-Q4: Data Lineage
-- **Severity**: INFO
-- **Finding**: No data lineage. DMS replication has no documented lineage. No ETL documentation.
-- **Gap**: N/A — cannot trace data origin for debugging.
-- **Recommendation**: Document data flow: seed data → MySQL → DMS → Aurora.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`, `database/create_tables.sql`
 
 ### 07 — Observability of Target Systems
 
 #### OBS-Q1: Distributed Tracing and Structured Logging
-- **Severity**: RISK
-- **Finding**: No distributed tracing (no X-Ray, no OpenTelemetry). Unstructured logging (`System.out.println()`, `e.printStackTrace()`). CloudWatch Agent collects plain text logs. No correlation IDs.
-- **Gap**: Agent-initiated requests cannot be traced. No structured log correlation.
-- **Recommendation**: Add X-Ray SDK and SLF4J/Logback with JSON formatting and correlation IDs.
-- **Evidence**: `build.gradle`, `src/main/java/com/monoToMicro/rest/controller/HealthController.java`
+- **Severity**: RISK-QUALITY
+- **Finding**: No OpenTelemetry, no X-Ray, no traceparent propagation. `System.out.println` and `e.printStackTrace()` only. No JSON logs, no correlation IDs.
+- **Gap**: Agent-initiated failures not debuggable.
+- **Recommendation**: Add SLF4J/Logback JSON logging and X-Ray SDK.
+- **Evidence**: `src/main/java/com/monoToMicro/rest/controller/HealthController.java`, `build.gradle`
 
 #### OBS-Q2: Alerting on Error Rates and Latency
-- **Severity**: RISK
-- **Finding**: No CloudWatch alarms. Log group with 7-day retention only. No anomaly detection. Spring Boot Actuator present but unconfigured.
-- **Gap**: Application degradation goes undetected.
-- **Recommendation**: Configure CloudWatch alarms on CPU, error patterns, and external health checks.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`, `build.gradle`
+- **Severity**: RISK-QUALITY
+- **Finding**: No CloudWatch alarms, no anomaly detection, no alerting. Spring Boot Actuator dependency present but unconfigured.
+- **Gap**: No alerts for system degradation affecting agent operations.
+- **Recommendation**: Configure CloudWatch alarms for 5xx rate and P99 latency.
+- **Evidence**: `build.gradle`, absence of monitoring configuration
 
 #### OBS-Q3: Business Outcome Metrics
 - **Severity**: INFO
-- **Finding**: No business metrics published. No custom CloudWatch metrics. Actuator present but no custom endpoints.
-- **Gap**: N/A — no business-level signal for agent effectiveness.
-- **Recommendation**: Publish CloudWatch metrics for basket add rate, user creation rate, basket abandonment.
-- **Evidence**: `build.gradle`, `src/main/java/com/monoToMicro/rest/controller/BasketController.java`
+- **Finding**: No custom business metrics. Actuator provides only infrastructure metrics.
+- **Gap**: Cannot measure agent interaction business outcomes.
+- **Recommendation**: Add custom CloudWatch metrics for baskets created, items added, registrations.
+- **Evidence**: `build.gradle`
 
 ### 08 — Engineering and Deployment Maturity
 
-#### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
-- **Severity**: RISK
-- **Finding**: CloudFormation IaC exists. cfn-nag scans MonoToMicroAssets on push. No drift detection. No PR review requirements. 1 of 3 sub-checks passes.
-- **Gap**: No drift detection. No mandatory change review.
-- **Recommendation**: Enable CloudFormation drift detection. Add branch protection rules.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`, `../.github/workflows/cfn-security.yml`
+#### ENG-Q1: Infrastructure Governance
+- **Severity**: RISK-QUALITY
+- **Finding**: No IaC files. EC2 deployment with no Terraform, CloudFormation, CDK, Helm. No peer review, no drift detection.
+- **Gap**: Integration surface not governed by code.
+- **Recommendation**: Define infrastructure in CDK/CloudFormation. Enable AWS Config drift detection.
+- **Evidence**: Absence of IaC files
 
 #### ENG-Q2: CI/CD with API Contract Testing
-- **Severity**: RISK
-- **Finding**: No application CI/CD pipeline. cfn-nag only. Application built on EC2 during cfn-init. No contract testing.
-- **Gap**: No automated build, test, or breaking-change detection.
-- **Recommendation**: Create GitHub Actions CI pipeline with build, test, and API contract validation.
-- **Evidence**: `../.github/workflows/cfn-security.yml`, `../MonoToMicroAssets/MonoToMicroCF.yaml`
+- **Severity**: RISK-QUALITY
+- **Finding**: No CI/CD pipeline files. No GitHub Actions, GitLab CI, Jenkins, CodeBuild. No contract tests.
+- **Gap**: API changes deployed without validation.
+- **Recommendation**: Create CI/CD pipeline with API contract testing.
+- **Evidence**: Absence of pipeline configuration files
 
 #### ENG-Q3: Rollback Capability
-- **Severity**: RISK
-- **Finding**: Single EC2 deployment via cfn-init. No blue/green, no canary, no CodeDeploy. Rollback requires full stack redeployment.
-- **Gap**: No fast rollback capability.
-- **Recommendation**: Implement blue/green deployment with CodeDeploy or ALB-based rolling updates.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`
+- **Severity**: RISK-QUALITY
+- **Finding**: No deployment orchestration. No blue/green, no CodeDeploy, no feature flags. Direct JAR deployment on EC2.
+- **Gap**: No automated rollback for agent-breaking deployments.
+- **Recommendation**: Implement CodeDeploy with blue/green and automatic rollback.
+- **Evidence**: `build.gradle` (bootJar with launchScript)
 
 #### ENG-Q4: API Test Coverage
-- **Severity**: RISK
-- **Finding**: Zero test files. `spring-boot-starter-test` dependency present but no `src/test/` directory. No test suites.
-- **Gap**: Zero automated test coverage.
-- **Recommendation**: Create unit tests, integration tests, and API contract tests targeting 80% endpoint coverage.
+- **Severity**: RISK-QUALITY
+- **Finding**: Zero test files. `spring-boot-starter-test` declared but no test classes exist. No `src/test/` directory.
+- **Gap**: No automated tests for agent-facing APIs.
+- **Recommendation**: Create integration tests with MockMvc or REST Assured.
 - **Evidence**: `build.gradle`
 
-#### ENG-Q5: Encryption at Rest for Agent-Accessible Data
-- **Severity**: RISK
-- **Finding**: RDS cluster has no `StorageEncrypted: true`. S3 buckets have no encryption config. No EBS encryption.
-- **Gap**: All data at rest is unencrypted.
-- **Recommendation**: Add `StorageEncrypted: true` to RDS. Add `BucketEncryption` to S3 buckets. Enable account EBS encryption.
-- **Evidence**: `../MonoToMicroAssets/MonoToMicroCF.yaml`
-
-#### ENG-Q6: Cross-Origin and Network Policies
-- **Severity**: BLOCKER
-- **Finding**: Permissive CORS in `MVCConfig.java` (all methods, all paths). `Application.java` ignores all OPTIONS with "not recommended for production" comment. Security groups allow inbound 80/443 from 0.0.0.0/0. No WAF.
-- **Gap**: Any origin can call any endpoint. No network access restrictions.
-- **Recommendation**: Restrict CORS origins. Deploy API Gateway with WAF. Restrict security group inbound to API Gateway only.
-- **Evidence**: `src/main/java/com/monoToMicro/config/MVCConfig.java`, `src/main/java/com/monoToMicro/Application.java`, `../MonoToMicroAssets/MonoToMicroCF.yaml`
-
----
-
+#### ENG-Q5: Encryption at Rest
+- **Severity**: RISK-QUALITY
+- **Finding**: No encryption at rest configuration. No KMS keys, no encryption in IaC. JDBC connection without SSL/TLS parameters. PII stored potentially unencrypted.
+- **Gap**: Data at rest and in transit not demonstrably encrypted.
+- **Recommendation**: Enable RDS encryption with KMS. Add SSL to JDBC connection string.
+- **Evidence**: `src/main/resources/application.properties`
 ## Evidence Index
-
-### Infrastructure as Code
-| File | Questions Referenced |
-|------|---------------------|
-| `../MonoToMicroAssets/MonoToMicroCF.yaml` | AUTH-Q1, AUTH-Q2, AUTH-Q6, AUTH-Q7, AUTH-Q8, STATE-Q5, STATE-Q7, HITL-Q3, DATA-Q1, DATA-Q2, DATA-Q4, DISC-Q4, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q5, ENG-Q6, API-Q8, API-Q9 |
 
 ### Source Code
 | File | Questions Referenced |
 |------|---------------------|
-| `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` | API-Q1, API-Q2, API-Q3, API-Q5, API-Q9, AUTH-Q1, DATA-Q3, DATA-Q6 |
-| `src/main/java/com/monoToMicro/rest/controller/BasketController.java` | API-Q1, API-Q3, API-Q4, API-Q7, AUTH-Q3, AUTH-Q7, STATE-Q2, STATE-Q6, HITL-Q1, HITL-Q2, OBS-Q3 |
-| `src/main/java/com/monoToMicro/rest/controller/UserController.java` | API-Q1, API-Q5, AUTH-Q3 |
-| `src/main/java/com/monoToMicro/rest/controller/HealthController.java` | API-Q1, DATA-Q7, OBS-Q1 |
-| `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` | API-Q1, API-Q3, API-Q7 |
-| `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q8 |
-| `src/main/java/com/monoToMicro/Application.java` | AUTH-Q5, ENG-Q6 |
-| `src/main/java/com/monoToMicro/config/MVCConfig.java` | ENG-Q6 |
-| `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` | API-Q3, STATE-Q1, STATE-Q4, DATA-Q7 |
-| `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` | STATE-Q3, DATA-Q7 |
-| `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` | STATE-Q1, API-Q8 |
-| `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java` | API-Q4, DATA-Q5 |
-| `src/main/java/com/monoToMicro/core/model/CoreModel.java` | API-Q6, DATA-Q5 |
-| `src/main/java/com/monoToMicro/core/model/Unicorn.java` | API-Q6, DISC-Q2 |
+| `src/main/java/com/monoToMicro/Application.java` | AUTH-Q1 |
+| `src/main/java/com/monoToMicro/security/ResourceServerConfig.java` | AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q7 |
+| `src/main/java/com/monoToMicro/rest/controller/BasketController.java` | API-Q1, API-Q3, AUTH-Q1, AUTH-Q3, STATE-Q2, HITL-Q1 |
+| `src/main/java/com/monoToMicro/rest/controller/UnicornController.java` | API-Q1, API-Q3, STATE-Q2, DISC-Q1 |
+| `src/main/java/com/monoToMicro/rest/controller/UserController.java` | API-Q1, AUTH-Q3, DATA-Q1 |
+| `src/main/java/com/monoToMicro/rest/controller/HealthController.java` | API-Q1, AUTH-Q6, OBS-Q1, STATE-Q7, DATA-Q6 |
+| `src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java` | API-Q1, DATA-Q3 |
+| `src/main/java/com/monoToMicro/rest/controller/CoreController.java` | API-Q1 |
+| `src/main/java/com/monoToMicro/core/model/CoreModel.java` | API-Q5, DATA-Q5 |
+| `src/main/java/com/monoToMicro/core/model/Unicorn.java` | API-Q5, DISC-Q2 |
+| `src/main/java/com/monoToMicro/core/model/UnicornBasket.java` | API-Q1 |
 | `src/main/java/com/monoToMicro/core/model/User.java` | DATA-Q1, DISC-Q2 |
-| `src/main/java/com/monoToMicro/core/events/EventContext.java` | HITL-Q1 |
-
-### CI/CD Configurations
-| File | Questions Referenced |
-|------|---------------------|
-| `../.github/workflows/cfn-security.yml` | ENG-Q1, ENG-Q2 |
+| `src/main/java/com/monoToMicro/core/repository/UnicornRepositoryImpl.java` | AUTH-Q6, DATA-Q6, OBS-Q1 |
+| `src/main/java/com/monoToMicro/core/repository/UserRepositoryImpl.java` | STATE-Q3, AUTH-Q6, DATA-Q6 |
+| `src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java` | STATE-Q1 |
+| `src/main/java/com/monoToMicro/core/services/UserServiceImpl.java` | STATE-Q1 |
+| `src/main/java/com/monoToMicro/config/MyBatisConfig.java` | API-Q1 |
+| `src/main/java/com/monoToMicro/config/CoreConfig.java` | AUTH-Q1 |
+| `src/main/java/com/monoToMicro/config/DateTimeTypeHandler.java` | DATA-Q5 |
+| `src/main/java/com/monoToMicro/config/MVCConfig.java` | API-Q1 |
 
 ### Dependency Manifests
 | File | Questions Referenced |
 |------|---------------------|
-| `build.gradle` | AUTH-Q1, AUTH-Q4, API-Q2, API-Q10, DISC-Q1, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q4 |
+| `build.gradle` | AUTH-Q1, AUTH-Q7, API-Q2, API-Q8, STATE-Q5, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q3, ENG-Q4 |
+| `gradle/wrapper/gradle-wrapper.properties` | ENG-Q1 |
 
 ### Configuration Files
 | File | Questions Referenced |
 |------|---------------------|
-| `src/main/resources/application.properties` | AUTH-Q6, STATE-Q4, DATA-Q2, DATA-Q5, HITL-Q3 |
-| `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` | API-Q4, STATE-Q1, STATE-Q6, DATA-Q3, DATA-Q8, API-Q10 |
-| `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml` | API-Q4, DATA-Q5 |
-| `database/create_tables.sql` | STATE-Q3, DATA-Q1, DATA-Q2, DATA-Q4, DATA-Q5, DATA-Q8, DISC-Q1, DISC-Q2, DISC-Q3, DISC-Q4 |
+| `src/main/resources/application.properties` | AUTH-Q5, DATA-Q2, STATE-Q5, ENG-Q5, HITL-Q3 |
+| `src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml` | API-Q4, STATE-Q1, STATE-Q3, DATA-Q3 |
+| `src/main/resources/com/monoToMicro/core/repository/mappers/UserMapper.xml` | API-Q4, DATA-Q1 |
+| `src/main/resources/com/monoToMicro/core/repository/mappers/HealthMapper.xml` | API-Q1 |
+
+### Database Scripts
+| File | Questions Referenced |
+|------|---------------------|
+| `database/create_tables.sql` | DATA-Q1, DATA-Q2, DATA-Q5, DATA-Q7, DISC-Q2, DISC-Q3, HITL-Q1 |
+
+### Notable Absences (evidence by absence)
+| Category | Absence | Questions Impacted |
+|----------|---------|-------------------|
+| IaC files | No `.tf`, `.cfn.yaml`, `cdk.json`, `Chart.yaml`, `kustomization.yaml` | ENG-Q1, AUTH-Q6, STATE-Q5 |
+| API specifications | No `openapi.yaml`, `swagger.yaml`, `.graphql`, `.smithy` | API-Q2, DISC-Q1 |
+| CI/CD configurations | No `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `buildspec.yml` | ENG-Q2, ENG-Q3 |
+| Container definitions | No `Dockerfile`, `docker-compose.yml` | HITL-Q3 |
+| Test files | No `src/test/` directory, no test classes | ENG-Q4 |
+| Environment files | No `.env`, no `application-staging.properties` | HITL-Q3 |
+| Monitoring config | No CloudWatch alarm definitions, no alerting config | OBS-Q2 |
+
+---
+
+*End of Agentic Readiness Assessment Report*

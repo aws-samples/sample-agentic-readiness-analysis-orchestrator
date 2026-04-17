@@ -27,7 +27,7 @@ The output is a detailed Markdown report saved as `portfolio-ara-report.md` cont
 - Cross-cutting RISKs (same risk question in 3+ repos)
 - Service dependency map from dependency_overrides
 - Portfolio-level remediation guidance for cross-cutting blockers
-- Agentic program recommendations (AgentStorming, AXE, EBA on Agentic AI)
+- Agentic program recommendations (AI DLC, AgentStorming, AXE, EBA on Agentic AI)
 - Service-by-service summary (repo name, profile, blocker count, risk count)
 
 This portfolio TD focuses exclusively on cross-cutting BLOCKER/RISK identification across multiple ARA reports. It does not include modernization pathways, roadmap phases, numeric scores, technology preferences, or resource allocation recommendations.
@@ -152,7 +152,7 @@ Extract from the report metadata header:
 
 Extract the readiness profile from the "Readiness Profile" section:
 
-- **Profile** — One of: `Agent-Ready`, `Pilot-Ready`, `Remediation Required`, `Not Agent-Integrable`
+- **Profile** — One of: `Agent-Ready`, `Pilot-Ready`, `Pilot-Ready (Safety Concerns)`, `Remediation Required`, `Not Agent-Integrable`
 - **Blocker count** — Number of BLOCKERs (excluding N/A)
 - **Risk count** — Number of RISKs (excluding N/A)
 - **Info count** — Number of INFOs (excluding N/A)
@@ -202,6 +202,7 @@ Count and calculate the percentage of services in each readiness profile:
 |---------|-------|------------|
 | Agent-Ready | N | X% |
 | Pilot-Ready | N | X% |
+| Pilot-Ready (Safety Concerns) | N | X% |
 | Remediation Required | N | X% |
 | Not Agent-Integrable | N | X% |
 
@@ -291,13 +292,18 @@ Fields:
 | `total_services` | integer | Count of assessed services |
 | `agent_ready` | integer | Count with Agent-Ready profile |
 | `pilot_ready` | integer | Count with Pilot-Ready profile |
+| `pilot_ready_safety_concerns` | integer | Count with Pilot-Ready (Safety Concerns) profile |
 | `remediation_required` | integer | Count with Remediation Required profile |
 | `not_integrable` | integer | Count with Not Agent-Integrable profile |
 | `total_blockers` | integer | Sum of BLOCKER counts across all services |
-| `total_risks` | integer | Sum of RISK counts across all services |
+| `total_risks` | integer | Sum of RISK counts across all services (RISK-SAFETY + RISK-QUALITY, retained for backward compatibility) |
+| `total_risk_safety` | integer | Sum of RISK-SAFETY counts across all services |
+| `total_risk_quality` | integer | Sum of RISK-QUALITY counts across all services |
 | `total_infos` | integer | Sum of INFO counts across all services |
 | `cross_cutting_blockers` | integer | Count of question IDs that are BLOCKER in 2+ repos |
-| `cross_cutting_risks` | integer | Count of question IDs that are RISK in 3+ repos |
+| `cross_cutting_risks` | integer | Count of question IDs that are RISK in 3+ repos (RISK-SAFETY + RISK-QUALITY, retained for backward compatibility) |
+| `cross_cutting_risk_safety` | integer | Count of RISK-SAFETY questions in 3+ repos |
+| `cross_cutting_risk_quality` | integer | Count of RISK-QUALITY questions in 3+ repos |
 | `portfolio_level_blockers` | integer | Count of portfolio-level questions (PORT-ARA-Q1–Q5) scored as BLOCKER |
 | `portfolio_level_risks` | integer | Count of portfolio-level questions (PORT-ARA-Q1–Q5) scored as RISK |
 | `write_enabled_services` | integer | Count with write-enabled agent scope |
@@ -357,21 +363,24 @@ For conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q7, DATA-Q2):
 
 ### Step 4b: Identify Cross-Cutting RISKs
 
-Identify RISK questions that appear across multiple services. These represent portfolio-wide patterns that warrant coordinated attention.
+Identify RISK questions that appear across multiple services. These represent portfolio-wide patterns that warrant coordinated attention. Cross-cutting RISKs are aggregated separately for RISK-SAFETY and RISK-QUALITY tiers.
 
 #### 4b.1 Cross-Cutting RISK Identification
 
-For each of the 49 ARA question IDs:
+For each of the 49 ARA question IDs, determine the question's RISK tier (RISK-SAFETY or RISK-QUALITY) and run the aggregation algorithm separately per tier:
 
-1. Collect the severity for that question across all services
-2. **Exclude services where the question is N/A** — a question that is N/A for a service does not count as a RISK for that service
-3. Count the number of services where the question has severity = RISK
-4. **If the count is 3 or more**, flag the question as a cross-cutting RISK
+1. Determine the RISK tier for the question (RISK-SAFETY or RISK-QUALITY)
+2. Collect the severity for that question across all services
+3. **Exclude services where the question is N/A** — a question that is N/A for a service does not count as a RISK for that service
+4. Count the number of services where the question has severity matching the specific tier (RISK-SAFETY or RISK-QUALITY)
+5. **If the count is 3 or more**, flag the question as a cross-cutting finding for that tier
 
 **Algorithm:**
 
 ```
 for each question_id in all_49_questions:
+    tier = get_risk_tier(question_id)  # RISK-SAFETY or RISK-QUALITY
+    
     risk_services = []
     applicable_services = []
     
@@ -380,21 +389,30 @@ for each question_id in all_49_questions:
         if severity == "N/A":
             continue  # Skip — N/A is not a gap
         applicable_services.append(service)
-        if severity == "RISK":
+        if severity == tier:  # Match the specific tier
             risk_services.append(service)
     
     if len(risk_services) >= 3:
-        flag as cross-cutting RISK
-        record: question_id, risk_services, applicable_services count
+        flag as cross-cutting {tier} finding
+        record: question_id, tier, risk_services, applicable_services count
 ```
+
+**RISK-SAFETY questions (9):** AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, STATE-Q1, STATE-Q4, STATE-Q5, DATA-Q2, DATA-Q6
+
+**RISK-QUALITY questions (15):** API-Q2, API-Q3, DATA-Q3, DATA-Q4, DATA-Q5, DISC-Q1, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, HITL-Q3
+
+Note: AUTH-Q7, STATE-Q1, and DATA-Q2 are conditional BLOCKER questions. When the conditional resolves to RISK (read-only scope), they resolve to RISK-SAFETY. Only count services where the resolved severity matches RISK-SAFETY for these questions.
 
 #### 4b.2 Cross-Cutting RISK Output
 
+Cross-cutting RISKs are split into two subsections: RISK-SAFETY findings first, then RISK-QUALITY findings.
+
 For each cross-cutting RISK, record:
 
-- **Question ID** — e.g., API-Q2
-- **Question topic** — e.g., "Machine-Readable API Specification"
-- **Affected services** — List of service names where this is a RISK
+- **Question ID** — e.g., AUTH-Q2
+- **Tier** — RISK-SAFETY or RISK-QUALITY
+- **Question topic** — e.g., "Scoped Permissions"
+- **Affected services** — List of service names where this is a RISK at the matching tier
 - **Applicable services** — Count of services where this question is not N/A
 - **Impact** — X of Y applicable services have this RISK
 - **Common findings** — Summarize the findings across affected services
@@ -508,17 +526,19 @@ Evaluate each program against its trigger condition. Include a program in the re
 
 | Program | Description | Trigger Condition | How to Evaluate |
 |---------|-------------|-------------------|-----------------|
+| **AI DLC (AI Driven Development Lifecycle)** | Workshop for adopting the AI Driven Development Lifecycle, emphasizing two dimensions: (1) AI Powered Execution with Human Oversight — AI creates detailed work plans, seeks clarification, and defers critical decisions to humans who possess contextual understanding and business knowledge; (2) Dynamic Team Collaboration — as AI handles routine tasks, teams unite in collaborative spaces for real-time problem solving, creative thinking, and rapid decision-making, shifting from isolated work to high-energy teamwork that accelerates innovation and delivery. | Portfolio shows teams without established AI-assisted development practices, or when engineering maturity scores indicate manual development workflows that could benefit from AI-driven automation. | Check ENG category scores across the portfolio. If the average ENG score is below 2.5, or if 50%+ of services show no CI/CD automation (ENG-Q2 score < 2), recommend AI DLC. Also recommend if the portfolio context mentions desire for AI-assisted development practices. |
 | **AgentStorming** | A workshop format that builds on EventStorming by adding Cognitive Complexity Analysis and Agentic Workflow Design to pinpoint where agentic AI delivers real value versus traditional automation. Gives customers a structured, repeatable path from "where should we use AI?" to a qualified, implementation-ready answer. | Portfolio shows inconsistent process documentation, lack of process modeling syntax, or unclear agent opportunity identification across business units. Run before ARA to identify where agents should operate. | Check if the portfolio context mentions unclear agent use cases, or if the assessment was run without a clear `context` field describing the agent use case. If the portfolio has no defined agent scope or the context is vague (e.g., "exploring AI opportunities"), recommend AgentStorming. Also recommend if 50%+ of services have no clear agent integration path identified in their individual reports. |
 | **AXE (Agentic Experience Workshop)** | A strategic methodology that helps enterprises implement agentic AI solutions by starting with desired customer and employee experience and working backwards to define AI agents and technical architecture. Built on the proven D2E methodology with 580+ successful engagements, AXE delivers a six-phase framework covering business process mapping, task identification, evaluation metrics, data architecture, governance, and guardrails. The Guardrails & Boundaries phase aligns with ARA, which evaluates whether target systems have the technical controls needed to safely support autonomous agents. Together, they provide a complete assess-to-implement pathway: ARA validates system readiness while AXE designs the agent experience and implementation roadmap. | Portfolio shows 3+ services in "Pilot-Ready" or "Agent-Ready" state, or when business has defined customer/employee experience goals but lacks technical implementation roadmap. | Count services with profile Agent-Ready or Pilot-Ready. If count >= 3, recommend AXE. Also recommend if the portfolio `context` describes experience-level goals (e.g., "customer support agent", "employee productivity") without a corresponding technical implementation plan. |
-| **EBA on Agentic AI** (Experience-Based Acceleration) | Hands-on implementation support for organizations that need accelerated path from assessment to production deployment. Provides coordinated architecture remediation across multiple services with AWS specialist guidance. | Portfolio shows systemic cross-cutting blockers appearing in 5+ repositories requiring coordinated architecture remediation, or when organization needs accelerated path from assessment to production deployment. | Count cross-cutting BLOCKERs (same BLOCKER in 2+ repos). If any single BLOCKER affects 5+ repos, recommend EBA on Agentic AI. Also recommend if total cross-cutting BLOCKERs >= 3 (indicating systemic issues requiring coordinated remediation). |
+| **EBA on Agentic AI** (Experience-Based Acceleration) | An Agentic EBA is an intensive, time-boxed engagement that accelerates an organization's path from agentic readiness assessment to production deployment of autonomous AI agents. It is designed for organizations where executive leadership has committed to an agentic AI transformation and where portfolio-level ARA findings reveal systemic gaps that cannot be resolved through standard advisory engagements alone. The engagement embeds AWS expertise to compress multi-quarter remediation cycles into a focused sprint, producing working outcomes — remediated systems, validated agent integrations, and a sequenced deployment roadmap that customers can keep doing. | Portfolio-level ARA results show systemic cross-cutting blockers appearing across five or more repositories, requiring coordinated architecture remediation. | Count cross-cutting BLOCKERs (same BLOCKER in 2+ repos). If any single cross-cutting BLOCKER affects 5 or more repositories, recommend EBA on Agentic AI. |
 
 #### 7.2 Program Sequencing Guidance
 
 When multiple programs are triggered, recommend them in this order:
 
-1. **AgentStorming** (if triggered) — Run first to identify where agents should operate before assessing system readiness
-2. **AXE** (if triggered) — Run after AgentStorming (or after ARA if AgentStorming was not needed) to design the agent experience and implementation roadmap
-3. **EBA on Agentic AI** (if triggered) — Run after AXE to accelerate implementation with hands-on remediation support
+1. **AI DLC** (if triggered) — Run first to establish AI-driven development practices before agentic work
+2. **AgentStorming** (if triggered) — Run to identify where agents should operate
+3. **AXE** (if triggered) — Run after AgentStorming to design the agent experience
+4. **EBA on Agentic AI** (if triggered) — Run after AXE to accelerate implementation
 
 If only one program is triggered, recommend it directly without sequencing context.
 
@@ -526,7 +546,7 @@ If only one program is triggered, recommend it directly without sequencing conte
 
 For each triggered program:
 
-- **Program name** — AgentStorming, AXE, or EBA on Agentic AI
+- **Program name** — AI DLC, AgentStorming, AXE, or EBA on Agentic AI
 - **Relevance** — Why this program is recommended based on portfolio findings
 - **Trigger findings** — Specific portfolio metrics that triggered the recommendation
 - **What it provides** — Brief description of the program's value
@@ -610,8 +630,9 @@ The portfolio ARA report is saved as `portfolio-ara-report.md`. The complete rep
 
 | Profile | Services | Percentage | Description |
 |---------|----------|------------|-------------|
-| ✅ Agent-Ready | N | X% | 0 blockers, 0–2 risks — broad agent deployment |
-| 🟡 Pilot-Ready | N | X% | 0 blockers, 3–5 risks — narrow pilot only |
+| ✅ Agent-Ready | N | X% | 0 blockers, 0 RISK-SAFETY — broad agent deployment |
+| 🟡 Pilot-Ready | N | X% | 0 blockers, 1–2 RISK-SAFETY — narrow pilot |
+| 🟡 Pilot-Ready (Safety Concerns) | N | X% | 0 blockers, 3+ RISK-SAFETY — supervised pilot, prioritize safety |
 | 🟠 Remediation Required | N | X% | 1–2 blockers — remediate before any agent deployment |
 | ❌ Not Agent-Integrable | N | X% | 3+ blockers — deferred or descoped |
 
@@ -652,13 +673,18 @@ The portfolio ARA report is saved as `portfolio-ara-report.md`. The complete rep
 | total_services | <N> |
 | agent_ready | <N> |
 | pilot_ready | <N> |
+| pilot_ready_safety_concerns | <N> |
 | remediation_required | <N> |
 | not_integrable | <N> |
 | total_blockers | <N> |
 | total_risks | <N> |
+| total_risk_safety | <N> |
+| total_risk_quality | <N> |
 | total_infos | <N> |
 | cross_cutting_blockers | <N> |
 | cross_cutting_risks | <N> |
+| cross_cutting_risk_safety | <N> |
+| cross_cutting_risk_quality | <N> |
 | portfolio_level_blockers | <N> |
 | portfolio_level_risks | <N> |
 | write_enabled_services | <N> |
@@ -710,30 +736,63 @@ No BLOCKER-severity questions appear in 2 or more repositories. Individual servi
 ### Cross-Cutting RISKs
 
 ```markdown
-## Cross-Cutting RISKs — Same Risk in 3+ Repos
+## Cross-Cutting RISKs
 
-> These are RISK-severity questions that appear in 3 or more repositories.
-> They represent portfolio-wide patterns warranting coordinated attention.
+### Cross-Cutting RISK-SAFETY — Same Safety Risk in 3+ Repos
+
+> These are RISK-SAFETY questions that appear in 3 or more repositories.
+> They represent portfolio-wide agent safety gaps requiring coordinated attention.
 > Questions scored as N/A for a service do not count as gaps for that service.
 
 ### <question_id>: <question topic>
 
-- **Severity**: RISK in <N> of <M applicable> services
+- **Severity**: RISK-SAFETY in <N> of <M applicable> services
 - **Affected Services**: <comma-separated service names>
 - **Common Finding**: <summarized finding pattern across affected services>
 - **Compensating Controls**: <portfolio-level compensating controls that can be applied across services>
 - **Portfolio-Level Recommendation**: <coordinated recommendation addressing all affected services>
 - **Estimated Effort**: High / Medium / Low
 
-<Repeat for each cross-cutting RISK, ordered by number of affected services (most affected first).>
+<Repeat for each cross-cutting RISK-SAFETY, ordered by number of affected services (most affected first).>
+
+<If no cross-cutting RISK-SAFETY findings are identified:>
+
+No RISK-SAFETY questions appear in 3 or more repositories.
+
+### Cross-Cutting RISK-QUALITY — Same Quality Risk in 3+ Repos
+
+> These are RISK-QUALITY questions that appear in 3 or more repositories.
+> They represent portfolio-wide quality patterns to address as capacity allows.
+> Questions scored as N/A for a service do not count as gaps for that service.
+
+### <question_id>: <question topic>
+
+- **Severity**: RISK-QUALITY in <N> of <M applicable> services
+- **Affected Services**: <comma-separated service names>
+- **Common Finding**: <summarized finding pattern across affected services>
+- **Compensating Controls**: <portfolio-level compensating controls that can be applied across services>
+- **Portfolio-Level Recommendation**: <coordinated recommendation addressing all affected services>
+- **Estimated Effort**: High / Medium / Low
+
+<Repeat for each cross-cutting RISK-QUALITY, ordered by number of affected services (most affected first).>
+
+<If no cross-cutting RISK-QUALITY findings are identified:>
+
+No RISK-QUALITY questions appear in 3 or more repositories.
 ```
 
-If no cross-cutting RISKs are identified:
+If no cross-cutting RISKs are identified in either tier:
 
 ```markdown
-## Cross-Cutting RISKs — Same Risk in 3+ Repos
+## Cross-Cutting RISKs
 
-No RISK-severity questions appear in 3 or more repositories. Individual service RISKs are listed in the service-by-service summary below.
+### Cross-Cutting RISK-SAFETY — Same Safety Risk in 3+ Repos
+
+No RISK-SAFETY questions appear in 3 or more repositories.
+
+### Cross-Cutting RISK-QUALITY — Same Quality Risk in 3+ Repos
+
+No RISK-QUALITY questions appear in 3 or more repositories. Individual service RISKs are listed in the service-by-service summary below.
 ```
 
 ---
@@ -940,7 +999,9 @@ The complete report structure, for reference:
    - Blocker Heatmap by Section
    - Readiness Snapshot
 2. Cross-Cutting BLOCKERs — Same Blocker in 2+ Repos
-3. Cross-Cutting RISKs — Same Risk in 3+ Repos
+3. Cross-Cutting RISKs
+   - Cross-Cutting RISK-SAFETY — Same Safety Risk in 3+ Repos
+   - Cross-Cutting RISK-QUALITY — Same Quality Risk in 3+ Repos
 4. Service Dependency Map
 5. Portfolio Remediation Guidance
 6. Agentic Program Recommendations

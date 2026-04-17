@@ -37,7 +37,7 @@ The assessment evaluates 7 AWS Modernization Pathways, each with defined trigger
 | **Move to Managed Databases** | INF-Q2 < 3, DATA-Q3 < 3 | — |
 | **Move to Managed Analytics** | INF-Q4 < 3, data source sprawl with no unified access layer | Evidence of data processing workloads must exist |
 | **Move to Modern DevOps** | INF-Q10 < 3, INF-Q11 < 3, OPS-Q5 < 3, OPS-Q6 < 3 | — |
-| **Move to AI** | No AI/agent frameworks, no vector DB, no RAG, no agent eval framework | — |
+| **Move to AI** | No AI/agent frameworks, no vector DB, no RAG, no agent eval framework | Requires AI/agent/LLM intent in portfolio or service context |
 
 All 7 pathways appear in the pathway summary table with status: **Triggered**, **Not Triggered**, or **Not Applicable** (for repo_types where the pathway does not apply).
 
@@ -122,7 +122,7 @@ The MOD TD does **not** read, validate, or apply the following fields from `addi
 Record the resolved values from Steps 0.1–0.2 in the assessment context. They will be used in subsequent steps as follows:
 
 - **`repo_type`** → Used in the N/A Mapping to determine which questions are scored as N/A and which pathways are marked Not Applicable for the detected repo type. Included in the report metadata header.
-- **`context`** → Used throughout the report to frame findings and recommendations with repository-specific context. For example, if context mentions "legacy PHP e-commerce", recommendations reference the specific technology stack and business domain.
+- **`context`** → Used throughout the report to frame findings and recommendations with repository-specific context. For example, if context mentions "legacy PHP e-commerce", recommendations reference the specific technology stack and business domain. Also used by the Move to AI pathway (Step 7.7) as a contextual guard. The pathway only triggers when the context explicitly mentions AI/agent/LLM use cases. This prevents false-positive triggers on services where AI adoption is not a goal.
 - **`priority`** → Recorded in the report metadata header. Used by the Portfolio MOD TD for service ordering within roadmap phases.
 - **`tags`** → Recorded in the report metadata header.
 - **`preferences`** → Used throughout the report to steer technology recommendations. When `prefer` contains values, recommendations favor those technologies where applicable (e.g., if `prefer: ["eks"]`, container recommendations reference EKS over ECS). When `avoid` contains values, recommendations steer away from those technologies (e.g., if `avoid: ["serverless"]`, recommendations do not suggest Lambda-based approaches). Preferences influence recommendation framing only — they do not change scores, N/A mappings, or pathway trigger logic.
@@ -1157,7 +1157,36 @@ The guard prevents recommending managed analytics infrastructure to applications
 
 **Trigger Logic:** Triggered when the primary condition is met (no AI/agent frameworks detected). Supporting conditions strengthen the case and expand the scope of recommendations.
 
-**Contextual Guard:** None — in the context of modernization, AI readiness is universally relevant as organizations prepare for agentic workloads. Every application can benefit from AI capabilities, whether through direct AI integration, AI-assisted operations, or preparation for future agentic use cases.
+**Contextual Guard:** Requires explicit AI/agent/LLM intent in the portfolio or service context. Before evaluating primary trigger conditions, scan both the portfolio-level `context` and the service-level `context` (from `additionalPlanContext`) for AI-related signal terms.
+
+**AI-Related Signal Terms (case-insensitive):**
+"AI", "agent", "agentic", "LLM", "machine learning", "ML", "Bedrock", "generative", "GenAI", "RAG", "vector", "embedding", "copilot", "assistant", "chatbot", "autonomous"
+
+**Guard Logic:**
+
+```
+ai_signals = ["AI", "agent", "agentic", "LLM", "machine learning", "ML", 
+              "Bedrock", "generative", "GenAI", "RAG", "vector", "embedding",
+              "copilot", "assistant", "chatbot", "autonomous"]
+
+portfolio_context = additionalPlanContext.context  # portfolio-level
+service_context = additionalPlanContext.context     # service-level (from repo config)
+
+has_ai_intent = false
+for signal in ai_signals:
+    if signal in portfolio_context (case-insensitive) OR signal in service_context (case-insensitive):
+        has_ai_intent = true
+        break
+
+if not has_ai_intent:
+    pathway_status = "Not Triggered"
+    reason = "No AI/agent intent detected in portfolio or service context."
+else:
+    # Proceed with primary trigger evaluation (no AI frameworks detected)
+    evaluate_primary_triggers()
+```
+
+If neither the portfolio-level context nor the service-level context contains any of the 17 AI-related signal terms, the pathway status is set to **Not Triggered** with reason: "No AI/agent intent detected in portfolio or service context." The primary trigger conditions are not evaluated. When at least one context string contains an AI-related signal and the primary trigger conditions are met, the pathway status is set to **Triggered**.
 
 **Priority:** Medium — AI adoption is increasingly important but depends on the application's domain and use cases.
 **Est. Effort:** Medium — initial AI integration (e.g., adding Bedrock for a single use case) is moderate effort, but building comprehensive AI infrastructure (vector DBs, RAG, eval frameworks) requires more investment.

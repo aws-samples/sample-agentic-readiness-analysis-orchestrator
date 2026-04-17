@@ -82,10 +82,51 @@ Each question is scored using a severity model:
 | Severity | Meaning | Implication |
 |----------|---------|-------------|
 | **BLOCKER** | Must resolve before any agent deployment. | Creates compliance exposure, data integrity risk, or failure-at-scale risk. |
-| **RISK** | Can proceed with compensating controls, scoped pilots, or human-in-the-loop gates. | Track and remediate on a defined timeline. |
+| **RISK-SAFETY** | Affects agent safety — unaddressed could cause the agent to cause harm. | Determines readiness profile. Must address for safe agent operation. |
+| **RISK-QUALITY** | Affects agent effectiveness, not safety. | No profile impact — informational for prioritization. Address as capacity allows. |
 | **INFO** | No immediate gating impact. Shapes architecture decisions. | Feeds agent design and orchestration decisions. Not a deployment gate. |
 
 Four questions are **conditional BLOCKERs** (⚡) — their severity depends on the `agent_scope` context (write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q6, and DATA-Q2.
+
+### RISK Tier Assignment
+
+Each of the 24 RISK-severity questions is assigned to exactly one tier. The assignment is static — it does not depend on service characteristics.
+
+**RISK-SAFETY (9 questions):**
+
+| Question ID | Topic | Safety Rationale |
+|-------------|-------|------------------|
+| AUTH-Q2 | Scoped permissions | Overly broad agent permissions create blast radius risk |
+| AUTH-Q3 | Action-level authorization | Agent could delete when only read is intended |
+| AUTH-Q6 | Audit logging | No audit trail for agent actions = undetectable harm |
+| AUTH-Q7 | Identity suspension | Cannot revoke a compromised agent identity |
+| STATE-Q1 | Compensation/rollback | Agent-initiated writes cannot be undone |
+| STATE-Q4 | Circuit breakers | Runaway agent loops cascade through dependencies |
+| STATE-Q5 | Rate limiting | Agent traffic storms overwhelm services |
+| DATA-Q2 | Data residency | Agent moves data across compliance boundaries |
+| DATA-Q6 | PII in logs | Agent actions leak PII into observable surfaces |
+
+**RISK-QUALITY (15 questions):**
+
+| Question ID | Topic | Quality Rationale |
+|-------------|-------|-------------------|
+| API-Q2 | Machine-readable spec | Agent tool generation requires manual work |
+| API-Q3 | Structured errors | Agent cannot distinguish retriable vs terminal errors |
+| DATA-Q3 | Pagination | Agent gets unbounded result sets |
+| DATA-Q4 | System of record | Agent reads stale data |
+| DATA-Q5 | Temporal metadata | Agent cannot reason about data freshness |
+| DISC-Q1 | Schema versioning | Agent tool bindings break silently |
+| OBS-Q1 | Tracing | Cannot debug agent-initiated requests |
+| OBS-Q2 | Alerting | No alerts for agent anomalies |
+| OBS-Q3 | Agent metrics | No visibility into agent behavior |
+| ENG-Q1 | Infra governance | No IaC = manual, error-prone changes |
+| ENG-Q2 | CI/CD + contracts | Agent tool breakage not caught in pipeline |
+| ENG-Q3 | Rollback | Cannot roll back agent-breaking deployments |
+| ENG-Q4 | Test coverage | Insufficient test coverage for agent paths |
+| ENG-Q5 | Encryption at rest | Data at rest unencrypted |
+| HITL-Q3 | Sandbox/staging | No safe environment to test agent behavior |
+
+Note: AUTH-Q7 and STATE-Q1 appear in both the RISK-SAFETY tier table and the conditional BLOCKER list. Their *base* severity when the conditional resolves to RISK (read-only scope) is RISK-SAFETY. When the conditional resolves to BLOCKER (write-enabled scope), they are counted as BLOCKERs, not RISK-SAFETY. The tier label applies only when the resolved severity is RISK. Similarly, AUTH-Q6 resolves to RISK-SAFETY and DATA-Q2 resolves to RISK-SAFETY when their conditional resolves to RISK.
 
 ### Service Archetype Classification
 
@@ -103,22 +144,23 @@ If the archetype cannot be determined with confidence, default to `stateful-crud
 
 The output is a structured Markdown report saved as `{repo-name}-ara-report.md` containing:
 - Metadata header (repo name, date, repo_type, agent_scope)
-- Readiness profile (Agent-Ready, Pilot-Ready, Remediation Required, or Not Agent-Integrable)
-- BLOCKER/RISK/INFO summary counts (excluding N/A questions)
+- Readiness profile (Agent-Ready, Pilot-Ready, Pilot-Ready (Safety Concerns), Remediation Required, or Not Agent-Integrable)
+- BLOCKER/RISK-SAFETY/RISK-QUALITY/INFO summary counts (excluding N/A questions)
 - BLOCKERs section with remediation guidance
-- RISKs section with compensating control options
+- RISKs section grouped by tier (RISK-SAFETY first, then RISK-QUALITY) with compensating control options
 - INFOs section
 - Detailed findings for all 43 questions (including N/A questions in N/A format)
 - Evidence index with file references
 
-The readiness profile is determined by blocker and risk counts:
+The readiness profile is determined by BLOCKER count and RISK-SAFETY count only. RISK-QUALITY has no effect on profile assignment:
 
-| Readiness Profile | Blockers | Risks | Recommendation |
-|-------------------|----------|-------|----------------|
-| **Agent-Ready** | 0 | 0–2 | Broad deployment |
-| **Pilot-Ready** | 0 | 3–5 | Narrow pilot only |
-| **Remediation Required** | 1–2 | Any | Remediate first |
-| **Not Agent-Integrable** | 3+ | Any | Deferred or descoped |
+| Readiness Profile | BLOCKERs | RISK-SAFETY | RISK-QUALITY | Recommendation |
+|-------------------|----------|-------------|--------------|----------------|
+| **Agent-Ready** | 0 | 0 | Any | Broad deployment |
+| **Pilot-Ready** | 0 | 1–2 | Any | Narrow pilot |
+| **Pilot-Ready (Safety Concerns)** | 0 | 3+ | Any | Supervised pilot, prioritize safety remediation |
+| **Remediation Required** | 1–2 | Any | Any | Remediate BLOCKERs first |
+| **Not Agent-Integrable** | 3+ | Any | Any | Deferred or descoped |
 
 This assessment does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers) or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Readiness Assessment.
 
@@ -164,7 +206,7 @@ additionalPlanContext: |
 If a field is absent from `additionalPlanContext`, apply these defaults:
 
 - **`repo_type`** → `"application"` — This is the most comprehensive assessment (no questions skipped). Defaulting to `application` ensures nothing is missed when classification is unknown.
-- **`agent_scope`** → `"read-only"` — This is the safer default. Conditional BLOCKER questions (⚡) are evaluated as INFO or RISK rather than BLOCKER, avoiding false escalation when the agent use case has not been scoped.
+- **`agent_scope`** → `"read-only"` — This is the safer default. Conditional BLOCKER questions (⚡) are evaluated as INFO or RISK-SAFETY rather than BLOCKER, avoiding false escalation when the agent use case has not been scoped.
 - **`service_archetype`** → Auto-detected in Step 1.5 based on repository analysis. If auto-detection is inconclusive, defaults to `"stateful-crud"` (the most conservative archetype — no severity downgrades beyond standard scope calibration). Only applies when `repo_type` is `application`.
 - **`context`** → No default. If absent, findings and recommendations are written without additional framing.
 - **`priority`** → No default. If absent, omitted from report metadata.
@@ -177,7 +219,7 @@ If `repo_type` is present but not one of the 5 recognized values (`application`,
 Record the resolved values from Steps 0.1–0.2 in the assessment context. They will be used in subsequent steps as follows:
 
 - **`repo_type`** → Used in the N/A Mapping (Step 1) to determine which questions are scored as N/A for the detected repo type. Included in the report metadata header.
-- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q6, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
+- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q6, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK-SAFETY. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
 - **`service_archetype`** → Used in Steps 2–9 (Evaluation) to calibrate severity for archetype-sensitive questions. When a question is calibrated to INFO for the detected archetype, it is recorded as INFO (not RISK) and does not count toward the RISK total. Calibration only downgrades severity — it never upgrades. Included in the report metadata header. Only applies when `repo_type` is `application`.
 - **`context`** → Used throughout the report to frame findings and recommendations with repository-specific context.
 - **`priority`** → Recorded in the report metadata header.
@@ -442,9 +484,10 @@ Replace `{repo_type}` with the actual resolved repo type value (e.g., "This is a
 N/A questions are **excluded** from the following:
 
 1. **BLOCKER count** — N/A questions do not count as BLOCKERs, even if the question's default severity is BLOCKER.
-2. **RISK count** — N/A questions do not count as RISKs.
-3. **INFO count** — N/A questions do not count as INFOs.
-4. **Readiness profile determination** — Only non-N/A questions with BLOCKER or RISK severity are used to determine the readiness profile (Agent-Ready, Pilot-Ready, Remediation Required, Not Agent-Integrable). N/A questions have no effect on the profile.
+2. **RISK-SAFETY count** — N/A questions do not count as RISK-SAFETY.
+3. **RISK-QUALITY count** — N/A questions do not count as RISK-QUALITY.
+4. **INFO count** — N/A questions do not count as INFOs.
+5. **Readiness profile determination** — Only non-N/A questions with BLOCKER or RISK-SAFETY severity are used to determine the readiness profile (Agent-Ready, Pilot-Ready, Pilot-Ready (Safety Concerns), Remediation Required, Not Agent-Integrable). N/A questions have no effect on the profile.
 
 ### N/A Inclusion Rule
 
@@ -496,11 +539,11 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q2: Machine-Readable API Specification — RISK
+#### API-Q2: Machine-Readable API Specification — RISK-QUALITY
 
 **Question:** Is there an OpenAPI, AsyncAPI, GraphQL schema, or equivalent machine-readable specification available and kept current with the implementation?
 
-**Why it matters:** Agent frameworks use machine-readable specs to generate tool definitions automatically. Without one, every integration requires manual tool authoring that drifts from actual behavior. Classified as RISK (not BLOCKER) because GraphQL schemas, Smithy models, and well-documented SDKs serve the same purpose — the real blocker is no machine-readable interface at all (API-Q1).
+**Why it matters:** Agent frameworks use machine-readable specs to generate tool definitions automatically. Without one, every integration requires manual tool authoring that drifts from actual behavior. Classified as RISK-QUALITY (not BLOCKER) because GraphQL schemas, Smithy models, and well-documented SDKs serve the same purpose — the real blocker is no machine-readable interface at all (API-Q1).
 
 **Look for:**
 - OpenAPI/Swagger files (`openapi.yaml`, `openapi.json`, `swagger.yaml`, `swagger.json`)
@@ -511,7 +554,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q3: Structured Error Responses — RISK
+#### API-Q3: Structured Error Responses — RISK-QUALITY
 
 **Question:** Do API responses include structured error codes and machine-readable error bodies — not just HTTP status codes?
 
@@ -627,7 +670,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### AUTH-Q2: Scoped Permissions (Least Privilege) — RISK
+#### AUTH-Q2: Scoped Permissions (Least Privilege) — RISK-SAFETY
 
 **Question:** Does the authorization model support scoped permissions — an agent identity can be granted read-only access to specific resources without inheriting broader privileges?
 
@@ -641,7 +684,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### AUTH-Q3: Action-Level Authorization — RISK
+#### AUTH-Q3: Action-Level Authorization — RISK-SAFETY
 
 **Question:** Can the application enforce action-level authorization — allowing an agent to read records but not delete them, even within the same resource type?
 
@@ -704,7 +747,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **⚡ Conditional BLOCKER:**
 - **When `agent_scope` is `"write-enabled"`:** Evaluate as **BLOCKER**. For regulated data contexts (EU AI Act, HIPAA, SOX), immutable audit trails are a compliance requirement. Write-enabled agents must have full audit attribution.
-- **When `agent_scope` is `"read-only"`:** Evaluate as **RISK**. Audit logging is still important for read-only agents but is not a deployment blocker.
+- **When `agent_scope` is `"read-only"`:** Evaluate as **RISK-SAFETY**. Audit logging is still important for read-only agents but is not a deployment blocker.
 
 **Why it matters:** Audit trails must identify whether an action was taken by a human or an agent, and which specific agent instance. Without immutable logs, you cannot prove compliance or conduct forensics.
 
@@ -717,7 +760,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### AUTH-Q7: Agent Identity Suspension — RISK
+#### AUTH-Q7: Agent Identity Suspension — RISK-SAFETY
 
 **Question:** Can individual agent identities be suspended or revoked immediately if anomalous behavior is detected, without taking down the broader platform?
 
@@ -745,7 +788,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **⚡ Conditional BLOCKER:**
 - **When `agent_scope` is `"write-enabled"`:** Evaluate as **BLOCKER**. Agents executing write-enabled multi-step workflows may succeed on steps 1–4 and fail on step 5. Without rollback or compensation logic, the application is left in a partial state.
-- **When `agent_scope` is `"read-only"`:** Evaluate as **RISK**. Read-only agents do not execute write workflows, but compensation capability is still relevant for system maturity.
+- **When `agent_scope` is `"read-only"`:** Evaluate as **RISK-SAFETY**. Read-only agents do not execute write workflows, but compensation capability is still relevant for system maturity.
 
 **Why it matters:** Agents executing a 5-step workflow may succeed on steps 1–4 and fail on step 5. Without rollback or compensation logic, the application is left in a partial state.
 
@@ -790,7 +833,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### STATE-Q4: Circuit Breakers and Resilience — RISK
+#### STATE-Q4: Circuit Breakers and Resilience — RISK-SAFETY
 
 **Question:** Does the target system implement circuit breakers, retry logic, and timeout configurations for its own external dependency calls?
 
@@ -804,7 +847,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### STATE-Q5: Rate Limiting and Throttling — RISK
+#### STATE-Q5: Rate Limiting and Throttling — RISK-SAFETY
 
 **Question:** Are rate limits enforced at the API layer to prevent runaway agent loops from overwhelming the application?
 
@@ -892,7 +935,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### HITL-Q3: Sandbox/Staging Environment — RISK
+#### HITL-Q3: Sandbox/Staging Environment — RISK-QUALITY
 
 **Question:** Is there a sandbox or staging environment with production-equivalent data shape that agents can use for testing without risk to live systems?
 
@@ -935,7 +978,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **⚡ Conditional BLOCKER:**
 - **When `agent_scope` is `"write-enabled"`:** Evaluate as **BLOCKER**. For regulated data (GDPR, LGPD, HIPAA, sector-specific), an agent sending regulated data to an LLM endpoint in another region may create a legal violation.
-- **When `agent_scope` is `"read-only"`:** Evaluate as **RISK**. Data residency is still relevant for read-only agents but the risk profile is lower when no data modification occurs.
+- **When `agent_scope` is `"read-only"`:** Evaluate as **RISK-SAFETY**. Data residency is still relevant for read-only agents but the risk profile is lower when no data modification occurs.
 
 **Why it matters:** An agent sending regulated data to an LLM endpoint in another region may create a legal violation. The data residency constraints are properties of the data the system holds.
 
@@ -948,7 +991,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DATA-Q3: Selective Query Support — RISK
+#### DATA-Q3: Selective Query Support — RISK-QUALITY
 
 **Question:** Can data be queried with filters, pagination, and sorting that limit result set size to what an agent actually needs?
 
@@ -963,7 +1006,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DATA-Q4: System of Record Designations — RISK
+#### DATA-Q4: System of Record Designations — RISK-QUALITY
 
 **Question:** Are there authoritative system-of-record designations for key entities, and is there a master data management process that resolves conflicts across systems?
 
@@ -978,7 +1021,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DATA-Q5: Temporal Metadata and Freshness — RISK
+#### DATA-Q5: Temporal Metadata and Freshness — RISK-QUALITY
 
 **Question:** Does the data include reliable timestamps (creation, last update, source event time) with timezone normalization, and can the system signal whether data returned to an agent is current, stale, cached, or eventually consistent?
 
@@ -997,7 +1040,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DATA-Q6: PII Redaction in Logs — RISK
+#### DATA-Q6: PII Redaction in Logs — RISK-SAFETY
 
 **Question:** Is PII redacted from logs, error messages, and observability data?
 
@@ -1035,7 +1078,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DISC-Q1: Schema Versioning and API Contracts — RISK
+#### DISC-Q1: Schema Versioning and API Contracts — RISK-QUALITY
 
 **Question:** Are data schemas and API contracts documented, versioned, and accessible — with breaking change detection in CI?
 
@@ -1092,7 +1135,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### OBS-Q1: Distributed Tracing and Structured Logging — RISK
+#### OBS-Q1: Distributed Tracing and Structured Logging — RISK-QUALITY
 
 **Question:** Does the application support distributed tracing (X-Ray, OpenTelemetry) with trace ID propagation, and are logs structured (JSON) with correlation IDs linking all entries for a single request?
 
@@ -1107,7 +1150,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### OBS-Q2: Alerting on Error Rates and Latency — RISK
+#### OBS-Q2: Alerting on Error Rates and Latency — RISK-QUALITY
 
 **Question:** Are there alerting thresholds configured for error rates and latency on the APIs agents will consume?
 
@@ -1122,7 +1165,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### OBS-Q3: Business Outcome Metrics — INFO
+#### OBS-Q3: Business Outcome Metrics — RISK-QUALITY
 
 **Question:** Are custom metrics published for business outcomes, not just infrastructure metrics?
 
@@ -1142,7 +1185,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### ENG-Q1: Infrastructure Governance for Agent-Facing Surface — RISK
+#### ENG-Q1: Infrastructure Governance for Agent-Facing Surface — RISK-QUALITY
 
 **Question:** Is the infrastructure exposing the target system to agents — API gateways, IAM roles, secrets, network configurations — defined as code, subject to peer review before changes, and monitored for drift?
 
@@ -1156,7 +1199,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### ENG-Q2: CI/CD with API Contract Testing — RISK
+#### ENG-Q2: CI/CD with API Contract Testing — RISK-QUALITY
 
 **Question:** Does the target system have a CI/CD pipeline that includes automated testing of agent-facing APIs and the ability to detect API-breaking changes before production?
 
@@ -1171,7 +1214,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### ENG-Q3: Rollback Capability — RISK
+#### ENG-Q3: Rollback Capability — RISK-QUALITY
 
 **Question:** Can the target system's deployment be rolled back to the previous known-good state if a change breaks agent-facing APIs? (Target: within 15–30 minutes.)
 
@@ -1187,7 +1230,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### ENG-Q4: API Test Coverage — RISK
+#### ENG-Q4: API Test Coverage — RISK-QUALITY
 
 **Question:** Are there automated tests for the APIs agents will consume — validating input handling, output format, error responses, and edge cases — running in CI?
 
@@ -1201,7 +1244,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### ENG-Q5: Encryption at Rest for Agent-Accessible Data — RISK
+#### ENG-Q5: Encryption at Rest for Agent-Accessible Data — RISK-QUALITY
 
 **Question:** Is data encrypted at rest (KMS) for sensitive information that agents will access?
 
@@ -1249,23 +1292,25 @@ If `repo_type` was defaulted due to an unrecognized value, include a warning lin
 
 ### Readiness Profile Determination
 
-Determine the readiness profile using the BLOCKER and RISK counts from non-N/A questions only. N/A questions are excluded from all counts and have no effect on the profile.
+Determine the readiness profile using the BLOCKER and RISK-SAFETY counts from non-N/A, non-"Not Evaluated (extended)" questions only. N/A questions and Not Evaluated (extended) questions are excluded from all counts and have no effect on the profile. RISK-QUALITY count has no effect on profile assignment.
 
-| Readiness Profile | Blockers | Risks | Recommendation | Deployment Gate |
-|-------------------|----------|-------|----------------|-----------------|
-| **Agent-Ready** | 0 | 0–2 | Broad deployment | Cleared for autonomous operation. Instrument observability. Define scope explicitly. Run controlled pilot first. |
-| **Pilot-Ready** | 0 | 3–5 | Narrow pilot only | Supervised pilot with: (1) human approval gates on irreversible actions, (2) agent limited to low-blast-radius operations, (3) compensating controls for each open RISK, (4) remediation timeline before expanding scope. |
-| **Remediation Required** | 1–2 | Any | Remediate first | Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days. |
-| **Not Agent-Integrable** | 3+ | Any | Deferred or descoped | Exclude from agent toolset or plan major remediation before re-evaluation. |
+| Readiness Profile | BLOCKERs | RISK-SAFETY | RISK-QUALITY | Recommendation | Deployment Gate |
+|-------------------|----------|-------------|--------------|----------------|-----------------|
+| **Agent-Ready** | 0 | 0 | Any | Broad deployment | Cleared for autonomous operation. Instrument observability. Define scope explicitly. Run controlled pilot first. |
+| **Pilot-Ready** | 0 | 1–2 | Any | Narrow pilot | Supervised pilot with: (1) human approval gates on irreversible actions, (2) agent limited to low-blast-radius operations, (3) compensating controls for each open RISK-SAFETY, (4) remediation timeline before expanding scope. |
+| **Pilot-Ready (Safety Concerns)** | 0 | 3+ | Any | Supervised pilot, prioritize safety remediation | Supervised pilot with elevated safety oversight: (1) all Pilot-Ready controls apply, (2) prioritize RISK-SAFETY remediation before expanding agent scope, (3) dedicated safety review cadence, (4) agent restricted to lowest-blast-radius operations until RISK-SAFETY count drops below 3. |
+| **Remediation Required** | 1–2 | Any | Any | Remediate BLOCKERs first | Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days. |
+| **Not Agent-Integrable** | 3+ | Any | Any | Deferred or descoped | Exclude from agent toolset or plan major remediation before re-evaluation. |
 
 **Rules:**
-1. Count only non-N/A questions with severity BLOCKER → `blocker_count`.
-2. Count only non-N/A questions with severity RISK → `risk_count`.
-3. If `blocker_count >= 3` → **Not Agent-Integrable**.
-4. If `blocker_count` is 1 or 2 → **Remediation Required** (risk_count is irrelevant).
-5. If `blocker_count == 0` and `risk_count >= 6` → **Pilot-Ready** (treat 6+ unmitigated risks same as 3–5 for gating purposes — narrow pilot only).
-6. If `blocker_count == 0` and `3 <= risk_count <= 5` → **Pilot-Ready**.
-7. If `blocker_count == 0` and `risk_count <= 2` → **Agent-Ready**.
+1. Count only non-N/A, non-"Not Evaluated (extended)" questions with severity BLOCKER → `blocker_count`.
+2. Count only non-N/A, non-"Not Evaluated (extended)" questions with severity RISK-SAFETY → `risk_safety_count`.
+3. RISK-QUALITY count is not used in profile determination.
+4. If `blocker_count >= 3` → **Not Agent-Integrable**.
+5. If `blocker_count` is 1 or 2 → **Remediation Required** (RISK-SAFETY count is irrelevant).
+6. If `blocker_count == 0` and `risk_safety_count >= 3` → **Pilot-Ready (Safety Concerns)**.
+7. If `blocker_count == 0` and `risk_safety_count` is 1 or 2 → **Pilot-Ready**.
+8. If `blocker_count == 0` and `risk_safety_count == 0` → **Agent-Ready**.
 
 Display the readiness profile in the report:
 
@@ -1274,7 +1319,7 @@ Display the readiness profile in the report:
 
 ## Readiness Profile: <profile name>
 
-**BLOCKERs**: <blocker_count> | **RISKs**: <risk_count> | **INFOs**: <info_count>
+**BLOCKERs**: <blocker_count> | **RISK-SAFETY**: <risk_safety_count> | **RISK-QUALITY**: <risk_quality_count> | **INFOs**: <info_count>
 
 <Deployment gate description from the table above.>
 ```
@@ -1291,7 +1336,8 @@ Display the severity distribution for all non-N/A questions. N/A questions are e
 | Severity | Count |
 |----------|-------|
 | BLOCKER | <count> |
-| RISK | <count> |
+| RISK-SAFETY | <count> |
+| RISK-QUALITY | <count> |
 | INFO | <count> |
 | N/A | <count> |
 | Not Evaluated (extended) | <count> |
@@ -1342,16 +1388,18 @@ There is no universal remediation order — it depends on the use case, the bloc
 
 ### RISKs Section
 
-List all questions that received a RISK severity. For each RISK, include compensating control options that allow a scoped pilot to proceed while the risk is remediated.
+List all questions that received a RISK-SAFETY or RISK-QUALITY severity, grouped by tier. RISK-SAFETY findings are listed first, followed by RISK-QUALITY findings. For each RISK, include compensating control options that allow a scoped pilot to proceed while the risk is remediated.
 
-If there are no RISKs, display: "No RISKs identified."
+If there are no RISKs (neither RISK-SAFETY nor RISK-QUALITY), display: "No RISKs identified."
 
 ```markdown
-## RISKs — Proceed with Compensating Controls
+## RISKs
 
-### <question_id>: <question topic>
+### RISK-SAFETY — Must Address for Agent Safety
 
-- **Severity**: RISK
+#### <question_id>: <question topic> — RISK-SAFETY
+
+- **Severity**: RISK-SAFETY
 - **Finding**: <what was observed, with specific file and resource references>
 - **Gap**: <what is missing or incomplete>
 - **Compensating Controls**:
@@ -1361,12 +1409,29 @@ If there are no RISKs, display: "No RISKs identified."
 - **Recommendation**: <specific next step to remediate>
 - **Evidence**: <specific files cited>
 
-<Repeat for each RISK question.>
+<Repeat for each RISK-SAFETY question.>
+
+### RISK-QUALITY — Address as Capacity Allows
+
+#### <question_id>: <question topic> — RISK-QUALITY
+
+- **Severity**: RISK-QUALITY
+- **Finding**: <what was observed, with specific file and resource references>
+- **Gap**: <what is missing or incomplete>
+- **Compensating Controls**:
+  - <option 1: a control that mitigates this risk for a scoped pilot>
+  - <option 2: an alternative mitigation approach>
+- **Remediation Timeline**: <suggested timeline to fully resolve — e.g., "30–60 days">
+- **Recommendation**: <specific next step to remediate>
+- **Evidence**: <specific files cited>
+
+<Repeat for each RISK-QUALITY question.>
 ```
 
 **RISK Prioritization Guidance:**
 
-- RISKs are prioritized by use case. A RISK that is irrelevant to the planned agent scope can be deferred. A RISK that directly affects the planned scope should be treated with urgency.
+- RISK-SAFETY findings take priority over RISK-QUALITY findings. Address safety risks first — they affect the readiness profile and determine whether the agent can operate safely.
+- RISK-QUALITY findings do not affect the readiness profile. They indicate areas where agent effectiveness is reduced, not where safety is compromised. Address as capacity allows.
 - Compensating controls buy time, not exemptions. A RISK mitigated by a compensating control (e.g., human-in-the-loop gate) is acceptable for a pilot but must be remediated before expanding scope.
 
 ---
@@ -1403,14 +1468,14 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q5). This s
 ### 01 — API Surface and Interface Design
 
 #### API-Q1: Documented API Interface
-- **Severity**: <BLOCKER / RISK / INFO / N/A>
+- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / RISK / INFO / N/A>
 - **Finding**: <what was observed, with specific file and resource references>
 - **Gap**: <what is missing, or "N/A">
 - **Recommendation**: <specific next step, or "N/A">
 - **Evidence**: <files cited, or "N/A">
 
 #### API-Q2: Machine-Readable API Specification
-- **Severity**: <BLOCKER / RISK / INFO / N/A>
+- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / RISK / INFO / N/A>
 - **Finding**: <what was observed>
 - **Gap**: <what is missing, or "N/A">
 - **Recommendation**: <specific next step, or "N/A">
@@ -1421,7 +1486,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q5). This s
 ### 02 — Authentication, Authorization, and Identity
 
 #### AUTH-Q1: Machine Identity Authentication
-- **Severity**: <BLOCKER / RISK / INFO / N/A>
+- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / RISK / INFO / N/A>
 - **Finding**: <what was observed>
 - **Gap**: <what is missing, or "N/A">
 - **Recommendation**: <specific next step, or "N/A">
@@ -1469,7 +1534,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q5). This s
 
 ```markdown
 #### <question_id>: <question topic> ⚡
-- **Severity**: <BLOCKER if write-enabled / INFO or RISK if read-only>
+- **Severity**: <BLOCKER if write-enabled / INFO or RISK-SAFETY if read-only>
 - **Conditional**: agent_scope is "<agent_scope>" — evaluated as <resolved severity>
 - **Finding**: <what was observed>
 - **Gap**: <what is missing>
@@ -1553,7 +1618,9 @@ The complete report structure, for reference:
 1. Readiness Profile
 2. Summary
 3. BLOCKERs — Must Resolve Before Agent Deployment
-4. RISKs — Proceed with Compensating Controls
+4. RISKs
+   - RISK-SAFETY — Must Address for Agent Safety
+   - RISK-QUALITY — Address as Capacity Allows
 5. INFOs — Architecture and Design Inputs
 6. Detailed Findings
    - 01 — API Surface and Interface Design (API-Q1 through API-Q8)
@@ -1578,8 +1645,8 @@ Strictly follow these rules at all times:
 - **Read before judging**: Do not score a question without actually reading relevant files. If relevant files have not been found yet, keep searching.
 - **IaC is ground truth**: Trust IaC definitions over README descriptions. What is deployed is what is defined in the IaC.
 - **Do not skip questions**: All 43 questions must appear in the report. Questions that are N/A for the detected `repo_type` use the N/A display format. Extended questions that are not triggered use the "Not Evaluated (extended)" display format. Both are listed, not omitted.
-- **N/A scoring rules**: Questions scored as N/A are excluded from BLOCKER, RISK, and INFO counts and from readiness profile determination.
-- **Extended question scoring rules**: Extended questions that are "Not Evaluated" are excluded from all counts and from readiness profile determination — same as N/A. Extended questions that ARE triggered are scored normally (BLOCKER/RISK/INFO) and count toward the readiness profile.
+- **N/A scoring rules**: Questions scored as N/A are excluded from BLOCKER, RISK-SAFETY, RISK-QUALITY, and INFO counts and from readiness profile determination.
+- **Extended question scoring rules**: Extended questions that are "Not Evaluated" are excluded from all counts and from readiness profile determination — same as N/A. Extended questions that ARE triggered are scored normally (BLOCKER/RISK-SAFETY/RISK-QUALITY/RISK/INFO) and count toward the readiness profile.
 - **Conditional BLOCKER rules**: The 4 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2) must be evaluated at the severity determined by `agent_scope`. Do not override the conditional logic.
 - **Evaluation tier rules**: Core questions are always evaluated (unless N/A by repo_type). Extended questions are evaluated only when their trigger condition is met. Use the Evaluation Tier tables in the Summary section to determine which extended questions to trigger based on archetype, scope, and service characteristics.
 - **Archetype classification**: Use the `service_archetype` from `additionalPlanContext` if provided. Otherwise, auto-detect in Step 1.5. If auto-detection is inconclusive, default to `stateful-crud`. The archetype determines which extended questions are triggered — it does NOT override severity of core questions.

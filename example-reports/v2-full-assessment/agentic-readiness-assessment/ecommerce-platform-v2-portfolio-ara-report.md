@@ -1,6 +1,6 @@
 # Portfolio Agentic Readiness Assessment Report
 
-**Date**: 2026-04-15
+**Date**: 2026-04-17
 **Services Assessed**: 5
 **Portfolio Context**: Evaluating the e-commerce platform portfolio for both autonomous AI agent integration and cloud-native modernization. The team is building a customer support agent that handles order inquiries, processes returns, and manages inventory restocking — while simultaneously modernizing legacy monoliths into containerized microservices on EKS.
 
@@ -12,10 +12,11 @@
 
 | Profile | Services | Percentage | Description |
 |---------|----------|------------|-------------|
-| ✅ Agent-Ready | 0 | 0% | 0 blockers, 0–2 risks — broad agent deployment |
-| 🟡 Pilot-Ready | 0 | 0% | 0 blockers, 3–5 risks — narrow pilot only |
-| 🟠 Remediation Required | 1 | 20% | 1–2 blockers — remediate before any agent deployment |
-| ❌ Not Agent-Integrable | 4 | 80% | 3+ blockers — deferred or descoped |
+| ✅ Agent-Ready | 0 | 0% | 0 blockers, 0 RISK-SAFETY — broad agent deployment |
+| 🟡 Pilot-Ready | 0 | 0% | 0 blockers, 1–2 RISK-SAFETY — narrow pilot |
+| 🟡 Pilot-Ready (Safety Concerns) | 1 | 20% | 0 blockers, 3+ RISK-SAFETY — supervised pilot, prioritize safety |
+| 🟠 Remediation Required | 4 | 80% | 1–2 blockers — remediate before any agent deployment |
+| ❌ Not Agent-Integrable | 0 | 0% | 3+ blockers — deferred or descoped |
 
 ### Portfolio Summary
 
@@ -23,13 +24,11 @@
 |--------|-------|
 | Total Services Assessed | 5 |
 | Services Ready for Agents (Agent-Ready + Pilot-Ready) | 0 (0%) |
-| Services Requiring Remediation | 5 (100%) |
-| Total Unique BLOCKERs across Portfolio | 7 distinct question IDs |
-| Total Unique RISKs across Portfolio | 33 distinct question IDs |
-| Cross-Cutting BLOCKERs (same blocker in 2+ repos) | 7 |
-| Cross-Cutting RISKs (same risk in 3+ repos) | 32 |
-| Services with Write-Enabled Agent Scope | 5 (100%) |
-| Services with Read-Only Agent Scope | 0 (0%) |
+| Services Requiring Remediation | 4 (80%) |
+| Cross-Cutting BLOCKERs (same blocker in 2+ repos) | 2 |
+| Cross-Cutting RISKs (same risk in 3+ repos) | 22 |
+| Services with Write-Enabled Agent Scope | 0 (0%) |
+| Services with Read-Only Agent Scope | 5 (100%) |
 
 ### Repo Type Distribution
 
@@ -41,6 +40,44 @@
 | monorepo | 0 | 0% |
 | library | 0 | 0% |
 
+### Blocker Heatmap by Section
+
+| Section | Repos Blocked | % of Applicable Repos | Top Blockers |
+|---------|--------------|----------------------|--------------|
+| AUTH | 4 | 80% (4 of 5 applicable) | AUTH-Q1 |
+| DATA | 4 | 100% (4 of 4 applicable) | DATA-Q1 |
+| API | 0 | 0% | — |
+| STATE | 0 | 0% | — |
+| HITL | 0 | 0% | — |
+| DISC | 0 | 0% | — |
+| OBS | 0 | 0% | — |
+| ENG | 0 | 0% | — |
+
+### Readiness Snapshot
+
+| Metric | Value |
+|--------|-------|
+| assessment_date | 2026-04-17 |
+| total_services | 5 |
+| agent_ready | 0 |
+| pilot_ready | 0 |
+| pilot_ready_safety_concerns | 1 |
+| remediation_required | 4 |
+| not_integrable | 0 |
+| total_blockers | 8 |
+| total_risks | 105 |
+| total_risk_safety | 37 |
+| total_risk_quality | 68 |
+| total_infos | 59 |
+| cross_cutting_blockers | 2 |
+| cross_cutting_risks | 22 |
+| cross_cutting_risk_safety | 8 |
+| cross_cutting_risk_quality | 14 |
+| portfolio_level_blockers | 1 |
+| portfolio_level_risks | 3 |
+| write_enabled_services | 0 |
+| read_only_services | 5 |
+
 ## Cross-Cutting BLOCKERs — Same Blocker in 2+ Repos
 
 > These are BLOCKER-severity questions that appear in 2 or more repositories.
@@ -49,385 +86,276 @@
 
 ### AUTH-Q1: Machine Identity Authentication
 
-- **Severity**: BLOCKER in 4 of 4 applicable services
+- **Severity**: BLOCKER in 4 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
-- **N/A Services**: None (eks-saas-gitops scored INFO — IRSA-based machine identity is well-established)
-- **Common Finding**: No machine identity authentication across any application service. Session-based auth (local-monolith), OAuth2 configured but disabled via `permitAll()` (unishop-monolith), completely open API Gateways (aws-microservices), and human-only Cognito User Pool with no client credentials flow (books-api). None of the 4 application services can authenticate an agent as a machine principal.
-- **Root Cause Pattern**: Each service was designed for human users only — session cookies, browser-based OAuth implicit flow, or no auth at all. No service has implemented the OAuth2 client credentials grant required for machine-to-machine authentication.
+- **Common Finding**: None of the 4 application services have machine identity authentication. unishop-monolith has Spring Security OAuth2 present as a dependency but entirely disabled (`permitAll()`). aws-microservices has 3 completely open API Gateway REST APIs with no authorizer. local-monolith uses PHP session-based authentication only (`$_SESSION`). books-api has Amazon Cognito User Pool but only with OAuth2 implicit flow for human users — no client_credentials grant for machine-to-machine auth. eks-saas-gitops (RISK-QUALITY, not BLOCKER) has a robust IRSA pattern but no agent-specific role.
+- **Root Cause Pattern**: All 4 application services were designed for human-only interaction. Authentication mechanisms are either absent (aws-microservices), disabled (unishop-monolith), browser-session-based (local-monolith), or human-flow-only (books-api). No service has a programmatic authentication path suitable for autonomous agent callers.
 - **Portfolio-Level Remediation**:
-  - **Approach**: Platform-level fix — deploy a centralized Amazon Cognito User Pool with Resource Servers and client_credentials grant for all services
-  - **Immediate Action**: Deploy a shared Cognito User Pool with custom scopes per service (e.g., `orders/read`, `catalog/write`, `inventory/read`). Issue unique client IDs per agent per service.
-  - **Target State**: All 4 application services require a valid OAuth2 bearer token from the shared Cognito pool. Each agent identity is a registered app client with scoped permissions. Audit logs attribute every API call to a specific principal.
-  - **Estimated Effort**: Medium
-  - **Priority**: Critical — identity is the foundation for all other security controls
-  - **Dependencies**: None — this must be resolved first
+  - **Approach**: HYBRID — platform-level Cognito setup shared across services + per-service integration
+  - **Immediate Action**: Provision a shared Amazon Cognito User Pool with resource servers and custom scopes (e.g., `orders/read`, `inventory/read`, `catalog/read`). Create per-agent App Clients with `client_credentials` grant type. The eks-saas-gitops IRSA pattern can serve as the template for Kubernetes-hosted services.
+  - **Target State**: All API endpoints require a valid OAuth2 Bearer token or API key with principal attribution. Each agent identity has a unique `client_id` that appears in audit logs and CloudTrail. books-api extends its existing Cognito with `client_credentials` flow. aws-microservices adds API Gateway authorizers. unishop-monolith enables its existing Spring Security OAuth2. local-monolith adds API key or OAuth2 middleware.
+  - **Estimated Effort**: High (platform setup: 2 weeks; per-service integration: 2–4 weeks each)
+  - **Priority**: Critical — affects 4/5 services, prerequisite for all other security controls (AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7)
+  - **Dependencies**: None — this is the first blocker to resolve
 
-### AUTH-Q7: Immutable Audit Logging
-
-- **Severity**: BLOCKER in 5 of 5 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Conditional**: All 5 services have agent_scope "write-enabled" — evaluated as BLOCKER for all
-- **Common Finding**: No immutable, tamper-evident audit trail in any service. unishop-monolith has CloudWatch Logs with only 7-day retention and unstructured `System.out.println()` output. aws-microservices uses `console.log` with full event payloads (including PII) and no log retention policies. local-monolith has PHP error logging with no structured audit records. books-api has API Gateway logging and X-Ray tracing but no CloudTrail and no application-level audit of authenticated principals. eks-saas-gitops has zero CloudTrail, CloudWatch Log Groups, or S3 object lock across all Terraform files.
-- **Root Cause Pattern**: No service has implemented compliance-grade audit logging. Logs are either absent, unstructured, mutable, or lack principal attribution. No CloudTrail is configured in any service's IaC.
-- **Portfolio-Level Remediation**:
-  - **Approach**: Platform-level fix — deploy an organization-level CloudTrail trail with S3 object lock, plus per-service structured logging standards
-  - **Immediate Action**: Deploy a centralized CloudTrail trail writing to an S3 bucket with object lock (WORM). Enable EKS control plane audit logging on eks-saas-gitops. Implement a structured JSON logging standard across all services.
-  - **Target State**: Every write operation across the portfolio logs: authenticated principal, action performed, resource affected, timestamp, and request ID. Logs are stored immutably in S3 with object lock. CloudTrail captures all API Gateway, Lambda, and EKS API invocations.
-  - **Estimated Effort**: Medium
-  - **Priority**: Critical — compliance requirement for write-enabled agent scope
-  - **Dependencies**: Resolve AUTH-Q1 first — you need machine identity before audit logs can attribute actions to specific agents
+> **Portfolio Context**: PORT-ARA-Q1 found no shared identity provider across the portfolio.
+> books-api has its own Cognito User Pool and eks-saas-gitops has IRSA, but no shared IdP exists.
+> Resolving AUTH-Q1 with a shared Cognito pool would simultaneously address PORT-ARA-Q1 — **verify**
+> that each service integrates with the shared Cognito pool after provisioning.
 
 ### DATA-Q1: Sensitive Data Classification
 
-- **Severity**: BLOCKER in 3 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith
-- **Non-BLOCKER Services**: books-api (RISK — book catalog data is non-sensitive bibliographic metadata), eks-saas-gitops (N/A — infrastructure-only)
-- **Common Finding**: PII stored without classification or field-level protection. unishop-monolith stores email, first_name, last_name in plaintext MySQL. aws-microservices stores firstName, lastName, email, address, cardInfo (potential PCI violation) in DynamoDB with no classification tags. local-monolith stores customer_name, customer_email, shipping_address in plaintext MySQL. No Macie integration, no field-level encryption, no data classification tags on any resource across any service.
-- **Root Cause Pattern**: Services store customer PII as part of normal business operations but have never undergone data classification. PII fields are exposed directly in API responses with no redaction or filtering.
-- **Portfolio-Level Remediation**:
-  - **Approach**: Hybrid — portfolio-level data classification policy + per-service field-level tagging and redaction
-  - **Immediate Action**: Define a portfolio data classification policy identifying PII field categories (email, name, address, payment). Tag all database tables and DynamoDB tables with `data-classification` resource tags. Implement field-level redaction in API responses.
-  - **Target State**: All data stores tagged with classification. PII fields identified, tagged, and subject to field-level access controls. API responses support scope-based field filtering — agents receive only the PII necessary for their task. Amazon Macie scanning for PII detection.
-  - **Estimated Effort**: High
-  - **Priority**: High
-  - **Dependencies**: AUTH-Q1 (need identity to enforce per-agent PII access controls)
-
-### DATA-Q2: Data Residency and Sovereignty
-
-- **Severity**: BLOCKER in 4 of 4 applicable services
+- **Severity**: BLOCKER in 4 of 4 applicable services (eks-saas-gitops is N/A for this question)
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
-- **Conditional**: All 4 have agent_scope "write-enabled" — evaluated as BLOCKER. eks-saas-gitops is N/A (infrastructure-only).
-- **Common Finding**: No data residency documentation or controls in any application service. unishop-monolith has no region restrictions in CloudFormation. aws-microservices has the CDK `env` property commented out (region-agnostic). local-monolith deploys via Docker with no region awareness. books-api has a single-region DynamoDB deployment but no formal residency documentation. Write-enabled agents transmitting PII to LLM providers in different jurisdictions create legal exposure across all services.
-- **Root Cause Pattern**: No service has documented which data residency regulations apply or which regions are approved for data processing. Region pinning is absent or undocumented.
+- **Common Finding**: All 4 application services store data without classification tags, field-level encryption, or Amazon Macie integration. unishop-monolith has user PII (`email`, `first_name`, `last_name`) in MySQL exposed in API responses via `@JsonInclude`. aws-microservices has PII **and** payment card information (`firstName`, `lastName`, `email`, `address`, `cardInfo`) in DynamoDB with no field-level encryption. local-monolith has customer PII (`customer_name`, `customer_email`, `shipping_address`) across 9 MySQL tables returned unfiltered by admin APIs. books-api has catalog/reference data (`isbn`, `title`, `author`) with no PII but no classification tags to prove it.
+- **Root Cause Pattern**: No data classification policy exists at the portfolio level. Each service stores data without explicit sensitivity labeling — even books-api, which stores only non-sensitive reference data, lacks classification tags. Without classification, agents cannot programmatically verify whether data they access is safe to process, cache, or transmit to LLM endpoints.
 - **Portfolio-Level Remediation**:
-  - **Approach**: Platform-level fix — document portfolio data residency policy, pin all stacks to specific regions, specify approved LLM endpoints
-  - **Immediate Action**: Create a portfolio-level `DATA_RESIDENCY.md` documenting applicable regulations (GDPR for EU customers, LGPD for Brazilian customers), approved AWS regions, and approved LLM endpoint locations. Pin all CDK/CloudFormation stacks to explicit regions. For books-api (non-PII bibliographic data), document the residency exemption.
-  - **Target State**: Data residency requirements documented and enforced at the infrastructure level. All stacks deployed to specific approved regions. Agent configurations specify Amazon Bedrock endpoints in the same region as data storage. PII redacted or anonymized before cross-region LLM transmission.
-  - **Estimated Effort**: Medium
-  - **Priority**: High
-  - **Dependencies**: DATA-Q1 (classify data before applying residency controls per field)
+  - **Approach**: HYBRID — portfolio-wide classification policy + per-service tagging and response filtering
+  - **Immediate Action**: Create a portfolio-wide data classification policy document defining levels: Public, Internal, Confidential, Restricted. Tag each data store in each service with its classification level. For books-api, add `data-classification: public` and `contains-pii: false` tags to the DynamoDB table (low effort — hours). For the other 3 services, classify each field and implement API response filtering to exclude PII from agent-facing endpoints.
+  - **Target State**: All data stores have explicit classification tags. API responses to agents exclude or mask PII unless explicitly authorized. Amazon Macie scans DynamoDB tables and S3 for PII detection. Field-level encryption protects Confidential/Restricted fields (especially `cardInfo` in aws-microservices).
+  - **Estimated Effort**: Medium (policy: 1 week; books-api tagging: hours; per-service field classification and response filtering: 1–4 weeks each; Macie + field-level encryption: 4–8 weeks)
+  - **Priority**: Critical — affects all 4 application services, required before agents can safely access data
+  - **Dependencies**: AUTH-Q1 should be resolved first — field-level access controls require identity to enforce per-caller data access scoping
 
-### STATE-Q1: Compensation and Rollback
+## Cross-Cutting RISKs
 
-- **Severity**: BLOCKER in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
-- **Conditional**: All 4 have agent_scope "write-enabled" — evaluated as BLOCKER. eks-saas-gitops is N/A (infrastructure-only).
-- **Common Finding**: No saga pattern or compensation logic in any application service. unishop-monolith has `@Transactional` on individual operations but no cross-operation coordination. aws-microservices has a 4-step checkout flow (basket → EventBridge → SQS → order) with no error compensation — partial failures leave inconsistent state. local-monolith has a multi-step fulfillment workflow (validate → assign-warehouse → pick → pack → ship) with each step committing independently. books-api has only a single `PutItem` with no delete endpoint for rollback.
-- **Root Cause Pattern**: All services implement single-operation transactions but have no mechanism for multi-step workflow compensation. An agent executing a sequence of API calls has no way to undo previously successful steps if a subsequent step fails.
-- **Portfolio-Level Remediation**:
-  - **Approach**: Per-service fix — each service needs individual compensation endpoints and workflow orchestration
-  - **Immediate Action**: Implement explicit undo/compensation endpoints for each service's write operations. Add DLQ to aws-microservices SQS OrderQueue. Add DELETE /books/{isbn} to books-api. Implement compensation endpoints for local-monolith's fulfillment workflow steps.
-  - **Target State**: All multi-step write workflows have compensating actions defined. AWS Step Functions used for complex agent workflows with error handling and compensation states. DLQ monitoring with alerts for failed compensations.
-  - **Estimated Effort**: High
-  - **Priority**: High
-  - **Dependencies**: API-Q4 (idempotency is a prerequisite for safe compensation — you must be able to retry compensation actions)
+### Cross-Cutting RISK-SAFETY — Same Safety Risk in 3+ Repos
 
-### API-Q4: Idempotent Write Operations
-
-- **Severity**: BLOCKER in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
-- **Conditional**: All 4 have agent_scope "write-enabled" — evaluated as BLOCKER. eks-saas-gitops is N/A (infrastructure-only).
-- **Common Finding**: No idempotency key support on write endpoints in any application service. unishop-monolith uses `INSERT IGNORE` (database-level, not application-level idempotency). aws-microservices generates UUIDs server-side with `uuidv4()` and has no idempotency on checkout. local-monolith generates order IDs with `uniqid('order-')` with no deduplication. books-api uses `PutItem` with no `ConditionExpression` — silently overwrites existing records.
-- **Root Cause Pattern**: No service implements the `Idempotency-Key` header pattern. Agent retries or LLM non-deterministic duplicate tool calls will create duplicate orders, duplicate products, or silently overwrite records.
-- **Portfolio-Level Remediation**:
-  - **Approach**: Hybrid — adopt AWS Lambda Powertools idempotency utility as portfolio standard + per-service implementation
-  - **Immediate Action**: Add `Idempotency-Key` header support to all write endpoints. For serverless services (aws-microservices, books-api), use Lambda Powertools idempotency utility with DynamoDB backing table. For container/EC2 services (local-monolith, unishop-monolith), implement idempotency middleware with a deduplication table.
-  - **Target State**: All write endpoints across the portfolio accept and enforce idempotency keys. Duplicate requests return the original response without re-executing side effects.
-  - **Estimated Effort**: Medium
-  - **Priority**: High
-  - **Dependencies**: None
-
-### ENG-Q6: Cross-Origin and Network Policies
-
-- **Severity**: BLOCKER in 5 of 5 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: Permissive or absent network security across all services. unishop-monolith has wildcard CORS allowing all methods from all origins with security groups open to 0.0.0.0/0. aws-microservices has no CORS on any API Gateway, no VPC attachment, no WAF, and publicly accessible APIs. local-monolith has no CORS headers, no security groups, and port 8080 exposed directly. books-api has no CORS on the SAM API Gateway, no WAF, no resource policies. eks-saas-gitops has EKS API server publicly accessible, Argo Workflows and Kubecost exposed via internet-facing LoadBalancers without authentication, and Kubecost network policies disabled.
-- **Root Cause Pattern**: Network security was not designed for machine-speed agent access. Services are either completely open, behind permissive CORS, or exposed directly to the internet without WAF or API Gateway protection.
-- **Portfolio-Level Remediation**:
-  - **Approach**: Hybrid — deploy portfolio-wide WAF rules + per-service CORS and network policy configuration
-  - **Immediate Action**: Deploy AWS WAF with rate limiting rules for all public-facing API Gateways. Add CORS configuration to each service. Set `cluster_endpoint_public_access = false` on eks-saas-gitops EKS cluster. Change Argo Workflows and Kubecost LoadBalancers to internal.
-  - **Target State**: All services behind API Gateways with WAF protection. CORS restricted to specific allowed origins. EKS API endpoint private-only. Network policies enabled for all EKS namespaces. Security groups restrict inbound to API Gateways only.
-  - **Estimated Effort**: Medium
-  - **Priority**: High
-  - **Dependencies**: None — can be resolved in parallel with identity and data remediation
-
-## Cross-Cutting RISKs — Same Risk in 3+ Repos
-
-> These are RISK-severity questions that appear in 3 or more repositories.
-> They represent portfolio-wide patterns warranting coordinated attention.
+> These are RISK-SAFETY questions that appear in 3 or more repositories.
+> They represent portfolio-wide agent safety gaps requiring coordinated attention.
 > Questions scored as N/A for a service do not count as gaps for that service.
 
-### AUTH-Q2: Scoped Permissions (Least Privilege) — RISK in 5 of 5 applicable services
+#### AUTH-Q2: Scoped Permissions (Least Privilege)
+
+- **Severity**: RISK-SAFETY in 5 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: Overly broad permissions across the portfolio. Application services lack fine-grained RBAC (permitAll, coarse roles, ReadWrite grants). eks-saas-gitops has AdministratorAccess on IRSA roles.
-- **Compensating Controls**: Deploy API Gateway resource policies or reverse proxy rules per service to restrict agent access to specific endpoints. For eks-saas-gitops, scope Argo Workflows and TF Controller IRSA roles to specific namespaces and API groups. Define per-agent permission boundaries in the agent orchestration layer to enforce least privilege until application-level RBAC is implemented.
-- **Portfolio-Level Recommendation**: Define a portfolio-wide RBAC model with agent-specific roles scoped to minimum required operations per service.
+- **Common Finding**: All services lack agent-specific scoped permissions. Application services use coarse-grained authorization (permitAll, binary admin/customer roles, or public endpoints). eks-saas-gitops has AdministratorAccess on IRSA roles for Argo Workflows and TF Controller.
+- **Compensating Controls**: Deploy read-only API Gateway stages for agents; use tenant-level IRSA roles (properly scoped) on eks-saas-gitops; restrict agent API keys to GET methods only.
+- **Portfolio-Level Recommendation**: After AUTH-Q1 remediation, define a shared RBAC model with at least 3 roles per service (human-reader, agent-reader, admin). Use Cognito custom scopes for per-service permission boundaries.
 - **Estimated Effort**: Medium
 
-### AUTH-Q3: Action-Level Authorization — RISK in 5 of 5 applicable services
+#### AUTH-Q3: Action-Level Authorization
+
+- **Severity**: RISK-SAFETY in 5 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: No action-level authorization differentiation. Application services cannot restrict an agent to read-only operations. eks-saas-gitops has wildcard ClusterRoles.
-- **Compensating Controls**: Implement action-level enforcement at the API Gateway or reverse proxy layer by mapping HTTP methods (GET vs POST/PUT/DELETE) to allow/deny rules per agent identity. For eks-saas-gitops, replace wildcard ClusterRoles with namespace-scoped Roles granting only required verbs. Restrict agents to read-only endpoints during initial pilot phases.
-- **Portfolio-Level Recommendation**: Implement per-endpoint permission checks in all services. Replace wildcard K8s ClusterRoles with scoped Roles.
+- **Common Finding**: No action-level authorization across the portfolio. Application services cannot restrict agents to read-only at the application layer. eks-saas-gitops has wildcard Kubernetes ClusterRoles granting all verbs on all resources.
+- **Compensating Controls**: Separate read-only API Gateway stages for agents; method-level API Gateway restrictions; Kubernetes namespace-scoped Roles.
+- **Portfolio-Level Recommendation**: Implement action-level authorization middleware in each service after AUTH-Q1 remediation. For Java (unishop-monolith): Spring Security `@PreAuthorize` with read/write roles. For Node.js (aws-microservices): Lambda authorizer middleware. For PHP (local-monolith): route-based middleware. For SAM (books-api): Cognito Resource Server scopes per endpoint.
 - **Estimated Effort**: Medium
 
-### AUTH-Q6: Credential Management — RISK in 5 of 5 applicable services
+#### AUTH-Q6: Immutable Audit Logging
+
+- **Severity**: RISK-SAFETY in 5 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: Hardcoded credentials (unishop-monolith application.properties, CloudFormation), hardcoded PHP fallback (local-monolith), plaintext K8s secrets (eks-saas-gitops), no Secrets Manager integration (books-api, aws-microservices).
-- **Compensating Controls**: Immediately remove all hardcoded credential fallbacks from application code. Use Docker secrets or environment-specific `.env` files with restricted file permissions for containerized services. For eks-saas-gitops, enable Kubernetes Secrets encryption at rest via EKS envelope encryption. Implement manual credential rotation procedures until automated rotation is deployed.
-- **Portfolio-Level Recommendation**: Standardize on AWS Secrets Manager for all credentials. Implement automatic rotation. Migrate all hardcoded credentials immediately.
-- **Estimated Effort**: Medium
+- **Common Finding**: No immutable, tamper-evident audit trail across the portfolio. unishop-monolith has only `System.out.println` and `e.printStackTrace()`. aws-microservices has unstructured `console.log` with no retention policies. local-monolith has mutable `order_status_history` in MySQL. books-api has API Gateway logging at INFO but no CloudTrail. eks-saas-gitops has no CloudTrail and no EKS control plane audit logging.
+- **Compensating Controls**: Enable account-level CloudTrail (shared across all services); configure CloudWatch Logs retention policies; add structured JSON logging to each service.
+- **Portfolio-Level Recommendation**: Deploy a shared CloudTrail trail with S3 bucket (object lock enabled) covering all services. This is a single platform-level investment that addresses AUTH-Q6 for the entire portfolio. Then add application-level structured logging per service.
+- **Estimated Effort**: Medium (shared CloudTrail: 1 week; per-service structured logging: 1–2 weeks each)
 
-### AUTH-Q8: Agent Identity Suspension — RISK in 5 of 5 applicable services
+#### AUTH-Q7: Agent Identity Suspension
+
+- **Severity**: RISK-SAFETY in 5 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: No mechanism to suspend individual agent identities. Suspension requires destroying accounts, disabling entire services, or Terraform changes.
-- **Compensating Controls**: Implement IP-based blocking at the API Gateway or WAF layer as an emergency kill switch for misbehaving agents. For Cognito-backed services, configure app client disable as a suspension mechanism. For eks-saas-gitops, annotate IRSA roles with a suspension runbook that documents the Terraform changes needed for immediate revocation. Deploy a centralized agent identity registry that can instantly revoke access tokens.
-- **Portfolio-Level Recommendation**: Design all agent identities as individually revocable Cognito app clients or API keys with instant suspension capability.
-- **Estimated Effort**: Low
+- **Common Finding**: No agent identity suspension mechanism exists in any service. Application services have no identity concept to suspend (no auth = no identity). eks-saas-gitops has IRSA roles but suspension requires Terraform code changes and `terraform apply` — too slow for incident response.
+- **Compensating Controls**: Network-level blocks (security groups, WAF rules) as emergency kill switches; pre-create IAM deny-all policy for eks-saas-gitops.
+- **Portfolio-Level Recommendation**: When implementing the shared Cognito pool (AUTH-Q1 remediation), each agent gets a unique App Client. Suspension = disable the App Client in Cognito (seconds, no code change). For eks-saas-gitops, create a pre-provisioned "agent-emergency-deny" IAM policy and a Lambda-backed API for immediate attachment.
+- **Estimated Effort**: Low (built into AUTH-Q1 remediation for application services; 1–2 weeks for eks-saas-gitops kill switch)
 
-### AUTH-Q4: Identity Propagation — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No JWT extraction, no user context propagation, self-asserted identity in request bodies. OAuth2 libraries present but unused in unishop-monolith.
-- **Compensating Controls**: For the initial pilot, leverage each service's single-process architecture where user context is inherently available within the request scope. Log the originating user/agent identity in all operations to maintain traceability. Use API Gateway request context to inject verified identity claims into backend requests.
-- **Portfolio-Level Recommendation**: Derive user identity from JWT claims via Cognito. Propagate identity context through SecurityContext or Lambda event requestContext.
-- **Estimated Effort**: Medium
+#### STATE-Q1: Compensation and Rollback
 
-### AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No distinction between agent acting autonomously and agent acting on behalf of a user. No separate auth flows or audit fields.
-- **Compensating Controls**: For the initial pilot, restrict all agents to agent-as-self mode with dedicated service accounts. Log all agent actions as agent-initiated in audit records to maintain a clear attribution trail. Include both agent identity and delegating user identity (if applicable) in custom log fields until formal OAuth2 token exchange flows are implemented.
-- **Portfolio-Level Recommendation**: Implement two OAuth2 flows: client_credentials for agent-as-self, token exchange for agent-on-behalf-of-user.
-- **Estimated Effort**: Medium
+- **Severity**: RISK-SAFETY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: No saga patterns, compensating transactions, or undo endpoints across any application service. local-monolith has MySQL transactions for atomic operations but no compensation for multi-step fulfillment workflow. aws-microservices has EventBridge→SQS→ordering checkout with no rollback if partial failure occurs. unishop-monolith and books-api have simple INSERT/DELETE with no multi-step coordination.
+- **Compensating Controls**: Agent is scoped to read-only, eliminating the need for write rollback in current scope. For future write-enabled scope, implement compensation at agent orchestration layer.
+- **Portfolio-Level Recommendation**: Document compensating transaction patterns as a portfolio standard before expanding any service to write-enabled agent scope. Prioritize aws-microservices (checkout flow) and local-monolith (fulfillment workflow) for saga pattern implementation.
+- **Estimated Effort**: High (60–90 days per service for saga implementation)
 
-### API-Q2: Machine-Readable API Specification — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No OpenAPI, Swagger, or any machine-readable spec in any application service. APIs defined only in source code.
-- **Compensating Controls**: Manually author agent tool definitions from code analysis for the initial pilot. Use API recording/proxy tools to capture request/response pairs and generate initial OpenAPI specs. For serverless services (aws-microservices, books-api), export API definitions from API Gateway console as a starting point.
-- **Portfolio-Level Recommendation**: Generate OpenAPI 3.0 specs for all services. Use springdoc-openapi for Java, API Gateway export for serverless.
-- **Estimated Effort**: Low
+#### STATE-Q5: Rate Limiting and Throttling
 
-### API-Q3: Structured Error Responses — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No structured error codes, no retryable indicators. unishop-monolith returns bare 400 status. aws-microservices leaks stack traces. local-monolith has inconsistent formats. books-api returns empty 500 bodies.
-- **Compensating Controls**: Map known HTTP status codes to retry behavior in agent tool definitions (e.g., 5xx → retry with backoff, 4xx → do not retry). Implement a thin error-mapping middleware or API Gateway response transformation to normalize error formats before they reach agents. Configure agent retry policies based on status codes rather than error message parsing.
-- **Portfolio-Level Recommendation**: Standardize on `{"error": {"code": "...", "message": "...", "retryable": boolean}}` format across all services.
-- **Estimated Effort**: Low
+- **Severity**: RISK-SAFETY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: No rate limiting at any layer across any application service. unishop-monolith runs directly on EC2 port 8080 with no API Gateway or WAF. aws-microservices has no API Gateway throttling or usage plans. local-monolith has a WAF but with no rate-based rules. books-api has no usage plan on API Gateway. A runaway agent loop could overwhelm any service at machine speed.
+- **Compensating Controls**: AWS account-level API Gateway throttling (10,000 RPS) provides minimal protection for aws-microservices and books-api. App Runner MaxConcurrency:100 provides partial back-pressure for local-monolith.
+- **Portfolio-Level Recommendation**: Deploy API Gateway with usage plans and per-agent-key throttling for all services. This is a prerequisite for safe agent traffic. For unishop-monolith: add API Gateway in front of EC2. For aws-microservices: add usage plans. For local-monolith: add WAF rate-based rules. For books-api: add usage plan to existing API Gateway.
+- **Estimated Effort**: Low–Medium (7–30 days per service)
 
-### API-Q5: API Versioning and Deprecation — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No API versioning on any service. Unversioned paths (e.g., `/unicorns`, `/product`, `/books`). No changelogs or deprecation policies.
-- **Compensating Controls**: Freeze the current API surface during initial agent integration — no breaking changes without coordinated agent tool definition updates. Add API contract tests (ENG-Q2) to detect breaking changes before deployment. Document current endpoint behavior in agent tool definitions as the de facto v1 contract.
-- **Portfolio-Level Recommendation**: Add `/v1/` URL prefix to all API endpoints. Establish portfolio-wide 90-day deprecation notice policy.
-- **Estimated Effort**: Low
+#### DATA-Q2: Data Residency and Sovereignty
 
-### API-Q7: Asynchronous Operation Support — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: All operations synchronous (except aws-microservices checkout which is fire-and-forget with no status tracking). No job status polling or webhook patterns.
-- **Compensating Controls**: Set generous HTTP timeouts on agent clients for the initial pilot (30s+ for write operations). Monitor actual response times across all services and implement async patterns only for operations exceeding 5 seconds. For aws-microservices checkout, add a status query endpoint so agents can verify order completion after the fire-and-forget submission.
-- **Portfolio-Level Recommendation**: Implement async patterns (job submission + polling) for operations exceeding 5 seconds. Add status tracking to aws-microservices checkout.
-- **Estimated Effort**: Medium
+- **Severity**: RISK-SAFETY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: No data residency documentation or controls exist in any application service. aws-microservices has CDK env commented out (environment-agnostic deployment). All services store data with no documented region constraints or compliance references (GDPR, LGPD, HIPAA). books-api data is non-sensitive reference data with low regulatory risk.
+- **Compensating Controls**: books-api catalog data has no PII and low residency risk. For PII-containing services, ensure agent-LLM communication stays within the same AWS region.
+- **Portfolio-Level Recommendation**: Document a portfolio-wide data residency policy. Classify each service's data residency requirements. For services with PII (unishop-monolith, aws-microservices, local-monolith), ensure deployment regions are pinned and agents use same-region Amazon Bedrock endpoints.
+- **Estimated Effort**: Low (documentation: 1 week; enforcement via CDK/CloudFormation: 1–2 weeks)
 
-### STATE-Q2: Queryable Current State — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: Incomplete state queryability. Missing individual resource GET endpoints. aws-microservices requires exact orderDate for queries.
-- **Compensating Controls**: Add individual resource GET endpoints (GET by ID) for the most critical agent-consumed entities as a targeted fix. Use existing list endpoints with client-side filtering in agent tool definitions for the initial pilot. For aws-microservices, document the orderDate query requirement in agent tool definitions to ensure correct parameter usage.
-- **Portfolio-Level Recommendation**: Add individual resource GET endpoints (GET by ID) to all services for agent read-before-write patterns.
-- **Estimated Effort**: Low
+#### DATA-Q6: PII Redaction in Logs
 
-### STATE-Q3: Concurrency Controls — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No optimistic locking. No version fields or ETags. Last-writer-wins on concurrent writes across all services.
-- **Compensating Controls**: Add `SELECT ... FOR UPDATE` to critical MySQL queries (unishop-monolith, local-monolith) to serialize concurrent access on high-contention resources like inventory. For DynamoDB services (aws-microservices, books-api), add `ConditionExpression` with version attributes on write operations. Limit agent concurrency in the orchestration layer to reduce the likelihood of write conflicts during the initial pilot.
-- **Portfolio-Level Recommendation**: Add version attributes and conditional writes/ETags to all data stores.
-- **Estimated Effort**: Medium
+- **Severity**: RISK-SAFETY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: PII is not redacted from logs in any application service. aws-microservices logs full checkout payloads including `firstName`, `lastName`, `email`, `address`, `cardInfo` via `console.log`. local-monolith has `die()` with `$e->getMessage()` that may contain SQL with customer data. unishop-monolith has `e.printStackTrace()` that may dump email addresses. books-api pre-traffic hook logs full DynamoDB items (low risk as data is non-PII catalog data).
+- **Compensating Controls**: Implement centralized error handlers returning sanitized messages; add CloudWatch log metric filters to detect PII patterns; restrict log access.
+- **Portfolio-Level Recommendation**: Adopt a portfolio-wide structured logging standard with field-level allowlists (log only explicitly permitted fields). For Java (unishop-monolith): SLF4J/Logback with PII masking patterns. For Node.js (aws-microservices): `@aws-lambda-powertools/logger`. For PHP (local-monolith): centralized error handler with log scrubbing. For TypeScript (books-api): structured logging library.
+- **Estimated Effort**: Low–Medium (14–30 days per service)
 
-### STATE-Q4: Circuit Breakers and Resilience — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No circuit breakers, no retry logic, no timeout configurations. Database/SDK failures cascade directly.
-- **Compensating Controls**: Configure HTTP connection and read timeouts on all database and SDK clients across services. Add health check endpoints that agents can query before initiating multi-step workflows. Implement retry logic with exponential backoff in the agent orchestration layer rather than within each service. Monitor service health via container/Lambda health checks as a basic liveness signal.
-- **Portfolio-Level Recommendation**: Add Resilience4j (Java) or SDK retry configuration (Node.js) across all services. Configure connection timeouts.
-- **Estimated Effort**: Medium
+### Cross-Cutting RISK-QUALITY — Same Quality Risk in 3+ Repos
 
-### STATE-Q5: Rate Limiting and Throttling — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No explicit rate limiting on any application service. Default API Gateway limits only where applicable.
-- **Compensating Controls**: Deploy nginx or API Gateway with rate limiting rules in front of services that currently lack them (local-monolith, unishop-monolith). For services already behind API Gateway (aws-microservices, books-api), configure usage plans with per-agent API key throttling. Implement per-agent rate limits in the agent orchestration layer as an additional guardrail.
-- **Portfolio-Level Recommendation**: Deploy API Gateway with usage plans and per-agent throttling for all services.
-- **Estimated Effort**: Medium
+> These are RISK-QUALITY questions that appear in 3 or more repositories.
+> They represent portfolio-wide quality patterns to address as capacity allows.
+> Questions scored as N/A for a service do not count as gaps for that service.
 
-### STATE-Q6: Blast Radius and Transaction Limits — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No per-agent transaction limits. Unbounded scans (SELECT * / DynamoDB Scan with no Limit). No spend caps or operation quotas.
-- **Compensating Controls**: Implement transaction limits in the agent orchestration layer (e.g., max orders per hour, max refund amount per session) as the first line of defense. Add approval gates for operations exceeding configurable thresholds. Add `LIMIT` clauses to all SQL queries and `Limit` parameters to all DynamoDB Scan operations to cap result sizes at the application level.
-- **Portfolio-Level Recommendation**: Add Limit parameters to all list operations. Implement per-agent operation quotas via API Gateway usage plans.
-- **Estimated Effort**: Medium
+#### API-Q2: Machine-Readable API Specification
 
-### STATE-Q7: Infrastructure Capacity for Agent Traffic — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No load testing. unishop-monolith on single t3.small EC2. local-monolith on single Docker container. aws-microservices uses deprecated NODEJS_14_X runtime. No provisioned concurrency.
-- **Compensating Controls**: Tune Apache/Nginx worker configurations for concurrent connections on container-based services. Upgrade aws-microservices Lambda runtime from deprecated NODEJS_14_X to NODEJS_20_X immediately (also a security concern). Monitor container CPU/memory usage and Lambda concurrent executions with CloudWatch alerts to detect capacity issues early. Limit agent request concurrency in the orchestration layer during initial pilot.
-- **Portfolio-Level Recommendation**: Conduct load testing for all services simulating agent traffic patterns. Upgrade runtimes. Add auto-scaling.
-- **Estimated Effort**: Medium
+- **Severity**: RISK-QUALITY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: No OpenAPI, AsyncAPI, or machine-readable API specification exists in any application service. API surfaces are defined only in source code (Java annotations, CDK constructs, PHP regex patterns, SAM events).
+- **Portfolio-Level Recommendation**: Generate OpenAPI 3.0 specifications for all application services. For unishop-monolith: add `springdoc-openapi-ui`. For aws-microservices: export from deployed API Gateway. For local-monolith: manual generation from PHP routes. For books-api: use SAM `DefinitionBody`.
+- **Estimated Effort**: Low (7–14 days per service)
 
-### HITL-Q1: Draft/Pending State — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: All writes immediately committed. No draft/pending state for agent proposals requiring human review.
-- **Compensating Controls**: For the initial pilot, restrict agents to proposing actions (recording recommendations in a separate tracking system) rather than executing writes directly. Use the existing return approval pattern in local-monolith as a template for adding draft states to other services. Implement a portfolio-wide agent action queue where proposed writes are logged for human review before execution.
-- **Portfolio-Level Recommendation**: Add status fields (draft/pending/confirmed) to records. Agent-created records default to draft.
-- **Estimated Effort**: Medium
+#### API-Q3: Structured Error Responses
 
-### HITL-Q2: Configurable Approval Gates — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No runtime approval gates. Only local-monolith has a return approval pattern. No Step Functions with human approval tasks.
-- **Compensating Controls**: Implement approval logic in the agent orchestration layer (e.g., require human approval for orders exceeding $500, refunds exceeding $100, or bulk operations). Use the existing local-monolith return approval workflow (`POST /api/admin/approve-return`) as the design pattern for other services. Deploy a centralized approval queue using Amazon SQS + Step Functions `waitForTaskToken` for high-risk operations across the portfolio.
-- **Portfolio-Level Recommendation**: Implement Step Functions with `waitForTaskToken` for high-risk operations across services.
-- **Estimated Effort**: High
+- **Severity**: RISK-QUALITY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: No structured error responses across the portfolio. unishop-monolith returns empty bodies with HTTP status codes. aws-microservices returns error stacks in production. local-monolith returns raw exception messages. books-api returns empty bodies on error.
+- **Portfolio-Level Recommendation**: Define a portfolio-wide error response schema: `{"error_code": "...", "message": "...", "retryable": true/false}`. Implement per service.
+- **Estimated Effort**: Low (7–14 days per service)
 
-### HITL-Q3: Sandbox/Staging Environment — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No production-equivalent staging environments. books-api has the best staging (CI/CD pipeline with staging deploy + E2E tests). Others have minimal or no staging.
-- **Compensating Controls**: Use local-monolith's docker-compose environment and books-api's CI/CD staging pipeline as baseline models for other services. Create enhanced seed data scripts for realistic agent testing scenarios. Deploy separate AWS accounts or resource prefixes for staging environments using existing IaC templates. Run agent integration tests against books-api's staging environment first as a proof-of-concept.
-- **Portfolio-Level Recommendation**: Create staging environments for all services with production-equivalent data shapes and seed data generators.
-- **Estimated Effort**: Medium
+#### HITL-Q3: Sandbox/Staging Environment
 
-### DATA-Q3: Selective Query Support — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No pagination, filtering, or result size limits. All list endpoints return unbounded result sets.
-- **Compensating Controls**: Limit the number of records processed by the agent at the orchestration layer (e.g., truncate responses exceeding 50 items). Pre-filter data in agent tool definitions by specifying query parameters or status filters where available. Add `LIMIT 50` to MySQL queries and `Limit: 50` to DynamoDB Scan operations as a quick application-level fix across all services.
-- **Portfolio-Level Recommendation**: Add limit/offset/cursor pagination to all list endpoints with a default limit of 50.
-- **Estimated Effort**: Low
+- **Severity**: RISK-QUALITY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: No agent-testing-focused staging environments. local-monolith has docker-compose for local dev. books-api has a staging environment in the CI/CD pipeline. aws-microservices and unishop-monolith have no staging at all. None have agent-specific test data or documented agent testing processes.
+- **Portfolio-Level Recommendation**: Create a portfolio-wide staging environment strategy with agent test data scripts and documented agent testing processes for each service.
+- **Estimated Effort**: Medium (14–30 days per service)
 
-### DATA-Q4: System of Record Designations — RISK in 3 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith (books-api INFO, eks-saas-gitops N/A)
-- **Common Finding**: No documented system-of-record designations. DMS replication creates ambiguous copies. Denormalized data in checkout flows.
-- **Compensating Controls**: Document the current authoritative data sources per entity (e.g., unishop-monolith MySQL for unicorn products, aws-microservices DynamoDB for orders, local-monolith MySQL for legacy products) in agent tool documentation. Establish a naming convention for data stores that indicates ownership. Restrict agents to writing only to the authoritative source for each entity type.
-- **Portfolio-Level Recommendation**: Document SoR per entity. Establish clear data ownership before service decomposition.
-- **Estimated Effort**: Low
+#### DATA-Q3: Selective Query Support
 
-### DATA-Q5: Reliable Timestamps — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: Incomplete timestamps. unishop-monolith has @JsonIgnore on timestamps. aws-microservices has timestamps only on orders. local-monolith has no explicit UTC. books-api has no timestamps at all.
-- **Compensating Controls**: Set server/container timezones to UTC via Dockerfile or environment configuration across all services. Document the timezone assumption in agent tool definitions. For books-api, add `createdAt`/`updatedAt` DynamoDB attributes using ISO 8601 UTC format as a quick fix. Remove `@JsonIgnore` from timestamp fields in unishop-monolith to expose them in API responses.
-- **Portfolio-Level Recommendation**: Add created_at/updated_at ISO 8601 UTC fields to all records across all services.
-- **Estimated Effort**: Low
+- **Severity**: RISK-QUALITY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: All application services return unbounded result sets. `SELECT *` without LIMIT/OFFSET in MySQL services. DynamoDB `ScanCommand` without pagination in serverless services. No filtering or sorting parameters accepted on any list endpoint.
+- **Portfolio-Level Recommendation**: Add pagination (limit/offset/cursor) to all list endpoints across the portfolio. Default to `limit=50` if no parameter provided.
+- **Estimated Effort**: Low (7–14 days per service)
 
-### DATA-Q6: Data Freshness Signaling — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No Cache-Control, X-Data-Age, or consistency-level headers in any API response.
-- **Compensating Controls**: Document in agent tool definitions that all data is served directly from primary data stores with strong consistency (no caching layers). Add `Cache-Control: no-cache` headers to all GET endpoints to explicitly signal data is always fresh. For DynamoDB services, document whether queries use eventually consistent or strongly consistent reads so agents understand consistency guarantees.
-- **Portfolio-Level Recommendation**: Add Cache-Control and consistency headers to all GET endpoints. Document consistency model per service.
-- **Estimated Effort**: Low
+#### DATA-Q4: System of Record Designations
 
-### DATA-Q7: PII Redaction in Logs — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: PII leaks into logs across all services. aws-microservices logs full checkout payloads including cardInfo. unishop-monolith uses e.printStackTrace(). No scrubbing or masking anywhere.
-- **Compensating Controls**: Add custom error handlers that sanitize exception messages before logging across all services. Configure CloudWatch Logs data protection policies to automatically detect and mask PII patterns (email, credit card, name) in log streams. Set aggressive log retention policies (7–30 days) to limit PII exposure windows. Remove full event payload logging from aws-microservices Lambda functions immediately (cardInfo logging is a potential PCI violation).
-- **Portfolio-Level Recommendation**: Implement structured logging with PII field redaction. Add CloudWatch Logs data protection policies.
-- **Estimated Effort**: Medium
+- **Severity**: RISK-QUALITY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: No formal system-of-record designations in any service. Each database is the de facto SoR but this is not documented.
+- **Portfolio-Level Recommendation**: Create a portfolio-wide data ownership document mapping each domain to its authoritative service.
+- **Estimated Effort**: Low (7–14 days — documentation only)
 
-### DISC-Q1: Schema Documentation and Versioning — RISK in 4 of 4 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api (eks-saas-gitops N/A)
-- **Common Finding**: No versioned schemas, no migration frameworks, no schema registry. Schemas defined only in application code.
-- **Compensating Controls**: Extract current database schemas into standalone documentation files (SQL DDL exports for MySQL services, DynamoDB table definitions for serverless services) as a quick first step. Freeze schema changes during initial agent integration — treat the current schema as the stable contract. Add agent tool definition versioning that references specific schema versions to detect drift.
-- **Portfolio-Level Recommendation**: Adopt database migration frameworks (Flyway for Java/PHP, CDK for DynamoDB). Create JSON Schema files per entity.
-- **Estimated Effort**: Medium
+#### DATA-Q5: Temporal Metadata and Freshness
 
-### OBS-Q1: Distributed Tracing and Structured Logging — RISK in 5 of 5 applicable services
+- **Severity**: RISK-QUALITY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: Incomplete or hidden temporal metadata. unishop-monolith has `creation_date`/`last_modified_date` columns but they are `@JsonIgnore` — hidden from API responses. aws-microservices has `orderDate` only on orders; products and baskets have no timestamps. local-monolith has timestamps on orders but not on inventory. books-api has no temporal fields at all. None return `Cache-Control` or freshness headers.
+- **Portfolio-Level Recommendation**: Add `created_at`/`updated_at` (ISO 8601 UTC) to all entities. Expose in API responses. Return `Cache-Control` and `Last-Modified` headers.
+- **Estimated Effort**: Low (7–14 days per service)
+
+#### DISC-Q1: Schema Versioning and API Contracts
+
+- **Severity**: RISK-QUALITY in 4 of 4 applicable services (eks-saas-gitops is N/A)
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api
+- **Common Finding**: No API versioning, no schema versioning, no breaking change detection in any service. API paths have no version prefix. No database migration tooling (only inline CREATE TABLE in local-monolith and DDL scripts in unishop-monolith).
+- **Portfolio-Level Recommendation**: Add `/v1/` prefix to all API paths. Generate and commit OpenAPI specs. Add breaking change detection to CI pipelines.
+- **Estimated Effort**: Medium (14–30 days per service)
+
+#### OBS-Q1: Distributed Tracing and Structured Logging
+
+- **Severity**: RISK-QUALITY in 5 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: No distributed tracing in 4 of 5 services (books-api has X-Ray enabled). No structured logging anywhere — all use unstructured console.log/println/error_log. No correlation IDs.
-- **Compensating Controls**: Enable X-Ray tracing on books-api (already partially configured) as the portfolio tracing baseline. Add request ID middleware to all services that generates and returns a UUID in response headers for agent-side correlation. Adopt AWS Lambda Powertools Logger for serverless services (aws-microservices, books-api) as a quick win for structured JSON logging. For container services, add JSON log formatting via SLF4J/Logback (unishop-monolith) or Monolog (local-monolith).
-- **Portfolio-Level Recommendation**: Enable X-Ray/OpenTelemetry across all services. Adopt AWS Lambda Powertools Logger (Node.js) and SLF4J/Logback (Java) for structured JSON logging.
-- **Estimated Effort**: Medium
+- **Common Finding**: Limited or no distributed tracing. books-api has X-Ray tracing enabled but no structured application logging. All others have no tracing. Logging is unstructured across the portfolio: `System.out.println` (unishop-monolith), `console.log` (aws-microservices), PHP `error_log` (local-monolith), no EKS control plane logging (eks-saas-gitops).
+- **Portfolio-Level Recommendation**: Deploy a shared observability stack: enable X-Ray tracing for all Lambda-based services, add OpenTelemetry for EKS workloads, and adopt structured JSON logging across the portfolio.
+- **Estimated Effort**: Medium (14–30 days per service)
 
-### OBS-Q2: Alerting on Error Rates and Latency — RISK in 5 of 5 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: No operational alerting. books-api has deployment-focused Lambda error alarms but no latency or operational alerts. All others have zero alerting.
-- **Compensating Controls**: Deploy CloudWatch alarms for Lambda error rates and concurrent execution limits on serverless services (aws-microservices, books-api) as a quick first step. Monitor container health checks for Docker-based services. Implement agent-side alerting on HTTP error rates (>5% errors over 5 minutes) and response time degradation (P95 > 2 seconds) as a compensating detection layer. Use books-api's existing CodeDeploy alarm pattern as a template for other services.
-- **Portfolio-Level Recommendation**: Deploy CloudWatch alarms for API error rates (>5% over 5min), P95 latency (>2s), and DLQ depth across all services.
-- **Estimated Effort**: Medium
+#### OBS-Q2: Alerting on Error Rates and Latency
 
-### ENG-Q1: Infrastructure Governance — RISK in 5 of 5 applicable services
+- **Severity**: RISK-QUALITY in 5 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: IaC exists in all services but drift detection and peer review enforcement are missing across the portfolio.
-- **Compensating Controls**: Add CODEOWNERS files to all repositories to require team review for infrastructure file changes. Enable branch protection rules on all repositories to enforce PR review before merge. Enable AWS Config with managed rules for drift detection on deployed resources. For eks-saas-gitops, run `terraform plan` manually before each apply and review output as a lightweight governance check.
-- **Portfolio-Level Recommendation**: Enable AWS Config drift detection. Add CODEOWNERS files. Enforce branch protection with mandatory reviews.
-- **Estimated Effort**: Low
+- **Common Finding**: No operational alerting across the portfolio. books-api has deployment-time error alarms (tied to CodeDeploy rollback) but no operational alerting. All others have zero CloudWatch alarms. No PagerDuty/OpsGenie/SNS integration anywhere.
+- **Portfolio-Level Recommendation**: Define CloudWatch alarms in IaC for each service: 5xx error rate, P99 latency, CPU/memory utilization. Configure a shared SNS topic for operator notifications.
+- **Estimated Effort**: Low (7–14 days per service)
 
-### ENG-Q2: CI/CD with API Contract Testing — RISK in 5 of 5 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: No API contract testing in any service. books-api has the most mature CI/CD (Source→Build→Staging→Prod). Others have minimal or no pipelines.
-- **Compensating Controls**: Use books-api's existing CI/CD pipeline (Source→Build→Staging→Prod with E2E tests) as the portfolio template for other services. Implement manual API smoke tests before each deployment using curl scripts or Postman collections. Run agent integration tests after each deployment to detect breaking changes. Add OpenAPI spec validation as a pre-commit hook where specs are available.
-- **Portfolio-Level Recommendation**: Implement CI/CD pipelines for all services. Add OpenAPI validation and consumer-driven contract tests.
-- **Estimated Effort**: High
+#### ENG-Q1: Infrastructure Governance for Agent-Facing Surface
 
-### ENG-Q3: Rollback Capability — RISK in 5 of 5 applicable services
+- **Severity**: RISK-QUALITY in 5 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: books-api has CodeDeploy with gradual traffic shifting and automatic rollback. Others lack automated rollback — manual redeployment or Docker restart required.
-- **Compensating Controls**: Tag Docker images with version numbers before each deployment for container-based services (local-monolith, unishop-monolith) to enable manual rollback to the previous image. For eks-saas-gitops, use Git revert to trigger Flux reconciliation as a de facto rollback mechanism. Adopt books-api's CodeDeploy with gradual traffic shifting pattern as the portfolio standard. Document rollback procedures per service as runbooks.
-- **Portfolio-Level Recommendation**: Implement automated deployment with rollback triggers for all services. Use CodeDeploy or blue/green patterns.
-- **Estimated Effort**: High
+- **Common Finding**: Inconsistent infrastructure governance. unishop-monolith has no IaC at all. aws-microservices has CDK but no peer review or drift detection. local-monolith has CloudFormation but manual deployment. books-api has SAM + CDK pipeline with manual approval (best in portfolio). eks-saas-gitops has comprehensive Terraform but `--auto-approve` and no drift detection.
+- **Portfolio-Level Recommendation**: Require IaC for all services. Enable branch protection and PR reviews. Add AWS Config drift detection rules.
+- **Estimated Effort**: Medium (14–30 days for unishop-monolith IaC creation; 7–14 days for governance improvements on others)
 
-### ENG-Q4: API Test Coverage — RISK in 5 of 5 applicable services
-- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: Zero test coverage in 3 services (unishop-monolith, aws-microservices, local-monolith). books-api has unit + E2E tests. eks-saas-gitops has only a Helm connectivity test.
-- **Compensating Controls**: Implement Postman/Newman API smoke test collections for each service's agent-facing endpoints as a quick coverage baseline. Use books-api's existing test suite (unit + E2E) as the portfolio model. Run agent integration tests from the agent orchestration layer after each deployment as a compensating validation mechanism. Focus initial test coverage on high-risk write endpoints used by the customer support agent (order creation, return processing, inventory updates).
-- **Portfolio-Level Recommendation**: Target minimum API test coverage for all agent-facing endpoints. Add contract tests for all services.
-- **Estimated Effort**: High
+#### ENG-Q2: CI/CD with API Contract Testing
 
-### ENG-Q5: Encryption at Rest — RISK in 5 of 5 applicable services
+- **Severity**: RISK-QUALITY in 5 of 5 applicable services
 - **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
-- **Common Finding**: Inconsistent encryption. No customer-managed KMS keys anywhere. unishop-monolith has no encryption at all. aws-microservices has SQS unencrypted. eks-saas-gitops skips Checkov encryption checks.
-- **Compensating Controls**: Enable AWS-managed encryption at rest on all RDS, DynamoDB, SQS, and S3 resources as an immediate baseline (default encryption covers most cases). For container-based services (local-monolith), enable EBS encryption on EC2/ECS hosts. Remove Checkov skip annotations in eks-saas-gitops and address the flagged encryption gaps. For local Docker deployments, enable filesystem-level encryption on the Docker host. Plan migration to customer-managed KMS keys as a follow-up for PII-containing data stores.
-- **Portfolio-Level Recommendation**: Enable KMS encryption on all data stores. Create a shared customer-managed KMS key for PII-containing services.
-- **Estimated Effort**: Medium
+- **Common Finding**: No API contract testing in any CI pipeline. books-api has the most mature CI/CD (build → test → staging → production with manual approval) but still lacks contract tests. unishop-monolith, aws-microservices, and local-monolith have no CI/CD pipeline at all. eks-saas-gitops has build-and-push CI with no testing.
+- **Portfolio-Level Recommendation**: Implement CI/CD pipelines for all services with API contract validation using OpenAPI spec diffs.
+- **Estimated Effort**: High (30–60 days per service without CI/CD; 14 days to add contract tests for books-api)
+
+#### ENG-Q3: Rollback Capability
+
+- **Severity**: RISK-QUALITY in 5 of 5 applicable services
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
+- **Common Finding**: Limited rollback capability. books-api has excellent rollback (Linear10PercentEvery1Minute with CloudWatch alarm-based automatic rollback via CodeDeploy). eks-saas-gitops has Flux GitOps reconciliation (git revert triggers rollback) but no automated triggers. unishop-monolith, aws-microservices, and local-monolith have no automated rollback.
+- **Portfolio-Level Recommendation**: Implement automated rollback for all services. Leverage CodeDeploy for EC2 services, Lambda aliases with traffic shifting for serverless, and Flagger for EKS.
+- **Estimated Effort**: Medium–High (14–60 days per service)
+
+#### ENG-Q4: API Test Coverage
+
+- **Severity**: RISK-QUALITY in 5 of 5 applicable services
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
+- **Common Finding**: Low or zero test coverage. books-api has unit tests (6 tests) and e2e tests (4 tests) — best in portfolio. aws-microservices has a test file but all tests are commented out. unishop-monolith, local-monolith, and eks-saas-gitops have zero test files.
+- **Portfolio-Level Recommendation**: Establish minimum test coverage requirements for agent-facing endpoints. Prioritize API integration tests for endpoints agents will consume.
+- **Estimated Effort**: Medium–High (30–60 days per service)
+
+#### ENG-Q5: Encryption at Rest for Agent-Accessible Data
+
+- **Severity**: RISK-QUALITY in 5 of 5 applicable services
+- **Affected Services**: unishop-monolith, aws-microservices, local-monolith, books-api, eks-saas-gitops
+- **Common Finding**: Encryption at rest varies widely. local-monolith has comprehensive KMS encryption (RDS, ECR, VPC Flow Logs). books-api has DynamoDB SSE with AWS-managed keys. aws-microservices uses default DynamoDB encryption only. unishop-monolith has no demonstrated encryption. eks-saas-gitops uses service-managed encryption with no customer-managed KMS keys.
+- **Portfolio-Level Recommendation**: Define a portfolio-wide encryption standard requiring customer-managed KMS keys for all data stores containing PII or Confidential data. Minimum: AWS-managed SSE for all other data stores.
+- **Estimated Effort**: Medium (14–30 days per service)
 
 ## Service Dependency Map
 
+> Dependencies were inferred from individual ARA report findings (not explicitly provided via `dependency_overrides`). Inferred dependencies may be incomplete — they reflect only what was observable in the assessed code and report context. For authoritative dependency data, add `dependency_overrides` to the portfolio config.
+
 ### Dependency Overview
 
-| Source Service | Target Service | Type | Description |
-|---------------|---------------|------|-------------|
-| aws-microservices | books-api | async | Microservices ordering flow triggers book catalog updates via EventBridge events |
-| books-api | aws-microservices | sync | Books API queries product microservice for catalog data via REST |
-| unishop-monolith | eks-saas-gitops | shared_infra | Unishop will be deployed onto the EKS cluster managed by eks-saas-gitops |
-| local-monolith | eks-saas-gitops | shared_infra | Local monolith will be containerized and deployed onto the EKS cluster |
-| aws-microservices | local-monolith | sync | Microservices query monolith for legacy product data during migration |
+| Source Service | Target Service | Type | Description | Inferred |
+|---------------|---------------|------|-------------|----------|
+| unishop-monolith | eks-saas-gitops | shared_infra | EKS is the target platform for monolith decomposition into containerized microservices (per portfolio context: "modernizing legacy monoliths into containerized microservices on EKS") | Yes |
+| local-monolith | eks-saas-gitops | shared_infra | EKS is the centralized platform for non-serverless workloads (per portfolio config context: "everything that is not serverless will run here") | Yes |
 
 ### Service Dependency Metrics
 
 | Service | Fan-In | Fan-Out | Role | Readiness Profile |
 |---------|--------|---------|------|-------------------|
-| eks-saas-gitops | 2 | 0 | Internal | 🟠 Remediation Required |
-| aws-microservices | 1 | 2 | Internal | ❌ Not Agent-Integrable |
-| books-api | 1 | 1 | Internal | ❌ Not Agent-Integrable |
-| local-monolith | 1 | 1 | Internal | ❌ Not Agent-Integrable |
-| unishop-monolith | 0 | 1 | Leaf | ❌ Not Agent-Integrable |
+| eks-saas-gitops | 2 | 0 | Foundation | Pilot-Ready (Safety Concerns) |
+| unishop-monolith | 0 | 1 | Leaf | Remediation Required |
+| local-monolith | 0 | 1 | Leaf | Remediation Required |
+| aws-microservices | 0 | 0 | Independent | Remediation Required |
+| books-api | 0 | 0 | Independent | Remediation Required |
 
 ### High-Risk Dependency Patterns
 
-1. **High-Risk Shared Infrastructure Service: eks-saas-gitops**
-   - **Affected Services**: unishop-monolith, local-monolith (shared_infra dependency)
-   - **Risk**: eks-saas-gitops is the shared EKS infrastructure service with Fan-In=2 (below the Foundation threshold of Fan-In≥3, but still a critical shared dependency) and readiness profile "Remediation Required" with 2 BLOCKERs (AUTH-Q7: no immutable audit logging, ENG-Q6: publicly exposed EKS API and internet-facing LoadBalancers). Both unishop-monolith and local-monolith will be deployed onto this EKS cluster. The ENG-Q6 BLOCKER (publicly accessible Kubernetes API server, Argo Workflows exposed without authentication, Kubecost with disabled network policies) affects all services deployed to this cluster — even if individual services resolve their own network security gaps, the underlying infrastructure remains exposed.
-   - **Recommendation**: Prioritize eks-saas-gitops ENG-Q6 remediation (set `cluster_endpoint_public_access = false`, move LoadBalancers to internal, enable network policies) before deploying containerized versions of unishop-monolith and local-monolith to the cluster.
+1. **Foundation Service with RISK-SAFETY Findings**: eks-saas-gitops is the foundation service (fan-in: 2, fan-out: 0) with 4 RISK-SAFETY findings including AUTH-Q2 (AdministratorAccess on IRSA roles). All services that will deploy on this platform inherit the platform's security posture.
+   - **Affected Services**: unishop-monolith, local-monolith (and potentially all containerized services post-decomposition)
+   - **Risk**: If Argo Workflows or TF Controller IRSA roles are compromised, all workloads on the EKS cluster are affected. The `AdministratorAccess` policy and wildcard Kubernetes ClusterRoles create maximum blast radius.
+   - **Recommendation**: Prioritize replacing `AdministratorAccess` with scoped policies on eks-saas-gitops before onboarding monolith workloads to EKS. Create a dedicated agent IRSA role with minimum required permissions.
 
-2. **Transitive Blocker Propagation: aws-microservices → local-monolith**
-   - **Affected Services**: aws-microservices, local-monolith
-   - **Risk**: aws-microservices (Not Agent-Integrable, 7 BLOCKERs) depends synchronously on local-monolith (Not Agent-Integrable, 7 BLOCKERs) for legacy product data queries during migration. Both services are independently blocked, but the synchronous dependency means that even if aws-microservices resolves all its own BLOCKERs, agent operations that trigger calls to local-monolith will still be affected by local-monolith's unresolved BLOCKERs (no machine identity, no audit logging, no idempotency, etc.).
-   - **Recommendation**: Remediate both services in parallel. Consider implementing a data cache or read replica in aws-microservices to reduce synchronous dependency on local-monolith during migration.
+2. **No Transitive BLOCKER Propagation**: eks-saas-gitops (foundation) has 0 BLOCKERs, so its Pilot-Ready (Safety Concerns) profile does not hard-block dependent services. However, the 4 RISK-SAFETY findings should be remediated before expanding agent operations on the platform.
+   - **Affected Services**: unishop-monolith, local-monolith
+   - **Risk**: Low (no hard blocks). Medium for safety — platform-level RISK-SAFETY findings affect all hosted workloads.
+   - **Recommendation**: Remediate eks-saas-gitops RISK-SAFETY findings (especially AUTH-Q2) before deploying agent-integrated workloads on EKS.
 
-3. **Circular Dependency: aws-microservices ↔ books-api**
+3. **Independent Serverless Services**: aws-microservices and books-api are self-contained serverless services with no inferred dependencies on other portfolio services. Their readiness can be improved independently.
    - **Affected Services**: aws-microservices, books-api
-   - **Risk**: aws-microservices sends async events to books-api via EventBridge, while books-api makes sync REST calls back to aws-microservices. This circular dependency means both services must be simultaneously agent-ready for the full data flow to work. Since both are "Not Agent-Integrable", neither can serve as a stepping stone for incremental agent enablement of the other.
-   - **Recommendation**: Break the circular dependency by implementing an independent data store or API for catalog data that both services can query without depending on each other.
-
-4. **Shared Infrastructure Cascading: EKS Network Security Gap**
-   - **Affected Services**: unishop-monolith, local-monolith, eks-saas-gitops
-   - **Risk**: The AUTH-Q7 BLOCKER (no CloudTrail, no immutable audit logging) on eks-saas-gitops means that when unishop-monolith and local-monolith are deployed to the EKS cluster, agent-initiated write operations via IRSA roles will not be recorded in an immutable audit trail — even if the individual services implement their own application-level audit logging.
-   - **Recommendation**: Deploy centralized CloudTrail with EKS control plane audit logging before deploying any agent-enabled services to the cluster.
+   - **Risk**: None (no dependency-related risk)
+   - **Recommendation**: These services can begin AUTH-Q1 and DATA-Q1 remediation independently without coordination.
 
 ## Portfolio Remediation Guidance
 
-> Portfolio context: Evaluating the e-commerce platform portfolio for both autonomous AI agent integration and cloud-native modernization. The team is building a customer support agent that handles order inquiries, processes returns, and manages inventory restocking.
+> Portfolio context: Evaluating the e-commerce platform portfolio for both autonomous AI agent integration and cloud-native modernization. The team is building a customer support agent that handles order inquiries, processes returns, and manages inventory restocking — while simultaneously modernizing legacy monoliths into containerized microservices on EKS.
 
 ### Remediation Priority Order
 
@@ -442,173 +370,238 @@ Remediation of cross-cutting BLOCKERs should follow this general priority:
 
 #### Identity Foundation
 
-**BLOCKERs addressed**: AUTH-Q1, AUTH-Q7
-**Services affected**: All 5 services
-
-- **What to do**: Deploy a centralized Amazon Cognito User Pool with Resource Servers and client_credentials grant. This single platform-level action unblocks machine identity authentication (AUTH-Q1) for all 4 application services simultaneously. In parallel, deploy an organization-level CloudTrail trail writing to S3 with object lock and enable EKS control plane audit logging on eks-saas-gitops — this addresses AUTH-Q7 across all 5 services. Implement a portfolio-wide structured JSON logging standard. For the customer support agent use case, register the agent as a Cognito app client with scopes for `orders/read`, `returns/write`, and `inventory/read` across relevant services.
-- **Expected outcome**: All services have machine identity authentication. All write operations are logged in an immutable audit trail with principal attribution. The customer support agent can authenticate and its actions are fully auditable.
-- **Effort**: Medium — 4–8 weeks for both AUTH-Q1 and AUTH-Q7
-
-#### Data Protection
-
-**BLOCKERs addressed**: DATA-Q1, DATA-Q2
+**BLOCKERs addressed**: AUTH-Q1
 **Services affected**: unishop-monolith, aws-microservices, local-monolith, books-api
 
-- **What to do**: Define a portfolio data classification policy identifying PII categories. Apply classification tags to all data stores. Document data residency requirements and pin all stacks to specific approved AWS regions. For the customer support agent handling order inquiries and returns, classify customer PII fields (name, email, address, payment info) and define which fields the agent can access. Implement field-level redaction so the agent receives only necessary PII. Document that Amazon Bedrock in the same region is the approved LLM endpoint for PII processing.
-- **Expected outcome**: All PII is classified and tagged. Data residency policy documented and enforced. The customer support agent accesses only the PII necessary for its scoped tasks. LLM calls stay within the approved jurisdiction.
-- **Effort**: High — 4–6 weeks for DATA-Q1, Medium — 2–3 weeks for DATA-Q2
+- **What to do**:
+  1. Provision a shared Amazon Cognito User Pool with resource servers and custom scopes for the portfolio
+  2. Create per-agent App Clients with `client_credentials` grant — each agent identity gets unique credentials
+  3. Integrate each service with the shared Cognito pool:
+     - **books-api** (lowest effort): Add `client_credentials` flow to existing Cognito User Pool, or migrate to the shared pool
+     - **aws-microservices**: Add Cognito authorizer to all 3 API Gateway REST APIs in CDK
+     - **unishop-monolith**: Enable existing Spring Security OAuth2 resource server (framework already present, just disabled)
+     - **local-monolith**: Add API key authentication middleware or OAuth2 bearer token validation
+  4. Use the eks-saas-gitops IRSA pattern as template for Kubernetes-hosted services post-decomposition
+- **Expected outcome**: All API endpoints require authentication. Each agent call is attributable by client_id. AUTH-Q2, AUTH-Q3, AUTH-Q6, and AUTH-Q7 remediation is unblocked.
+- **Effort**: High (platform: 2 weeks; per-service: 2–4 weeks each)
 
-#### Write Safety
+#### Data Classification and Protection
 
-**BLOCKERs addressed**: API-Q4, STATE-Q1
+**BLOCKERs addressed**: DATA-Q1
 **Services affected**: unishop-monolith, aws-microservices, local-monolith, books-api
 
-- **What to do**: Adopt a portfolio-wide idempotency standard using `Idempotency-Key` headers. For serverless services (aws-microservices, books-api), use Lambda Powertools idempotency utility. For container/EC2 services (local-monolith, unishop-monolith), implement idempotency middleware. In parallel, implement compensation endpoints for each service's multi-step workflows. For the customer support agent processing returns and managing restocking, idempotency ensures that retry on a "process return" or "restock inventory" API call does not duplicate the operation. Compensation logic ensures that a failed multi-step return workflow can be cleanly reversed.
-- **Expected outcome**: All write endpoints are idempotent. Multi-step agent workflows have defined compensation paths. The customer support agent can safely retry failed operations and recover from partial workflow failures.
-- **Effort**: Medium — 3–4 weeks for API-Q4, High — 6–8 weeks for STATE-Q1
-
-#### Network Hardening
-
-**BLOCKERs addressed**: ENG-Q6
-**Services affected**: All 5 services
-
-- **What to do**: Deploy AWS WAF with rate limiting rules on all public-facing API Gateways. Add explicit CORS configuration to each service restricting allowed origins. For eks-saas-gitops: set `cluster_endpoint_public_access = false`, change Argo Workflows and Kubecost LoadBalancers from internet-facing to internal, enable Kubecost network policies. For application services: deploy API Gateway in front of each service with WAF, restrict security groups to API Gateway only. For the customer support agent, configure WAF rules that allow the agent's known IP ranges while rate-limiting all clients.
-- **Expected outcome**: All services accessible only through controlled network paths. CORS restricted to authorized origins. EKS cluster not publicly accessible. WAF provides rate limiting and IP reputation filtering. The customer support agent operates through a well-defined, secured network path.
-- **Effort**: Medium — 3–4 weeks
+- **What to do**:
+  1. Create a portfolio-wide data classification policy (Public / Internal / Confidential / Restricted)
+  2. Classify each service's data stores:
+     - **books-api**: Public (isbn, title, author — non-PII catalog data). Tag DynamoDB table with `data-classification: public`. Effort: hours.
+     - **aws-microservices**: Confidential (order table has firstName, lastName, email, address, cardInfo). Tag tables. Implement field-level encryption for `cardInfo` and `email` with KMS. Effort: 4–8 weeks.
+     - **local-monolith**: Confidential (customer_name, customer_email, shipping_address across 9 tables). Implement API response filtering for agent endpoints. Effort: 2–4 weeks.
+     - **unishop-monolith**: Confidential (email, first_name, last_name in unicorn_user). Add `@JsonIgnore` on PII fields for agent-facing DTOs. Effort: 1–2 weeks.
+  3. Deploy Amazon Macie for automated PII detection across DynamoDB and S3
+- **Expected outcome**: All data stores have classification tags. Agent-facing endpoints return only non-PII data (or explicitly authorized PII with audit logging). Agents can programmatically verify data safety.
+- **Effort**: Medium (policy: 1 week; per-service: hours to 8 weeks depending on PII complexity)
 
 ## Agentic Program Recommendations
 
 > These are engagement-level recommendations based on the portfolio's agentic readiness
 > profile. Discuss with your AWS Solutions Architect to determine eligibility and timing.
 
-| Program | Relevance | Trigger Findings | Next Step |
-|---------|-----------|-----------------|-----------|
-| EBA-Agentic AI | NOT triggered — 0 services are Agent-Ready or Pilot-Ready | Re-evaluate after completing the Identity Foundation and Network Hardening remediation groups | Request EBA engagement via AWS Solutions Architect once services reach Pilot-Ready |
+| Program | Relevance | Trigger Findings | Suggested Timing | Next Step |
+|---------|-----------|-----------------|------------------|-----------|
+| AI DLC | Portfolio shows manual development workflows and lack of CI/CD across 3 of 5 services | 3/4 application services have no CI/CD (ENG-Q2); all 5 services have ENG RISK-QUALITY findings; zero or minimal test coverage across portfolio | Run first — before agentic work | Request engagement via AWS Solutions Architect |
+| AgentStorming | 80% of services require remediation despite clear agent use cases — structured agent opportunity identification would help prioritize which services to remediate first | 4/5 services are Remediation Required; portfolio context describes specific agent use cases but all target services have BLOCKERs | Run after AI DLC, before remediation begins | Request engagement via AWS Solutions Architect |
 
 ### Program Details
 
-> No agentic programs currently triggered. As the portfolio's agentic readiness improves through remediation of cross-cutting BLOCKERs, re-assess to identify EBA-Agentic AI eligibility.
+#### AI DLC (AI Driven Development Lifecycle)
+
+- **Why triggered**: The portfolio demonstrates predominantly manual development workflows. 3 of 4 application services (unishop-monolith, aws-microservices, local-monolith) have no CI/CD pipeline. All 5 services have RISK-QUALITY findings in the Engineering category (ENG-Q1 through ENG-Q5). Test coverage is near-zero across the portfolio. These findings indicate teams that would benefit from adopting AI-driven development practices to accelerate remediation and modernization.
+- **What it provides**: Workshop for adopting the AI Driven Development Lifecycle, emphasizing AI Powered Execution with Human Oversight and Dynamic Team Collaboration. AI creates detailed work plans, seeks clarification, and defers critical decisions to humans. Teams unite in collaborative spaces for real-time problem solving and rapid decision-making.
+- **Suggested timing**: Run first — before beginning agentic readiness remediation. Establishing AI-assisted development practices will accelerate the AUTH-Q1 and DATA-Q1 remediation across all 4 affected services.
+- **Recommended scope**: All 5 services. Focus on the 3 services without CI/CD (unishop-monolith, aws-microservices, local-monolith) for the highest impact.
+- **Next step**: Request AI DLC engagement via AWS Solutions Architect.
+
+#### AgentStorming
+
+- **Why triggered**: Despite a clear portfolio context describing specific agent use cases (customer support agent handling order inquiries, returns, inventory restocking), 80% of services (4/5) are Remediation Required. The gap between the defined agent vision and the current readiness state suggests benefit from structured agent opportunity identification to prioritize which services to remediate first and which agent capabilities to target initially.
+- **What it provides**: A workshop format that builds on EventStorming by adding Cognitive Complexity Analysis and Agentic Workflow Design. Pinpoints where agentic AI delivers real value versus traditional automation. Gives the team a structured, repeatable path from "where should we use AI?" to a qualified, implementation-ready answer.
+- **Suggested timing**: Run after AI DLC, before beginning remediation. AgentStorming output will inform which services to prioritize for AUTH-Q1/DATA-Q1 remediation and which agent capabilities to target in the initial pilot.
+- **Recommended scope**: Focus on the customer support agent use case across the 3 P0 services (unishop-monolith, aws-microservices, local-monolith) and the P1 books-api. Identify which agent tools map to which service endpoints and prioritize remediation accordingly.
+- **Next step**: Request AgentStorming engagement via AWS Solutions Architect.
+
+#### AXE (Agentic Experience Workshop)
+
+> Not triggered. Fewer than 3 services in Pilot-Ready or Agent-Ready state (only 1: eks-saas-gitops at Pilot-Ready Safety Concerns). Re-assess after remediating AUTH-Q1 and DATA-Q1 — resolving these 2 BLOCKERs across the 4 application services could move multiple services to Pilot-Ready, triggering AXE eligibility.
+
+#### EBA on Agentic AI (Experience-Based Acceleration)
+
+> Not triggered. No single cross-cutting BLOCKER affects 5 or more repositories. AUTH-Q1 and DATA-Q1 each affect 4 repos (not 5). If the portfolio grows to 5+ application services and the same BLOCKERs persist, EBA may be triggered.
+
+## Portfolio-Level Findings
+
+> These questions evaluate capabilities that can only be assessed by looking across
+> multiple repos. They are distinct from cross-cutting analysis (which aggregates
+> individual findings). Individual report findings are never overridden.
+
+### PORT-ARA-Q1: Centralized Identity Plane
+
+- **Severity**: BLOCKER
+- **Finding**: No shared identity provider exists across the portfolio. books-api has its own Amazon Cognito User Pool (`CognitoUserPool` in `template.yml`) with OAuth2 implicit flow and `COGNITO` identity provider, but no other service references it. eks-saas-gitops uses IRSA (IAM Roles for Service Accounts) with OIDC federation for Kubernetes workload identity — this is a machine identity mechanism but scoped to the EKS cluster and not accessible to application-level services. unishop-monolith has a disabled Spring Security OAuth2 framework with no provider configured. aws-microservices and local-monolith have no identity provider at all. The two identity mechanisms (Cognito in books-api, IRSA in eks-saas-gitops) are completely independent with no cross-service integration.
+- **Evidence**: `services/books-api/template.yml` (CognitoUserPool, UserPoolClient, UserPoolDomain), `services/eks-saas-gitops/terraform/modules/gitops-saas-infra/main.tf` (7 IRSA roles with OIDC), absence of shared Cognito references in other services
+- **Recommendation**: Provision a portfolio-wide Amazon Cognito User Pool with resource servers for each service. Create per-agent App Clients with `client_credentials` grant. Either extend the books-api Cognito as the shared pool or create a new centralized pool. Integrate all 4 application services. For eks-saas-gitops, the existing IRSA mechanism covers Kubernetes workloads; bridge to Cognito if agents need to interact with both application APIs and the EKS control plane.
+- **Affected Services**: All 5 services
+- **Contextual Annotations**: This finding directly relates to the AUTH-Q1 cross-cutting BLOCKER. Provisioning a shared Cognito User Pool resolves both PORT-ARA-Q1 and AUTH-Q1 simultaneously.
+
+### PORT-ARA-Q2: Cross-Service Audit Correlation
+
+- **Severity**: RISK
+- **Finding**: No cross-service audit correlation mechanism exists. books-api has X-Ray tracing enabled (`Tracing: Active`, `TracingEnabled: true`, `aws-xray-sdk-core`) — the only service with distributed tracing. However, no other service has X-Ray or any tracing instrumentation. No shared CloudTrail trail is defined in any repository. No consistent trace ID headers (`X-Amzn-Trace-Id`, `traceparent`) are propagated across services. No centralized log aggregation (no shared CloudWatch Log Group, no S3 audit bucket) is configured. Each service logs independently with no correlation mechanism.
+- **Evidence**: `services/books-api/template.yml` (Tracing: Active, TracingEnabled: true), all other service reports (no tracing configuration), absence of CloudTrail resources in any repository
+- **Recommendation**: Enable X-Ray tracing across all Lambda-based services (aws-microservices, books-api). Add OpenTelemetry instrumentation for EC2/EKS services (unishop-monolith, local-monolith, eks-saas-gitops). Deploy a shared CloudTrail trail at the account level with S3 bucket (object lock enabled). Establish a standard trace ID header propagation convention across all services.
+- **Affected Services**: All 5 services
+- **Contextual Annotations**: This finding provides context for the AUTH-Q6 cross-cutting RISK-SAFETY. A shared CloudTrail trail would partially mitigate AUTH-Q6 for all services — **verify** that each service's API calls are captured by the trail.
+
+### PORT-ARA-Q3: Portfolio-Level Rate Limiting
+
+- **Severity**: RISK
+- **Finding**: No shared API gateway, WAF, or rate limiting configuration protects the portfolio perimeter. local-monolith has its own WAF Web ACL but with no rate-based rules — it has IP whitelisting and AWS Managed Rules only. books-api and aws-microservices have API Gateway but no usage plans or throttling configuration. unishop-monolith runs directly on EC2 port 8080 with no gateway layer. eks-saas-gitops has no WAF or API Gateway. Each service manages (or fails to manage) its own rate limiting independently. There is no portfolio-level protection against agent traffic storms that could span multiple services simultaneously.
+- **Evidence**: `monolith/infrastructure/monolith-apprunner.yaml` (WebACL with no rate rules), `services/aws-microservices/lib/apigateway.ts` (no usage plans), `services/books-api/template.yml` (no UsagePlan), absence of shared WAF or API Gateway resources
+- **Recommendation**: Deploy a shared AWS WAF WebACL with rate-based rules covering all public-facing services. Configure per-agent rate limits across the portfolio. For the customer support agent use case, define a portfolio-wide rate limit (e.g., 500 requests/minute per agent identity) enforced at the shared WAF level.
+- **Affected Services**: All application services (unishop-monolith, aws-microservices, local-monolith, books-api)
+- **Contextual Annotations**: This finding provides context for the STATE-Q5 cross-cutting RISK-SAFETY. A shared WAF with rate-based rules would partially mitigate STATE-Q5 for all services — **verify** that per-agent throttling is configured at both the portfolio and service level.
+
+### PORT-ARA-Q4: Transitive Dependency Safety
+
+- **Severity**: INFO
+- **Finding**: Using the inferred dependency graph and readiness profiles: eks-saas-gitops (Pilot-Ready Safety Concerns, 0 BLOCKERs) is the sole foundation service. unishop-monolith and local-monolith have inferred `shared_infra` dependencies on eks-saas-gitops. No service with profile Agent-Ready or Pilot-Ready depends synchronously on a service with profile Not Agent-Integrable (no services are Not Agent-Integrable). The 4 Remediation Required services are independent of each other — their BLOCKERs (AUTH-Q1, DATA-Q1) are individual, not caused by transitive dependencies. The foundation service (eks-saas-gitops) has 0 BLOCKERs, so it does not propagate blockers to dependent services.
+- **Evidence**: Inferred dependency graph (Step 5), readiness profiles from all 5 services
+- **Recommendation**: No transitive dependency safety issues at current state. Monitor as services are decomposed — if unishop-monolith is split into microservices on EKS, the dependency on eks-saas-gitops becomes a sync dependency, and any BLOCKERs on eks-saas-gitops would propagate.
+- **Affected Services**: unishop-monolith, local-monolith (via dependency on eks-saas-gitops)
+- **Contextual Annotations**: None — no transitive blocker propagation detected.
+
+### PORT-ARA-Q5: Agent Identity Governance
+
+- **Severity**: RISK
+- **Finding**: No centralized mechanism exists to suspend or revoke agent identities across all services simultaneously. books-api's Cognito supports `adminDisableUser` but only for its own User Pool. eks-saas-gitops IRSA roles can be deactivated by modifying Terraform, but this is slow (minutes to hours). unishop-monolith, aws-microservices, and local-monolith have no identity mechanism at all (no Cognito, no API keys, no service accounts). There is no portfolio-wide agent identity registry, no centralized kill switch, and no operational runbook for revoking all agent access in an emergency.
+- **Evidence**: `services/books-api/template.yml` (CognitoUserPool — single-service scope), `services/eks-saas-gitops/terraform/modules/gitops-saas-infra/main.tf` (IRSA roles — Terraform-managed), absence of centralized identity management in other services
+- **Recommendation**: When implementing the shared Cognito User Pool (AUTH-Q1 remediation), design a centralized agent identity governance layer: (1) all agent App Clients are registered in the shared pool, (2) a "kill all agents" Lambda function can disable all agent App Clients within seconds, (3) an operational runbook documents the agent suspension procedure, (4) for eks-saas-gitops, pre-provision an IAM deny-all policy that can be attached to agent IRSA roles via CLI.
+- **Affected Services**: All 5 services
+- **Contextual Annotations**: This finding provides context for the AUTH-Q7 cross-cutting RISK-SAFETY. A shared Cognito pool with centralized governance would mitigate AUTH-Q7 for all application services — **verify** that each service's agent identity is managed through the shared pool after implementation.
 
 ## Service-by-Service Summary
 
 | Service | Repo Type | Agent Scope | Readiness Profile | BLOCKERs | RISKs | INFOs | N/A |
 |---------|-----------|-------------|-------------------|----------|-------|-------|-----|
-| unishop-monolith | application | write-enabled | ❌ Not Agent-Integrable | 7 | 32 | 10 | 0 |
-| aws-microservices | application | write-enabled | ❌ Not Agent-Integrable | 7 | 32 | 10 | 0 |
-| local-monolith | application | write-enabled | ❌ Not Agent-Integrable | 7 | 33 | 9 | 0 |
-| books-api | application | write-enabled | ❌ Not Agent-Integrable | 6 | 32 | 11 | 0 |
-| eks-saas-gitops | infrastructure-only | write-enabled | 🟠 Remediation Required | 2 | 11 | 2 | 34 |
+| unishop-monolith | application | read-only | 🟠 Remediation Required | 2 | 22 | 13 | 0 |
+| aws-microservices | application | read-only | 🟠 Remediation Required | 2 | 25 | 16 | 0 |
+| local-monolith | application | read-only | 🟠 Remediation Required | 2 | 22 | 17 | 0 |
+| books-api | application | read-only | 🟠 Remediation Required | 2 | 23 | 12 | 0 |
+| eks-saas-gitops | infrastructure-only | read-only | 🟡 Pilot-Ready (Safety Concerns) | 0 | 13 | 1 | 29 |
 
 ### Individual Service Details
 
 #### unishop-monolith
 
-- **Readiness Profile**: ❌ Not Agent-Integrable
+- **Readiness Profile**: Remediation Required
 - **Repo Type**: application
-- **Agent Scope**: write-enabled
+- **Agent Scope**: read-only
 - **Priority**: P0
-- **BLOCKERs** (7):
-  - AUTH-Q1: OAuth2 configured but `permitAll()` disables all authentication — no machine identity
-  - API-Q4: No idempotency keys on write endpoints; `INSERT IGNORE` provides only DB-level protection
-  - STATE-Q1: No compensation/rollback for multi-step basket and user creation workflows
-  - AUTH-Q7: No immutable audit logging; CloudWatch Logs with only 7-day retention and unstructured output
-  - DATA-Q1: PII (email, first_name, last_name) in plaintext MySQL with no classification or field-level controls
-  - DATA-Q2: No data residency documentation or controls; PII could be sent to any jurisdiction
-  - ENG-Q6: Wildcard CORS, security groups open to 0.0.0.0/0, no WAF
+- **BLOCKERs** (2):
+  - AUTH-Q1: Spring Security OAuth2 present but entirely disabled (`permitAll()` on all endpoints) — no machine identity
+  - DATA-Q1: PII (email, first_name, last_name) in `unicorn_user` table exposed in API responses without classification
+- **RISKs** (22):
+  - RISK-SAFETY (8): AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, STATE-Q1, STATE-Q5, DATA-Q2, DATA-Q6
+  - RISK-QUALITY (14): API-Q2, API-Q3, HITL-Q3, DATA-Q3, DATA-Q4, DATA-Q5, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5
 - **Key Recommendations**:
-  - Enable OAuth2 validation in ResourceServerConfig.java and configure Cognito client credentials
-  - Migrate hardcoded credentials from application.properties and CloudFormation to Secrets Manager
-  - Add encryption at rest to RDS cluster (StorageEncrypted: true)
-- **Depends On**: eks-saas-gitops (shared_infra — EKS deployment target)
+  - Enable existing Spring Security OAuth2 resource server with Cognito provider (AUTH-Q1)
+  - Classify PII fields and implement response filtering for agent endpoints (DATA-Q1)
+  - Create IaC (CloudFormation/CDK) for the EC2 infrastructure (ENG-Q1)
+- **Depends On**: eks-saas-gitops (shared_infra — target EKS platform for decomposition)
 - **Depended On By**: None
 
 #### aws-microservices
 
-- **Readiness Profile**: ❌ Not Agent-Integrable
+- **Readiness Profile**: Remediation Required
 - **Repo Type**: application
-- **Agent Scope**: write-enabled
+- **Agent Scope**: read-only
 - **Priority**: P0
-- **BLOCKERs** (7):
-  - AUTH-Q1: All three API Gateways completely open — no authorizer, no API keys, no auth
-  - API-Q4: No idempotency on POST /product and POST /basket/checkout — retries create duplicates
-  - STATE-Q1: 4-step checkout flow with no compensation; EventBridge events not reversible
-  - AUTH-Q7: No CloudTrail in CDK; Lambda logs full event payloads including PII without retention policies
-  - DATA-Q1: Order table stores PII + cardInfo with no classification tags or field-level encryption
-  - DATA-Q2: CDK stack env property commented out — no region pinning, no residency documentation
-  - ENG-Q6: No CORS on any API Gateway, no VPC attachment, no WAF, APIs publicly accessible
+- **BLOCKERs** (2):
+  - AUTH-Q1: All 3 API Gateway REST APIs completely open — no authorizer, no API keys, no IAM auth
+  - DATA-Q1: Order DynamoDB table stores PII and payment card info (`cardInfo`) without classification or field-level encryption
+- **RISKs** (25):
+  - RISK-SAFETY (9): AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, STATE-Q1, STATE-Q4, STATE-Q5, DATA-Q2, DATA-Q6
+  - RISK-QUALITY (16): API-Q2, API-Q3, API-Q6, HITL-Q3, DATA-Q3, DATA-Q4, DATA-Q5, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, STATE-Q7
 - **Key Recommendations**:
-  - Add API Gateway API keys immediately, then migrate to Cognito OAuth 2.0 client credentials
-  - Upgrade Lambda runtime from deprecated NODEJS_14_X to NODEJS_20_X
-  - Tokenize or remove cardInfo field from order table (potential PCI DSS violation)
-- **Depends On**: books-api (async — EventBridge events), local-monolith (sync — legacy product data)
-- **Depended On By**: books-api (sync — REST catalog queries)
+  - Add API Gateway API key authentication with usage plans to all 3 REST APIs (AUTH-Q1)
+  - Implement field-level encryption for `cardInfo` and `email` in DynamoDB with KMS (DATA-Q1)
+  - Add circuit breakers and resilience patterns to AWS SDK clients (STATE-Q4 — unique to this service)
+- **Depends On**: None (self-contained serverless)
+- **Depended On By**: None
 
 #### local-monolith
 
-- **Readiness Profile**: ❌ Not Agent-Integrable
+- **Readiness Profile**: Remediation Required
 - **Repo Type**: application
-- **Agent Scope**: write-enabled
+- **Agent Scope**: read-only
 - **Priority**: P0
-- **BLOCKERs** (7):
-  - AUTH-Q1: Session-based PHP auth only — no OAuth2, no API keys, no machine identity
-  - API-Q4: No idempotency keys on any write endpoint; order IDs use uniqid() with no deduplication
-  - STATE-Q1: Multi-step fulfillment workflow (7 steps) with each step committing independently — no saga
-  - AUTH-Q7: Application-level order_status_history is mutable MySQL — not an immutable audit log
-  - DATA-Q1: Customer PII (name, email, shipping address) in plaintext MySQL without classification
-  - DATA-Q2: Docker deployment with no region awareness; no residency documentation
-  - ENG-Q6: No CORS headers, no security groups, port 8080 exposed directly, no WAF
+- **BLOCKERs** (2):
+  - AUTH-Q1: PHP session-based authentication only — no OAuth2, no API keys, no machine identity
+  - DATA-Q1: Customer PII (names, emails, addresses) across 9 MySQL tables with no classification or access controls
+- **RISKs** (22):
+  - RISK-SAFETY (8): AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, STATE-Q1, STATE-Q5, DATA-Q2, DATA-Q6
+  - RISK-QUALITY (14): API-Q2, API-Q3, HITL-Q3, DATA-Q3, DATA-Q5, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, STATE-Q2, STATE-Q7
 - **Key Recommendations**:
-  - Implement API key authentication as alternative auth path alongside session-based auth
-  - Remove hardcoded credential fallback `getenv('DB_PASS') ?: 'ecommerce_pass'` from index.php
-  - Deploy API Gateway with WAF in front of the application
-- **Depends On**: eks-saas-gitops (shared_infra — EKS deployment target)
-- **Depended On By**: aws-microservices (sync — legacy product data queries)
+  - Add API key authentication middleware as parallel auth path alongside PHP sessions (AUTH-Q1)
+  - Create data classification inventory for all 9 tables and implement API response filtering (DATA-Q1)
+  - Add WAF rate-based rules to existing WAF configuration (STATE-Q5 — quick win)
+- **Depends On**: eks-saas-gitops (shared_infra — centralized EKS platform)
+- **Depended On By**: None
 
 #### books-api
 
-- **Readiness Profile**: ❌ Not Agent-Integrable
+- **Readiness Profile**: Remediation Required
 - **Repo Type**: application
-- **Agent Scope**: write-enabled
+- **Agent Scope**: read-only
 - **Priority**: P1
-- **BLOCKERs** (6):
-  - AUTH-Q1: Cognito User Pool with human-only implicit grant — no client credentials for machine identity
-  - API-Q4: POST /books uses PutItem with no ConditionExpression — silent overwrites on retries
-  - STATE-Q1: No delete endpoint, no saga pattern, no compensation for multi-step agent workflows
-  - AUTH-Q7: API Gateway logging and X-Ray enabled but no CloudTrail, no immutable storage, no principal logging
-  - DATA-Q2: No formal data residency documentation (book catalog data is non-PII but write-enabled scope requires documented assessment)
-  - ENG-Q6: No CORS on SAM API Gateway, no WAF, no network policy documentation
+- **BLOCKERs** (2):
+  - AUTH-Q1: Cognito User Pool exists but only with implicit flow for humans — no client_credentials for agents
+  - DATA-Q1: DynamoDB table lacks classification tags (data is non-PII catalog data but no auditable proof)
+- **RISKs** (23):
+  - RISK-SAFETY (8): AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, STATE-Q1, STATE-Q5, DATA-Q2, DATA-Q6
+  - RISK-QUALITY (15): API-Q2, API-Q3, HITL-Q3, DATA-Q3, DATA-Q4, DATA-Q5, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, STATE-Q2
 - **Key Recommendations**:
-  - Add Cognito App Client with client_credentials grant and custom scopes (books/read, books/write)
-  - Add ConditionExpression to PutItem to prevent silent overwrites
-  - Add CORS configuration to BooksApi SAM resource — fastest blocker to resolve
-- **Depends On**: aws-microservices (sync — REST catalog queries)
-- **Depended On By**: aws-microservices (async — EventBridge events)
+  - Add Cognito App Client with `client_credentials` flow (AUTH-Q1 — lowest effort in portfolio: 1–2 days)
+  - Add `data-classification: public` and `contains-pii: false` tags to DynamoDB table (DATA-Q1 — hours)
+  - Add GET /books/{isbn} endpoint for targeted agent lookups (STATE-Q2)
+- **Depends On**: None (self-contained serverless)
+- **Depended On By**: None
 
 #### eks-saas-gitops
 
-- **Readiness Profile**: 🟠 Remediation Required
+- **Readiness Profile**: Pilot-Ready (Safety Concerns)
 - **Repo Type**: infrastructure-only
-- **Agent Scope**: write-enabled
+- **Agent Scope**: read-only
 - **Priority**: P1
-- **BLOCKERs** (2):
-  - AUTH-Q7: No CloudTrail, no CloudWatch Log Groups, no S3 object lock in any Terraform file
-  - ENG-Q6: EKS API publicly accessible, Argo Workflows and Kubecost exposed via internet-facing LoadBalancers without authentication, Kubecost network policies disabled
+- **BLOCKERs** (0): None
+- **RISKs** (13):
+  - RISK-SAFETY (4): AUTH-Q2 (AdministratorAccess on IRSA roles), AUTH-Q3 (wildcard Kubernetes ClusterRoles), AUTH-Q6 (no CloudTrail or EKS audit logging), AUTH-Q7 (no automated agent identity suspension)
+  - RISK-QUALITY (9): AUTH-Q1 (no agent-specific IRSA role), AUTH-Q5 (SSM credentials with no rotation, hardcoded test password), OBS-Q1 (no distributed tracing), OBS-Q2 (no alerting), ENG-Q1 (`--auto-approve`, no drift detection), ENG-Q2 (no testing in CI), ENG-Q3 (no automated rollback triggers), ENG-Q4 (zero test coverage), ENG-Q5 (no customer-managed KMS)
 - **Key Recommendations**:
-  - Add aws_cloudtrail resource with log file validation and S3 bucket with object lock
-  - Set cluster_endpoint_public_access = false and move LoadBalancers to internal
-  - Replace AdministratorAccess on argo-workflows and tf-controller IRSA roles with scoped policies
-- **Depends On**: None
-- **Depended On By**: unishop-monolith (shared_infra), local-monolith (shared_infra)
+  - Replace `AdministratorAccess` on Argo Workflows and TF Controller IRSA roles with scoped policies (AUTH-Q2 — highest priority)
+  - Enable EKS control plane audit logging via `cluster_enabled_log_types` (AUTH-Q6 — quick win)
+  - Create a dedicated agent IRSA role following existing patterns (AUTH-Q1 — RISK-QUALITY)
+- **Depends On**: None (foundation service)
+- **Depended On By**: unishop-monolith, local-monolith
 
 ## Assessment Inventory
 
 | # | Service | Report File | Assessment Date | Repo Type | Agent Scope |
 |---|---------|-------------|-----------------|-----------|-------------|
-| 1 | unishop-monolith | ./services/unishop-monolith-to-microservices/MonoToMicroLegacy/MonoToMicroLegacy-ara-report.md | 2026-04-15 | application | write-enabled |
-| 2 | aws-microservices | ./services/aws-microservices/aws-microservices-ara-report.md | 2026-04-15 | application | write-enabled |
-| 3 | local-monolith | ./monolith/monolith-ara-report.md | 2026-04-15 | application | write-enabled |
-| 4 | books-api | ./services/books-api/books-api-ara-report.md | 2026-04-15 | application | write-enabled |
-| 5 | eks-saas-gitops | ./services/eks-saas-gitops/eks-saas-gitops-ara-report.md | 2025-07-15 | infrastructure-only | write-enabled |
+| 1 | unishop-monolith | `./services/unishop-monolith-to-microservices/MonoToMicroLegacy/MonoToMicroLegacy-ara-report.md` | 2026-04-17 | application | read-only |
+| 2 | aws-microservices | `./services/aws-microservices/aws-microservices-ara-report.md` | 2026-04-17 | application | read-only |
+| 3 | local-monolith | `./monolith/monolith-ara-report.md` | 2025-07-17 | application | read-only |
+| 4 | books-api | `./services/books-api/books-api-ara-report.md` | 2026-04-17 | application | read-only |
+| 5 | eks-saas-gitops | `./services/eks-saas-gitops/eks-saas-gitops-ara-report.md` | 2026-04-17 | infrastructure-only | read-only |
 
 ---
 

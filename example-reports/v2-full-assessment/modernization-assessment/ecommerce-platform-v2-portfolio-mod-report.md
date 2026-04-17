@@ -1,11 +1,9 @@
 # Portfolio Modernization Readiness Assessment Report
 
-**Date**: 2026-04-15
+**Date**: 2026-04-17
 **Services Assessed**: 5
 **Portfolio Context**: Evaluating the e-commerce platform portfolio for both autonomous AI agent integration and cloud-native modernization. The team is building a customer support agent that handles order inquiries, processes returns, and manages inventory restocking — while simultaneously modernizing legacy monoliths into containerized microservices on EKS.
 **Technology Preferences**: Prefer: eks, aurora, dynamodb, api-gateway, eventbridge, bedrock, terraform, gitops; Avoid: self-managed-kafka, self-managed-kubernetes, oracle, manual-deployments
-
----
 
 ## Executive Dashboard
 
@@ -13,32 +11,33 @@
 
 | Metric | Value |
 |--------|-------|
-| Portfolio Overall Score | 2.05 / 4.0 |
-| Score Range | 1.29 – 2.66 |
-| Highest Scoring Service | eks-saas-gitops (2.66) |
-| Lowest Scoring Service | local-monolith (1.29) |
+| Portfolio Overall Score | 2.15 / 4.0 |
+| Score Range | 1.40 – 2.71 |
+| Score Variance (σ) | 0.46 |
+| Highest Scoring Service | books-api (2.71) |
+| Lowest Scoring Service | unishop-monolith (1.40) |
 | Pathways Triggered (portfolio-wide) | 6 of 7 |
-| Cross-Cutting Foundational Blockers | 20 |
-| Cross-Cutting Improvement Opportunities | 4 |
+| Cross-Cutting Foundational Blockers | 22 |
+| Cross-Cutting Improvement Opportunities | 3 |
 
 ### Readiness Distribution
 
 | Level | Services | Percentage | Description |
 |-------|----------|------------|-------------|
 | ✅ Mature (3.5–4.0) | 0 | 0% | Fully meets criteria. Minor optimization only. |
-| 🟡 Partial (2.5–3.4) | 2 | 40% | Partially meets criteria. Targeted improvements needed. |
-| 🟠 Needs Work (1.5–2.4) | 1 | 20% | Significant gaps. Moderate modernization effort. |
-| ❌ Not Ready (<1.5) | 2 | 40% | Fundamental gaps. Major modernization required. |
+| 🟡 Partial (2.5–3.4) | 1 | 20% | Partially meets criteria. Targeted improvements needed. |
+| 🟠 Needs Work (1.5–2.4) | 3 | 60% | Significant gaps. Moderate modernization effort. |
+| ❌ Not Ready (<1.5) | 1 | 20% | Fundamental gaps. Major modernization required. |
 
 ### Category Score Averages
 
 | Category | Portfolio Average | Min | Max | Services with N/A |
 |----------|------------------|-----|-----|-------------------|
-| Infrastructure & DevOps (INF) | 2.16 | 1.00 | 3.18 | 0 |
-| Application Architecture (APP) | 2.09 | 1.17 | 3.00 | 1 |
-| Data Platform (DATA) | 2.85 | 2.00 | 4.00 | 0 |
-| Security Baseline (SEC) | 1.77 | 1.00 | 2.86 | 0 |
-| Operations & Observability (OPS) | 1.29 | 1.00 | 2.11 | 0 |
+| Infrastructure & DevOps (INF) | 2.40 | 1.00 | 3.00 | 0 |
+| Application Architecture (APP) | 2.17 | 1.33 | 3.00 | 1 |
+| Data Platform (DATA) | 2.95 | 2.50 | 4.00 | 0 |
+| Security Baseline (SEC) | 1.86 | 1.00 | 2.71 | 0 |
+| Operations & Observability (OPS) | 1.33 | 1.00 | 2.44 | 0 |
 
 ### Repo Type Distribution
 
@@ -46,9 +45,29 @@
 |-----------|-------|------------|
 | application | 4 | 80% |
 | infrastructure-only | 1 | 20% |
-| deployment-config | 0 | 0% |
-| monorepo | 0 | 0% |
-| library | 0 | 0% |
+
+### Readiness Snapshot
+
+| Metric | Value |
+|--------|-------|
+| assessment_date | 2026-04-17 |
+| total_services | 5 |
+| portfolio_score | 2.15 |
+| score_range_min | 1.40 |
+| score_range_max | 2.71 |
+| mature_services | 0 |
+| partial_services | 1 |
+| needs_work_services | 3 |
+| not_ready_services | 1 |
+| pathways_triggered | 6 |
+| foundational_blockers | 22 |
+| improvement_opportunities | 3 |
+| category_inf | 2.40 |
+| category_app | 2.17 |
+| category_data | 2.95 |
+| category_sec | 1.86 |
+| category_ops | 1.33 |
+| portfolio_level_avg | 1.80 |
 
 ## Technology Stack Summary
 
@@ -56,336 +75,336 @@
 
 | Language | Services | Percentage |
 |----------|----------|------------|
-| PHP 8.2 | 1 (local-monolith) | 20% |
-| Java 8 (Spring Boot 2.1.x) | 1 (MonoToMicroLegacy) | 20% |
-| JavaScript/TypeScript (Node.js) | 2 (aws-microservices, books-api) | 40% |
+| PHP | 1 (local-monolith) | 20% |
+| Java | 1 (unishop-monolith) | 20% |
+| JavaScript/TypeScript | 2 (aws-microservices, books-api) | 40% |
 | Terraform/HCL | 1 (eks-saas-gitops) | 20% |
 
 ### Database Engines
 
 | Engine | Type | Services | Managed? |
 |--------|------|----------|----------|
-| MySQL 8.0 (self-managed, Docker) | Relational | 1 (local-monolith) | No |
-| MySQL 8.0 (self-managed, EC2) | Relational | 1 (MonoToMicroLegacy) | No |
-| DynamoDB | NoSQL (Key-Value) | 3 (aws-microservices, books-api, eks-saas-gitops) | Yes |
+| MySQL (RDS) | Relational | 1 (local-monolith) | Yes |
+| MySQL (self-managed) | Relational | 1 (unishop-monolith) | No |
+| DynamoDB | NoSQL / Key-Value | 3 (aws-microservices, books-api, eks-saas-gitops) | Yes |
 
-**Database Distribution**: 3 managed (DynamoDB), 2 self-managed (MySQL), 0 commercial, 2 open source (MySQL)
+**Database Distribution**: 4 managed (RDS MySQL + 3× DynamoDB), 1 self-managed (unishop-monolith MySQL), 0 commercial, 5 open source / AWS-native
 
 ### Compute Patterns
 
 | Pattern | Services | Percentage |
 |---------|----------|------------|
-| Docker containers / No orchestration | 1 (local-monolith) | 20% |
-| EC2 / VM-based | 1 (MonoToMicroLegacy) | 20% |
+| App Runner (Managed Containers) | 1 (local-monolith) | 20% |
+| EC2 / VM-based | 1 (unishop-monolith) | 20% |
 | Serverless (Lambda) | 2 (aws-microservices, books-api) | 40% |
-| Managed containers (EKS) | 1 (eks-saas-gitops) | 20% |
+| EKS / Containers | 1 (eks-saas-gitops) | 20% |
 
 ### IaC and CI/CD Tools
 
 | Tool | Category | Services |
 |------|----------|----------|
-| None (zero IaC) | IaC | 2 (local-monolith, MonoToMicroLegacy) |
-| AWS CDK (TypeScript) | IaC | 2 (aws-microservices, books-api) |
-| Terraform + Flux CD | IaC | 1 (eks-saas-gitops) |
-| None (manual deployment) | CI/CD | 2 (local-monolith, MonoToMicroLegacy) |
-| Manual `cdk deploy` | CI/CD | 1 (aws-microservices) |
-| AWS CodePipeline + CodeBuild | CI/CD | 1 (books-api) |
-| Gitea Actions + Flux CD | CI/CD | 1 (eks-saas-gitops) |
+| CloudFormation | IaC | 1 (local-monolith) |
+| CDK | IaC | 2 (aws-microservices, books-api pipeline) |
+| SAM | IaC | 1 (books-api) |
+| Terraform | IaC | 1 (eks-saas-gitops) |
+| None | IaC | 1 (unishop-monolith) |
+| CodePipeline | CI/CD | 1 (books-api) |
+| Flux CD | CI/CD | 1 (eks-saas-gitops) |
+| Gitea Actions | CI/CD | 1 (eks-saas-gitops — sample only) |
+| None | CI/CD | 3 (local-monolith, unishop-monolith, aws-microservices) |
+
+### Messaging / Streaming
+
+| Technology | Services |
+|------------|----------|
+| EventBridge + SQS | 1 (aws-microservices) |
+| SQS | 1 (eks-saas-gitops) |
+| None | 3 (local-monolith, unishop-monolith, books-api) |
 
 ### Standardization Opportunities
 
-- **IaC Standardization on Terraform (preferred)**: Only 1 of 5 services (eks-saas-gitops) uses Terraform — the preferred IaC tool. 2 services (aws-microservices, books-api) use CDK and could be migrated. 2 services (local-monolith, MonoToMicroLegacy) have zero IaC — Terraform should be adopted from scratch. This is a **high-priority consolidation opportunity**.
-- **GitOps Adoption (preferred)**: Only eks-saas-gitops uses GitOps (Flux CD). All other services should adopt GitOps practices as they are modernized and deployed to EKS, avoiding manual deployments per preferences.
-- **MySQL → Aurora Migration (preferred)**: 2 services use self-managed MySQL 8.0. Aurora MySQL is the preferred managed database target and provides drop-in compatibility. This is a shared migration pattern that can be standardized.
-- **Observability Standardization**: Only books-api has X-Ray tracing instrumentation. The remaining 4 services lack any observability. AWS X-Ray / ADOT should be standardized across the portfolio.
-- **Technology Diversity Score**: 10 distinct technologies / 5 services = **2.0** (high diversity indicating fragmentation)
-- **Preference Alignment**: eks-saas-gitops is the only service aligned with multiple preferred technologies (EKS, Terraform, GitOps). The serverless services (aws-microservices, books-api) use DynamoDB (preferred) but not EKS. The legacy monoliths have no alignment with preferred technologies.
+- **IaC Fragmentation (Critical)**: 5 distinct IaC tools/approaches across 5 services (CloudFormation, CDK, SAM, Terraform, none). The preferred IaC tool is **Terraform**, but only 1 service (eks-saas-gitops) currently uses it. **Recommendation**: Standardize on Terraform across the portfolio for consistent state management, module reuse, and GitOps compatibility.
+- **CI/CD Gap**: 3 of 5 services (60%) have no CI/CD pipeline at all. Only books-api has a mature pipeline. **Recommendation**: Establish a shared CI/CD pipeline template using GitHub Actions or AWS CodePipeline with GitOps deployment patterns.
+- **DynamoDB as Dominant Database**: 3 of 5 services use DynamoDB (preferred). The remaining 2 use MySQL. **Recommendation**: Migrate unishop-monolith's self-managed MySQL to **Aurora MySQL** (preferred). Local-monolith already uses managed RDS MySQL — consider Aurora upgrade for consistency.
+- **Messaging Adoption**: 3 of 5 services have no async messaging. **Recommendation**: Standardize on **Amazon EventBridge** (preferred) as the portfolio-wide event bus for inter-service communication.
+- **Compute Convergence Target**: EKS (preferred) is the target for non-serverless workloads. Both monoliths should be containerized and deployed to the eks-saas-gitops EKS platform.
+- **Technology Diversity Score**: 15 distinct technologies / 5 services = 3.0 (high fragmentation — score 2 on standardization scale).
 
 ## Service Dependency Map
+
+> Dependencies were inferred from individual MOD report findings (not explicitly provided via `dependency_overrides`). Inferred dependencies may be incomplete — they reflect only what was observable in the assessed code and report context. For authoritative dependency data, add `dependency_overrides` to the portfolio config.
 
 ### Dependency Overview
 
 | Source Service | Target Service | Type | Coupling | Description |
 |---------------|---------------|------|----------|-------------|
-| aws-microservices | books-api | async | — | Microservices ordering flow triggers book catalog updates via EventBridge events |
-| books-api | aws-microservices | sync | — | Books API queries product microservice for catalog data via REST |
-| unishop-monolith | eks-saas-gitops | shared_infra | Low | Unishop will be deployed onto the EKS cluster managed by eks-saas-gitops |
-| local-monolith | eks-saas-gitops | shared_infra | Low | Local monolith will be containerized and deployed onto the EKS cluster |
-| aws-microservices | local-monolith | sync | Medium | Microservices query monolith for legacy product data during migration |
-
-**Pair Coupling Scores:**
-- **aws-microservices ↔ books-api**: **Medium** — 2 dependency types (1 async + 1 sync) between the pair
-- **aws-microservices → local-monolith**: **Medium** — Synchronous dependency only
-- **unishop-monolith → eks-saas-gitops**: **Low** — Shared infrastructure only
-- **local-monolith → eks-saas-gitops**: **Low** — Shared infrastructure only
+| unishop-monolith | eks-saas-gitops | shared_infra | Medium | EKS is the target compute platform for containerized monolith (context: "everything that is not serverless will run here") |
+| local-monolith | eks-saas-gitops | shared_infra | Medium | EKS is the target compute platform for containerized monolith post-decomposition |
+| local-monolith | aws-microservices | async | Low | Inventory events from local-monolith will feed agent that invokes aws-microservices for order/return processing |
+| unishop-monolith | aws-microservices | async | Low | Order data from unishop-monolith feeds into the agent orchestration layer alongside aws-microservices |
 
 ### Service Dependency Metrics
 
 | Service | Fan-In | Fan-Out | Blast Radius | Role | Overall Score |
 |---------|--------|---------|--------------|------|---------------|
-| eks-saas-gitops | 2 | 0 | 80% (4/5) | Foundation | 2.66 |
-| local-monolith | 1 | 1 | 20% (1/5) | Internal | 1.29 |
-| aws-microservices | 1 | 2 | 40% (2/5) | Internal | 2.24 |
-| books-api | 1 | 1 | 40% (2/5) | Internal | 2.64 |
-| unishop-monolith | 0 | 1 | 0% (0/5) | Leaf | 1.43 |
-
-**Blast Radius Calculation (BFS):**
-- **eks-saas-gitops**: If eks-saas-gitops fails → local-monolith and unishop-monolith lose infrastructure; local-monolith failure cascades to aws-microservices (sync dep); aws-microservices failure cascades to books-api. **4 of 5 services affected = 80%**.
-- **aws-microservices**: aws-microservices failure → impacts books-api (books-api depends on aws-microservices sync) and local-monolith is not downstream. books-api has no downstream dependents. **2 of 5 = 40%**.
-- **books-api**: books-api failure → impacts aws-microservices (aws-microservices depends on books-api async). aws-microservices failure cascades to local-monolith (sync). **2 of 5 = 40%**.
-- **local-monolith**: local-monolith failure → impacts aws-microservices (sync dependency). aws-microservices cascades to books-api. **1 of 5 directly = 20%** (considering blast radius as directly affected = 1).
-- **unishop-monolith**: No services depend on it. **0 of 5 = 0%**.
+| eks-saas-gitops | 2 | 0 | 60% | Foundation | 2.49 |
+| aws-microservices | 2 | 0 | 40% | Internal | 2.27 |
+| local-monolith | 0 | 2 | 0% | Leaf | 1.90 |
+| unishop-monolith | 0 | 2 | 0% | Leaf | 1.40 |
+| books-api | 0 | 0 | 0% | Independent | 2.71 |
 
 ### Foundation Services (High Fan-In)
 
-- **eks-saas-gitops** (Fan-In: 2, Fan-Out: 0) — Both unishop-monolith and local-monolith depend on the EKS cluster infrastructure. This service **must be modernized and stabilized first**. Despite being P1 priority, its foundation role makes it a Phase 1 prerequisite.
+- **eks-saas-gitops** (Fan-in: 2) — Centralized EKS platform. Both monoliths will be deployed here post-containerization. Must be hardened and stabilized before onboarding workloads.
 
 ### Circular Dependencies
 
-⚠️ **Circular dependencies detected** — these must be broken in Phase 0:
+✅ No circular dependencies detected. All inferred dependencies are acyclic — the dependency graph flows from leaf services (monoliths) toward foundation services (eks-saas-gitops) and integration services (aws-microservices).
 
-- **Cycle: aws-microservices → books-api (async) → aws-microservices (sync)**
-  - aws-microservices publishes EventBridge events that trigger book catalog updates in books-api
-  - books-api synchronously queries aws-microservices via REST for catalog data
-  - **Resolution**: Decouple the sync dependency (books-api → aws-microservices) by replacing the synchronous REST call with an EventBridge event subscription or a local cache of catalog data in books-api. This breaks the cycle while preserving the data flow.
+### Critical Path Analysis
+
+- **Longest dependency chain**: 1 hop (monoliths → eks-saas-gitops)
+- **Sequencing constraint**: eks-saas-gitops must be secured and stabilized (Phase 1) before monoliths can be deployed to it (Phase 2)
+- **Independent services**: books-api has no dependencies and can be modernized in any phase
 
 ## Cross-Cutting Concerns
 
-> Cross-cutting concerns are gaps that appear across multiple services. They are
-> classified into two tiers based purely on score severity — no goal-based logic.
+> Cross-cutting concerns are gaps that appear across multiple services. They are classified into two tiers based on score severity.
 
 ### 🚨 Foundational Blockers
 
 > Criteria scoring < 2 in 2+ repos. These block all modernization efforts.
 > Address these first — nothing else matters until these are resolved.
 
-1. **OPS-Q2: SLO Definitions** — 5 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 1, eks-saas-gitops: 1
-   - **Impact**: No service in the portfolio has defined SLOs. Without measurable reliability baselines, the team cannot prioritize modernization investments, measure agent impact, or detect degradation.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, books-api, eks-saas-gitops
-   - **Portfolio-Level Recommendation**: Define portfolio-wide SLO standards. Establish SLOs for critical user journeys per service (availability ≥ 99.9%, p99 latency < 500ms for APIs, < 2s for agent-invoked endpoints). Implement CloudWatch composite alarms with error budget tracking. Start with agent-facing endpoints.
+1. **OPS-Q3: Business Metrics** — 5 of 5 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, books-api=1, eks-saas-gitops=1
+   - **Impact**: Zero visibility into business outcomes across the entire portfolio. Cannot measure modernization ROI or make data-driven decisions.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, books-api, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Establish a shared CloudWatch custom metrics namespace (`ecommerce-platform/business`). Define standard business metrics per service (orders/min, cart abandonment, API usage). Use CloudWatch Embedded Metric Format (EMF) in Lambda and structured logging with metrics in EKS workloads.
 
-2. **OPS-Q7: Incident Response Automation** — 5 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 1, eks-saas-gitops: 1
-   - **Impact**: Zero runbooks or automated incident response across the entire portfolio. All incident response is ad hoc. Autonomous agents amplify this risk — agent-triggered failures need documented remediation paths.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, books-api, eks-saas-gitops
-   - **Portfolio-Level Recommendation**: Create shared runbook templates for common incidents (database failure, deployment rollback, SQS queue backup, API error spikes). Implement SSM Automation documents for the most common remediation actions. Start with the agent-critical path: inventory API → order API → return processing.
+2. **OPS-Q1: Distributed Tracing** — 4 of 5 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; books-api=4
+   - **Impact**: Cannot trace requests across service boundaries. Agent interactions spanning multiple services will be undiagnosable.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Deploy a centralized OpenTelemetry Collector on EKS (ADOT) and enable X-Ray tracing on all Lambda functions. books-api already has full X-Ray instrumentation — use it as the reference implementation.
 
-3. **OPS-Q8: Observability Ownership** — 5 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 1, eks-saas-gitops: 1
-   - **Impact**: No service in the portfolio has defined observability ownership. No CODEOWNERS, no per-service dashboards, no alarm ownership. When issues occur, there is no escalation path.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, books-api, eks-saas-gitops
-   - **Portfolio-Level Recommendation**: Establish a portfolio-wide observability ownership model. Create CODEOWNERS files. Assign per-service dashboard and alarm ownership. Define on-call rotations per service priority (P0 services first).
+3. **OPS-Q2: SLO Definitions** — 4 of 5 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; books-api=2
+   - **Impact**: No formal service level objectives. Cannot measure if the portfolio meets user expectations or track error budgets.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Define SLOs for each service's critical user journeys. Start with availability (99.9%) and p99 latency targets. Implement CloudWatch Application Signals for SLO monitoring.
 
-4. **SEC-Q1: Audit Logging** — 4 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, eks-saas-gitops: 1, books-api: 2
-   - **Impact**: 4 of 5 services have zero CloudTrail or audit logging. No forensic trail for security incidents, compliance failures, or unauthorized access. Critical gap before deploying autonomous agents that make decisions.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, eks-saas-gitops
-   - **Portfolio-Level Recommendation**: Deploy a centralized CloudTrail with multi-region trail, log file validation, and immutable S3 storage (Object Lock). Enable CloudTrail data events for DynamoDB and S3. This is a shared infrastructure investment benefiting all services.
+4. **OPS-Q4: Anomaly Detection and Alerting** — 4 of 5 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; books-api=2
+   - **Impact**: Production failures go undetected until users report them. No proactive incident detection across the portfolio.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Deploy centralized alerting: CloudWatch alarms for all services, Prometheus AlertManager on EKS, SNS integration with PagerDuty/OpsGenie. Enable CloudWatch anomaly detection on key metrics.
 
-5. **OPS-Q1: Distributed Tracing** — 4 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, eks-saas-gitops: 1, books-api: 3
-   - **Impact**: 4 of 5 services have zero tracing. Cross-service debugging is impossible. Agent-initiated request flows cannot be traced. Only books-api has X-Ray.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, eks-saas-gitops
-   - **Portfolio-Level Recommendation**: Deploy ADOT (AWS Distro for OpenTelemetry) as a shared tracing infrastructure. Enable X-Ray on all Lambda functions and API Gateways. Deploy ADOT DaemonSet on EKS. Propagate trace IDs through EventBridge events.
+5. **OPS-Q6: Integration Testing** — 4 of 5 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; books-api=3
+   - **Impact**: No automated regression detection. Any modernization change risks breaking existing functionality without detection.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Establish a shared testing strategy. Require integration tests before merging. Use books-api's test suite (unit + e2e + pre-traffic smoke tests) as the reference pattern.
 
-6. **OPS-Q3: Business Metrics** — 4 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 1, eks-saas-gitops: 2
-   - **Impact**: 4 of 5 services publish zero custom business metrics. Cannot measure business outcomes, agent effectiveness, or modernization impact. Only eks-saas-gitops has basic cost metrics via Kubecost.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, books-api
-   - **Portfolio-Level Recommendation**: Define a portfolio-wide business metrics standard. Publish custom CloudWatch metrics for: orders/min, inventory restocking events, agent decision accuracy, API response times, checkout conversion rate. Use CloudWatch EMF for zero-latency metric emission.
+6. **OPS-Q7: Incident Response Automation** — 4 of 5 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; books-api=2
+   - **Impact**: All incident response is ad hoc. No runbooks, no automated remediation, no escalation procedures.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Create shared runbook templates as SSM Automation documents. Define incident escalation procedures. Leverage Argo Workflows on eks-saas-gitops for automated platform-level remediation.
 
-7. **OPS-Q4: Anomaly Detection and Alerting** — 4 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, eks-saas-gitops: 1, books-api: 2
-   - **Impact**: 4 of 5 services have zero alerting. Issues go undetected until users complain. Agent-triggered failures will be invisible without alerting.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, eks-saas-gitops
-   - **Portfolio-Level Recommendation**: Deploy a centralized alerting strategy. Define CloudWatch alarms for error rates, latency, and resource utilization per service. Integrate with SNS → PagerDuty/OpsGenie for on-call notifications. Enable CloudWatch anomaly detection on key metrics.
+7. **OPS-Q8: Observability Ownership** — 4 of 5 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; books-api=2
+   - **Impact**: No accountability for monitoring, alerting, or incident response. Alarms have no defined owners.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Add CODEOWNERS files to all repositories. Assign dashboard and alarm ownership. Establish on-call rotations per service.
 
-8. **INF-Q1: Managed Compute** — 2 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 4, books-api: 4, eks-saas-gitops: 3
-   - **Impact**: 2 services run on unmanaged compute (Docker containers, raw EC2). No auto-scaling, no managed orchestration, no HA.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy
-   - **Portfolio-Level Recommendation**: Containerize both monoliths and deploy to EKS (preferred). The eks-saas-gitops cluster provides the target infrastructure. Use Strangler Fig pattern for incremental migration.
+8. **APP-Q5: API Versioning Strategy** — 4 of 4 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, books-api=1 (eks-saas-gitops=N/A)
+   - **Impact**: Breaking API changes affect all consumers immediately. Critical blocker for agent integration — agents need stable, versioned APIs with OpenAPI specs.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, books-api
+   - **Portfolio-Level Recommendation**: Mandate URL-based API versioning (`/v1/`) across all services. Generate OpenAPI specs — this is prerequisite for Amazon Bedrock Agents tool discovery.
 
-9. **INF-Q2: Managed Databases** — 2 of 5 applicable services score < 2
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 4, books-api: 4, eks-saas-gitops: 4
-   - **Impact**: 2 services use self-managed MySQL with no backups, no failover, no encryption. Critical data loss and availability risk.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy
-   - **Portfolio-Level Recommendation**: Migrate both MySQL instances to Aurora MySQL (preferred) using AWS DMS. Standardize on a shared migration pattern: provision Aurora via Terraform, replicate via DMS, cut over, enable PITR and Multi-AZ.
+9. **INF-Q3: Workflow Orchestration** — 4 of 5 applicable services score < 2
+   - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, books-api=1; eks-saas-gitops=4
+   - **Impact**: All workflow logic is hardcoded. No visual management, no automated retry/error handling, no state machines for complex business processes.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, books-api
+   - **Portfolio-Level Recommendation**: Adopt AWS Step Functions for application-level workflow orchestration. eks-saas-gitops already has Argo Workflows for infrastructure workflows — extend this pattern.
 
-10. **INF-Q3: Workflow Orchestration** — 3 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 1, eks-saas-gitops: 4
-    - **Impact**: 4 of 5 services have no workflow orchestration. Business workflows are hardcoded with no retry logic, error handling, or visibility. The fulfillment workflow in local-monolith requires manual human intervention at each step.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, books-api
-    - **Portfolio-Level Recommendation**: Introduce AWS Step Functions for multi-step business workflows. The fulfillment workflow (local-monolith), checkout flow (aws-microservices), and pre-traffic validation (books-api) are immediate candidates.
+10. **SEC-Q7: Application Security Pipeline** — 4 of 5 applicable services score < 2
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, books-api=1; eks-saas-gitops=2
+    - **Impact**: No automated security scanning. Vulnerabilities reach production undetected across the entire portfolio.
+    - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, books-api
+    - **Portfolio-Level Recommendation**: Create a shared security scanning pipeline template: SAST (Semgrep/CodeGuru), dependency scanning (npm audit/composer audit/Snyk), container scanning (ECR + Trivy). Gate all deployments on critical vulnerability findings.
 
 11. **INF-Q4: Async Messaging and Streaming** — 3 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, books-api: 1, aws-microservices: 3, eks-saas-gitops: 3
-    - **Impact**: 3 services have zero messaging infrastructure. All communication is synchronous, preventing event-driven patterns critical for agent integration and service decoupling.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy, books-api
-    - **Portfolio-Level Recommendation**: Deploy Amazon EventBridge (preferred) as the shared event bus. Define domain events (OrderPlaced, InventoryUpdated, BookCreated, ReturnRequested) published by each service. This enables the restocking agent to react to events in real-time.
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1, books-api=1; aws-microservices=4, eks-saas-gitops=3
+    - **Impact**: Tight coupling between domains. No event-driven architecture for the majority of the portfolio.
+    - **Affected Services**: local-monolith, unishop-monolith, books-api
+    - **Portfolio-Level Recommendation**: Deploy a shared Amazon EventBridge event bus (preferred). Define standard event schemas for domain events (OrderCreated, InventoryUpdated, BookCreated). aws-microservices already uses EventBridge — replicate this pattern.
 
-12. **INF-Q5: Network Security** — 2 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 3, eks-saas-gitops: 3
-    - **Impact**: 3 services have no network security (no VPC, no security groups, no subnets). The monolith MySQL port is exposed directly.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices
-    - **Portfolio-Level Recommendation**: Define a shared VPC architecture with Terraform (preferred). Place all services in private subnets with API Gateway (preferred) as the only public entry point. Use security groups with least-privilege rules.
+12. **INF-Q11: CI/CD Automation** — 3 of 5 applicable services score < 2
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1; books-api=3, eks-saas-gitops=2
+    - **Impact**: Manual deployments are error-prone and slow. Blocks all other modernization efforts for 3 services.
+    - **Affected Services**: local-monolith, unishop-monolith, aws-microservices
+    - **Portfolio-Level Recommendation**: Create shared CI/CD pipeline templates. Avoid manual deployments (per preferences). Use GitOps (preferred) with ArgoCD/Flux for EKS workloads and CodePipeline for serverless.
 
-13. **INF-Q6: API Entry Point** — 2 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 2, books-api: 3, eks-saas-gitops: 3
-    - **Impact**: 2 services have no API gateway or load balancer. Services are directly exposed with no throttling, auth, or request validation. Agents need a managed entry point for tool invocation.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy
-    - **Portfolio-Level Recommendation**: Deploy Amazon API Gateway (preferred) as the unified entry point for all services. Configure throttling, request validation, and Cognito-based authentication. This provides the tool discovery surface for AI agents.
+13. **SEC-Q1: Audit Logging** — 3 of 5 applicable services score < 2
+    - **Score Distribution**: unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; local-monolith=2, books-api=2
+    - **Impact**: No audit trail for API calls or resource changes in 3 services. Compliance blocker.
+    - **Affected Services**: unishop-monolith, aws-microservices, eks-saas-gitops
+    - **Portfolio-Level Recommendation**: Deploy CloudTrail at the account level via Terraform. Enable log file validation and S3 Object Lock for immutable storage. Define CloudWatch Logs retention policies.
 
-14. **INF-Q7: Auto-Scaling** — 2 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 4, books-api: 4, eks-saas-gitops: 3
-    - **Impact**: 2 services have static, single-instance capacity with no auto-scaling. Cannot handle traffic spikes from agent-driven workloads.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy
-    - **Portfolio-Level Recommendation**: Deploy to EKS (preferred) with HPA-based auto-scaling. Configure Karpenter for cluster-level node scaling (already available in eks-saas-gitops).
+14. **SEC-Q3: API Authentication** — 3 of 5 applicable services score < 2
+    - **Score Distribution**: unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; local-monolith=2, books-api=3
+    - **Impact**: Three services have no real API authentication. Agent requests cannot be authenticated. Critical security vulnerability.
+    - **Affected Services**: unishop-monolith, aws-microservices, eks-saas-gitops
+    - **Portfolio-Level Recommendation**: Implement centralized Amazon Cognito user pools with API Gateway authorizers. All API endpoints must require authentication before agent integration can proceed.
 
-15. **INF-Q8: Backup and Recovery** — 2 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 2, eks-saas-gitops: 2
-    - **Impact**: 3 services have no backup strategy. A failure could result in complete, irrecoverable data loss for order, inventory, and product data.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices
-    - **Portfolio-Level Recommendation**: Implement a portfolio-wide backup strategy. Enable Aurora automated backups + PITR for migrated MySQL databases. Enable DynamoDB PITR on all tables. Create an AWS Backup plan covering all data stores.
+15. **SEC-Q4: Centralized Identity Integration** — 3 of 4 applicable services score < 2
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1; books-api=3 (eks-saas-gitops=2)
+    - **Impact**: Fragmented authentication. Cannot implement SSO or unified access policies for the AI agent.
+    - **Affected Services**: local-monolith, unishop-monolith, aws-microservices
+    - **Portfolio-Level Recommendation**: Deploy centralized Amazon Cognito with federation support. Migrate all services to token-based authentication (OAuth2/JWT). books-api already uses Cognito — replicate its pattern.
 
-16. **INF-Q9: High Availability and Fault Isolation** — 2 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 4, books-api: 4, eks-saas-gitops: 3
-    - **Impact**: 2 services are single-instance with no fault isolation. A single failure takes down the entire service and database.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy
-    - **Portfolio-Level Recommendation**: Deploy to EKS (preferred) with multi-AZ pod distribution. Use Aurora Multi-AZ for database HA. Align with the shared EKS cluster in eks-saas-gitops.
+16. **OPS-Q9: Resource Tagging Governance** — 3 of 5 applicable services score < 2
+    - **Score Distribution**: unishop-monolith=1, aws-microservices=1, eks-saas-gitops=1; local-monolith=2, books-api=2
+    - **Impact**: Cannot track costs per workload, identify resource ownership, or enforce budget controls.
+    - **Affected Services**: unishop-monolith, aws-microservices, eks-saas-gitops
+    - **Portfolio-Level Recommendation**: Define a portfolio-wide tagging standard: `Environment`, `Service`, `Team`, `CostCenter`, `Project`. Enforce with Terraform `default_tags` and AWS Config `required-tags` rules.
 
-17. **INF-Q10: Infrastructure as Code Coverage** — 2 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 4, books-api: 4, eks-saas-gitops: 4
-    - **Impact**: 2 services have zero IaC. Cannot reproduce environments, perform disaster recovery, or manage infrastructure changes safely. Blocks all other modernization pathways.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy
-    - **Portfolio-Level Recommendation**: Adopt Terraform (preferred) for both services immediately. Start by codifying target-state infrastructure (EKS deployment, Aurora MySQL, API Gateway, EventBridge). Use the eks-saas-gitops Terraform modules as templates.
+17. **OPS-Q5: Deployment Strategy** — 3 of 5 applicable services score < 2
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1; books-api=4, eks-saas-gitops=2
+    - **Impact**: Direct-to-production deployments with no safety nets. Any bad deployment affects all users immediately.
+    - **Affected Services**: local-monolith, unishop-monolith, aws-microservices
+    - **Portfolio-Level Recommendation**: Implement progressive delivery: CodeDeploy with Linear traffic shifting for Lambda (books-api pattern), Argo Rollouts/Flagger for EKS workloads. Avoid all-or-nothing deployments.
 
-18. **INF-Q11: CI/CD Automation** — 3 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 3, eks-saas-gitops: 3
-    - **Impact**: 3 services have no CI/CD pipeline. All deployments are manual. Blocks safe iterative modernization, automated testing, and GitOps adoption. Avoid manual deployments per preferences.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices
-    - **Portfolio-Level Recommendation**: Implement CI/CD pipelines for all 3 services. Adopt GitOps (preferred) with automated pipelines: lint → test → build → security scan → deploy. For EKS-hosted services, use Flux CD (already proven in eks-saas-gitops). For serverless services, use CodePipeline or GitHub Actions.
+18. **INF-Q8: Backup and Recovery** — 3 of 5 applicable services score < 2
+    - **Score Distribution**: unishop-monolith=1, aws-microservices=1, books-api=1; local-monolith=3, eks-saas-gitops=2
+    - **Impact**: No backup strategy for 3 services. Data loss would be unrecoverable.
+    - **Affected Services**: unishop-monolith, aws-microservices, books-api
+    - **Portfolio-Level Recommendation**: Enable DynamoDB PITR on all tables. Create AWS Backup plans via Terraform. Migrate to Aurora (preferred) which has built-in automated backups.
 
-19. **SEC-Q4: Centralized Identity Integration** — 3 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 4, eks-saas-gitops: 2
-    - **Impact**: 3 services have no centralized identity provider. Each manages its own auth independently. Cannot participate in SSO, cannot federate identities. Agents need a unified identity framework for M2M auth.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices
-    - **Portfolio-Level Recommendation**: Deploy Amazon Cognito as the centralized identity provider for the portfolio. Configure Cognito User Pools for human users and Identity Pools for machine-to-machine (agent) authentication. Migrate all services to Cognito-based auth.
+19. **DATA-Q1: Unstructured Data Storage** — 4 of 4 applicable services score < 2
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1, aws-microservices=1, books-api=1 (eks-saas-gitops=N/A)
+    - **Impact**: No capability to store or process product images, documents, or files across the portfolio.
+    - **Affected Services**: local-monolith, unishop-monolith, aws-microservices, books-api
+    - **Portfolio-Level Recommendation**: Create a shared S3 bucket strategy for product images and documents. Implement pre-signed URLs for secure upload/download. S3 also provides the document corpus for future RAG-based knowledge agents.
 
-20. **SEC-Q7: Application Security Pipeline** — 3 of 5 applicable services score < 2
-    - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 1, eks-saas-gitops: 2
-    - **Impact**: 4 services have zero security scanning. Vulnerabilities in dependencies, containers, and code reach production undetected. This is a compliance and security risk for an e-commerce platform handling payment data.
-    - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices, books-api
-    - **Portfolio-Level Recommendation**: Integrate security scanning into all CI/CD pipelines. Standardize on: (1) SAST — Semgrep or CodeGuru, (2) dependency scanning — Dependabot + npm audit/pip-audit, (3) container scanning — ECR scanning + Trivy, (4) IaC scanning — Checkov/tfsec. Add security gates that block deployment on critical findings.
+20. **APP-Q2: Monolith vs Microservices** — 2 of 4 applicable services score < 2
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1; aws-microservices=3, books-api=3 (eks-saas-gitops=N/A)
+    - **Impact**: Both P0 monoliths block independent scaling, deployment, and team autonomy. Primary trigger for Move to Cloud Native pathway.
+    - **Affected Services**: local-monolith, unishop-monolith
+    - **Portfolio-Level Recommendation**: Execute Strangler Fig decomposition for both monoliths. Extract inventory and order services first to enable agent integration.
+
+21. **APP-Q3: Async vs Sync Communication** — 2 of 4 applicable services score < 2
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1; aws-microservices=3, books-api=2 (eks-saas-gitops=N/A)
+    - **Impact**: Tight coupling and cascading failure risk in both monoliths.
+    - **Affected Services**: local-monolith, unishop-monolith
+    - **Portfolio-Level Recommendation**: Introduce EventBridge (preferred) for async domain events during decomposition.
+
+22. **APP-Q4: Long-Running Process Handling** — 2 of 4 applicable services score < 2
+    - **Score Distribution**: local-monolith=1, unishop-monolith=1; aws-microservices=4, books-api=4 (eks-saas-gitops=N/A)
+    - **Impact**: All operations are synchronous in both monoliths, regardless of duration.
+    - **Affected Services**: local-monolith, unishop-monolith
+    - **Portfolio-Level Recommendation**: Implement Step Functions for multi-step workflows and SQS for async job processing.
 
 ### 💡 Improvement Opportunities
 
 > Criteria scoring < 3 in 3+ repos. Important but not blocking.
 > Address as capacity allows or in parallel with other modernization work.
 
-1. **SEC-Q2: Encryption at Rest** — 3 of 5 applicable services score < 3
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 3, books-api: 3, eks-saas-gitops: 3
-   - **Impact**: 2 services have no encryption at rest. 3 services use AWS-managed keys but not customer-managed KMS keys. For an e-commerce platform handling payment data, customer-managed encryption provides better governance.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices (no CMK)
-   - **Portfolio-Level Recommendation**: Create portfolio-wide KMS keys for each data classification level. Apply customer-managed KMS to all data stores during migration. Enable key rotation and audit trails.
+1. **INF-Q6: API Entry Point** — 3 of 5 applicable services score < 3
+   - **Score Distribution**: local-monolith=2, unishop-monolith=1, aws-microservices=2; books-api=4, eks-saas-gitops=3
+   - **Impact**: Lack of unified API Gateway with throttling, validation, and per-tenant rate limiting.
+   - **Affected Services**: local-monolith, unishop-monolith, aws-microservices
+   - **Portfolio-Level Recommendation**: Deploy Amazon API Gateway (preferred) as the unified entry point for all services. Consolidate the three separate API Gateway instances in aws-microservices.
 
 2. **SEC-Q5: Secrets Management** — 3 of 5 applicable services score < 3
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 2, books-api: 3, eks-saas-gitops: 2
-   - **Impact**: 2 services have hardcoded credentials (local-monolith fallback defaults, MonoToMicroLegacy plaintext in application.properties). 2 services use partial secrets management without rotation.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices
-   - **Portfolio-Level Recommendation**: Migrate all secrets to AWS Secrets Manager with automated rotation. Remove all hardcoded credentials. Use EKS Secrets Store CSI driver for Kubernetes-native secret injection.
+   - **Score Distribution**: local-monolith=2, unishop-monolith=1, eks-saas-gitops=2; aws-microservices=3, books-api=4
+   - **Impact**: Hardcoded credentials in unishop-monolith. No secrets rotation across most services.
+   - **Affected Services**: local-monolith, unishop-monolith, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Migrate all secrets to AWS Secrets Manager with automatic rotation. Use External Secrets Operator on EKS to sync with Kubernetes secrets.
 
-3. **SEC-Q3: API Authentication** — 3 of 5 applicable services score < 3
-   - **Score Distribution**: local-monolith: 2, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 3, eks-saas-gitops: 2
-   - **Impact**: 2 services have completely open APIs (no auth). 1 service has basic session auth. Only books-api has proper Cognito OAuth2. Agent integration requires authenticated endpoints.
-   - **Affected Services**: MonoToMicroLegacy, aws-microservices, eks-saas-gitops
-   - **Portfolio-Level Recommendation**: Implement Cognito-based API authentication across all services. Configure API Gateway (preferred) authorizers with JWT validation. Add machine-to-machine client credentials flow for agent authentication.
-
-4. **OPS-Q9: Resource Tagging Governance** — 3 of 5 applicable services score < 3
-   - **Score Distribution**: local-monolith: 1, MonoToMicroLegacy: 1, aws-microservices: 1, books-api: 2, eks-saas-gitops: 2
-   - **Impact**: 3 services have zero tags. 2 services have inconsistent/incomplete tagging. Cannot attribute costs, identify ownership, or distinguish environments across the portfolio.
-   - **Affected Services**: local-monolith, MonoToMicroLegacy, aws-microservices
-   - **Portfolio-Level Recommendation**: Define a portfolio-wide tagging standard: `Project`, `Environment`, `Service`, `Team`, `CostCenter`, `Priority`. Enforce via Terraform `default_tags` and AWS Config `required-tags` rules. Activate cost allocation tags.
+3. **SEC-Q6: Compute Hardening and Patching** — 3 of 5 applicable services score < 3
+   - **Score Distribution**: unishop-monolith=1, aws-microservices=2, eks-saas-gitops=2; local-monolith=3, books-api=3
+   - **Impact**: Outdated runtimes and dependencies. No vulnerability scanning automation.
+   - **Affected Services**: unishop-monolith, aws-microservices, eks-saas-gitops
+   - **Portfolio-Level Recommendation**: Upgrade all Lambda runtimes to Node.js 20+. Upgrade Java to 17+. Use Bottlerocket AMIs for EKS worker nodes. Enable AWS Inspector for continuous vulnerability scanning.
 
 ### Per-Category Analysis
 
 #### Infrastructure & DevOps
 
-**Portfolio Score: 2.16 / 4.0**
+**Portfolio Score: 2.40 / 4.0**
 
 **Common Patterns:**
-- IaC coverage is bimodal: 3 services have 100% IaC (scores 4) while 2 services have 0% (scores 1)
-- CI/CD is similarly split: 2 services have CI/CD (scores 3), 3 services have none (scores 1)
-- Serverless services (aws-microservices, books-api) have excellent compute and database scores (4) but lack workflow orchestration and messaging
+- IaC adoption: 4 of 5 services have some IaC (80%), but fragmented across 4 tools
+- High IaC coverage: books-api (4), aws-microservices (4), eks-saas-gitops (4) demonstrate excellent IaC
+- Managed compute: 4 of 5 services use managed compute (App Runner, Lambda, EKS); only unishop-monolith is on raw EC2
 
 **Critical Gaps:**
-1. Zero IaC in local-monolith and MonoToMicroLegacy — blocks all modernization for these P0 services
-2. No CI/CD for 3 services including the P0 aws-microservices — manual deployments are high risk
-3. No workflow orchestration in 4 of 5 services — hardcoded workflows cannot support agent-driven automation
+1. CI/CD: 3 of 5 services have no CI/CD pipeline — this is the single most impactful gap blocking all modernization
+2. Async messaging: 3 of 5 services have no event-driven architecture capability
+3. Workflow orchestration: 4 of 5 services lack workflow orchestration (only eks-saas-gitops has Argo Workflows)
 
 #### Application Architecture
 
-**Portfolio Score: 2.09 / 4.0** (4 services, eks-saas-gitops N/A)
+**Portfolio Score: 2.17 / 4.0** (4 applicable services; eks-saas-gitops N/A)
 
 **Common Patterns:**
-- 2 monoliths (scores 1–2) and 2 well-structured services (scores 3–4)
-- All 4 application services lack API versioning (3 score 1, 1 scores 1) — critical blocker for agent tool integration
-- Communication patterns are mostly synchronous (3 services score 1 for async)
+- Serverless services (aws-microservices, books-api) score well: APP 3.0 and 2.83 respectively
+- Both monoliths score poorly: APP 1.33 (local-monolith) and 1.5 (unishop-monolith)
 
 **Critical Gaps:**
-1. APP-Q5 (API Versioning): All 4 application services lack API versioning — agents need stable, versioned APIs as tool interfaces
-2. APP-Q3 (Async Communication): 3 of 4 services are 100% synchronous — limits event-driven agent patterns
-3. APP-Q2 (Architecture): 2 services are tightly-coupled monoliths requiring decomposition
+1. API versioning: All 4 applicable services score 1 — universal gap that blocks agent integration
+2. Monolith decomposition: Both P0 monoliths need Strangler Fig decomposition
+3. Async communication: 2 of 4 services have zero async patterns
 
 #### Data Platform
 
-**Portfolio Score: 2.85 / 4.0**
+**Portfolio Score: 2.95 / 4.0**
 
 **Common Patterns:**
-- Strong positive: All services have zero stored procedures (DATA-Q4 = 4 across all applicable services)
-- DynamoDB users (3 services) have excellent managed database scores
-- Self-managed MySQL users (2 services) drag down the average
+- DynamoDB (preferred) is dominant: 3 services use it with full managed status
+- No stored procedures across the portfolio — clean separation of business logic (DATA-Q4 = 4 in all applicable services)
+- Database versions are well-managed where applicable
 
 **Critical Gaps:**
-1. DATA-Q1 (Unstructured Data): 4 of 5 services score 1 — no S3 storage for images, documents, or AI knowledge bases
-2. DATA-Q2 (Data Access Layer): Scattered across services with varying patterns (scores 1-3)
+1. Unstructured data: All 4 applicable services score 1 — no S3 or object storage
+2. Self-managed MySQL: unishop-monolith has no managed database — must migrate to Aurora MySQL (preferred)
 
 #### Security Baseline
 
-**Portfolio Score: 1.77 / 4.0**
+**Portfolio Score: 1.86 / 4.0**
 
 **Common Patterns:**
-- Audit logging is absent across 4 services (SEC-Q1)
-- Identity management is fragmented — each service uses a different approach
-- books-api is the only service with proper Cognito integration (score 4)
-- Security scanning is absent in 4 of 5 services
+- Encryption at rest is partially adopted (4 of 5 services score 3) using AWS-managed keys
+- books-api has the most mature security posture (Cognito, IAM policies, no hardcoded secrets)
 
 **Critical Gaps:**
-1. SEC-Q1 (Audit Logging): 4 services score 1 — no forensic capability
-2. SEC-Q4 (Identity): 3 services have no centralized identity — fragments the authentication model
-3. SEC-Q7 (Security Pipeline): 4 services score 1 — vulnerabilities reach production undetected
+1. API authentication: 3 services have no real auth (scores of 1) — especially critical for eks-saas-gitops with internet-facing Argo Workflows
+2. Security pipeline: 4 of 5 services have no automated security scanning
+3. Audit logging: 3 services have no CloudTrail or structured audit logging
+4. Hardcoded credentials: unishop-monolith has plaintext DB credentials in source control
 
 #### Operations & Observability
 
-**Portfolio Score: 1.29 / 4.0**
+**Portfolio Score: 1.33 / 4.0**
 
 **Common Patterns:**
-- This is the weakest category portfolio-wide. Only books-api has any meaningful operational maturity.
-- SLOs, incident response, and observability ownership are universally absent (all 5 services score 1)
-- Distributed tracing exists only in books-api
-- Only books-api has a deployment strategy (score 4) — the rest are manual or basic
+- books-api is the only service with meaningful observability (OPS 2.44) — X-Ray tracing, error alarms, integration tests
+- All other services score 1.0–1.11 — near-zero operational maturity
 
 **Critical Gaps:**
-1. OPS-Q2 (SLOs): All 5 services score 1 — no service level objectives anywhere
-2. OPS-Q7 (Incident Response): All 5 services score 1 — completely ad hoc
-3. OPS-Q8 (Observability Ownership): All 5 services score 1 — no accountability for system health
-4. OPS-Q5 (Deployment Strategy): 3 services score 1 — direct-to-production with no safety net
+1. Business metrics: All 5 services score 1 — the most pervasive gap in the portfolio
+2. Tracing: 4 of 5 services have no distributed tracing
+3. Alerting: 4 of 5 services have no alerting capability
+4. Testing: 4 of 5 services have no integration tests
+5. Incident response: 4 of 5 services have no runbooks or automated remediation
 
 ## Portfolio Modernization Roadmap
 
-> Dependency-aware phased roadmap with fixed phase names. Services are ordered
-> by dependency graph position, then by priority (P0 → P1 → P2), then by score.
+> Dependency-aware phased roadmap with fixed phase names. Services are ordered by dependency graph position, then by priority (P0 → P1 → P2), then by score.
 
 ### Sequencing Principles
 
@@ -400,18 +419,19 @@
 **Objective**: Establish shared capabilities, break circular dependencies, and address portfolio-wide blockers.
 
 **Cross-Cutting Activities:**
-- **Centralized CloudTrail**: Deploy multi-region CloudTrail with immutable S3 storage (addresses SEC-Q1 across 4 services)
-- **Observability Platform**: Deploy ADOT on EKS, enable X-Ray on Lambda functions, standardize CloudWatch dashboards (addresses OPS-Q1, OPS-Q3, OPS-Q4, OPS-Q8)
-- **SLO Framework**: Define portfolio-wide SLO standards and implement CloudWatch composite alarms (addresses OPS-Q2)
-- **Shared Identity**: Deploy Amazon Cognito User Pools with M2M auth for agents (addresses SEC-Q3, SEC-Q4)
-- **Security Scanning**: Integrate Semgrep, Dependabot, Trivy into pipeline templates (addresses SEC-Q7)
-- **Tagging Standard**: Define and enforce portfolio-wide tagging standard in Terraform (addresses OPS-Q9)
-- **Circular Dependency Breaking**: Decouple books-api → aws-microservices sync dependency by introducing EventBridge-based catalog data synchronization or local cache. Replace the synchronous REST call with an event subscription.
+- **CI/CD Pipeline Templates**: Create shared pipeline templates (GitHub Actions + ArgoCD for EKS, CodePipeline for Lambda). Addresses INF-Q11 Foundational Blocker.
+- **Centralized Observability Platform**: Deploy ADOT Collector on EKS, enable X-Ray on Lambda. Create shared CloudWatch dashboards. Addresses OPS-Q1, OPS-Q2, OPS-Q3, OPS-Q4 Foundational Blockers.
+- **CloudTrail & Audit Logging**: Deploy account-level CloudTrail via Terraform. Addresses SEC-Q1 Foundational Blocker.
+- **Centralized Identity (Cognito)**: Deploy shared Cognito User Pool with federation. Addresses SEC-Q3, SEC-Q4 Foundational Blockers.
+- **Security Scanning Pipeline**: Create shared Semgrep + dependency scanning + ECR scanning templates. Addresses SEC-Q7 Foundational Blocker.
+- **Tagging Standard**: Define and enforce portfolio-wide tagging governance via Terraform `default_tags`. Addresses OPS-Q9 Blocker.
+- **API Versioning Standard**: Define `/v1/` versioning convention and OpenAPI spec generation requirements. Addresses APP-Q5 Blocker.
+- **EventBridge Event Bus**: Deploy shared EventBridge bus with standard event schemas. Addresses INF-Q4 Blocker.
 
 **Organizational Enablers:**
-- Training: Terraform fundamentals, EKS operations, observability (X-Ray/ADOT), Aurora migration
-- Tooling: Standardize on Terraform (preferred), establish GitOps patterns with Flux CD
-- Standards: API versioning policy, runbook templates, incident response procedures, tagging standard
+- Training: Terraform, EKS/Kubernetes, GitOps (ArgoCD/Flux), Observability (X-Ray/OTEL), Amazon Bedrock
+- Tooling: Standardize on Terraform, establish Terraform module registry
+- Standards: API versioning convention, tagging standard, security scanning requirements, observability ownership model
 
 **Estimated Effort**: High
 
@@ -421,51 +441,35 @@
 
 **Services in Scope:**
 
-1. **eks-saas-gitops** (P1, Score: 2.66 / 4.0) — Foundation Service
-   - Current State: EKS infrastructure with Terraform and Flux CD. Score 2.66 with gaps in security (SEC 2.14) and operations (OPS 1.33). Gitea is a SPOF.
-   - Target State: Hardened EKS platform with full observability, audit logging, and HA improvements. Score target: 3.2+
+1. **eks-saas-gitops** (P1, Score: 2.49 / 4.0) — Foundation Service
+   - Current State: EKS platform with excellent IaC and workflow orchestration but critical security gaps (unauthenticated Argo Workflows, internet-facing management UIs)
+   - Target State: Secured EKS platform ready to onboard application workloads
    - Key Activities:
-     - Enable EKS control plane audit logging
-     - Deploy ADOT DaemonSet for tracing
-     - Harden Argo Workflows authentication (replace --auth-mode=server)
-     - Add multiple NAT gateways for fault isolation
-     - Define SLOs for tenant-facing services
+     - **CRITICAL**: Fix Argo Workflows `--auth-mode=server` → add OIDC/Dex authentication
+     - Switch all management UIs (Argo, Kubecost, Capacitor) to internal LoadBalancers
+     - Set `cluster_endpoint_public_access = false`
+     - Add Terraform CI pipeline (validate, plan, checkov)
+     - Enable S3 versioning on artifact buckets
+     - Add `default_tags` to Terraform provider
+     - Deploy OpenTelemetry Collector (ADOT) as DaemonSet
    - Dependencies: None (foundation service)
-   - Blocks: local-monolith, unishop-monolith (both depend on EKS cluster)
+   - Blocks: unishop-monolith, local-monolith (EKS platform must be secured first)
    - Estimated Effort: Medium
 
-2. **local-monolith** (P0, Score: 1.29 / 4.0)
-   - Current State: PHP monolith in Docker with zero IaC, zero CI/CD, self-managed MySQL, score 1.29. Lowest-scoring service.
-   - Target State: Containerized on EKS with Terraform IaC, CI/CD pipeline, Aurora MySQL. Score target: 2.5+
+2. **unishop-monolith** (P0, Score: 1.40 / 4.0) — Highest Priority
+   - Current State: Legacy Java Spring Boot on raw EC2, zero IaC, no CI/CD, hardcoded credentials, self-managed MySQL. Lowest score in portfolio.
+   - Target State: Containerized on EKS with Terraform IaC, CI/CD pipeline, Aurora MySQL, rotated credentials
    - Key Activities:
-     - Create Terraform project for EKS deployment, Aurora MySQL, API Gateway
-     - Push Docker image to ECR and deploy to EKS cluster
-     - Migrate MySQL to Aurora MySQL (preferred) via DMS
-     - Create CI/CD pipeline with Flux CD (preferred)
-     - Add X-Ray instrumentation
-   - Dependencies: eks-saas-gitops (EKS cluster)
-   - Blocks: aws-microservices (sync dependency for legacy product data)
+     - **CRITICAL**: Rotate compromised database credentials (hardcoded in source)
+     - Create Dockerfile for Spring Boot application
+     - Create Terraform IaC for VPC, EKS deployment, Aurora MySQL
+     - Migrate self-managed MySQL to Aurora MySQL (preferred) via DMS
+     - Create CI/CD pipeline with GitHub Actions + ArgoCD (GitOps preferred)
+     - Add integration tests before decomposition
+     - Upgrade Java 8 → 17+, Spring Boot 2.1 → 3.x, AWS SDK v1 → v2
+   - Dependencies: eks-saas-gitops (deploys to EKS platform)
+   - Blocks: Agent integration (needs discrete order/return APIs)
    - Estimated Effort: High
-
-3. **unishop-monolith (MonoToMicroLegacy)** (P0, Score: 1.43 / 4.0)
-   - Current State: Java Spring Boot monolith on EC2 with zero IaC, zero CI/CD, self-managed MySQL, score 1.43. Hardcoded credentials.
-   - Target State: Containerized on EKS with Terraform IaC, CI/CD pipeline, Aurora MySQL. Score target: 2.5+
-   - Key Activities:
-     - Create Dockerfile (currently missing) and containerize the Spring Boot JAR
-     - Create Terraform project for EKS deployment and Aurora MySQL
-     - Migrate MySQL to Aurora MySQL (preferred) via DMS
-     - Remediate hardcoded credentials (SEC-Q5) — migrate to Secrets Manager
-     - Create CI/CD pipeline with GitOps (preferred)
-     - Upgrade Java 8 → Java 17+ and Spring Boot 2.1.x → 3.x
-   - Dependencies: eks-saas-gitops (EKS cluster)
-   - Blocks: None (leaf service)
-   - Estimated Effort: High
-
-**Expected Outcomes:**
-- EKS platform hardened and ready for workloads
-- Both monoliths containerized and deployed on managed infrastructure
-- Self-managed MySQL databases migrated to Aurora MySQL
-- CI/CD pipelines established for all Phase 1 services
 
 ### Phase 2 — Foundation (Mo 2–4)
 
@@ -473,24 +477,40 @@
 
 **Services in Scope:**
 
-1. **aws-microservices** (P0, Score: 2.24 / 4.0)
-   - Current State: Well-structured serverless microservices with Lambda, DynamoDB, EventBridge. Gaps in CI/CD (score 1), security (SEC 1.57), and operations (OPS 1.00). EOL Lambda runtime (Node.js 14).
-   - Target State: Fully automated CI/CD, authenticated APIs, comprehensive observability. Score target: 3.2+
+1. **local-monolith** (P0, Score: 1.90 / 4.0)
+   - Current State: PHP monolith on App Runner, CloudFormation IaC, no CI/CD, no async patterns, session-based auth
+   - Target State: Decomposed services on EKS with Terraform, CI/CD, EventBridge, Cognito auth
    - Key Activities:
-     - Create CI/CD pipeline (GitHub Actions or CodePipeline)
-     - Add API Gateway authentication (Cognito authorizer)
-     - Enable DynamoDB PITR on all tables; change removal policy to RETAIN
-     - Upgrade Lambda runtime from NODEJS_14_X to NODEJS_20_X+
-     - Enable X-Ray tracing on all Lambda functions and API Gateways
-     - Add API versioning (/v1/ prefix)
-     - Add DLQ for OrderQueue
-     - Define SLOs and CloudWatch alarms
-   - Dependencies: local-monolith (Phase 1 — sync dependency for legacy product data)
-   - Blocks: books-api (async EventBridge events; circular dependency broken in Phase 0)
+     - Create CI/CD pipeline (GitHub Actions + ArgoCD)
+     - Migrate IaC from CloudFormation to Terraform (preferred)
+     - Begin Strangler Fig decomposition: extract Inventory Service first (P0 for agent restocking)
+     - Migrate authentication from PHP sessions to Cognito
+     - Add EventBridge for domain events (OrderCreated, InventoryUpdated)
+     - Add X-Ray tracing and CloudWatch business metrics
+     - Add integration tests for critical API endpoints
+   - Dependencies: eks-saas-gitops (deploys decomposed services to EKS)
+   - Blocks: Agent restocking feature (needs inventory API)
+   - Estimated Effort: High
+
+2. **aws-microservices** (P0, Score: 2.27 / 4.0)
+   - Current State: Well-architected serverless microservices but missing CI/CD, API auth, network security, tracing
+   - Target State: Production-ready serverless with CI/CD, Cognito auth, X-Ray tracing, security scanning
+   - Key Activities:
+     - Create CI/CD pipeline (CDK Pipelines or GitHub Actions)
+     - Add Cognito authorizer to all API Gateway endpoints
+     - Upgrade Lambda runtime Node.js 14 → 20+
+     - Enable X-Ray tracing on all Lambda functions
+     - Add VPC endpoints for DynamoDB
+     - Add WAF to API Gateway
+     - Consolidate 3 API Gateways into 1 with path-based routing
+     - Add DLQ to SQS OrderQueue
+     - Enable DynamoDB PITR, change RemovalPolicy to RETAIN
+   - Dependencies: None (independent serverless stack)
+   - Blocks: Agent order/return processing (needs authenticated, documented APIs)
    - Estimated Effort: Medium
 
 **Parallel Tracks:**
-- aws-microservices can proceed independently once Phase 0 circular dependency is broken and Phase 1 local-monolith is deployed on EKS
+- local-monolith and aws-microservices can be modernized concurrently — they have no mutual dependencies
 
 ### Phase 3 — Advanced (Mo 4–6+)
 
@@ -498,36 +518,45 @@
 
 **Services in Scope:**
 
-1. **books-api** (P1, Score: 2.64 / 4.0)
-   - Current State: Well-structured serverless API with CDK, Cognito auth, X-Ray tracing, full CI/CD pipeline. Highest operational maturity among application services. Gaps in async messaging, workflow orchestration, and security scanning.
-   - Target State: Event-driven with EventBridge, API versioning, security scanning, advanced observability. Score target: 3.5+
+1. **books-api** (P1, Score: 2.71 / 4.0)
+   - Current State: Most mature service in portfolio — full CI/CD, X-Ray tracing, Cognito auth, deployment strategy. Minor gaps only.
+   - Target State: Fully optimized with API versioning, EventBridge events, security scanning
    - Key Activities:
-     - Add API versioning (/v1/books)
-     - Add EventBridge integration for BookCreated events
-     - Add security scanning to CI/CD pipeline (npm audit, Dependabot)
-     - Add SLO definitions and business metrics
-     - Generate OpenAPI specification for agent tool discovery
-     - Add incident response runbooks
-   - Dependencies: aws-microservices (Phase 2 — circular dependency broken in Phase 0)
+     - Add API versioning (`/v1/books`)
+     - Generate OpenAPI spec for Bedrock Agent tool discovery
+     - Add `GET /books/{isbn}` endpoint for efficient agent lookups
+     - Add EventBridge events for BookCreated
+     - Add `npm audit` to CI/CD pipeline
+     - Add business metrics (CloudWatch EMF)
+     - Strengthen Cognito password policy, migrate to auth code flow with PKCE
+   - Dependencies: None (independent)
    - Estimated Effort: Low
 
-**Advanced Portfolio Activities:**
-- Begin monolith decomposition (Strangler Fig) for local-monolith and unishop-monolith
-- Deploy AI agent integration: inventory restocking agent (Bedrock), order inquiry agent
-- Implement shared EventBridge event bus for portfolio-wide domain events
-- Deploy Amazon Bedrock Knowledge Bases for RAG-based knowledge agents
+2. **All Services — AI Agent Integration**
+   - Key Activities:
+     - Deploy Amazon Bedrock agent with tool endpoints for all services
+     - Configure agent action groups: inventory restocking, order status, return processing, product lookups
+     - Generate OpenAPI specs for all service APIs (prerequisite)
+     - Implement agent evaluation framework (Ragas/DeepEval)
+     - Add DynamoDB tables for agent session state
+     - Implement feedback loop for agent quality improvement
+   - Dependencies: Phase 1 + Phase 2 must be complete (APIs authenticated, documented, observable)
+   - Estimated Effort: Medium
+
+**Continuous Improvement:**
+- Advanced observability: SLO monitoring, error budgets, automated canary analysis
+- Complete monolith decomposition (remaining services from local-monolith and unishop-monolith)
+- Event-driven architecture maturation across all services
 
 ### Total Portfolio Effort
 
 **Total Estimated Effort**: High
-**Expected Timeline**: 6+ months (with 2 parallel tracks in Phase 1: local-monolith + unishop-monolith)
-**Critical Path**: eks-saas-gitops (Phase 1) → local-monolith (Phase 1) → aws-microservices (Phase 2) → books-api (Phase 3)
+**Expected Timeline**: 6+ months (with 2 parallel tracks in Phase 2)
+**Critical Path**: Phase 0 → eks-saas-gitops (Phase 1) → monolith containerization (Phase 1–2) → Agent integration (Phase 3)
 
 ## AWS Modernization Pathways
 
-> The AWS Modernization Pathways framework recognizes there is no "one-size-fits-all"
-> approach. A customer portfolio may be divided into multiple pathways depending on
-> workloads and priorities; these pathways can be executed in parallel.
+> The AWS Modernization Pathways framework recognizes there is no "one-size-fits-all" approach. A customer portfolio may be divided into multiple pathways depending on workloads and priorities; these pathways can be executed in parallel.
 
 ### Portfolio Pathway Summary
 
@@ -536,199 +565,199 @@
 | Move to Cloud Native | 2 | 40% | Medium | High |
 | Move to Containers | 1 | 20% | Low | Medium |
 | Move to Open Source | 0 | 0% | — | — |
-| Move to Managed Databases | 2 | 40% | High | Medium |
+| Move to Managed Databases | 1 | 20% | Low | Medium |
 | Move to Managed Analytics | 0 | 0% | — | — |
-| Move to Modern DevOps | 3 | 60% | High | Medium |
+| Move to Modern DevOps | 4 | 80% | High | Medium |
 | Move to AI | 4 | 80% | High | Medium |
 
 ### Portfolio Pathway Aggregation
 
-This table shows exactly which repositories fall into each pathway status, providing
-a single at-a-glance view of pathway coverage across the portfolio. Each repo appears
-in exactly one column per pathway row.
+This table shows exactly which repositories fall into each pathway status, providing a single at-a-glance view of pathway coverage across the portfolio. Each repo appears in exactly one column per pathway row.
 
 | Pathway | Triggered | Not Triggered | Not Applicable |
 |---------|-----------|---------------|----------------|
-| Move to Cloud Native | local-monolith, MonoToMicroLegacy | aws-microservices, books-api | eks-saas-gitops |
-| Move to Containers | MonoToMicroLegacy | local-monolith, aws-microservices, books-api | eks-saas-gitops |
-| Move to Open Source | — | local-monolith, MonoToMicroLegacy, aws-microservices, books-api, eks-saas-gitops | — |
-| Move to Managed Databases | local-monolith, MonoToMicroLegacy | aws-microservices, books-api, eks-saas-gitops | — |
-| Move to Managed Analytics | — | local-monolith, aws-microservices, books-api | MonoToMicroLegacy, eks-saas-gitops |
-| Move to Modern DevOps | local-monolith, MonoToMicroLegacy, aws-microservices | books-api, eks-saas-gitops | — |
-| Move to AI | local-monolith, MonoToMicroLegacy, aws-microservices, books-api | — | eks-saas-gitops |
+| Move to Cloud Native | local-monolith, unishop-monolith | aws-microservices, books-api | eks-saas-gitops |
+| Move to Containers | unishop-monolith | local-monolith, aws-microservices, books-api | eks-saas-gitops |
+| Move to Open Source | — | local-monolith, unishop-monolith, aws-microservices, books-api | eks-saas-gitops |
+| Move to Managed Databases | unishop-monolith | local-monolith, aws-microservices, books-api | eks-saas-gitops |
+| Move to Managed Analytics | — | local-monolith, unishop-monolith, aws-microservices, books-api | eks-saas-gitops |
+| Move to Modern DevOps | local-monolith, unishop-monolith, aws-microservices, eks-saas-gitops | books-api | — |
+| Move to AI | local-monolith, unishop-monolith, aws-microservices, books-api | — | eks-saas-gitops |
 
 ### Per-Service Pathway Assignment
 
 | Service | Cloud Native | Containers | Open Source | Managed DB | Managed Analytics | Modern DevOps | Move to AI |
 |---------|-------------|------------|-------------|------------|-------------------|---------------|------------|
-| local-monolith | ✅ | — | — | ✅ | — | ✅ | ✅ |
-| MonoToMicroLegacy | ✅ | ✅ | — | ✅ | N/A | ✅ | ✅ |
+| local-monolith | ✅ | — | — | — | — | ✅ | ✅ |
+| unishop-monolith | ✅ | ✅ | — | ✅ | — | ✅ | ✅ |
 | aws-microservices | — | — | — | — | — | ✅ | ✅ |
 | books-api | — | — | — | — | — | — | ✅ |
-| eks-saas-gitops | N/A | N/A | — | — | N/A | — | N/A |
+| eks-saas-gitops | N/A | N/A | — | — | N/A | ✅ | N/A |
 
 ### Pathway Dependencies and Parallel Execution
 
 **Sequential Dependencies:**
-- Move to Containers should precede Move to Cloud Native (containerize monoliths before decomposing them)
-- Move to Managed Databases can proceed in parallel with Move to Containers (Aurora migration independent of containerization)
+- Move to Containers should precede Move to Cloud Native (containerize before decomposing)
+- Move to Open Source may precede Move to Managed Databases (migrate off proprietary first — N/A here, all MySQL is open source)
 - Move to Modern DevOps enables faster execution of all other pathways (CI/CD accelerates delivery)
-- Move to Managed Databases is a prerequisite for Move to AI (data foundations needed for agent integration)
+- Move to Managed Databases is often a prerequisite for Move to AI (data foundations needed)
 
 **Parallel Execution Tracks:**
-- **Track 1**: Move to Modern DevOps + Move to Containers + Move to Managed Databases (foundational, Mo 0–3)
-- **Track 2**: Move to Cloud Native + Move to AI (advanced, Mo 3–6+, builds on Track 1)
+- **Track 1 (Infrastructure)**: Move to Modern DevOps → Move to Containers → Move to Cloud Native (sequential for unishop-monolith)
+- **Track 2 (Data + AI)**: Move to Managed Databases → Move to AI (sequential for unishop-monolith; parallel for others)
 
 ### Pathway Details
 
+#### Move to Cloud Native
+
+- **Services Affected**: local-monolith, unishop-monolith (2 total)
+- **Portfolio Priority**: Medium
+- **Common Trigger Criteria**:
+  - APP-Q2 = 1 (monolith): affects 2 services
+  - APP-Q3 = 1 (all sync): affects 2 services
+  - APP-Q4 = 1 (no async processing): affects 2 services
+  - INF-Q1 = 1 (raw EC2): affects 1 service (unishop-monolith)
+- **Representative AWS Services**: Amazon EKS (preferred), Amazon API Gateway (preferred), Amazon EventBridge (preferred), Amazon Aurora MySQL (preferred), Amazon DynamoDB (preferred), AWS Step Functions
+- **Key Activities**:
+  1. Strangler Fig decomposition for both monoliths
+  2. Extract Inventory Service (local-monolith) and Basket/Order Service (unishop-monolith) first for agent APIs
+  3. Introduce EventBridge for inter-service communication
+- **Cross-Service Synergies**: Shared decomposition patterns, common API Gateway configuration, reusable Terraform EKS modules
+- **Estimated Effort**: High across 2 services
+- **Roadmap Phase Alignment**: Phase 1–2
+- **Relevant Learning Materials**: Module 2 — Move to Cloud Native
+
+#### Move to Containers
+
+- **Services Affected**: unishop-monolith (1 total)
+- **Portfolio Priority**: Low
+- **Common Trigger Criteria**:
+  - INF-Q1 = 1 (raw EC2): 1 service
+  - No container definitions found: 1 service
+- **Representative AWS Services**: Amazon EKS (preferred), Amazon ECR, EKS managed node groups with Graviton
+- **Key Activities**:
+  1. Create Dockerfile for Spring Boot monolith
+  2. Deploy to EKS cluster (eks-saas-gitops)
+  3. Establish container image scanning pipeline
+- **Cross-Service Synergies**: EKS platform (eks-saas-gitops) serves both monoliths
+- **Estimated Effort**: Medium for 1 service
+- **Roadmap Phase Alignment**: Phase 1
+- **Relevant Learning Materials**: Module 3 — Move to Containers
+
+#### Move to Managed Databases
+
+- **Services Affected**: unishop-monolith (1 total)
+- **Portfolio Priority**: Low
+- **Common Trigger Criteria**:
+  - INF-Q2 = 1 (self-managed MySQL): 1 service
+  - DATA-Q3 = 2 (version not pinned in IaC): 1 service
+- **Representative AWS Services**: Amazon Aurora MySQL (preferred), AWS DMS, Amazon DynamoDB (preferred for basket data post-decomposition), Amazon RDS Proxy
+- **Key Activities**:
+  1. Discover actual MySQL server version
+  2. Migrate to Aurora MySQL via AWS DMS
+  3. Update application connection string
+  4. Post-decomposition: move basket data to DynamoDB (preferred)
+- **Cross-Service Synergies**: Aurora MySQL Terraform modules can be shared with local-monolith's RDS MySQL upgrade
+- **Estimated Effort**: Medium for 1 service
+- **Roadmap Phase Alignment**: Phase 1
+- **Relevant Learning Materials**: Module 4 — Move to Managed Databases
+
 #### Move to Modern DevOps
 
-- **Services Affected**: local-monolith, MonoToMicroLegacy, aws-microservices (3 total)
-- **Portfolio Priority**: High (triggered for 60% of portfolio, including all 3 P0 services)
+- **Services Affected**: local-monolith, unishop-monolith, aws-microservices, eks-saas-gitops (4 total)
+- **Portfolio Priority**: High (80% of portfolio triggered, all P0 services affected)
 - **Common Trigger Criteria**:
-  - INF-Q10 (IaC) score 1: affects 2 services (local-monolith, MonoToMicroLegacy)
-  - INF-Q11 (CI/CD) score 1: affects 3 services (local-monolith, MonoToMicroLegacy, aws-microservices)
-  - OPS-Q5 (Deployment Strategy) score 1: affects 3 services
-  - OPS-Q6 (Integration Testing) score 1: affects 3 services
-- **Representative AWS Services**: Terraform (preferred), Flux CD / ArgoCD (GitOps preferred), GitHub Actions, AWS CodePipeline + CodeBuild, Amazon ECR
+  - INF-Q11 < 3 (CI/CD): affects 4 services
+  - OPS-Q5 = 1 (no deployment strategy): affects 3 services
+  - OPS-Q6 = 1 (no integration tests): affects 4 services
+  - INF-Q10 = 1 (zero IaC): affects 1 service (unishop-monolith)
+- **Representative AWS Services**: Terraform (preferred), ArgoCD/Flux CD (GitOps preferred), AWS CodePipeline, AWS CodeBuild, Amazon ECR, GitHub Actions
 - **Key Activities**:
-  1. Adopt Terraform (preferred) for all infrastructure — standardize on eks-saas-gitops patterns
-  2. Implement CI/CD pipelines with GitOps (preferred) — avoid manual deployments
-  3. Add automated testing frameworks per language (PHPUnit, JUnit, Jest)
-  4. Configure progressive deployment strategies (canary/blue-green)
-- **Cross-Service Synergies**: Shared Terraform modules, shared CI/CD pipeline templates, shared security scanning configuration
-- **Estimated Effort**: Medium across 3 services
-- **Roadmap Phase Alignment**: Phase 0 (standards), Phase 1 (monoliths), Phase 2 (aws-microservices)
+  1. Create CI/CD pipelines for 3 services with zero pipelines
+  2. Add Terraform CI validation for eks-saas-gitops
+  3. Implement progressive delivery (CodeDeploy for Lambda, Flagger/Argo Rollouts for EKS)
+  4. Add integration testing to all services
+  5. Standardize on Terraform across the portfolio
+- **Cross-Service Synergies**: Shared CI/CD pipeline templates, shared Terraform modules, common GitOps workflow patterns. books-api's pipeline is the reference implementation.
+- **Estimated Effort**: Medium across 4 services
+- **Roadmap Phase Alignment**: Phase 0 (cross-cutting enabler) + Phase 1–2 (per-service pipelines)
 - **Relevant Learning Materials**: Module 6 — Move to Modern DevOps
 
 #### Move to AI
 
-- **Services Affected**: local-monolith, MonoToMicroLegacy, aws-microservices, books-api (4 total)
-- **Portfolio Priority**: High (triggered for 80% of portfolio)
+- **Services Affected**: local-monolith, unishop-monolith, aws-microservices, books-api (4 total)
+- **Portfolio Priority**: High (80% of portfolio triggered, aligned with agent integration goal)
+- **Aggregation**: Move to AI: Triggered in 4 of 5 services (1 service — eks-saas-gitops — is infrastructure-only, pathway correctly marked Not Applicable)
+- **Not Triggered Breakdown**:
+  - Contextual guard suppression (no AI intent): — (no services)
+  - Already present (AI frameworks detected): — (no services)
+  - Not Applicable (infrastructure-only): eks-saas-gitops
 - **Common Trigger Criteria**:
-  - No AI/agent frameworks detected in any service
-  - No vector database infrastructure
-  - No RAG implementation
-  - No agent evaluation frameworks
-- **Representative AWS Services**: Amazon Bedrock (preferred), Amazon Bedrock AgentCore, Amazon Bedrock Knowledge Bases, Amazon OpenSearch Service (vector engine)
+  - No AI/agent frameworks detected: affects 4 services
+  - Context contains "agent" AI signal term: all 4 services have AI intent confirmed
+- **Representative AWS Services**: Amazon Bedrock (preferred), Amazon Bedrock AgentCore, Amazon Bedrock Knowledge Bases, Amazon DynamoDB (preferred for agent state), Amazon API Gateway (preferred for tool endpoints), Amazon EventBridge (preferred for event-driven triggers)
 - **Key Activities**:
-  1. Deploy Amazon Bedrock as the shared AI foundation
-  2. Build inventory restocking agent using Bedrock with inventory API tools
-  3. Build customer support agent for order inquiries and return processing
-  4. Create RAG knowledge base from product catalog and order policies
-  5. Generate OpenAPI specifications for all APIs to enable agent tool discovery
-- **Cross-Service Synergies**: Shared Bedrock configuration, unified agent framework, common tool discovery pattern via OpenAPI specs
+  1. Generate OpenAPI specs for all service APIs (prerequisite for Bedrock Agent tool discovery)
+  2. Deploy Amazon Bedrock agent with action groups mapped to service endpoints
+  3. Configure agent tools: inventory restocking (local-monolith), order status + return processing (aws-microservices/unishop-monolith), product lookups (books-api)
+  4. Implement agent evaluation framework
+  5. Add vector database (OpenSearch Serverless) for RAG-based knowledge agents
+- **Cross-Service Synergies**: Shared Bedrock agent configuration, common tool endpoint patterns, unified agent evaluation framework, shared DynamoDB agent session state table
 - **Estimated Effort**: Medium across 4 services
-- **Roadmap Phase Alignment**: Phase 3 (after foundational modernization)
+- **Roadmap Phase Alignment**: Phase 3 (requires authenticated, documented APIs from Phases 1–2)
 - **Relevant Learning Materials**: Module 7 — Move to AI
-
-#### Move to Cloud Native
-
-- **Services Affected**: local-monolith, MonoToMicroLegacy (2 total)
-- **Portfolio Priority**: Medium (triggered for 40% of portfolio)
-- **Common Trigger Criteria**:
-  - APP-Q2 (Architecture) score 1-2: affects 2 services (tightly-coupled monoliths)
-  - INF-Q1 (Managed Compute) score 1: affects 2 services
-  - APP-Q3 (Async Communication) score 1: affects 2 services
-  - APP-Q4 (Long-Running Processes) score 1: affects 2 services
-- **Representative AWS Services**: Amazon EKS (preferred), Amazon API Gateway (preferred), Amazon EventBridge (preferred), AWS Step Functions, Aurora MySQL (preferred)
-- **Key Activities**:
-  1. Containerize monoliths and deploy to EKS (Phase 1)
-  2. Implement Strangler Fig decomposition starting with Inventory Service (local-monolith) and Basket/Order Service (MonoToMicroLegacy)
-  3. Introduce EventBridge for inter-service event-driven communication
-  4. Implement Step Functions for workflow orchestration
-- **Cross-Service Synergies**: Shared decomposition patterns, shared EventBridge event bus, shared API Gateway
-- **Estimated Effort**: High across 2 services
-- **Roadmap Phase Alignment**: Phase 1 (containerization), Phase 3 (decomposition)
-- **Relevant Learning Materials**: Module 2 — Move to Cloud Native
-
-#### Move to Managed Databases
-
-- **Services Affected**: local-monolith, MonoToMicroLegacy (2 total)
-- **Portfolio Priority**: High (triggered for 40% of portfolio, both P0 services with self-managed MySQL)
-- **Common Trigger Criteria**:
-  - INF-Q2 (Managed Databases) score 1: affects 2 services
-  - DATA-Q3 (Engine Version) score 2: affects 2 services
-- **Representative AWS Services**: Amazon Aurora MySQL (preferred), Amazon DynamoDB (preferred for extracted services), AWS DMS, AWS Secrets Manager
-- **Key Activities**:
-  1. Provision Aurora MySQL clusters via Terraform (preferred)
-  2. Use AWS DMS for continuous replication from self-managed MySQL to Aurora
-  3. Cut over connection strings to Aurora endpoints
-  4. Enable automated backups, PITR, and Multi-AZ failover
-- **Cross-Service Synergies**: Shared DMS migration pattern, shared Aurora Terraform modules, shared Secrets Manager configuration
-- **Estimated Effort**: Medium across 2 services
-- **Roadmap Phase Alignment**: Phase 1
-- **Relevant Learning Materials**: Module 4 — Move to Managed Databases
-
-#### Move to Containers
-
-- **Services Affected**: MonoToMicroLegacy (1 total)
-- **Portfolio Priority**: Low (triggered for 20% of portfolio)
-- **Common Trigger Criteria**:
-  - INF-Q1 (Managed Compute) score 1: raw EC2 with no container definitions
-  - No Dockerfile exists (commented out docker task in build.gradle)
-- **Representative AWS Services**: Amazon EKS (preferred), Amazon ECR, Helm, Karpenter
-- **Key Activities**:
-  1. Create Dockerfile for the Spring Boot fat JAR
-  2. Set up ECR repository and push container image
-  3. Deploy to EKS cluster (eks-saas-gitops) with Helm chart
-  4. Replace EC2MetadataUtils with Kubernetes-native health probes
-- **Cross-Service Synergies**: Reuse eks-saas-gitops Helm chart templates and Karpenter configuration
-- **Estimated Effort**: Medium for 1 service
-- **Roadmap Phase Alignment**: Phase 1
-- **Relevant Learning Materials**: Module 3 — Move to Containers
 
 ## Integration Opportunities
 
 ### Shared Service Extraction
 
-**Opportunity: Centralized Authentication Service**
-- **Current State**: Duplicated in local-monolith (PHP sessions), MonoToMicroLegacy (disabled Spring Security), aws-microservices (no auth), books-api (Cognito), eks-saas-gitops (Gitea tokens + IRSA)
-- **Proposed Solution**: Deploy Amazon Cognito as the centralized identity provider with User Pools for human users and Identity Pools for M2M agent authentication. Create a shared Terraform module for Cognito configuration.
-- **Benefits**: Unified authentication across all services, SSO capability, centralized user management, M2M auth for AI agents
+**Opportunity: Centralized Authentication & Identity (Cognito)**
+- **Current State**: Fragmented across portfolio — books-api has Cognito, local-monolith uses PHP sessions, unishop-monolith has disabled Spring Security, aws-microservices has no auth, eks-saas-gitops has no auth on Argo
+- **Proposed Solution**: Deploy a shared Amazon Cognito User Pool with federation support. All services use Cognito JWT tokens for API authentication. Machine-to-machine OAuth2 flows for agent access via client credentials grant.
+- **Benefits**: Unified identity, SSO capability, consistent auth patterns, agent identity management
 - **Effort**: Medium
-- **Priority**: High
+- **Priority**: High — prerequisite for agent integration
 
-**Opportunity: Shared Observability Platform**
-- **Current State**: Only books-api has X-Ray tracing. No shared dashboards, no centralized alerting, no unified log aggregation.
-- **Proposed Solution**: Deploy ADOT (AWS Distro for OpenTelemetry) collector on EKS, enable X-Ray on all Lambda functions, create centralized CloudWatch dashboards per service, implement PagerDuty/OpsGenie integration via SNS.
-- **Benefits**: End-to-end request tracing across all services, centralized monitoring, consistent alerting, agent action traceability
+**Opportunity: Centralized Observability Platform**
+- **Current State**: Only books-api has X-Ray tracing. All other services have zero observability.
+- **Proposed Solution**: Deploy ADOT Collector on EKS, enable X-Ray on all Lambda functions, create shared CloudWatch dashboards with portfolio-wide metrics namespace.
+- **Benefits**: End-to-end request tracing across agent interactions, unified metrics, centralized alerting
 - **Effort**: Medium
-- **Priority**: High
+- **Priority**: High — required for production readiness
 
-**Opportunity: Shared Database Migration Pattern**
-- **Current State**: local-monolith and MonoToMicroLegacy both use self-managed MySQL 8.0. Both need migration to Aurora MySQL.
-- **Proposed Solution**: Create a reusable Terraform module for Aurora MySQL provisioning and a shared DMS migration runbook. Execute both migrations using the same pattern and tooling.
-- **Benefits**: Reduced migration effort through pattern reuse, consistent database configuration, shared operational knowledge
-- **Effort**: Low (incremental, pattern already defined)
-- **Priority**: High
+**Opportunity: Shared Terraform Module Registry**
+- **Current State**: 5 different IaC tools across the portfolio
+- **Proposed Solution**: Create reusable Terraform modules for common patterns: VPC, EKS deployment, Aurora MySQL, DynamoDB, API Gateway, EventBridge, CloudWatch dashboards
+- **Benefits**: Consistent infrastructure, faster provisioning, reduced drift
+- **Effort**: Medium
+- **Priority**: High — enables all modernization work
 
 ### Event-Driven Architecture
 
-**Opportunity: Portfolio-Wide EventBridge Event Bus**
-- **Current State**: aws-microservices has its own EventBridge bus (SwnEventBus). No other services use EventBridge. books-api → aws-microservices is a synchronous REST call.
-- **Proposed Solution**: Create a shared EventBridge event bus using Amazon EventBridge (preferred). Define domain events: `OrderPlaced`, `InventoryUpdated`, `BookCreated`, `ReturnRequested`, `BasketCheckedOut`. Migrate the books-api → aws-microservices sync dependency to EventBridge event subscription.
-- **Benefits**: Decoupled services, real-time event processing for agents, async communication reducing cascading failures, circular dependency resolution
+**Opportunity: Portfolio Event Bus**
+- **Current State**: aws-microservices uses EventBridge for checkout flow. All other services are synchronous.
+- **Proposed Solution**: Deploy a shared Amazon EventBridge event bus (preferred). Standard event schemas: `OrderCreated`, `InventoryUpdated`, `BookCreated`, `ReturnRequested`, `TenantOnboarded`.
+- **Benefits**: Decoupled services, agent event triggers (e.g., inventory threshold → restocking), audit trail
 - **Effort**: Medium
 
-**Opportunity: Agent Event Integration**
-- **Current State**: No mechanism for AI agents to receive real-time notifications of inventory changes, order updates, or return requests.
-- **Proposed Solution**: Extend EventBridge to publish agent-relevant events. The inventory restocking agent subscribes to `InventoryLow` events. The customer support agent subscribes to `ReturnRequested` events.
-- **Benefits**: Real-time agent activation, reduced polling, event-driven agent architecture
-- **Effort**: Low (once EventBridge is established)
+**Opportunity: Async Order Fulfillment**
+- **Current State**: local-monolith processes orders synchronously in a single PHP transaction
+- **Proposed Solution**: EventBridge + Step Functions for orchestrated fulfillment: validate → assign warehouse → pick → pack → QC → ship
+- **Benefits**: Resilience, visibility, automated retry, agent integration for warehouse assignment
+- **Effort**: High
 
 ### API Gateway Consolidation
 
-- **Current State**: aws-microservices has 3 separate API Gateways (Product, Basket, Order). books-api has 1 API Gateway. local-monolith and MonoToMicroLegacy have no API gateway.
-- **Proposed Solution**: Deploy a unified Amazon API Gateway (preferred) for all customer-facing APIs. Route to backend services (EKS pods, Lambda functions) via VPC links and Lambda integrations. Consolidate authentication, throttling, and request validation.
-- **Benefits**: Consistent authentication and authorization, unified rate limiting, centralized API documentation for agent tool discovery, reduced management overhead
+- **Current State**: aws-microservices has 3 separate API Gateway instances. local-monolith uses App Runner directly. unishop-monolith exposes port 8080 with no gateway.
+- **Proposed Solution**: Consolidate into a unified Amazon API Gateway (preferred) architecture — one gateway per service with consistent auth, throttling, and monitoring. For EKS workloads, use API Gateway with ALB integration.
+- **Benefits**: Consistent auth, rate limiting per consumer, monitoring, OpenAPI export for agent tool discovery
 - **Effort**: Medium
 
 ### Observability Unification
 
-- **Current State**: books-api uses X-Ray with aws-xray-sdk-core. eks-saas-gitops has Kubecost + Prometheus. Other services have zero observability.
-- **Proposed Solution**: Standardize on AWS X-Ray + ADOT for distributed tracing, CloudWatch for metrics and logs, and Amazon Managed Grafana for dashboards. Deploy ADOT DaemonSet on EKS and enable X-Ray on all Lambda functions.
-- **Benefits**: End-to-end request tracing across service boundaries, consistent metric collection, unified dashboards, agent action traceability
+- **Current State**: books-api has X-Ray. All others have nothing. No shared dashboards.
+- **Proposed Solution**: Deploy OpenTelemetry/ADOT across all services. Centralized CloudWatch dashboards per service and portfolio-wide. Prometheus + Grafana on EKS for infrastructure metrics.
+- **Benefits**: End-to-end tracing, consistent metrics, reduced tool sprawl, agent interaction monitoring
 - **Effort**: Medium
 
 ## Risk Assessment
@@ -737,101 +766,93 @@ in exactly one column per pathway row.
 
 | Risk | Likelihood | Impact | Priority | Mitigation | Phase |
 |------|------------|--------|----------|------------|-------|
-| eks-saas-gitops Gitea SPOF | High | High | 🔴 Critical | Replace single Gitea EC2 with HA solution (Gitea on EKS or managed Git service) | Phase 1 |
-| Self-managed MySQL data loss (2 services) | High | High | 🔴 Critical | Migrate to Aurora MySQL (preferred) with automated backups and PITR | Phase 1 |
-| Circular dependency (aws-microservices ↔ books-api) | Medium | Medium | 🟡 Medium | Break sync dependency via EventBridge event subscription | Phase 0 |
-| No audit logging (4 services) | High | Medium | 🟠 High | Deploy centralized CloudTrail with immutable storage | Phase 0 |
-| No API authentication (2 services completely open) | High | High | 🔴 Critical | Implement Cognito-based API Gateway authorization | Phase 0-1 |
-| Hardcoded credentials (MonoToMicroLegacy) | High | High | 🔴 Critical | Migrate to AWS Secrets Manager immediately | Phase 1 |
-| EOL Lambda runtime Node.js 14 (aws-microservices) | Medium | Medium | 🟡 Medium | Upgrade to NODEJS_20_X or NODEJS_22_X | Phase 2 |
-| No observability (4 services) | Medium | High | 🟠 High | Deploy ADOT + X-Ray portfolio-wide | Phase 0 |
-| DynamoDB PITR not enabled + DESTROY policy (aws-microservices) | Medium | High | 🟠 High | Enable PITR, change to RETAIN removal policy | Phase 2 |
-| No automated tests (3 services) | Medium | Medium | 🟡 Medium | Add test frameworks before modernization | Phase 1 |
+| Argo Workflows exposed without auth (eks-saas-gitops) — full cluster admin access | High | High | 🔴 Critical | Add OIDC/Dex auth, switch to internal LB, restrict ClusterRole | Phase 1 |
+| Hardcoded DB credentials in source (unishop-monolith) | High | High | 🔴 Critical | Rotate credentials immediately, migrate to Secrets Manager | Phase 1 |
+| No CI/CD for 3 P0 services — manual deployments | High | Medium | 🟠 High | Create CI/CD pipelines per service, adopt GitOps | Phase 0–1 |
+| No observability across 4 services — blind to failures | Medium | High | 🟠 High | Deploy centralized tracing, alerting, dashboards | Phase 0–1 |
+| Self-managed MySQL (unishop-monolith) — no backups, no HA | High | Medium | 🟠 High | Migrate to Aurora MySQL with Multi-AZ and automated backups | Phase 1 |
+| No API authentication on 3 services — public access to CRUD | High | Medium | 🟠 High | Deploy Cognito authorizers on all API endpoints | Phase 0–1 |
+| EKS API server publicly accessible (eks-saas-gitops) | Medium | High | 🟠 High | Set cluster_endpoint_public_access = false, use VPN | Phase 1 |
+| No security scanning in any pipeline | Medium | Medium | 🟡 Medium | Add SAST + dependency scanning to CI/CD templates | Phase 0 |
+| DynamoDB tables with RemovalPolicy.DESTROY (aws-microservices) | Medium | Medium | 🟡 Medium | Change to RETAIN, enable PITR | Phase 2 |
+| Single NAT Gateway (eks-saas-gitops) — SPOF | Low | Medium | 🟡 Medium | Enable one_nat_gateway_per_az | Phase 1 |
+| No integration tests across 4 services | Medium | Medium | 🟡 Medium | Add test suites using books-api as reference | Phase 1–2 |
+| Gitea on unmanaged EC2 — SPOF for GitOps platform | Medium | High | 🟠 High | Migrate Gitea to EKS or managed Git service | Phase 1 |
 
 ### High-Risk Dependencies
 
-- **eks-saas-gitops** (Score: 2.66, Fan-In: 2, Blast Radius: 80%): While relatively healthy, this is the shared infrastructure foundation. The Gitea single-EC2-instance SPOF could take down the entire GitOps pipeline for all services.
-- **local-monolith** (Score: 1.29, Fan-In: 1): Very low score with aws-microservices depending on it synchronously for legacy product data. A failure cascades to the microservices layer.
+- **unishop-monolith** (score 1.40): Lowest scoring service that provides order/return data needed for the AI agent. If this service fails, agent cannot process orders. Mitigation: Prioritize containerization and database migration in Phase 1.
 
 ### Single Points of Failure
 
-- **eks-saas-gitops — Gitea EC2 instance**: Single EC2 instance in one public subnet running the Git server. If it fails, all GitOps-based deployments stop. Blast radius: 80% of portfolio (all services deployed via GitOps). **No HA, no redundancy.**
-- **local-monolith — Self-managed MySQL**: Docker volume with no backups, no PITR, no failover. Data loss is irrecoverable. Contains inventory, order, and payment data.
-- **MonoToMicroLegacy — Self-managed MySQL on EC2**: Similar to local-monolith. Single-instance database with no backup strategy.
+- **eks-saas-gitops** (blast radius 60%): The centralized EKS platform affects all non-serverless workloads. Single NAT gateway and single Gitea instance amplify risk. Mitigation: Fix SPOF (NAT, Gitea) in Phase 1, add PDBs for critical controllers.
+- **Gitea EC2 instance**: Backs the entire GitOps pipeline. No backup, no HA. Loss would disrupt all deployments.
 
 ### Circular Dependency Risks
 
-- **aws-microservices ↔ books-api**: Bidirectional dependency creates deployment coupling. Cannot independently deploy or scale either service without considering the other. Must be resolved in Phase 0 before either service is modernized.
+✅ No circular dependencies detected.
 
 ### Data Availability Risks
 
-- **local-monolith** (Self-managed MySQL, Docker volume): Data loss risk is critical. No automated backups, no PITR, no failover. A Docker volume failure destroys all e-commerce data.
-- **MonoToMicroLegacy** (Self-managed MySQL, EC2): Similar risk. Unknown MySQL server version. No managed backup strategy.
-- **aws-microservices** (DynamoDB with DESTROY policy): Stack deletion destroys all product, basket, and order data. PITR not enabled.
+- **unishop-monolith**: Self-managed MySQL with no automated backups and no HA (single EC2). High risk of data loss. Mitigation: Migrate to Aurora MySQL (preferred) with Multi-AZ and PITR.
 
 ### Observability Blind Spots
 
-- **aws-microservices** (Fan-Out: 2, OPS-Q1: 1): Calls both books-api (async) and local-monolith (sync) with no tracing. Cannot debug cross-service failures in the checkout flow (basket → EventBridge → SQS → ordering).
-- **local-monolith** (Fan-Out: 1, OPS-Q1: 1): Called synchronously by aws-microservices for legacy product data. No tracing means latency issues in this dependency are invisible.
+- **4 of 5 services** have no distributed tracing. The agent interaction chain (agent → API Gateway → Lambda/EKS → DynamoDB/Aurora) will be completely opaque without tracing. Mitigation: Deploy ADOT + X-Ray across all services in Phase 0.
 
 ## Resource Allocation Recommendations
 
 ### Team Structure
 
-**Recommended Approach**: Centralized Platform Team + Service Teams
+**Recommended Approach**: Centralized platform team + service teams (cross-cutting concerns count = 22, well above the threshold of 5)
 
-> With 20 Foundational Blockers (≥ 5 threshold), a centralized platform team is recommended to drive cross-cutting improvements while service teams focus on domain-specific modernization.
+**Platform Team** (3–4 engineers):
+- Responsibilities: Shared infrastructure (EKS, Terraform modules, CI/CD templates), centralized observability, shared Cognito, EventBridge, security scanning pipeline, CloudTrail, tagging governance
+- Skills Required: Terraform, EKS/Kubernetes, GitOps (ArgoCD/Flux), Observability (ADOT/X-Ray/Prometheus), Cognito/IAM, CI/CD pipeline design
 
-**Platform Team**:
-- Responsibilities: Shared infrastructure (EKS cluster, Cognito, CloudTrail, ADOT, EventBridge), Terraform module library, CI/CD pipeline templates, security scanning integration, observability platform, tagging enforcement
-- Skills Required: Terraform, EKS, AWS networking (VPC/ALB), observability (X-Ray/ADOT/CloudWatch), security (Cognito/KMS/Secrets Manager)
-- Recommended Size: 2–3 engineers
-
-**Service Teams**:
-- Responsibilities: Service-specific modernization, domain-specific testing, API versioning, database migration execution, application code changes
-- Skills Required: Per-service language expertise (PHP, Java, TypeScript), DMS migration, containerization, API design
-- Recommended Size: 1–2 engineers per service (shared across monoliths)
+**Service Teams** (2 engineers per monolith, 1 per serverless service):
+- Responsibilities: Service-specific modernization, decomposition, feature development, service-level testing
+- Skills Required: Service-specific languages (PHP, Java, TypeScript), DynamoDB, Aurora, API Gateway, Bedrock (for agent integration)
 
 ### Skill Gaps
 
 | Skill | Required For | Currently Available? | Priority |
 |-------|-------------|---------------------|----------|
-| Terraform | IaC for all services (preferred) | Partial (eks-saas-gitops only) | High |
-| EKS / Kubernetes | Container orchestration for monoliths | Partial (eks-saas-gitops only) | High |
-| AWS X-Ray / ADOT | Distributed tracing portfolio-wide | Partial (books-api X-Ray only) | High |
-| Aurora MySQL / DMS | Database migration for 2 services | No | High |
-| Amazon Cognito | Centralized identity for all services | Partial (books-api only) | High |
-| Amazon Bedrock | AI agent integration | No | Medium |
-| Flux CD / GitOps | Deployment automation (preferred) | Partial (eks-saas-gitops only) | Medium |
-| Containerization (Docker) | Monolith containerization | Partial (local-monolith has Dockerfile) | Medium |
-| EventBridge | Event-driven architecture | Partial (aws-microservices only) | Medium |
-| Security scanning (Semgrep/Trivy) | CI/CD security gates | No | Medium |
+| Terraform | IaC standardization (all services) | Partial (eks-saas-gitops only) | High |
+| EKS / Kubernetes | Monolith containerization, platform management | Partial (eks-saas-gitops only) | High |
+| GitOps (ArgoCD/Flux) | Deployment automation | Partial (eks-saas-gitops only) | High |
+| Observability (X-Ray/OTEL) | Tracing, metrics, alerting | Partial (books-api X-Ray only) | High |
+| Amazon Bedrock / Agentic AI | Agent integration | No | Medium |
+| CI/CD Pipeline Design | Pipeline creation for 3 services | Partial (books-api pipeline) | High |
+| Strangler Fig Decomposition | Monolith modernization | No | Medium |
+| Aurora MySQL / DMS | Database migration | No | Medium |
+| Amazon Cognito | Centralized identity | Partial (books-api only) | High |
 
 ### Training Recommendations
 
-**Phase 0 (Immediate — Required for foundation work):**
-- Terraform Fundamentals — required for 4 of 5 service teams
-- EKS Workshop — required for monolith containerization teams
-- AWS Observability — required for platform team (X-Ray, ADOT, CloudWatch)
-- Move to Modern DevOps learning plan — required for all 3 DevOps pathway services
+**Phase 0 Training (Immediate — needed for cross-cutting foundation):**
+- Terraform fundamentals and module development
+- EKS/Kubernetes operations and GitOps workflows
+- Observability with AWS X-Ray, ADOT, and CloudWatch
+- CI/CD pipeline design with GitHub Actions and ArgoCD
 
-**Phase 1 (Weeks 1–4 — Required for monolith modernization):**
-- Move to Managed Databases learning plan — required for MySQL → Aurora migration
-- Move to Containers learning plan — required for MonoToMicroLegacy containerization
-- AWS DMS Getting Started — required for database migration team
+**Phase 1–2 Training (Weeks 2–8 — needed for service modernization):**
+- Strangler Fig pattern and microservices decomposition
+- Aurora MySQL migration with AWS DMS
+- Amazon Bedrock Agents and AgentCore fundamentals
 
-**Phase 2–3 (Months 2–6 — Required for advanced capabilities):**
-- Move to AI learning plan — required for agent integration
-- Amazon Bedrock Getting Started — required for AI agent development
-- Move to Cloud Native learning plan — required for monolith decomposition
+**Phase 3 Training (Weeks 8+ — needed for AI integration):**
+- Building agents with Amazon Bedrock
+- Agentic AI patterns and evaluation frameworks
+- RAG implementation with Bedrock Knowledge Bases
 
 ### External Support
 
-**Recommended AWS Professional Services or Partner engagement for:**
-- **Database Migration (High Risk)**: Engage AWS Professional Services for Aurora MySQL migration of the 2 self-managed databases. Production data migration with minimal downtime requires expertise in DMS configuration and cutover planning.
-- **EKS Cluster Hardening**: Engage an AWS Partner for eks-saas-gitops security hardening (Argo Workflows authentication, network segmentation, multi-NAT gateway configuration).
-- **AI Agent Design**: Engage AWS Professional Services for Bedrock agent architecture design — specifically for the inventory restocking agent and customer support agent use cases.
-- **Monolith Decomposition Planning**: Engage AWS Professional Services for Strangler Fig decomposition strategy for both monoliths. Domain boundary identification and data separation planning require architectural expertise.
+**Recommended AWS Professional Services engagement for:**
+- **Database Migration** (unishop-monolith MySQL → Aurora MySQL): High-risk activity requiring DMS expertise
+- **EKS Platform Hardening** (eks-saas-gitops): Security architecture review, RBAC design, network policy implementation
+- **Architecture Review**: Validate decomposition strategy for both monoliths before execution
+- **Agent Architecture Design**: Amazon Bedrock agent design for multi-service tool orchestration
 
 ## AWS Programs & Engagement Recommendations
 
@@ -842,30 +863,39 @@ in exactly one column per pathway row.
 
 | Program | Acronym | Relevance | Trigger Findings | Next Step |
 |---------|---------|-----------|-----------------|-----------|
-| Migration Acceleration Program | MAP | 3 of 5 services have overall score < 2.5 | local-monolith (1.29), MonoToMicroLegacy (1.43), aws-microservices (2.24) all below 2.5 threshold | Request MAP engagement via AWS Solutions Architect |
-| Experience-Based Acceleration | EBA | 3 services have triggered pathways AND score < 3.0 | local-monolith (4 pathways, 1.29), MonoToMicroLegacy (5 pathways, 1.43), aws-microservices (2 pathways, 2.24) | Request EBA engagement focused on Move to Modern DevOps pathway |
+| Migration Acceleration Program | MAP | Portfolio has significant modernization needs with 4 services scoring below 2.5 | 4 of 5 services have overall score < 2.5 (unishop-monolith=1.40, local-monolith=1.90, aws-microservices=2.27, eks-saas-gitops=2.49) | Request MAP engagement via AWS Solutions Architect |
+| Experience-Based Acceleration | EBA | Portfolio needs hands-on modernization guidance, especially for Move to Modern DevOps and Move to AI | All 5 services score < 3.0 and all 5 have at least one triggered pathway. Most prevalent: Move to Modern DevOps (4 services) and Move to AI (4 services) | Request EBA engagement focused on Move to Modern DevOps and Move to AI pathways |
 
 ### Program Details
 
 **Migration Acceleration Program (MAP)**
-
-This program is recommended because 3 of 5 services (60%) have overall modernization readiness scores below 2.5, indicating significant modernization work is needed. The two monoliths (local-monolith at 1.29 and MonoToMicroLegacy at 1.43) are particularly low-scoring, requiring infrastructure modernization (IaC, CI/CD, managed compute, managed databases) before any advanced modernization can proceed. MAP provides migration funding credits, partner ecosystem access, and methodology support to accelerate the modernization journey. **Suggested timing**: Initiate MAP engagement during Phase 0 to support Phase 1 infrastructure modernization activities.
+- **Why recommended**: 80% of the portfolio (4 of 5 services) scores below 2.5, indicating significant modernization work ahead. The portfolio includes legacy monolith decomposition, database migration, containerization, and AI agent integration — all MAP-eligible activities.
+- **What it provides**: Funding credits, migration tools, methodology framework, and partner support to accelerate the modernization journey. MAP provides a structured approach to assess, mobilize, and migrate/modernize workloads.
+- **Suggested timing**: Begin MAP engagement in Phase 0 to fund cross-cutting foundation work and Phase 1 service modernization.
 
 **Experience-Based Acceleration (EBA)**
+- **Why recommended**: All 5 services score below 3.0 with active modernization pathways triggered. The team needs hands-on guidance for Move to Modern DevOps (80% of portfolio) and Move to AI (80% of portfolio) — both high-priority pathways.
+- **What it provides**: Hands-on workshops and accelerators led by AWS experts, focused on specific modernization pathways. EBA provides practical implementation guidance, reference architectures, and working prototypes.
+- **Suggested timing**: Schedule EBA workshops during Phase 0–1 for DevOps modernization and Phase 2–3 for AI agent integration.
 
-This program is recommended because 3 services have at least one triggered modernization pathway AND an overall score below 3.0. The most prevalent pathway is **Move to Modern DevOps** (triggered for 3 services), making it the recommended EBA focus area. EBA provides AWS-led sprints where AWS architects work alongside the customer team to execute specific modernization activities. **Suggested timing**: Align the first EBA sprint with Phase 1 (Mo 1–2) to establish Terraform, CI/CD, and GitOps patterns that all services can adopt.
+**Programs NOT triggered:**
+- **OLA**: No Oracle, SQL Server, VMware, or commercial licenses detected — MySQL (open source) and DynamoDB only
+- **MMP**: No .NET or Windows workloads detected
+- **VMP**: No VMware references detected
+- **WAMP**: No Windows-based deployment targets detected
+- **ISV WMP**: No ISV or third-party software workloads detected
 
-> These are engagement-level recommendations. Discuss with your AWS Solutions Architect
-> or Partner to determine eligibility and timing.
+> These are engagement-level recommendations. Discuss with your AWS Solutions Architect or Partner to determine eligibility and timing.
 
 ## Recommended Self-Paced Learning Materials
 
-> Included modules are relevant to the portfolio's triggered pathways and skill gaps.
+> Include relevant links only from the following categories based on portfolio-wide skill gaps identified in the Resource Allocation section and triggered pathways.
 
 ### Module 2: Move to Cloud Native (Containers and Serverless)
 
 - Cloud Design Patterns, Architectures, and Implementations — https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html
 - AWS Modernization Pathways: Move to Cloud Native Serverless — https://skillbuilder.aws/learning-plan/CMK2J48MVN/aws-modernization-pathways-move-to-cloud-native-serverless-includes-labs/EFUPP53B4Q
+- Architecting Serverless Applications — https://skillbuilder.aws/learn/MRWENY7FSX/architecting-serverless-applications/QVFY2JHVEH
 - Modernize a Monolith to ECS and Fargate using Application Discovery — https://skillbuilder.aws/learn/1YXAWYH2WA/modernize-a-monolith-to-ecs-and-fargate-using-application-discovery/AQ37WHN3K1
 - Meeting Simulator: Transform Monolithic App into Serverless Microservices — https://skillbuilder.aws/learn/HUKQHYU9TB/meeting-simulator-transforming-our-monolithic-app-into-serverless-microservices/NS6S2J7YR7
 
@@ -881,10 +911,8 @@ This program is recommended because 3 services have at least one triggered moder
 ### Module 4: Move to Managed Databases
 
 - AWS Modernization Pathways: Move to Managed Databases — https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC/aws-modernization-pathways-move-to-managed-databases-includes-labs/2S2QZKG9DV
-- Introduction to Building with AWS Databases — https://skillbuilder.aws/learn/HYKKWEN9ZS/introduction-to-building-with-aws-databases/V7RVH2KY91
 - Selecting your Data Migration Strategy with AWS — https://skillbuilder.aws/learn/RKGP54WJPP/selecting-your-data-migration-strategy-with-aws/D38U3CZEYR
 - AWS Database Migration Service (DMS) Getting Started — https://skillbuilder.aws/learn/ND246G8Y3W/aws-database-migration-service-aws-dms-getting-started/QK5CCBP464
-- Introduction to AWS Database Migration Service (Lab) — https://skillbuilder.aws/learn/CX63W1TFSH/introduction-to-aws-database-migration-service/3DJVXSU4SE
 - Migrating RDS MySQL to Aurora (Lab) — https://skillbuilder.aws/learn/RZF2GBUUWX/migrating-rds-mysql-to-aurora-with-read-replica/SMG825PXTK
 
 ### Module 6: Move to Modern DevOps
@@ -893,6 +921,7 @@ This program is recommended because 3 services have at least one triggered moder
 - Getting Started with DevOps on AWS — https://skillbuilder.aws/learn/R4B13K95YQ/getting-started-with-devops-on-aws/38NHHYRV1R
 - Create a CI/CD Pipeline to Deploy Your App to AWS Fargate (ECS) — https://skillbuilder.aws/learn/H61B17Z8R7/create-a-cicd-pipeline-to-deploy-your-app-to-aws-fargate/T66BGGGHV5
 - AWS CloudFormation Getting Started — https://skillbuilder.aws/learn/RH22P2RXU4/aws-cloudformation-getting-started/KEK5BT6HSE
+- Advanced Testing Practices Using AWS DevOps Tools — https://skillbuilder.aws/learn/1YC7UXUWBR/advanced-testing-practices-using-aws-devops-tools/A32U6G7NEQ
 - AWS PartnerCast: Automate EKS Deployments With GitOps Using ArgoCD and GitHub Actions — https://skillbuilder.aws/learn/D9U7XMXP31/aws-partnercast--tech-talks--automate-eks-deployments-with-gitops-using-argocd-and-github-actions--technical/Z4M9Z8FY88
 - EKS Workshop: Automation — https://www.eksworkshop.com/docs/automation/
 - EKS SaaS GitOps Workshop — https://catalog.workshops.aws/eks-saas-gitops/en-US/03-lab1
@@ -901,166 +930,219 @@ This program is recommended because 3 services have at least one triggered moder
 
 - AWS Modernization Pathways: Move to AI — https://skillbuilder.aws/learning-plan/VDFEE4ACCV/aws-modernization-pathways-move-to-ai-pathways-includes-labs/P3DAWPTN63
 - Introduction to Generative AI: Art of the Possible — https://skillbuilder.aws/learn/ZEVZZ1D4AS/introduction-to-generative-ai--art-of-the-possible/Y7MTGJCW1U
-- Planning a Generative AI Project — https://skillbuilder.aws/learn/HU1FQRGDDZ/planning-a-generative-ai-project/SYR3SCPSHC
 - Amazon Bedrock Getting Started — https://skillbuilder.aws/learn/63KTRM86DQ/amazon-bedrock-getting-started/SC2Y3HMAUE
+- Essentials for Prompt Engineering — https://skillbuilder.aws/learn/XBNAVKA88J/essentials-of-prompt-engineering/9T9Q45EDTV
+- Build and Evaluate Retrieval Augmented Generation (RAG) Applications using Knowledge Bases for Amazon Bedrock (Lab) — https://skillbuilder.aws/learn/JRGWCFYT67/lab--build-and-evaluate-retrieval-augmented-generation-rag-applications-using-knowledge-bases-for-amazon-bedrock/A4MN58JB7A
 - Amazon Q Developer Getting Started — https://skillbuilder.aws/learn/BQMRXE8AB4/amazon-q-developer-getting-started/JY4XXGZDJA
 - Introduction to Agentic AI on AWS — https://skillbuilder.aws/learn/DNBD5MT8ZD/introduction-to-agentic-ai-on-aws/WAKAFK6UFY
-- Build and Evaluate Retrieval Augmented Generation (RAG) Applications using Knowledge Bases for Amazon Bedrock (Lab) — https://skillbuilder.aws/learn/JRGWCFYT67/lab--build-and-evaluate-retrieval-augmented-generation-rag-applications-using-knowledge-bases-for-amazon-bedrock/A4MN58JB7A
 - Introduction to AWS DevOps Agent (Lab) — https://skillbuilder.aws/learn/2BMGKG58ZU/introduction-to-aws-devops-agent/S61EE8J7S9
 - Creating an AWS DevOps AI Agent with the Strands Agents SDK (Lab) — https://skillbuilder.aws/learn/AH1GD8AJY3/lab--creating-an-aws-devops-ai-agent-with-the-strands-agents-sdk/A9SKJNMPJ2
+
+## Portfolio-Level Findings
+
+> These questions evaluate capabilities that can only be assessed by looking across multiple repos. They are distinct from cross-cutting analysis (which aggregates individual scores). Individual report scores are never overridden.
+
+### PORT-MOD-Q1: IaC Standardization
+
+- **Score**: 2
+- **Finding**: The portfolio uses 5 distinct IaC tools/approaches: CloudFormation (local-monolith), CDK (aws-microservices, books-api pipeline), SAM (books-api), Terraform (eks-saas-gitops), and no IaC (unishop-monolith). Terraform — the preferred tool — covers only 20% of the portfolio (1 of 5 services). The most common approach (CDK) covers 40% but is not the preferred tool.
+- **Evidence**: local-monolith: `infrastructure/monolith-apprunner.yaml` (CloudFormation); aws-microservices: `lib/*.ts` (CDK); books-api: `template.yml` (SAM) + `pipeline/lib/pipeline-stack.ts` (CDK); eks-saas-gitops: `terraform/` (Terraform); unishop-monolith: no IaC files found.
+- **Recommendation**: Standardize on Terraform (preferred) across the portfolio. Create a Terraform module registry with reusable modules for VPC, EKS, Aurora, DynamoDB, API Gateway, Lambda. Migrate services incrementally — start with unishop-monolith (needs IaC from scratch) and local-monolith (CloudFormation → Terraform).
+- **Contextual Annotations**: This finding provides context for INF-Q10 cross-cutting scores — while 4 of 5 services have IaC (scoring well individually), portfolio-level fragmentation creates maintenance burden and knowledge silos.
+
+### PORT-MOD-Q2: Shared Observability Platform
+
+- **Score**: 1
+- **Finding**: No centralized observability platform exists. Each service operates independently: books-api has X-Ray tracing (OPS-Q1=4), but no other service shares this tracing configuration. There is no shared CloudWatch log group, no cross-service tracing, no shared dashboards, and no consistent metric namespaces. The only shared infrastructure metric comes from Kubecost on eks-saas-gitops, which is cost-focused, not observability-focused.
+- **Evidence**: books-api: X-Ray tracing (Tracing: Active, TracingEnabled: true, aws-xray-sdk-core). All other services: no tracing configuration. No shared CloudWatch dashboards or metric namespaces found across repositories.
+- **Recommendation**: Deploy a centralized observability stack: (1) ADOT Collector on EKS for all EKS workloads, (2) X-Ray enabled on all Lambda functions, (3) Shared CloudWatch dashboard with widgets per service, (4) Standardized metric namespace `ecommerce-platform/{service}` for business and operational metrics, (5) Centralized log aggregation with structured JSON logging format.
+- **Contextual Annotations**: None — this is a net-new portfolio capability.
+
+### PORT-MOD-Q3: Dependency Cycle Health
+
+- **Score**: 4
+- **Finding**: No circular dependencies detected in the inferred dependency graph. All dependencies flow in one direction: leaf services (monoliths) → foundation services (eks-saas-gitops, aws-microservices). The architecture supports independent modernization of each service.
+- **Evidence**: Inferred dependency graph analysis using BFS from all service nodes. No strongly connected components with size > 1 found.
+- **Recommendation**: No action needed. Maintain the acyclic dependency structure as services are decomposed. When extracting microservices from monoliths, ensure new services do not introduce circular dependencies.
+- **Contextual Annotations**: None.
+
+### PORT-MOD-Q4: Technology Diversity
+
+- **Score**: 1
+- **Finding**: Extreme technology fragmentation: 4+ programming languages (PHP, Java, JavaScript/TypeScript, Terraform/HCL), 5 distinct IaC tools (CloudFormation, CDK, SAM, Terraform, none), 3 database engines (MySQL RDS, MySQL self-managed, DynamoDB), 4 compute patterns (App Runner, EC2, Lambda, EKS), 3+ CI/CD approaches (CodePipeline, Flux CD, none). Technology diversity score: 15 distinct technologies / 5 services = 3.0. This level of fragmentation creates significant knowledge silos and operational overhead.
+- **Evidence**: All 5 MOD reports — each service uses a unique technology combination. No two services share the same IaC tool + compute pattern + CI/CD tool combination.
+- **Recommendation**: Converge on preferred technologies: Terraform for IaC, EKS for containers (+ Lambda for serverless), Aurora/DynamoDB for databases, EventBridge for messaging, GitOps for deployments. Accept language diversity (PHP, Java, TypeScript) as a pragmatic reality but standardize tooling around services.
+- **Contextual Annotations**:
+  > **Portfolio Context**: PORT-MOD-Q4 found extreme technology fragmentation (diversity score 3.0). This may affect the severity of INF-Q10 and INF-Q11 cross-cutting concerns for all services — **verify** that IaC migration and CI/CD standardization efforts account for the learning curve of adopting new tools.
+
+### PORT-MOD-Q5: Shared Security Posture
+
+- **Score**: 1
+- **Finding**: No centralized security scanning pipeline, no shared WAF, and no unified vulnerability management. Each service manages security independently (or not at all). Only books-api has Cognito auth. Only eks-saas-gitops has ECR scan-on-push. No shared WAF WebACL (local-monolith has its own WAF, but it's not shared). No centralized security scanning tool (no SonarQube, no Snyk, no Dependabot). SEC category averages 1.86 across the portfolio.
+- **Evidence**: books-api: Cognito auth, no security scanning; local-monolith: WAF on App Runner, no scanning; eks-saas-gitops: ECR scan-on-push, no pipeline scanning; aws-microservices: no auth, no scanning; unishop-monolith: hardcoded credentials, no scanning.
+- **Recommendation**: (1) Deploy centralized security scanning: Semgrep for SAST, npm audit/composer audit/Snyk for dependencies, ECR scanning for containers, CDK-nag/Checkov for IaC. (2) Deploy shared WAF rules via Terraform module. (3) Deploy shared Cognito User Pool for unified identity. (4) Create shared AWS Config rules for security compliance. (5) Implement Dependabot or Renovate across all repositories.
+- **Contextual Annotations**:
+  > **Portfolio Context**: PORT-MOD-Q5 found no shared security posture (score 1). This provides context for SEC-Q3 (API auth), SEC-Q4 (identity), and SEC-Q7 (security pipeline) cross-cutting concerns for all services — **verify** that the centralized Cognito and security scanning initiatives in Phase 0 address these individual gaps.
+
+### Portfolio-Level Score Average
+
+| Question | Score |
+|----------|-------|
+| PORT-MOD-Q1: IaC Standardization | 2 |
+| PORT-MOD-Q2: Shared Observability Platform | 1 |
+| PORT-MOD-Q3: Dependency Cycle Health | 4 |
+| PORT-MOD-Q4: Technology Diversity | 1 |
+| PORT-MOD-Q5: Shared Security Posture | 1 |
+| **Portfolio-Level Average** | **1.80** |
 
 ## Service-by-Service Summary
 
 | Service | Repo Type | Priority | Overall Score | INF | APP | DATA | SEC | OPS | Pathways Triggered | Phase |
 |---------|-----------|----------|---------------|-----|-----|------|-----|-----|--------------------|-------|
-| local-monolith | application | P0 | 1.29 | 1.00 | 1.17 | 2.00 | 1.29 | 1.00 | 4 of 7 | 1 |
-| MonoToMicroLegacy | application | P0 | 1.43 | 1.00 | 1.67 | 2.50 | 1.00 | 1.00 | 5 of 7 | 1 |
-| aws-microservices | application | P0 | 2.24 | 2.64 | 3.00 | 3.00 | 1.57 | 1.00 | 2 of 7 | 2 |
-| books-api | application | P1 | 2.64 | 3.00 | 2.50 | 2.75 | 2.86 | 2.11 | 1 of 7 | 3 |
-| eks-saas-gitops | infrastructure-only | P1 | 2.66 | 3.18 | N/A | 4.00 | 2.14 | 1.33 | 0 of 7 | 1 |
+| unishop-monolith | application | P0 | 1.40 | 1.00 | 1.50 | 2.50 | 1.00 | 1.00 | 5 of 7 | 1 |
+| local-monolith | application | P0 | 1.90 | 2.55 | 1.33 | 2.50 | 2.00 | 1.11 | 3 of 7 | 2 |
+| aws-microservices | application | P0 | 2.27 | 2.64 | 3.00 | 3.00 | 1.71 | 1.00 | 2 of 7 | 2 |
+| eks-saas-gitops | infrastructure-only | P1 | 2.49 | 3.00 | N/A | 4.00 | 1.86 | 1.11 | 1 of 7 | 1 |
+| books-api | application | P1 | 2.71 | 2.82 | 2.83 | 2.75 | 2.71 | 2.44 | 1 of 7 | 3 |
 
 ### Individual Service Details
 
-#### local-monolith
+#### unishop-monolith
 
-- **Overall Score**: 1.29 / 4.0
+- **Overall Score**: 1.40 / 4.0
 - **Repository Type**: application
 - **Priority**: P0
-- **Assessment Date**: 2026-04-15
+- **Assessment Date**: 2026-04-17
 - **Category Scores**:
   - Infrastructure & DevOps: 1.00
-  - Application Architecture: 1.17
-  - Data Platform: 2.00
-  - Security Baseline: 1.29
-  - Operations & Observability: 1.00
-- **Top Gaps**:
-  - INF-Q10: score 1 — Zero IaC, all infrastructure manually defined in docker-compose.yml
-  - INF-Q11: score 1 — No CI/CD pipeline, only manual deploy.sh script
-  - APP-Q2: score 1 — Entire application in single index.php (~2000+ lines)
-- **Triggered Pathways**: Move to Cloud Native, Move to Managed Databases, Move to Modern DevOps, Move to AI
-- **Key Recommendations**:
-  - Containerize and deploy to EKS (preferred) using existing Dockerfile
-  - Migrate self-managed MySQL to Aurora MySQL (preferred) via DMS
-  - Adopt Terraform (preferred) for all infrastructure
-- **Depends On**: eks-saas-gitops (shared_infra — EKS cluster)
-- **Depended On By**: aws-microservices (sync — legacy product data)
-- **Blast Radius**: 20%
-- **Roadmap Phase**: Phase 1 — Quick Wins
-
-#### MonoToMicroLegacy (unishop-monolith)
-
-- **Overall Score**: 1.43 / 4.0
-- **Repository Type**: application
-- **Priority**: P0
-- **Assessment Date**: 2026-04-15
-- **Category Scores**:
-  - Infrastructure & DevOps: 1.00
-  - Application Architecture: 1.67
+  - Application Architecture: 1.50
   - Data Platform: 2.50
   - Security Baseline: 1.00
   - Operations & Observability: 1.00
 - **Top Gaps**:
-  - INF-Q10: score 1 — Zero IaC, 100% ClickOps
-  - INF-Q11: score 1 — No CI/CD pipeline, local Gradle build only
+  - INF-Q10: score 1 — Zero IaC, all infrastructure manually created (ClickOps)
+  - INF-Q11: score 1 — No CI/CD pipeline, all deployments manual
   - SEC-Q5: score 1 — Database credentials hardcoded in plaintext in application.properties
 - **Triggered Pathways**: Move to Cloud Native, Move to Containers, Move to Managed Databases, Move to Modern DevOps, Move to AI
 - **Key Recommendations**:
-  - Create Dockerfile (missing) and containerize on EKS (preferred)
-  - Migrate self-managed MySQL to Aurora MySQL (preferred) via DMS
-  - Immediately remediate hardcoded credentials — migrate to Secrets Manager
-- **Depends On**: eks-saas-gitops (shared_infra — EKS cluster)
-- **Depended On By**: None (leaf service)
+  - Rotate compromised credentials immediately
+  - Create Terraform IaC and CI/CD pipeline from scratch
+  - Containerize on EKS and migrate MySQL to Aurora
+- **Depends On**: eks-saas-gitops (EKS platform)
+- **Depended On By**: Agent integration (order/return data)
 - **Blast Radius**: 0%
 - **Roadmap Phase**: Phase 1 — Quick Wins
 
-#### aws-microservices
+#### local-monolith
 
-- **Overall Score**: 2.24 / 4.0
+- **Overall Score**: 1.90 / 4.0
 - **Repository Type**: application
 - **Priority**: P0
-- **Assessment Date**: 2026-04-15
+- **Assessment Date**: 2025-07-17
+- **Category Scores**:
+  - Infrastructure & DevOps: 2.55
+  - Application Architecture: 1.33
+  - Data Platform: 2.50
+  - Security Baseline: 2.00
+  - Operations & Observability: 1.11
+- **Top Gaps**:
+  - APP-Q2: score 1 — Tightly-coupled monolith, all business logic in single index.php
+  - INF-Q11: score 1 — No CI/CD pipeline, manual docker-compose deployment
+  - OPS-Q1–Q8: score 1 — Complete absence of operational practices
+- **Triggered Pathways**: Move to Cloud Native, Move to Modern DevOps, Move to AI
+- **Key Recommendations**:
+  - Create CI/CD pipeline and migrate IaC to Terraform
+  - Begin Strangler Fig decomposition, extract Inventory Service first
+  - Add observability stack (X-Ray, CloudWatch, alerting)
+- **Depends On**: eks-saas-gitops (EKS platform for decomposed services)
+- **Depended On By**: Agent restocking feature (inventory API)
+- **Blast Radius**: 0%
+- **Roadmap Phase**: Phase 2 — Foundation
+
+#### aws-microservices
+
+- **Overall Score**: 2.27 / 4.0
+- **Repository Type**: application
+- **Priority**: P0
+- **Assessment Date**: 2026-04-17
 - **Category Scores**:
   - Infrastructure & DevOps: 2.64
   - Application Architecture: 3.00
   - Data Platform: 3.00
-  - Security Baseline: 1.57
+  - Security Baseline: 1.71
   - Operations & Observability: 1.00
 - **Top Gaps**:
-  - INF-Q11: score 1 — No CI/CD pipeline, all deployments are manual cdk deploy
-  - SEC-Q3: score 1 — All 3 API Gateway endpoints completely open with no authentication
-  - INF-Q8: score 1 — DynamoDB PITR not enabled; removalPolicy: DESTROY on all tables
+  - INF-Q11: score 1 — No CI/CD pipeline, manual `cdk deploy`
+  - SEC-Q3: score 1 — No authentication on any API Gateway endpoint
+  - OPS-Q1–Q9: score 1 — Zero observability across all operations questions
 - **Triggered Pathways**: Move to Modern DevOps, Move to AI
 - **Key Recommendations**:
-  - Implement CI/CD pipeline immediately (avoid manual deployments per preferences)
-  - Add API Gateway authentication (Cognito authorizer) before agent integration
-  - Enable DynamoDB PITR and change removal policy to RETAIN
-- **Depends On**: local-monolith (sync — legacy product data), books-api (async — EventBridge events, circular dependency)
-- **Depended On By**: books-api (sync — catalog data REST query, circular dependency)
+  - Create CI/CD pipeline (CDK Pipelines or GitHub Actions)
+  - Add Cognito authorizer to all API Gateway endpoints
+  - Upgrade Lambda runtime from Node.js 14 to 20+
+- **Depends On**: None (independent serverless stack)
+- **Depended On By**: Agent order status and return processing
 - **Blast Radius**: 40%
 - **Roadmap Phase**: Phase 2 — Foundation
 
-#### books-api
-
-- **Overall Score**: 2.64 / 4.0
-- **Repository Type**: application
-- **Priority**: P1
-- **Assessment Date**: 2026-04-15
-- **Category Scores**:
-  - Infrastructure & DevOps: 3.00
-  - Application Architecture: 2.50
-  - Data Platform: 2.75
-  - Security Baseline: 2.86
-  - Operations & Observability: 2.11
-- **Top Gaps**:
-  - INF-Q3: score 1 — No workflow orchestration service
-  - INF-Q4: score 1 — No messaging or streaming infrastructure
-  - APP-Q5: score 1 — No API versioning strategy
-- **Triggered Pathways**: Move to AI
-- **Key Recommendations**:
-  - Add API versioning (/v1/books) for stable agent tool interfaces
-  - Add EventBridge (preferred) integration for BookCreated events
-  - Add security scanning to CI/CD pipeline
-- **Depends On**: aws-microservices (sync — catalog data REST query, circular dependency)
-- **Depended On By**: aws-microservices (async — EventBridge events, circular dependency)
-- **Blast Radius**: 40%
-- **Roadmap Phase**: Phase 3 — Advanced
-
 #### eks-saas-gitops
 
-- **Overall Score**: 2.66 / 4.0
+- **Overall Score**: 2.49 / 4.0
 - **Repository Type**: infrastructure-only
 - **Priority**: P1
 - **Assessment Date**: 2025-07-17
 - **Category Scores**:
-  - Infrastructure & DevOps: 3.18
+  - Infrastructure & DevOps: 3.00
   - Application Architecture: N/A
   - Data Platform: 4.00
-  - Security Baseline: 2.14
-  - Operations & Observability: 1.33
+  - Security Baseline: 1.86
+  - Operations & Observability: 1.11
 - **Top Gaps**:
-  - SEC-Q1: score 1 — No CloudTrail or audit logging defined in IaC
-  - OPS-Q1: score 1 — No distributed tracing instrumentation
-  - OPS-Q2: score 1 — No SLO definitions or error budget tracking
-- **Triggered Pathways**: None (0 of 7)
+  - SEC-Q3: score 1 — Argo Workflows exposed internet-facing with no authentication and full cluster admin
+  - SEC-Q1: score 1 — No CloudTrail or audit logging
+  - OPS-Q1: score 1 — No distributed tracing across the platform
+- **Triggered Pathways**: Move to Modern DevOps
 - **Key Recommendations**:
-  - Enable EKS control plane audit logging and deploy CloudTrail
-  - Deploy ADOT DaemonSet for distributed tracing
-  - Harden Argo Workflows authentication (replace --auth-mode=server)
+  - Fix Argo Workflows auth immediately (critical security risk)
+  - Switch management UIs to internal LoadBalancers
+  - Add Terraform CI pipeline and deploy ADOT for tracing
 - **Depends On**: None (foundation service)
-- **Depended On By**: local-monolith (shared_infra), unishop-monolith (shared_infra)
-- **Blast Radius**: 80%
-- **Roadmap Phase**: Phase 1 — Quick Wins (Foundation Service)
+- **Depended On By**: unishop-monolith, local-monolith (EKS compute platform)
+- **Blast Radius**: 60%
+- **Roadmap Phase**: Phase 1 — Quick Wins
+
+#### books-api
+
+- **Overall Score**: 2.71 / 4.0
+- **Repository Type**: application
+- **Priority**: P1
+- **Assessment Date**: 2026-04-17
+- **Category Scores**:
+  - Infrastructure & DevOps: 2.82
+  - Application Architecture: 2.83
+  - Data Platform: 2.75
+  - Security Baseline: 2.71
+  - Operations & Observability: 2.44
+- **Top Gaps**:
+  - APP-Q5: score 1 — No API versioning strategy
+  - INF-Q4: score 1 — No async messaging
+  - SEC-Q7: score 1 — No security scanning in CI/CD pipeline
+- **Triggered Pathways**: Move to AI
+- **Key Recommendations**:
+  - Add API versioning and generate OpenAPI spec for Bedrock Agent
+  - Add EventBridge events for BookCreated
+  - Add npm audit to CI/CD pipeline
+- **Depends On**: None (independent)
+- **Depended On By**: Agent product lookups
+- **Blast Radius**: 0%
+- **Roadmap Phase**: Phase 3 — Advanced
 
 ## Assessment Inventory
 
 | # | Service | Report File | Assessment Date | Repo Type | Overall Score |
 |---|---------|-------------|-----------------|-----------|---------------|
-| 1 | local-monolith | monolith/monolith-mod-report.md | 2026-04-15 | application | 1.29 |
-| 2 | MonoToMicroLegacy | services/unishop-monolith-to-microservices/MonoToMicroLegacy/MonoToMicroLegacy-mod-report.md | 2026-04-15 | application | 1.43 |
-| 3 | aws-microservices | services/aws-microservices/aws-microservices-mod-report.md | 2026-04-15 | application | 2.24 |
-| 4 | books-api | services/books-api/books-api-mod-report.md | 2026-04-15 | application | 2.64 |
-| 5 | eks-saas-gitops | services/eks-saas-gitops/eks-saas-gitops-mod-report.md | 2025-07-17 | infrastructure-only | 2.66 |
-
----
-
-*Portfolio Modernization Readiness Assessment Report generated on 2026-04-15. Assessment covers 5 services in the ecommerce-platform-v2 portfolio.*
+| 1 | local-monolith | ./monolith/monolith-mod-report.md | 2025-07-17 | application | 1.90 |
+| 2 | unishop-monolith | ./services/unishop-monolith-to-microservices/MonoToMicroLegacy/MonoToMicroLegacy-mod-report.md | 2026-04-17 | application | 1.40 |
+| 3 | aws-microservices | ./services/aws-microservices/aws-microservices-mod-report.md | 2026-04-17 | application | 2.27 |
+| 4 | books-api | ./services/books-api/books-api-mod-report.md | 2026-04-17 | application | 2.71 |
+| 5 | eks-saas-gitops | ./services/eks-saas-gitops/eks-saas-gitops-mod-report.md | 2025-07-17 | infrastructure-only | 2.49 |

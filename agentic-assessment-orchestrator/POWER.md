@@ -33,7 +33,7 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 - Routes by `assessment_type`:
   - `agentic-readiness` → generates ARA ATX configs per repo, spawns ARA subagents, then runs Portfolio ARA TD
   - `modernization` → generates MOD ATX configs per repo, spawns MOD subagents, then runs Portfolio MOD TD
-  - `full` → generates both ARA and MOD ATX configs per repo (2 subagents per repo), then runs both portfolio TDs
+  - `full` → generates both ARA and MOD ATX configs per repo (2 subagents per repo), then runs both portfolio TDs, then runs Bridge TD (if `portfolio_bridge` is configured)
 - ARA ATX configs contain: `repo_type`, `service_archetype` (if provided or auto-detected), `agent_scope`, `context`, `priority`, `tags` — NO preferences
 - MOD ATX configs contain: `repo_type`, `context`, `priority`, `tags`, merged `preferences` (global + per-repo with conflict resolution) — NO agent_scope
 - Spawns parallel subagents to run `atx custom def exec -n <td_name> -g file://<generated-config> -x -t` concurrently
@@ -42,7 +42,8 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
   - Portfolio ARA: `context`, service inventory, `dependency_overrides`
   - Portfolio MOD: `context`, `preferences`, service inventory, `dependency_overrides`
 - Runs portfolio TDs to generate aggregated reports
-- Consolidates ARA reports into `agentic-readiness-assessment/` folder and MOD reports into `modernization-assessment/` folder at the portfolio root — cleans up temporary `.atx-config-*.yaml` files
+- When `assessment_type: full` and `portfolio_bridge` is configured: runs the Bridge TD after both portfolio TDs complete, passing both portfolio report paths as input. If the Bridge TD fails, logs the failure and reports to the user without affecting the completed ARA/MOD reports. If `portfolio_bridge` is not configured, skips the bridge step and logs a warning: "portfolio_bridge not configured — bridge report will not be generated"
+- Consolidates ARA reports into `agentic-readiness-assessment/` folder, MOD reports into `modernization-assessment/` folder, and the bridge report (if generated) at the portfolio root — cleans up temporary `.atx-config-*.yaml` files
 
 > All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) flags since assessments run at scale without human intervention.
 
@@ -61,6 +62,7 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 - Parallel subagent execution per repo for fast portfolio-wide assessment
 - Cross-cutting analysis across the portfolio (blockers for ARA, score-based concerns for MOD)
 - Configurable preferences to steer MOD technology recommendations
+- Bridge report cross-referencing ARA and MOD findings for unified remediation planning (full assessment only, when `portfolio_bridge` is configured)
 - Consolidated reports organized by assessment type
 
 **When to Use:**
@@ -91,6 +93,7 @@ Kiro orchestrates the assessment workflow, but relies on **AWS Transform CLI** t
      modernization: "your-mod-td-name"
      portfolio_agentic_readiness: "your-portfolio-ara-td-name"
      portfolio_modernization: "your-portfolio-mod-td-name"
+     portfolio_bridge: "your-bridge-td-name"  # optional — only used when assessment_type is "full"
    ```
    Verify they exist:
    ```bash
@@ -120,6 +123,7 @@ transformation_definitions:
   modernization: "modernization-assessment"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  portfolio_bridge: "portfolio-agentic-modernization-bridge"  # optional — bridge TD for full assessments
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
@@ -159,11 +163,21 @@ Kiro will:
 6. Route by `assessment_type`:
    - **`agentic-readiness`**: For each repo, generate an ARA ATX config (repo_type, agent_scope, context, priority, tags — NO preferences). Spawn parallel subagents running the ARA TD. After completion, generate Portfolio ARA ATX config (context, service inventory, dependency_overrides) and run Portfolio ARA TD.
    - **`modernization`**: For each repo, generate a MOD ATX config (repo_type, context, priority, tags, merged preferences — NO agent_scope). Spawn parallel subagents running the MOD TD. After completion, generate Portfolio MOD ATX config (context, preferences, service inventory, dependency_overrides) and run Portfolio MOD TD.
-   - **`full`**: Generate both ARA and MOD configs per repo (2 subagents per repo). Run both paths in parallel. After completion, run both portfolio TDs.
+   - **`full`**: Generate both ARA and MOD configs per repo (2 subagents per repo). Run both paths in parallel. After completion, run both portfolio TDs. Then, if `portfolio_bridge` is configured, run the Bridge TD (see step 7.5 below).
 7. Consolidate reports:
    - ARA reports → `agentic-readiness-assessment/` folder
    - MOD reports → `modernization-assessment/` folder
+   - Bridge report (if generated) → portfolio root as `{portfolio_name}-bridge-report.md`
    - Clean up temporary `.atx-config-*.yaml` files
+
+**Step 7.5 — Bridge TD (full assessment only):**
+
+When `assessment_type: full` and `portfolio_bridge` is configured in `transformation_definitions`:
+1. After both Portfolio ARA TD and Portfolio MOD TD complete, generate a bridge ATX config with both portfolio report paths
+2. Run the Bridge TD to produce a unified remediation view cross-referencing both portfolio reports
+3. The bridge report is saved at the portfolio root as `{portfolio_name}-bridge-report.md`
+4. **Failure isolation**: If the Bridge TD fails, Kiro logs the failure and reports it to the user, but does NOT affect the already-completed ARA and MOD portfolio reports. The assessment is considered successful — the bridge is supplementary.
+5. If `portfolio_bridge` is not configured, Kiro skips the bridge step and logs a warning: "portfolio_bridge not configured — bridge report will not be generated"
 
 ### 3. Or Run Manually Step by Step
 
@@ -249,6 +263,24 @@ additionalPlanContext: |
 
 > Always use `-x` (non-interactive) and `-t` (trust all tools) when running at scale. Note: these commands are long-running (5–15 min each). If a command times out, check for the output report file before assuming failure.
 
+**Bridge TD (after both portfolio assessments, full assessment only):**
+
+When running a full assessment manually, run the Bridge TD after both portfolio reports are generated:
+
+```bash
+atx custom def exec -n <your-bridge-td-name> -p . -g file://atx-config-bridge.yaml -x -t
+```
+
+Where `atx-config-bridge.yaml` contains the bridge `additionalPlanContext`:
+```yaml
+additionalPlanContext: |
+  portfolio_ara_report_path: "agentic-readiness-assessment/my-platform-portfolio-ara-report.md"
+  portfolio_mod_report_path: "modernization-assessment/my-platform-portfolio-mod-report.md"
+  portfolio_name: "my-platform"
+```
+
+The bridge report is saved at the portfolio root as `{portfolio_name}-bridge-report.md`.
+
 ---
 
 ## Portfolio Configuration
@@ -289,6 +321,7 @@ transformation_definitions:
   modernization: "modernization-assessment"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  portfolio_bridge: "portfolio-agentic-modernization-bridge"  # optional — bridge TD for full assessments
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
@@ -471,6 +504,7 @@ The full configuration schema is available in `portfolio-config.schema.json`. Ke
   - `modernization` (required): Name for per-repository MOD assessments
   - `portfolio_agentic_readiness` (required): Name for portfolio ARA aggregation
   - `portfolio_modernization` (required): Name for portfolio MOD aggregation
+  - `portfolio_bridge` (optional): Name for the bridge TD that cross-references ARA and MOD portfolio reports. Only used when `assessment_type` is `full`. When not configured and `assessment_type` is `full`, the orchestrator skips the bridge step and logs a warning.
 - **preferences** (optional): Global technology/pattern preferences (MOD-only — ignored for ARA configs)
   - `prefer` (optional): String array of preferred technologies/patterns
   - `avoid` (optional): String array of technologies/patterns to avoid
@@ -727,9 +761,42 @@ portfolio-config.yaml
 └─────────┬───────────┘
           │
           ▼
+┌─────────────────────────────────────────────────────┐
+│  8.5 Bridge TD (full assessment only)                │
+│                                                       │
+│  IF assessment_type == "full"                         │
+│  AND portfolio_bridge is configured:                  │
+│                                                       │
+│  ┌──────────────────┐   ┌──────────────────┐          │
+│  │ Portfolio ARA     │   │ Portfolio MOD     │          │
+│  │ report            │   │ report            │          │
+│  └────────┬─────────┘   └────────┬─────────┘          │
+│           │                      │                     │
+│           └──────────┬───────────┘                     │
+│                      ▼                                 │
+│           ┌──────────────────┐                         │
+│           │ Bridge TD        │                         │
+│           │ (cross-reference │                         │
+│           │  ARA + MOD)      │                         │
+│           └────────┬─────────┘                         │
+│                    ▼                                   │
+│           {portfolio}-bridge-report.md                  │
+│           at portfolio root                            │
+│                                                       │
+│  Failure isolation: if Bridge TD fails,               │
+│  log failure, report to user, do NOT affect            │
+│  completed ARA/MOD reports.                            │
+│                                                       │
+│  If portfolio_bridge not configured → skip with        │
+│  warning: "portfolio_bridge not configured —            │
+│  bridge report will not be generated"                  │
+└─────────────────────┬───────────────────────────────┘
+          │
+          ▼
 ┌─────────────────────┐
 │  9. Consolidate      │  ARA reports → agentic-readiness-assessment/
 │     reports          │  MOD reports → modernization-assessment/
+│                      │  Bridge report → portfolio root (if generated)
 │                      │  Clean up temp .atx-config-*.yaml files
 └─────────┬───────────┘
           │
@@ -899,9 +966,56 @@ Portfolio MOD generates:
 modernization-assessment/{portfolio-name}-portfolio-mod-report.md
 ```
 
+### Step 2.5: Run Bridge TD (Full Assessment Only)
+
+When `assessment_type: full` and `portfolio_bridge` is configured in `transformation_definitions`, Kiro runs the Bridge TD as a final step after both portfolio TDs complete. The Bridge TD cross-references the portfolio ARA and MOD reports to produce a unified remediation view.
+
+**When the bridge step runs:**
+- `assessment_type` must be `full`
+- `portfolio_bridge` must be configured in `transformation_definitions`
+- Both Portfolio ARA TD and Portfolio MOD TD must have completed
+
+**When the bridge step is skipped:**
+- `assessment_type` is `agentic-readiness` or `modernization` → bridge step is not applicable
+- `assessment_type` is `full` but `portfolio_bridge` is not configured → Kiro skips the bridge step and logs a warning: "portfolio_bridge not configured — bridge report will not be generated"
+
+**Generated Bridge ATX config example** (`.atx-config-bridge.yaml`):
+```yaml
+additionalPlanContext: |
+  portfolio_ara_report_path: "agentic-readiness-assessment/ecommerce-platform-portfolio-ara-report.md"
+  portfolio_mod_report_path: "modernization-assessment/ecommerce-platform-portfolio-mod-report.md"
+  portfolio_name: "ecommerce-platform"
+```
+
+**How Kiro generates the Bridge `additionalPlanContext`:**
+1. Set `portfolio_ara_report_path` to the path of the portfolio ARA report: `agentic-readiness-assessment/{portfolio_name}-portfolio-ara-report.md`
+2. Set `portfolio_mod_report_path` to the path of the portfolio MOD report: `modernization-assessment/{portfolio_name}-portfolio-mod-report.md`
+3. Set `portfolio_name` from the portfolio config
+
+```bash
+# Bridge TD (using transformation_definitions.portfolio_bridge):
+atx custom def exec -n <portfolio_bridge> -p . -g file://.atx-config-bridge.yaml -x -t
+```
+
+Bridge TD generates:
+```
+{portfolio_name}-bridge-report.md  (at portfolio root)
+```
+
+**Failure Isolation:**
+
+The bridge report is supplementary — it enhances the assessment but is not required for the core ARA and MOD results. If the Bridge TD fails:
+
+1. Kiro logs the failure with the error message
+2. Kiro reports the failure to the user (e.g., "Bridge TD failed: {error}. The ARA and MOD portfolio reports are unaffected.")
+3. The already-completed ARA and MOD portfolio reports are NOT affected
+4. The overall assessment is considered successful — the bridge is an optional enhancement
+
+> **Note:** If one of the portfolio TDs failed (so only one portfolio report exists), the Bridge TD will detect the missing report and terminate with a clear error identifying which report is missing. This is expected behavior — the bridge requires both portfolio reports as input.
+
 ### Step 3: Consolidate Reports
 
-After the portfolio assessments complete, Kiro consolidates all reports into organized directories at the portfolio root for easy access and review.
+After the portfolio assessments (and bridge TD, if applicable) complete, Kiro consolidates all reports into organized directories at the portfolio root for easy access and review.
 
 **What Kiro does:**
 
@@ -914,6 +1028,10 @@ For `modernization` or `full` assessment_type:
 1. Creates `modernization-assessment/` at the portfolio root (if it doesn't already exist)
 2. Copies each individual MOD report from `{repo}/modernization-assessment/{project-name}-mod-report.md` into the root `modernization-assessment/` folder
 3. The portfolio MOD report is already at `modernization-assessment/{portfolio-name}-portfolio-mod-report.md`
+
+For `full` assessment_type with bridge report:
+1. The bridge report is already at the portfolio root as `{portfolio-name}-bridge-report.md`
+2. No additional consolidation needed for the bridge report
 
 Finally:
 4. Cleans up temporary `.atx-config-*.yaml` files generated during the assessment
@@ -931,6 +1049,8 @@ modernization-assessment/
 ├── service-b-mod-report.md
 ├── service-c-mod-report.md
 └── my-platform-portfolio-mod-report.md
+
+my-platform-bridge-report.md  ← Bridge report (if portfolio_bridge configured)
 ```
 
 ### Step 4: Review Portfolio Reports
@@ -939,6 +1059,7 @@ Reports are generated by the TDs — see the individual TD documentation for ful
 
 - **ARA Portfolio Report**: Readiness distribution, cross-cutting blockers/risks, service-by-service summary
 - **MOD Portfolio Report**: Score overview, cross-cutting concerns, dependency-aware roadmap, pathway aggregation, service-by-service summary
+- **Bridge Report** (full assessment only): Shared remediation mapping, agentic readiness delta, MOD readiness gate, unified remediation sequence, shared findings deduplication
 
 ---
 
@@ -965,11 +1086,14 @@ modernization-assessment/
 ├── {service-a}-mod-report.md
 ├── {service-b}-mod-report.md
 └── {portfolio-name}-portfolio-mod-report.md
+
+{portfolio-name}-bridge-report.md  ← Bridge report (full assessment only, if portfolio_bridge configured)
 ```
 
 Individual reports (before consolidation) are generated at:
 - ARA: `{repo}/agentic-readiness-assessment/{project-name}-ara-report.md`
 - MOD: `{repo}/modernization-assessment/{project-name}-mod-report.md`
+- Bridge: `{portfolio-name}-bridge-report.md` at portfolio root (no consolidation needed)
 
 ## Example Usage
 
@@ -1069,6 +1193,7 @@ transformation_definitions:
   modernization: "modernization-assessment"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  portfolio_bridge: "portfolio-agentic-modernization-bridge"
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
@@ -1151,7 +1276,7 @@ repositories:
 2. Check required fields:
    - `portfolio_name` is a non-empty string
    - `assessment_type` is one of: `agentic-readiness`, `modernization`, `full`
-   - `transformation_definitions` has all 4 TD names: `agentic_readiness`, `modernization`, `portfolio_agentic_readiness`, `portfolio_modernization`
+   - `transformation_definitions` has all 4 TD names: `agentic_readiness`, `modernization`, `portfolio_agentic_readiness`, `portfolio_modernization` (plus optional `portfolio_bridge` for full assessments)
    - Each repository has `name` and `path`
    - Paths are relative to portfolio root
 3. Check optional field formats:
