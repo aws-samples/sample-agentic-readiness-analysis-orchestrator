@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Portfolio Assessment Configuration Schema (V2)",
-  "description": "Simplified configuration schema for Goal-Driven AWS Transform Portfolio Agentic Readiness Assessment. This is a breaking change from V1 — old configs require migration.",
+  "description": "Configuration schema for the V2 two-assessment architecture. Supports agentic-readiness (ARA), modernization (MOD), or full (both) assessment types. Breaking change from V1 — old configs require migration (goal → assessment_type, goal_context → context, deployment-cicd → deployment-config).",
   "type": "object",
-  "required": ["portfolio_name", "goal", "transformation_definitions", "repositories"],
+  "required": ["portfolio_name", "assessment_type", "transformation_definitions", "repositories"],
   "additionalProperties": false,
   "properties": {
     "portfolio_name": {
@@ -11,44 +11,67 @@
       "description": "Name of the portfolio being assessed",
       "examples": ["ecommerce-platform", "payment-services", "customer-portal"]
     },
-    "goal": {
+    "assessment_type": {
       "type": "string",
-      "description": "Modernization objective that acts as a priority lens over the assessment. Determines phase names, pathway alignment, criteria prioritization, and report framing.",
+      "description": "Determines which assessment TDs to run. 'agentic-readiness' runs ARA only, 'modernization' runs MOD only, 'full' runs both in parallel.",
       "enum": [
         "agentic-readiness",
-        "enable-agentic-use-case",
-        "cloud-native-modernization",
-        "cost-optimization"
+        "modernization",
+        "full"
       ]
     },
-    "goal_context": {
+    "context": {
       "type": "string",
-      "description": "Optional free-text context for scoping recommendations. Influences Quick Agent Wins suggestions, portfolio service prioritization, and recommendation framing.",
+      "description": "Optional free-text context for framing recommendations. Passed to all TDs (ARA, MOD, Portfolio ARA, Portfolio MOD) as general framing context.",
       "examples": [
         "Building a customer support agent for order and inventory data",
-        "Migrating off Oracle to reduce licensing costs by 60%"
+        "Migrating off Oracle to reduce licensing costs by 60%",
+        "Evaluating portfolio for both agentic integration and cloud modernization"
+      ]
+    },
+    "agent_scope": {
+      "type": "string",
+      "description": "Scope of agent integration — affects conditional BLOCKER evaluation in ARA. ARA-only: the Power passes this only to ARA ATX configs and ignores it for MOD configs. Defaults to 'read-only' if not provided.",
+      "enum": [
+        "read-only",
+        "write-enabled"
       ]
     },
     "transformation_definitions": {
       "type": "object",
-      "description": "Names of the AWS Transform custom transformation definitions to use. These must match the names published to your AWS Transform registry.",
-      "required": ["individual_assessment", "portfolio_assessment"],
+      "description": "Names of the AWS Transform custom transformation definitions. The four core TDs (agentic_readiness, modernization, portfolio_agentic_readiness, portfolio_modernization) are required. The optional portfolio_bridge TD cross-references ARA and MOD portfolio reports when assessment_type is 'full'.",
+      "required": ["agentic_readiness", "modernization", "portfolio_agentic_readiness", "portfolio_modernization"],
       "properties": {
-        "individual_assessment": {
+        "agentic_readiness": {
           "type": "string",
-          "description": "Transformation definition name for individual repository assessments",
-          "examples": ["individual-aws-agentic-assessment", "my-team-agentic-assessment"]
+          "description": "Transformation definition name for individual ARA (Agentic Readiness Assessment) per repo",
+          "examples": ["agentic-readiness-assessment", "my-team-ara"]
         },
-        "portfolio_assessment": {
+        "modernization": {
           "type": "string",
-          "description": "Transformation definition name for portfolio-level aggregation",
-          "examples": ["portfolio-agentic-assessment", "my-team-portfolio-assessment"]
+          "description": "Transformation definition name for individual MOD (Modernization Readiness Assessment) per repo",
+          "examples": ["modernization-assessment", "my-team-mod"]
+        },
+        "portfolio_agentic_readiness": {
+          "type": "string",
+          "description": "Transformation definition name for portfolio-level ARA aggregation",
+          "examples": ["portfolio-agentic-readiness", "my-team-portfolio-ara"]
+        },
+        "portfolio_modernization": {
+          "type": "string",
+          "description": "Transformation definition name for portfolio-level MOD aggregation",
+          "examples": ["portfolio-modernization", "my-team-portfolio-mod"]
+        },
+        "portfolio_bridge": {
+          "type": "string",
+          "description": "Transformation definition name for the bridge TD that cross-references ARA and MOD portfolio reports. Only used when assessment_type is 'full'.",
+          "examples": ["portfolio-agentic-modernization-bridge"]
         }
       }
     },
     "preferences": {
       "type": "object",
-      "description": "Global transformation preferences using flat prefer/avoid arrays. Replaces all V1 nested constraint objects. Per-repo preferences merge with (and can override) these global preferences.",
+      "description": "Global transformation preferences using flat prefer/avoid arrays. MOD-only: the Power passes these only to MOD ATX configs (individual and portfolio) and ignores them for ARA configs. Per-repo preferences merge with (and can override) these global preferences.",
       "properties": {
         "prefer": {
           "type": "array",
@@ -96,7 +119,7 @@
           },
           "preferences": {
             "type": "object",
-            "description": "Per-repo transformation preferences. Merged with global preferences — per-repo avoid overrides global prefer for conflicts.",
+            "description": "Per-repo transformation preferences. MOD-only. Merged with global preferences — per-repo avoid overrides global prefer for conflicts.",
             "properties": {
               "prefer": {
                 "type": "array",
@@ -117,7 +140,7 @@
           "repo_type": {
             "type": "string",
             "description": "Optional override for repository type classification. If not provided, the agent auto-detects during discovery.",
-            "enum": ["application", "infrastructure-only", "deployment-cicd", "monorepo", "library"]
+            "enum": ["application", "infrastructure-only", "deployment-config", "monorepo", "library"]
           },
           "tags": {
             "type": "array",
@@ -137,8 +160,12 @@
           },
           "report_path": {
             "type": "string",
-            "description": "Optional explicit path to agentic-readiness-report.md (if not in standard location)",
-            "default": "{path}/agentic-readiness-report.md"
+            "description": "Optional explicit path to the assessment report (if not in standard location)"
+          },
+          "agent_scope": {
+            "type": "string",
+            "description": "Optional per-repo override for agent scope. ARA-only. If set, overrides the portfolio-level agent_scope for this repo. Use to set infrastructure-only repos to read-only while application repos are write-enabled.",
+            "enum": ["read-only", "write-enabled"]
           }
         }
       }
