@@ -115,7 +115,7 @@ Scan the target directory structure to find all individual ARA reports.
 - Verify each file follows the expected ARA report structure:
   - Contains a "Readiness Profile" section
   - Contains BLOCKER/RISK/INFO summary counts
-  - Contains detailed findings with question IDs (API-Q1 through ENG-Q6)
+  - Contains detailed findings with question IDs (API-Q1 through ENG-Q5)
 - Exclude files that don't match the expected ARA report structure — log a warning for each excluded file
 - Log warnings for inaccessible or malformed files
 - **Terminate with a clear error if fewer than 2 valid ARA reports are found**
@@ -177,7 +177,7 @@ When a question has severity N/A:
 
 #### 2.4 Conditional BLOCKER Tracking
 
-For the 4 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q7, DATA-Q2), record:
+For the 4 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2), record:
 - The resolved severity (BLOCKER, RISK, or INFO — depending on the service's agent_scope)
 - The agent_scope that determined the resolution
 
@@ -325,7 +325,7 @@ For each of the 43 ARA question IDs:
 **Algorithm:**
 
 ```
-for each question_id in all_49_questions:
+for each question_id in all_43_questions:
     blocker_services = []
     applicable_services = []
     
@@ -356,7 +356,7 @@ For each cross-cutting BLOCKER, record:
 
 #### 4.3 Conditional BLOCKER Handling in Cross-Cutting Analysis
 
-For conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q7, DATA-Q2):
+For conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2):
 - Only count a service as having a BLOCKER if the conditional resolved to BLOCKER for that service (i.e., agent_scope was "write-enabled")
 - Services where the conditional resolved to INFO or RISK (agent_scope was "read-only") do NOT count toward the cross-cutting BLOCKER threshold
 - Note in the output which services have write-enabled scope (and thus BLOCKER) vs. read-only scope (and thus INFO/RISK) for these questions
@@ -378,7 +378,7 @@ For each of the 43 ARA question IDs, determine the question's RISK tier (RISK-SA
 **Algorithm:**
 
 ```
-for each question_id in all_49_questions:
+for each question_id in all_43_questions:
     tier = get_risk_tier(question_id)  # RISK-SAFETY or RISK-QUALITY
     
     risk_services = []
@@ -401,7 +401,7 @@ for each question_id in all_49_questions:
 
 **RISK-QUALITY questions (15):** API-Q2, API-Q3, DATA-Q3, DATA-Q4, DATA-Q5, DISC-Q1, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, HITL-Q3
 
-Note: AUTH-Q7, STATE-Q1, and DATA-Q2 are conditional BLOCKER questions. When the conditional resolves to RISK (read-only scope), they resolve to RISK-SAFETY. Only count services where the resolved severity matches RISK-SAFETY for these questions.
+Note: AUTH-Q6, STATE-Q1, and DATA-Q2 are conditional BLOCKER questions. When the conditional resolves to RISK (read-only scope), they resolve to RISK-SAFETY. Only count services where the resolved severity matches RISK-SAFETY for these questions.
 
 #### 4b.2 Cross-Cutting RISK Output
 
@@ -503,7 +503,7 @@ For each cross-cutting BLOCKER:
   - **Critical** — Affects all or nearly all services, or affects foundation services with high fan-in
   - **High** — Affects majority of services
   - **Medium** — Affects a subset of services
-- **Dependencies** — Other cross-cutting BLOCKERs that should be resolved first (e.g., "Resolve AUTH-Q1 before AUTH-Q7 — you need machine identity before you can audit agent actions")
+- **Dependencies** — Other cross-cutting BLOCKERs that should be resolved first (e.g., "Resolve AUTH-Q1 before AUTH-Q6 — you need machine identity before you can audit agent actions")
 
 #### 6.2 Remediation Prioritization
 
@@ -1019,5 +1019,5 @@ Strictly follow these rules at all times:
 - **N/A exclusion**: Questions scored as N/A for a service do NOT count as gaps for that service in cross-cutting analysis. A question that is N/A for a service is excluded from BLOCKER and RISK counts for cross-cutting identification.
 - **Cross-cutting thresholds**: BLOCKERs require 2+ repos. RISKs require 3+ repos. Do not lower these thresholds.
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
-- **Conditional BLOCKER accuracy**: When counting cross-cutting BLOCKERs for conditional questions (API-Q4, STATE-Q1, AUTH-Q7, DATA-Q2), only count services where the conditional resolved to BLOCKER (write-enabled scope). Do not count services where it resolved to INFO/RISK (read-only scope).
+- **Conditional BLOCKER accuracy**: When counting cross-cutting BLOCKERs for conditional questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2), only count services where the conditional resolved to BLOCKER (write-enabled scope). Do not count services where it resolved to INFO/RISK (read-only scope).
 - **Report completeness**: The output report must contain all required sections: executive dashboard, cross-cutting BLOCKERs, cross-cutting RISKs, service dependency map, remediation guidance, agentic program recommendations, service-by-service summary, and assessment inventory.
