@@ -59,7 +59,7 @@ Extract the following fields from `additionalPlanContext`:
 |-------|------|----------|---------|-------------|
 | `context` | string | No | — | Free-text description of the portfolio (e.g., "E-commerce platform with 5 microservices planning cloud-native modernization"). Used to frame portfolio-level recommendations and roadmap guidance. |
 | `preferences` | object | No | — | Technology steering preferences with two arrays: `prefer` (technologies to favor in recommendations) and `avoid` (technologies to steer away from). Applied to portfolio-level technology recommendations, roadmap activities, and integration opportunity proposals. |
-| `service_inventory` | object[] | No | — | List of services in the portfolio with metadata (name, path, priority, repo_type, tags). Used to enrich the service-by-service summary and cross-reference with discovered reports. |
+| `service_inventory` | object[] | No | — | List of services in the portfolio with metadata (name, path, priority, repo_type, tags, service_archetype). Used to enrich the service-by-service summary and cross-reference with discovered reports. `service_archetype` (optional, applies only to `application` repos) is passed through to each per-service MOD TD invocation to calibrate architecture-sensitive questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4); if omitted, the service MOD TD auto-detects it. |
 | `dependency_overrides` | object[] | No | — | Explicit service dependency declarations. Each entry has: `source` (service name), `target` (service name), `type` (sync, async, shared_db, shared_infra), and `description`. Used to build the service dependency graph in Step 4. |
 
 **Example `additionalPlanContext`:**
@@ -75,11 +75,13 @@ additionalPlanContext: |
       path: "../order-service"
       priority: "P0"
       repo_type: "application"
+      service_archetype: "stateful-crud"
       tags: ["monolith", "php", "payment-critical"]
     - name: "catalog-service"
       path: "../catalog-service"
       priority: "P1"
       repo_type: "application"
+      service_archetype: "data-gateway"
     - name: "infra-modules"
       path: "../infra-modules"
       priority: "P2"
@@ -118,7 +120,7 @@ Record the resolved values from Steps 0.1–0.2 in the assessment context. They 
 
 - **`context`** → Used throughout the report to frame findings, recommendations, and roadmap guidance with portfolio-specific context. For example, if context mentions "legacy PHP e-commerce", recommendations reference the specific technology stack and business domain.
 - **`preferences`** → Used throughout the report to steer technology recommendations. When `prefer` contains values, recommendations favor those technologies where applicable (e.g., if `prefer: ["eks"]`, container recommendations reference EKS over ECS). When `avoid` contains values, recommendations steer away from those technologies (e.g., if `avoid: ["serverless"]`, recommendations do not suggest Lambda-based approaches). Preferences influence recommendation framing only — they do not change scores, N/A mappings, or pathway trigger logic.
-- **`service_inventory`** → Used to enrich service metadata (priority, repo_type, tags) and cross-reference with discovered reports.
+- **`service_inventory`** → Used to enrich service metadata (priority, repo_type, tags, service_archetype) and cross-reference with discovered reports. When a service entry includes `service_archetype`, that value is passed through to the per-service MOD TD invocation for scoring calibration on architecture-sensitive questions. When absent, each service MOD TD auto-detects its own archetype.
 - **`dependency_overrides`** → Used in Step 4 to construct the service dependency graph, and in Step 6 to generate the dependency-aware phased roadmap.
 
 

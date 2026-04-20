@@ -85,6 +85,7 @@ Extract the following fields from `additionalPlanContext`:
 | `priority` | enum | No | — | Repository priority within the portfolio. One of: `P0`, `P1`, `P2`. Recorded in report metadata. |
 | `tags` | string[] | No | — | User-defined tags for categorization (e.g., `["monolith", "php", "payment-critical"]`). Recorded in report metadata. |
 | `preferences` | object | No | — | Technology steering preferences with two arrays: `prefer` (technologies to favor in recommendations) and `avoid` (technologies to steer away from). Used to frame technology recommendations throughout the report. |
+| `service_archetype` | enum | No | auto-detected | Service archetype for scoring calibration on architecture-sensitive questions. One of: `stateless-utility`, `stateful-crud`, `orchestrator`, `data-gateway`, `event-processor`. If not provided, auto-detected in Step 1.5. Only applies when `repo_type` is `application`. |
 
 **Example `additionalPlanContext`:**
 
@@ -94,6 +95,7 @@ additionalPlanContext: |
   context: "Legacy PHP e-commerce app running on EC2 with MySQL"
   priority: "P0"
   tags: ["monolith", "php", "payment-critical"]
+  service_archetype: "stateful-crud"
   preferences:
     prefer: ["eks", "aurora", "graviton"]
     avoid: ["serverless", "dynamodb"]
@@ -108,6 +110,7 @@ If a field is absent from `additionalPlanContext`, apply these defaults:
 - **`priority`** → No default. If absent, omitted from report metadata.
 - **`tags`** → No default. If absent, omitted from report metadata.
 - **`preferences`** → No default. If absent, technology recommendations use neutral language without favoring or avoiding specific technologies.
+- **`service_archetype`** → Auto-detected in Step 1.5 based on repository analysis. If auto-detection is inconclusive, defaults to `"stateful-crud"` (the most conservative archetype — applies the strictest rubric on architecture-sensitive questions without false downgrades). Only applies when `repo_type` is `application`. For non-application repo types, this field is ignored.
 
 If `repo_type` is present but not one of the 5 recognized values (`application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`), default to `"application"` and include a warning in the report metadata: **"Unrecognized repo_type '{value}', defaulting to application."**
 
@@ -115,7 +118,7 @@ If `repo_type` is present but not one of the 5 recognized values (`application`,
 
 The MOD TD does **not** read, validate, or apply the following fields from `additionalPlanContext`. If present, they are ignored:
 
-- **`agent_scope`** — Not used by this TD. Agent scope is an ARA-only concept.
+- **`agent_scope`** — Not used by this TD. Agent scope governs agent-interaction safety decisions and is not relevant to modernization scoring.
 
 #### 0.4 How Context Fields Are Used
 
@@ -126,6 +129,7 @@ Record the resolved values from Steps 0.1–0.2 in the assessment context. They 
 - **`priority`** → Recorded in the report metadata header. Used by the Portfolio MOD TD for service ordering within roadmap phases.
 - **`tags`** → Recorded in the report metadata header.
 - **`preferences`** → Used throughout the report to steer technology recommendations. When `prefer` contains values, recommendations favor those technologies where applicable (e.g., if `prefer: ["eks"]`, container recommendations reference EKS over ECS). When `avoid` contains values, recommendations steer away from those technologies (e.g., if `avoid: ["serverless"]`, recommendations do not suggest Lambda-based approaches). Preferences influence recommendation framing only — they do not change scores, N/A mappings, or pathway trigger logic.
+- **`service_archetype`** → Used in Steps 2–3 to calibrate scoring on architecture-sensitive questions where the "correct" architectural choice depends on the kind of service being evaluated. Specifically, INF-Q3 (Workflow Orchestration), INF-Q4 (Async Messaging and Streaming), APP-Q3 (Async vs Sync Communication), and APP-Q4 (Long-Running Process Handling) use archetype-keyed rubrics so that services whose correct design is synchronous and stateless are not penalized for lacking async infrastructure they do not need. Calibration can both downgrade and upgrade a score relative to the default rubric — for example, a `stateless-utility` using only synchronous HTTP may score 4 on INF-Q4 (correct design), while the same evidence would score 1 for an `orchestrator`. Included in the report metadata header. Only applies when `repo_type` is `application`; for other repo types, archetype calibration is skipped and the default rubric applies.
 
 ### Step 1: Discovery — Static Scan
 
@@ -273,6 +277,66 @@ Read all discovered files that are relevant to the assessment. Prioritize readin
 
 For large repositories, focus on files most relevant to the 37 evaluation questions. Not every source file needs to be read in full — prioritize IaC resources, Kubernetes manifests, database configurations, pipeline definitions, entry points, and inter-service communication patterns.
 
+### Step 1.5: Service Archetype Detection
+
+Service archetype classifies an application by its **runtime architectural role**, which determines what the "correct" design looks like for communication patterns, persistence, and orchestration. Architecture-sensitive questions in this TD (INF-Q3, INF-Q4, APP-Q3, APP-Q4) score the same evidence differently depending on archetype — synchronous HTTP is correct for a stateless utility and an anti-pattern for an orchestrator.
+
+**This archetype model is owned by the MOD TD and is applied to MOD scoring only.** It is independent of any other transformation definition. If `service_archetype` was provided in `additionalPlanContext`, use that value directly and skip auto-detection. Otherwise, analyze the file inventory from Step 1.3 and the file contents from Step 1.4 to classify the archetype using the decision logic below.
+
+Archetype detection applies only when `repo_type` is `application`. For `infrastructure-only`, `deployment-config`, and `library`, skip this step — there is no application runtime to classify. For `monorepo`, detect archetype per service.
+
+#### Archetypes and Their Detection Signals
+
+| Archetype | Description | Detection Signals |
+|-----------|-------------|-------------------|
+| **stateless-utility** | Pure-function services with no persistent state, no user-specific data, and no write operations. Correct design is synchronous request/response. | No database connections, no cache writes, no message queue producers. All API operations are read-only (GET endpoints, query RPCs). Data comes from static files, environment variables, or in-memory computation. No `user_id`, `session`, or user-specific context. Data is public or reference-grade. Examples: currency converter, feature flag reader, config service, health aggregator. |
+| **stateful-crud** | Services that own persistent state and expose CRUD operations on business entities. | Database connections (SQL, NoSQL, Redis with writes, DynamoDB). Create/Update/Delete endpoints alongside Read. Entity lifecycle management (status fields, soft deletes). User-specific data (user_id, session). Examples: cart service, user profile service, order service, inventory service. |
+| **orchestrator** | Services that coordinate multi-service workflows by calling other services. Correct design leans async with managed orchestration. | High fan-out — calls 3+ downstream services (HTTP clients, gRPC stubs, service addresses in env vars). Sequential or parallel service-call patterns. Minimal or no persistent state of its own. Transaction coordination (saga patterns, compensating actions). Examples: checkout service, order placement service, workflow coordinator. |
+| **data-gateway** | Read-heavy data access layer — APIs over databases, search indexes, or data lakes. Synchronous reads are the primary and correct pattern. | Database queries dominate the logic (SQL, Elasticsearch, DynamoDB scans). Pagination, filtering, sorting parameters in API. Search endpoints. Minimal business logic — primarily data transformation and serialization. Read-heavy traffic (>80% reads). Examples: product search service, reporting API, analytics query service. |
+| **event-processor** | Services that consume events/messages and process them asynchronously. Correct design has no or minimal synchronous API surface. | Message queue consumers (SQS, Kafka, SNS, EventBridge). Event handler functions (Lambda triggers, message listeners). No synchronous API surface, or minimal (health checks only). Batch processing patterns. Examples: notification service, ETL pipeline, audit log processor, email sender. |
+
+#### Auto-Detection Decision Logic
+
+Apply these checks in order. The first check that matches determines the archetype.
+
+1. **Has message queue consumers with no (or minimal) synchronous API surface?** → `event-processor`
+   - SQS/Kafka/SNS handlers, EventBridge rules, Lambda triggers on queue events
+   - No HTTP routes, or only health-check routes
+
+2. **Calls 3+ downstream services (high fan-out) with minimal or no persistent state of its own?** → `orchestrator`
+   - HTTP/gRPC clients to 3+ other services
+   - Service addresses in env vars pointing to multiple peers
+   - Workflow or saga coordination patterns
+
+3. **Has persistent state?** → go to 3a
+   **No persistent state?** → go to 3b
+
+   **3a. Has write endpoints or state mutations?**
+   - **Yes** → `stateful-crud`
+   - **No, primarily read queries with pagination/filtering and minimal business logic** → `data-gateway`
+
+   **3b. Stateless, has write endpoints or state mutations?**
+   - **No** → `stateless-utility`
+   - **Yes** (writes but no owned persistent state — e.g., forwarder to another service) → `stateful-crud` (treat as conservative default)
+
+4. **If the above signals are ambiguous or conflicting**, default to `stateful-crud`. This is the conservative choice — it applies the strictest rubric on architecture-sensitive questions without false downgrades, matching the behavior of the default (non-calibrated) rubric.
+
+#### Archetype Recording
+
+Record the detected archetype in the assessment context. Include it in the report metadata header:
+
+```markdown
+**Service Archetype**: <archetype> (auto-detected | user-provided)
+```
+
+If auto-detection was used, include a one- to two-sentence justification referencing the specific signals observed:
+
+```markdown
+**Archetype Justification**: <e.g., "No database connections or writes detected; all endpoints are GET operations reading from a static JSON file. Classified as stateless-utility.">
+```
+
+If archetype detection is skipped because `repo_type` is not `application`, omit these fields from the metadata header.
+
 ## N/A Mapping — Repository Type Question and Pathway Applicability
 
 Before evaluating any question or pathway, check the `repo_type` (resolved in Step 0) against the N/A mapping tables below. Questions and pathways mapped as N/A for the detected repo type are **not evaluated** — they are recorded directly in the N/A display format and excluded from scoring.
@@ -407,31 +471,39 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 **Question:** Are workflow orchestration services used (Step Functions, Temporal, Camunda) or are workflows primarily implemented as hardcoded application logic?
 
-**Why it matters:** Dedicated workflow orchestration provides visual workflow management, error handling, retry logic, and state management. Without it, all orchestration logic is buried in code — harder to maintain, debug, and evolve.
+**Why it matters:** Dedicated workflow orchestration provides visual workflow management, error handling, retry logic, and state management. Without it, all orchestration logic is buried in code — harder to maintain, debug, and evolve. However, not every service has workflows to orchestrate. A pure read-only utility or a simple CRUD service may have nothing multi-step to coordinate, and penalizing it for not adopting Step Functions would recommend complexity where none is warranted.
 
-| Score | Criteria |
-|-------|----------|
-| **4** | Dedicated workflow orchestration service in use for business-critical workflows. |
-| **3** | Partial adoption — some workflows orchestrated, others still in code. |
-| **2** | Simple state machines in code with some structure, but no dedicated service. |
-| **1** | No orchestration — all workflow logic hardcoded in application code. |
+**Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
-> **Look for:** `aws_sfn_*` in Terraform; Temporal SDK imports; workflow YAML definitions; state machine patterns in code.
+| Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
+|-------|------------------|--------------|---------------|--------------|-----------------|
+| **4** | No multi-step workflows exist — not applicable by design. Score defaults to 4 as the "correct" outcome. | No multi-step workflows exist in the read path; any background maintenance jobs use managed orchestration. | Dedicated workflow orchestration service in use for business-critical multi-step operations. | Step Functions, Temporal, or equivalent coordinates all multi-service workflows with error handling and retries. | Event pipeline uses managed orchestration (Step Functions, EventBridge Pipes) for multi-step processing. |
+| **3** | — | Some background jobs orchestrated, others in code; minimal impact on read path. | Partial adoption — some workflows orchestrated, others still in code. | Partial adoption — primary workflow orchestrated, auxiliary flows still in code. | Primary pipeline orchestrated; some event chains still handled inline. |
+| **2** | — | Background jobs are hardcoded state machines. | Simple state machines in code with some structure, but no dedicated service. | Fan-out coordination is in code with basic structure but no dedicated orchestrator. | Multi-step event processing is ad hoc in handler code. |
+| **1** | Multi-step processes exist despite the utility framing and are entirely hardcoded (indicates archetype may be misclassified). | Multi-step orchestration buried in application code with no structure. | No orchestration — all workflow logic hardcoded in application code. | No orchestration despite fan-out — tight coupling and no retry/error strategy. This is an anti-pattern for this archetype. | Event chains are fully hardcoded with no orchestration primitives. |
+
+When the score is 4 for `stateless-utility` or `data-gateway` because no workflows exist, the **Recommendation** field should state that dedicated workflow orchestration is not applicable for this archetype and does not represent a gap. When the score is 1 for `orchestrator`, explicitly call out that this is an anti-pattern for the archetype and elevate the recommendation priority.
+
+> **Look for:** `aws_sfn_*` in Terraform; Temporal SDK imports; workflow YAML definitions; state machine patterns in code. For archetype detection cross-check: count of downstream service calls, presence of multi-step business operations.
 
 #### INF-Q4: Async Messaging and Streaming
 
 **Question:** Is there managed messaging or streaming infrastructure (SQS, SNS, EventBridge, MSK, Kinesis) vs self-managed Kafka/RabbitMQ, or no messaging at all?
 
-**Why it matters:** Managed messaging and streaming enable event-driven architectures with reduced operational overhead. Self-managed message brokers and streaming platforms require patching, scaling, and monitoring. Async patterns are foundational for decoupled, resilient architectures.
+**Why it matters:** Managed messaging and streaming enable event-driven architectures with reduced operational overhead. Self-managed message brokers require patching, scaling, and monitoring. However, async is not universally the right answer — synchronous HTTP or gRPC is the correct design for read-only utility services and read-heavy data gateways, and forcing async into those designs adds operational complexity without architectural benefit. This rubric calibrates expectations by archetype so that services scoring 4 reflect the correct design for their role, not a uniform "async everywhere" bar.
 
-| Score | Criteria |
-|-------|----------|
-| **4** | Managed messaging and/or streaming services in use for inter-service communication and data pipelines. |
-| **3** | Managed messaging for some flows; synchronous HTTP or self-managed components for others. |
-| **2** | Self-managed messaging/streaming (Kafka, RabbitMQ on EC2/containers). |
-| **1** | No messaging or streaming infrastructure — all communication is synchronous HTTP, batch-only data pipelines. |
+**Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
-> **Look for:** `aws_sqs_*`, `aws_sns_*`, `aws_msk_*`, `aws_kinesis_*` in IaC; SDK imports for messaging/streaming; event-driven patterns in code; stream consumer patterns.
+| Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
+|-------|------------------|--------------|---------------|--------------|-----------------|
+| **4** | Synchronous HTTP/gRPC is the correct design and is in use; no messaging needed. Any outbound signals (e.g., telemetry) use managed services. | Synchronous reads dominate (correct); any write-back, cache invalidation, or indexing flows use managed messaging. | Managed messaging (SQS, SNS, EventBridge) for cross-service state changes and notifications; synchronous reads where appropriate. | Managed messaging and/or streaming (EventBridge, SQS, MSK, Kinesis) for fan-out and decoupling; Step Functions for coordination. | Managed event source (SQS, Kafka/MSK, Kinesis, EventBridge) with structured consumer patterns. |
+| **3** | Sync dominates; a small amount of async exists and is on managed services. | Synchronous dominant with some managed async for auxiliary flows. | Managed messaging for key flows; synchronous HTTP for others where async would genuinely help but is not yet in place. | Managed messaging for some flows; synchronous HTTP or self-managed components for others. | Managed primary event source; some auxiliary flows are self-managed. |
+| **2** | Any self-managed messaging is in use without clear need (suggests archetype may be misclassified). | Self-managed messaging for write-back or indexing flows. | Self-managed messaging (Kafka, RabbitMQ on EC2/containers) for cross-service flows. | Self-managed messaging for orchestration fan-out. | Self-managed event broker is primary source. |
+| **1** | Self-managed broker used despite no real need — pure overhead. | No async where async would reduce read-path coupling, OR self-managed broker without justification. | No messaging where state changes cross service boundaries — tight synchronous coupling between services that should be decoupled. | Synchronous-only fan-out across 3+ services. This is an anti-pattern for this archetype — cascading failures and timeout amplification are structural risks. | Polling a REST endpoint instead of consuming events (wrong archetype) or no broker at all. |
+
+When the score is 4 for `stateless-utility` or `data-gateway` because synchronous communication is the correct design, the **Finding** field should state that synchronous is appropriate for this archetype and the **Recommendation** should explicitly note that adopting async messaging is NOT recommended — it would add operational complexity without architectural benefit. When the score is 1 for `orchestrator` due to synchronous-only fan-out, flag it as an anti-pattern in the **Gap** field.
+
+> **Look for:** `aws_sqs_*`, `aws_sns_*`, `aws_msk_*`, `aws_kinesis_*`, `aws_eventbridge_*` in IaC; SDK imports for messaging/streaming (boto3 SQS/SNS, `@aws-sdk/client-sqs`, Kafka/Kinesis clients); event-driven handler patterns; stream consumer patterns; for archetype cross-check: count of downstream service calls, presence of write endpoints, presence of event emission on state changes.
 
 #### INF-Q5: Network Security
 
@@ -577,31 +649,39 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Question:** What percentage of inter-service communication is asynchronous vs synchronous HTTP?
 
-**Why it matters:** Synchronous-only architectures create tight coupling, cascading failures, and timeout risks. Async patterns enable decoupling, resilience, and better handling of variable-latency operations.
+**Why it matters:** Synchronous-only architectures create tight coupling, cascading failures, and timeout risks. Async patterns enable decoupling, resilience, and better handling of variable-latency operations. However, the correct async/sync ratio depends on what the service does. A pure utility or read-heavy data gateway has no inherent need for async communication — forcing it in would be complexity for its own sake. An orchestrator or event-processor with primarily synchronous coupling, in contrast, is an anti-pattern for its archetype.
 
-| Score | Criteria |
-|-------|----------|
-| **4** | 50%+ async, or async available for all long-running operations. |
-| **3** | Mix of async and sync with async for key workflows. |
-| **2** | Primarily synchronous with some async for background jobs. |
-| **1** | All communication is synchronous HTTP with no async patterns. |
+**Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
-> **Look for:** HTTP client calls (axios, requests, RestTemplate, fetch) vs message publishing patterns; event-driven handlers; queue consumers.
+| Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
+|-------|------------------|--------------|---------------|--------------|-----------------|
+| **4** | Sync request/response is the correct design; async not needed. Score defaults to 4. | Sync reads are correct; any write-back, cache invalidation, or indexing uses async. | 50%+ async for cross-service state propagation, or async available for all long-running operations. | Async dominates for fan-out; sync reserved for reads and fast-returning calls. | Primary input is async (event/queue); any outbound calls are async where appropriate. |
+| **3** | — | Sync-dominant with async available for auxiliary flows that need it. | Mix of async and sync with async for key workflows. | Mix of async and sync; primary workflows async, some fan-out still sync. | Async input; some sync outbound calls that could be async. |
+| **2** | — | Sync-only with no async path for flows that would benefit (e.g., reindexing blocks read traffic). | Primarily synchronous with some async for background jobs. | Primarily synchronous fan-out with limited async. | Mixed input model with significant sync coupling. |
+| **1** | Sync with no ability to add async where rare outbound signals would genuinely benefit. | Sync-only across all paths with visible queueing or timeout issues. | All communication synchronous HTTP with no async patterns. | Synchronous-only fan-out across 3+ services — cascading failure risk. Anti-pattern for this archetype. | Entirely synchronous (polling loops, sync RPCs) — archetype mismatch. |
+
+When the score is 4 for `stateless-utility` or `data-gateway` because synchronous is the correct design, the **Finding** should state this explicitly and the **Recommendation** should NOT propose converting to async. When the score is 1 for `orchestrator` or `event-processor`, flag it as an archetype anti-pattern in the **Gap** field.
+
+> **Look for:** HTTP client calls (axios, requests, RestTemplate, fetch, gRPC stubs) vs message publishing patterns; event-driven handlers; queue consumers; Lambda event source mappings. Cross-check: count of downstream calls and whether they are unary vs fire-and-forget.
 
 #### APP-Q4: Long-Running Process Handling
 
 **Question:** Are operations over 30 seconds handled asynchronously with status polling or callbacks?
 
-**Why it matters:** Blocking calls for long-running operations create timeout risks, poor user experience, and resource waste. Async patterns with status tracking enable better resource utilization and user feedback.
+**Why it matters:** Blocking calls for long-running operations create timeout risks, poor user experience, and resource waste. Async patterns with status tracking enable better resource utilization and user feedback. However, many services have no operations that exceed 30 seconds — a pure utility doing stateless computation or a data-gateway doing indexed reads has no long-running work to offload. In those cases, this question is not a gap and should not drive a recommendation.
 
-| Score | Criteria |
-|-------|----------|
-| **4** | All operations over 30 seconds implemented as async jobs with status polling or callbacks. |
-| **3** | Most long-running operations are async; some blocking calls remain. |
-| **2** | Some background job processing but inconsistent patterns. |
-| **1** | All operations are synchronous regardless of duration. |
+**Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
-> **Look for:** Background job frameworks (Celery, Bull, SQS workers); async/polling patterns; job status APIs; Lambda async invocations; Step Functions for long processes.
+| Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
+|-------|------------------|--------------|---------------|--------------|-----------------|
+| **4** | No operations exceed 30 seconds — not applicable by design. Score defaults to 4. | No user-facing operations exceed 30 seconds; any heavy reindexing or export jobs are async with status polling. | All operations over 30 seconds implemented as async jobs with status polling or callbacks. | All long-running coordination uses Step Functions, polling, or callback patterns. | Event handlers are async by design; long-running processing within a handler uses checkpointing or sub-workflows. |
+| **3** | — | Most heavy operations are async; a rarely-hit export path may still block. | Most long-running operations async; some blocking calls remain. | Most long-running coordination async; edge cases still block. | Most handlers safely bounded; a few may exceed timeout without checkpointing. |
+| **2** | — | Some heavy reads are synchronous and risk timeout. | Some background job processing but inconsistent patterns. | Some long-running coordination still blocks with risk of timeout. | Handlers occasionally exceed timeout; retries cause duplicate side effects. |
+| **1** | A synchronous operation exceeding 30 seconds exists, contradicting the utility framing (archetype likely misclassified). | Unbounded synchronous queries blocking the read path. | All operations synchronous regardless of duration. | All long-running coordination synchronous — caller must hold connection open. | Handlers routinely exceed timeout with no checkpointing — processing lost on retry. |
+
+When the score is 4 for `stateless-utility` or `data-gateway` because no long-running operations exist, the **Finding** should state this and the **Recommendation** should note that async job infrastructure is not applicable for the current surface. This question should not trigger a pathway recommendation in that case.
+
+> **Look for:** Background job frameworks (Celery, Bull, SQS workers); async/polling patterns; job status APIs; Lambda async invocations; Step Functions for long processes. Cross-check: existence of operations whose latency is data-volume or network-dependent (batch exports, bulk updates, external provider calls with variable SLA).
 
 #### APP-Q5: API Versioning Strategy
 
@@ -987,7 +1067,7 @@ Do not evaluate trigger conditions for N/A pathways. Proceed to evaluate only th
 
 **Trigger Logic:** Triggered when APP-Q2 < 3 (primary trigger) AND at least one supporting condition is also met (INF-Q1 < 3, APP-Q3 < 3, or APP-Q4 < 3).
 
-**Contextual Guard:** None — if the application is a monolith with supporting infrastructure gaps, this pathway is relevant regardless of other factors.
+**Contextual Guard:** None — if the application is a monolith with supporting infrastructure gaps, this pathway is relevant regardless of other factors. Note that with archetype calibration applied in Steps 3–4, APP-Q3 and APP-Q4 will not score below 3 purely because a service is synchronous-by-design (e.g., `stateless-utility`, `data-gateway`), so those supporting triggers naturally reflect genuine async-readiness gaps rather than archetype mismatches.
 
 **Priority:** High — monolith decomposition is typically the highest-impact modernization initiative.
 **Est. Effort:** High — decomposition requires architectural redesign, service boundary identification, data separation, and incremental migration.
@@ -1099,6 +1179,7 @@ Do not evaluate trigger conditions for N/A pathways. Proceed to evaluate only th
 **Contextual Guard:** Evidence of data processing workloads MUST exist. This pathway SHALL NOT trigger if:
 - No streaming, ETL, data pipeline, or analytics artifacts were found during discovery (Step 1).
 - The application has no data processing responsibilities (e.g., a simple CRUD API with no analytics or streaming needs).
+- The detected `service_archetype` is `stateless-utility` or `data-gateway` AND no streaming/ETL artifacts were found — these archetypes correctly score 4 on INF-Q4 when sync-only, and the low score does not indicate a modernization gap for them.
 
 The guard prevents recommending managed analytics infrastructure to applications that do not process, transform, or analyze data at scale.
 
@@ -1374,6 +1455,7 @@ The assessment output is a structured Markdown report saved as `{repo-name}-mod-
 | **Repository** | {repo-name} |
 | **Date** | {assessment-date} |
 | **Repo Type** | {repo_type} |
+| **Service Archetype** | {archetype} ({auto-detected or user-provided}) — omit row if repo_type is not `application` |
 | **Priority** | {priority or "—" if not provided} |
 | **Tags** | {tags as comma-separated list or "—" if not provided} |
 | **Context** | {context or "—" if not provided} |
@@ -1383,6 +1465,8 @@ The assessment output is a structured Markdown report saved as `{repo-name}-mod-
 If `repo_type` was not provided and defaulted to `application`, include a note: "Repo type defaulted to `application` (not specified in assessment context)."
 
 If `repo_type` was provided but unrecognized, include a warning: "Unrecognized repo_type '{value}', defaulted to `application`."
+
+If `service_archetype` was auto-detected, include the one- to two-sentence justification produced in Step 1.5 immediately below the metadata table under the heading `**Archetype Justification**:`.
 
 ### Section 2: Overall and Category Score Table
 
