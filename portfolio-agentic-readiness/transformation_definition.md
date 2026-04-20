@@ -315,7 +315,7 @@ Identify BLOCKER questions that appear across multiple services. These represent
 
 #### 4.1 Cross-Cutting BLOCKER Identification
 
-For each of the 49 ARA question IDs:
+For each of the 43 ARA question IDs:
 
 1. Collect the severity for that question across all services
 2. **Exclude services where the question is N/A** — a question that is N/A for a service does not count as a BLOCKER for that service
@@ -367,7 +367,7 @@ Identify RISK questions that appear across multiple services. These represent po
 
 #### 4b.1 Cross-Cutting RISK Identification
 
-For each of the 49 ARA question IDs, determine the question's RISK tier (RISK-SAFETY or RISK-QUALITY) and run the aggregation algorithm separately per tier:
+For each of the 43 ARA question IDs, determine the question's RISK tier (RISK-SAFETY or RISK-QUALITY) and run the aggregation algorithm separately per tier:
 
 1. Determine the RISK tier for the question (RISK-SAFETY or RISK-QUALITY)
 2. Collect the severity for that question across all services
