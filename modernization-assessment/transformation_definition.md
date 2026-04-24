@@ -8,7 +8,7 @@ Evaluate the cloud architecture maturity, operational readiness, and modernizati
 
 ## Summary
 
-This transformation performs a dedicated Modernization Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, container definitions, Kubernetes manifests, and Helm charts. It then evaluates what it finds against 37 questions across 5 sections:
+This transformation performs a dedicated Modernization Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, container definitions, Kubernetes manifests, and Helm charts. It then evaluates what it finds against 37 questions across 5 sections — Infrastructure (INF), Application Architecture (APP), Data Platform (DATA), Security (SEC), and Operations (OPS):
 
 - **INF** — Infrastructure, Platform, and DevOps (11 questions)
 - **APP** — Application Architecture (6 questions)
@@ -56,6 +56,8 @@ The output is a structured Markdown report saved as `{repo-name}-mod-report.md` 
 - Detailed findings for all 37 questions (including N/A questions in N/A format)
 - Learning materials mapped to triggered pathways
 - Evidence index with file references
+
+This assessment targets workloads running on AWS. On-premises and multi-cloud workloads are out of scope unless actively migrating to AWS.
 
 This assessment does NOT cover:
 - **Agentic Readiness** — Whether systems can serve as agent tools (API surface quality, agent identity and authorization, transactional integrity, human-in-the-loop controls, agent observability, discoverability). Those concerns use BLOCKER/RISK/INFO severity scoring, readiness profiles, conditional BLOCKERs based on agent_scope, and are covered in the Agentic Readiness Assessment.
@@ -457,7 +459,7 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 **Question:** Are databases fully managed (RDS/Aurora/DynamoDB/DocumentDB/Neptune/Timestream) vs self-managed?
 
-**Why it matters:** Self-managed databases — regardless of where they run (EC2, containers, on-premises) — introduce maintenance windows, manual patching, and operational overhead. Migrating to managed services eliminates ops burden and enables automatic backups, failover, and scaling. This is a primary target for AWS DMS/SCT-based migration pathways.
+**Why it matters:** Self-managed databases — regardless of where they run (EC2, containers, on-premises) — introduce maintenance windows, manual patching, and operational overhead. Migrating to managed services eliminates ops burden and enables automatic backups, failover, and scaling.
 
 | Score | Criteria |
 |-------|----------|
@@ -492,6 +494,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no workflo
 **Question:** Is there managed messaging or streaming infrastructure (SQS, SNS, EventBridge, MSK, Kinesis, Amazon MQ) vs self-managed Kafka/RabbitMQ, or no messaging at all?
 
 **Why it matters:** Managed messaging and streaming enable event-driven architectures with reduced operational overhead. Self-managed message brokers require patching, scaling, and monitoring. However, async is not universally the right answer — synchronous HTTP or gRPC is the correct design for read-only utility services and read-heavy data gateways, and forcing async into those designs adds operational complexity without architectural benefit. This rubric calibrates expectations by archetype so that services scoring 4 reflect the correct design for their role, not a uniform "async everywhere" bar.
+
+> **Note:** This question uses archetype-sensitive calibration. Synchronous HTTP is the correct design for stateless-utility and data-gateway services and scores 4. See the archetype rubric below.
 
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
@@ -598,7 +602,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 #### INF-Q11: CI/CD Automation
 
-**Question:** Are CI/CD pipelines automated with build, test, and deploy stages, or are deployments manual?
+**Question:** Are CI/CD pipelines automated with build, test, and deploy stages for both application code and infrastructure as code, or are deployments manual?
 
 **Why it matters:** Manual deployments create bottlenecks, are error-prone, and prevent rapid iteration. Automated pipelines enable continuous delivery with consistent quality gates.
 
@@ -635,7 +639,7 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Question:** Is the application a single deployable unit or multiple independently deployable services?
 
-**Why it matters:** Monoliths limit independent scaling, deployment, and team autonomy. Understanding the current decomposition state and coupling level determines the modernization strategy — containerize as-is, strangler fig extraction, or full decomposition.
+**Why it matters:** Monoliths limit independent scaling, deployment, and team autonomy. Understanding the current decomposition state and coupling level determines the modernization strategy — containerize, migrate to serverless (Lambda), strangler fig extraction, or full decomposition.
 
 | Score | Criteria |
 |-------|----------|
@@ -723,13 +727,13 @@ These questions evaluate the data layer's modernization state — managed servic
 
 **Question:** Are documents and unstructured data stored in managed object storage (S3) with parsing capabilities (Textract, Tika)?
 
-**Why it matters:** Unstructured data locked in file systems, local storage, or legacy document management systems is inaccessible for modern workloads. S3 with parsing pipelines enables search, analytics, and AI integration.
+**Why it matters:** Unstructured data locked in file systems, local storage, or legacy document management systems is inaccessible for modern workloads. S3 with parsing pipelines enables search, analytics, and AI integration. Assessing current access patterns (frequency, size, format) helps identify S3 adoption opportunities and migration paths.
 
 | Score | Criteria |
 |-------|----------|
 | **4** | Unstructured data stored in S3 with parsing pipeline available. |
 | **3** | Data in S3 but no automated parsing or extraction pipeline. |
-| **2** | Data in managed storage but not S3 (EFS, EBS volumes) with limited accessibility. |
+| **2** | Data in managed storage but not S3 (EFS, EBS volumes) with limited accessibility. Note: Amazon S3 File Gateway (mountable S3 access) can bridge filesystem-dependent applications without data duplication. |
 | **1** | Data on local file systems, legacy document management, or inaccessible storage. |
 
 > **Look for:** `aws_s3_bucket`; Textract calls; document parsing libraries; PDF/image processing.
