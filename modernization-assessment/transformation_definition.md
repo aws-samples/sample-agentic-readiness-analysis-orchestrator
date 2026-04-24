@@ -563,7 +563,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All production data stores have automated backups with defined retention; PITR enabled where supported; restore procedures documented or tested. |
+| **4** | All production data stores have automated backups with defined retention; PITR enabled where supported; restore procedures documented or tested; cross-region backup replication configured for critical data. |
 | **3** | Automated backups configured but missing PITR or missing on some data stores; no documented restore testing. |
 | **2** | Backups on main production database only; no backup plans for other data stores; no restore testing. |
 | **1** | No backup configuration found; or backup_retention_period = 0. |
@@ -579,8 +579,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | Score | Criteria |
 |-------|----------|
 | **4** | All production compute and data stores span 2+ AZs; load balancers with cross-zone enabled. |
-| **3** | Main production database is Multi-AZ but some compute or caches are single-AZ. |
-| **2** | Database is single-AZ; compute spans multiple AZs but no explicit fault isolation. |
+| **3** | Main production database is Multi-AZ; stateful compute or caches are multi-AZ; stateless compute may be single-AZ if replaceable via ASG/service across AZs. |
+| **2** | Main production database is single-AZ OR stateful compute is single-AZ; other compute spans multiple AZs but fault isolation is not explicit. |
 | **1** | All resources in a single AZ; or no AZ configuration found. |
 
 > **Look for:** `multi_az = true` on RDS; `availability_zones` spanning 2+ AZs in ASGs/ECS; subnet configurations across multiple AZs.
@@ -624,14 +624,14 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Question:** What programming languages are used and how mature is their ecosystem for cloud-native development?
 
-**Why it matters:** Language choice affects framework availability, community support, hiring, and modernization options. Some languages have richer ecosystems for containers, serverless, and cloud-native patterns.
+**Why it matters:** Language choice determines the breadth of AWS SDK support, the depth of cloud-native tooling, and the availability of modern framework ecosystems. Languages with first-class AWS SDK coverage and mature cloud-native libraries enable faster modernization; languages with narrower AWS tooling require more custom integration work to reach the same outcomes.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Python, TypeScript/JavaScript, Go, or Java/Kotlin — mature cloud-native ecosystems. |
-| **3** | .NET, Ruby, or Rust — solid ecosystems with some gaps. |
-| **2** | PHP, Perl, or older Java versions (< 11) — functional but limited modern tooling. |
-| **1** | COBOL, VB6, Classic ASP, or legacy languages with minimal cloud-native support. |
+| **4** | Python, TypeScript/JavaScript, Go, or Java/Kotlin — first-class AWS SDK coverage, broad cloud-native tooling, mature framework ecosystems. |
+| **3** | .NET/C# or Rust — good AWS SDK coverage with narrower cloud-native tooling ecosystem. |
+| **2** | PHP, Ruby, Perl, or older Java versions (< 11) — functional AWS SDK but limited cloud-native tooling depth. |
+| **1** | Languages with limited AWS SDK and cloud-native tooling (e.g., COBOL, VB6, Classic ASP) — requires custom integration or migration planning for cloud services. |
 
 > **Look for:** File extensions; package.json, requirements.txt, pom.xml/build.gradle, go.mod, *.csproj.
 
@@ -761,7 +761,7 @@ These questions evaluate the data layer's modernization state — managed servic
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All database engine versions explicitly pinned in IaC; no engines at or past EOL. |
+| **4** | All database engine versions explicitly pinned in IaC; no engines at or past EOL; documented version-update procedure exists covering downtime windows, rollback, and risk acknowledgment. |
 | **3** | Versions pinned but some approaching EOL within 12 months. |
 | **2** | Some versions pinned, others implicit; EOL status unknown. |
 | **1** | No version pinning; engines at or past EOL detected. |
@@ -811,9 +811,9 @@ These questions evaluate the foundational security posture required for any mode
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Customer-managed KMS keys for all sensitive data stores. |
-| **3** | AWS-managed encryption enabled on most data stores. |
-| **2** | Encryption enabled on some data stores but not all. |
+| **4** | Customer-managed KMS keys for all sensitive data stores, with centralized key management and documented rotation policy. |
+| **3** | Customer-managed KMS keys on most sensitive data stores, OR AWS-managed encryption enabled across all data stores. Rotation may not be defined. |
+| **2** | Mix of encryption types with coverage gaps — some data stores have customer-managed keys, others use AWS-managed, and at least one sensitive data store has no encryption configured. |
 | **1** | No encryption at rest configured. |
 
 > **Look for:** `kms_key_id` on S3/RDS/DynamoDB/EBS; `aws_kms_key` resources; encryption config on data stores.
@@ -1026,12 +1026,12 @@ These questions evaluate the operational maturity and observability practices th
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All resources tagged with consistent keys; tag enforcement via Config rules or SCPs; cost allocation tags activated. |
+| **4** | All resources tagged with consistent keys; tag enforcement via IaC (required tags in modules) combined with Tag Policies in AWS Organizations and AWS Config rules; cost allocation tags activated. |
 | **3** | Most resources tagged but inconsistent key naming or missing on some resource types; no enforcement. |
 | **2** | Some resources tagged but many untagged; no tagging standard. |
 | **1** | No tags found on resources; or only Name tags with no cost/ownership attribution. |
 
-> **Look for:** `default_tags` in Terraform provider; `tags` on resources; `required-tags` Config rules; tag policies in AWS Organizations.
+> **Look for:** `default_tags` in Terraform provider; `tags` on resources; `required-tags` Config rules; Tag Policies in AWS Organizations. SCPs are generally not recommended for tag enforcement — per-service action variance and policy-size limits make them unreliable for tagging; reserve SCPs for security guardrails.
 
 
 ### Step 7: Evaluate AWS Modernization Pathways
