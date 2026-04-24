@@ -448,7 +448,7 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 | Score | Criteria |
 |-------|----------|
-| **4** | 80%+ of compute is ECS/EKS/Lambda/Fargate. EC2 only for edge cases. |
+| **4** | All primary workloads run on ECS/EKS/Lambda/Fargate. EC2 used only for edge cases (bastion hosts, license-locked software). Measured by service count: ≤1 EC2-based service remains. |
 | **3** | Mix of managed and EC2, with managed compute for primary workloads. |
 | **2** | Primarily EC2 with some containerization or Lambda for auxiliary functions. |
 | **1** | All compute on raw EC2 or on-premises with no managed services. |
@@ -465,7 +465,7 @@ These questions evaluate the compute, networking, platform services, and deploym
 |-------|----------|
 | **4** | All databases are managed services with automated failover. |
 | **3** | Main production databases managed; some auxiliary or secondary self-managed instances remain. |
-| **2** | Mix of managed and self-managed, or managed but single-AZ without failover. |
+| **2** | Main production databases are managed services but deployed single-AZ or without Multi-AZ failover enabled. OR: mix of managed and self-managed — at least one production database is self-hosted (e.g., MySQL on EC2, PostgreSQL in Docker). |
 | **1** | All databases self-managed on EC2, containers, or on-premises. |
 
 > **Look for:** Terraform `aws_rds_*`, `aws_dynamodb_*`, `aws_docdb_*`, `aws_neptune_*`, `aws_timestreamwrite_*` vs compute resources running database software; connection strings pointing to self-hosted instances; database engine installation in Dockerfiles or user-data scripts.
@@ -549,8 +549,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | Score | Criteria |
 |-------|----------|
 | **4** | All compute resource types have auto-scaling configured with appropriate min/max. |
-| **3** | Auto-scaling on primary compute; some static capacity for auxiliary services. |
-| **2** | Basic auto-scaling with default settings, not tuned for workload patterns. |
+| **3** | Auto-scaling configured on primary compute with workload-appropriate thresholds (custom target tracking or step policies). Auxiliary services may use static capacity. |
+| **2** | Auto-scaling exists but uses only default/out-of-box settings (e.g., default ECS target tracking without tuning). No custom scaling policies or scheduled scaling. |
 | **1** | No auto-scaling — all capacity is statically provisioned. |
 
 > **Look for:** `aws_autoscaling_*`, `aws_appautoscaling_*`; scaling policies; min/max capacity settings; Lambda concurrency limits.
@@ -644,8 +644,8 @@ These questions evaluate the application's structural maturity, decomposition re
 | Score | Criteria |
 |-------|----------|
 | **4** | Microservices or modular monolith with well-defined module boundaries, no circular dependencies, clear interfaces. |
-| **3** | Modular monolith with some coupling, or early-stage microservices with shared databases. |
-| **2** | Monolith with identifiable modules but significant coupling (shared state, database coupling, circular dependencies). |
+| **3** | Modular monolith with separate schemas per module (or per-service databases), clear module interfaces, no circular dependencies. OR: microservices that share a database instance but use separate schemas. |
+| **2** | Monolith with identifiable modules but shared database schemas, direct cross-module data access, or circular call dependencies between modules. |
 | **1** | Tightly-coupled monolith with no clear module boundaries, pervasive shared state. |
 
 > **Look for:** Single deployable vs multiple service directories; Helm charts for multiple services; Docker Compose with multiple services; IaC for multiple ECS tasks or Lambda functions. For monoliths: package/module structure, dependency graphs, circular dependencies, shared mutable state, database coupling.
@@ -697,8 +697,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no long-ru
 | Score | Criteria |
 |-------|----------|
 | **4** | Consistent versioning strategy with backward compatibility guarantees. |
-| **3** | Versioning present but inconsistent across endpoints. |
-| **2** | Ad hoc versioning — some endpoints versioned, others not. |
+| **3** | Versioning strategy exists and is applied to most endpoints (e.g., /v1/ paths, version headers), but some newer or internal endpoints don't follow the convention. |
+| **2** | Versioning applied ad hoc — fewer than half of endpoints use versioning, or multiple conflicting versioning schemes coexist (e.g., some use URL paths, others use headers). |
 | **1** | No versioning — breaking changes deployed directly. |
 
 > **Look for:** /v1/, /v2/ URL patterns; Accept-Version headers; versioning annotations; changelog files.
@@ -826,9 +826,9 @@ These questions evaluate the foundational security posture required for any mode
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Every API endpoint authenticated; OAuth2/JWT standard in use. |
-| **3** | Most endpoints authenticated; some internal endpoints lack auth. |
-| **2** | Basic authentication (API keys) without token-based auth. |
+| **4** | All API endpoints use token-based auth (OAuth2/JWT); intentionally public endpoints protected by API Gateway with throttling and validation. |
+| **3** | Token-based auth (OAuth2/JWT) on all external endpoints. Internal/private-subnet endpoints may lack auth if network isolation is enforced (security groups, VPC endpoints). |
+| **2** | API key or static credential authentication without token-based auth. OR: token-based auth on fewer than half of endpoints. |
 | **1** | No API authentication — endpoints are open. |
 
 > **Look for:** Auth middleware; API Gateway authorizers; Cognito user pools; OAuth2 flows; Bearer token validation; @Authenticated annotations.
@@ -857,8 +857,8 @@ These questions evaluate the foundational security posture required for any mode
 | Score | Criteria |
 |-------|----------|
 | **4** | All secrets in Secrets Manager or Vault with automated rotation; no hardcoded credentials. |
-| **3** | Most secrets managed; some legacy environment variables remain. |
-| **2** | Mix of managed and hardcoded secrets; no rotation. |
+| **3** | Secrets Manager or Vault used for primary credentials (database, API keys). Some non-critical configs still in environment variables (e.g., feature flags, non-secret config). No rotation configured. |
+| **2** | Some secrets in Secrets Manager/Vault but production database credentials or API keys still in environment variables, config files, or parameter store without encryption. No rotation. |
 | **1** | Secrets hardcoded in code or committed to version control. |
 
 > **Look for:** `aws_secretsmanager_*` in IaC; Vault client imports; hardcoded patterns (password=, secret=, api_key= in code); .env files committed to git.
@@ -888,8 +888,8 @@ These questions evaluate the foundational security posture required for any mode
 |-------|----------|
 | **4** | SAST + dependency scanning in CI/CD with security gates blocking on critical findings; container scanning if applicable. |
 | **3** | At least one scanning tool in CI/CD but missing container scanning or no blocking gate. |
-| **2** | Dependency scanning configured (e.g., Dependabot) but no SAST; or scanning not integrated into pipeline. |
-| **1** | No security scanning in CI/CD pipeline. |
+| **2** | Dependency scanning configured (e.g., Dependabot, npm audit) and running, but no SAST tool. OR: SAST tool configured but only runs on-demand, not in every pipeline execution. |
+| **1** | No security scanning tools configured — no Dependabot, no SAST, no container scanning. Pipeline has no security validation step. |
 
 > **Look for:** SonarQube, Semgrep, CodeGuru Reviewer in CI/CD; Dependabot config; `npm audit` or `pip-audit` in pipeline; ECR image scanning; `.snyk` policy files.
 
