@@ -279,7 +279,7 @@ Get the full directory tree and identify all file types present. For each catego
 - Application config (`*.yaml`, `*.yml`, `*.json`, `*.toml`, `*.properties`, `*.ini`)
 - Environment files (`.env`, `.env.*`)
 - Kubernetes manifests (`*.yaml` in k8s/, manifests/, or deploy/ directories)
-- Service mesh configs (Istio, App Mesh)
+- Service mesh configs (Istio)
 
 #### 1.2 Directories to Ignore
 
@@ -665,6 +665,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - mTLS configuration
 - Service account definitions
 - Cognito app clients
+- Bedrock AgentCore Identity configurations
 - API Gateway authorizers
 - Check audit logs for agent identity fields
 
@@ -715,14 +716,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - User context headers (`X-User-Id`, `Authorization Bearer`) passed through service calls
 - Separate IAM roles or API keys for agent-as-self vs agent-on-behalf-of-user
 - Different auth flows for service-to-service vs user-delegated calls
-- Audit log fields distinguishing the two modes cannot personalize responses per user or silently exposes all user data to every agent call.
-
-**Look for:**
-- JWT parsing middleware
-- OAuth2 on-behalf-of flows
-- Token exchange patterns
-- Cognito/Okta integration
-- User context headers (`X-User-Id`, `Authorization Bearer`) passed through service calls
+- Audit log fields distinguishing the two modes
 
 ---
 
