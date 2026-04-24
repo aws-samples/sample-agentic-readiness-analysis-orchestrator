@@ -163,6 +163,7 @@ Get the full directory tree and identify all file types present. For each catego
 - GitLab CI (`.gitlab-ci.yml`)
 - Jenkins (`Jenkinsfile`)
 - AWS CodeBuild (`buildspec.yml`)
+- AWS CodeDeploy (`appspec.yml`)
 - AWS CodePipeline definitions in IaC
 - Other pipeline definitions
 
@@ -189,7 +190,7 @@ This category is particularly important for MOD — Kubernetes and Helm artifact
 - Kustomize overlays (`kustomization.yaml`, `overlays/`, `bases/`)
 - ArgoCD application definitions (`Application`, `ApplicationSet` resources)
 - Flux CD configurations (`GitRepository`, `HelmRelease`, `Kustomization` resources)
-- Service mesh configs (Istio `VirtualService`, `DestinationRule`; App Mesh `VirtualNode`, `VirtualRouter`)
+- Service mesh configs (Istio `VirtualService`, `DestinationRule`)
 - Kubernetes Operators and CRDs (Custom Resource Definitions)
 
 **Database Configurations:**
@@ -454,22 +455,22 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 #### INF-Q2: Managed Databases
 
-**Question:** Are databases fully managed (RDS/Aurora/DynamoDB/DocumentDB) vs self-managed?
+**Question:** Are databases fully managed (RDS/Aurora/DynamoDB/DocumentDB/Neptune/Timestream) vs self-managed?
 
 **Why it matters:** Self-managed databases — regardless of where they run (EC2, containers, on-premises) — introduce maintenance windows, manual patching, and operational overhead. Migrating to managed services eliminates ops burden and enables automatic backups, failover, and scaling. This is a primary target for AWS DMS/SCT-based migration pathways.
 
 | Score | Criteria |
 |-------|----------|
 | **4** | All databases are managed services with automated failover. |
-| **3** | Primary databases managed; some auxiliary self-managed instances remain. |
+| **3** | Main production databases managed; some auxiliary or secondary self-managed instances remain. |
 | **2** | Mix of managed and self-managed, or managed but single-AZ without failover. |
 | **1** | All databases self-managed on EC2, containers, or on-premises. |
 
-> **Look for:** Terraform `aws_rds_*`, `aws_dynamodb_*`, `aws_docdb_*` vs compute resources running database software; connection strings pointing to self-hosted instances; database engine installation in Dockerfiles or user-data scripts.
+> **Look for:** Terraform `aws_rds_*`, `aws_dynamodb_*`, `aws_docdb_*`, `aws_neptune_*`, `aws_timestreamwrite_*` vs compute resources running database software; connection strings pointing to self-hosted instances; database engine installation in Dockerfiles or user-data scripts.
 
 #### INF-Q3: Workflow Orchestration
 
-**Question:** Are workflow orchestration services used (Step Functions, Temporal, Camunda) or are workflows primarily implemented as hardcoded application logic?
+**Question:** Are workflow orchestration services used (Step Functions, MWAA, Temporal, Camunda) or are workflows primarily implemented as hardcoded application logic?
 
 **Why it matters:** Dedicated workflow orchestration provides visual workflow management, error handling, retry logic, and state management. Without it, all orchestration logic is buried in code — harder to maintain, debug, and evolve. However, not every service has workflows to orchestrate. A pure read-only utility or a simple CRUD service may have nothing multi-step to coordinate, and penalizing it for not adopting Step Functions would recommend complexity where none is warranted.
 
@@ -488,7 +489,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no workflo
 
 #### INF-Q4: Async Messaging and Streaming
 
-**Question:** Is there managed messaging or streaming infrastructure (SQS, SNS, EventBridge, MSK, Kinesis) vs self-managed Kafka/RabbitMQ, or no messaging at all?
+**Question:** Is there managed messaging or streaming infrastructure (SQS, SNS, EventBridge, MSK, Kinesis, Amazon MQ) vs self-managed Kafka/RabbitMQ, or no messaging at all?
 
 **Why it matters:** Managed messaging and streaming enable event-driven architectures with reduced operational overhead. Self-managed message brokers require patching, scaling, and monitoring. However, async is not universally the right answer — synchronous HTTP or gRPC is the correct design for read-only utility services and read-heavy data gateways, and forcing async into those designs adds operational complexity without architectural benefit. This rubric calibrates expectations by archetype so that services scoring 4 reflect the correct design for their role, not a uniform "async everywhere" bar.
 
@@ -503,7 +504,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no workflo
 
 When the score is 4 for `stateless-utility` or `data-gateway` because synchronous communication is the correct design, the **Finding** field should state that synchronous is appropriate for this archetype and the **Recommendation** should explicitly note that adopting async messaging is NOT recommended — it would add operational complexity without architectural benefit. When the score is 1 for `orchestrator` due to synchronous-only fan-out, flag it as an anti-pattern in the **Gap** field.
 
-> **Look for:** `aws_sqs_*`, `aws_sns_*`, `aws_msk_*`, `aws_kinesis_*`, `aws_eventbridge_*` in IaC; SDK imports for messaging/streaming (boto3 SQS/SNS, `@aws-sdk/client-sqs`, Kafka/Kinesis clients); event-driven handler patterns; stream consumer patterns; for archetype cross-check: count of downstream service calls, presence of write endpoints, presence of event emission on state changes.
+> **Look for:** `aws_sqs_*`, `aws_sns_*`, `aws_msk_*`, `aws_kinesis_*`, `aws_eventbridge_*`, `aws_mq_*` in IaC; SDK imports for messaging/streaming (boto3 SQS/SNS, `@aws-sdk/client-sqs`, Kafka/Kinesis clients, ActiveMQ/RabbitMQ clients); event-driven handler patterns; stream consumer patterns; for archetype cross-check: count of downstream service calls, presence of write endpoints, presence of event emission on state changes.
 
 #### INF-Q5: Network Security
 
@@ -522,7 +523,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 #### INF-Q6: API Entry Point
 
-**Question:** Is there an API Gateway, ALB, or CloudFront as the entry point vs direct service exposure?
+**Question:** Is there an API Gateway, AppSync, ALB, or CloudFront as the entry point vs direct service exposure?
 
 **Why it matters:** A managed entry point provides throttling, authentication, request validation, and a single point of control. Direct service exposure lacks these protections and makes it harder to manage traffic patterns.
 
@@ -533,7 +534,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | **2** | Load balancer present but minimal configuration (no auth, no throttling). |
 | **1** | Services exposed directly with no gateway or load balancer. |
 
-> **Look for:** `aws_api_gateway_*`, `aws_apigatewayv2_*`, `aws_lb_*` in IaC; throttling and auth config on gateway.
+> **Look for:** `aws_api_gateway_*`, `aws_apigatewayv2_*`, `aws_appsync_*`, `aws_lb_*`, `aws_iot_*` in IaC; throttling and auth config on gateway; AppSync schema and resolver configurations; IoT Core topic rules.
 
 #### INF-Q7: Auto-Scaling
 
@@ -543,7 +544,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All compute tiers have auto-scaling configured with appropriate min/max. |
+| **4** | All compute resource types have auto-scaling configured with appropriate min/max. |
 | **3** | Auto-scaling on primary compute; some static capacity for auxiliary services. |
 | **2** | Basic auto-scaling with default settings, not tuned for workload patterns. |
 | **1** | No auto-scaling — all capacity is statically provisioned. |
@@ -560,7 +561,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 |-------|----------|
 | **4** | All production data stores have automated backups with defined retention; PITR enabled where supported; restore procedures documented or tested. |
 | **3** | Automated backups configured but missing PITR or missing on some data stores; no documented restore testing. |
-| **2** | Backups on primary database only; no backup plans for other data stores; no restore testing. |
+| **2** | Backups on main production database only; no backup plans for other data stores; no restore testing. |
 | **1** | No backup configuration found; or backup_retention_period = 0. |
 
 > **Look for:** `backup_retention_period` on RDS; `point_in_time_recovery` on DynamoDB; `aws_backup_plan` resources; S3 versioning; EBS snapshot lifecycle policies.
@@ -574,7 +575,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | Score | Criteria |
 |-------|----------|
 | **4** | All production compute and data stores span 2+ AZs; load balancers with cross-zone enabled. |
-| **3** | Primary database is Multi-AZ but some compute or caches are single-AZ. |
+| **3** | Main production database is Multi-AZ but some compute or caches are single-AZ. |
 | **2** | Database is single-AZ; compute spans multiple AZs but no explicit fault isolation. |
 | **1** | All resources in a single AZ; or no AZ configuration found. |
 
@@ -593,7 +594,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | **2** | Partial IaC — some resources defined, but significant manual infrastructure. |
 | **1** | No IaC — all infrastructure created manually (ClickOps). |
 
-> **Look for:** Presence and coverage of .tf files, CDK stacks, CloudFormation templates, Helm charts. Check whether IaC covers compute, networking, databases, and messaging.
+> **Look for:** Presence and coverage of .tf files, CDK stacks, CloudFormation templates, Helm charts. Check whether IaC covers compute, networking, databases, messaging, and operational resources (CloudWatch alarms, Route 53 health checks, Backup plans, and other DR-related resources).
 
 #### INF-Q11: CI/CD Automation
 
@@ -608,7 +609,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | **2** | Partial automation — build is automated but deployment is manual or semi-manual. |
 | **1** | No CI/CD — all deployments are manual scripts or ClickOps. |
 
-> **Look for:** .github/workflows/, buildspec.yml, Jenkinsfile, CodePipeline definitions in IaC; pipeline stages with automated test, build, and deploy steps.
+> **Look for:** .github/workflows/, buildspec.yml, appspec.yml, Jenkinsfile, CodePipeline definitions in IaC; pipeline stages with automated test, build, and deploy steps.
 
 
 ### Step 3: Application Architecture (APP-Q1 through APP-Q6)
@@ -711,7 +712,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no long-ru
 | **2** | Environment variables for endpoints but no dynamic discovery. |
 | **1** | All service endpoints hard-coded in application code or configuration. |
 
-> **Look for:** AWS Service Discovery, App Mesh, Istio, Consul; API Gateway as catalog; environment variables with hard-coded endpoints vs service discovery.
+> **Look for:** AWS Service Discovery, Istio, Consul; API Gateway as catalog; environment variables with hard-coded endpoints vs service discovery.
 
 
 ### Step 4: Data Platform Modernization (DATA-Q1 through DATA-Q4)
