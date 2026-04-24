@@ -6,6 +6,10 @@ Agentic Readiness Assessment
 
 Evaluate whether a repository's systems — infrastructure, applications, data, security controls, and operational practices — are safe, operable, and integrable for autonomous AI agent integration. This assessment targets the environment that agents will call or consume, not the agent itself. It answers the question: are the systems agents will interact with ready to be called safely?
 
+The assessment serves two purposes: (1) portfolio-level telemetry — a snapshot of which systems are agent-ready, which need remediation, and where systemic gaps exist; and (2) use-case-level dependency checking — given a specific agent workflow, which target systems are blockers?
+
+ARA is a design-time architecture review — it evaluates whether controls exist in code and configuration, not whether they are effective at runtime. It is not a penetration test or runtime security scan.
+
 ## Summary
 
 This transformation performs a dedicated Agentic Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, and container definitions. It then evaluates what it finds against 43 questions across 8 sections:
@@ -151,6 +155,9 @@ The output is a structured Markdown report saved as `{repo-name}-ara-report.md` 
 - INFOs section
 - Detailed findings for all 43 questions (including N/A questions in N/A format)
 - Evidence index with file references
+- Prioritized remediation guidance per BLOCKER and RISK finding
+
+Controls evaluated here may exist at the application layer, the platform layer (API Gateway, service mesh, IAM), or the agent architecture layer. ARA checks end-to-end presence — where a control is implemented is an architecture decision, not a scoring factor.
 
 The readiness profile is determined by BLOCKER count and RISK-SAFETY count only. RISK-QUALITY has no effect on profile assignment:
 
@@ -162,7 +169,7 @@ The readiness profile is determined by BLOCKER count and RISK-SAFETY count only.
 | **Remediation Required** | 1–2 | Any | Any | Remediate BLOCKERs first |
 | **Not Agent-Integrable** | 3+ | Any | Any | Deferred or descoped |
 
-This assessment does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers) or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Readiness Assessment.
+This assessment does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers), agent-level AI governance (model policy, prompt-injection defense, safety evaluation), or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Readiness Assessment or agent-side governance reviews.
 
 ## Entry Criteria
 
