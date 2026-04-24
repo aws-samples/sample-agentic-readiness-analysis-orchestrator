@@ -542,18 +542,18 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 #### INF-Q7: Auto-Scaling
 
-**Question:** Are auto-scaling mechanisms configured for compute workloads?
+**Question:** Are auto-scaling mechanisms configured for compute, database, and other workloads?
 
-**Why it matters:** Without auto-scaling, workloads cannot respond to traffic spikes or scale down during low demand. This leads to either over-provisioning (cost waste) or under-provisioning (degraded experience).
+**Why it matters:** Without auto-scaling, workloads cannot respond to traffic spikes or scale down during low demand. This leads to either over-provisioning (cost waste) or under-provisioning (degraded experience). Auto-scaling applies beyond compute — DynamoDB capacity, Aurora replicas, ElastiCache shards, and other managed services also benefit from dynamic scaling.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All compute resource types have auto-scaling configured with appropriate min/max. |
-| **3** | Auto-scaling configured on primary compute with workload-appropriate thresholds (custom target tracking or step policies). Auxiliary services may use static capacity. |
-| **2** | Auto-scaling exists but uses only default/out-of-box settings (e.g., default ECS target tracking without tuning). No custom scaling policies or scheduled scaling. |
+| **4** | All scalable resource types have auto-scaling configured with appropriate min/max — compute (ECS/EKS/EC2 ASG/Lambda concurrency), data (DynamoDB capacity, Aurora replicas), and other managed services where applicable. |
+| **3** | Auto-scaling configured on primary workloads with workload-appropriate thresholds (custom target tracking or step policies) covering both compute and data layers. Auxiliary resources may use static capacity. |
+| **2** | Auto-scaling exists but uses only default/out-of-box settings (e.g., default ECS target tracking without tuning), OR coverage is limited to compute with no scaling on data or other managed services. No custom scaling policies or scheduled scaling. |
 | **1** | No auto-scaling — all capacity is statically provisioned. |
 
-> **Look for:** `aws_autoscaling_*`, `aws_appautoscaling_*`; scaling policies; min/max capacity settings; Lambda concurrency limits.
+> **Look for:** `aws_autoscaling_*`, `aws_appautoscaling_*`; scaling policies; min/max capacity settings; Lambda concurrency limits; DynamoDB auto-scaling; Aurora auto-scaling configuration; ElastiCache shard scaling.
 
 #### INF-Q8: Backup and Recovery
 
