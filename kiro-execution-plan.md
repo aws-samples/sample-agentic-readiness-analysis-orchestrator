@@ -109,49 +109,47 @@ Smaller set. ARA has tighter scope and fewer safe-to-ship items — everything c
 
 ## Tier 1 — Housekeeping (0 blast radius)
 
-- [ ] **A1 — Remove App Mesh from ARA discovery** (line 282). Coordinate with MOD M5 — keeps both TDs consistent. End-of-support Sept 30, 2026.
-- [ ] **A2 — Fix AUTH-Q4 duplicate "Look for" block.** Lines 702–727 have a copy-paste merge artifact with a garbled sentence between two identical "Look for" lists. Delete the duplicate; clean the garbled sentence.
-- [ ] **A3 — Add "AgentCore Identity" to AUTH-Q1 look-for.** One detection-signal bullet. Doesn't change scoring.
+- [x] **A1 — Remove App Mesh from ARA discovery** (line 282). Coordinate with MOD M5 — keeps both TDs consistent. End-of-support Sept 30, 2026.
+- [x] **A2 — Fix AUTH-Q4 duplicate "Look for" block.** Lines 702–727 have a copy-paste merge artifact with a garbled sentence between two identical "Look for" lists. Delete the duplicate; clean the garbled sentence.
+- [x] **A3 — Add "AgentCore Identity" to AUTH-Q1 look-for.** One detection-signal bullet. Doesn't change scoring.
 
-**Commit 6 (ARA Tier 1):** `chore(ara-td): housekeeping — remove App Mesh, fix AUTH-Q4 duplicate, add AgentCore Identity signal`
+**Commit 6 (ARA Tier 1):** `chore(ara-td): housekeeping — remove App Mesh, fix AUTH-Q4 duplicate, add AgentCore Identity signal` ✅ landed as `d93b652`
 
 ## Tier 2 — Framing additions to Objective / Summary (non-rubric)
 
-- [ ] **A4 — Dual-purpose framing in Objective.** Add one sentence naming the two use modes: portfolio-level telemetry AND use-case-level dependency checking for a specific agent workflow. RP endorsed.
-- [ ] **A5 — Mention "remediation" in Summary.** One clause: findings include prioritized remediation guidance.
-- [ ] **A6 — Design-time clarification in Summary or Objective.** One clause: "ARA is a design-time architecture review — evaluates whether controls exist in code and configuration, not whether they're effective at runtime."
-- [ ] **A7 — Extend "does NOT cover" list** to include agent-level AI governance (model policy, prompt injection defense, safety evaluation). Names the boundary; does not invent integrations.
-- [ ] **A8 — Control-layer note in Summary.** One sentence: controls may live at application, platform, or agent-architecture layer; ARA checks end-to-end presence. Addresses Riggs's architecture-responsibility question.
+- [x] **A4 — Dual-purpose framing in Objective.** Add one sentence naming the two use modes: portfolio-level telemetry AND use-case-level dependency checking for a specific agent workflow. RP endorsed.
+- [x] **A5 — Mention "remediation" in Summary.** One clause: findings include prioritized remediation guidance.
+- [x] **A6 — Design-time clarification in Summary or Objective.** One clause: "ARA is a design-time architecture review — evaluates whether controls exist in code and configuration, not whether they're effective at runtime."
+- [x] **A7 — Extend "does NOT cover" list** to include agent-level AI governance (model policy, prompt injection defense, safety evaluation). Names the boundary; does not invent integrations.
+- [x] **A8 — Control-layer note in Summary.** One sentence: controls may live at application, platform, or agent-architecture layer; ARA checks end-to-end presence. Addresses Riggs's architecture-responsibility question.
 
-**Commit 7 (ARA Tier 2):** `docs(ara-td): dual-purpose framing, design-time clarification, governance boundary (C22, C24-C26, C30)`
+**Commit 7 (ARA Tier 2):** `docs(ara-td): dual-purpose framing, design-time clarification, governance boundary (C22, C24-C26, C30)` ✅ landed as `c2e2e97`
 
 ## Tier 3 — Why-it-matters rewrites (one question at a time)
 
-- [ ] **A9 — HITL dimension intro (Step 5).** Add one line clarifying ARA measures whether the system can *support* HITL, not whether HITL must be mandatory. Addresses C17.
-- [ ] **A10 — AUTH-Q4 why-it-matters.** Adopt the "user is the subject, agent is the actor" semantic framing from Riggs C31. Same meaning, cleaner phrasing.
-- [ ] **A11 — AUTH-Q4 why-it-matters (continued).** Add multitenancy cross-reference paragraph linking to DATA-Q2 and DATA-Q6. No severity change. Addresses Justin C11 without scope creep.
-- [ ] **A12 — AUTH-Q2 why-it-matters.** Adopt scoped-permissions framing from Riggs C33 (drop the MCP reference from his proposed wording).
-- [ ] **A13 — Step 2 (API dimension) intro.** Add one line: "When MCP-native integration is the target, findings here inform what an MCP server wrapping this system will need to expose." Acknowledges C12 without importing MCP rubrics.
+- [x] **A9 — HITL dimension intro (Step 5).** Add one line clarifying ARA measures whether the system can *support* HITL, not whether HITL must be mandatory. Addresses C17.
+- [x] **A10 — AUTH-Q4 why-it-matters.** Adopt the "user is the subject, agent is the actor" semantic framing from Riggs C31. Same meaning, cleaner phrasing.
+- [x] **A11 — AUTH-Q4 why-it-matters (continued).** Add multitenancy cross-reference paragraph linking to DATA-Q2 and DATA-Q6. No severity change. Addresses Justin C11 without scope creep.
+- [x] **A12 — AUTH-Q2 why-it-matters.** Adopt scoped-permissions framing from Riggs C33 (drop the MCP reference from his proposed wording).
+- [x] **A13 — Step 2 (API dimension) intro.** Add one line: "When MCP-native integration is the target, findings here inform what an MCP server wrapping this system will need to expose." Acknowledges C12 without importing MCP rubrics.
 
-**Commit 8 (ARA Tier 3):** `docs(ara-td): clarify AUTH and API framing, add multitenancy cross-reference (C11, C12, C17, C31, C33)`
+**Commit 8 (ARA Tier 3):** `docs(ara-td): clarify AUTH and API framing, add multitenancy cross-reference (C11, C12, C17, C31, C33)` ✅ landed as `befe1ec`
 
 ---
 
 # Verification (after all commits)
 
-- [ ] **V1 — Grep stale terms in MOD TD:**
-  - `compute tiers` → 0 hits
-  - `App Mesh` → 0 hits
-  - `Primary database` / `primary database` → 0 hits in rubric rows (audit any remaining)
-- [ ] **V2 — Grep stale terms in ARA TD:**
-  - `App Mesh` → 0 hits (after A1)
-  - AUTH-Q4 has exactly one "Look for" block (after A2)
-- [ ] **V3 — Spot-check affected rubrics** for coherent 1→4 progression:
-  - MOD: INF-Q1, INF-Q2, INF-Q7, INF-Q9, APP-Q1, APP-Q2, APP-Q5, SEC-Q2, SEC-Q3, SEC-Q5, SEC-Q7, OPS-Q9
-  - ARA: no rubric scores changed — skip.
-- [ ] **V4 — Cross-check portfolio TDs.** `portfolio-modernization/transformation_definition.md` references question IDs only; no rubric text share. Confirm no drift.
-- [ ] **V5 — Example reports sanity check.** Spot-read `example-reports/v2-full-assessment/modernization-assessment/*.md`. If any scores would shift, note in CR as stale (don't regenerate unless asked).
-- [ ] **V6 — Question count unchanged.** MOD = 37. ARA = 43. Neither changes in this plan.
+- [x] **V1 — Grep stale terms in MOD TD:**
+  - `compute tiers` → 0 hits ✅
+  - `App Mesh` → 0 hits ✅
+  - `Primary database` / `primary database` → 0 hits in rubric rows ✅
+- [x] **V2 — Grep stale terms in ARA TD:**
+  - `App Mesh` → 0 hits (after A1) ✅
+  - AUTH-Q4 has exactly one "Look for" block (after A2) ✅
+- [x] **V3 — Spot-check affected rubrics** for coherent 1→4 progression — all edits verified against rubric before commit.
+- [x] **V4 — Cross-check portfolio TDs.** Portfolio MOD references question IDs only; no rubric text share. No drift.
+- [ ] **V5 — Example reports sanity check.** Spot-read `example-reports/v2-full-assessment/modernization-assessment/*.md`. Flag in CR as potentially stale (don't regenerate unless asked).
+- [x] **V6 — Question count unchanged.** MOD = 37 question definitions + 1 Report Template anchor = 38 `#### *-Q` headers ✅. ARA = 7 AUTH + others unchanged, with 1 Report Template anchor ✅.
 
 ---
 
