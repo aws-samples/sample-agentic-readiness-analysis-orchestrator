@@ -183,3 +183,10 @@ These are tracked in `kiro-feedback-todo.md` but not here because they need deci
 - All reply-only items (respond in reviewer threads, no file changes)
 
 Anything on this list lands *after* this plan ships, or not at all.
+
+
+---
+
+# Post-landing additions
+
+- [x] **M40 — INF-Q5 rework (Thread 26).** Score 1 → "default VPC or public subnets without isolation"; Score 4 → add managed networking services (PrivateLink, VPC Lattice, IPAM, zero-trust). Scores 2–3 shifted down one step. Look-for gains managed-networking signals. Committed as `0836d24`.
