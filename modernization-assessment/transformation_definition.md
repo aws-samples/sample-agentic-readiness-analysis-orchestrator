@@ -518,12 +518,12 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Services in private subnets, least-privilege security groups, network segmentation present. |
-| **3** | VPC with subnets but some overly permissive rules or missing segmentation. |
-| **2** | Basic VPC setup but services in public subnets or with 0.0.0.0/0 rules. |
-| **1** | No VPC configuration or services deployed outside VPC controls. |
+| **4** | Services in private subnets, least-privilege security groups, proper segmentation, and managed networking services in use (VPC endpoints / PrivateLink, VPC Lattice, IPAM for address management, or zero-trust patterns). |
+| **3** | Services in private subnets with least-privilege security groups and network segmentation present, but no managed networking services layered on top. |
+| **2** | VPC with subnets but some overly permissive rules (0.0.0.0/0 in security groups) or missing segmentation between tiers. |
+| **1** | Services deployed in the default VPC or to public subnets without isolation (e.g., public-facing EC2 with 0.0.0.0/0 ingress, no custom VPC). |
 
-> **Look for:** `aws_vpc`, `aws_subnet`, `aws_security_group`; subnet tiers (public vs private); security group rules; overly permissive rules (0.0.0.0/0).
+> **Look for:** `aws_vpc`, `aws_subnet`, `aws_security_group`; subnet tiers (public vs private); security group rules; overly permissive rules (0.0.0.0/0); default-VPC usage; managed networking signals — `aws_vpc_endpoint`, `aws_vpclattice_*`, `aws_vpc_ipam_*`, AWS PrivateLink configurations.
 
 #### INF-Q6: API Entry Point
 
