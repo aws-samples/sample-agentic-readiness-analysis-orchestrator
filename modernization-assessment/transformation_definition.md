@@ -563,7 +563,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All production data stores have automated backups with defined retention; PITR enabled where supported; restore procedures documented or tested; cross-region backup replication configured for critical data. |
+| **4** | All production data stores have automated backups with defined retention; PITR enabled where supported; restore procedures documented and tested; cross-region backup replication configured for critical data. |
 | **3** | Automated backups configured but missing PITR or missing on some data stores; no documented restore testing. |
 | **2** | Backups on main production database only; no backup plans for other data stores; no restore testing. |
 | **1** | No backup configuration found; or backup_retention_period = 0. |
@@ -593,7 +593,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | 90%+ of infrastructure defined in IaC (compute, networking, databases, messaging). |
+| **4** | 90%+ of infrastructure defined in IaC (compute, networking, databases, messaging, and operational/DR resources — monitoring, alarms, backup plans, health checks). |
 | **3** | 70-90% IaC coverage — primary resources covered, some auxiliary resources manual. |
 | **2** | Partial IaC — some resources defined, but significant manual infrastructure. |
 | **1** | No IaC — all infrastructure created manually (ClickOps). |
