@@ -8,7 +8,7 @@ Evaluate the cloud architecture maturity, operational readiness, and modernizati
 
 ## Summary
 
-This transformation performs a dedicated Modernization Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, container definitions, Kubernetes manifests, and Helm charts. It then evaluates what it finds against 37 questions across 5 sections:
+This transformation performs a dedicated Modernization Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, container definitions, Kubernetes manifests, and Helm charts. It then evaluates what it finds against 37 questions across 5 sections — Infrastructure (INF), Application Architecture (APP), Data Platform (DATA), Security (SEC), and Operations (OPS):
 
 - **INF** — Infrastructure, Platform, and DevOps (11 questions)
 - **APP** — Application Architecture (6 questions)
@@ -56,6 +56,8 @@ The output is a structured Markdown report saved as `{repo-name}-mod-report.md` 
 - Detailed findings for all 37 questions (including N/A questions in N/A format)
 - Learning materials mapped to triggered pathways
 - Evidence index with file references
+
+This assessment targets workloads running on AWS. On-premises and multi-cloud workloads are out of scope unless actively migrating to AWS.
 
 This assessment does NOT cover:
 - **Agentic Readiness** — Whether systems can serve as agent tools (API surface quality, agent identity and authorization, transactional integrity, human-in-the-loop controls, agent observability, discoverability). Those concerns use BLOCKER/RISK/INFO severity scoring, readiness profiles, conditional BLOCKERs based on agent_scope, and are covered in the Agentic Readiness Assessment.
@@ -163,6 +165,7 @@ Get the full directory tree and identify all file types present. For each catego
 - GitLab CI (`.gitlab-ci.yml`)
 - Jenkins (`Jenkinsfile`)
 - AWS CodeBuild (`buildspec.yml`)
+- AWS CodeDeploy (`appspec.yml`)
 - AWS CodePipeline definitions in IaC
 - Other pipeline definitions
 
@@ -189,7 +192,7 @@ This category is particularly important for MOD — Kubernetes and Helm artifact
 - Kustomize overlays (`kustomization.yaml`, `overlays/`, `bases/`)
 - ArgoCD application definitions (`Application`, `ApplicationSet` resources)
 - Flux CD configurations (`GitRepository`, `HelmRelease`, `Kustomization` resources)
-- Service mesh configs (Istio `VirtualService`, `DestinationRule`; App Mesh `VirtualNode`, `VirtualRouter`)
+- Service mesh configs (Istio `VirtualService`, `DestinationRule`)
 - Kubernetes Operators and CRDs (Custom Resource Definitions)
 
 **Database Configurations:**
@@ -445,7 +448,7 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 | Score | Criteria |
 |-------|----------|
-| **4** | 80%+ of compute is ECS/EKS/Lambda/Fargate. EC2 only for edge cases. |
+| **4** | All primary workloads run on ECS/EKS/Lambda/Fargate. EC2 used only for edge cases (bastion hosts, license-locked software). Measured by service count: ≤1 EC2-based service remains. |
 | **3** | Mix of managed and EC2, with managed compute for primary workloads. |
 | **2** | Primarily EC2 with some containerization or Lambda for auxiliary functions. |
 | **1** | All compute on raw EC2 or on-premises with no managed services. |
@@ -454,22 +457,22 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 #### INF-Q2: Managed Databases
 
-**Question:** Are databases fully managed (RDS/Aurora/DynamoDB/DocumentDB) vs self-managed?
+**Question:** Are databases fully managed (RDS/Aurora/DynamoDB/DocumentDB/Neptune/Timestream) vs self-managed?
 
-**Why it matters:** Self-managed databases — regardless of where they run (EC2, containers, on-premises) — introduce maintenance windows, manual patching, and operational overhead. Migrating to managed services eliminates ops burden and enables automatic backups, failover, and scaling. This is a primary target for AWS DMS/SCT-based migration pathways.
+**Why it matters:** Self-managed databases — regardless of where they run (EC2, containers, on-premises) — introduce maintenance windows, manual patching, and operational overhead. Migrating to managed services eliminates ops burden and enables automatic backups, failover, and scaling.
 
 | Score | Criteria |
 |-------|----------|
 | **4** | All databases are managed services with automated failover. |
-| **3** | Primary databases managed; some auxiliary self-managed instances remain. |
-| **2** | Mix of managed and self-managed, or managed but single-AZ without failover. |
+| **3** | Main production databases managed; some auxiliary or secondary self-managed instances remain. |
+| **2** | Main production databases are managed services but deployed single-AZ or without Multi-AZ failover enabled. OR: mix of managed and self-managed — at least one production database is self-hosted (e.g., MySQL on EC2, PostgreSQL in Docker). |
 | **1** | All databases self-managed on EC2, containers, or on-premises. |
 
-> **Look for:** Terraform `aws_rds_*`, `aws_dynamodb_*`, `aws_docdb_*` vs compute resources running database software; connection strings pointing to self-hosted instances; database engine installation in Dockerfiles or user-data scripts.
+> **Look for:** Terraform `aws_rds_*`, `aws_dynamodb_*`, `aws_docdb_*`, `aws_neptune_*`, `aws_timestreamwrite_*` vs compute resources running database software; connection strings pointing to self-hosted instances; database engine installation in Dockerfiles or user-data scripts.
 
 #### INF-Q3: Workflow Orchestration
 
-**Question:** Are workflow orchestration services used (Step Functions, Temporal, Camunda) or are workflows primarily implemented as hardcoded application logic?
+**Question:** Are workflow orchestration services used (Step Functions, MWAA, Temporal, Camunda) or are workflows primarily implemented as hardcoded application logic?
 
 **Why it matters:** Dedicated workflow orchestration provides visual workflow management, error handling, retry logic, and state management. Without it, all orchestration logic is buried in code — harder to maintain, debug, and evolve. However, not every service has workflows to orchestrate. A pure read-only utility or a simple CRUD service may have nothing multi-step to coordinate, and penalizing it for not adopting Step Functions would recommend complexity where none is warranted.
 
@@ -488,9 +491,11 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no workflo
 
 #### INF-Q4: Async Messaging and Streaming
 
-**Question:** Is there managed messaging or streaming infrastructure (SQS, SNS, EventBridge, MSK, Kinesis) vs self-managed Kafka/RabbitMQ, or no messaging at all?
+**Question:** Is there managed messaging or streaming infrastructure (SQS, SNS, EventBridge, MSK, Kinesis, Amazon MQ) vs self-managed Kafka/RabbitMQ, or no messaging at all?
 
 **Why it matters:** Managed messaging and streaming enable event-driven architectures with reduced operational overhead. Self-managed message brokers require patching, scaling, and monitoring. However, async is not universally the right answer — synchronous HTTP or gRPC is the correct design for read-only utility services and read-heavy data gateways, and forcing async into those designs adds operational complexity without architectural benefit. This rubric calibrates expectations by archetype so that services scoring 4 reflect the correct design for their role, not a uniform "async everywhere" bar.
+
+> **Note:** This question uses archetype-sensitive calibration. Synchronous HTTP is the correct design for stateless-utility and data-gateway services and scores 4. See the archetype rubric below.
 
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
@@ -503,7 +508,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no workflo
 
 When the score is 4 for `stateless-utility` or `data-gateway` because synchronous communication is the correct design, the **Finding** field should state that synchronous is appropriate for this archetype and the **Recommendation** should explicitly note that adopting async messaging is NOT recommended — it would add operational complexity without architectural benefit. When the score is 1 for `orchestrator` due to synchronous-only fan-out, flag it as an anti-pattern in the **Gap** field.
 
-> **Look for:** `aws_sqs_*`, `aws_sns_*`, `aws_msk_*`, `aws_kinesis_*`, `aws_eventbridge_*` in IaC; SDK imports for messaging/streaming (boto3 SQS/SNS, `@aws-sdk/client-sqs`, Kafka/Kinesis clients); event-driven handler patterns; stream consumer patterns; for archetype cross-check: count of downstream service calls, presence of write endpoints, presence of event emission on state changes.
+> **Look for:** `aws_sqs_*`, `aws_sns_*`, `aws_msk_*`, `aws_kinesis_*`, `aws_eventbridge_*`, `aws_mq_*` in IaC; SDK imports for messaging/streaming (boto3 SQS/SNS, `@aws-sdk/client-sqs`, Kafka/Kinesis clients, ActiveMQ/RabbitMQ clients); event-driven handler patterns; stream consumer patterns; for archetype cross-check: count of downstream service calls, presence of write endpoints, presence of event emission on state changes.
 
 #### INF-Q5: Network Security
 
@@ -522,7 +527,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 #### INF-Q6: API Entry Point
 
-**Question:** Is there an API Gateway, ALB, or CloudFront as the entry point vs direct service exposure?
+**Question:** Is there an API Gateway, AppSync, ALB, or CloudFront as the entry point vs direct service exposure?
 
 **Why it matters:** A managed entry point provides throttling, authentication, request validation, and a single point of control. Direct service exposure lacks these protections and makes it harder to manage traffic patterns.
 
@@ -533,22 +538,22 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | **2** | Load balancer present but minimal configuration (no auth, no throttling). |
 | **1** | Services exposed directly with no gateway or load balancer. |
 
-> **Look for:** `aws_api_gateway_*`, `aws_apigatewayv2_*`, `aws_lb_*` in IaC; throttling and auth config on gateway.
+> **Look for:** `aws_api_gateway_*`, `aws_apigatewayv2_*`, `aws_appsync_*`, `aws_lb_*`, `aws_iot_*` in IaC; throttling and auth config on gateway; AppSync schema and resolver configurations; IoT Core topic rules.
 
 #### INF-Q7: Auto-Scaling
 
-**Question:** Are auto-scaling mechanisms configured for compute workloads?
+**Question:** Are auto-scaling mechanisms configured for compute, database, and other workloads?
 
-**Why it matters:** Without auto-scaling, workloads cannot respond to traffic spikes or scale down during low demand. This leads to either over-provisioning (cost waste) or under-provisioning (degraded experience).
+**Why it matters:** Without auto-scaling, workloads cannot respond to traffic spikes or scale down during low demand. This leads to either over-provisioning (cost waste) or under-provisioning (degraded experience). Auto-scaling applies beyond compute — DynamoDB capacity, Aurora replicas, ElastiCache shards, and other managed services also benefit from dynamic scaling.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All compute tiers have auto-scaling configured with appropriate min/max. |
-| **3** | Auto-scaling on primary compute; some static capacity for auxiliary services. |
-| **2** | Basic auto-scaling with default settings, not tuned for workload patterns. |
+| **4** | All scalable resource types have auto-scaling configured with appropriate min/max — compute (ECS/EKS/EC2 ASG/Lambda concurrency), data (DynamoDB capacity, Aurora replicas), and other managed services where applicable. |
+| **3** | Auto-scaling configured on primary workloads with workload-appropriate thresholds (custom target tracking or step policies) covering both compute and data layers. Auxiliary resources may use static capacity. |
+| **2** | Auto-scaling exists but uses only default/out-of-box settings (e.g., default ECS target tracking without tuning), OR coverage is limited to compute with no scaling on data or other managed services. No custom scaling policies or scheduled scaling. |
 | **1** | No auto-scaling — all capacity is statically provisioned. |
 
-> **Look for:** `aws_autoscaling_*`, `aws_appautoscaling_*`; scaling policies; min/max capacity settings; Lambda concurrency limits.
+> **Look for:** `aws_autoscaling_*`, `aws_appautoscaling_*`; scaling policies; min/max capacity settings; Lambda concurrency limits; DynamoDB auto-scaling; Aurora auto-scaling configuration; ElastiCache shard scaling.
 
 #### INF-Q8: Backup and Recovery
 
@@ -558,9 +563,9 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All production data stores have automated backups with defined retention; PITR enabled where supported; restore procedures documented or tested. |
+| **4** | All production data stores have automated backups with defined retention; PITR enabled where supported; restore procedures documented or tested; cross-region backup replication configured for critical data. |
 | **3** | Automated backups configured but missing PITR or missing on some data stores; no documented restore testing. |
-| **2** | Backups on primary database only; no backup plans for other data stores; no restore testing. |
+| **2** | Backups on main production database only; no backup plans for other data stores; no restore testing. |
 | **1** | No backup configuration found; or backup_retention_period = 0. |
 
 > **Look for:** `backup_retention_period` on RDS; `point_in_time_recovery` on DynamoDB; `aws_backup_plan` resources; S3 versioning; EBS snapshot lifecycle policies.
@@ -574,8 +579,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | Score | Criteria |
 |-------|----------|
 | **4** | All production compute and data stores span 2+ AZs; load balancers with cross-zone enabled. |
-| **3** | Primary database is Multi-AZ but some compute or caches are single-AZ. |
-| **2** | Database is single-AZ; compute spans multiple AZs but no explicit fault isolation. |
+| **3** | Main production database is Multi-AZ; stateful compute or caches are multi-AZ; stateless compute may be single-AZ if replaceable via ASG/service across AZs. |
+| **2** | Main production database is single-AZ OR stateful compute is single-AZ; other compute spans multiple AZs but fault isolation is not explicit. |
 | **1** | All resources in a single AZ; or no AZ configuration found. |
 
 > **Look for:** `multi_az = true` on RDS; `availability_zones` spanning 2+ AZs in ASGs/ECS; subnet configurations across multiple AZs.
@@ -593,11 +598,11 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | **2** | Partial IaC — some resources defined, but significant manual infrastructure. |
 | **1** | No IaC — all infrastructure created manually (ClickOps). |
 
-> **Look for:** Presence and coverage of .tf files, CDK stacks, CloudFormation templates, Helm charts. Check whether IaC covers compute, networking, databases, and messaging.
+> **Look for:** Presence and coverage of .tf files, CDK stacks, CloudFormation templates, Helm charts. Check whether IaC covers compute, networking, databases, messaging, and operational resources (CloudWatch alarms, Route 53 health checks, Backup plans, and other DR-related resources).
 
 #### INF-Q11: CI/CD Automation
 
-**Question:** Are CI/CD pipelines automated with build, test, and deploy stages, or are deployments manual?
+**Question:** Are CI/CD pipelines automated with build, test, and deploy stages for both application code and infrastructure as code, or are deployments manual?
 
 **Why it matters:** Manual deployments create bottlenecks, are error-prone, and prevent rapid iteration. Automated pipelines enable continuous delivery with consistent quality gates.
 
@@ -608,7 +613,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | **2** | Partial automation — build is automated but deployment is manual or semi-manual. |
 | **1** | No CI/CD — all deployments are manual scripts or ClickOps. |
 
-> **Look for:** .github/workflows/, buildspec.yml, Jenkinsfile, CodePipeline definitions in IaC; pipeline stages with automated test, build, and deploy steps.
+> **Look for:** .github/workflows/, buildspec.yml, appspec.yml, Jenkinsfile, CodePipeline definitions in IaC; pipeline stages with automated test, build, and deploy steps.
 
 
 ### Step 3: Application Architecture (APP-Q1 through APP-Q6)
@@ -619,14 +624,14 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Question:** What programming languages are used and how mature is their ecosystem for cloud-native development?
 
-**Why it matters:** Language choice affects framework availability, community support, hiring, and modernization options. Some languages have richer ecosystems for containers, serverless, and cloud-native patterns.
+**Why it matters:** Language choice determines the breadth of AWS SDK support, the depth of cloud-native tooling, and the availability of modern framework ecosystems. Languages with first-class AWS SDK coverage and mature cloud-native libraries enable faster modernization; languages with narrower AWS tooling require more custom integration work to reach the same outcomes.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Python, TypeScript/JavaScript, Go, or Java/Kotlin — mature cloud-native ecosystems. |
-| **3** | .NET, Ruby, or Rust — solid ecosystems with some gaps. |
-| **2** | PHP, Perl, or older Java versions (< 11) — functional but limited modern tooling. |
-| **1** | COBOL, VB6, Classic ASP, or legacy languages with minimal cloud-native support. |
+| **4** | Python, TypeScript/JavaScript, Go, or Java/Kotlin — first-class AWS SDK coverage, broad cloud-native tooling, mature framework ecosystems. |
+| **3** | .NET/C# or Rust — good AWS SDK coverage with narrower cloud-native tooling ecosystem. |
+| **2** | PHP, Ruby, Perl, or older Java versions (< 11) — functional AWS SDK but limited cloud-native tooling depth. |
+| **1** | Languages with limited AWS SDK and cloud-native tooling (e.g., COBOL, VB6, Classic ASP) — requires custom integration or migration planning for cloud services. |
 
 > **Look for:** File extensions; package.json, requirements.txt, pom.xml/build.gradle, go.mod, *.csproj.
 
@@ -634,13 +639,13 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Question:** Is the application a single deployable unit or multiple independently deployable services?
 
-**Why it matters:** Monoliths limit independent scaling, deployment, and team autonomy. Understanding the current decomposition state and coupling level determines the modernization strategy — containerize as-is, strangler fig extraction, or full decomposition.
+**Why it matters:** Monoliths limit independent scaling, deployment, and team autonomy. Understanding the current decomposition state and coupling level determines the modernization strategy — containerize, migrate to serverless (Lambda), strangler fig extraction, or full decomposition.
 
 | Score | Criteria |
 |-------|----------|
 | **4** | Microservices or modular monolith with well-defined module boundaries, no circular dependencies, clear interfaces. |
-| **3** | Modular monolith with some coupling, or early-stage microservices with shared databases. |
-| **2** | Monolith with identifiable modules but significant coupling (shared state, database coupling, circular dependencies). |
+| **3** | Modular monolith with separate schemas per module (or per-service databases), clear module interfaces, no circular dependencies. OR: microservices that share a database instance but use separate schemas. |
+| **2** | Monolith with identifiable modules but shared database schemas, direct cross-module data access, or circular call dependencies between modules. |
 | **1** | Tightly-coupled monolith with no clear module boundaries, pervasive shared state. |
 
 > **Look for:** Single deployable vs multiple service directories; Helm charts for multiple services; Docker Compose with multiple services; IaC for multiple ECS tasks or Lambda functions. For monoliths: package/module structure, dependency graphs, circular dependencies, shared mutable state, database coupling.
@@ -692,8 +697,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no long-ru
 | Score | Criteria |
 |-------|----------|
 | **4** | Consistent versioning strategy with backward compatibility guarantees. |
-| **3** | Versioning present but inconsistent across endpoints. |
-| **2** | Ad hoc versioning — some endpoints versioned, others not. |
+| **3** | Versioning strategy exists and is applied to most endpoints (e.g., /v1/ paths, version headers), but some newer or internal endpoints don't follow the convention. |
+| **2** | Versioning applied ad hoc — fewer than half of endpoints use versioning, or multiple conflicting versioning schemes coexist (e.g., some use URL paths, others use headers). |
 | **1** | No versioning — breaking changes deployed directly. |
 
 > **Look for:** /v1/, /v2/ URL patterns; Accept-Version headers; versioning annotations; changelog files.
@@ -711,7 +716,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because no long-ru
 | **2** | Environment variables for endpoints but no dynamic discovery. |
 | **1** | All service endpoints hard-coded in application code or configuration. |
 
-> **Look for:** AWS Service Discovery, App Mesh, Istio, Consul; API Gateway as catalog; environment variables with hard-coded endpoints vs service discovery.
+> **Look for:** AWS Service Discovery, Istio, Consul; API Gateway as catalog; environment variables with hard-coded endpoints vs service discovery.
 
 
 ### Step 4: Data Platform Modernization (DATA-Q1 through DATA-Q4)
@@ -722,13 +727,13 @@ These questions evaluate the data layer's modernization state — managed servic
 
 **Question:** Are documents and unstructured data stored in managed object storage (S3) with parsing capabilities (Textract, Tika)?
 
-**Why it matters:** Unstructured data locked in file systems, local storage, or legacy document management systems is inaccessible for modern workloads. S3 with parsing pipelines enables search, analytics, and AI integration.
+**Why it matters:** Unstructured data locked in file systems, local storage, or legacy document management systems is inaccessible for modern workloads. S3 with parsing pipelines enables search, analytics, and AI integration. Assessing current access patterns (frequency, size, format) helps identify S3 adoption opportunities and migration paths.
 
 | Score | Criteria |
 |-------|----------|
 | **4** | Unstructured data stored in S3 with parsing pipeline available. |
 | **3** | Data in S3 but no automated parsing or extraction pipeline. |
-| **2** | Data in managed storage but not S3 (EFS, EBS volumes) with limited accessibility. |
+| **2** | Data in managed storage but not S3 (EFS, EBS volumes) with limited accessibility. Note: Amazon S3 File Gateway (mountable S3 access) can bridge filesystem-dependent applications without data duplication. |
 | **1** | Data on local file systems, legacy document management, or inaccessible storage. |
 
 > **Look for:** `aws_s3_bucket`; Textract calls; document parsing libraries; PDF/image processing.
@@ -756,7 +761,7 @@ These questions evaluate the data layer's modernization state — managed servic
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All database engine versions explicitly pinned in IaC; no engines at or past EOL. |
+| **4** | All database engine versions explicitly pinned in IaC; no engines at or past EOL; documented version-update procedure exists covering downtime windows, rollback, and risk acknowledgment. |
 | **3** | Versions pinned but some approaching EOL within 12 months. |
 | **2** | Some versions pinned, others implicit; EOL status unknown. |
 | **1** | No version pinning; engines at or past EOL detected. |
@@ -806,9 +811,9 @@ These questions evaluate the foundational security posture required for any mode
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Customer-managed KMS keys for all sensitive data stores. |
-| **3** | AWS-managed encryption enabled on most data stores. |
-| **2** | Encryption enabled on some data stores but not all. |
+| **4** | Customer-managed KMS keys for all sensitive data stores, with centralized key management and documented rotation policy. |
+| **3** | Customer-managed KMS keys on most sensitive data stores, OR AWS-managed encryption enabled across all data stores. Rotation may not be defined. |
+| **2** | Mix of encryption types with coverage gaps — some data stores have customer-managed keys, others use AWS-managed, and at least one sensitive data store has no encryption configured. |
 | **1** | No encryption at rest configured. |
 
 > **Look for:** `kms_key_id` on S3/RDS/DynamoDB/EBS; `aws_kms_key` resources; encryption config on data stores.
@@ -821,9 +826,9 @@ These questions evaluate the foundational security posture required for any mode
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Every API endpoint authenticated; OAuth2/JWT standard in use. |
-| **3** | Most endpoints authenticated; some internal endpoints lack auth. |
-| **2** | Basic authentication (API keys) without token-based auth. |
+| **4** | All API endpoints use token-based auth (OAuth2/JWT); intentionally public endpoints protected by API Gateway with throttling and validation. |
+| **3** | Token-based auth (OAuth2/JWT) on all external endpoints. Internal/private-subnet endpoints may lack auth if network isolation is enforced (security groups, VPC endpoints). |
+| **2** | API key or static credential authentication without token-based auth. OR: token-based auth on fewer than half of endpoints. |
 | **1** | No API authentication — endpoints are open. |
 
 > **Look for:** Auth middleware; API Gateway authorizers; Cognito user pools; OAuth2 flows; Bearer token validation; @Authenticated annotations.
@@ -852,8 +857,8 @@ These questions evaluate the foundational security posture required for any mode
 | Score | Criteria |
 |-------|----------|
 | **4** | All secrets in Secrets Manager or Vault with automated rotation; no hardcoded credentials. |
-| **3** | Most secrets managed; some legacy environment variables remain. |
-| **2** | Mix of managed and hardcoded secrets; no rotation. |
+| **3** | Secrets Manager or Vault used for primary credentials (database, API keys). Some non-critical configs still in environment variables (e.g., feature flags, non-secret config). No rotation configured. |
+| **2** | Some secrets in Secrets Manager/Vault but production database credentials or API keys still in environment variables, config files, or parameter store without encryption. No rotation. |
 | **1** | Secrets hardcoded in code or committed to version control. |
 
 > **Look for:** `aws_secretsmanager_*` in IaC; Vault client imports; hardcoded patterns (password=, secret=, api_key= in code); .env files committed to git.
@@ -883,8 +888,8 @@ These questions evaluate the foundational security posture required for any mode
 |-------|----------|
 | **4** | SAST + dependency scanning in CI/CD with security gates blocking on critical findings; container scanning if applicable. |
 | **3** | At least one scanning tool in CI/CD but missing container scanning or no blocking gate. |
-| **2** | Dependency scanning configured (e.g., Dependabot) but no SAST; or scanning not integrated into pipeline. |
-| **1** | No security scanning in CI/CD pipeline. |
+| **2** | Dependency scanning configured (e.g., Dependabot, npm audit) and running, but no SAST tool. OR: SAST tool configured but only runs on-demand, not in every pipeline execution. |
+| **1** | No security scanning tools configured — no Dependabot, no SAST, no container scanning. Pipeline has no security validation step. |
 
 > **Look for:** SonarQube, Semgrep, CodeGuru Reviewer in CI/CD; Dependabot config; `npm audit` or `pip-audit` in pipeline; ECR image scanning; `.snyk` policy files.
 
@@ -1021,12 +1026,12 @@ These questions evaluate the operational maturity and observability practices th
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All resources tagged with consistent keys; tag enforcement via Config rules or SCPs; cost allocation tags activated. |
+| **4** | All resources tagged with consistent keys; tag enforcement via IaC (required tags in modules) combined with Tag Policies in AWS Organizations and AWS Config rules; cost allocation tags activated. |
 | **3** | Most resources tagged but inconsistent key naming or missing on some resource types; no enforcement. |
 | **2** | Some resources tagged but many untagged; no tagging standard. |
 | **1** | No tags found on resources; or only Name tags with no cost/ownership attribution. |
 
-> **Look for:** `default_tags` in Terraform provider; `tags` on resources; `required-tags` Config rules; tag policies in AWS Organizations.
+> **Look for:** `default_tags` in Terraform provider; `tags` on resources; `required-tags` Config rules; Tag Policies in AWS Organizations. SCPs are generally not recommended for tag enforcement — per-service action variance and policy-size limits make them unreliable for tagging; reserve SCPs for security guardrails.
 
 
 ### Step 7: Evaluate AWS Modernization Pathways

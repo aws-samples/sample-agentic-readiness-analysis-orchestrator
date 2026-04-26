@@ -6,6 +6,10 @@ Agentic Readiness Assessment
 
 Evaluate whether a repository's systems — infrastructure, applications, data, security controls, and operational practices — are safe, operable, and integrable for autonomous AI agent integration. This assessment targets the environment that agents will call or consume, not the agent itself. It answers the question: are the systems agents will interact with ready to be called safely?
 
+The assessment serves two purposes: (1) portfolio-level telemetry — a snapshot of which systems are agent-ready, which need remediation, and where systemic gaps exist; and (2) use-case-level dependency checking — given a specific agent workflow, which target systems are blockers?
+
+ARA is a design-time architecture review — it evaluates whether controls exist in code and configuration, not whether they are effective at runtime. It is not a penetration test or runtime security scan.
+
 ## Summary
 
 This transformation performs a dedicated Agentic Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, and container definitions. It then evaluates what it finds against 43 questions across 8 sections:
@@ -151,6 +155,9 @@ The output is a structured Markdown report saved as `{repo-name}-ara-report.md` 
 - INFOs section
 - Detailed findings for all 43 questions (including N/A questions in N/A format)
 - Evidence index with file references
+- Prioritized remediation guidance per BLOCKER and RISK finding
+
+Controls evaluated here may exist at the application layer, the platform layer (API Gateway, service mesh, IAM), or the agent architecture layer. ARA checks end-to-end presence — where a control is implemented is an architecture decision, not a scoring factor.
 
 The readiness profile is determined by BLOCKER count and RISK-SAFETY count only. RISK-QUALITY has no effect on profile assignment:
 
@@ -162,7 +169,7 @@ The readiness profile is determined by BLOCKER count and RISK-SAFETY count only.
 | **Remediation Required** | 1–2 | Any | Any | Remediate BLOCKERs first |
 | **Not Agent-Integrable** | 3+ | Any | Any | Deferred or descoped |
 
-This assessment does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers) or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Readiness Assessment.
+This assessment does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers), agent-level AI governance (model policy, prompt-injection defense, safety evaluation), or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Readiness Assessment or agent-side governance reviews.
 
 ## Entry Criteria
 
@@ -279,7 +286,7 @@ Get the full directory tree and identify all file types present. For each catego
 - Application config (`*.yaml`, `*.yml`, `*.json`, `*.toml`, `*.properties`, `*.ini`)
 - Environment files (`.env`, `.env.*`)
 - Kubernetes manifests (`*.yaml` in k8s/, manifests/, or deploy/ directories)
-- Service mesh configs (Istio, App Mesh)
+- Service mesh configs (Istio)
 
 #### 1.2 Directories to Ignore
 
@@ -519,6 +526,8 @@ For each evaluation step (Steps 2–9), before evaluating a question:
 
 Evaluate the application's API surface — the integration layer that agents will call. APIs are the minimum viable integration surface for agent tools. This section assesses whether the APIs are documented, machine-readable, well-structured, versioned, and operationally ready for autonomous consumption.
 
+When MCP-native integration is the target, the findings here inform what an MCP server wrapping this system will need to expose.
+
 Before evaluating each question, check the N/A mapping for the resolved `repo_type`. If a question is N/A, record it in the N/A display format and skip evaluation.
 
 ---
@@ -665,6 +674,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - mTLS configuration
 - Service account definitions
 - Cognito app clients
+- Bedrock AgentCore Identity configurations
 - API Gateway authorizers
 - Check audit logs for agent identity fields
 
@@ -674,7 +684,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Question:** Does the authorization model support scoped permissions — an agent identity can be granted read-only access to specific resources without inheriting broader privileges?
 
-**Why it matters:** Agents under overly broad permissions create blast radius risk. Least-privilege is critical, though enforcement can happen at the platform layer (API Gateway, IAM policies) if the app itself is coarse-grained.
+**Why it matters:** Agents under overly broad permissions create blast radius risk. Without scoped permissions, the system cannot scope down agent access per capability — every agent identity inherits the same broad surface. Least-privilege is critical, though enforcement can happen at the platform layer (API Gateway, IAM policies) if the app itself is coarse-grained.
 
 **Look for:**
 - IAM policies with specific actions per resource vs wildcards (`Action: "*"`, `Resource: "*"`)
@@ -703,7 +713,9 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Question:** Does the system support identity propagation through service calls (JWT/OAuth token exchange, on-behalf-of flows), and can it distinguish between an agent acting under its own service identity vs. acting on behalf of a specific human user?
 
-**Why it matters:** Without identity propagation, the system either trusts all internal calls equally or requires each service to re-authenticate — both are problematic. Additionally, an agent acting as itself should have tightly scoped permissions, while an agent acting on behalf of a user should be bounded by that user's permissions. Conflating the two is a common source of privilege escalation.
+**Why it matters:** Without identity propagation, the system either trusts all internal calls equally or requires each service to re-authenticate — both are problematic. Additionally, an agent acting as itself should have tightly scoped permissions, while an agent acting on behalf of a user should be bounded by that user's permissions. Conflating the two is a common source of privilege escalation. The user is the subject (whose data and permissions apply); the agent is the actor (executing the operation). The system must distinguish both dimensions.
+
+When the target system serves multiple tenants, weak identity propagation compounds with data-layer risks — see DATA-Q2 (data residency) and DATA-Q6 (PII in logs). Treat these as a cluster when planning remediation.
 
 **Archetype calibration:** For `stateless-utility` and `data-gateway` archetypes, downgrade to INFO — stateless services returning public/reference data are not affected by caller identity, and data gateways typically serve as read-only query layers where identity context has minimal security impact.
 
@@ -715,14 +727,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - User context headers (`X-User-Id`, `Authorization Bearer`) passed through service calls
 - Separate IAM roles or API keys for agent-as-self vs agent-on-behalf-of-user
 - Different auth flows for service-to-service vs user-delegated calls
-- Audit log fields distinguishing the two modes cannot personalize responses per user or silently exposes all user data to every agent call.
-
-**Look for:**
-- JWT parsing middleware
-- OAuth2 on-behalf-of flows
-- Token exchange patterns
-- Cognito/Okta integration
-- User context headers (`X-User-Id`, `Authorization Bearer`) passed through service calls
+- Audit log fields distinguishing the two modes
 
 ---
 
@@ -894,6 +899,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 ### Step 5: Human-in-the-Loop and Approval Workflows (3 questions)
 
 Evaluate whether the application supports human oversight for high-stakes agent operations. Agents should not commit irreversible actions autonomously for high-risk operations — draft states, approval gates, and sandbox environments provide defense in depth.
+
+ARA measures whether a target system can *support* human-in-the-loop patterns, not whether HITL is mandatory. HITL is a valuable safety mechanism for high-stakes operations and a confidence-building step during initial agent deployments.
 
 Before evaluating each question, check the N/A mapping for the resolved `repo_type`. If a question is N/A, record it in the N/A display format and skip evaluation.
 
