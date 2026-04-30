@@ -821,6 +821,8 @@ When the target system serves multiple tenants, weak identity propagation compou
 
 **Why it matters:** Audit trails must identify whether an action was taken by a human or an agent, and which specific agent instance. Without immutable logs, you cannot prove compliance or conduct forensics.
 
+**Surface-flag calibration:** The conditional above determines severity only when the system has an agent-invocable surface. If the repo was classified as `dev-library-application` via Step 1.5, or if `has_auth_surface` is `false` AND `has_write_operations` is `false`, record as INFO with the rationale `"System does not execute agent-invoked write operations — audit logging is a consumer responsibility. The library/utility is called by applications that own the audit context."` This downgrade path addresses the observed pattern where 34/34 repos score identical RISK-SAFETY for "no audit logging found," even when the repo is a CLI tool or frontend template with no operations to audit.
+
 **Look for:**
 - `aws_cloudtrail` in IaC
 - CloudTrail log file validation enabled
@@ -835,6 +837,8 @@ When the target system serves multiple tenants, weak identity propagation compou
 **Question:** Can individual agent identities be suspended or revoked immediately if anomalous behavior is detected, without taking down the broader platform?
 
 **Why it matters:** The ability to isolate a misbehaving agent without disrupting other agents or users is a fundamental operational requirement.
+
+**Surface-flag calibration:** If the repo was classified as `dev-library-application` via Step 1.5, or if `has_auth_surface` is `false`, record as INFO with the rationale `"System does not issue or enforce agent identities — suspension is a consumer responsibility. Libraries and utilities are invoked by applications that own identity lifecycle."`
 
 **Look for:**
 - API key revocation endpoints
