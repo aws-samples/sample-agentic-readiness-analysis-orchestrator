@@ -337,3 +337,43 @@ Net: v3 is not more lenient — the distribution is sharper. Fewer blockers, mor
 
 - **C-1** — APP-Q1 Score 2 may be too harsh for "language modern, stack lag" cases (Java 8 + legacy framework).
 - **C-4** — Portfolio Assessment Inventory `assessment_date` pulled from frontmatter, not run date — produces stale dates.
+
+## Phase F+C — Shipped Apr 30, 2026 (branch `fix/ara-calibration`)
+
+- ✅ **B3 — Archetype-visibility Note extended to INF-Q3, APP-Q3, APP-Q4.** Commit `7040e7f`. Added the `> **Note:** This question uses archetype-sensitive calibration...` block above `**Archetype Calibration:**` in all 3 archetype-sensitive MOD questions that were missing it. Now all 4 (INF-Q3, INF-Q4, APP-Q3, APP-Q4) surface archetype sensitivity consistently.
+- ✅ **F5 — INF-Q11 ↔ SEC-Q7 cross-reference.** Commit `7040e7f`. Added one sentence to INF-Q11 why-it-matters noting CI/CD automation alone is not sufficient — pipelines must also include security validation (SAST, DAST, dependency scanning). Cross-references SEC-Q7 for the pipeline-security evaluation.
+- ✅ **F6 — INF-Q7 Score 4 business-metric-driven scaling.** Commit `7040e7f`. Extended Score 4 to mention *"custom CloudWatch metrics on requests-in-flight, orders-per-second, queue depth"* as the maturity signal where purely technical metrics are insufficient. Completes R3-rework.
+- ✅ **C-1 — APP-Q1 two-axis rubric.** Commit `7040e7f`. Rewrote APP-Q1 with a two-axis calibration: (a) language/runtime modernity, (b) framework/SDK modernity. Score 4 = all modern (Python 3.10+, Java 17+ with Spring Boot 3.x and AWS SDK v2, modern .NET 6-10 with AWS SDK v3). Score 3 = modern language with framework/SDK lag (Java 17 + Spring Boot 2.7; modern .NET with SDK v2 partial adoption). Score 2 = compound regression across all three axes (Java 8 + Spring Boot 2.x + SDK v1; .NET Framework 4.x + legacy ASP.NET + SDK v2 or older; also PHP/Ruby/Perl). Score 1 = no meaningful AWS SDK (COBOL, VB6). Scanner data confirmed .NET Framework 4.8 (greenshot) and modern .NET (Sonarr, cartservice) were being conflated at Score 3, and Java 8 alone was scoring 4 in some reports — the new rubric separates these cleanly.
+
+## Phase R — ARA Rubric Recalibration (shipped Apr 29–30, 2026, branch `fix/ara-calibration`)
+
+**Source:** `analyze-ara-patterns.py` across all 34 zg-cmp ARA v4 reports — 26 of 43 questions showed ≥85% concentration on one severity, with 11 non-data-handling OSS tools getting the same BLOCKER/RISK-SAFETY findings as hapi-fhir.
+
+- ✅ **ARA-R1 — DATA-Q1 scope gate + archetype calibration.** Commit `044c369`. Rewritten with Stage A (does this system handle sensitive data?) / Stage B (classification check) structure. `stateless-utility` archetype and `dev-library-application` override land on INFO.
+- ✅ **ARA-R2 — DATA-Q2, DATA-Q6 archetype + scope calibration.** Commit `3826b58`. Both downgrade to INFO when the system has no persistent data store and no user-data logging, or for `stateless-utility` archetype. Conditional BLOCKER logic on DATA-Q2 preserved.
+- ✅ **ARA-R3 — STATE-Q1, STATE-Q5 archetype calibration.** Commit `3826b58`. STATE-Q1 downgrades to INFO when no write operations and no HTTP/RPC surface. STATE-Q5 downgrades to INFO when no HTTP/RPC surface. Both also honor the dev-library-application override.
+- ✅ **ARA-R4 — OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3 library-aware calibration.** Commit `ed9eca6`. All five downgrade to INFO for `dev-library-application` or when no HTTP/RPC surface (and, for ENG-Q1, also no auth surface).
+- ✅ **ARA-R5 — API-Q2, API-Q3 scope gate for "no HTTP surface".** Commit `3826b58`. Both downgrade to INFO when `has_http_rpc_surface` is false or for `dev-library-application`.
+- ✅ **ARA-R6 — Target-system-surface detection step.** Commit `cf58756`. New Step 1.5 records five surface flags (has_persistent_data_store, has_http_rpc_surface, has_auth_surface, has_write_operations, has_logging_of_user_data). Feeds all downstream scope gates. Renumbered archetype detection to Step 1.6.
+- ✅ **ARA-R7 — AUTH-Q6 and AUTH-Q7 differentiation when downgraded.** Commit `dd35bce`. Both downgrade to INFO for `dev-library-application` or when no auth surface (+ no write operations for AUTH-Q6). Conditional BLOCKER logic on AUTH-Q6 preserved.
+- ✅ **ARA-R8 — Dev-library-application archetype override (option b).** Commit `cf58756` as part of Step 1.5. When archetype is `stateless-utility` AND 3+ surface flags are `false`, apply the `library` N/A mapping as the scoring baseline. ARA-TD-internal, no Power or portfolio config changes needed.
+- ✅ **ARA-R9 — HITL-Q3 library calibration.** Commit `3826b58`. Downgrades to INFO for `dev-library-application` or when no HTTP/RPC surface and no data store.
+
+**Canary verification (Apr 29, 2026):** Ran tqdm, hapifhir, umami with recalibrated TD. tqdm: all 15 targeted questions flipped from BLOCKER/RISK-SAFETY/RISK-QUALITY to INFO. hapifhir: DATA-Q1 correctly stayed BLOCKER (real PHI). umami: unchanged (observability repo that does handle user data). Confirms the calibration removes false positives without under-flagging real data-handling systems.
+
+**Pending:** 31 non-canary repos need v5 ARA re-run against recalibrated TD to confirm V-R1..V-R4 at portfolio scale.
+
+## Phase C-2 — ARA framing lift (shipped Apr 30, 2026)
+
+- ✅ **C-2 — Lift ARA Summary framing into per-question why-it-matters.** Commit `cfe3a04`. The ARA Summary/Objective already carried dual-purpose, design-time, control-layer, and HITL-support-not-mandatory framing, but rendered reports quote per-question why-it-matters (not Summary). Lifted one sentence each into:
+  - **AUTH-Q1**: design-time + control-layer clause (machine identity sits at the control layer; weak attribution invalidates downstream AUTH-Q2/Q3/Q6)
+  - **AUTH-Q4**: dual-purpose clause (portfolio telemetry vs use-case-level dependency checking)
+  - **HITL-Q1**: support-not-mandatory clause (ARA measures whether HITL patterns can be supported, not whether they are mandatory)
+
+## Phase TD-Infra — Fix A + Fix B (shipped Apr 29, 2026)
+
+- ✅ **Fix A — td_version in report metadata.** Commit `c97b735`. Both ARA and MOD reports now emit `td_version` in the frontmatter so we can tell which TD version generated which report during portfolio scans and regressions.
+- ✅ **Fix B — Not Evaluated (archetype-N/A) tier for MOD.** Commit `c97b735`. MOD TD now has a `"Not Evaluated (archetype-N/A)"` output tier mirroring ARA's Not-Evaluated handling. Used by archetype-sensitive questions when the archetype makes the question inapplicable (e.g., stateless-utility + APP-Q3 sync-is-correct), so these don't default to Score 4 and skew category averages.
+
+---
+
