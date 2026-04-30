@@ -1,0 +1,339 @@
+# Feedback Archive
+
+Items already **shipped**, **rejected**, **already resolved**, **reply-only**, or **docx-only** from the MOD + ARA TD feedback passes. Kept here for CR and reviewer traceability — the live TODO is in `kiro-feedback-todo.md`.
+
+**Last updated:** Apr 29, 2026 — verified shipped items via grep against live TDs.
+
+---
+
+# ✅ MOD TD — Shipped
+
+All items below are **confirmed present in `modernization-assessment/transformation_definition.md`** as of Apr 29, 2026.
+
+## Phase A — Scope + structural
+
+- ✅ **A1 — P1C-1: AWS scope statement.** Prepended AWS-targeting paragraph above `This assessment does NOT cover:` in Summary. Addresses C5 (Turrini), Thread 4.
+- ✅ **A2 — P4-1: Name the 5 dimensions** on the `37 questions across 5 sections:` line. Addresses C3 (Omran).
+
+## Phase B — Scoring rubric precision
+
+- ✅ **B1 — INF-Q1 Score 4**: service-count-based criterion. Measured by `≤1 EC2-based service remains`.
+- ✅ **B2 — INF-Q2 Scores 2 and 3** (WF-1 wording). Score 2: *"Main production databases are managed services but deployed single-AZ or without Multi-AZ failover enabled. OR: mix of managed and self-managed..."*
+- ✅ **B3 (partial) — INF-Q4 archetype-visibility Note.** INF-Q4 has a `> **Note:**` block above Archetype Calibration. **Still open for INF-Q3, APP-Q3, APP-Q4** — in live TODO.
+- ✅ **B4 — INF-Q7 Scores 3 and 2**: custom vs default scaling policies (Score 2 explicitly calls out "default/out-of-box settings").
+- ✅ **B5 — APP-Q2 Scores 3 and 2**: schema separation + circular dependencies.
+- ✅ **B6 — APP-Q5 Scores 3 and 2**: "most endpoints follow" vs "fewer than half".
+- ✅ **B7 — SEC-Q3 Scores 3 and 2**: auth method vs coverage (Score 3 allows internal/private-subnet endpoints without auth if network isolation; Score 2 = API key/static credential OR token-auth on <half).
+- ✅ **B8 — SEC-Q5 Scores 3 and 2**: what's in env vars (Score 3 = primary credentials in Secrets Manager, non-critical configs may be env vars; Score 2 = production DB creds still in env vars).
+- ✅ **B9 — SEC-Q7 Scores 2 and 1**: eliminated overlap (Score 2 = dependency scanning only OR on-demand SAST; Score 1 = nothing).
+- ✅ **B10 — SEC-Q3 Score 4** (WF-3): carve-out for intentional public APIs (*"intentionally public endpoints protected by API Gateway with throttling and validation"*).
+- ✅ **B11 — analysis-C12: APP-Q1 tone fix.** Score 1 now reads: *"Languages with limited AWS SDK and cloud-native tooling (e.g., COBOL, VB6, Classic ASP) — requires custom integration or migration planning for cloud services."*
+- ✅ **B12 — SEC-Q2 Score 2/3 overlap** (analysis-C23): reworked on key type AND coverage.
+- ✅ **B13 — INF-Q9 multi-AZ wording** (analysis-C15): Score 3 reads *"stateless compute may be single-AZ if replaceable via ASG/service across AZs."*
+- ✅ **B14 — INF-Q10 look-for scope** (analysis-C10): expanded to include CloudWatch alarms, Route 53 health checks, Backup plans.
+
+## Phase C — Terminology
+
+- ✅ **C1 — "compute tiers" → "compute resource types"** (INF-Q7 Score 4). 0 hits for `compute tiers` in TD.
+- ✅ **C2 — "primary database" → "main production database"** in INF-Q8 Score 2 and INF-Q9 Score 3.
+
+## Phase D — Missing AWS services
+
+- ✅ **D1 — App Mesh references removed from MOD TD.** 0 hits.
+  > ⚠️ **ARA TD status pending** — P0.4 in live TODO. If App Mesh still present in ARA, extend D1 scope.
+- ✅ **D2 — AppSync + IoT Core added to INF-Q6** (question + look-for).
+- ✅ **D3 — `appspec.yml` (CodeDeploy) added to CI/CD discovery.**
+- ✅ **D4 — MWAA added to INF-Q3** workflow orchestration list.
+- ✅ **D5 — Amazon MQ added to INF-Q4** (question + look-for).
+- ✅ **D6 — Neptune + Timestream added to INF-Q2** (question + look-for).
+
+## Phase E — Content enhancements
+
+- ✅ **E1 — P4-2: DATA-Q1 S3 access-pattern assessment.** Why-it-matters now reads: *"Assessing current access patterns (frequency, size, format) helps identify S3 adoption opportunities and migration paths."*
+- ✅ **E2 — P4-4: S3 File Gateway in DATA-Q1 Score 2 note.** *"Amazon S3 File Gateway (mountable S3 access) can bridge filesystem-dependent applications without data duplication."*
+- ✅ **E3 — P4-5: DMS/SCT moved out of INF-Q2 why-it-matters.** DMS/SCT now only referenced in Pathway sections (Move to Managed Databases / Move to Open Source), which is correct.
+- ✅ **E4 — P4-6: INF-Q11 question clarifies app + IaC pipelines.** Question reads *"Are CI/CD pipelines automated with build, test, and deploy stages for both application code and infrastructure as code, or are deployments manual?"*
+- ✅ **E5 — WF-2: Broaden "containerize as-is" to include serverless.** APP-Q2 why-it-matters: *"containerize, migrate to serverless (Lambda), strangler fig extraction, or full decomposition."*
+
+## Phase F — Net-new additions
+
+- ✅ **F1 — Thread 53: SCPs replaced in OPS-Q9 Score 4.** Rewrite uses IaC enforcement + Tag Policies + AWS Config rules. Look-for note: *"SCPs are generally not recommended for tag enforcement — per-service action variance and policy-size limits make them unreliable for tagging; reserve SCPs for security guardrails."*
+- ✅ **F2 — Thread 29: Cross-region in INF-Q8 Score 4.** *"cross-region backup replication configured for critical data."*
+- ✅ **F3 — Thread 41: DATA-Q3 Score 4 versioning update process.** Score 4 now reads: *"All database engine versions explicitly pinned in IaC; no engines at or past EOL; documented version-update procedure exists covering downtime windows, rollback, and risk acknowledgment."*
+- ✅ **F4 — Thread 44: SEC-Q2 Score 4 centralized key management + documented rotation policy.**
+
+## Phase R-reworks — partial rejections with counters applied
+
+- ✅ **R3-rework — INF-Q7 broadening.** Question + why-it-matters + look-for + rubric all shipped:
+  - Question: *"Are auto-scaling mechanisms configured for compute, database, and other workloads?"*
+  - Why-it-matters names *"DynamoDB capacity, Aurora replicas, ElastiCache shards"*.
+  - Score 3: *"covering both compute and data layers"*.
+  - Score 2: *"coverage is limited to compute with no scaling on data or other managed services"*.
+  - Look-for names `aws_appautoscaling_*`, Lambda concurrency, DynamoDB auto-scaling, Aurora auto-scaling, ElastiCache shard scaling.
+  - **Still open:** F6 (business-metric-driven scaling at Score 4) — in live TODO.
+
+## Phase G — Landed
+
+- ✅ **G3 — SEC-Q5 Score 1 + Score 4 rework** (N8). INF-Q5 Score 4 references PrivateLink, VPC Lattice, IPAM, zero-trust patterns. Score 1 references default VPC and public-facing EC2 without isolation.
+
+---
+
+# ✅ ARA TD — Shipped
+
+All items below are **confirmed present in `agentic-readiness-assessment/transformation_definition.md`** as of Apr 29, 2026.
+
+## Part A
+
+- ✅ **ARA-A1 — C34 (Riggs): AgentCore Identity in AUTH-Q1 look-for.** *"Bedrock AgentCore Identity configurations"* added to look-for list.
+- ✅ **ARA-A2 — C31 (Riggs): AUTH-Q4 subject/actor phrasing.** Why-it-matters: *"The user is the subject (whose data and permissions apply); the agent is the actor (executing the operation). The system must distinguish both dimensions."*
+- ✅ **ARA-A3 — C24 (Riggs + RP): Dual-purpose framing in Objective.** *"(1) portfolio-level telemetry... (2) use-case-level dependency checking — given a specific agent workflow, which target systems are blockers?"*
+- ✅ **ARA-A4 — C26 (Harish): Remediation guidance in Summary.** Report now includes *"Prioritized remediation guidance per BLOCKER and RISK finding."*
+- ✅ **ARA-A5 — C25 (Henry): Design-time clarification.** *"ARA is a design-time architecture review — it evaluates whether controls exist in code and configuration, not whether they are effective at runtime. It is not a penetration test or runtime security scan."*
+- ✅ **ARA-A6 — C22 + C29: Extended "does NOT cover" list.** Line 172: *"...agent-level AI governance (model policy, prompt-injection defense, safety evaluation)..."*
+- ✅ **ARA-A7 — C17 (Harish): HITL framing in Step 5 intro.** *"ARA measures whether a target system can support human-in-the-loop patterns, not whether HITL is mandatory. HITL is a valuable safety mechanism..."*
+- ✅ **ARA-A8 — AUTH-Q4 duplicated Look-for cleanup.** AUTH-Q4 Look-for is a clean single list at lines ~720-730. No duplication.
+- ✅ **ARA — App Mesh in ARA TD.** 0 hits. D1 extension complete, no action needed.
+
+## Part B
+
+- ✅ **ARA-B1 — C30 (Riggs): Control-layer note in Summary.** *"Controls evaluated here may exist at the application layer, the platform layer (API Gateway, service mesh, IAM), or the agent architecture layer..."*
+- ✅ **ARA-B2 — C12 counter: MCP-awareness clause in Step 2.** Line 529: *"When MCP-native integration is the target, the findings here inform what an MCP server wrapping this system will need to expose."*
+- ✅ **ARA-B3 — C33 partial: AUTH-Q2 scoped permissions phrasing.** AUTH-Q2 why-it-matters: *"Without scoped permissions, the system cannot scope down agent access per capability..."*
+- ✅ **ARA-B4 — C11 counter: AUTH-Q4 multitenancy cross-reference.** *"When the target system serves multiple tenants, weak identity propagation compounds with data-layer risks — see DATA-Q2 (data residency) and DATA-Q6 (PII in logs). Treat these as a cluster when planning remediation."*
+
+---
+
+# ❌ MOD TD — Rejected (with counter-proposals)
+
+Each rejection has a counter-proposal that was or will be applied elsewhere. Surface these in CR descriptions so reviewers see their concern was addressed, not dismissed.
+
+- **R1 — Task 10 (P1-B): Reframe APP-Q1 from "language modernity" to "SDK + agent framework coverage."**
+  **Rejected as written.** The replacement collapses language maturity into agent-framework availability — an ARA concern, not MOD. Also loses the legitimate "legacy language → modernization blocker" signal (COBOL/VB6/Classic ASP).
+  **Counter:** B11 (shipped ✅) fixes the tone without the reframe. If SDK/agent coverage needs capturing, add a new question (APP-Q7) or move to ARA.
+
+- **R2 — Task 9: "in IaC" → "in Terraform/CloudFormation" (two lines).**
+  **Rejected.** TD uses "IaC" as superset in ~6 other places and discovery includes CDK, Helm, Kustomize, Ansible. Narrowing two instances excludes CDK (AWS-native) and creates cross-TD inconsistency.
+  **Counter:** Drop the task. Current wording is consistent.
+
+- **R3 — Task P4-3: Broaden INF-Q7 beyond compute auto-scaling.**
+  **Needs rework, not straight reject.** Question + why-it-matters + look-for edits are fine, but rubric rows still need expansion to cover compute AND data/managed-service auto-scaling. **Still in TODO as "R3-rework"** — sequence R3 → F6 to avoid stomping edits.
+
+- **R4 — analysis-C24 (Robert + Maia): "Plaintext credentials = security blocker, not low score."**
+  **Rejected — scope mismatch with MOD's scoring model.** MOD uses 1–4 numeric scoring. BLOCKER/RISK/INFO severity is an ARA construct. Importing it into MOD would break overall/category score math, pathway triggers, and N/A handling.
+  **Counter:** Keep SEC-Q5 = 1 for plaintext credentials in MOD, but strengthen the **recommendation text** in the Report Template to flag "address before any modernization work" — deliver severity signal through recommendation copy, not score type.
+
+- **R5 — analysis-C21 (Robert): "CloudTrail belongs in WAFR, not modernization."**
+  **Rejected — intentional overlap.** CloudTrail presence is a prerequisite for any auditable modernization work. Lucas already replied with this reasoning in-thread.
+  **Counter:** Close thread with existing reply. Keep SEC-Q1 as-is.
+
+---
+
+# ❌ ARA TD — Rejected (with counter-proposals)
+
+- **ARA-R1 — C12/C14/C15 (Mark + RP): "Evaluate MCP interfaces as first-class target."**
+  **Rejected.** The TD explicitly excludes MCP servers (line 165). Agent architecture — which MCP is — is not what ARA evaluates; ARA evaluates what agents *call*. Adding MCP rubrics would require new scoring across API-Q1–Q4 and AUTH-Q4, which is a scope reversal requiring leadership sign-off.
+  **Counter:** ARA-B2 (TODO — one-line awareness clause in Step 2).
+  **Respond in docx thread:** *"Current API surface is assessed because that's what agents call today. MCP is covered by bridge-mode guidance and agent architecture (out of scope per intro)."*
+
+- **ARA-R2 — C11 (Justin): Escalate AUTH-Q4 severity beyond RISK.**
+  **Rejected severity change.** Severity model is deliberate:
+  - AUTH-Q1 (Machine Identity) = BLOCKER handles the categorical "no identity = no multitenancy" case.
+  - AUTH-Q4 = RISK-SAFETY handles the "identity exists but propagation is weak" case. Maps to Pilot-Ready (1–2 RISK-SAFETY) by design.
+  - Escalating AUTH-Q4 would push many repos from Pilot-Ready to Remediation Required on architecture maturity, not actual agent-safety risk.
+  **Counter:** ARA-B4 (TODO — multitenancy cross-reference, no severity change).
+
+- **ARA-R3 — C33 MCP reference.**
+  **Partial reject.** Scoped permissions phrasing is adopted in ARA-B3 (TODO). MCP reference is dropped (same reasoning as ARA-R1).
+
+---
+
+# 📄 Docx-only items (not TD work)
+
+These target the companion docx (`modernization-readiness-assessment-v2.docx` / `agentic-readiness-assessment-v3.docx`) — intro framing, Customer Positioning, Programs tables, Appendix narratives. **Handled in docx review pass, not the TD edit cycle.**
+
+## MOD docx
+
+| Analysis ID | Topic | Docx location |
+|-------------|-------|---------------|
+| C22 | "WAR" → "WAFR" abbreviation | Scope Boundary narrative |
+| C6 | "Assessment vs questionnaire" framing | Intro / opening narrative |
+| N7 / Thread 2 | Cross-validate with Cloud Maturity Assessment 3.0 | Intro or Appendix |
+
+## ARA docx
+
+| Analysis ID | Topic | Docx location |
+|-------------|-------|---------------|
+| C16 | EBA hyperlink | Appendix 3 Programs table |
+| C21 | Self-serve + managed delivery model | Customer Positioning section |
+| C19 | "Relationship to OLA" — assessment fatigue | How to Use This Guide (new section) |
+| C27 | MOD cross-reference (docx narrative) | Intro / opening narrative |
+| C18 | "When to run" timing guidance | How to Use This Guide |
+| C23 | "target systems" vs "source systems" glossary | Docx glossary |
+| C29 (part) | Delineation from "AI team's readiness assessment" | Intro narrative |
+
+---
+
+# 💬 Reply-only items (neither TD nor docx edits)
+
+Respond in the reviewer thread. No TD or docx edit.
+
+## MOD reply-only
+
+| Analysis ID | Topic | Suggested response |
+|-------------|-------|--------------------|
+| C5 (Gianfranco) | Additional languages — Rust, Ruby? | Confirm current coverage (APP-Q1 mentions them); roadmap note is future work, not TD-bound. |
+| C14 (Ahmed) | Positive feedback | Thank and close. |
+| C20 (Robert) | Example of sync vs async distinction | Lucas already replied; archetype calibration (Step 2 INF-Q4) handles this — link to existing calibration table. |
+| C21 (Robert) | CloudTrail in WAFR | Covered by R5 rejection rationale. |
+| C25 (Robert) | Comment-resolution process | Process ack, no TD change. |
+| C28 (Maia) | Business metrics auto-scaling (→ F6) | Confirm tracked as F6 pending R3 rework. |
+| C36 (Maia) | Why focus on error budget tracking | Respond with OPS-Q3 positioning; defer rebalancing. |
+| C37 (Robert) | Secrets Management scoring context | Confirm SEC-Q5 rubric is intentional — respond in thread. |
+
+## ARA reply-only
+
+| Analysis ID | Topic | Suggested response |
+|-------------|-------|--------------------|
+| C32 | "Why RISK not BLOCKER?" | *"AUTH-Q2/Q3 are RISK-SAFETY because the control can be enforced at the platform layer (API Gateway, IAM) even if the app is coarse-grained. BLOCKER is reserved for categorical failures like no machine identity at all."* |
+| C28 | "Does it assess data exposure, privilege escalation, destructive actions?" | Mapping: data exposure → DATA-Q1/Q2/Q6; privilege escalation → AUTH-Q2/Q4; destructive actions → STATE-Q1/Q5/Q6. All covered. |
+| C13 | "guarantees?" | Needs anchor ID in docx before responding. |
+| C14 | "but does look at MCP interface definitions?" | Covered by ARA-R1 response. |
+| C15 | "why not MCP server interfaces?" | Covered by ARA-R1 response. |
+| C10 | "Post-readiness POV — what comes next?" | Point to AI DLC workshop (already referenced in docx) and any agent-side readiness assessment. Out of ARA scope. |
+| C9 | "Example of what you mean?" | Blocked — need comment anchor in docx. |
+
+---
+
+# 📚 Already resolved (per analysis doc — no work)
+
+**MOD resolved before review:** C1 (Agent Storming — ARA, not MOD), C14 (positive), C20 (sync vs async), C27 (Maia direct edit), C30 (compute tiers).
+
+**ARA resolved before review:** C1 (Agent Storming), C2 (FinOps), C3 (multi-agent framing), C4 (portfolio metrics), C5 (Gartner citation), C6 (process modeling), C7 (EBA criteria), C8 (AI DLC).
+
+---
+
+# MOD Analysis-doc cross-reference
+
+For reviewer look-up — maps analysis IDs to TODO/archive/rejection tracking.
+
+| Analysis ID | Topic | Tracked as |
+|-------------|-------|-----------|
+| C2 | Remove App Mesh | D1 ✅ |
+| C3 | Scope clarification | A1 ✅ |
+| C4 | S3 access patterns | E1 ✅ |
+| C7 | AppSync + IoT Core | D2 ✅ |
+| C8 | IaC / Terraform consistency | R2 (rejected) |
+| C9 | Async-only bias | B3 archetype note — partial (INF-Q4 ✅, INF-Q3/APP-Q3/APP-Q4 TODO) |
+| C10 | INF-Q10 look-for scope | B14 ✅ |
+| C11 | appspec.yml / CodeDeploy | D3 ✅ |
+| C12 | Language scoring tone | R1 (rejected reframe) + B11 ✅ (tone-only fix) |
+| C13 | Multi-region backup wording | F2 ✅ |
+| C15 | Multi-AZ statelessness | B13 ✅ |
+| C16 | MWAA | D4 ✅ |
+| C17 | Amazon MQ | D5 ✅ |
+| C18 | Neptune, Timestream | D6 ✅ |
+| C19 | Define "tiers" | C1 ✅ |
+| C22 | WAR → WAFR | docx-only |
+| C23 | SEC-Q2 Score overlap | B12 ✅ |
+| C24 | Plaintext credentials = blocker | R4 (rejected) |
+| C26 | VPC Lattice, PrivateLink, IPAM | G3 ✅ |
+| C27 | Maia direct edit Apr 24 | resolved |
+| C30 | "compute tiers" | C1 ✅ |
+| C31 | Version update process | F3 ✅ |
+| C32 | Key management + rotation | F4 ✅ |
+| C33 | SCP tagging fix | F1 ✅ |
+| C34 | DMS/SCT misplaced | E3 ✅ |
+| C37 | CI/CD covers app + IaC | E4 ✅ |
+
+---
+
+# Why we draw these scope lines
+
+**ARA guardrails:**
+1. **Target systems, not agents.** Reviewing MCP servers, prompt injection, agent governance, or model policy breaks this guardrail.
+2. **Design-time, not runtime.** Reviewing live posture or live credentials breaks this guardrail.
+3. **Severity-based, not numeric.** BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO maps to readiness profile. Mixing numeric scoring (as C11/C32 implicitly push toward) breaks the profile math.
+
+**MOD guardrails:**
+1. **1–4 numeric scoring is the rubric contract.** Importing BLOCKER/RISK/INFO (C24) would break overall/category score math, pathway triggers, and N/A handling.
+2. **Modernization readiness, not operational readiness.** MOD evaluates the work needed to modernize; WAFR/runtime ops are adjacent assessments.
+3. **IaC is the superset.** Don't narrow to specific tools (R2).
+
+When a reviewer proposal would cross a guardrail, the pattern is: **reject as written, provide a counter-proposal that stays in scope.** Every rejection in this archive follows that pattern.
+
+
+---
+
+# 🚢 Commit-to-edit trail
+
+Historical record of which commits shipped which edits during the reviewer pass. Preserved from `kiro-execution-plan.md` after that file was retired (all 61 line items done).
+
+| Commit | TD | Message | Items |
+|--------|----|---------|-------|
+| `0cda661` | MOD | `chore(mod-td): terminology fixes and missing AWS services (P2B, P3, analysis-C10)` | M1-M11 (C1, C2, D1-D6, B14) |
+| `870a67a` | MOD | `docs(mod-td): clarify AWS scope, name dimensions, expand DATA-Q1 and APP-Q2 framing (P1C, P4)` | M12-M19 (A1, A2, E1, E2, E3, E4, E5, B3 partial for INF-Q4) |
+| `4b6f32e` | MOD | `refactor(mod-td): sharpen scoring rubric precision (P2A)` | M20-M28 (B1, B2, B4, B5, B6, B7, B8, B9, B10) |
+| `762e61d` | MOD | `refactor(mod-td): address reopened reviewer concerns + Herrera Soto pass (APP-Q1 tone, SEC-Q2, INF-Q9, DATA-Q3, INF-Q8, OPS-Q9)` | M29-M35 (B11, B12, B13, F1, F2, F3, F4) |
+| `0ea6062` | MOD | `refactor(mod-td): broaden INF-Q7 auto-scaling across compute + data (P4-3)` | M36-M39 (R3-rework) |
+| `d93b652` | ARA | `chore(ara-td): housekeeping — App Mesh, AUTH-Q4 cleanup, AgentCore Identity signal` | A1-A3 (ARA-A1, ARA-A8, D1 for ARA) |
+| `c2e2e97` | ARA | `docs(ara-td): dual-purpose framing, design-time clarification, governance boundary (C22, C24-C26, C30)` | A4-A8 (ARA-A3, ARA-A4, ARA-A5, ARA-A6, ARA-B1) |
+| `befe1ec` | ARA | `docs(ara-td): clarify AUTH and API framing, add multitenancy cross-reference (C11, C12, C17, C31, C33)` | A9-A13 (ARA-A7, ARA-A2, ARA-B4, ARA-B3, ARA-B2) |
+| `0836d24` | MOD | INF-Q5 rework — Thread 26 (post-landing) | M40 (G3) |
+
+**Verification commits noted at the time of landing:**
+- `compute tiers` → 0 hits ✅
+- `App Mesh` → 0 hits in both MOD and ARA TDs ✅
+- `primary database` → 0 hits in rubric rows ✅
+- AUTH-Q4 Look-for block de-duplicated ✅
+- Question count unchanged: MOD = 37 + 1 Report Template anchor; ARA structure preserved ✅
+
+
+---
+
+# 📊 V3 Impact Summary (from retired v2-vs-v3 comparison)
+
+Preserved from `example-reports/v2-vs-v3-comparison.md` after it was retired. Actionable follow-ups moved into `kiro-feedback-todo.md` as items **C-1** through **C-5**.
+
+## Portfolio-level shifts
+
+| Metric | v2 | v3 | Delta |
+|---|---|---|---|
+| MOD portfolio score | 2.15 | 2.13 | -0.02 (stable) |
+| Score range | 1.40–2.71 | 1.67–2.65 | Lowest pulled up |
+| Not Ready count (<1.5) | 1 (unishop) | 0 | -1 |
+| Foundational blockers | 22 | 20 | -2 |
+| Improvement opportunities | 3 | 5 | +2 |
+| Pathways triggered | 6/7 | 5/7 | -1 |
+| ARA BLOCKERs | n/a | 9 | new dimension |
+
+Net: v3 is not more lenient — the distribution is sharper. Fewer blockers, more improvement classifications = precision win, not grade inflation.
+
+## Landed and visibly shaping v3 reports
+
+- **Terminology fixes (M1-M4)** — `compute tiers` and `primary database` gone from rubric rows.
+- **App Mesh removal (M5 / A1)** — 0 mentions in the 5 target repos' v3 reports.
+- **New AWS services (M6-M10)** — MWAA, Amazon MQ, AppSync, appspec.yml all surfacing in v3 findings where relevant.
+- **APP-Q1 tone fix + reclassification (M29)** — biggest behavioral shift: unishop 4 → 2, pulling it out of "Not Ready". Exactly what B11 was designed to produce.
+- **INF-Q7 broadening (M36-M39)** — v3 findings evaluate both compute and data auto-scaling (DynamoDB throttling, on-demand scaling, etc.).
+- **DATA-Q3 version-update procedure (M33)** — v3 explicitly flags missing procedure in 3 of 5 repos.
+- **INF-Q8 cross-region backup (M34)** — multi-region concern integrated into backup rubric.
+- **INF-Q5 managed networking rework (M40)** — PrivateLink/VPC Lattice/zero-trust evaluation flowing into v3 evidence.
+- **AgentCore Identity signal (A3)** — surfacing in eks-saas-gitops AUTH-Q1 finding.
+- **OPS-Q9 SCP removal (M35 / F1)** — zero SCP tagging recommendations in v3.
+
+## Landed in TD but not visible in v3 reports (expected, not regressions)
+
+- **ARA Summary/Objective framing (A4-A8)** — TD framing doesn't quote verbatim into reports. See live TODO **C-2**.
+- **MCP awareness clause (A13)** — repos in v3 don't expose MCP. See **C-5**.
+- **S3 File Gateway note (E2/M18)** — no on-prem migration scenario in v3 to trigger it. See **C-5**.
+- **INF-Q11 "application and IaC" phrasing (E4/M16)** — TD edit landed in question header but not in rubric/why-it-matters, so reports still sound app-pipeline-centric. See **C-3**.
+
+## New v3 deliverables
+
+- **Bridge report** — 17 shared remediation mappings, 67% of ARA BLOCKERs resolvable by MOD Phase 0, unified remediation sequence. Worth keeping in mind: the bridge quantifies the ARA/MOD overlap that teams used to plan twice.
+- **Portfolio-level question tightening** — PORT-MOD-Q4 / PORT-ARA-Q5 have sharper evidence in v3.
+
+## Things to watch (moved to live TODO)
+
+- **C-1** — APP-Q1 Score 2 may be too harsh for "language modern, stack lag" cases (Java 8 + legacy framework).
+- **C-4** — Portfolio Assessment Inventory `assessment_date` pulled from frontmatter, not run date — produces stale dates.

@@ -1,440 +1,319 @@
-# TODO — Reviewer Feedback Pass on MOD Transformation Definition
+# TODO — Open Work
 
-**TD target:** `modernization-assessment/transformation_definition.md` (1712 lines)
-**Source of FIND/REPLACE:** `quick-scripts/feedback-updates/kiro-feedback-changes.md`
-**Source of reviewer context:** `quick-scripts/feedback-mod-action.md`
-**Latest reviewer state (Apr 24):** `quick-scripts/feedback-updates/mod-feedback-analysis.md` — 37 threads, 59 comments. Maia Herrera Soto and Robert Hanuschke reopens noted. Angel, Javier made untracked content edits on Apr 24 (review before executing).
+Only items that are still **open and actionable** live here. Everything shipped, rejected, reply-only, or deferred is in `kiro-feedback-archive.md` for CR and reviewer traceability.
 
-> **Note:** This TODO tracks only changes to the **transformation_definition.md**. Reviewer items targeting the companion docx (intro framing, Programs table, Customer Positioning, Appendix narratives) are listed separately under "📄 Docx-only" for visibility and handled in the docx review pass, not here.
+**Last verified:** Apr 29, 2026 — every item below was grep'd against the live TDs. Confirmed NOT YET shipped.
 
 ---
 
-## ✔️ Validation Report (checked against live TDs)
+## 🚀 High Priority — JSON Report Output (Phase H)
 
-**FIND strings verified present and unique** for all `kiro-feedback-changes.md` tasks:
-- A1, A2, B1, B4–B9, C1, C2, D1–D6, E3, E5, WF-1 leftovers ✅
-- **B3 caveat:** "Archetype Calibration" line appears 4× in TD (INF-Q3, INF-Q4, APP-Q3, APP-Q4). The FIND in `kiro-feedback-changes.md` isn't unique — P2A-3 needs more surrounding context to target INF-Q4 specifically. Fix before executing.
+**Source:** GianFranco feedback post-v3. Current portfolio TDs re-parse markdown tables to extract scores, pathway triggers, findings, tech stack. Fragile, slow, regex-prone. A structured JSON sidecar alongside the markdown fixes accuracy, speed, and validation in one move.
 
-**Pathway trigger impact check:**
-- B9 (SEC-Q7 Score 2/1 semantic shift): SEC-Q7 is not a pathway trigger. Safe.
-- R3 / B4 (INF-Q7 changes): INF-Q7 is not a pathway trigger. Safe.
-- B12 (SEC-Q2 changes): Not a pathway trigger. Safe.
-- B13 (INF-Q9 changes): Not a pathway trigger. Safe.
-- B14 (INF-Q10 look-for expansion): INF-Q10 < 3 triggers *Move to Modern DevOps*. Look-for text doesn't change scoring. Safe.
+### Scope
 
-**Cross-TD impact:**
-- Portfolio MOD TD references question IDs only, not rubric text. **V5 is low risk.**
-- Bridge TD has no shared rubric text. Safe.
-- ⚠️ **ARA TD also mentions App Mesh** (`agentic-readiness-assessment/transformation_definition.md` line 282). D1 removes it from MOD only. Consider extending D1 to also patch ARA to stay consistent — or leave as deliberate scope split.
+- [ ] **H-1 — Define JSON schema for MOD report.**
+  - Metadata (repo_name, date, repo_type, service_archetype, priority, tags, resolved preferences)
+  - Scores (overall, per-category, per-question with N/A marked explicitly via `"status": "NA", "reason": "..."`)
+  - Pathways (per-pathway: triggered | not-triggered | not-applicable + trigger evidence)
+  - Findings (per-question: score, finding text, gap text, recommendation, evidence list)
+  - Technology stack (languages, databases, compute, IaC, CI/CD, messaging)
+  - Quick Agent Wins (detected prerequisites + suggested patterns)
+  - `"schema_version": "1.0.0"` at top level
+  - Store as `modernization-assessment/report-schema.json` (JSON Schema draft 2020-12)
 
-**Example report impact:**
-- "primary database" appears in 2 online-boutique reports (finding/recommendation text, not rubric quotes). C2 rename causes mild staleness. Don't regenerate unless asked.
-- No rubric text (e.g., "80%+ of compute", "compute tiers", "Most secrets managed") is quoted verbatim in example reports. **V6 is low risk.**
+- [ ] **H-2 — MOD TD: emit JSON sidecar alongside markdown.**
+  - New "Output" subsection in the Report Template section
+  - Assessor writes both `{repo-name}-mod-report.md` AND `{repo-name}-mod-report.json`
+  - Same data, different representation. JSON is canonical; markdown is derived.
 
-**N1 target confirmed:** SCP reference lives in OPS-Q9 resource tagging (Score 4 rubric row + look-for line). Confirmed via grep in live TD.
+- [ ] **H-3 — Portfolio MOD TD: consume JSON with markdown fallback.**
+  - Step 1 (Discovery): prefer `*-mod-report.json`, fall back to `*-mod-report.md`
+  - Step 3 (Parsing): `JSON.parse` directly when available
+  - Backward compat — v2-era reports must keep working
 
----
+- [ ] **H-4 — ARA symmetry.**
+  - Define `agentic-readiness-assessment/report-schema.json` (severity enum replaces numeric score)
+  - ARA TD emits `{repo-name}-ara-report.json`
+  - Portfolio ARA TD consumes JSON with markdown fallback
 
-## ⚠️ Pre-flight
+- [ ] **H-5 — Bridge TD: consume portfolio JSON sidecars.**
+  - Portfolio ARA TD and Portfolio MOD TD both emit portfolio-level JSON sidecars
+  - Bridge TD reads both JSON files directly
 
-- [ ] **P0.1 — Clean working tree.** `git status` clean, then `git checkout -b feedback/mod-td-reviewer-pass`.
-- [ ] **P0.2 — Read the TD once end-to-end** for orientation before any edits.
-- [ ] **P0.3 — Fix B3 FIND uniqueness.** P2A-3's FIND must include enough context to target INF-Q4's Archetype Calibration line only (not INF-Q3, APP-Q3, or APP-Q4). Use the preceding `#### INF-Q4:` header + the paragraph above as anchor context.
-- [ ] **P0.4 — Resolve INF-Q2 Score 2 duplicate.** Both P2A-2 and WF-1 rewrite the same row. WF-1's wording ("Main production databases…") is preferred. Apply WF-1 instead of P2A-2 for that specific row. Keep P2A-2 where it doesn't overlap.
-- [ ] **P0.5 — Decide on multi-region scope.** Multi-region topic (Thread 29 / analysis-C13) could land in INF-Q8 (backups) or INF-Q9 (HA/fault isolation) or become a new question. Decide before Phase F.
-- [ ] **P0.6 — Diff latest docx against TD.** Angel, Javier edited the docx Apr 24 with no comments — confirm no silent TD-relevant changes were made. Also confirm Maia's C27 ("Made it a bit more agnostic" Apr 24) about API Gateway language is reflected in the TD, not just the docx.
-- [ ] **P0.7 — Decide D1 scope: MOD only vs MOD + ARA.** App Mesh is referenced in both TDs. Recommend extending D1 to patch ARA line 282 for consistency, or explicitly scope D1 as MOD-only.
-- [ ] **P0.8 — Decide N5 and N6 scope.** Both propose **new TD questions** (IaC governance as a new INF question; ops gaps — chaos, load, synthetics — as a new OPS question or extensions). New questions change total count (37 → 38/39) and ripple into N/A mappings and category score math. Settle before Phase F.
+- [ ] **H-6 — Power documentation.**
+  - Update `agentic-assessment-orchestrator/POWER.md` to mention JSON sidecar
+  - Update consolidation: move both `.md` and `.json` into `v{N}-full-assessment/`
 
----
+- [ ] **H-7 — Validate schema against v3 reports.**
+  - Parse v3 example reports against schema; flag any markdown fields the schema misses
 
-## ✅ Part 1 — TD Clean wins (adopt as specified in `kiro-feedback-changes.md`)
+### Phase H Commit Strategy
 
-All items below change the **transformation_definition.md** only. FIND/REPLACE text lives in `kiro-feedback-changes.md`.
+| Commit | Scope | Message |
+|--------|-------|---------|
+| H1 | H-1 (schemas) | `feat(assessment-schemas): define JSON schemas for MOD, ARA, and portfolio reports` |
+| H2 | H-2 (MOD emits) | `feat(mod-td): emit structured JSON sidecar alongside markdown report` |
+| H3 | H-3 (Portfolio MOD consumes) | `refactor(portfolio-mod-td): consume JSON sidecars with markdown fallback` |
+| H4 | H-4 (ARA symmetry) | `feat(ara-td,portfolio-ara-td): JSON sidecar emit + consume with markdown fallback` |
+| H5 | H-5 (Bridge) | `refactor(bridge-td): consume portfolio JSON sidecars` |
+| H6 | H-6 (Power) | `docs(orchestrator-power): document JSON sidecar in output structure` |
 
-### Phase A — TD Scope + structural (Summary / Objective)
+### Risk Notes
 
-- [ ] **A1 — P1C-1: Add AWS scope statement.** Prepend AWS-targeting paragraph above `This assessment does NOT cover:` in Summary. Addresses C5 (Turrini), Thread 4.
-- [ ] **A2 — P4-1: Name the 5 dimensions on the `37 questions across 5 sections:` line.** One-line addition to Summary. Addresses C3 (Omran).
+- **Double-write drift** — MD and JSON must stay in sync. Treat JSON as single source of truth; MD is derived.
+- **Backward compatibility** — every portfolio TD MUST keep the markdown path working. JSON is "preferred when present", not required.
+- **Schema stability** — external tooling (dashboards, Jira, Taskei) will depend on this. Breaking changes bump schema version.
+- **N/A representation** — N/A is a state, not a score. Explicit in the schema.
 
-### Phase B — TD Scoring rubric precision (P2-A + reopens)
+### Unlocks
 
-- [ ] **B1 — P2A-1: INF-Q1 Score 4** — service-count-based criterion.
-- [ ] **B2 — INF-Q2 Scores 2 and 3** — apply WF-1 wording per P0.4 (supersedes P2A-2 for Score 2).
-- [ ] **B3 — P2A-3: INF-Q4** — prepend archetype-visibility note above `**Archetype Calibration:**`.
-- [ ] **B4 — P2A-4: INF-Q7 Scores 3 and 2** — custom vs default scaling policies.
-- [ ] **B5 — P2A-5: APP-Q2 Scores 3 and 2** — schema separation + circular deps.
-- [ ] **B6 — P2A-6: APP-Q5 Scores 3 and 2** — define "inconsistent" (most-follow vs <50%).
-- [ ] **B7 — P2A-7: SEC-Q3 Scores 3 and 2** — auth method vs coverage.
-- [ ] **B8 — P2A-8: SEC-Q5 Scores 3 and 2** — what's in env vars.
-- [ ] **B9 — P2A-9: SEC-Q7 Scores 2 and 1** — eliminate overlap with Score 1.
-- [ ] **B10 — WF-3: SEC-Q3 Score 4** — carve-out for intentional public APIs.
-- [ ] **B11 — analysis-C12: APP-Q1 tone fix.**
-  Flagged P0 by Robert — calling customer environments "not modern" for language choice sounds judgmental. Separate from R1's rejected reframe — keep modernization framing, rewrite Score 1/2 wording to attribute the gap to AWS tooling limits, not to the customer.
-  Example Score 1: `Languages with limited AWS SDK and cloud-native tooling (e.g., COBOL, VB6, Classic ASP) — requires custom integration or migration planning.`
-- [ ] **B12 — analysis-C23 (Robert reopened): SEC-Q2 Score 2/3 overlap.**
-  Current rubric makes "some KMS" worse than "AWS-managed everywhere." Rework Score 2/3 to differentiate on key type AND coverage, not coverage alone.
-- [ ] **B13 — analysis-C15 (Robert): INF-Q9 multi-AZ wording.**
-  Current rubric treats single-AZ compute as a hard Score 1/2. A stateless service with fast ASG replacement across AZs can be resilient without persistent dual-AZ compute. Rework Score 2/3 to distinguish stateless-recoverable single-AZ from stateful single-AZ.
-- [ ] **B14 — analysis-C10 (Robert reopened): INF-Q10 look-for scope.**
-  Expand look-for text beyond the 4 resource categories (compute / networking / databases / messaging) to include observability and DR resources (CloudWatch alarms, Route 53 health checks, Backup plans).
-
-**Commit A:** `refactor(mod-td): sharpen scoring rubrics, fix APP-Q1 tone, resolve reopened rubrics (P1C, P2A, P4-1, analysis-C10/C12/C15/C23)`
-
-### Phase C — TD Terminology fixes (P2-B)
-
-- [ ] **C1 — Task 7: "compute tiers" → "compute resource types"** (INF-Q7 Score 4 rubric row).
-- [ ] **C2 — WF-1 leftovers: remaining "primary database" → "main production database"**
-  - [ ] INF-Q8 Score 2 rubric row
-  - [ ] INF-Q9 Score 3 rubric row
-
-### Phase D — TD Missing AWS services (P3)
-
-- [ ] **D1 — Task 1: Remove App Mesh references.** End-of-support Sept 30, 2026. Two hits: discovery list (line 192) and INF-Q6 look-for (line 714). See P0.7 for ARA-TD extension decision.
-- [ ] **D2 — Task 2: Add AppSync + IoT Core to INF-Q6** (question + look-for).
-- [ ] **D3 — Task 3: Add `appspec.yml` (CodeDeploy) to CI/CD discovery** (two hits).
-- [ ] **D4 — Task 4: Add MWAA to INF-Q3** workflow orchestration list.
-- [ ] **D5 — Task 5: Add Amazon MQ to INF-Q4** (question + look-for).
-- [ ] **D6 — Task 6: Add Neptune + Timestream to INF-Q2** (question + look-for).
-
-**Commit B:** `feat(mod-td): add missing AWS services and clarify terminology (P2B, P3)`
-
-### Phase E — TD Content enhancements (P4 + wording fixes)
-
-- [ ] **E1 — P4-2: Add S3 access-pattern assessment to DATA-Q1.** Addresses C6 / Thread 5.
-- [ ] **E2 — P4-4: Highlight Amazon S3 File Gateway in DATA-Q1 Score 2 note.** Addresses C26.
-- [ ] **E3 — P4-5: Remove misplaced DMS/SCT reference from INF-Q2 why-it-matters.** Addresses C34.
-- [ ] **E4 — P4-6: Clarify INF-Q11 covers application AND IaC pipelines.** Addresses C37.
-- [ ] **E5 — WF-2: Broaden "containerize as-is" to include serverless.** Replacement wording is "containerize, migrate to serverless (Lambda), strangler fig extraction, or full decomposition" — clean list extension in APP-Q2 why-it-matters.
-
-**Commit C:** `docs(mod-td): expand DATA-Q1 coverage, broaden modernization strategies (P4, WF)`
-
-### Phase F — TD Net-new additions (from `feedback-mod-action.md`)
-
-All items below are rubric or look-for extensions, not scope shifts. Each targets a specific TD rubric row.
-
-- [ ] **F1 — Thread 53: Replace SCPs recommendation for tagging in OPS-Q9.**
-  Rewrite Score 4 rubric row and look-for. SCPs are the wrong tool for tag enforcement — hit char limits, per-service action variance. Recommendation: IaC enforcement, Tag Policies, AWS Config rules. SCPs reserved for security measures.
-- [ ] **F2 — Thread 29: Add multi-region to INF-Q8 or INF-Q9.**
-  Per P0.5 decision. Extend INF-Q8 Score 4 to require cross-region backup replication, OR extend INF-Q9 rubric to include multi-region data durability as Score 4.
-- [ ] **F3 — Thread 41: Add versioning-update process to DATA-Q3 Score 4.**
-  Engine version pinning is not enough. Extend Score 4 to require documented update procedure (downtime awareness, risk acknowledgment).
-- [ ] **F4 — Thread 44: Add key management + rotation to SEC-Q2.**
-  Extend Score 4 to include centralized key management + rotation when customer-managed keys are used. Coordinate with B12 so the rubric rewrite lands once.
-- [ ] **F5 — Thread 35 (N9): Cross-reference SEC-Q7 from INF-Q11.**
-  Add one sentence to INF-Q11 why-it-matters noting that CI/CD automation alone is not enough — pipelines must include security validation (→ SEC-Q7). Coordinate with E4.
-- [ ] **F6 — Thread 22 (N10): Business-metric-driven scaling in INF-Q7 Score 4.**
-  If R3 is reworked and applied (INF-Q7 broadening), extend Score 4 to mention business-metric-based scaling as the maturity signal. Depends on R3 rework decision.
-
-**Commit F:** `feat(mod-td): incorporate Herrera Soto pass — tagging, multi-region, key management, versioning, pipeline security (F1–F6)`
-
-### Phase G — TD Scope decisions (pending)
-
-- [ ] **G1 — Thread 32 / N5: IaC governance as a new INF question.**
-  Lucas's reply in-thread agrees this is a valid concern. Deciding to add a new question is a scope change — affects question count (11→12 INF questions), category score math, N/A mappings. Settle via P0.8 before execution.
-- [ ] **G2 — Thread 51 / N6: Operations gaps — load testing, chaos engineering, synthetic monitoring, metrics definition.**
-  Options: (a) single new OPS question covering resilience testing, (b) extensions across OPS-Q3/Q4/Q7 rubrics, (c) defer to a future TD version. Settle via P0.8.
-- [ ] **G3 — Thread 16 / N8: SEC-Q5 Score 1 + Score 4 rework.**
-  Lucas proposed Score 1 as "deployed in default VPC with public config." Score 4 extended to include PrivateLink, VPC Lattice, CloudWAN, zero-trust. **Blocked on Maia's confirmation.** Apply once confirmed; otherwise defer.
-
-**Commit G (if adopted):** `feat(mod-td): add IaC governance question and resilience testing coverage (G1–G3)`
+- Dashboard widgets consume JSON directly (`dashboard/modernization.html`)
+- Programmatic diffs between portfolio runs (v3 vs v4)
+- External integrations (Jira, Taskei) one HTTP call away
+- CI validation — JSON schema check in the TD-edit CR pipeline
 
 ---
 
-## ❌ Part 2 — TD Reject (scope mismatch; keep rubric model intact)
+## 🔄 GianFranco — Other Open Items
 
-- [ ] **R1 — Task 10 (P1-B): Reframe APP-Q1 from "language modernity" to "SDK + agent framework coverage."**
-  **Reject as written.** The replacement collapses language maturity into agent-framework availability — an ARA concern, not MOD. Also loses the legitimate "legacy language → modernization blocker" signal (COBOL/VB6/Classic ASP).
-  **Counter-proposal:** B11 fixes the tone without the reframe. If SDK/agent coverage needs capturing, add a new question (APP-Q7) or move to ARA.
+- [ ] **GF-1 — Confirm archetype skip logic with GianFranco.**
+  Already implemented (MOD TD line 289). Verify he is reading head-of-mainline. If yes, close with "already landed in v3 run"; if no, point him at current TD.
 
-- [ ] **R2 — Task 9: "in IaC" → "in Terraform/CloudFormation" (two lines).**
-  **Reject.** TD uses "IaC" as the superset in ~6 other places and discovery includes CDK, Helm, Kustomize, Ansible. Narrowing two instances excludes CDK (AWS-native) and creates cross-TD inconsistency.
-  **Counter-proposal:** Drop the task. Current wording is consistent.
-
-- [ ] **R3 — Task P4-3: Broaden INF-Q7 beyond compute auto-scaling (3-part edit).**
-  **Needs rework, not straight reject.** The proposed question + why-it-matters + look-for edits are fine, but rubric rows still say "compute tiers" and "primary compute." After C1 renames "compute tiers" to "compute resource types," Score 3 and 2 still read as compute-only. Fuzzy scoring results.
-  **Counter-proposal:** Apply P4-3 as a 4-part edit — add a rubric rewrite that expands Score criteria to cover compute AND data/managed-service auto-scaling. Coordinate with F6.
-
-- [ ] **R4 — analysis-C24 (Robert + Maia): "Plaintext credentials = security blocker, not low score."**
-  **Reject — scope mismatch with MOD's scoring model.** MOD uses 1–4 numeric scoring. BLOCKER/RISK/INFO severity is an ARA construct. Importing it into MOD would break overall/category score math, pathway triggers, and N/A handling (all assume numeric scores).
-  **Counter-proposal:** Keep SEC-Q5 = 1 for plaintext credentials in MOD, but strengthen the **recommendation text** in the Report Template to flag "address before any modernization work" — deliver the severity signal through recommendation copy, not score type.
-
-- [ ] **R5 — analysis-C21 (Robert): "CloudTrail belongs in WAFR, not modernization."**
-  **Reject — intentional overlap.** CloudTrail presence is a prerequisite for any auditable modernization work. Lucas already replied with this reasoning in-thread. No TD edit.
-  **Counter-proposal:** Close thread with Lucas's existing reply. Keep SEC-Q1 as-is.
+- [ ] **GF-2 — Auto-detection decision logic clarification.**
+  Ambiguous which tree he means. Ask:
+  - **If archetype auto-detection (MOD TD Step 1.5):** push back — "first match wins" with `stateful-crud` fallback is deliberate. Loosening makes scoring flaky without changing outcomes for ambiguous cases (default catches them).
+  - **If repo_type auto-detection (POWER.md decision tree):** feedback is valid but wrong file; redirect to Power maintainer. Rewrite as "typical signals" not "hard forks"; keep `application` default.
+  - **If archetype is agreed target:** rephrase checks as "signals to consider", preserve fallback, document assessor judgment for mixed signals. Do NOT remove ordered progression.
 
 ---
 
-## 📄 Docx-only items (NOT TD work — track in docx review pass)
+## 🔬 V3 Calibration Follow-ups
 
-These reviewer comments target the companion docx (`modernization-readiness-assessment-v2.docx`) — intro framing, Customer Positioning, Programs tables, Appendix narratives. They do **not** belong in the TD edit cycle.
+Surfaced by the v2-vs-v3 comparison. Keep in mind for the next TD iteration or assessment run.
 
-| Analysis ID | Topic | Docx location |
-|-------------|-------|---------------|
-| C22 | "WAR" → "WAFR" abbreviation | Scope Boundary narrative (kiro-feedback-changes.md Task 8 already calls out "docx only") |
-| C6 | "Assessment vs questionnaire" framing | Intro / opening narrative |
-| N7 / Thread 2 | Cross-validate with Cloud Maturity Assessment 3.0 | Intro or Appendix — relationship with other AWS assessments |
+- [ ] **C-1 — APP-Q1 Score 2 vs Score 3 calibration.**
+  v3 pulled unishop from APP-Q1 = 4 → 2 (Java 8 + Spring Boot 2.1 + SDK v1). The tone fix (B11) is working, but Score 2 may be too harsh when the *language* is modern and only the *version/framework lag* is the issue. Review Score 2 vs Score 3 criteria with a calibration example (e.g., "Java 8 on corporate standard" → 2 or 3?). Low-risk rubric wording nudge, no scope change.
 
----
+- [ ] **C-2 — Make ARA framing visible in report output.**
+  The ARA Summary/Objective now has dual-purpose framing, design-time clarification, HITL framing, control-layer note, multitenancy cross-reference (all shipped). They don't appear in rendered reports because reports quote rubric rows + question text, not Summary. If reviewers want these framings visible, lift the relevant clauses from Summary into per-question why-it-matters guidance so they anchor in the output.
 
-## 💬 Reply-only items (neither TD nor docx edits — respond in reviewer thread)
+- [ ] **C-3 — INF-Q11 narrative doesn't say "application and IaC pipelines".**
+  E4 landed in the question text, but v3 report findings still read as application-pipeline-centric. If reviewers want the phrasing in the output, the rubric rows or why-it-matters would need the explicit "application and IaC" framing — not just the question header.
 
-| Analysis ID | Topic | Suggested response |
-|-------------|-------|--------------------|
-| C5 (Gianfranco) | Additional languages in roadmap — Rust, Ruby? | Confirm current coverage (APP-Q1 mentions them); roadmap note is future work, not TD-bound. |
-| C14 (Ahmed) | Positive feedback ("easy to customize and iterate") | Thank and close. |
-| C20 (Robert) | Example of sync vs async distinction | Lucas already replied with examples; archetype calibration (Step 2 INF-Q4) already handles this — link to the existing calibration table. |
-| C21 (Robert) | CloudTrail in WAFR (→ R5) | Covered by R5 rejection rationale. |
-| C25 (Robert) | Comment-resolution process | Process ack, no TD change. |
-| C28 (Maia) | Business metrics auto-scaling (→ F6) | Confirm intent tracked as F6 pending R3. |
-| C36 (Maia) | Why focus on error budget tracking | Respond with OPS-Q3 positioning; defer any rebalancing. |
-| C37 (Robert) | Secrets Management scoring context | Confirm SEC-Q5 rubric is intentional — respond in thread. |
+- [ ] **C-4 — `assessment_date` in Portfolio Assessment Inventory uses frontmatter, not run date.**
+  v3 portfolio MOD inventory shows stale dates (2025-07-17 for unishop, 2026-04-27 for others) because the aggregator pulls `assessment_date` from the individual report's frontmatter rather than file mtime or run timestamp. Fix in the Portfolio MOD TD: use file mtime (or inject a run timestamp) for inventory dates. Also affects Portfolio ARA.
+
+- [ ] **C-5 — Broaden test coverage in next portfolio run.**
+  Two TD edits landed but didn't get exercised in v3:
+  - **A13 MCP awareness clause** — no repo in v3 exposes MCP surfaces.
+  - **E2/M18 S3 File Gateway note** — no repo has the on-prem migration scenario that triggers DATA-Q1 Score 2 with the File Gateway note.
+  Add one MCP-adjacent repo and one on-prem-migration repo to the next sample portfolio config so these edits get exercise.
 
 ---
 
-## 📚 Already resolved (per analysis doc or prior responses)
+## ⚠️ Pre-flight (any TD edit pass)
 
-Per analysis doc's reasoning: C1 (Agent Storming — ARA, not MOD), C14 (positive), and threads already closed. Listed in the CR description for completeness. No TD work.
-
-Analysis-doc cross-reference table (for reviewer look-up):
-
-| Analysis ID | Topic | Tracked as |
-|-------------|-------|-----------|
-| C2 | Remove App Mesh | D1 |
-| C3 | Scope clarification | A1 |
-| C4 | S3 access patterns | E1 |
-| C7 | AppSync + IoT Core | D2 |
-| C8 | IaC / Terraform consistency | R2 (rejected) |
-| C9 | Async-only bias | B3 — archetype calibration already handles; note makes it visible |
-| C10 | INF-Q10 look-for scope | B14 |
-| C11 | appspec.yml / CodeDeploy | D3 |
-| C12 | Language scoring tone | R1 (rejected reframe) + B11 (tone-only fix) |
-| C13 | Multi-region backup wording | F2 |
-| C15 | Multi-AZ statelessness | B13 |
-| C16 | MWAA | D4 |
-| C17 | Amazon MQ | D5 |
-| C18 | Neptune, Timestream | D6 |
-| C19 | Define "tiers" | C1 |
-| C22 | WAR → WAFR | docx-only (see docx table) |
-| C23 | SEC-Q2 Score overlap | B12 |
-| C24 | Plaintext credentials = blocker | R4 (rejected, recommendation-copy counter) |
-| C26 | Managed networking services (VPC Lattice, PrivateLink, IPAM) | G3 (pending Maia) |
-| C27 | "Made it more agnostic" (Maia direct edit Apr 24) | P0.6 — verify in docx/TD |
-| C30 | "compute tiers" | C1 |
-| C31 | Version update process | F3 |
-| C32 | Key management + rotation | F4 |
-| C33 | SCP tagging fix | F1 |
-| C34 | DMS/SCT misplaced | E3 |
-| C37 | CI/CD covers app + IaC | E4 |
+- [ ] **P0.1 — Clean working tree.** `git status` clean, then `git checkout -b feedback/<branch>`.
+- [ ] **P0.2 — Read target section end-to-end** before the edit.
+- [ ] **P0.3 — Decide on N5 / N6 scope (G1/G2).** Both propose new TD questions (IaC governance; ops resilience testing). New questions change question count and ripple into N/A mappings and category score math.
 
 ---
 
-## 🔍 Part 3 — Verification
+## ✅ MOD TD — Remaining Clean Wins
 
-- [ ] **V1 — Grep stale terms:**
-  - `compute tiers` — 0 hits (after C1)
-  - `App Mesh` — 0 hits in MOD TD (after D1). ARA TD depends on P0.7 decision.
-  - `primary database` / `Primary database` — audit remaining hits
-  - `in IaC` — unchanged (R2 rejected)
-- [ ] **V2 — Spot-check rubrics** INF-Q1, INF-Q2, INF-Q7, INF-Q9, APP-Q1, APP-Q2, APP-Q5, SEC-Q2, SEC-Q3, SEC-Q5, SEC-Q7 for coherent 1→4 progression.
-- [ ] **V3 — Confirm no duplicate wording** from P0.4 merge on INF-Q2 Score 2.
-- [ ] **V4 — Read CI/CD and INF-Q7 sections end-to-end** post-edit.
-- [ ] **V5 — Cross-check portfolio TD.** `portfolio-modernization/transformation_definition.md` references question IDs only (verified) — no rubric text share. Confirm no drift.
-- [ ] **V6 — Cross-check example reports.** `example-reports/v2-full-assessment/modernization-assessment/*.md` — low risk per validation report. Flag as stale in CR if any scores shift.
-- [ ] **V7 — Confirm no rubric-count change without scope decision.** If G1/G2 add new questions, update category score math, N/A mappings, and the "37 questions across 5 sections" counter in Summary.
+Items verified not yet shipped. FIND/REPLACE text lives in `quick-scripts/feedback-updates/kiro-feedback-changes.md`.
+
+### Scoring rubric precision
+
+- [ ] **B3 — Extend archetype-visibility Note to INF-Q3, APP-Q3, APP-Q4.**
+  INF-Q4 already has a `> **Note:** This question uses archetype-sensitive calibration...` block above `**Archetype Calibration:**`. The other 3 archetype-sensitive questions (INF-Q3, APP-Q3, APP-Q4) lack it. Add the same visibility Note to each so assessors see archetype sensitivity consistently.
+  ⚠️ P0: "Archetype Calibration" appears 4× in TD — use the `#### <QID>:` header + preceding paragraph as FIND anchor.
+
+### Net-new additions
+
+- [ ] **F5 — INF-Q11 ↔ SEC-Q7 cross-reference.**
+  Add one sentence to INF-Q11 why-it-matters noting CI/CD automation alone is not enough — pipelines must include security validation (link to SEC-Q7). Currently INF-Q11 why-it-matters has no SEC-Q7 reference.
+
+- [ ] **F6 — INF-Q7 Score 4: business-metric-driven scaling.**
+  R3-rework (broadening INF-Q7 beyond compute) **is already shipped** — question, why-it-matters, look-for, and rubric Scores 2/3/4 all cover compute + data. What is still missing: business-metric-driven scaling as the maturity signal in Score 4. Extend Score 4 to mention e.g. *"custom CloudWatch metrics driven by business KPIs (requests-in-flight, orders-per-second) where purely technical metrics are insufficient."*
+
+**Commit F:** `feat(mod-td): archetype-visibility notes (B3) and INF-Q7/INF-Q11 enhancements (F5, F6)`
+
+### Phase G — Scope decisions (pending P0.3)
+
+- [ ] **G1 — IaC governance as a new INF question** (Thread 32 / N5).
+  Scope change: affects question count (11→12 INF), category score math, N/A mappings. Settle via P0.3 before execution.
+
+- [ ] **G2 — Operations gaps — load testing, chaos, synthetics, metrics definition** (Thread 51 / N6).
+  Options: (a) new OPS question covering resilience testing, (b) extensions across OPS-Q3/Q4/Q7 rubrics, (c) defer to future TD version. Settle via P0.3.
+
+> **G3 — SEC-Q5 rework is already shipped.** INF-Q5 Score 4 references PrivateLink, VPC Lattice, IPAM, zero-trust; Score 1 references default VPC. No action.
+
+**Commit G (if adopted):** `feat(mod-td): add IaC governance question and resilience testing coverage (G1-G2)`
 
 ---
 
-## 📦 Part 4 — Wrap-up
+## 🤖 ARA TD — Remaining Items
+
+All Part A (A1, A3, A4, A5, A7) shipped. Parts B1/B2/B3/B4 shipped. A2 shipped (subject/actor phrasing landed in AUTH-Q4). A6 shipped (AI governance carve-out in scope exclusion). A8 shipped (AUTH-Q4 duplicated Look-for block cleaned up).
+
+**No remaining ARA TD edits from the original reviewer pass.** All Part A and Part B items are in the live TD as of Apr 29, 2026.
+
+> See the new **ARA TD — Rubric Recalibration** section below for a larger open tranche surfaced by the zg-cmp 34-repo run (Apr 29, 2026).
+
+### ARA Pre-flight (if reopened)
+
+- [ ] **ARA-P0.1 — Reconcile question numbering.** Analysis doc says "AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User" — actual TD has this at AUTH-Q4. Map both in CR description when replying to C11/C31.
+- [ ] **ARA-P0.2 — Retrieve docx anchors for C9 and C13.** Both need comment-position lookup before response.
+
+---
+
+## 🎯 ARA TD — Rubric Recalibration (from zg-cmp v4 portfolio run)
+
+**Source:** `analyze-ara-patterns.py` run across all 34 zg-cmp ARA reports (Apr 29, 2026).
+
+**Problem:** 26 of 43 questions show ≥85% concentration on one severity — meaning the question isn't differentiating between repos. 11 non-data-handling OSS tools (tqdm, webpack, gulpjs, serverless, getlift, motdotla-node-lambda, aws-sdk-mock, openapi-generator, greenshot, 3 Angular templates) all get the same BLOCKER/RISK-SAFETY findings as hapi-fhir (a healthcare library that actually processes PHI). The rubric doesn't distinguish between "no PII controls because this is a progress bar" and "no PII controls on a PHI-handling system."
+
+### Root causes
+
+1. **N/A mapping is too coarse** — filters only on `repo_type` (library / infra-only / deployment-config / monorepo). Many build tools / scaffolds / browser SDKs classify as `application` and fall through to "all 43 questions apply."
+2. **Archetype calibration only exists on 4/43 questions** (AUTH-Q4, STATE-Q5, STATE-Q6, DATA-Q5). The other 39 don't calibrate — so `stateless-utility` repos get dinged on DATA-Q1, DATA-Q6, AUTH-Q6, etc.
+3. **No "target-system-has-this-surface?" scope gate** before scoring. TD jumps straight to "is X classified/rate-limited/redacted?" without first asking "does this system have data/an API/logs?"
+4. **Conditional downgrades produce identical findings across repos.** AUTH-Q6 resolves to RISK-SAFETY 100% of the time when `agent_scope: read-only` — finding text is identical whether the repo is hapi-fhir or tqdm.
+
+### The data (severity concentration across 34 repos)
+
+| Question | % on dominant severity | Assessment |
+|---|---|---|
+| **DATA-Q1** | 88% BLOCKER | Broken — flags build tools for "no PII classification" |
+| **DATA-Q2, DATA-Q6** | 91–94% RISK-SAFETY | Same pattern — non-data repos dinged |
+| **STATE-Q1, STATE-Q5** | 91% RISK-SAFETY | Stateless utilities flagged for "no rate limiting" |
+| **AUTH-Q6** | 100% RISK-SAFETY | Conditional→RISK collapse, zero differentiation |
+| **AUTH-Q2, AUTH-Q3, AUTH-Q7** | 88–94% RISK-SAFETY | Libraries flagged for "no authorization surface" |
+| **DISC-Q1** | 100% RISK-QUALITY | Every OSS repo dinged for no schema versioning CI |
+| **OBS-Q1, OBS-Q2** | 94–97% RISK-QUALITY | Libraries don't own tracing/dashboards — their consumers do |
+| **ENG-Q1, Q2, Q3** | 85–97% RISK-QUALITY | Same issue — consumer-facing ops concerns applied to libs |
+| **API-Q2, API-Q3** | 91–94% RISK-QUALITY | Repos with no HTTP surface still getting API-quality findings |
+| **HITL-Q3** | 97% RISK-QUALITY | "No sandbox/staging" applied to libraries |
+
+### Items (ordered by impact)
+
+> **All 9 items shipped Apr 29, 2026 on branch `fix/ara-calibration`. Commits `cf58756`, `044c369`, `3826b58`, `ed9eca6`, `dd35bce`.** Pending verification (V-R1 through V-R4 below) — re-run zg-cmp portfolio to confirm the calibration produces the expected severity distribution.
+
+- [x] **ARA-R1 — DATA-Q1 scope gate + archetype calibration. HIGHEST PRIORITY.** Shipped in `044c369`.
+  Rewritten with Stage A (does this system handle sensitive data?) / Stage B (classification check) structure. `stateless-utility` archetype and `dev-library-application` override land on INFO. Expected portfolio impact pending V-R1.
+
+- [x] **ARA-R2 — DATA-Q2, DATA-Q6 archetype + scope calibration.** Shipped in `3826b58`.
+  Both questions now downgrade to INFO when the system has no persistent data store and no user-data logging, or for `stateless-utility` archetype. Conditional BLOCKER logic on DATA-Q2 preserved.
+
+- [x] **ARA-R3 — STATE-Q1, STATE-Q5 archetype calibration.** Shipped in `3826b58`.
+  STATE-Q1 downgrades to INFO when no write operations and no HTTP/RPC surface. STATE-Q5 downgrades to INFO when no HTTP/RPC surface. Both also honor the dev-library-application override.
+
+- [x] **ARA-R4 — OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3 library-aware calibration.** Shipped in `ed9eca6`.
+  All five downgrade to INFO for `dev-library-application` or when no HTTP/RPC surface (and, for ENG-Q1, also no auth surface). Libraries that ship instrumentation hooks satisfy the concern without owning the tracing/alerting/rollback infrastructure.
+
+- [x] **ARA-R5 — API-Q2, API-Q3 scope gate for "no HTTP surface".** Shipped in `3826b58`.
+  Both downgrade to INFO when `has_http_rpc_surface` is false or for `dev-library-application`.
+
+- [x] **ARA-R6 — Add a "target-system-surface" detection step.** Shipped in `cf58756`.
+  New Step 1.5 records five surface flags (has_persistent_data_store, has_http_rpc_surface, has_auth_surface, has_write_operations, has_logging_of_user_data). Feeds all downstream scope gates. Renumbered archetype detection to Step 1.6.
+
+- [x] **ARA-R7 — Rewrite AUTH-Q6 and AUTH-Q7 rubric+finding to differentiate when downgraded.** Shipped in `dd35bce`.
+  Both downgrade to INFO for `dev-library-application` or when no auth surface (+ no write operations for AUTH-Q6). Conditional BLOCKER logic on AUTH-Q6 preserved.
+
+- [x] **ARA-R8 — Dev-library-application archetype override (option b).** Shipped in `cf58756` as part of Step 1.5.
+  When archetype is `stateless-utility` AND 3+ surface flags are `false`, apply the `library` N/A mapping as the scoring baseline. ARA-TD-internal, no Power or portfolio config changes needed. Option (b) chosen per D1 decision.
+
+- [x] **ARA-R9 — HITL-Q3 library calibration.** Shipped in `3826b58`.
+  Downgrades to INFO for `dev-library-application` or when no HTTP/RPC surface and no data store.
+
+### Sequencing
+
+1. **R6 first** (target-system-surface detection) — structural foundation that R1–R5 depend on
+2. **R1** (DATA-Q1) — highest-impact single change, and the simplest to ship if R6 is in place
+3. **R2, R3, R5** (calibration extensions) — apply the same pattern to siblings
+4. **R4, R9** (library-aware OBS/ENG/HITL calibration)
+5. **R7** (AUTH-Q6/Q7 differentiation) — independent of the others, can ship anytime
+6. **R8** (new repo_type) — open scope question, resolve before or alongside R6
+
+### Commit Strategy
+
+| Commit | Scope | Message | Status |
+|--------|-------|---------|--------|
+| `cf58756` | R6 + R8 | `feat(ara-td): add target-system-surface detection in Step 1 for finer N/A mapping` | ✅ landed |
+| `044c369` | R1 | `refactor(ara-td): add scope gate + archetype calibration to DATA-Q1` | ✅ landed |
+| `3826b58` | R2, R3, R5, R9 | `refactor(ara-td): extend surface-flag calibration to DATA-Q2/Q6, STATE-Q1/Q5, API-Q2/Q3, HITL-Q3` | ✅ landed |
+| `ed9eca6` | R4 | `refactor(ara-td): library-aware calibration for OBS-Q1/Q2 and ENG-Q1/Q2/Q3` | ✅ landed |
+| `dd35bce` | R7 | `refactor(ara-td): differentiate AUTH-Q6/Q7 findings when conditional downgrades` | ✅ landed |
+
+### Verification (post-edit)
+
+- [ ] **V-R1 — Re-run zg-cmp portfolio** with recalibrated TD. Expected: DATA-Q1 BLOCKER count drops from 30 → under 10. AUTH-Q6 and DATA-Q2 RISK-SAFETY drop from 31–34 → single digits for non-data repos.
+- [ ] **V-R2 — Spot-check hapi-fhir.** Must still score BLOCKER on DATA-Q1 (PHI-handling) and keep RISK-SAFETY on DATA-Q2/Q6. Recalibration must not under-flag real PII systems.
+- [ ] **V-R3 — Spot-check Graylog2 + umami** (observability/analytics repos that do handle user data). Must keep RISK-SAFETY on DATA-Q6 — they absolutely can leak PII into logs.
+- [ ] **V-R4 — Verify portfolio ARA trigger logic** isn't affected. Check `portfolio-agentic-readiness/transformation_definition.md` doesn't reference rubric text verbatim.
+
+### Risk Notes
+
+- **Under-flagging is the main risk.** The goal is to remove false positives on tools/libraries, NOT to downgrade real data-handling systems. V-R2 and V-R3 exist specifically to catch that regression.
+- **R8 scope question.** Adding `dev-library-application` is a taxonomy change. Option (b) in R8 (archetype overrides repo_type) is less invasive — may be preferable.
+- **Example reports will drift.** v3 reports showed the over-strict patterns as "working" findings. After R1-R7 land, many of those will change severity. Flag as expected drift in the CR, don't regenerate unless asked.
+
+---
+
+## 🔍 Verification (pre-CR)
+
+- [ ] **V1 — Grep stale terms after edits land:**
+  - `compute tiers` — 0 hits required (already clean)
+  - `App Mesh` — 0 hits in MOD and ARA TDs (both already clean)
+  - `primary database` / `Primary database` — 0 expected hits (B2 shipped)
+  - `in IaC` — unchanged (R2 rejected, stays IaC)
+- [ ] **V2 — Spot-check reworked rubrics** (INF-Q3, APP-Q3, APP-Q4 after B3; INF-Q7 after F6; INF-Q11 after F5) for coherent 1→4 progression.
+- [ ] **V3 — Cross-check portfolio TD.** `portfolio-modernization/transformation_definition.md` references question IDs only. Re-verify no rubric text drift.
+- [ ] **V4 — Cross-check example reports.** `example-reports/v2-full-assessment/modernization-assessment/*.md` — flag as stale in CR if any scores shift.
+- [ ] **V5 — Rubric-count changes.** If G1/G2 add new questions, update Summary counter, category math, N/A mappings.
+- [ ] **V6 — Phase H schema check.** Validate emitted JSON against `report-schema.json` for each TD's example report.
+
+---
+
+## 📦 Wrap-up (per CR)
 
 - [ ] **W1 — Final review.** `git status` + `git -P diff --stat`.
-- [ ] **W2 — Raise CR.** Description should include:
-  - Link to `feedback-mod-action.md`, `kiro-feedback-changes.md`, and `mod-feedback-analysis.md`
-  - Analysis-doc cross-reference table (Part "Already resolved")
-  - R1–R5 called out as rejected/reworked with rationale — reviewers can push back on those specifically
-  - Phase F status (which F items shipped, which deferred)
-  - Phase G status (scope decisions settled or deferred)
-  - Call out reopened threads (analysis-C10, C13, C23) explicitly — Robert wants to see these addressed
-- [ ] **W3 — Reply in doc threads** for the reply-only items (C5, C14, C20, C21, C25, C28, C36, C37).
-
----
-
-## MOD Commit Strategy
-
-| Commit | Phases | Message |
-|--------|--------|---------|
-| A | Phase A + B | `refactor(mod-td): sharpen scoring rubrics, fix APP-Q1 tone, resolve reopened rubrics (P1C, P2A, P4-1, analysis-C10/C12/C15/C23)` |
-| B | Phase C + D | `feat(mod-td): add missing AWS services and clarify terminology (P2B, P3)` |
-| C | Phase E | `docs(mod-td): expand DATA-Q1 coverage, broaden modernization strategies (P4, WF)` |
-| F | Phase F | `feat(mod-td): incorporate Herrera Soto pass — tagging, multi-region, key management, versioning, pipeline security (F1–F6)` |
-| G | Phase G (if adopted) | `feat(mod-td): add IaC governance question and resilience testing coverage (G1–G3)` |
-
-Commits A–C are low-risk and can land together. F adds rubric content but no scope change. G is a scope change and should be a separate CR if adopted.
+- [ ] **W2 — Raise CR** with:
+  - Link to `feedback-mod-action.md`, `kiro-feedback-changes.md`, `mod-feedback-analysis.md`
+  - Rejection rationale for MOD R1/R2/R4/R5, ARA R1-R3 (from archive)
+  - Phase F / G / H status (shipped vs deferred)
+  - Reopened threads addressed (analysis-C10 ✅, C13 ✅ partial via F2, C23 ✅)
+- [ ] **W3 — Reply in doc threads** for reply-only items (see archive).
 
 ---
 
 ## Risk Notes
 
 - **Line numbers drift** — match on FIND text, not line numbers.
-- **P0.4 merge** — INF-Q2 has two overlapping edits; apply merged wording once.
-- **B4, R3, F6 all touch INF-Q7** — sequence B4 (rubric scores 2/3) → R3 rework (question + rubric broadening) → F6 (business-metrics signal at Score 4). Apply in that order to avoid stomping edits.
-- **B9 semantic shift** — SEC-Q7 Score 2/1 rework. Confirmed not a pathway trigger. Safe.
-- **R1–R5 rejections are visible** — surface each in CR description so reviewers can push back.
-- **Phase G changes question count** — if G1 or G2 lands, update Summary counter, category math, N/A mappings before shipping.
-- **Part 3 scope discipline** — if pressed to include docx-only items, hold the line. The TD cycle does not own narrative positioning.
+- **INF-Q7 edit chain** — R3-rework is already shipped (compute+data covered). Only F6 remains; apply carefully without reintroducing compute-only wording.
+- **Phase G changes question count** — update Summary counter, category math, N/A mappings before shipping.
+- **JSON schema stability (Phase H)** — once external tooling depends on it, breaking changes bump schema version.
+- **Part 3 scope discipline** — if pressed to include docx-only items in TD CR, hold the line.
 
 ---
 
-# 🤖 ARA — Proposed Feedback Adoption
+## What's left, at a glance
 
-**TD target:** `agentic-readiness-assessment/transformation_definition.md` (1654 lines)
-**Source:** `quick-scripts/feedback-updates/ara-feedback-analysis.md` (34 threads, 57 comments; 8 resolved, 26 open)
+| Category | Count | Items |
+|----------|-------|-------|
+| 🚀 Phase H JSON | 7 | H-1..H-7 |
+| 🔄 GF replies | 2 | GF-1, GF-2 |
+| 🔬 V3 calibration follow-ups | 5 | C-1..C-5 |
+| 🎯 **ARA rubric recalibration** | 9 | **R1..R9 all shipped on `fix/ara-calibration` (Apr 29, 2026) — pending V-R1..V-R4 portfolio re-run** |
+| ⚠️ Pre-flight | 3 | P0.1..P0.3 |
+| ✅ MOD edits | 3 | B3, F5, F6 |
+| 🤔 MOD scope decisions | 2 | G1, G2 |
+| 🤖 ARA edits (original pass) | 0 | All shipped |
+| 🔍 Verification | 6 | V1..V6 |
+| 🔍 ARA-R Verification | 4 | V-R1..V-R4 (run zg-cmp portfolio against recalibrated TD) |
+| 📦 Wrap-up | 3 | W1..W3 |
+| **Total remaining** | **35** | |
 
-> **Note:** This TODO only tracks changes to the **transformation_definition.md**. Many reviewer items target the companion docx (Customer Positioning, How to Use This Guide, Programs table, Appendix narratives). Those are listed separately under "📄 Docx-only" for visibility but are NOT TD work and should be handled in the docx review pass, not here.
-
----
-
-## Specialist Observations Before Proposing Anything
-
-Three findings from reading the TD + analysis together shape every decision below:
-
-1. **Question numbering mismatch.** The analysis doc's "AUTH-Q5 = Agent-as-Self vs Agent-on-Behalf-of-User" does not match the TD. In the TD, identity propagation is **AUTH-Q4** (RISK); **AUTH-Q5** is credential management (RISK). C11, C31, and any severity discussion that references "AUTH-Q5 identity semantics" actually target **AUTH-Q4**. Fix reviewer-facing numbering before responding, or reviewers will think we ignored their thread.
-
-2. **MCP is already scoped OUT.** Line 165 of the TD reads: *"This assessment does NOT cover agent architecture (…RAG pipelines, MCP servers)…"*. C12, C14, C15, and C33 ask for MCP to be treated as a first-class target. That's a scope reversal, not a wording tweak. Needs a deliberate decision before any edit.
-
-3. **AUTH-Q4 has a duplicated "Look for" block** (TD lines 702–727 are a copy-paste merge artifact). Unrelated to feedback — a hygiene fix we should sneak in while editing this section.
-
----
-
-## ✅ Part A — TD Adopt (specialist-endorsed, stays within ARA's scope)
-
-All items below change the **transformation_definition.md**.
-
-- [ ] **ARA-A1 — C34 (Riggs): Add "AgentCore Identity" to AUTH-Q1 look-for.**
-  AUTH-Q1 is BLOCKER for machine identity. AgentCore Identity is an AWS-native implementation path. Add to the look-for bullet list as a detection signal. Does NOT mean we assess AgentCore specifically; it means we recognize its presence as evidence that machine identity is satisfied.
-
-- [ ] **ARA-A2 — C31 (Riggs): Subject/actor semantics in AUTH-Q4 why-it-matters.**
-  *(Reviewer said "AUTH-Q5" but current TD has this at AUTH-Q4 — Identity Propagation and Delegation.)*
-  AUTH-Q4 already distinguishes agent-as-self vs agent-on-behalf-of-user. Riggs's phrasing — *"user is the subject, agent is the actor"* — is a cleaner way to say the same thing. Adopt as a why-it-matters rewrite; **do not change severity**.
-
-- [ ] **ARA-A3 — C24 (Riggs + RP): Dual-purpose framing in Objective.**
-  Current Objective mentions "safe, operable, integrable." Add one sentence explicitly naming the two use modes: (1) portfolio-level telemetry of which systems are agent-ready, (2) use-case-level dependency checking for a specific agent workflow. RP endorsed both uses.
-
-- [ ] **ARA-A4 — C26 (Harish): Mention "remediation" in Summary.**
-  The Summary lists what the output contains but doesn't preview that the assessment *produces remediation guidance*. One-clause addition: findings include prioritized remediation guidance.
-
-- [ ] **ARA-A5 — C25 (Henry): Design-time vs runtime clarification in Summary or Objective.**
-  The ARA scans code and config — it doesn't see runtime posture. Make this explicit: *"ARA is a design-time architecture review — it evaluates whether controls exist in code and configuration, not whether they're effective at runtime."* Deflects pentest/runtime-scan requests.
-
-- [ ] **ARA-A6 — C22 + C29: Extend "does NOT cover" list (TD line 165).**
-  Current exclusion lists agent architecture and general cloud modernization. Add: "agent-level AI governance (model policy, prompt injection defense, safety evaluation)." Keep to a clause — names the boundary without promising integration.
-
-- [ ] **ARA-A7 — C17 (Harish): HITL framing in Step 5 intro.**
-  Current Step 5 intro may sound like ARA is discouraging HITL. Add a line to the Step 5 preamble: *"ARA measures whether the system can support human-in-the-loop patterns — not whether HITL should be mandatory. HITL is a valuable safety mechanism for high-stakes operations."* No rubric impact.
-
-- [ ] **ARA-A8 — Housekeeping: Fix AUTH-Q4 duplicated "Look for" block.**
-  TD lines 702–727 have a copy-paste merge artifact — the "Look for" list appears twice with a garbled sentence between them. Clean up while editing the section.
-
-**Commit ARA-TD-1:** `refactor(ara-td): clarify scope, dual-purpose framing, HITL, and AUTH look-for (C17, C22, C24-C26, C31, C34) + AUTH-Q4 cleanup`
-
----
-
-## 🤔 Part B — TD Adopt with revision (reviewer intent right, needs careful wording)
-
-- [ ] **ARA-B1 — C30 (Riggs): Control-layer note in scope/Summary.**
-  A control can live in the application, the platform (API Gateway, service mesh, IAM), or the agent architecture. The TD already acknowledges this in AUTH-Q2 ("enforcement can happen at the platform layer") but only there. Add one line to Summary: *"Controls may exist at the application layer, platform layer, or agent architecture layer. ARA checks end-to-end presence — who implements the control is a design decision."* **Do not invent a new taxonomy.**
-
-- [ ] **ARA-B2 — C12 counter-proposal: MCP-awareness clause in Step 2 intro (API dimension).**
-  We reject evaluating MCP (see R1 below) but can acknowledge it in one line at the top of the API section: *"When MCP-native integration is the target, the findings here inform what an MCP server wrapping this system will need to expose."* Signals we see the question; doesn't import MCP rubrics.
-
-- [ ] **ARA-B3 — C33 partial: AUTH-Q2 why-it-matters — scoped permissions phrasing.**
-  Riggs's phrasing about "cannot scope down agent access" is useful for AUTH-Q2 (Scoped Permissions). Adopt the scoped-access language for AUTH-Q2 why-it-matters; **drop** the MCP reference from his proposed wording.
-
-- [ ] **ARA-B4 — C11 counter-proposal: Multitenancy cross-reference in AUTH-Q4.**
-  Justin's concern about multitenancy + identity propagation is real, but severity escalation is wrong (see R2). Add a paragraph to AUTH-Q4 why-it-matters: *"When the target system serves multiple tenants, weak identity propagation compounds with data-layer risks (DATA-Q2 data residency, DATA-Q6 PII in logs). Treat these as a cluster when planning remediation."* **No severity change.**
-
-**Commit ARA-TD-2:** `docs(ara-td): control-layer note, MCP awareness clause, multitenancy cross-reference (C11, C12, C30, C33)`
-
----
-
-## ❌ Part C — TD Reject (scope mismatch; counter-proposals already in Part B)
-
-- [ ] **ARA-R1 — C12/C14/C15 (Mark + RP): "Evaluate MCP interfaces as a first-class target."**
-  **Reject.** The TD explicitly excludes MCP servers from scope (line 165). Agent architecture — which MCP is — is not what ARA evaluates; ARA evaluates what agents *call*. If we added MCP rubrics, we'd need new scoring across API-Q1–Q4 and AUTH-Q4. That's a scope reversal requiring leadership sign-off.
-  **Counter-proposal:** ARA-B2 (one-line awareness clause in Step 2).
-  **Respond in docx thread:** "Current API surface is assessed because that's what agents call today. MCP is covered by bridge-mode guidance and agent architecture (out of scope per intro)."
-
-- [ ] **ARA-R2 — C11 (Justin): Escalate AUTH-Q4 severity beyond RISK.**
-  **Reject severity change.** The severity model is deliberate:
-  - AUTH-Q1 (Machine Identity) = BLOCKER handles the categorical "no identity = no multitenancy" case.
-  - AUTH-Q4 = RISK-SAFETY handles the "identity exists but propagation is weak" case. This maps to Pilot-Ready (1–2 RISK-SAFETY) by design.
-  - Escalating AUTH-Q4 would push many repos from Pilot-Ready to Remediation Required on architecture maturity, not actual agent-safety risk.
-  **Counter-proposal:** ARA-B4 (multitenancy cross-reference, no severity change).
-
-- [ ] **ARA-R3 — C33 MCP reference.**
-  **Partial reject.** Scoped permissions phrasing is adopted in ARA-B3. MCP reference is dropped (same reasoning as R1).
-
----
-
-## 📄 Docx-only items (NOT TD work — track in docx review pass)
-
-These reviewer comments address the narrative docx (Customer Positioning, How to Use This Guide, Programs table, Appendix). They do **not** belong in the TD edit cycle. Listed here only so nothing gets lost when the CR description references the analysis doc.
-
-| Analysis ID | Topic | Docx location |
-|-------------|-------|---------------|
-| C16 | EBA hyperlink | Appendix 3 Programs table |
-| C21 | Self-serve + managed delivery model | Customer Positioning section |
-| C19 | "Relationship to OLA" — assessment fatigue | How to Use This Guide (new section) |
-| C27 | MOD cross-reference (docx narrative) | Intro / opening narrative |
-| C18 | "When to run" timing guidance | How to Use This Guide |
-| C23 | "target systems" vs "source systems" glossary | Docx glossary |
-| C29 (part) | Delineation from "AI team's readiness assessment" | Intro narrative |
-
----
-
-## 💬 Reply-only items (neither TD nor docx edits — respond in reviewer thread)
-
-| Analysis ID | Topic | Suggested response |
-|-------------|-------|--------------------|
-| C32 | "Why RISK not BLOCKER?" | *"AUTH-Q2/Q3 are RISK-SAFETY because the control can be enforced at the platform layer (API Gateway, IAM) even if the app is coarse-grained. BLOCKER is reserved for categorical failures like no machine identity at all."* |
-| C28 | "Does it assess data exposure, privilege escalation, destructive actions?" | Respond with mapping: data exposure → DATA-Q1/Q2/Q6; privilege escalation → AUTH-Q2/Q4; destructive actions → STATE-Q1/Q5/Q6. All already covered. |
-| C13 | "guarantees?" | Needs anchor identification in docx before responding. |
-| C14 | "but does look at MCP interface definitions?" | Covered by R1 response. |
-| C15 | "why not MCP server interfaces?" | Covered by R1 response. |
-| C10 | "Post-readiness POV — what comes next?" | Point to AI DLC workshop (already referenced in docx) and any agent-side readiness assessment. Explicitly out of ARA scope. |
-| C9 | "Example of what you mean?" | Blocked — need to identify the comment anchor in docx. |
-
----
-
-## 📚 Already resolved (per analysis doc 🟢 RESOLVED list — no work)
-
-C1 (Agent Storming), C2 (FinOps), C3 (multi-agent framing), C4 (portfolio metrics), C5 (Gartner citation), C6 (process modeling), C7 (EBA criteria), C8 (AI DLC). Listed for CR completeness only.
-
----
-
-## ⚠️ ARA Pre-flight
-
-- [ ] **ARA-P0.1 — Reconcile question numbering with reviewers.** Analysis doc says "AUTH-Q5: Agent-as-Self vs Agent-on-Behalf-of-User" — actual TD has this at AUTH-Q4. Map both in the CR description so C11/C31 replies hit the right question.
-- [ ] **ARA-P0.2 — Retrieve docx anchors for C9 and C13.** Both need comment-position lookup in the source docx before a response can be drafted.
-- [ ] **ARA-P0.3 — Scope decision: is MCP in or out?** Today the TD says out (line 165). Part C rejects MCP evaluation; Part B adds one awareness clause. If leadership decides MCP should be evaluated, Parts B2 and C1/C3 flip. **Do not execute until this is settled.**
-- [ ] **ARA-P0.4 — Confirm no rubric changes.** Nothing in Parts A or B changes severity, readiness profile math, N/A mappings, or pathway triggers. Verify before CR.
-
----
-
-## ARA Commit Strategy
-
-| Commit | Scope | Message |
-|--------|-------|---------|
-| ARA-TD-1 | Part A (8 items) | `refactor(ara-td): clarify scope, dual-purpose framing, HITL, AUTH look-for + AUTH-Q4 cleanup (C17, C22, C24-C26, C31, C34)` |
-| ARA-TD-2 | Part B (4 items) | `docs(ara-td): control-layer note, MCP awareness clause, multitenancy cross-reference (C11, C12, C30, C33)` |
-
----
-
-## Why I'm drawing these lines
-
-ARA has a tight, deliberate scope: *"Evaluate whether target systems are safe, operable, integrable by agents."* Three scope guardrails keep it useful:
-1. **Target systems, not agents.** Reviewing MCP servers, prompt injection, agent governance, or model policy breaks this guardrail.
-2. **Design-time, not runtime.** Reviewing live posture or live credentials breaks this guardrail.
-3. **Severity-based, not numeric.** BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO maps to readiness profile. Mixing numeric scoring in (as C11/C32 implicitly push toward) breaks the profile math.
-
-Parts A and B strengthen ARA within these guardrails. Part C rejects items that would cross them — each with a counter-proposal folded into Part B so reviewers see their concern addressed, not dismissed. Docx-only and reply-only items are split out so we're not editing the TD to answer narrative questions.
+Of those 35, the **9 ARA Rubric Recalibration items are shipped and awaiting verification** — the next concrete step is re-running the zg-cmp portfolio against `fix/ara-calibration` and confirming V-R1..V-R4 pass.
