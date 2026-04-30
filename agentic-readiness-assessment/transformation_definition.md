@@ -1260,6 +1260,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Why it matters:** These two controls serve the same diagnostic purpose — reconstructing what happened inside the target system when an agent-initiated request fails. Both must be present to make agent-initiated failures debuggable.
 
+**Surface-flag calibration:** If the repo was classified as `dev-library-application` via Step 1.5, or if `has_http_rpc_surface` is `false` AND there is no agent-initiated request path to trace, record as INFO with the rationale `"Library/utility — tracing and correlation are consumer concerns. The library's obligation is to propagate trace context if provided, which DISC-Q1 evaluates."` Libraries that ship OpenTelemetry hooks or accept a logger instance satisfy the instrumentation concern without owning the trace pipeline.
+
 **Look for:**
 - OpenTelemetry SDK
 - X-Ray instrumentation
@@ -1274,6 +1276,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 **Question:** Are there alerting thresholds configured for error rates and latency on the APIs agents will consume?
 
 **Why it matters:** Target system degradation is felt immediately by agents. Alerting lets you detect problems before agents start cascading failures.
+
+**Surface-flag calibration:** If the repo was classified as `dev-library-application` via Step 1.5, or if `has_http_rpc_surface` is `false`, record as INFO with the rationale `"Library/utility — alerting on error rates and latency is a consumer concern. Libraries expose error and timing signals via return values, exceptions, or structured metrics; consumers decide the alert thresholds."`
 
 **Look for:**
 - CloudWatch alarms on error rates and latency
@@ -1310,6 +1314,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Why it matters:** The integration surface is a high-value attack surface. All three controls — IaC definition, change review, and drift detection — must be present together for this surface to be trustworthy.
 
+**Surface-flag calibration:** If the repo was classified as `dev-library-application` via Step 1.5, or if `has_http_rpc_surface` is `false` AND `has_auth_surface` is `false`, record as INFO. Libraries, CLIs, and formatters do not own the IaC for API gateways, IAM roles, or networking — their consumers do. The library's engineering governance is its own build/release pipeline, which ENG-Q2/Q3 cover.
+
 **Look for:**
 - Sub-checks: (1) Integration surface defined as IaC? (2) Changes subject to automated plan review + peer review? (3) Drift detection active?
 - Terraform, CloudFormation, or CDK definitions for API Gateway, IAM, secrets, networking
@@ -1323,6 +1329,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 **Question:** Does the target system have a CI/CD pipeline that includes automated testing of agent-facing APIs and the ability to detect API-breaking changes before production?
 
 **Why it matters:** The agentic concern is not "does CI/CD exist" but "can API contract changes be caught before agents are affected."
+
+**Surface-flag calibration:** If `has_http_rpc_surface` is `false`, there are no APIs to contract-test — record as INFO with the rationale `"No HTTP/RPC surface — API contract testing is not applicable. Library contract stability is evaluated by DISC-Q1 (schema/typed-export versioning)."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO — library build pipelines validate package contracts (semver, typed exports), not API contracts.
 
 **Look for:**
 - API contract tests in CI pipeline
@@ -1338,6 +1346,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 **Question:** Can the target system's deployment be rolled back to the previous known-good state if a change breaks agent-facing APIs? (Target: within 15–30 minutes.)
 
 **Why it matters:** A broken API that agents depend on leaves agents unable to function. The intent — fast, reliable rollback — matters more than the exact time threshold. Organizations with canary + circuit breaker patterns achieve safe recovery.
+
+**Surface-flag calibration:** If `has_http_rpc_surface` is `false`, there is no deployed surface to roll back — record as INFO with the rationale `"No deployed HTTP/RPC surface — deployment rollback is a consumer concern. Library rollback is handled via package version pinning by consumers."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO.
 
 **Look for:**
 - Blue/green deployment config
