@@ -1403,6 +1403,7 @@ Create the report file with exactly this structure. Every section is required. A
 **Target**: <repository path>
 **Date**: <date>
 **Assessed by**: AWS Transform Custom — Agentic Readiness Assessment
+**TD Version**: <resolved from `atx custom def get -n agentic-readiness-assessment` — the version ID of the published TD that produced this report, e.g., "3g1ef0edkgh173d9yafo0lio">
 **Repository Type**: <resolved repo_type>
 **Service Archetype**: <resolved service_archetype> (auto-detected | user-provided)
 **Agent Scope**: <resolved agent_scope>

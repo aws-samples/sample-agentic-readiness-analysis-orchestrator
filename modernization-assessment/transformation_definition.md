@@ -25,7 +25,9 @@ Each question is scored on a 1–4 scale:
 | **2** | 🟠 Needs Work | Exists but significant gaps. Moderate effort needed. |
 | **1** | ❌ Not Present | Missing entirely or fundamentally inadequate. |
 
-Category scores are calculated as the arithmetic mean of all non-N/A question scores in that category. The overall score is the average of the 5 category scores (each category weighted equally regardless of question count). If all questions in a category are N/A for the detected repo_type, the category score is "N/A" and is excluded from the overall score average.
+Category scores are calculated as the arithmetic mean of all non-N/A, non-Not-Evaluated question scores in that category. The overall score is the average of the 5 category scores (each category weighted equally regardless of question count). If all questions in a category are N/A or Not Evaluated for the detected repo_type and archetype, the category score is "N/A" and is excluded from the overall score average.
+
+**Not Evaluated (archetype-N/A)** — Questions that are archetype-calibrated (currently INF-Q3, INF-Q4, APP-Q3, APP-Q4) may resolve to "not applicable by design" for a specific archetype. When the archetype column indicates the question does not apply (e.g., "No multi-step workflows exist — not applicable by design" for `stateless-utility` on INF-Q3), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from both category and overall score averaging — same exclusion as N/A. This prevents artificial score inflation from archetype-correct-but-uninformative "Score 4 by default" entries. The rubric columns still describe what evaluation would look like; the Not-Evaluated status means no evaluation was performed for this repo.
 
 The assessment evaluates 7 AWS Modernization Pathways, each with defined trigger conditions mapped to specific question IDs and contextual guards to prevent false positives:
 
@@ -398,6 +400,19 @@ When a question is N/A for the detected `repo_type`, record it as:
 
 Replace `{repo_type}` with the actual resolved repo type value (e.g., "This is a `infrastructure-only` repository. This question does not apply.").
 
+### Not Evaluated (archetype-N/A) Display Format
+
+When an archetype-calibrated question (INF-Q3, APP-Q3, APP-Q4) resolves to "not applicable by design" for the detected archetype, record it as:
+
+| Field | Value |
+|-------|-------|
+| **Score** | Not Evaluated (archetype-N/A) |
+| **Finding** | This service is a `{archetype}`. {Question topic} is not applicable by design — {brief reason, e.g., "no multi-step workflows exist for a stateless utility"}. |
+| **Gap** | N/A |
+| **Recommendation** | N/A |
+
+Not-Evaluated questions are **excluded from category and overall score averaging** — treated identically to N/A for scoring purposes.
+
 When a pathway is N/A for the detected `repo_type`, record it in the pathway summary table as:
 
 | Field | Value |
@@ -405,14 +420,16 @@ When a pathway is N/A for the detected `repo_type`, record it in the pathway sum
 | **Status** | Not Applicable |
 | **Reason** | This is a `{repo_type}` repository. This pathway does not apply. |
 
-### N/A Scoring Rules
+### N/A and Not-Evaluated Scoring Rules
 
-N/A questions are **excluded from both the numerator and denominator** of category score averages:
+N/A questions and Not-Evaluated (archetype-N/A) questions are **both excluded from the numerator and denominator** of category score averages:
 
-1. **Category score calculation** — The category score is the arithmetic mean of only the non-N/A question scores in that category. N/A questions are excluded from both the sum of scores (numerator) and the count of questions (denominator). For example, if a category has 6 questions and 2 are N/A, the category score = (sum of 4 non-N/A scores) / 4.
-2. **All-N/A category** — If **all** questions in a category are N/A for the detected repo_type, the category score is **"N/A"** and that category is excluded from the overall score average. For example, if the Application Architecture category (APP-Q1 through APP-Q6) is entirely N/A for an `infrastructure-only` repo, the overall score is calculated from the remaining 4 categories instead of 5.
+1. **Category score calculation** — The category score is the arithmetic mean of only the non-N/A, non-Not-Evaluated question scores in that category. Both are excluded from the sum of scores (numerator) and the count of questions (denominator). For example, if a category has 6 questions, 1 is N/A for repo_type, and 1 is Not Evaluated (archetype-N/A), the category score = (sum of 4 remaining scores) / 4.
+2. **All-exclusion category** — If **all** questions in a category are N/A or Not Evaluated, the category score is **"N/A"** and that category is excluded from the overall score average.
 3. **Overall score calculation** — The overall score is the average of the non-N/A category scores. Each non-N/A category is weighted equally regardless of question count.
 4. **Pathway exclusion** — N/A pathways are listed in the pathway summary table with status "Not Applicable" but do not affect the count of triggered vs not-triggered pathways.
+
+> **Why Not-Evaluated matters:** A `stateless-utility` that correctly has no workflows (INF-Q3) should not score 4 "by design" — that inflates its infrastructure category above a `stateful-crud` with appropriate Step Functions coverage (realistic Score 3). Recording as Not Evaluated (archetype-N/A) keeps scores comparable across archetypes.
 
 ### N/A Inclusion Rule
 
@@ -477,6 +494,8 @@ These questions evaluate the compute, networking, platform services, and deploym
 **Why it matters:** Dedicated workflow orchestration provides visual workflow management, error handling, retry logic, and state management. Without it, all orchestration logic is buried in code — harder to maintain, debug, and evolve. However, not every service has workflows to orchestrate. A pure read-only utility or a simple CRUD service may have nothing multi-step to coordinate, and penalizing it for not adopting Step Functions would recommend complexity where none is warranted.
 
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
+
+> **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (the rubric cell says "not applicable by design" or equivalent — for INF-Q3 this is `stateless-utility` Score 4), record the question as **"Not Evaluated (archetype-N/A)"** in the report and exclude it from category and overall score averaging. Do not report a default Score 4. Use the Not-Evaluated display format from Section 8 of the Report Template.
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
@@ -658,6 +677,8 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
+> **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (for APP-Q3 this is `stateless-utility` Score 4: "Sync request/response is the correct design; async not needed"), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from category and overall score averaging. Do not report a default Score 4.
+
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
 | **4** | Sync request/response is the correct design; async not needed. Score defaults to 4. | Sync reads are correct; any write-back, cache invalidation, or indexing uses async. | 50%+ async for cross-service state propagation, or async available for all long-running operations. | Async dominates for fan-out; sync reserved for reads and fast-returning calls. | Primary input is async (event/queue); any outbound calls are async where appropriate. |
@@ -676,6 +697,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 **Why it matters:** Blocking calls for long-running operations create timeout risks, poor user experience, and resource waste. Async patterns with status tracking enable better resource utilization and user feedback. However, many services have no operations that exceed 30 seconds — a pure utility doing stateless computation or a data-gateway doing indexed reads has no long-running work to offload. In those cases, this question is not a gap and should not drive a recommendation.
 
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
+
+> **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (for APP-Q4 this is `stateless-utility` Score 4: "No operations exceed 30 seconds — not applicable by design"), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from category and overall score averaging. Do not report a default Score 4.
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
@@ -1459,6 +1482,7 @@ The assessment output is a structured Markdown report saved as `{repo-name}-mod-
 |-------|-------|
 | **Repository** | {repo-name} |
 | **Date** | {assessment-date} |
+| **TD Version** | {version ID of the published TD that produced this report — resolve via `atx custom def get -n modernization-assessment`} |
 | **Repo Type** | {repo_type} |
 | **Service Archetype** | {archetype} ({auto-detected or user-provided}) — omit row if repo_type is not `application` |
 | **Priority** | {priority or "—" if not provided} |
@@ -1497,16 +1521,17 @@ If `service_archetype` was auto-detected, include the one- to two-sentence justi
 | 1.5 – 2.4 | 🟠 Needs Work |
 | < 1.5 | ❌ Not Present |
 
-If a category score is "N/A" (all questions in that category are N/A for the detected repo_type), display:
+If a category score is "N/A" (all questions in that category are N/A or Not Evaluated for the detected repo_type and archetype), display:
 
 ```markdown
-| Application Architecture (APP) | N/A | N/A — all questions not applicable for {repo_type} |
+| Application Architecture (APP) | N/A | N/A — all questions not applicable for {repo_type}/{archetype} |
 ```
 
 **Scoring rules:**
-- Category score = arithmetic mean of non-N/A question scores in that category.
+- Category score = arithmetic mean of non-N/A, non-Not-Evaluated question scores in that category.
 - Overall score = arithmetic mean of non-N/A category scores (each category weighted equally).
-- N/A questions excluded from both numerator and denominator.
+- Both N/A and Not-Evaluated (archetype-N/A) questions are excluded from numerator and denominator.
+- If all questions in a category are N/A or Not Evaluated, category score = "N/A", excluded from overall average.
 - If all questions in a category are N/A, category score = "N/A", excluded from overall average.
 
 ### Section 3: Top 5 Gaps
