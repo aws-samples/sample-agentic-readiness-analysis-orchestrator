@@ -493,6 +493,8 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 **Why it matters:** Dedicated workflow orchestration provides visual workflow management, error handling, retry logic, and state management. Without it, all orchestration logic is buried in code — harder to maintain, debug, and evolve. However, not every service has workflows to orchestrate. A pure read-only utility or a simple CRUD service may have nothing multi-step to coordinate, and penalizing it for not adopting Step Functions would recommend complexity where none is warranted.
 
+> **Note:** This question uses archetype-sensitive calibration. A `stateless-utility` with no multi-step workflows records as "Not Evaluated (archetype-N/A)" rather than defaulting to Score 4. See the archetype rubric below.
+
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
 > **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (the rubric cell says "not applicable by design" or equivalent — for INF-Q3 this is `stateless-utility` Score 4), record the question as **"Not Evaluated (archetype-N/A)"** in the report and exclude it from category and overall score averaging. Do not report a default Score 4. Use the Not-Evaluated display format from Section 8 of the Report Template.
@@ -567,7 +569,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All scalable resource types have auto-scaling configured with appropriate min/max — compute (ECS/EKS/EC2 ASG/Lambda concurrency), data (DynamoDB capacity, Aurora replicas), and other managed services where applicable. |
+| **4** | All scalable resource types have auto-scaling configured with appropriate min/max — compute (ECS/EKS/EC2 ASG/Lambda concurrency), data (DynamoDB capacity, Aurora replicas), and other managed services where applicable. Mature deployments also use business-metric-driven scaling policies (custom CloudWatch metrics on requests-in-flight, orders-per-second, queue depth) where purely technical metrics (CPU, memory) are insufficient signals of load. |
 | **3** | Auto-scaling configured on primary workloads with workload-appropriate thresholds (custom target tracking or step policies) covering both compute and data layers. Auxiliary resources may use static capacity. |
 | **2** | Auto-scaling exists but uses only default/out-of-box settings (e.g., default ECS target tracking without tuning), OR coverage is limited to compute with no scaling on data or other managed services. No custom scaling policies or scheduled scaling. |
 | **1** | No auto-scaling — all capacity is statically provisioned. |
@@ -623,7 +625,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 **Question:** Are CI/CD pipelines automated with build, test, and deploy stages for both application code and infrastructure as code, or are deployments manual?
 
-**Why it matters:** Manual deployments create bottlenecks, are error-prone, and prevent rapid iteration. Automated pipelines enable continuous delivery with consistent quality gates.
+**Why it matters:** Manual deployments create bottlenecks, are error-prone, and prevent rapid iteration. Automated pipelines enable continuous delivery with consistent quality gates. CI/CD automation alone is not sufficient for modern agent-facing APIs — pipelines must also include security validation (SAST, DAST, dependency scanning). See **SEC-Q7** for the security-pipeline evaluation that pairs with INF-Q11's automation scoring.
 
 | Score | Criteria |
 |-------|----------|
@@ -643,16 +645,18 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Question:** What programming languages are used and how mature is their ecosystem for cloud-native development?
 
-**Why it matters:** Language choice determines the breadth of AWS SDK support, the depth of cloud-native tooling, and the availability of modern framework ecosystems. Languages with first-class AWS SDK coverage and mature cloud-native libraries enable faster modernization; languages with narrower AWS tooling require more custom integration work to reach the same outcomes.
+**Why it matters:** Language choice determines the breadth of AWS SDK support, the depth of cloud-native tooling, and the availability of modern framework ecosystems. Languages with first-class AWS SDK coverage and mature cloud-native libraries enable faster modernization; languages with narrower AWS tooling require more custom integration work to reach the same outcomes. Within a given language, the version/framework/SDK combination matters too — modern Java with a current Spring Boot and AWS SDK v2 is materially different from Java 8 with Spring Boot 2.1 and SDK v1, and modern .NET (Core/.NET 6+) is materially different from .NET Framework 4.x.
+
+> **Two-axis calibration:** Score based on both (a) *language/runtime modernity* and (b) *framework/SDK modernity*. A modern language version with lagging framework/SDK lands in Score 3; compound regression across both axes lands in Score 2.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Python, TypeScript/JavaScript, Go, or Java/Kotlin — first-class AWS SDK coverage, broad cloud-native tooling, mature framework ecosystems. |
-| **3** | .NET/C# or Rust — good AWS SDK coverage with narrower cloud-native tooling ecosystem. |
-| **2** | PHP, Ruby, Perl, or older Java versions (< 11) — functional AWS SDK but limited cloud-native tooling depth. |
-| **1** | Languages with limited AWS SDK and cloud-native tooling (e.g., COBOL, VB6, Classic ASP) — requires custom integration or migration planning for cloud services. |
+| **4** | Modern cloud-native language at a current version with matching modern framework and SDK. Examples: Python 3.10+, Node.js 18+ / TypeScript, Go 1.20+, Java 17+ / Kotlin with Spring Boot 3.x and AWS SDK v2; modern .NET (6/7/8/9/10) with current ASP.NET Core and AWS SDK for .NET v3. First-class AWS SDK coverage, broad cloud-native tooling, mature framework ecosystems. |
+| **3** | Cloud-native language at a modern version but with **framework or SDK lag** — e.g., Java 17 on Spring Boot 2.7, Node.js 18+ on Express with AWS SDK v2 partial adoption, Python 3.10+ on an older web framework, or Rust (good AWS SDK coverage but narrower cloud-native tooling ecosystem). Language choice is not the blocker; modernization is an SDK/framework upgrade. |
+| **2** | Compound legacy signals — **language version AND framework AND SDK all regressed**. Examples: Java 8 with Spring Boot 2.x and AWS SDK v1; .NET Framework 4.x with legacy ASP.NET (pre-Core) and AWS SDK for .NET v2 or older; Python 2.x; end-of-life Node.js with an unsupported framework. Also includes PHP, Ruby, or Perl — functional AWS SDK but limited cloud-native tooling depth regardless of version. These require a version upgrade in addition to framework/SDK modernization. |
+| **1** | Languages with limited or no AWS SDK and effectively no cloud-native tooling (e.g., COBOL, VB6, Classic ASP, PowerBuilder) — requires custom integration or migration planning for cloud services. |
 
-> **Look for:** File extensions; package.json, requirements.txt, pom.xml/build.gradle, go.mod, *.csproj.
+> **Look for:** File extensions; dependency manifests (package.json, requirements.txt, pom.xml/build.gradle, go.mod, *.csproj). Record the *version* alongside the language (e.g., `Java 8` vs `Java 17`, `.NET Framework 4.8` vs `.NET 8`), the framework version (Spring Boot 2.1 vs 3.x, ASP.NET Framework vs ASP.NET Core), and the AWS SDK major version (v1 vs v2 for Java/JS, v2 vs v3 for .NET) — all three axes drive the score.
 
 #### APP-Q2: Monolith vs Microservices
 
@@ -675,6 +679,8 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Why it matters:** Synchronous-only architectures create tight coupling, cascading failures, and timeout risks. Async patterns enable decoupling, resilience, and better handling of variable-latency operations. However, the correct async/sync ratio depends on what the service does. A pure utility or read-heavy data gateway has no inherent need for async communication — forcing it in would be complexity for its own sake. An orchestrator or event-processor with primarily synchronous coupling, in contrast, is an anti-pattern for its archetype.
 
+> **Note:** This question uses archetype-sensitive calibration. A `stateless-utility` where sync is the correct design records as "Not Evaluated (archetype-N/A)" rather than defaulting to Score 4. See the archetype rubric below.
+
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
 > **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (for APP-Q3 this is `stateless-utility` Score 4: "Sync request/response is the correct design; async not needed"), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from category and overall score averaging. Do not report a default Score 4.
@@ -695,6 +701,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 **Question:** Are operations over 30 seconds handled asynchronously with status polling or callbacks?
 
 **Why it matters:** Blocking calls for long-running operations create timeout risks, poor user experience, and resource waste. Async patterns with status tracking enable better resource utilization and user feedback. However, many services have no operations that exceed 30 seconds — a pure utility doing stateless computation or a data-gateway doing indexed reads has no long-running work to offload. In those cases, this question is not a gap and should not drive a recommendation.
+
+> **Note:** This question uses archetype-sensitive calibration. A `stateless-utility` with no long-running operations records as "Not Evaluated (archetype-N/A)" rather than defaulting to Score 4. See the archetype rubric below.
 
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
