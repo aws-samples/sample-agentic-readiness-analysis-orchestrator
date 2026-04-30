@@ -377,3 +377,18 @@ Net: v3 is not more lenient — the distribution is sharper. Fewer blockers, mor
 
 ---
 
+
+## Phase C-5 — Effectively closed by zg-cmp v4 portfolio run (Apr 30, 2026)
+
+- ✅ **C-5 — MCP and File Gateway TD clauses now exercised in example-reports.**
+  Original concern was that the A13 MCP awareness clause and the E2/M18 S3 File Gateway note were shipping in the TDs but never firing in any sample portfolio run. Verified Apr 30, 2026 against `example-reports/zg-cmp-full-assessment/modernization-assessment/*.md`:
+  - **MCP clause exercised:** Graylog2 MOD report calls out the existing MCP server implementation (`graylog2-server/src/main/java/org/graylog/mcp/` with 13 tools — SearchMessages, ListStreams, AggregateMessages, SystemInfo, ListFields, etc.) as an existing AI/agent foundation. FlowiseAI mentions MCP SDK in the AI stack. sentry-python integration tests cover MCP.
+  - **File Gateway clause exercised:** Lidarr, Sonarr, gulpjs, and Graylog2 MOD reports all carry S3 File Gateway recommendations in DATA-Q1 Score 2 context ("Consider Amazon S3 File Gateway for seamless S3 integration without changing filesystem-based code paths"). Multiple repos with filesystem-dependent media/data patterns triggered it.
+  No additional sample portfolio needed — the 34-repo zg-cmp run provided natural coverage.
+
+
+## Phase C-4 — Removed Apr 30, 2026 (orchestrator concern, not TD concern)
+
+- ❌ **C-4 — `assessment_date` in Portfolio Inventory uses frontmatter rather than run date.** *Removed from todo.*
+  Original plan was to fix the aggregator in `portfolio-modernization/transformation_definition.md` and `portfolio-agentic-readiness/transformation_definition.md` to source `assessment_date` from file mtime or an injected run timestamp. After reviewing scope: this belongs to the orchestrator (or whatever invokes the TD), not the TD itself. The orchestrator has the run timestamp naturally and can pass it through at invocation time. Closing without TD changes. If the zg-cmp-style date mismatch surfaces again, fix it at the orchestrator/Power layer.
+

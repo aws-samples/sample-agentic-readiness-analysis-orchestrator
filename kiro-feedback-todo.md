@@ -75,27 +75,20 @@ Only items that are still **open and actionable** live here. Everything shipped,
 
 ---
 
-## 🔬 V3 Calibration Follow-ups
+## 🔬 Calibration Follow-ups (post-v3 + Apr 30 rubric scan)
 
-Surfaced by the v2-vs-v3 comparison and the Apr 30 cross-portfolio rubric scan. Keep in mind for the next TD iteration or assessment run.
+Small rubric-tightening items from the v2-vs-v3 comparison and the Apr 30 cross-portfolio scan (`scan-rubric-quality.py`). Each verified still-open against the live TDs on Apr 30, 2026.
 
-- [ ] **C-3 — INF-Q11 narrative doesn't say "application and IaC pipelines".**
-  E4 landed in the question text, but v3 report findings still read as application-pipeline-centric. If reviewers want the phrasing in the output, the rubric rows or why-it-matters would need the explicit "application and IaC" framing — not just the question header.
+### MOD TD — calibration (deferred, does not block ARA v5 re-run)
 
-- [ ] **C-4 — `assessment_date` in Portfolio Assessment Inventory uses frontmatter, not run date.**
-  v3 portfolio MOD inventory shows stale dates (2025-07-17 for unishop, 2026-04-27 for others) because the aggregator pulls `assessment_date` from the individual report's frontmatter rather than file mtime or run timestamp. Fix in the Portfolio MOD TD: use file mtime (or inject a run timestamp) for inventory dates. Also affects Portfolio ARA.
+- [ ] **C-3 — INF-Q11 rubric rows don't carry the "application + IaC" framing.**
+  Verified Apr 30: question header and why-it-matters both mention application code + IaC, but Scores 1-4 still read as generic "CI/CD automation" / "No CI/CD" / "Partial automation". Reports quote rubric rows. Fix: lift the application+IaC framing into at least one of the rubric rows (most naturally Score 4: *"Full CI/CD automation covering both application code and infrastructure-as-code changes, with test, build, deploy, and automated rollback"*).
 
-- [ ] **C-5 — Broaden test coverage in next portfolio run.**
-  Two TD edits landed but didn't get exercised in v3:
-  - **A13 MCP awareness clause** — no repo in v3 exposes MCP surfaces.
-  - **E2/M18 S3 File Gateway note** — no repo has the on-prem migration scenario that triggers DATA-Q1 Score 2 with the File Gateway note.
-  Add one MCP-adjacent repo and one on-prem-migration repo to the next sample portfolio config so these edits get exercise.
+- [ ] **C-6 — MOD SEC-Q5 Score 1/2/3 boundary (from Apr 30 scan).**
+  Scanner showed SEC-Q5 Score 2 absorbing 33 repos with mixed maturity — CloudFormation NoEcho parameters, SSM Parameter Store for admin passwords, *and* repos with remaining plaintext alongside some secret management. Score 2 isn't differentiating "partial secret management" from "partial management plus remaining plaintext." Rewrite 1/2/3 rows: Score 1 = any plaintext credentials, Score 2 = no plaintext but parameter-store/env-var without rotation, Score 3 = managed secrets with rotation. Separate from the C24 BLOCKER-severity rejection.
 
-- [ ] **C-6 — MOD SEC-Q5 Score 1/2/3 boundary needs review (post-v4-scan).**
-  The cross-portfolio scan (`scan-rubric-quality.py` run Apr 30, 2026) showed SEC-Q5 Score 2 absorbing 33 repos with mixed maturity — v2/monolith (CloudFormation NoEcho parameters), v2/eks-saas-gitops (SSM Parameter Store for Gitea admin password), and repos that still have plaintext credentials alongside *some* secret management. Score 2 is not differentiating "has partial secret management" from "has partial secret management plus remaining plaintext." Rewrite the 1/2/3 rubric rows so Score 1 = plaintext anywhere, Score 2 = no plaintext but basic parameter-store/env-var approach without rotation, Score 3 = managed secrets with rotation. Separate from the C24 rejection, which was about BLOCKER severity on SEC-Q5. Not a blocker for the ARA re-run.
-
-- [ ] **C-7 — MOD surface-flag calibration for INF-Q2, SEC-Q2, and OPS questions (post-v4-scan).**
-  The scanner showed INF-Q2 (managed databases) at 59% Score 1 and SEC-Q2 (encryption at rest) at 86% Score 1 across all portfolios — driven largely by OSS libraries and stateless utilities that have no database/data-at-rest surface at all. This is the MOD-side equivalent of the ARA R1/R6 recalibration. Libraries, stateless utilities, and CLIs with no persistent data should record these as "Not Evaluated (archetype-N/A)" rather than defaulting to Score 1. Scope: add surface-flag detection to MOD Step 1 (mirrors ARA Step 1.5) and apply calibration rows to INF-Q2, SEC-Q2, and selected OPS questions. Deferred per "don't touch MOD rubric now" — revisit after seeing the ARA v5 portfolio.
+- [ ] **C-7 — MOD surface-flag calibration (from Apr 30 scan).**
+  Scanner showed INF-Q2 (managed DBs) at 59% Score 1 and SEC-Q2 (encryption at rest) at 86% Score 1, dominated by OSS libraries and stateless utilities with no persistent-data or at-rest surface at all. MOD-side equivalent of the ARA R1/R6 recalibration. Scope: add surface-flag detection to MOD Step 1 (mirrors ARA Step 1.5) and apply calibration to INF-Q2, SEC-Q2, and selected OPS questions so "no surface" maps to `Not Evaluated (archetype-N/A)` rather than Score 1. Revisit after ARA v5 portfolio lands.
 
 ---
 
@@ -179,13 +172,13 @@ All 9 ARA-R items shipped on `fix/ara-calibration`. Canary (tqdm, hapi-fhir, uma
 | Category | Count | Items |
 |----------|-------|-------|
 | 🚀 Phase H JSON | 7 | H-1..H-7 |
-| 🔬 V3 calibration follow-ups | 5 | C-3, C-4, C-5, C-6 (MOD SEC-Q5), C-7 (MOD surface-flag) |
+| 🔬 V3 calibration follow-ups | 3 | C-3, C-6 (MOD SEC-Q5), C-7 (MOD surface-flag) |
 | ⚠️ Pre-flight | 3 | P0.1..P0.3 |
 | 🤔 MOD scope decisions | 2 | G1, G2 |
 | 🤖 ARA pre-flight | 2 | ARA-P0.1, ARA-P0.2 |
 | 🔍 ARA-R Verification | 4 | V-R1..V-R4 (run zg-cmp 31-repo ARA v5) |
 | 🔍 Verification | 6 | V1..V6 |
 | 📦 Wrap-up | 3 | W1..W3 |
-| **Total remaining** | **32** | |
+| **Total remaining** | **30** | |
 
 **Next concrete step:** V-R1 — run `./run-assessments.sh` (ARA-only filter) for the 31 non-canary repos against the republished ARA TD `3g1ipe93e5d2wb6n5d4yqaf9`, then re-run `scan-rubric-quality.py` to confirm the severity distributions normalize.
