@@ -5,8 +5,10 @@ Interactive HTML dashboards for visualizing ARA and MOD assessment results.
 | File | Description |
 |------|-------------|
 | `index.html` | Landing page (redirects to ARA dashboard) |
-| `agentic-readiness.html` | ARA dashboard — run selector, readiness profiles, cross-cutting analysis, pilot ranking, program recommendations, delta comparison |
-| `modernization.html` | MOD dashboard — category scores, pathways, roadmap, radar chart, technology stack |
+| `agentic-readiness.html` | ARA dashboard -- run selector, readiness profiles, cross-cutting analysis, pilot ranking, program recommendations, delta comparison |
+| `modernization.html` | MOD dashboard -- category scores, pathways, roadmap, radar chart, technology stack |
+| `bridge.html` | Bridge dashboard -- shared remediation mapping, agentic readiness delta, MOD readiness gates |
+| `bpmn-opportunity.html` | BAO dashboard -- agent opportunity classification, dependency discovery, implementation waves, Bedrock cost forecast |
 | `cloudformation.yaml` | CloudFormation template for S3 + CloudFront hosting |
 
 ## Viewing Locally

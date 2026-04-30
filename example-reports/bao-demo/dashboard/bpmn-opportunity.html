@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BAO — bao-demo BPMN Agentic Opportunity Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f1117;--surface:#1a1d27;--card:#222639;--border:#2d3148;--text:#e2e4ed;--muted:#8b8fa3;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--cyan:#06b6d4;--green-bg:rgba(34,197,94,.12);--yellow-bg:rgba(234,179,8,.12);--orange-bg:rgba(249,115,22,.12);--red-bg:rgba(239,68,68,.12);--cyan-bg:rgba(6,182,212,.12);--accent-bg:rgba(99,102,241,.12)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline;color:#a5b4fc}
+.container{max-width:1440px;margin:0 auto;padding:24px}
+nav{display:flex;align-items:center;gap:6px;margin-bottom:24px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--border)}
+nav a{padding:8px 18px;font-size:.82rem;font-weight:600;color:var(--muted);border-radius:8px;border:1px solid var(--border);background:var(--surface);transition:all .2s;white-space:nowrap;text-decoration:none}
+nav a:hover{border-color:var(--accent);color:var(--text)}nav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:12px}
+.top-bar h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em}.top-bar h1 span{color:var(--accent2)}
+.grid{display:grid;gap:20px}.grid-5{grid-template-columns:repeat(5,1fr)}.grid-4{grid-template-columns:repeat(4,1fr)}.grid-3{grid-template-columns:repeat(3,1fr)}.grid-2{grid-template-columns:repeat(2,1fr)}.grid-12{grid-template-columns:repeat(12,1fr)}
+.span-8{grid-column:span 8}.span-6{grid-column:span 6}.span-4{grid-column:span 4}.span-3{grid-column:span 3}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s}.card:hover{border-color:var(--accent)}
+.card-title{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-value{font-size:2rem;font-weight:700;letter-spacing:-.03em}
+.card-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+.score-green{color:var(--green)}.score-yellow{color:var(--yellow)}.score-orange{color:var(--orange)}.score-red{color:var(--red)}.score-cyan{color:var(--cyan)}.score-accent{color:var(--accent2)}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600}
+.pill-green{background:var(--green-bg);color:var(--green)}.pill-yellow{background:var(--yellow-bg);color:var(--yellow)}.pill-orange{background:var(--orange-bg);color:var(--orange)}.pill-red{background:var(--red-bg);color:var(--red)}.pill-cyan{background:var(--cyan-bg);color:var(--cyan)}.pill-blue{background:var(--accent-bg);color:var(--accent2)}.pill-muted{background:rgba(139,143,163,.12);color:var(--muted)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:10px 12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}tr:hover td{background:rgba(99,102,241,.04)}
+.section{margin-bottom:32px}.section-title{font-size:1.1rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+@media(max-width:1024px){.grid-5,.grid-4{grid-template-columns:repeat(2,1fr)}.grid-12 .span-8,.grid-12 .span-4,.grid-12 .span-6,.grid-12 .span-3{grid-column:span 12}.grid-3{grid-template-columns:1fr}}
+@media(max-width:640px){.grid-5,.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="top-bar">
+  <h1>⚡ <span>BAO: BPMN Agentic Opportunity</span> — bao-demo</h1>
+  <div style="font-size:.8rem;color:var(--muted)">📅 April 28, 2026 · 5 repositories · 3,333 processes</div>
+</div>
+<nav>
+  <a href="agentic-readiness.html">🛡️ Agentic Readiness (ARA)</a>
+  <a href="modernization.html">📐 Modernization (MOD)</a>
+  <a href="bridge.html">🔗 Bridge (ARA–MOD)</a>
+  <a href="bpmn-opportunity.html" class="active">⚡ BAO</a>
+</nav>
+<div id="main"></div>
+</div>
+<script>
+function p(cls,txt){return `<span class="pill ${cls}">${txt}</span>`;}
+const el=document.getElementById('main');
+
+el.innerHTML=`
+<!-- KPI Cards -->
+<div class="section"><div class="grid grid-5">
+  <div class="card"><div class="card-title">📋 Total Tasks</div><div class="card-value score-accent">7,149</div><div class="card-sub">Across 3,333 processes</div></div>
+  <div class="card"><div class="card-title">🤖 Agent Opportunities</div><div class="card-value score-cyan">64</div><div class="card-sub">All classified as data-first</div></div>
+  <div class="card"><div class="card-title">⚙️ Automatable</div><div class="card-value score-green">6,905</div><div class="card-sub">96.6% — Step Functions / rule engines</div></div>
+  <div class="card"><div class="card-title">👤 Human Required</div><div class="card-value score-orange">177</div><div class="card-sub">Approval gates with risk ≥ 0.65</div></div>
+  <div class="card"><div class="card-title">💰 Bedrock Cost</div><div class="card-value score-yellow">$558.90<span style="font-size:.9rem;color:var(--muted)">/mo</span></div><div class="card-sub">Claude Haiku 3.5 · 200 inv/day</div></div>
+</div></div>
+
+<!-- Charts Row -->
+<div class="section"><div class="grid grid-12">
+  <div class="card span-4"><div class="card-title">🎯 Task Category Distribution</div><div style="position:relative;height:260px"><canvas id="c-cat"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">📊 Tasks by Repository</div><div style="position:relative;height:260px"><canvas id="c-repo"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">💰 Cost by Repository</div><div style="position:relative;height:260px"><canvas id="c-cost"></canvas></div></div>
+</div></div>
+
+<!-- Category Breakdown -->
+<div class="section"><div class="section-title"><span>📈</span> Opportunity Breakdown</div>
+<div class="grid grid-4">
+  <div class="card" style="text-align:center;border-top:3px solid var(--muted)"><div style="font-size:2.5rem;font-weight:700;color:var(--muted)">0</div><div style="font-size:.82rem;color:var(--muted)">🚀 Build Now</div></div>
+  <div class="card" style="text-align:center;border-top:3px solid var(--cyan)"><div style="font-size:2.5rem;font-weight:700;color:var(--cyan)">64</div><div style="font-size:.82rem;color:var(--cyan)">📊 Data-First</div></div>
+  <div class="card" style="text-align:center;border-top:3px solid var(--green)"><div style="font-size:2.5rem;font-weight:700;color:var(--green)">6,905</div><div style="font-size:.82rem;color:var(--green)">⚙️ Automate</div></div>
+  <div class="card" style="text-align:center;border-top:3px solid var(--accent2)"><div style="font-size:2.5rem;font-weight:700;color:var(--accent2)">3</div><div style="font-size:.82rem;color:var(--accent2)">🗄️ Data Platform</div></div>
+</div></div>
+
+<!-- Process-by-Process Summary -->
+<div class="section"><div class="section-title"><span>🔍</span> Process-by-Process Summary</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Repository</th><th>Process</th><th>Tasks</th><th>Agents</th><th>Automate</th><th>Human</th><th>Data Plat.</th><th>Est. Cost/mo</th></tr></thead>
+  <tbody>
+    <tr><td style="font-weight:600">camunda-invoice ${p('pill-red','P0')}</td><td>Camunda Invoice (2,446 proc)</td><td>3,484</td><td class="score-cyan">5</td><td class="score-green">3,462</td><td>17</td><td>0</td><td>$81.00</td></tr>
+    <tr><td style="font-weight:600">camunda8-order-process ${p('pill-red','P0')}</td><td>Process Data Example</td><td>5</td><td>0</td><td class="score-green">2</td><td>0</td><td class="score-accent">3</td><td>$0.00</td></tr>
+    <tr><td style="font-weight:600">camunda-rest-service ${p('pill-orange','P1')}</td><td>Git Repo Popularity Checker</td><td>8</td><td>0</td><td class="score-green">8</td><td>0</td><td>0</td><td>$0.00</td></tr>
+    <tr><td style="font-weight:600">bpmn-miwg-test-suite ${p('pill-orange','P1')}</td><td>BPMN MIWG Test Suite (831 proc)</td><td>3,555</td><td class="score-cyan">59</td><td class="score-green">3,340</td><td>156</td><td>0</td><td>$477.90</td></tr>
+    <tr><td style="font-weight:600">camunda-bpm-examples ${p('pill-orange','P1')}</td><td>54 example processes</td><td>97</td><td>0</td><td class="score-green">93</td><td>4</td><td>0</td><td>$0.00</td></tr>
+    <tr style="font-weight:700;border-top:2px solid var(--border)"><td>Total</td><td>3,333 processes</td><td>7,149</td><td class="score-cyan">64</td><td class="score-green">6,905</td><td>177</td><td>3</td><td>$558.90</td></tr>
+  </tbody>
+</table></div></div></div>
+
+<!-- Top Agent Opportunities -->
+<div class="section"><div class="section-title"><span>🏆</span> Top Agent Opportunities (ranked by composite score)</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Rank</th><th>Task</th><th>Process</th><th>Repository</th><th>Category</th><th>Autonomy</th><th>Composite</th><th>Instances</th></tr></thead>
+  <tbody>
+    <tr><td style="font-weight:700">1</td><td style="font-weight:600">Check decision</td><td>process</td><td>camunda-invoice</td><td>${p('pill-cyan','Agent data-first')}</td><td>Prepared</td><td>0.265</td><td>1</td></tr>
+    <tr><td style="font-weight:700">2</td><td style="font-weight:600">evaluate decision table</td><td>Process</td><td>camunda-invoice</td><td>${p('pill-cyan','Agent data-first')}</td><td>Prepared</td><td>0.265</td><td>1</td></tr>
+    <tr><td style="font-weight:700">3</td><td style="font-weight:600">Analyze report</td><td>failingTimer</td><td>camunda-invoice</td><td>${p('pill-cyan','Agent data-first')}</td><td>Prepared</td><td>0.195</td><td>1</td></tr>
+    <tr><td style="font-weight:700">4</td><td style="font-weight:600">Review terms of contract</td><td>C.4.0 Employee Onboarding</td><td>bpmn-miwg-test-suite</td><td>${p('pill-cyan','Agent data-first')}</td><td>Prepared</td><td>0.166</td><td>23</td></tr>
+    <tr><td style="font-weight:700">5</td><td style="font-weight:600">Review Invoice</td><td>Review Invoice</td><td>camunda-invoice</td><td>${p('pill-cyan','Agent data-first')}</td><td>Prepared</td><td>0.160</td><td>1</td></tr>
+    <tr><td style="font-weight:700">6</td><td style="font-weight:600">Assign Reviewer</td><td>Review Invoice</td><td>camunda-invoice</td><td>${p('pill-cyan','Agent data-first')}</td><td>Exploration</td><td>0.130</td><td>1</td></tr>
+    <tr><td style="font-weight:700">7</td><td style="font-weight:600">Review and document result</td><td>C.1.0 Invoice Team-Assistant</td><td>bpmn-miwg-test-suite</td><td>${p('pill-cyan','Agent data-first')}</td><td>Prepared</td><td>0.110</td><td>36</td></tr>
+  </tbody>
+</table></div></div></div>
+
+<!-- Implementation Roadmap -->
+<div class="section"><div class="section-title"><span>🗺️</span> Implementation Roadmap</div>
+<div class="grid grid-3">
+  <div class="card" style="border-top:3px solid var(--muted)"><div style="font-weight:700;font-size:.9rem;margin-bottom:4px">Wave 1: Build Now</div><div style="font-size:.78rem;color:var(--accent2);margin-bottom:8px">0 agent tasks · $0.00/mo</div><div style="font-size:.78rem;color:var(--muted)">No tasks confirmed for immediate build. All 64 agent tasks require data readiness confirmation via ARA.</div></div>
+  <div class="card" style="border-top:3px solid var(--cyan)"><div style="font-weight:700;font-size:.9rem;margin-bottom:4px">Wave 2: After Data Work</div><div style="font-size:.78rem;color:var(--accent2);margin-bottom:8px">67 tasks · $558.90/mo</div><div style="font-size:.78rem;color:var(--muted)">64 agent data-first + 3 data-platform tasks. Requires data classification, API surface development, and identity infrastructure.</div></div>
+  <div class="card" style="border-top:3px solid var(--orange)"><div style="font-weight:700;font-size:.9rem;margin-bottom:4px">Wave 3: After System Remediation</div><div style="font-size:.78rem;color:var(--accent2);margin-bottom:8px">Populated by Bridge TD</div><div style="font-size:.78rem;color:var(--muted)">Cross-reference with ARA findings to identify which agent opportunities are blocked by system-level BLOCKERs.</div></div>
+</div></div>
+
+<!-- Cost Forecast -->
+<div class="section"><div class="section-title"><span>💰</span> Cost Forecast</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Repository</th><th>Priority</th><th>Agent Tasks</th><th>Est. Monthly Cost</th><th>% of Total</th></tr></thead>
+  <tbody>
+    <tr><td style="font-weight:600">bpmn-miwg-test-suite</td><td>${p('pill-orange','P1')}</td><td>59</td><td>$477.90</td><td>85.5%</td></tr>
+    <tr><td style="font-weight:600">camunda-invoice</td><td>${p('pill-red','P0')}</td><td>5</td><td>$81.00</td><td>14.5%</td></tr>
+    <tr><td style="font-weight:600">camunda8-order-process</td><td>${p('pill-red','P0')}</td><td>0</td><td>$0.00</td><td>0.0%</td></tr>
+    <tr><td style="font-weight:600">camunda-rest-service</td><td>${p('pill-orange','P1')}</td><td>0</td><td>$0.00</td><td>0.0%</td></tr>
+    <tr><td style="font-weight:600">camunda-bpm-examples</td><td>${p('pill-orange','P1')}</td><td>0</td><td>$0.00</td><td>0.0%</td></tr>
+    <tr style="font-weight:700"><td>Total</td><td></td><td>64</td><td>$558.90</td><td>100%</td></tr>
+  </tbody>
+</table></div></div>
+<div style="font-size:.82rem;color:var(--muted);margin-top:8px;padding:10px;background:var(--surface);border-radius:8px">
+  <strong>Effective production cost</strong> (deduplicating MIWG vendor replicas): <strong style="color:var(--green)">~$97.20/mo</strong> — 7 unique agents × $16.20/mo × 200 inv/day
+</div></div>
+
+<!-- Readiness Snapshot -->
+<div class="section"><div class="section-title"><span>📋</span> BAO Snapshot</div>
+<div class="card" style="font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:#a5b4fc;background:#181b24;line-height:1.8;padding:16px;white-space:pre">assessment_date: 2026-04-28
+repositories: 5
+total_processes: 3,333
+total_tasks: 7,149
+agent_opportunities: 64
+  build_now: 0
+  data_first: 64
+automatable_tasks: 6,905
+human_required: 177
+data_platform: 3
+estimated_monthly_cost: $558.90
+unique_agent_patterns: 7
+effective_production_cost: ~$97.20/mo</div></div>`;
+
+/* Charts */
+new Chart(document.getElementById('c-cat'),{type:'doughnut',data:{labels:['Build Now','Data-First','Automate','Human Required','Data Platform'],datasets:[{data:[0,64,6905,177,3],backgroundColor:['#22c55e','#06b6d4','#818cf8','#f97316','#eab308'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:10}}}}});
+
+new Chart(document.getElementById('c-repo'),{type:'bar',data:{labels:['camunda-invoice','camunda8-order','camunda-rest','bpmn-miwg','camunda-examples'],datasets:[{label:'Agent',data:[5,0,0,59,0],backgroundColor:'#06b6d4'},{label:'Automate',data:[3462,2,8,3340,93],backgroundColor:'#818cf8'},{label:'Human',data:[17,0,0,156,4],backgroundColor:'#f97316'},{label:'Data Plat.',data:[0,3,0,0,0],backgroundColor:'#eab308'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:'#8b8fa3',font:{size:7},maxRotation:45},grid:{display:false}},y:{stacked:true,ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}}}}});
+
+new Chart(document.getElementById('c-cost'),{type:'doughnut',data:{labels:['bpmn-miwg-test-suite ($477.90)','camunda-invoice ($81.00)','Others ($0.00)'],datasets:[{data:[477.90,81.00,0],backgroundColor:['#ef4444','#f97316','#2d3148'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:10}}}}});
+</script>
+</body>
+</html>

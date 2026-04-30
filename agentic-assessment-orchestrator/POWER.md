@@ -14,59 +14,80 @@ This Knowledge Base Power turns Kiro into an orchestrator for running comprehens
 
 - **Agentic Readiness Assessment (ARA)** — 43 questions across 8 sections using BLOCKER/RISK/INFO severity scoring. Evaluates whether systems are safe for autonomous AI agent integration.
 - **Modernization Readiness Assessment (MOD)** — 37 questions across 5 sections using 1-4 scale scoring. Evaluates cloud architecture maturity and identifies modernization pathways.
+- **BPMN Agentic Opportunity Assessment** — Analyzes BPMN 2.0 process models to identify which tasks are candidates for agentic AI, classifies each by reasoning complexity and data readiness, and produces a prioritized opportunity map with cost estimates.
 
 The `assessment_type` field in `portfolio-config.yaml` controls which assessments run:
 - `agentic-readiness` → ARA path only
 - `modernization` → MOD path only
-- `full` → both ARA and MOD paths in parallel
+- `bpmn-opportunity` → BPMN opportunity analysis only (requires `.bpmn` files in repos)
+- `full` → ARA + MOD + BPMN opportunity (when `.bpmn` files are present) in parallel
 
 For each path, Kiro spawns parallel subagents (one per repository) for individual assessments, then runs the corresponding portfolio TD to aggregate results.
 
 The transformation definition names are configurable in `portfolio-config.yaml` via the `transformation_definitions` section — use whatever names you published to your AWS Transform registry.
 
 **How Kiro Orchestrates:**
+- Verifies AWS credentials (`aws sts get-caller-identity`) before doing anything else -- fails fast if credentials are expired or missing
 - Parses `portfolio-config.yaml` to discover all repositories, their configuration, the `assessment_type`, `context`, `agent_scope`, `preferences`, and the transformation definition names
-- Validates the `assessment_type` value — must be one of `agentic-readiness`, `modernization`, `full`; errors if missing or invalid (no default — assessment_type is required)
+- Validates the `assessment_type` value — must be one of `agentic-readiness`, `modernization`, `bpmn-opportunity`, `full`; errors if missing or invalid (no default — assessment_type is required)
 - Classifies each repository using the repo type decision tree (or uses the user-provided `repo_type` override from config)
 - Validates per-repo fields: `name` and `path` required; `priority`, `context`, `preferences`, `repo_type`, `tags` optional
 - Clones repositories automatically when `repository_url` is provided and the local `path` doesn't exist
 - Routes by `assessment_type`:
   - `agentic-readiness` → generates ARA ATX configs per repo, spawns ARA subagents, then runs Portfolio ARA TD
   - `modernization` → generates MOD ATX configs per repo, spawns MOD subagents, then runs Portfolio MOD TD
-  - `full` → generates both ARA and MOD ATX configs per repo (2 subagents per repo), then runs both portfolio TDs, then runs Bridge TD (if `portfolio_bridge` is configured)
+  - `bpmn-opportunity` -> for each repo containing `.bpmn` files: runs the BPMN analyzer in directory mode (`bpmn-analyzer/run_analysis.py --bpmn-dir <repo_path>`) to produce a combined JSON analysis report covering all BPMN files in the repo. If the repo has `downstream_dependencies`, runs ARA on each dependency in parallel and passes results to the BPMN Opportunity TD for cross-referencing. Then generates BPMN Opportunity ATX configs with the `analysis_report_path` and dependency ARA results, spawns BPMN Opportunity subagents. Repos without `.bpmn` files are skipped with a warning.
+  - `full` → generates ARA, MOD, and (when `.bpmn` files are present) BPMN Opportunity ATX configs per repo. Runs all paths in parallel. After completion, runs portfolio TDs and Bridge TD. BPMN Opportunity reports are consolidated into `bpmn-opportunity-assessment/` folder.
 - ARA ATX configs contain: `repo_type`, `service_archetype` (if provided or auto-detected), `agent_scope`, `context`, `priority`, `tags` — NO preferences
 - MOD ATX configs contain: `repo_type`, `context`, `priority`, `tags`, merged `preferences` (global + per-repo with conflict resolution) — NO agent_scope
 - Spawns parallel subagents to run `atx custom def exec -n <td_name> -g file://<generated-config> -x -t` concurrently
 - Waits for all individual assessments to complete
 - Generates portfolio-level ATX configs:
-  - Portfolio ARA: `context`, service inventory, `dependency_overrides`
+  - Portfolio ARA: `context`, service inventory, `dependency_overrides`, `bpmn_opportunity_reports` (when BPMN reports exist)
   - Portfolio MOD: `context`, `preferences`, service inventory, `dependency_overrides`
 - Runs portfolio TDs to generate aggregated reports
 - When `assessment_type: full` and `portfolio_bridge` is configured: runs the Bridge TD after both portfolio TDs complete, passing both portfolio report paths as input. If the Bridge TD fails, logs the failure and reports to the user without affecting the completed ARA/MOD reports. If `portfolio_bridge` is not configured, skips the bridge step and logs a warning: "portfolio_bridge not configured — bridge report will not be generated"
-- Consolidates ARA reports into `agentic-readiness-assessment/` folder, MOD reports into `modernization-assessment/` folder, and the bridge report (if generated) at the portfolio root — cleans up temporary `.atx-config-*.yaml` files
+- Consolidates ARA reports into `agentic-readiness-assessment/` folder, MOD reports into `modernization-assessment/` folder, BPMN Opportunity reports into `bpmn-opportunity-assessment/` folder, and the bridge report (if generated) at the portfolio root — cleans up temporary `.atx-config-*.yaml` files
 
 > All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) flags since assessments run at scale without human intervention.
 
-> **⏱ Long-Running Commands — Timeout Handling:** `atx custom def exec` commands are long-running operations that typically take **5–15 minutes per repository** depending on codebase size. These commands **will likely exceed default shell timeouts**. Subagents MUST NOT hang waiting for output or assume the command failed just because it took a long time. Instead, subagents should:
-> 1. Launch the `atx` command with an appropriate timeout (or no timeout)
-> 2. **Do NOT poll, retry, or re-check repeatedly.** After launching the command, wait patiently. Do not check status in a loop or re-run the command. A single check after a reasonable wait (10–15 minutes) is sufficient.
-> 3. If the command times out or appears to hang, check **once** whether the assessment report file was generated at the expected output path
-> 4. Validate success by checking for the existence of the output report file: `{repo}/agentic-readiness-assessment/{project-name}-ara-report.md` (for ARA) or `{repo}/modernization-assessment/{project-name}-mod-report.md` (for MOD)
-> 5. If the report exists, treat the assessment as successful regardless of the command's exit behavior
-> 6. Only report failure if the report file is missing AND the command returned a clear error
-> 7. **Never retry a transformation that is still running.** Running duplicate `atx` processes against the same repo wastes resources and can cause conflicts.
+> **⏱ Long-Running Commands -- Timeout Handling:** `atx custom def exec` commands are long-running operations that typically take **5-15 minutes per repository** depending on codebase size. These commands **will likely exceed default shell timeouts** and can freeze the Kiro terminal if they produce too much stdout. Subagents MUST use the following pattern:
+>
+> **Launch with a 20-minute timeout:**
+> ```bash
+> # Use the executeBash timeout parameter (milliseconds), NOT shell timeout command (not available on macOS)
+> # timeout: 1200000 (20 minutes)
+> atx custom def exec -n <td_name> -p <repo_path> -g file://<config> -x -t
+> ```
+>
+> **After timeout or completion, check for the report file:**
+> ```bash
+> ls {repo}/agentic-readiness-assessment/{project-name}-ara-report.md 2>/dev/null  # ARA
+> ls {repo}/modernization-assessment/{project-name}-mod-report.md 2>/dev/null      # MOD
+> ls {repo}/bpmn-opportunity-assessment/*-bpmn-opportunity-report.md 2>/dev/null   # BPMN
+> ```
+>
+> **Rules:**
+> 1. Set `timeout: 1200000` (20 min) on the executeBash call. This prevents terminal freezes from stdout buffer overflow.
+> 2. **Do NOT poll, retry, or re-check repeatedly.** One check after the command completes or times out.
+> 3. If the report file exists, the assessment succeeded regardless of the command's exit code or timeout status.
+> 4. If the report file is missing AND the command returned a clear error, report failure.
+> 5. If the report file is missing AND the command timed out with no error, report timeout and suggest the user re-run manually.
+> 6. **Never retry a transformation that may still be running.** Running duplicate `atx` processes against the same repo wastes resources and can cause conflicts.
 
 **What You Get:**
-- Assessment routing driven by `assessment_type` — run ARA, MOD, or both
+- Assessment routing driven by `assessment_type` — run ARA, MOD, BPMN opportunity, or all three
 - Automatic repo type classification with user override support
+- BPMN process analysis with deterministic constraint extraction and task scoring (no LLM hallucination on extraction)
 - Parallel subagent execution per repo for fast portfolio-wide assessment
 - Cross-cutting analysis across the portfolio (blockers for ARA, score-based concerns for MOD)
 - Configurable preferences to steer MOD technology recommendations
-- Bridge report cross-referencing ARA and MOD findings for unified remediation planning (full assessment only, when `portfolio_bridge` is configured)
+- Bridge report cross-referencing ARA, MOD, and BPMN findings for unified remediation planning (full assessment only, when `portfolio_bridge` is configured)
 - Consolidated reports organized by assessment type
 
 **When to Use:**
 - Planning agentic AI adoption across microservices
+- Identifying which business process steps should become agent-powered (BPMN opportunity)
 - Identifying shared infrastructure gaps
 - Prioritizing modernization based on dependencies
 - Tracking portfolio-wide readiness progress
@@ -78,7 +99,13 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 
 Kiro orchestrates the assessment workflow, but relies on **AWS Transform CLI** to execute the actual transformations. You need:
 
-1. **AWS Transform CLI** installed and configured
+1. **Valid AWS credentials** -- The orchestrator checks credentials before doing anything else. If credentials are expired or missing, it fails immediately with an actionable error.
+   ```bash
+   # Verify credentials are valid
+   aws sts get-caller-identity
+   ```
+
+2. **AWS Transform CLI** installed and configured
    ```bash
    # Check if installed
    atx --version
@@ -86,7 +113,7 @@ Kiro orchestrates the assessment workflow, but relies on **AWS Transform CLI** t
    # If not installed, follow: https://docs.aws.amazon.com/transform/
    ```
 
-2. **Transformation definitions** published to your AWS Transform registry. The names are configured in `portfolio-config.yaml`:
+3. **Transformation definitions** published to your AWS Transform registry. The names are configured in `portfolio-config.yaml`:
    ```yaml
    transformation_definitions:
      agentic_readiness: "your-ara-td-name"
@@ -100,7 +127,7 @@ Kiro orchestrates the assessment workflow, but relies on **AWS Transform CLI** t
    atx custom def list | grep your-assessment-name
    ```
 
-3. **Repository access** — Repositories can be:
+4. **Repository access** -- Repositories can be:
    - Already cloned locally (just set `path` in the config)
    - Auto-cloned by Kiro (set `repository_url` and `path` in the config — Kiro clones if `path` doesn't exist)
 
@@ -123,7 +150,7 @@ transformation_definitions:
   modernization: "modernization-assessment"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
-  portfolio_bridge: "portfolio-agentic-modernization-bridge"  # optional — bridge TD for full assessments
+  portfolio_bridge: "portfolio-bridge"  # optional — bridge TD for full assessments
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
@@ -153,22 +180,60 @@ See `portfolio-config.example.yaml` for complete examples with preferences.
 ```
 
 Kiro will:
-1. Parse `portfolio-config.yaml` — read `assessment_type`, `context`, `agent_scope`, `preferences`, `transformation_definitions`, `repositories`, and `dependency_overrides`
+0. **Verify AWS credentials** -- Run `aws sts get-caller-identity` before anything else. If this fails (expired credentials, no profile configured, network issue), terminate immediately with:
+   ```
+   ERROR: AWS credentials are not valid. Cannot proceed with assessment.
+   Run 'aws sts get-caller-identity' to diagnose. Common fixes:
+   - Run 'ada credentials update' to refresh Midway credentials
+   - Run 'aws sso login' if using SSO
+   - Check AWS_PROFILE environment variable
+   ```
+   Do NOT proceed to any subsequent step if credentials are invalid.
+1. Parse `portfolio-config.yaml` -- read `assessment_type`, `context`, `agent_scope`, `preferences`, `transformation_definitions`, `repositories`, and `dependency_overrides`
 2. Validate the `assessment_type` value:
-   - Must be one of: `agentic-readiness`, `modernization`, `full`
+   - Must be one of: `agentic-readiness`, `modernization`, `bpmn-opportunity`, `full`
    - If missing or invalid → error (assessment_type is required, no default)
 3. Classify each repository using the repo type decision tree (see Repo Type Classification below), or use the user-provided `repo_type` override
 4. Validate per-repo fields: `name` and `path` are required; `priority`, `context`, `preferences`, `repo_type`, `tags`, `repository_url`, `report_path` are optional
 5. Clone any repositories where `repository_url` is provided and `path` doesn't exist yet
 6. Route by `assessment_type`:
-   - **`agentic-readiness`**: For each repo, generate an ARA ATX config (repo_type, agent_scope, context, priority, tags — NO preferences). Spawn parallel subagents running the ARA TD. After completion, generate Portfolio ARA ATX config (context, service inventory, dependency_overrides) and run Portfolio ARA TD.
+   - **`agentic-readiness`**: For each repo, generate an ARA ATX config (repo_type, agent_scope, context, priority, tags -- NO preferences). Spawn parallel subagents running the ARA TD. After completion, generate Portfolio ARA ATX config (context, service inventory, dependency_overrides, bpmn_opportunity_reports if BPMN reports exist) and run Portfolio ARA TD.
    - **`modernization`**: For each repo, generate a MOD ATX config (repo_type, context, priority, tags, merged preferences — NO agent_scope). Spawn parallel subagents running the MOD TD. After completion, generate Portfolio MOD ATX config (context, preferences, service inventory, dependency_overrides) and run Portfolio MOD TD.
-   - **`full`**: Generate both ARA and MOD configs per repo (2 subagents per repo). Run both paths in parallel. After completion, run both portfolio TDs. Then, if `portfolio_bridge` is configured, run the Bridge TD (see step 7.5 below).
+   - **`full`**: Generate ARA, MOD, and BPMN Opportunity configs per repo. Run all paths in parallel. After completion, run both portfolio TDs. Then, if `portfolio_bridge` is configured, run the Bridge TD (see step 7.5 below). BPMN Opportunity runs only for repos containing `.bpmn` files.
+   - **`bpmn-opportunity`**: For each repo, scan for `.bpmn` files. If found:
+     1. Run the BPMN analyzer in directory mode: `python3 bpmn-analyzer/run_analysis.py --bpmn-dir <repo_path> --output <repo_path>/bpmn-analysis.json`
+        The `bpmn-analyzer/` directory is at the root of this repository (sibling to `bpmn-opportunity-assessment/`).
+        The analyzer recursively finds all `.bpmn` files in the repo, analyzes each one (deterministic Python, no LLM), and produces a combined JSON report with per-process results and a portfolio summary.
+     2. If the repo has `downstream_dependencies` in the config, run ARA on each dependency:
+        - Clone the dependency repo if `repository_url` is provided and `path` doesn't exist
+        - Classify the dependency repo type (same decision tree as main repos)
+        - Generate an ARA ATX config for each dependency (repo_type, agent_scope from portfolio config, context from dependency config)
+        - Spawn parallel ARA subagents for all dependencies: `atx custom def exec -n <agentic_readiness> -p <dep_path> -g file://<config> -x -t`
+        - Wait for all dependency ARA assessments to complete
+        - Collect the ARA report paths for each dependency
+        - If a dependency ARA fails, log a warning and continue (the BPMN report will note it as "dependency assessed but ARA failed")
+     3. Generate a BPMN Opportunity ATX config with `analysis_report_path` pointing to the JSON, plus dependency ARA results when available:
+        ```yaml
+        additionalPlanContext: |
+          analysis_report_path: "<repo_path>/bpmn-analysis.json"
+          context: "<from portfolio config>"
+          daily_volume: 200
+          priority: "<from repo config>"
+          downstream_dependency_reports:
+            - name: "credit-scoring-service"
+              ara_report_path: "<dep_path>/agentic-readiness-assessment/<dep_name>-ara-report.md"
+            - name: "customer-db"
+              ara_report_path: "<dep_path>/agentic-readiness-assessment/<dep_name>-ara-report.md"
+        ```
+        When `downstream_dependency_reports` is present, the BPMN Opportunity TD uses it to populate the `declared` section of the dependency report and cross-reference each BPMN task's inferred dependencies against ARA findings.
+     4. Spawn a subagent running the BPMN Opportunity TD: `atx custom def exec -n <bpmn_opportunity_td_name> -p <repo_path> -g file://<config> -x -t`
+     5. If no `.bpmn` files found in a repo, skip it with a warning: "No BPMN files found in {repo_name}, skipping BPMN opportunity analysis."
 7. Consolidate reports:
    - ARA reports → `agentic-readiness-assessment/` folder
    - MOD reports → `modernization-assessment/` folder
+   - BPMN Opportunity reports → `bpmn-opportunity-assessment/` folder
    - Bridge report (if generated) → portfolio root as `{portfolio_name}-bridge-report.md`
-   - Clean up temporary `.atx-config-*.yaml` files
+   - Clean up temporary `.atx-config-*.yaml` files and `bpmn-analysis.json` files
 
 **Step 7.5 — Bridge TD (full assessment only):**
 
@@ -277,6 +342,9 @@ additionalPlanContext: |
   portfolio_ara_report_path: "agentic-readiness-assessment/my-platform-portfolio-ara-report.md"
   portfolio_mod_report_path: "modernization-assessment/my-platform-portfolio-mod-report.md"
   portfolio_name: "my-platform"
+  # Optional: include if BPMN opportunity reports exist
+  # bpmn_opportunity_report_paths:
+  #   - "bpmn-opportunity-assessment/process-name-bpmn-report.md"
 ```
 
 The bridge report is saved at the portfolio root as `{portfolio_name}-bridge-report.md`.
@@ -321,7 +389,7 @@ transformation_definitions:
   modernization: "modernization-assessment"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
-  portfolio_bridge: "portfolio-agentic-modernization-bridge"  # optional — bridge TD for full assessments
+  portfolio_bridge: "portfolio-bridge"  # optional — bridge TD for full assessments
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
@@ -382,6 +450,38 @@ dependency_overrides:
     target: "inventory"
     type: "sync"
     description: "REST API calls for inventory checks"
+```
+
+**BPMN Opportunity with Downstream Dependencies:**
+
+```yaml
+portfolio_name: "loan-platform"
+assessment_type: "bpmn-opportunity"
+context: "Identifying agentic opportunities in loan origination workflows"
+
+transformation_definitions:
+  agentic_readiness: "agentic-readiness-assessment"
+  modernization: "modernization-assessment"
+  portfolio_agentic_readiness: "portfolio-agentic-readiness"
+  portfolio_modernization: "portfolio-modernization"
+  bpmn_opportunity: "bpmn-opportunity-assessment"
+
+repositories:
+  - name: "loan-origination-process"
+    path: "./processes/loan-origination"
+    priority: "P0"
+    context: "Core loan origination BPMN workflows (Camunda C7)"
+    downstream_dependencies:
+      - name: "credit-scoring-service"
+        path: "./services/credit-scoring"
+        context: "REST API for credit score lookups, Java/Spring Boot"
+      - name: "customer-db"
+        path: "./services/customer-api"
+        repository_url: "https://github.com/org/customer-api.git"
+        context: "Customer data access layer, PostgreSQL backend"
+  - name: "kyc-process"
+    path: "./processes/kyc"
+    priority: "P1"
 ```
 
 ### Assessment Type Configuration
@@ -519,7 +619,8 @@ The full configuration schema is available in `portfolio-config.schema.json`. Ke
   - `service_archetype` (optional): Override auto-detection for ARA — one of `stateless-utility`, `stateful-crud`, `orchestrator`, `data-gateway`, `event-processor`. ARA-only. Determines which extended questions are triggered.
   - `tags` (optional): String array of tags for categorization
   - `report_path` (optional): Custom output path for the assessment report
-  - `agent_scope` (optional): Per-repo override for agent scope — one of `read-only`, `write-enabled`. ARA-only. Overrides portfolio-level `agent_scope` for this repo.
+  - `agent_scope` (optional): Per-repo override for agent scope -- one of `read-only`, `write-enabled`. ARA-only. Overrides portfolio-level `agent_scope` for this repo.
+  - `downstream_dependencies` (optional): Array of downstream systems this repo's BPMN processes depend on. Each entry has `name` (required), `path` (required), `repository_url` (optional), `context` (optional). When provided with `bpmn-opportunity` or `full` assessment types, the orchestrator runs ARA on each dependency and passes results to the BPMN Opportunity TD for cross-referencing.
 - **dependency_overrides** (optional): Manual dependency declarations
   - `source` (required): Source service name
   - `target` (required): Target service name
@@ -690,6 +791,12 @@ When you ask Kiro to run the portfolio assessment, it follows this sequence:
 portfolio-config.yaml
         │
         ▼
+┌─────────────────────┐
+│  0. Verify AWS       │  aws sts get-caller-identity
+│     credentials      │  FAIL FAST if expired or missing
+└─────────┬───────────┘
+          │
+          ▼
 ┌─────────────────────┐
 │  1. Parse YAML       │  Kiro reads portfolio-config.yaml
 │     config file      │  and extracts assessment_type, context,
@@ -878,7 +985,7 @@ atx custom def exec -n <modernization> -p <repo-path> -g file://.atx-config-<ser
 
 The `-x` (non-interactive) flag is mandatory — subagents run without human intervention. Kiro waits for all subagents to complete before proceeding.
 
-> **Timeout Note:** Each `atx custom def exec` invocation is a long-running process (typically 5–15 minutes). Subagents MUST NOT poll, retry, or re-check repeatedly. After launching the command, wait patiently — do NOT check status in a loop or re-run the command. A single check after 10–15 minutes is sufficient. If the command appears to time out, check **once** whether the expected report file was written before reporting failure. The presence of the report file is the definitive success indicator, not the command's exit code or timing. Never retry a transformation that is still running.
+> **Timeout Note:** Each `atx custom def exec` invocation is a long-running process (typically 5-15 minutes). Use `timeout: 1200000` (20 min) on the executeBash call to prevent terminal freezes. After the command completes or times out, check once for the report file. If the file exists, the assessment succeeded. See the Timeout Handling section above for the full pattern.
 
 Each ARA assessment generates:
 ```
@@ -985,12 +1092,16 @@ additionalPlanContext: |
   portfolio_ara_report_path: "agentic-readiness-assessment/ecommerce-platform-portfolio-ara-report.md"
   portfolio_mod_report_path: "modernization-assessment/ecommerce-platform-portfolio-mod-report.md"
   portfolio_name: "ecommerce-platform"
+  bpmn_opportunity_report_paths:
+    - "bpmn-opportunity-assessment/loan-origination-bpmn-report.md"
+    - "bpmn-opportunity-assessment/kyc-onboarding-bpmn-report.md"
 ```
 
 **How Kiro generates the Bridge `additionalPlanContext`:**
 1. Set `portfolio_ara_report_path` to the path of the portfolio ARA report: `agentic-readiness-assessment/{portfolio_name}-portfolio-ara-report.md`
 2. Set `portfolio_mod_report_path` to the path of the portfolio MOD report: `modernization-assessment/{portfolio_name}-portfolio-mod-report.md`
 3. Set `portfolio_name` from the portfolio config
+4. If BPMN opportunity reports exist in `bpmn-opportunity-assessment/`, set `bpmn_opportunity_report_paths` to the list of report file paths. If no BPMN reports exist, omit this field.
 
 ```bash
 # Bridge TD (using transformation_definitions.portfolio_bridge):
@@ -1193,7 +1304,7 @@ transformation_definitions:
   modernization: "modernization-assessment"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
-  portfolio_bridge: "portfolio-agentic-modernization-bridge"
+  portfolio_bridge: "portfolio-bridge"
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]

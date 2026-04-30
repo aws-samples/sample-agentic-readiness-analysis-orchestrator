@@ -13,10 +13,11 @@
     },
     "assessment_type": {
       "type": "string",
-      "description": "Determines which assessment TDs to run. 'agentic-readiness' runs ARA only, 'modernization' runs MOD only, 'full' runs both in parallel.",
+      "description": "Determines which assessment TDs to run. 'agentic-readiness' runs ARA only, 'modernization' runs MOD only, 'bpmn-opportunity' runs BPMN opportunity analysis only (requires .bpmn files), 'full' runs all assessments in parallel.",
       "enum": [
         "agentic-readiness",
         "modernization",
+        "bpmn-opportunity",
         "full"
       ]
     },
@@ -65,7 +66,17 @@
         "portfolio_bridge": {
           "type": "string",
           "description": "Transformation definition name for the bridge TD that cross-references ARA and MOD portfolio reports. Only used when assessment_type is 'full'.",
-          "examples": ["portfolio-agentic-modernization-bridge"]
+          "examples": ["portfolio-bridge"]
+        },
+        "bpmn_opportunity": {
+          "type": "string",
+          "description": "Transformation definition name for BPMN agentic opportunity analysis per repo. Requires .bpmn files in the repository.",
+          "examples": ["bpmn-opportunity-assessment"]
+        },
+        "portfolio_bpmn_opportunity": {
+          "type": "string",
+          "description": "Transformation definition name for portfolio-level BPMN opportunity aggregation. Optional.",
+          "examples": ["portfolio-bpmn-opportunity"]
         }
       }
     },
@@ -171,6 +182,34 @@
             "type": "string",
             "description": "Optional per-repo override for agent scope. ARA-only. If set, overrides the portfolio-level agent_scope for this repo. Use to set infrastructure-only repos to read-only while application repos are write-enabled.",
             "enum": ["read-only", "write-enabled"]
+          },
+          "downstream_dependencies": {
+            "type": "array",
+            "description": "Optional list of downstream systems that this repository's BPMN processes depend on. When provided and assessment_type includes bpmn-opportunity, the orchestrator runs ARA on each dependency and passes the results to the BPMN Opportunity TD for cross-referencing (populates the 'declared' section of the dependency report). Each entry maps a BPMN-inferred dependency to the code repository where that system lives.",
+            "items": {
+              "type": "object",
+              "required": ["name", "path"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Human-readable name of the downstream system (should match or be recognizable from BPMN service task references)",
+                  "examples": ["credit-scoring-service", "customer-db", "payment-gateway"]
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Local path to the downstream system's code repository (for ARA to scan)"
+                },
+                "repository_url": {
+                  "type": "string",
+                  "description": "Optional Git URL. If provided and path doesn't exist, Kiro clones it before running ARA.",
+                  "format": "uri"
+                },
+                "context": {
+                  "type": "string",
+                  "description": "Optional context about this dependency (e.g., 'REST API for credit score lookups, Java/Spring Boot')"
+                }
+              }
+            }
           }
         }
       }
