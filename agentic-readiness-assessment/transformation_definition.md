@@ -615,6 +615,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Why it matters:** Agent frameworks use machine-readable specs to generate tool definitions automatically. Without one, every integration requires manual tool authoring that drifts from actual behavior. Classified as RISK-QUALITY (not BLOCKER) because GraphQL schemas, Smithy models, and well-documented SDKs serve the same purpose — the real blocker is no machine-readable interface at all (API-Q1).
 
+**Surface-flag calibration:** If `has_http_rpc_surface` is `false`, the system exposes no callable API surface — there is nothing for a machine-readable spec to describe. Record as INFO with the rationale `"No HTTP/RPC surface — machine-readable spec is not applicable."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. For libraries, API contracts are expressed via package manifests and typed exports (TypeScript declarations, Python type hints, Go interfaces), which DISC-Q1 evaluates — not as OpenAPI specs.
+
 **Look for:**
 - OpenAPI/Swagger files (`openapi.yaml`, `openapi.json`, `swagger.yaml`, `swagger.json`)
 - AsyncAPI specifications
@@ -629,6 +631,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 **Question:** Do API responses include structured error codes and machine-readable error bodies — not just HTTP status codes?
 
 **Why it matters:** Agents need to distinguish retriable errors (timeout, rate limit) from terminal errors (invalid input, permission denied). A 500 with no body forces agents to guess.
+
+**Surface-flag calibration:** If `has_http_rpc_surface` is `false`, there are no API responses to structure — record as INFO with the rationale `"No HTTP/RPC surface — structured error responses are not applicable."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. Libraries communicate failure via typed exceptions, error-return conventions, or Result types — which DISC-Q1 evaluates.
 
 **Look for:**
 - Error response structures in code (error code, error message, retryable boolean or category)
@@ -858,6 +862,10 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Why it matters:** Agents executing a 5-step workflow may succeed on steps 1–4 and fail on step 5. Without rollback or compensation logic, the application is left in a partial state.
 
+**Surface-flag calibration:** If `has_write_operations` is `false` AND `has_http_rpc_surface` is `false`, the system has no write path that would need compensation — record as INFO with the rationale `"System exposes no write operations — compensation logic is not applicable."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. The conditional BLOCKER severity above applies only when the system actually has multi-step write workflows.
+
+**Archetype calibration:** For `stateless-utility` archetype, record as INFO — stateless utilities have no multi-step write sequences.
+
 **Look for:**
 - Saga pattern
 - Two-phase commit
@@ -918,6 +926,10 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 **Question:** Are rate limits enforced at the API layer to prevent runaway agent loops from overwhelming the application?
 
 **Why it matters:** A runaway agent loop can DDoS your own services at machine speed. Rate limiting prevents agent bugs from taking down production.
+
+**Surface-flag calibration:** If `has_http_rpc_surface` is `false`, there is no API layer to enforce rate limits at — record as INFO with the rationale `"System exposes no HTTP/RPC surface — API-layer rate limiting is not applicable."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. Libraries invoked by consuming applications inherit the consumer's rate limiting, not their own.
+
+**Archetype calibration:** For `stateless-utility` archetype without a persistent API surface, record as INFO.
 
 **Look for:**
 - API Gateway throttling config
@@ -1009,6 +1021,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Why it matters:** Agents must be testable against realistic conditions before production promotion. Without a staging environment, the first time you discover an agent bug is in production.
 
+**Surface-flag calibration:** If the repo was classified as `dev-library-application` via Step 1.5, or if `has_http_rpc_surface` is `false` AND `has_persistent_data_store` is `false`, record as INFO. Libraries, CLIs, and scaffolds do not own staging environments — their consumers do. Requiring a library to maintain its own staging is a category error.
+
 **Look for:**
 - Separate environment configurations (staging, sandbox)
 - Docker-compose for local testing
@@ -1079,6 +1093,10 @@ Evaluate whether sensitive data identified in Stage A is classified, tagged at t
 
 **Why it matters:** An agent sending regulated data to an LLM endpoint in another region may create a legal violation. The data residency constraints are properties of the data the system holds.
 
+**Surface-flag calibration:** If `has_persistent_data_store` is `false` AND `has_logging_of_user_data` is `false`, the system holds no data subject to residency constraints — record as INFO with the rationale `"No persistent data store and no user-data logging — residency requirements do not apply."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. The conditional BLOCKER severity above applies only when at least one of those surface flags is `true`.
+
+**Archetype calibration:** For `stateless-utility` archetype, record as INFO — stateless utilities handle transient or public/reference data by archetype definition.
+
 **Look for:**
 - Data residency requirements in documentation
 - GDPR/LGPD compliance references
@@ -1142,6 +1160,10 @@ Evaluate whether sensitive data identified in Stage A is classified, tagged at t
 **Question:** Is PII redacted from logs, error messages, and observability data?
 
 **Why it matters:** Agents process customer PII. If PII leaks into logs or LLM prompt/response pairs, it becomes a compliance violation.
+
+**Surface-flag calibration:** If `has_logging_of_user_data` is `false` AND `has_persistent_data_store` is `false`, the system has no pipeline where user PII could enter logs — record as INFO with the rationale `"System does not log user data and holds no user data — PII-in-logs risk is not applicable."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. Libraries and utilities whose only logging is internal diagnostic output (no user-submitted content) fall in the INFO bucket.
+
+**Archetype calibration:** For `stateless-utility` archetype, record as INFO — stateless utilities do not handle user PII.
 
 **Look for:**
 - Log scrubbing middleware
