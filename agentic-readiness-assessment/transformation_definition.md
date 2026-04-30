@@ -731,7 +731,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Question:** Does the application support service account or machine identity authentication (client credentials OAuth 2.0, API key with principal attribution, or mTLS), and can the authenticated principal be attributed in audit logs?
 
-**Why it matters:** Agents cannot use human credentials. The application must distinguish which agent made a call — a generic service account with no attribution is insufficient for audit and forensics.
+**Why it matters:** Agents cannot use human credentials. The application must distinguish which agent made a call — a generic service account with no attribution is insufficient for audit and forensics. Because ARA is a design-time review, this question evaluates whether the machine-identity *mechanism* exists in code and configuration, not whether it is continuously effective at runtime — and because machine identity sits at the control layer, weak attribution here invalidates every downstream authorization decision (AUTH-Q2, AUTH-Q3, AUTH-Q6).
 
 **Look for:**
 - OAuth2 client credentials flow
@@ -778,7 +778,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Question:** Does the system support identity propagation through service calls (JWT/OAuth token exchange, on-behalf-of flows), and can it distinguish between an agent acting under its own service identity vs. acting on behalf of a specific human user?
 
-**Why it matters:** Without identity propagation, the system either trusts all internal calls equally or requires each service to re-authenticate — both are problematic. Additionally, an agent acting as itself should have tightly scoped permissions, while an agent acting on behalf of a user should be bounded by that user's permissions. Conflating the two is a common source of privilege escalation. The user is the subject (whose data and permissions apply); the agent is the actor (executing the operation). The system must distinguish both dimensions.
+**Why it matters:** Without identity propagation, the system either trusts all internal calls equally or requires each service to re-authenticate — both are problematic. Additionally, an agent acting as itself should have tightly scoped permissions, while an agent acting on behalf of a user should be bounded by that user's permissions. Conflating the two is a common source of privilege escalation. The user is the subject (whose data and permissions apply); the agent is the actor (executing the operation). The system must distinguish both dimensions. This question serves ARA's dual purpose: portfolio telemetry (which systems can carry propagated identity) and use-case-level dependency checking (whether a specific on-behalf-of agent workflow is blocked).
 
 When the target system serves multiple tenants, weak identity propagation compounds with data-layer risks — see DATA-Q2 (data residency) and DATA-Q6 (PII in logs). Treat these as a cluster when planning remediation.
 
@@ -991,7 +991,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - **When `agent_scope` is `"write-enabled"`:** Evaluate as **RISK**. Write-enabled agents should not commit irreversible actions autonomously for high-stakes operations. Draft states let agents propose and humans confirm.
 - **When `agent_scope` is `"read-only"`:** Evaluate as **INFO**. Read-only agents do not make state changes, so draft/pending states are informational only — relevant for future scope expansion planning.
 
-**Why it matters:** Agents should not commit irreversible actions autonomously for high-stakes operations. Draft states let agents propose and humans confirm.
+**Why it matters:** Agents should not commit irreversible actions autonomously for high-stakes operations. Draft states let agents propose and humans confirm. ARA measures whether the target system can *support* human-in-the-loop patterns, not whether HITL is mandatory — HITL is a valuable safety mechanism for high-stakes operations and a confidence-building step during initial agent deployments.
 
 **Look for:**
 - Draft/pending status fields in database schemas
