@@ -75,28 +75,15 @@ Only items that are still **open and actionable** live here. Everything shipped,
 
 ---
 
-## 🔄 GianFranco — Other Open Items
-
-- [ ] **GF-1 — Confirm archetype skip logic with GianFranco.**
-  Already implemented (MOD TD line 289). Verify he is reading head-of-mainline. If yes, close with "already landed in v3 run"; if no, point him at current TD.
-
-- [ ] **GF-2 — Auto-detection decision logic clarification.**
-  Ambiguous which tree he means. Ask:
-  - **If archetype auto-detection (MOD TD Step 1.5):** push back — "first match wins" with `stateful-crud` fallback is deliberate. Loosening makes scoring flaky without changing outcomes for ambiguous cases (default catches them).
-  - **If repo_type auto-detection (POWER.md decision tree):** feedback is valid but wrong file; redirect to Power maintainer. Rewrite as "typical signals" not "hard forks"; keep `application` default.
-  - **If archetype is agreed target:** rephrase checks as "signals to consider", preserve fallback, document assessor judgment for mixed signals. Do NOT remove ordered progression.
-
----
-
 ## 🔬 V3 Calibration Follow-ups
 
 Surfaced by the v2-vs-v3 comparison. Keep in mind for the next TD iteration or assessment run.
 
-- [ ] **C-1 — APP-Q1 Score 2 vs Score 3 calibration.**
-  v3 pulled unishop from APP-Q1 = 4 → 2 (Java 8 + Spring Boot 2.1 + SDK v1). The tone fix (B11) is working, but Score 2 may be too harsh when the *language* is modern and only the *version/framework lag* is the issue. Review Score 2 vs Score 3 criteria with a calibration example (e.g., "Java 8 on corporate standard" → 2 or 3?). Low-risk rubric wording nudge, no scope change.
+- [x] **C-1 — APP-Q1 two-axis rubric (language + framework + SDK).** ✅ Shipped Apr 30, 2026.
+  Rewrote APP-Q1 with a two-axis calibration: (a) language/runtime modernity, (b) framework/SDK modernity. Score 4 = all modern (Python 3.10+, Java 17+ with Spring Boot 3.x and AWS SDK v2, modern .NET 6-10 with AWS SDK v3). Score 3 = modern language with framework or SDK lag (Java 17 + Spring Boot 2.7; modern .NET with SDK v2 partial adoption). Score 2 = compound regression across all three axes (Java 8 + Spring Boot 2.x + SDK v1; .NET Framework 4.x + legacy ASP.NET + SDK v2 or older; also PHP/Ruby/Perl). Score 1 = no meaningful AWS SDK (COBOL, VB6). The scanner data confirmed .NET Framework 4.8 (greenshot) and modern .NET (Sonarr, cartservice) were being conflated at Score 3, and Java 8 alone was scoring 4 in some reports — the new rubric separates these cleanly.
 
-- [ ] **C-2 — Make ARA framing visible in report output.**
-  The ARA Summary/Objective now has dual-purpose framing, design-time clarification, HITL framing, control-layer note, multitenancy cross-reference (all shipped). They don't appear in rendered reports because reports quote rubric rows + question text, not Summary. If reviewers want these framings visible, lift the relevant clauses from Summary into per-question why-it-matters guidance so they anchor in the output.
+- [x] **C-2 — Lift ARA framing into per-question why-it-matters.** ✅ Shipped Apr 30, 2026.
+  Added dual-purpose framing to AUTH-Q4 why-it-matters (portfolio telemetry vs use-case-level dependency checking). Added design-time + control-layer framing to AUTH-Q1 why-it-matters (machine identity sits at the control layer; weak attribution invalidates downstream AUTH-Q2/Q3/Q6). Added HITL-support-not-mandatory framing to HITL-Q1 why-it-matters. These clauses were already present in the Summary/Objective but did not render in report output because reports quote per-question text, not Summary.
 
 - [ ] **C-3 — INF-Q11 narrative doesn't say "application and IaC pipelines".**
   E4 landed in the question text, but v3 report findings still read as application-pipeline-centric. If reviewers want the phrasing in the output, the rubric rows or why-it-matters would need the explicit "application and IaC" framing — not just the question header.
@@ -109,6 +96,12 @@ Surfaced by the v2-vs-v3 comparison. Keep in mind for the next TD iteration or a
   - **A13 MCP awareness clause** — no repo in v3 exposes MCP surfaces.
   - **E2/M18 S3 File Gateway note** — no repo has the on-prem migration scenario that triggers DATA-Q1 Score 2 with the File Gateway note.
   Add one MCP-adjacent repo and one on-prem-migration repo to the next sample portfolio config so these edits get exercise.
+
+- [ ] **C-6 — MOD SEC-Q5 Score 1/2/3 boundary needs review (post-v4-scan).**
+  The cross-portfolio scan (`scan-rubric-quality.py` run Apr 30, 2026) showed SEC-Q5 Score 2 absorbing 33 repos with mixed maturity — v2/monolith (CloudFormation NoEcho parameters), v2/eks-saas-gitops (SSM Parameter Store for Gitea admin password), and repos that still have plaintext credentials alongside *some* secret management. Score 2 is not differentiating "has partial secret management" from "has partial secret management plus remaining plaintext." Rewrite the 1/2/3 rubric rows so Score 1 = plaintext anywhere, Score 2 = no plaintext but basic parameter-store/env-var approach without rotation, Score 3 = managed secrets with rotation. Separate from the C24 rejection, which was about BLOCKER severity on SEC-Q5. Not a blocker for the ARA re-run.
+
+- [ ] **C-7 — MOD surface-flag calibration for INF-Q2, SEC-Q2, and OPS questions (post-v4-scan).**
+  The scanner showed INF-Q2 (managed databases) at 59% Score 1 and SEC-Q2 (encryption at rest) at 86% Score 1 across all portfolios — driven largely by OSS libraries and stateless utilities that have no database/data-at-rest surface at all. This is the MOD-side equivalent of the ARA R1/R6 recalibration. Libraries, stateless utilities, and CLIs with no persistent data should record these as "Not Evaluated (archetype-N/A)" rather than defaulting to Score 1. Scope: add surface-flag detection to MOD Step 1 (mirrors ARA Step 1.5) and apply calibration rows to INF-Q2, SEC-Q2, and selected OPS questions. Deferred per "don't touch MOD rubric now" — revisit after seeing the ARA v5 portfolio.
 
 ---
 
@@ -126,19 +119,18 @@ Items verified not yet shipped. FIND/REPLACE text lives in `quick-scripts/feedba
 
 ### Scoring rubric precision
 
-- [ ] **B3 — Extend archetype-visibility Note to INF-Q3, APP-Q3, APP-Q4.**
-  INF-Q4 already has a `> **Note:** This question uses archetype-sensitive calibration...` block above `**Archetype Calibration:**`. The other 3 archetype-sensitive questions (INF-Q3, APP-Q3, APP-Q4) lack it. Add the same visibility Note to each so assessors see archetype sensitivity consistently.
-  ⚠️ P0: "Archetype Calibration" appears 4× in TD — use the `#### <QID>:` header + preceding paragraph as FIND anchor.
+- [x] **B3 — Extend archetype-visibility Note to INF-Q3, APP-Q3, APP-Q4.** ✅ Shipped Apr 30, 2026.
+  Added the `> **Note:** This question uses archetype-sensitive calibration...` block above `**Archetype Calibration:**` in INF-Q3, APP-Q3, and APP-Q4 so assessors see archetype sensitivity consistently across all 4 archetype-sensitive questions.
 
 ### Net-new additions
 
-- [ ] **F5 — INF-Q11 ↔ SEC-Q7 cross-reference.**
-  Add one sentence to INF-Q11 why-it-matters noting CI/CD automation alone is not enough — pipelines must include security validation (link to SEC-Q7). Currently INF-Q11 why-it-matters has no SEC-Q7 reference.
+- [x] **F5 — INF-Q11 ↔ SEC-Q7 cross-reference.** ✅ Shipped Apr 30, 2026.
+  Added one sentence to INF-Q11 why-it-matters noting CI/CD automation alone is not sufficient — pipelines must also include security validation (SAST, DAST, dependency scanning). Cross-references SEC-Q7 for the pipeline-security evaluation.
 
-- [ ] **F6 — INF-Q7 Score 4: business-metric-driven scaling.**
-  R3-rework (broadening INF-Q7 beyond compute) **is already shipped** — question, why-it-matters, look-for, and rubric Scores 2/3/4 all cover compute + data. What is still missing: business-metric-driven scaling as the maturity signal in Score 4. Extend Score 4 to mention e.g. *"custom CloudWatch metrics driven by business KPIs (requests-in-flight, orders-per-second) where purely technical metrics are insufficient."*
+- [x] **F6 — INF-Q7 Score 4: business-metric-driven scaling.** ✅ Shipped Apr 30, 2026.
+  Extended Score 4 to call out business-metric-driven scaling (custom CloudWatch metrics on requests-in-flight, orders-per-second, queue depth) as the maturity signal where purely technical metrics are insufficient.
 
-**Commit F:** `feat(mod-td): archetype-visibility notes (B3) and INF-Q7/INF-Q11 enhancements (F5, F6)`
+**Commit F:** `feat(mod-td): archetype-visibility notes (B3) and INF-Q7/INF-Q11 enhancements (F5, F6)` — pending squash-commit.
 
 ### Phase G — Scope decisions (pending P0.3)
 
@@ -305,15 +297,15 @@ All Part A (A1, A3, A4, A5, A7) shipped. Parts B1/B2/B3/B4 shipped. A2 shipped (
 |----------|-------|-------|
 | 🚀 Phase H JSON | 7 | H-1..H-7 |
 | 🔄 GF replies | 2 | GF-1, GF-2 |
-| 🔬 V3 calibration follow-ups | 5 | C-1..C-5 |
+| 🔬 V3 calibration follow-ups | 5 | C-3, C-4, C-5, **C-6 (MOD SEC-Q5)**, **C-7 (MOD surface-flag)** |
 | 🎯 **ARA rubric recalibration** | 9 | **R1..R9 all shipped on `fix/ara-calibration` (Apr 29, 2026) — pending V-R1..V-R4 portfolio re-run** |
 | ⚠️ Pre-flight | 3 | P0.1..P0.3 |
-| ✅ MOD edits | 3 | B3, F5, F6 |
+| ✅ MOD edits | 0 | **B3, F5, F6 shipped Apr 30** |
 | 🤔 MOD scope decisions | 2 | G1, G2 |
 | 🤖 ARA edits (original pass) | 0 | All shipped |
 | 🔍 Verification | 6 | V1..V6 |
 | 🔍 ARA-R Verification | 4 | V-R1..V-R4 (run zg-cmp portfolio against recalibrated TD) |
 | 📦 Wrap-up | 3 | W1..W3 |
-| **Total remaining** | **35** | |
+| **Total remaining** | **32** | |
 
-Of those 35, the **9 ARA Rubric Recalibration items are shipped and awaiting verification** — the next concrete step is re-running the zg-cmp portfolio against `fix/ara-calibration` and confirming V-R1..V-R4 pass.
+Of those 32, **C-1 and C-2 shipped Apr 30** — next concrete step is republishing both TDs and re-running ARA for the 31 non-canary repos to verify V-R1..V-R4.
