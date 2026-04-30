@@ -392,3 +392,75 @@ Net: v3 is not more lenient — the distribution is sharper. Fewer blockers, mor
 - ❌ **C-4 — `assessment_date` in Portfolio Inventory uses frontmatter rather than run date.** *Removed from todo.*
   Original plan was to fix the aggregator in `portfolio-modernization/transformation_definition.md` and `portfolio-agentic-readiness/transformation_definition.md` to source `assessment_date` from file mtime or an injected run timestamp. After reviewing scope: this belongs to the orchestrator (or whatever invokes the TD), not the TD itself. The orchestrator has the run timestamp naturally and can pass it through at invocation time. Closing without TD changes. If the zg-cmp-style date mismatch surfaces again, fix it at the orchestrator/Power layer.
 
+
+## Phase C-3 / C-6 / C-7 — Shipped Apr 30, 2026 (branch `fix/ara-calibration`)
+
+All three items targeted calibration gaps surfaced by `scan-rubric-quality.py` (2163 MOD findings + 2978 ARA findings across 5 MOD portfolios and 6 ARA portfolios).
+
+- ✅ **C-3 — INF-Q11 rubric rows carry "application + IaC" framing.**
+  Rewrote Scores 1-4 to land the application+IaC framing in rendered output (reports quote rubric rows, not just question headers).
+  - Score 4: "Full CI/CD automation covering both application code and infrastructure-as-code changes, with test, build, deploy, and automated rollback stages."
+  - Score 3: covers both tracks with build+deploy but limited testing, OR automation on one track (application or IaC) with manual steps on the other.
+  - Score 2: partial automation with manual/semi-manual deployment for application and/or IaC changes.
+  - Score 1: no CI/CD, "all application and infrastructure deployments are manual scripts or ClickOps."
+
+- ✅ **C-6 — MOD SEC-Q5 Score 1/2/3 boundary rewritten for plaintext precision.**
+  Scanner showed SEC-Q5 Score 2 absorbing 33 repos with mixed maturity (CloudFormation NoEcho parameters, SSM Parameter Store for admin passwords, repos with remaining plaintext alongside some secret management). Rewrite separates the three cases:
+  - Score 1: plaintext credentials present anywhere in the repository — source files, application configs, `.env`, `application.properties`, connection strings in IaC without parameter/secret references. Score 1 applies *even when* a secrets manager exists elsewhere in the system.
+  - Score 2: no plaintext in source or version control, but production credentials in plain env vars, parameter store without encryption (`String` not `SecureString`), or CloudFormation `NoEcho` parameters without rotation. Includes mixed-management cases (some secrets in Secrets Manager, at least one still in env vars).
+  - Score 3: Secrets Manager/Vault used for all production credentials with rotation on high-risk secrets; non-critical configs may remain in env vars.
+  - Score 4: all secrets in Secrets Manager/Vault with automated rotation; no production credentials in env vars.
+  Look-for extended with differentiation signals (`SecureString` vs `String`, `rotation_lambda_arn`, CloudFormation `NoEcho` backing).
+  Separate from the C24 rejection (which was about BLOCKER severity on SEC-Q5 — not revisited).
+
+- ✅ **C-7 — MOD surface-flag calibration (Step 1.6 + surface gates).**
+  Scanner showed INF-Q2 (managed DBs) at 59% Score 1 and SEC-Q2 (encryption at rest) at 86% Score 1 across all portfolios, dominated by OSS libraries and stateless utilities with no persistent-data or at-rest surface at all. MOD-side equivalent of the ARA R1/R6/R8 pattern.
+  - Added new **Step 1.6: Target-System Surface Detection** in MOD TD between archetype detection and N/A mapping.
+  - Records five surface flags: `has_persistent_data_store`, `has_at_rest_data_surface`, `has_deployed_workload`, `has_api_surface`, `has_multi_instance_deployment`. Derived from the Step 1 file inventory — no additional scanning needed.
+  - Surface gates applied:
+    - INF-Q2 (Managed Databases) requires `has_persistent_data_store`
+    - SEC-Q2 (Encryption at Rest) requires `has_at_rest_data_surface`
+    - INF-Q8 (Backup/Recovery) requires `has_persistent_data_store` OR `has_at_rest_data_surface`
+    - INF-Q9 (High Availability) requires `has_deployed_workload` AND (`has_api_surface` OR `has_persistent_data_store`)
+    - OPS-Q2 (SLOs) requires `has_api_surface` OR `has_persistent_data_store`
+  - When a gate flag is `false`, the question records as **"Not Evaluated (archetype-N/A)"** rather than Score 1. Surface flags never downgrade a real Score 1 — they only prevent false Score 1 on systems that don't expose the surface.
+  - Inline `> **Note:** This question is **surface-gated** (Step 1.6)...` blocks added to INF-Q2 and SEC-Q2 question sections for assessor visibility (matches the existing B3 archetype-visibility Note pattern).
+  - Surface Flags field added to report metadata header alongside Archetype Justification.
+
+**Verification pending:** V-R1 — re-run `scan-rubric-quality.py` against v5 portfolio to confirm SEC-Q2 86% Score-1 concentration drops (libraries and stateless utilities should now land on Not-Evaluated) and INF-Q2 59% concentration drops similarly, without downgrading real Score-1 findings on systems that do deploy databases/data-at-rest surfaces.
+
+
+## Phase C calibration follow-ups — Shipped Apr 30, 2026 (branch `fix/ara-calibration`)
+
+Three small MOD rubric-tightening items surfaced by the Apr 30 cross-portfolio scan (`scan-rubric-quality.py`, 2163 MOD + 2978 ARA findings). All shipped together in an uncommitted working-tree edit on top of `cfe3a04`.
+
+- ✅ **C-3 — INF-Q11 rubric rows now carry "application + IaC" framing.**
+  Rewrote Scores 1-4. Score 4: *"Full CI/CD automation covering both application code and infrastructure-as-code changes, with test, build, deploy, and automated rollback stages."* Score 3 adds the one-track-automated-other-manual case. Score 2 names "application code and/or IaC changes." Score 1 names "all application and infrastructure deployments are manual scripts or ClickOps." The application+IaC framing now lands in rendered rubric output, not just the question header.
+
+- ✅ **C-6 — MOD SEC-Q5 Score 1/2/3 boundary rewritten.**
+  Score 2 had been absorbing 33 repos with mixed maturity — CloudFormation `NoEcho` parameters, SSM Parameter Store for admin passwords, and repos with remaining plaintext alongside some secret management. New rubric:
+  - Score 1 = plaintext credentials present anywhere in repo (source, configs, `.env`, `application.properties`, connection strings in IaC without secret references). Score 1 applies even when a secrets manager exists elsewhere.
+  - Score 2 = no plaintext but credentials in plain env vars, parameter store without encryption, or CloudFormation `NoEcho` parameters without rotation.
+  - Score 3 = Secrets Manager/Vault with rotation on high-risk secrets; some non-critical configs may remain in env vars.
+  - Score 4 = all secrets managed with automated rotation.
+  Look-for extended with Score 2/3 differentiation signals (`SecureString` vs `String`, `rotation_lambda_arn`, NoEcho backed by Secrets Manager).
+
+- ✅ **C-7 — MOD surface-flag calibration.**
+  Added new **Step 1.6: Target-System Surface Detection** (parallels ARA Step 1.5) with five flags derived from Step 1 inventory:
+  - `has_persistent_data_store` — DB resources in IaC, self-managed DB in compose/K8s/Helm, or DB driver in source with connection config.
+  - `has_at_rest_data_surface` — S3, RDS/Aurora/DynamoDB/DocDB/Neptune/Timestream/ElastiCache, EBS attached to workloads, EFS, managed storage. Implied by persistent_data_store=true.
+  - `has_deployed_workload` — deployable compute in IaC, or Dockerfile+deployment manifests. Pure libraries are false.
+  - `has_api_surface` — HTTP/gRPC/RPC endpoints, API Gateway, ALB listeners, AppSync. CLI/SDK libraries are false.
+  - `has_multi_instance_deployment` — ASG desired>1, K8s replicas>1, ECS desired_count>1, Lambda, serverless.
+
+  Surface gates applied:
+  - **INF-Q2** (Managed Databases) requires `has_persistent_data_store`
+  - **SEC-Q2** (Encryption at Rest) requires `has_at_rest_data_surface`
+  - **INF-Q8** (Backup/Recovery) requires persistent store OR at-rest surface
+  - **INF-Q9** (High Availability) requires deployed workload + api/data surface
+  - **OPS-Q2** (SLOs) requires api or data surface
+
+  When the gate flag is `false`, the question records as **"Not Evaluated (archetype-N/A)"** rather than defaulting to Score 1. Inline Notes added to INF-Q2 and SEC-Q2 sections. The surface-flag pattern is the MOD-side equivalent of the ARA R1/R6/R8 recalibration — libraries, utilities, and CLI tools stop getting Score 1 "no managed database" / "no encryption at rest" findings when they don't expose those surfaces at all.
+
+**Verification pending:** Post-v5 re-run scan should show INF-Q2 Score 1 concentration drop from 59% and SEC-Q2 Score 1 from 86%, with real data-handling repos (unishop, hapi-fhir, bao-demo Camunda) keeping Score 1/2 where warranted.
+

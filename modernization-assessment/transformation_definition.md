@@ -342,6 +342,42 @@ If auto-detection was used, include a one- to two-sentence justification referen
 
 If archetype detection is skipped because `repo_type` is not `application`, omit these fields from the metadata header.
 
+### Step 1.6: Target-System Surface Detection
+
+Some MOD questions evaluate a system's maturity on a specific operational surface — a persistent data store, an at-rest-encryption surface, a multi-AZ surface. For repositories that **do not expose that surface at all** (e.g., a progress-bar library has no database, a build tool has no data at rest, a pure utility has no multi-AZ decision to make), scoring those questions with Score 1 ("no managed database" / "no encryption at rest") produces false positives and crowds out the genuine findings on repositories that *do* expose the surface.
+
+This step records five surface flags that feed surface-gated calibration on a small number of INF, SEC, and OPS questions. Surface flags are derived from the Step 1 file inventory — no additional scanning is needed.
+
+#### Flags
+
+| Flag | True when |
+|------|-----------|
+| `has_persistent_data_store` | IaC defines a database resource (`aws_rds_*`, `aws_dynamodb_*`, `aws_docdb_*`, `aws_neptune_*`, `aws_timestreamwrite_*`, `aws_elasticache_*`), a self-managed database is declared in Docker Compose / Kubernetes manifests / Helm charts, or the source code imports a database driver (JDBC, SQLAlchemy, Mongoose, go-sql-driver, `pymongo`, `redis`, etc.) paired with connection/pool configuration. Libraries that provide a database *adapter* without themselves deploying a store are `false`. |
+| `has_at_rest_data_surface` | Any of the following exists in IaC or detected at runtime: S3 buckets, RDS/Aurora/DynamoDB/DocumentDB/Neptune/Timestream/ElastiCache, EBS volumes attached to workloads, EFS file systems, managed block/object storage. `has_persistent_data_store=true` implies `has_at_rest_data_surface=true`. Source-code-only repositories with no deployment artifacts are `false`. |
+| `has_deployed_workload` | IaC defines deployable compute (`aws_ecs_*`, `aws_eks_*`, `aws_lambda_*`, `aws_instance`, `aws_apprunner_*`, EKS/ECS task definitions, Lambda functions) OR a Dockerfile exists AND deployment manifests (Helm chart, Kubernetes manifests, CloudFormation / Terraform) reference it. Pure library repos (no Dockerfile, no IaC, published via NpmPrettyMuch/PyPI/Maven Central) are `false`. |
+| `has_api_surface` | The codebase defines HTTP/gRPC/RPC endpoints (Express/FastAPI/Flask/Spring MVC/gRPC server bindings, API Gateway resources in IaC, ALB listeners, AppSync schemas). CLI tools, SDK libraries, and pure computation utilities are `false`. |
+| `has_multi_instance_deployment` | The deployment model supports more than one running instance — ASG with desired>1, Kubernetes Deployment with replicas>1, ECS service with desired_count>1, Lambda (inherently multi-instance), serverless. Single-EC2 or single-container deployments are `false`. Used for INF-Q9 multi-AZ calibration. |
+
+#### Surface-flag gates on scoring
+
+Questions marked with a surface gate below evaluate to **"Not Evaluated (archetype-N/A)"** when the required flag is `false`, rather than defaulting to Score 1.
+
+| Question | Gate flag required | Behavior when flag is `false` |
+|----------|-------------------|-------------------------------|
+| **INF-Q2** (Managed Databases) | `has_persistent_data_store` | Not Evaluated (archetype-N/A). Finding: "This system does not deploy a database. INF-Q2 does not apply." |
+| **SEC-Q2** (Encryption at Rest) | `has_at_rest_data_surface` | Not Evaluated (archetype-N/A). Finding: "This system has no deployed data-at-rest surface — no database, S3 bucket, EBS volume, or similar. SEC-Q2 does not apply." |
+| **INF-Q8** (Backup/Recovery) | `has_persistent_data_store` OR `has_at_rest_data_surface` | Not Evaluated (archetype-N/A). Finding: "This system has no persistent state to back up. INF-Q8 does not apply." |
+| **INF-Q9** (High Availability) | `has_deployed_workload` AND (`has_api_surface` OR `has_persistent_data_store`) | Not Evaluated (archetype-N/A). Finding: "This system has no deployed workload requiring HA evaluation. INF-Q9 does not apply." |
+| **OPS-Q2** (SLOs) | `has_api_surface` OR `has_persistent_data_store` | Not Evaluated (archetype-N/A). Finding: "This system has no user-facing surface for which SLOs are meaningful. OPS-Q2 does not apply." |
+
+When a flag is `true`, the question is evaluated normally against its rubric — surface flags never downgrade a real Score 1, they only prevent a false Score 1 on a system that does not expose the surface at all. Record the resolved surface flags in the report metadata:
+
+```markdown
+**Surface Flags**: has_persistent_data_store=<true|false>, has_at_rest_data_surface=<true|false>, has_deployed_workload=<true|false>, has_api_surface=<true|false>, has_multi_instance_deployment=<true|false>
+```
+
+Surface flags apply to all `repo_type` values where the flag is meaningful. Libraries (`library` repo_type) already receive Not-Evaluated treatment for most INF questions via the N/A mapping; surface flags tighten the same pattern for `application` and `monorepo` repos that happen to lack specific surfaces.
+
 ## N/A Mapping — Repository Type Question and Pathway Applicability
 
 Before evaluating any question or pathway, check the `repo_type` (resolved in Step 0) against the N/A mapping tables below. Questions and pathways mapped as N/A for the detected repo type are **not evaluated** — they are recorded directly in the N/A display format and excluded from scoring.
@@ -477,6 +513,8 @@ These questions evaluate the compute, networking, platform services, and deploym
 **Question:** Are databases fully managed (RDS/Aurora/DynamoDB/DocumentDB/Neptune/Timestream) vs self-managed?
 
 **Why it matters:** Self-managed databases — regardless of where they run (EC2, containers, on-premises) — introduce maintenance windows, manual patching, and operational overhead. Migrating to managed services eliminates ops burden and enables automatic backups, failover, and scaling.
+
+> **Note:** This question is **surface-gated** (Step 1.6). If `has_persistent_data_store` is `false` — the system does not deploy any database, managed or self-managed — record the question as **"Not Evaluated (archetype-N/A)"** and skip evaluation. A build tool, pure utility, or frontend-only application has no database and should not receive Score 1 for "no managed database."
 
 | Score | Criteria |
 |-------|----------|
@@ -629,10 +667,10 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Full CI/CD automation with test, build, and deploy stages including automated rollback. |
-| **3** | CI/CD pipeline exists with build and deploy, but limited automated testing. |
-| **2** | Partial automation — build is automated but deployment is manual or semi-manual. |
-| **1** | No CI/CD — all deployments are manual scripts or ClickOps. |
+| **4** | Full CI/CD automation covering both application code and infrastructure-as-code changes, with test, build, deploy, and automated rollback stages. |
+| **3** | CI/CD pipelines exist for application code and IaC with build and deploy stages, but limited automated testing, OR automation on one track (application or IaC) with manual steps on the other. |
+| **2** | Partial automation — build is automated but deployment is manual or semi-manual for application code and/or IaC changes. |
+| **1** | No CI/CD — all application and infrastructure deployments are manual scripts or ClickOps. |
 
 > **Look for:** .github/workflows/, buildspec.yml, appspec.yml, Jenkinsfile, CodePipeline definitions in IaC; pipeline stages with automated test, build, and deploy steps.
 
@@ -840,6 +878,8 @@ These questions evaluate the foundational security posture required for any mode
 
 **Why it matters:** Encryption at rest is a baseline security requirement. Customer-managed KMS keys provide control over key rotation, access policies, and audit trails.
 
+> **Note:** This question is **surface-gated** (Step 1.6). If `has_at_rest_data_surface` is `false` — the system has no deployed data-at-rest surface (no database, S3 bucket, EBS volume, EFS file system, or similar managed storage) — record the question as **"Not Evaluated (archetype-N/A)"** and skip evaluation. A library or CLI tool with no runtime state to encrypt should not receive Score 1 for "no encryption at rest."
+
 | Score | Criteria |
 |-------|----------|
 | **4** | Customer-managed KMS keys for all sensitive data stores, with centralized key management and documented rotation policy. |
@@ -883,16 +923,16 @@ These questions evaluate the foundational security posture required for any mode
 
 **Question:** Are secrets (database credentials, API keys, tokens) managed through a dedicated secrets management system (AWS Secrets Manager, HashiCorp Vault) with rotation, or are they hardcoded in code, environment variables, or configuration files?
 
-**Why it matters:** Hardcoded secrets are a critical security vulnerability and a common finding in legacy applications. Secrets management with rotation and audit trails is a baseline security requirement for any production system, not just agentic workloads.
+**Why it matters:** Hardcoded secrets are a critical security vulnerability and a common finding in legacy applications. Secrets management with rotation and audit trails is a baseline security requirement for any production system, not just agentic workloads. The presence of plaintext credentials anywhere in the repository — source code, application configs, or version-controlled env files — is a materially different posture than a system that uses parameter store or env vars without rotation, even when some secrets are already in a managed store. Score 1 reflects any plaintext credential presence; Score 2 reflects no-plaintext but no-rotation; Score 3 reflects managed secrets with rotation.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All secrets in Secrets Manager or Vault with automated rotation; no hardcoded credentials. |
-| **3** | Secrets Manager or Vault used for primary credentials (database, API keys). Some non-critical configs still in environment variables (e.g., feature flags, non-secret config). No rotation configured. |
-| **2** | Some secrets in Secrets Manager/Vault but production database credentials or API keys still in environment variables, config files, or parameter store without encryption. No rotation. |
-| **1** | Secrets hardcoded in code or committed to version control. |
+| **4** | All secrets in Secrets Manager or Vault with automated rotation configured; no hardcoded credentials; no production credentials in environment variables or parameter store without encryption. |
+| **3** | Secrets Manager or Vault used for all production credentials (database passwords, API keys, service tokens) with automated rotation configured on at least the highest-risk secrets. Some non-critical configs (feature flags, non-secret configuration) may still be in environment variables. No plaintext credentials in source. |
+| **2** | No plaintext credentials in source or version control, but production credentials are kept in environment variables, parameter store without encryption, or CloudFormation `NoEcho` parameters. Rotation is not configured. Includes cases where *some* secrets are in Secrets Manager/Vault but at least one production credential is still in plain env vars or unencrypted parameter store. |
+| **1** | Plaintext credentials present anywhere in the repository — source files, application configs, version-controlled env files (`.env`, `application.properties`, `application.yaml`), or connection strings in IaC without parameter/secret references. Score 1 applies even when a secrets manager exists elsewhere in the system, because any plaintext secret is a deployment-blocking issue. |
 
-> **Look for:** `aws_secretsmanager_*` in IaC; Vault client imports; hardcoded patterns (password=, secret=, api_key= in code); .env files committed to git.
+> **Look for:** `aws_secretsmanager_*` in IaC; Vault client imports; hardcoded patterns (`password=`, `secret=`, `api_key=`, `DB_PASSWORD=` values in code, YAML, `.env`, `.properties`); `.env` or `application.properties` files committed to git; connection strings with embedded credentials. For Score 2/3 differentiation, also check: whether parameter store usage references KMS-encrypted `SecureString` vs plain `String`; whether Secrets Manager resources have `rotation_lambda_arn` or `rotation_rules` attached; whether the `NoEcho` parameters in CloudFormation are backed by Secrets Manager at runtime.
 
 #### SEC-Q6: Compute Hardening and Patching
 
