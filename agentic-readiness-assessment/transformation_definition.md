@@ -1027,11 +1027,40 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 #### DATA-Q1: Sensitive Data Classification — BLOCKER
 
-**Question:** Is sensitive data (PII, PHI, financial records, credentials) classified and tagged at the field level, and are there controls preventing an agent from retrieving it without explicit authorization?
+**Question:** Does this system store, process, or transmit sensitive data (PII, PHI, financial records, credentials), and if so, is it classified and tagged at the field level with controls preventing an agent from retrieving it without explicit authorization?
 
-**Why it matters:** Unclassified sensitive data in a retrieval pipeline is a regulatory and reputational risk. Classification must happen before agents get read access.
+**Why it matters:** Unclassified sensitive data in a retrieval pipeline is a regulatory and reputational risk. Classification must happen before agents get read access. However, the classification requirement only applies to systems that actually hold sensitive data — build tools, CLI utilities, pure computation libraries, and scaffolding templates that never touch PII should not be flagged for the absence of classification controls they have no reason to implement.
 
-**Look for:**
+**Two-stage evaluation:**
+
+**Stage A — Scope gate: does this system handle sensitive data?**
+
+Answer Yes if any of the following is true:
+- `has_persistent_data_store` is `true` AND the stored data includes user-specific fields (user_id, email, phone, address, account details), health or medical records, financial instruments (cards, accounts, balances, transactions), or credentials (passwords, tokens, API keys persisted beyond their request lifecycle)
+- `has_logging_of_user_data` is `true` AND logs capture request/response bodies that may contain user-submitted PII
+- The system's stated purpose involves regulated data domains (healthcare/FHIR, payments/PCI, identity/IAM, telecom CPNI, finance)
+
+Answer No if the system is clearly not a data-handling target. Representative No cases:
+- Build tools and compilers (webpack, gulp, rollup) that read source files but never hold user data
+- CLI utilities that invoke remote services without persisting user input (aws-cli wrappers, deployment tools)
+- Pure computation libraries (date/time, math, formatting) with no persistence
+- SDK mocks and test doubles
+- Frontend scaffolds and starter templates with no backend
+- Progress bars and instrumentation libraries that transmit only user-provided label strings
+
+**If Stage A = No:** Record the question as INFO with the rationale `"Not a data-handling target — no PII/PHI/financial/credential data is stored, processed, or logged."` Skip Stage B entirely. Do not flag absence of classification controls as a finding — this is expected for non-data-handling systems.
+
+**If Stage A = Yes:** Proceed to Stage B.
+
+**Stage B — Classification and access control check (BLOCKER severity):**
+
+Evaluate whether sensitive data identified in Stage A is classified, tagged at the field level, and protected by controls that prevent an agent from retrieving it without explicit authorization. If classification is absent or partial, record as BLOCKER.
+
+**Archetype calibration:** For `stateless-utility` archetype (regardless of Stage A result): record as INFO. Stateless utilities operate on transient or public/reference data by definition; if they appear to handle sensitive data, the archetype classification should be revisited — recommend reclassifying before flagging DATA-Q1 as a blocker.
+
+**Dev-library-application override:** If the repo was classified as `dev-library-application` via the Step 1.5 override, skip directly to INFO without evaluating Stage A or Stage B. Libraries, CLIs, and scaffolds do not own the data that consuming applications store.
+
+**Look for (Stage B only):**
 - Data classification tags in IaC (`aws_s3_bucket` tags, DynamoDB table tags)
 - Field-level encryption
 - Column-level access controls
