@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BAO — BPMN Agentic Opportunity Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f1117;--surface:#1a1d27;--card:#222639;--border:#2d3148;--text:#e2e4ed;--muted:#8b8fa3;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--cyan:#06b6d4;--green-bg:rgba(34,197,94,.12);--yellow-bg:rgba(234,179,8,.12);--orange-bg:rgba(249,115,22,.12);--red-bg:rgba(239,68,68,.12);--cyan-bg:rgba(6,182,212,.12);--accent-bg:rgba(99,102,241,.12)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline;color:#a5b4fc}
+.container{max-width:1440px;margin:0 auto;padding:24px}
+nav{display:flex;align-items:center;gap:6px;margin-bottom:24px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--border)}
+nav a{padding:8px 18px;font-size:.82rem;font-weight:600;color:var(--muted);border-radius:8px;border:1px solid var(--border);background:var(--surface);transition:all .2s;white-space:nowrap;text-decoration:none}
+nav a:hover{border-color:var(--accent);color:var(--text)}nav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:12px}
+.top-bar h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em}.top-bar h1 span{color:var(--accent2)}
+.grid{display:grid;gap:20px}.grid-5{grid-template-columns:repeat(5,1fr)}.grid-4{grid-template-columns:repeat(4,1fr)}.grid-3{grid-template-columns:repeat(3,1fr)}.grid-2{grid-template-columns:repeat(2,1fr)}.grid-12{grid-template-columns:repeat(12,1fr)}
+.span-8{grid-column:span 8}.span-6{grid-column:span 6}.span-4{grid-column:span 4}.span-3{grid-column:span 3}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s}.card:hover{border-color:var(--accent)}
+.card-title{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-value{font-size:2rem;font-weight:700;letter-spacing:-.03em}
+.card-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+.score-green{color:var(--green)}.score-yellow{color:var(--yellow)}.score-orange{color:var(--orange)}.score-red{color:var(--red)}.score-cyan{color:var(--cyan)}.score-accent{color:var(--accent2)}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600}
+.pill-green{background:var(--green-bg);color:var(--green)}.pill-yellow{background:var(--yellow-bg);color:var(--yellow)}.pill-orange{background:var(--orange-bg);color:var(--orange)}.pill-red{background:var(--red-bg);color:var(--red)}.pill-cyan{background:var(--cyan-bg);color:var(--cyan)}.pill-blue{background:var(--accent-bg);color:var(--accent2)}.pill-muted{background:rgba(139,143,163,.12);color:var(--muted)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:10px 12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}tr:hover td{background:rgba(99,102,241,.04)}
+.section{margin-bottom:32px}.section-title{font-size:1.1rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+details{margin-bottom:8px}details summary{cursor:pointer;padding:8px 12px;background:var(--surface);border-radius:8px;font-weight:600;font-size:.85rem;list-style:none;display:flex;align-items:center;gap:8px}
+details summary::before{content:'▸';transition:transform .2s}details[open] summary::before{transform:rotate(90deg)}
+details .detail-body{padding:12px;font-size:.82rem;color:var(--muted);line-height:1.7}
+.autonomy-bar{display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden;margin-top:6px}
+.autonomy-bar div{flex:1;border-radius:2px}
+.flow-node{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;font-size:.8rem;font-weight:600;border:1px solid var(--border);background:var(--surface)}
+.flow-arrow{color:var(--muted);font-size:.9rem}
+@media(max-width:1024px){.grid-5,.grid-4{grid-template-columns:repeat(2,1fr)}.grid-12 .span-8,.grid-12 .span-4,.grid-12 .span-6,.grid-12 .span-3{grid-column:span 12}.grid-3{grid-template-columns:1fr}}
+@media(max-width:640px){.grid-5,.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="top-bar">
+  <h1>⚡ <span>BAO: BPMN Agentic Opportunity</span> — bpmn-opportunity-demo</h1>
+  <div style="font-size:.8rem;color:var(--muted)">📅 April 27, 2026 · 5 repositories · 3 vendor platforms</div>
+</div>
+<nav>
+  <a href="agentic-readiness.html">🛡️ Agentic Readiness (ARA)</a>
+  <a href="modernization.html">📐 Modernization (MOD)</a>
+  <a href="bridge.html">🔗 Bridge (ARA-MOD)</a>
+  <a href="bpmn-opportunity.html" class="active">⚡ BAO</a>
+</nav>
+<div id="main"></div>
+</div>
+<script>
+function p(cls,txt){return `<span class="pill ${cls}">${txt}</span>`;}
+const el=document.getElementById('main');
+</script>
+<script>
+const D={
+  portfolio:'bpmn-opportunity-demo',
+  totalProcesses:5,
+  totalTasks:26,
+  agentOpportunities:1,
+  serviceOpportunities:23,
+  humanTasks:2,
+  totalDepsInferred:6,
+  totalDepsDeclared:0,
+  totalDepsUnknown:4,
+  estMonthlyCostUSD:16.20,
+  vendorsDetected:['camunda-c7','camunda-c8','bpmn-2.0'],
+  warnings:1,
+
+  categories:{
+    agentBuildNow:0,
+    agentDataFirst:1,
+    automate:23,
+    dataPlatform:0
+  },
+
+  autonomy:{L1:0,L2:1,L3:0,L4:0,L5:0},
+
+  repos:[
+    {name:'camunda-invoice',processes:1,tasks:4,agents:0,services:3,human:1,vendor:'camunda-c7',deps:3,cost:0,tags:['finance','invoice']},
+    {name:'camunda8-order-process',processes:1,tasks:8,agents:0,services:7,human:1,vendor:'camunda-c8',deps:0,cost:0,tags:['orders','zeebe']},
+    {name:'camunda-rest-service',processes:1,tasks:8,agents:0,services:8,human:0,vendor:'camunda-c7',deps:2,cost:0,tags:['rest-api','integration']},
+    {name:'bpmn-miwg-test-suite',processes:1,tasks:4,agents:1,services:3,human:0,vendor:'bpmn-2.0',deps:1,cost:16.20,tags:['multi-vendor','omg-official']},
+    {name:'camunda-bpm-examples',processes:1,tasks:2,agents:0,services:2,human:0,vendor:'camunda-c7',deps:2,cost:0,tags:['examples','multi-pattern']}
+  ],
+
+  topOpportunities:[
+    {task:'Review and document result',process:'Team-Assistant',repo:'bpmn-miwg-test-suite',category:'Agent Data-First',autonomy:'L2',dep:'reviewInvoice (message flow)',depType:'message_flow',cost:2.70,vendor:'bpmn-2.0'},
+    {task:'Validate Data',process:'Process Data Example',repo:'camunda8-order-process',category:'Automate (future agent)',autonomy:'--',dep:'zeebe:assignmentDefinition',depType:'vendor_specific',cost:0,vendor:'camunda-c8'},
+    {task:'Manual Check',process:'Process Data Example',repo:'camunda8-order-process',category:'Automate (future agent)',autonomy:'--',dep:'timer escalation',depType:'vendor_specific',cost:0,vendor:'camunda-c8'},
+    {task:'Approve Invoice',process:'Invoice Receipt',repo:'camunda-invoice',category:'Human Required',autonomy:'--',dep:'${approverGroups} (DMN)',depType:'vendor_specific',cost:0,vendor:'camunda-c7'},
+    {task:'Assign Approver Group',process:'Invoice Receipt',repo:'camunda-invoice',category:'Automate',autonomy:'--',dep:'invoice-assign-approver (DMN)',depType:'vendor_specific',cost:0,vendor:'camunda-c7'},
+    {task:'Archive Invoice',process:'Invoice Receipt',repo:'camunda-invoice',category:'Automate',autonomy:'--',dep:'org.camunda.bpm.example.invoice.service.ArchiveInvoiceService',depType:'service_endpoint',cost:0,vendor:'camunda-c7'},
+    {task:'Decide on popularity',process:'Git Repo Popularity Checker',repo:'camunda-rest-service',category:'Automate',autonomy:'--',dep:'DecideOnPopularity (DMN)',depType:'vendor_specific',cost:0,vendor:'camunda-c7'},
+    {task:'Create Invoice',process:'Order Process',repo:'camunda-bpm-examples',category:'Automate',autonomy:'--',dep:'external:invoiceCreator',depType:'service_endpoint',cost:0,vendor:'camunda-c7'}
+  ],
+
+  dependencies:{
+    byType:[
+      {type:'Service Endpoint',count:4,confidence:'high',icon:'🔌'},
+      {type:'Data Store',count:1,confidence:'high',icon:'🗄️'},
+      {type:'Call Activity',count:1,confidence:'high',icon:'📞'},
+      {type:'Message Flow',count:1,confidence:'medium',icon:'✉️'},
+      {type:'Vendor Specific',count:1,confidence:'medium',icon:'🏭'}
+    ],
+    byVendor:[
+      {vendor:'camunda-c7',count:5,color:'#f97316'},
+      {vendor:'camunda-c8',count:0,color:'#06b6d4'},
+      {vendor:'bpmn-2.0',count:3,color:'#6366f1'}
+    ]
+  },
+
+  warningsList:[
+    {code:'unsupported_vendor_namespace',message:'Signavio namespace detected in camunda-invoice BPMN file, no extractor registered. Vendor-specific dependencies may be missed.',vendor:'signavio'}
+  ],
+
+  implementationWaves:[
+    {wave:1,name:'Quick Wins',tasks:23,category:'Automate',autonomy:'N/A',cost:0,desc:'Deterministic tasks: REST APIs, DMN rules, external task workers, Step Functions. No LLM needed.'},
+    {wave:2,name:'Agent Data-First',tasks:1,category:'Agent Data-First',autonomy:'L2',cost:16.20,desc:'Review and document result (Team-Assistant). Needs data readiness confirmation via ARA.'},
+    {wave:3,name:'Future Candidates',tasks:2,category:'Monitor',autonomy:'TBD',cost:0,desc:'Validate Data and Manual Check (Camunda 8). Currently automatable but highest AI benefit scores for future agent consideration.'},
+    {wave:4,name:'Human-in-the-Loop',tasks:2,category:'Human Required',autonomy:'N/A',cost:0,desc:'Approve Invoice and Enter Cancellation Details. Financial approval and cancellation workflows requiring human judgment.'}
+  ]
+};
+
+const d=D;
+el.innerHTML=`
+<!-- KPI Cards -->
+<div class="section"><div class="grid grid-5">
+  <div class="card"><div class="card-title">⚡ Agent Opportunities</div><div class="card-value score-green">${d.agentOpportunities}</div><div class="card-sub">of ${d.totalTasks} total tasks across ${d.totalProcesses} processes</div></div>
+  <div class="card"><div class="card-title">🔌 Dependencies Found</div><div class="card-value score-cyan">${d.totalDepsInferred + d.totalDepsDeclared}</div><div class="card-sub">${d.totalDepsInferred} inferred, ${d.totalDepsDeclared} declared, ${d.totalDepsUnknown} unknown</div></div>
+  <div class="card"><div class="card-title">🏭 Vendors Detected</div><div class="card-value score-accent">${d.vendorsDetected.length}</div><div class="card-sub">${d.vendorsDetected.join(', ')}</div></div>
+  <div class="card"><div class="card-title">💰 Est. Monthly Bedrock</div><div class="card-value score-yellow">$${d.estMonthlyCostUSD.toLocaleString()}</div><div class="card-sub">at 200 invocations/day per process</div></div>
+  <div class="card"><div class="card-title">⚠️ Warnings</div><div class="card-value score-orange">${d.warnings}</div><div class="card-sub">Unsupported vendor namespaces</div></div>
+</div></div>
+
+<!-- Opportunity Classification -->
+<div class="section"><div class="section-title"><span>🎯</span> Opportunity Classification</div><div class="grid grid-4">
+  <div class="card" style="border-top:3px solid var(--green);text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--green)">${d.categories.agentBuildNow}</div><div style="font-size:.82rem;color:var(--green);font-weight:600">🚀 Agent Build-Now</div><div style="font-size:.75rem;color:var(--muted);margin-top:4px">High reasoning, data ready</div></div>
+  <div class="card" style="border-top:3px solid var(--yellow);text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--yellow)">${d.categories.agentDataFirst}</div><div style="font-size:.82rem;color:var(--yellow);font-weight:600">📊 Agent Data-First</div><div style="font-size:.75rem;color:var(--muted);margin-top:4px">High reasoning, needs data work</div></div>
+  <div class="card" style="border-top:3px solid var(--cyan);text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--cyan)">${d.categories.automate}</div><div style="font-size:.82rem;color:var(--cyan);font-weight:600">⚙️ Automate</div><div style="font-size:.75rem;color:var(--muted);margin-top:4px">Low reasoning, deterministic</div></div>
+  <div class="card" style="border-top:3px solid var(--accent2);text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--accent2)">${d.categories.dataPlatform}</div><div style="font-size:.82rem;color:var(--accent2);font-weight:600">🗄️ Data Platform</div><div style="font-size:.75rem;color:var(--muted);margin-top:4px">Infrastructure investment needed</div></div>
+</div></div>
+
+<!-- Charts Row -->
+<div class="section"><div class="grid grid-12">
+  <div class="card span-4"><div class="card-title">🎯 Task Classification</div><div style="position:relative;height:260px"><canvas id="c-class"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">🤖 Autonomy Distribution</div><div style="position:relative;height:260px"><canvas id="c-auto"></canvas></div></div>
+  <div class="card span-4"><div class="card-title">🏭 Dependencies by Vendor</div><div style="position:relative;height:260px"><canvas id="c-vendor"></canvas></div></div>
+</div></div>
+
+<!-- Repository Summary -->
+<div class="section"><div class="section-title"><span>📦</span> Repository Summary</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Repository</th><th>Processes</th><th>Tasks</th><th>Agent Opps</th><th>Services</th><th>Human</th><th>Vendor</th><th>Dependencies</th><th>Est. Cost/mo</th><th>Tags</th></tr></thead>
+  <tbody>${d.repos.map(r=>`<tr>
+    <td style="font-weight:600">${r.name}</td>
+    <td>${r.processes}</td>
+    <td>${r.tasks}</td>
+    <td class="score-green" style="font-weight:700">${r.agents}</td>
+    <td>${r.services}</td>
+    <td>${r.human}</td>
+    <td>${p(r.vendor==='camunda-c7'?'pill-orange':r.vendor==='camunda-c8'?'pill-cyan':r.vendor==='jbpm'?'pill-green':'pill-blue',r.vendor)}</td>
+    <td>${r.deps}</td>
+    <td>$${r.cost.toLocaleString()}</td>
+    <td>${r.tags.map(t=>p('pill-muted',t)).join(' ')}</td>
+  </tr>`).join('')}</tbody>
+</table></div></div></div>
+
+<!-- Top Agent Opportunities -->
+<div class="section"><div class="section-title"><span>🏆</span> Top Agent Opportunities</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Task</th><th>Process</th><th>Repository</th><th>Category</th><th>Autonomy</th><th>Dependency</th><th>Vendor</th><th>$/mo</th></tr></thead>
+  <tbody>${d.topOpportunities.map(o=>`<tr>
+    <td style="font-weight:600">${o.task}</td>
+    <td style="color:var(--muted)">${o.process}</td>
+    <td>${o.repo}</td>
+    <td>${p(o.category==='Agent Build-Now'?'pill-green':o.category==='Agent Data-First'?'pill-yellow':o.category==='Automate'?'pill-cyan':'pill-blue',o.category)}</td>
+    <td>${p('pill-muted',o.autonomy)}</td>
+    <td style="font-family:'SF Mono',Consolas,monospace;font-size:.75rem;color:var(--cyan);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${o.dep}">${o.dep}</td>
+    <td>${p(o.vendor==='camunda-c7'?'pill-orange':o.vendor==='camunda-c8'?'pill-cyan':'pill-blue',o.vendor)}</td>
+    <td>$${o.cost}</td>
+  </tr>`).join('')}</tbody>
+</table></div></div></div>
+
+<!-- Dependency Map -->
+<div class="section"><div class="section-title"><span>🔗</span> Dependency Discovery</div>
+<div class="grid grid-2">
+  <div class="card"><div class="card-title">By Type</div><div class="table-wrap"><table>
+    <thead><tr><th>Type</th><th>Count</th><th>Confidence</th></tr></thead>
+    <tbody>${d.dependencies.byType.map(t=>`<tr><td>${t.icon} ${t.type}</td><td style="font-weight:700">${t.count}</td><td>${p(t.confidence==='high'?'pill-green':'pill-yellow',t.confidence)}</td></tr>`).join('')}</tbody>
+  </table></div></div>
+  <div class="card"><div class="card-title">By Vendor Extractor</div><div style="position:relative;height:220px"><canvas id="c-depvendor"></canvas></div></div>
+</div></div>
+
+<!-- Implementation Waves -->
+<div class="section"><div class="section-title"><span>🌊</span> Implementation Waves</div>
+<div class="grid grid-4">${d.implementationWaves.map((w,i)=>`<div class="card" style="border-left:3px solid ${['var(--cyan)','var(--green)','var(--yellow)','var(--accent2)'][i]}">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span style="font-weight:700">Wave ${w.wave}: ${w.name}</span>
+    ${p(['pill-cyan','pill-green','pill-yellow','pill-blue'][i],w.tasks+' tasks')}
+  </div>
+  <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">${w.desc}</div>
+  <div style="display:flex;justify-content:space-between;font-size:.78rem">
+    <span>Autonomy: ${p('pill-muted',w.autonomy)}</span>
+    <span style="font-weight:600;color:var(--yellow)">$${w.cost.toLocaleString()}/mo</span>
+  </div>
+</div>`).join('')}</div></div>
+
+<!-- Warnings -->
+<div class="section"><div class="section-title"><span>⚠️</span> Warnings (${d.warningsList.length})</div>
+<div style="font-size:.82rem;color:var(--muted);margin-bottom:12px">Vendor namespaces detected without registered extractors. Vendor-specific dependencies may be missed.</div>
+${d.warningsList.map(w=>`<details><summary>${w.code} <span style="color:var(--muted);font-weight:400;font-size:.8rem;margin-left:auto">${p('pill-orange',w.vendor)}</span></summary><div class="detail-body">${w.message}</div></details>`).join('')}
+</div>
+
+<!-- Bedrock Consumption Forecast -->
+<div class="section"><div class="section-title"><span>💰</span> Bedrock Consumption Forecast</div>
+<div class="card" style="font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:#a5b4fc;background:#181b24;line-height:1.8;padding:16px;white-space:pre">portfolio: bpmn-opportunity-demo
+assessment_date: 2026-04-27
+total_repositories: 5
+total_processes: 5
+total_tasks: 26
+agent_opportunities: 1
+  agent_build_now: 0
+  agent_data_first: 1
+  automate: 23
+  data_platform: 0
+service_tasks: 23
+human_tasks: 2
+dependencies:
+  inferred: 6
+  declared: 0
+  unknown: 4
+vendors_detected: [camunda-c7, camunda-c8, bpmn-2.0]
+warnings: 1
+estimated_monthly_bedrock_cost_usd: 16.20
+  at_volume: 200 invocations/day/process
+  model: haiku-3.5 (1,300 tokens/invocation)
+implementation_waves:
+  wave_1_automate: 23 tasks, $0/mo (deterministic, no LLM)
+  wave_2_agent_data_first: 1 task, $16.20/mo
+  wave_3_future_candidates: 2 tasks, $0/mo (monitor for reclassification)
+  wave_4_human_in_loop: 2 tasks, $0/mo (human judgment required)</div></div>`;
+
+/* Charts */
+new Chart(document.getElementById('c-class'),{type:'doughnut',data:{labels:['Agent Build-Now','Agent Data-First','Automate','Data Platform','Service (no change)','Human (keep)'],datasets:[{data:[d.categories.agentBuildNow,d.categories.agentDataFirst,d.categories.automate,d.categories.dataPlatform,d.serviceOpportunities,d.humanTasks],backgroundColor:['#22c55e','#eab308','#06b6d4','#818cf8','#4b5563','#374151'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:8}}}}});
+
+new Chart(document.getElementById('c-auto'),{type:'bar',data:{labels:['L1 Notify','L2 Suggest','L3 Act+Confirm','L4 Act+Report','L5 Autonomous'],datasets:[{label:'Tasks',data:[d.autonomy.L1,d.autonomy.L2,d.autonomy.L3,d.autonomy.L4,d.autonomy.L5],backgroundColor:['#ef4444','#f97316','#eab308','#22c55e','#06b6d4'],borderWidth:0,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8b8fa3',font:{size:9}},grid:{display:false}},y:{ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}}}}});
+
+new Chart(document.getElementById('c-vendor'),{type:'doughnut',data:{labels:d.dependencies.byVendor.map(v=>v.vendor),datasets:[{data:d.dependencies.byVendor.map(v=>v.count),backgroundColor:d.dependencies.byVendor.map(v=>v.color),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:8}}}}});
+
+new Chart(document.getElementById('c-depvendor'),{type:'bar',data:{labels:d.dependencies.byVendor.map(v=>v.vendor),datasets:[{label:'Dependencies',data:d.dependencies.byVendor.map(v=>v.count),backgroundColor:d.dependencies.byVendor.map(v=>v.color),borderWidth:0,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}},y:{ticks:{color:'#8b8fa3',font:{size:11}},grid:{display:false}}}}});
+</script>
+</body>
+</html>

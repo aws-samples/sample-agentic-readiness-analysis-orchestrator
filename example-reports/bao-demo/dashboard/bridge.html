@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bridge — bao-demo ARA–MOD Bridge Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f1117;--surface:#1a1d27;--card:#222639;--border:#2d3148;--text:#e2e4ed;--muted:#8b8fa3;--accent:#6366f1;--accent2:#818cf8;--green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--green-bg:rgba(34,197,94,.12);--yellow-bg:rgba(234,179,8,.12);--orange-bg:rgba(249,115,22,.12);--red-bg:rgba(239,68,68,.12);--purple:#a855f7;--purple-bg:rgba(168,85,247,.12)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline;color:#a5b4fc}
+.container{max-width:1440px;margin:0 auto;padding:24px}
+nav{display:flex;align-items:center;gap:6px;margin-bottom:24px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--border)}
+nav a{padding:8px 18px;font-size:.82rem;font-weight:600;color:var(--muted);border-radius:8px;border:1px solid var(--border);background:var(--surface);transition:all .2s;white-space:nowrap;text-decoration:none}
+nav a:hover{border-color:var(--accent);color:var(--text)}nav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:12px}
+.top-bar h1{font-size:1.35rem;font-weight:700;letter-spacing:-.02em}.top-bar h1 span{color:var(--accent2)}
+.grid{display:grid;gap:20px}.grid-5{grid-template-columns:repeat(5,1fr)}.grid-4{grid-template-columns:repeat(4,1fr)}.grid-3{grid-template-columns:repeat(3,1fr)}.grid-2{grid-template-columns:repeat(2,1fr)}.grid-12{grid-template-columns:repeat(12,1fr)}
+.span-8{grid-column:span 8}.span-6{grid-column:span 6}.span-4{grid-column:span 4}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .2s}.card:hover{border-color:var(--accent)}
+.card-title{font-size:.78rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-value{font-size:2rem;font-weight:700;letter-spacing:-.03em}
+.card-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+.score-green{color:var(--green)}.score-yellow{color:var(--yellow)}.score-orange{color:var(--orange)}.score-red{color:var(--red)}.score-purple{color:var(--purple)}
+.bg-green{background:var(--green-bg)}.bg-yellow{background:var(--yellow-bg)}.bg-orange{background:var(--orange-bg)}.bg-red{background:var(--red-bg)}.bg-purple{background:var(--purple-bg)}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600}
+.pill-green{background:var(--green-bg);color:var(--green)}.pill-yellow{background:var(--yellow-bg);color:var(--yellow)}.pill-orange{background:var(--orange-bg);color:var(--orange)}.pill-red{background:var(--red-bg);color:var(--red)}.pill-blue{background:rgba(99,102,241,.12);color:var(--accent2)}.pill-purple{background:var(--purple-bg);color:var(--purple)}.pill-muted{background:rgba(139,143,163,.12);color:var(--muted)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:10px 12px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}tr:hover td{background:rgba(99,102,241,.04)}
+.section{margin-bottom:32px}.section-title{font-size:1.1rem;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.score-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:8px}.score-bar-fill{height:100%;border-radius:3px}
+.dual-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:.72rem;font-weight:700;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(168,85,247,.15));color:var(--purple);border:1px solid rgba(168,85,247,.3)}
+@media(max-width:1024px){.grid-5,.grid-4{grid-template-columns:repeat(2,1fr)}.grid-12 .span-8,.grid-12 .span-4,.grid-12 .span-6{grid-column:span 12}.grid-3{grid-template-columns:1fr}}
+@media(max-width:640px){.grid-5,.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="top-bar">
+  <h1>🔗 <span>ARA–MOD Bridge</span> — bao-demo</h1>
+  <div style="font-size:.8rem;color:var(--muted)">📅 April 28, 2026 · bao-demo · assessment_type: full</div>
+</div>
+<nav>
+  <a href="agentic-readiness.html">🛡️ Agentic Readiness (ARA)</a>
+  <a href="modernization.html">📐 Modernization (MOD)</a>
+  <a href="bridge.html" class="active">🔗 Bridge (ARA–MOD)</a>
+  <a href="bpmn-opportunity.html">⚡ BAO</a>
+</nav>
+<div id="main"></div>
+</div>
+<script>
+function p(cls,txt){return `<span class="pill ${cls}">${txt}</span>`;}
+const el=document.getElementById('main');
+
+el.innerHTML=`
+<!-- KPI Cards -->
+<div class="section"><div class="grid grid-5">
+  <div class="card"><div class="card-title">🔗 Shared Mappings</div><div class="card-value score-purple">17</div><div class="card-sub">ARA↔MOD cross-references</div></div>
+  <div class="card"><div class="card-title">🎯 BLOCKERs via MOD Phase 0</div><div class="card-value score-red">0<span style="font-size:1rem;color:var(--muted)"> / 12</span></div><div class="card-sub">0% resolved by modernization</div></div>
+  <div class="card"><div class="card-title">⚠️ Readiness Gates</div><div class="card-value score-red">2</div><div class="card-sub">SEC (1.17) + OPS (1.13)</div></div>
+  <div class="card"><div class="card-title">📋 Unified Items</div><div class="card-value score-orange">13</div><div class="card-sub">6 Phase 0 + 7 ARA-specific</div></div>
+  <div class="card"><div class="card-title">🔄 Deduplicated</div><div class="card-value score-yellow">17</div><div class="card-sub">Plan once, not twice</div></div>
+</div></div>
+
+<!-- Agentic Readiness Delta -->
+<div class="section"><div class="section-title"><span>🎯</span> Agentic Readiness Delta — Modernization Dividend</div>
+<div class="grid grid-12">
+  <div class="card span-4">
+    <div class="card-title">BLOCKER Resolution</div>
+    <div style="position:relative;height:220px"><canvas id="c-delta"></canvas></div>
+    <div style="text-align:center;margin-top:8px;font-size:.82rem;color:var(--muted)">0% of BLOCKERs resolved by MOD Phase 0</div>
+  </div>
+  <div class="card span-8">
+    <div class="card-title">ARA BLOCKERs Analysis</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>ARA BLOCKER</th><th>Instances</th><th>MOD Mapping</th><th>Phase 0?</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td style="font-weight:600">AUTH-Q1: Machine Identity</td><td>4 services</td><td>SEC-Q3 + SEC-Q4</td><td>${p('pill-red','❌ Phase 3')}</td><td>Not resolved</td></tr>
+        <tr><td style="font-weight:600">DATA-Q1: Data Classification</td><td>5 services</td><td>DATA-Q1 + SEC-Q5</td><td>${p('pill-orange','⚠️ Partial')}</td><td>Partially addressed</td></tr>
+        <tr><td style="font-weight:600">API-Q1: Documented API Interface</td><td>3 services</td><td>None</td><td>${p('pill-muted','N/A')}</td><td>ARA-specific</td></tr>
+      </tbody>
+    </table></div>
+    <div style="margin-top:12px;padding:10px;background:var(--surface);border-radius:8px;font-size:.82rem">
+      <strong style="color:var(--orange)">Recommendation:</strong> <span style="color:var(--muted)">Pull SEC-Q3 + SEC-Q4 from Phase 3 into Phase 0 to resolve AUTH-Q1 (4 BLOCKER instances), increasing delta from 0% to 33%.</span>
+    </div>
+  </div>
+</div></div>
+
+<!-- MOD Readiness Gates -->
+<div class="section"><div class="section-title"><span>🚦</span> MOD Readiness Gates</div>
+<div class="grid grid-2">
+  <div class="card" style="border-left:3px solid var(--red)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-weight:700">⚠️ Security Baseline Gap</span>
+      ${p('pill-red','SEC avg: 1.17 / 4.0')}
+    </div>
+    <div class="score-bar"><div class="score-bar-fill" style="width:29.3%;background:var(--red)"></div></div>
+    <div style="font-size:.82rem;color:var(--muted);margin-top:8px">ARA AUTH remediation (Q1–Q7) blocked until MOD SEC improves. All 7 SEC questions are foundational blockers.</div>
+    <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">
+      ${p('pill-red','SEC-Q1: 1.00')} ${p('pill-red','SEC-Q2: 1.00')} ${p('pill-red','SEC-Q3: 1.20')} ${p('pill-red','SEC-Q4: 1.00')} ${p('pill-red','SEC-Q5: 1.40')}
+    </div>
+  </div>
+  <div class="card" style="border-left:3px solid var(--red)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-weight:700">⚠️ Operational Baseline Gap</span>
+      ${p('pill-red','OPS avg: 1.13 / 4.0')}
+    </div>
+    <div class="score-bar"><div class="score-bar-fill" style="width:28.3%;background:var(--red)"></div></div>
+    <div style="font-size:.82rem;color:var(--muted);margin-top:8px">ARA OBS remediation (AUTH-Q6, OBS-Q1, OBS-Q2) blocked until MOD OPS improves. All 9 OPS questions are foundational blockers.</div>
+    <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">
+      ${p('pill-red','OPS-Q1: 1.00')} ${p('pill-red','OPS-Q2: 1.00')} ${p('pill-red','OPS-Q3: 1.00')} ${p('pill-red','OPS-Q4: 1.00')} ${p('pill-red','OPS-Q5: 1.00')}
+    </div>
+  </div>
+</div></div>
+
+<!-- Unified Remediation Sequence -->
+<div class="section"><div class="section-title"><span>🗺️</span> Unified Remediation Sequence</div>
+<div class="grid grid-12">
+  <div class="card span-8">
+    <div class="card-title">Phase 0: Cross-Cutting Foundation (MOD + ARA)</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Item</th><th>Type</th><th>MOD Resolved</th><th>ARA Resolved</th><th>Services</th></tr></thead>
+      <tbody>
+        <tr><td style="font-weight:700">1</td><td style="font-weight:600">Secrets Remediation (SEC-Q5)</td><td><span class="dual-badge">⭐ Dual</span></td><td>SEC-Q5</td><td>AUTH-Q5</td><td>5</td></tr>
+        <tr><td style="font-weight:700">2</td><td style="font-weight:600">IaC Foundation (INF-Q10)</td><td><span class="dual-badge">⭐ Dual</span></td><td>INF-Q10</td><td>ENG-Q1</td><td>5</td></tr>
+        <tr><td style="font-weight:700">3</td><td style="font-weight:600">CI/CD Template (INF-Q11)</td><td><span class="dual-badge">⭐ Dual</span></td><td>INF-Q11</td><td>ENG-Q2</td><td>5</td></tr>
+        <tr><td style="font-weight:700">4</td><td style="font-weight:600">Network Architecture (INF-Q5)</td><td>${p('pill-blue','MOD-only')}</td><td>INF-Q5</td><td>—</td><td>5</td></tr>
+        <tr><td style="font-weight:700">5</td><td style="font-weight:600">Security Pipeline (SEC-Q7)</td><td>${p('pill-blue','MOD-only')}</td><td>SEC-Q7</td><td>—</td><td>5</td></tr>
+        <tr><td style="font-weight:700">6</td><td style="font-weight:600">Observability Platform (OPS-Q1)</td><td><span class="dual-badge">⭐ Dual</span></td><td>OPS-Q1</td><td>OBS-Q1</td><td>5</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="card span-4">
+    <div class="card-title">ARA-Specific (After Phase 0)</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Item</th><th>Severity</th></tr></thead>
+      <tbody>
+        <tr><td style="font-weight:700">1</td><td style="font-weight:600">AUTH-Q1: Machine Identity</td><td>${p('pill-red','BLOCKER')}</td></tr>
+        <tr><td style="font-weight:700">2</td><td style="font-weight:600">DATA-Q1: Data Classification</td><td>${p('pill-red','BLOCKER')}</td></tr>
+        <tr><td style="font-weight:700">3</td><td style="font-weight:600">API-Q1: Documented API</td><td>${p('pill-red','BLOCKER')}</td></tr>
+        <tr><td style="font-weight:700">4</td><td style="font-weight:600">AUTH-Q2/Q3/Q6/Q7: Identity</td><td>${p('pill-orange','RISK-SAFETY')}</td></tr>
+        <tr><td style="font-weight:700">5</td><td style="font-weight:600">STATE-Q5: Rate Limiting</td><td>${p('pill-orange','RISK-SAFETY')}</td></tr>
+        <tr><td style="font-weight:700">6</td><td style="font-weight:600">OBS-Q2: Alerting</td><td>${p('pill-yellow','RISK-QUALITY')}</td></tr>
+        <tr><td style="font-weight:700">7</td><td style="font-weight:600">HITL-Q3: Sandbox/Staging</td><td>${p('pill-yellow','RISK-QUALITY')}</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div></div>
+
+<!-- Dual Resolution Impact Chart -->
+<div class="section"><div class="section-title"><span>⚡</span> Dual-Resolution Impact</div>
+<div class="grid grid-12">
+  <div class="card span-6"><div style="position:relative;height:280px"><canvas id="c-dual"></canvas></div></div>
+  <div class="card span-6">
+    <div class="card-title">Highest-Value Items</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="padding:12px;background:var(--surface);border-radius:8px;border-left:3px solid var(--purple)">
+        <div style="font-weight:700;font-size:.85rem">1. Secrets Remediation (SEC-Q5)</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:4px">Resolves 1 MOD + 1 ARA finding across 5 services. Immediate priority — hardcoded credentials in 4 services.</div>
+        <div style="margin-top:6px"><span class="dual-badge">Highest urgency — credential exposure</span></div>
+      </div>
+      <div style="padding:12px;background:var(--surface);border-radius:8px;border-left:3px solid var(--purple)">
+        <div style="font-weight:700;font-size:.85rem">2. IaC Foundation (INF-Q10)</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:4px">Resolves 1 MOD + 1 ARA finding across 5 services. #1 prerequisite for all other modernization and ARA work.</div>
+      </div>
+      <div style="padding:12px;background:var(--surface);border-radius:8px;border-left:3px solid var(--purple)">
+        <div style="font-weight:700;font-size:.85rem">3. Observability Platform (OPS-Q1)</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:4px">Resolves 1 MOD + 1 ARA finding across 5 services. Unblocks AUTH-Q6 and OBS-Q2.</div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+<!-- BAO + ARA Readiness Matrix -->
+<div class="section"><div class="section-title"><span>🤖</span> BAO + ARA Readiness Matrix</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>Agent Task</th><th>Instances</th><th>Target System</th><th>ARA Profile</th><th>BLOCKERs</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td style="font-weight:600">Check decision</td><td>1</td><td>camunda-invoice</td><td>${p('pill-orange','Remediation Req.')}</td><td>DATA-Q1</td><td>${p('pill-red','Blocked')}</td></tr>
+    <tr><td style="font-weight:600">evaluate decision table</td><td>1</td><td>camunda-invoice</td><td>${p('pill-orange','Remediation Req.')}</td><td>DATA-Q1</td><td>${p('pill-red','Blocked')}</td></tr>
+    <tr><td style="font-weight:600">Analyze report</td><td>1</td><td>camunda-invoice</td><td>${p('pill-orange','Remediation Req.')}</td><td>DATA-Q1</td><td>${p('pill-red','Blocked')}</td></tr>
+    <tr><td style="font-weight:600">Review Invoice</td><td>1</td><td>camunda-invoice</td><td>${p('pill-orange','Remediation Req.')}</td><td>DATA-Q1</td><td>${p('pill-red','Blocked')}</td></tr>
+    <tr><td style="font-weight:600">Assign Reviewer</td><td>1</td><td>camunda-invoice</td><td>${p('pill-orange','Remediation Req.')}</td><td>DATA-Q1</td><td>${p('pill-red','Blocked')}</td></tr>
+    <tr><td style="font-weight:600">Review terms of contract</td><td>23</td><td>bpmn-miwg-test-suite</td><td>${p('pill-red','Not Integrable')}</td><td>API-Q1, AUTH-Q1, DATA-Q1</td><td>${p('pill-red','Blocked')}</td></tr>
+    <tr><td style="font-weight:600">Review and document result</td><td>36</td><td>bpmn-miwg-test-suite</td><td>${p('pill-red','Not Integrable')}</td><td>API-Q1, AUTH-Q1, DATA-Q1</td><td>${p('pill-red','Blocked')}</td></tr>
+  </tbody>
+</table></div>
+<div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
+  <div style="padding:8px 14px;background:var(--surface);border-radius:8px;font-size:.82rem"><strong style="color:var(--red)">0</strong> <span style="color:var(--muted)">Ready</span></div>
+  <div style="padding:8px 14px;background:var(--surface);border-radius:8px;font-size:.82rem"><strong style="color:var(--red)">64</strong> <span style="color:var(--muted)">Blocked</span></div>
+  <div style="padding:8px 14px;background:var(--surface);border-radius:8px;font-size:.82rem"><strong style="color:var(--muted)">0</strong> <span style="color:var(--muted)">Unassessed</span></div>
+</div></div></div>
+
+<!-- Deduplication Summary -->
+<div class="section"><div class="section-title"><span>🔄</span> Deduplication Summary</div>
+<div class="grid grid-12">
+  <div class="card span-4"><div style="position:relative;height:220px"><canvas id="c-dedup"></canvas></div></div>
+  <div class="card span-8">
+    <div class="grid grid-3" style="margin-bottom:16px">
+      <div style="text-align:center;padding:12px;background:var(--surface);border-radius:8px"><div style="font-size:1.8rem;font-weight:700;color:var(--purple)">17</div><div style="font-size:.78rem;color:var(--muted)">Findings in both assessments</div></div>
+      <div style="text-align:center;padding:12px;background:var(--surface);border-radius:8px"><div style="font-size:1.8rem;font-weight:700;color:var(--green)">13</div><div style="font-size:.78rem;color:var(--muted)">Remediation items consolidated</div></div>
+      <div style="text-align:center;padding:12px;background:var(--surface);border-radius:8px"><div style="font-size:1.8rem;font-weight:700;color:var(--accent2)">4</div><div style="font-size:.78rem;color:var(--muted)">Dual-resolution Phase 0 items</div></div>
+    </div>
+    <div style="font-size:.82rem;color:var(--muted);line-height:1.7">
+      <strong style="color:var(--text)">62% reduction in planning overhead</strong> — Without deduplication, teams would plan ~34 separate work items (17 from each assessment); with deduplication, they plan 13 consolidated items.
+    </div>
+  </div>
+</div></div>
+
+<!-- Bridge Snapshot -->
+<div class="section"><div class="section-title"><span>📋</span> Bridge Snapshot</div>
+<div class="card" style="font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:#a5b4fc;background:#181b24;line-height:1.8;padding:16px;white-space:pre">bridge_date: 2026-04-28
+portfolio: bao-demo
+assessment_type: full
+shared_mappings: 17
+ara_blockers_total: 12
+ara_blockers_resolvable_by_mod: 0
+modernization_dividend: 0%
+readiness_gates_triggered: 2
+  sec_avg: 1.17
+  ops_avg: 1.13
+unified_items: 13
+  phase_0_dual_resolution: 4
+  phase_0_mod_only: 2
+  ara_specific: 7
+deduplicated_findings: 17
+  shared_relationship: 7
+  mod_to_ara_both_active: 9
+  ara_extends_mod: 1
+consolidated_remediation_items: 13
+bao_agent_opportunities: 64
+  ready: 0
+  blocked: 64
+  unassessed: 0</div></div>`;
+
+/* Charts */
+new Chart(document.getElementById('c-delta'),{type:'doughnut',data:{labels:['Resolved by MOD Phase 0','ARA-Specific Remediation'],datasets:[{data:[0,12],backgroundColor:['#22c55e','#ef4444'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:10}}}}});
+
+new Chart(document.getElementById('c-dual'),{type:'bar',data:{labels:['Secrets (SEC-Q5)','IaC (INF-Q10)','CI/CD (INF-Q11)','Observability (OPS-Q1)','Network (INF-Q5)','Security Pipeline (SEC-Q7)'],datasets:[{label:'MOD Findings Resolved',data:[1,1,1,1,1,1],backgroundColor:'#6366f1'},{label:'ARA Findings Resolved',data:[1,1,1,1,0,0],backgroundColor:'#a855f7'}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}},y:{stacked:true,ticks:{color:'#8b8fa3',font:{size:9}},grid:{display:false}}}}});
+
+new Chart(document.getElementById('c-dedup'),{type:'doughnut',data:{labels:['Shared (same gap)','MOD→ARA (both active)','ARA extends MOD'],datasets:[{data:[7,9,1],backgroundColor:['#818cf8','#a855f7','#ef4444'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:10}}}}});
+</script>
+</body>
+</html>

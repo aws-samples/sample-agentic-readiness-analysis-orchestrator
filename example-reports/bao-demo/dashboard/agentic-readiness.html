@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ARA — ecommerce-platform-v2 Agentic Readiness Dashboard</title>
+<title>ARA — bao-demo Agentic Readiness Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -41,8 +41,8 @@ details .detail-body{padding:12px;font-size:.82rem;color:var(--muted);line-heigh
 <body>
 <div class="container">
 <div class="top-bar">
-  <h1>🛡️ <span>Agentic Readiness</span> — ecommerce-platform-v2</h1>
-  <div style="font-size:.8rem;color:var(--muted)">📅 April 17, 2026 · ecommerce-platform-v2 · agent_scope: read-only</div>
+  <h1>🛡️ <span>Agentic Readiness</span> — bao-demo</h1>
+  <div style="font-size:.8rem;color:var(--muted)">📅 July 17, 2025 · bao-demo · 5 services · agent_scope: read-only</div>
 </div>
 <nav>
   <a href="agentic-readiness.html" class="active">🛡️ Agentic Readiness (ARA)</a>
@@ -57,81 +57,63 @@ function p(cls,txt){return `<span class="pill ${cls}">${txt}</span>`;}
 const el=document.getElementById('main');
 
 const D={
-  agentReady:0,pilotReady:0,pilotSafety:1,remReq:4,notInt:0,
-  blockers:8,risks:105,riskSafety:37,riskQuality:68,infos:59,
-  ccBlockers:2,ccRisks:22,ccRiskSafety:8,ccRiskQuality:14,
+  agentReady:0,pilotReady:0,pilotSafety:0,remReq:2,notInt:3,
+  blockers:12,risks:113,riskSafety:41,riskQuality:72,infos:61,
+  ccBlockers:3,ccRisks:22,ccRiskSafety:8,ccRiskQuality:14,
   services:[
-    {id:'unishop-monolith',type:'application',profile:'Remediation Req.',pc:'pill-orange',b:2,rs:8,rq:14,i:13,pri:'P0',prc:'pill-red'},
-    {id:'aws-microservices',type:'application',profile:'Remediation Req.',pc:'pill-orange',b:2,rs:9,rq:16,i:16,pri:'P0',prc:'pill-red'},
-    {id:'local-monolith',type:'application',profile:'Remediation Req.',pc:'pill-orange',b:2,rs:8,rq:14,i:17,pri:'P0',prc:'pill-red'},
-    {id:'books-api',type:'application',profile:'Remediation Req.',pc:'pill-orange',b:2,rs:8,rq:15,i:12,pri:'P1',prc:'pill-orange'},
-    {id:'eks-saas-gitops',type:'infra-only',profile:'Pilot-Ready (Safety)',pc:'pill-yellow',b:0,rs:4,rq:9,i:1,pri:'P1',prc:'pill-orange'}
+    {id:'camunda-invoice',type:'monorepo',profile:'Remediation Req.',pc:'pill-orange',b:1,rs:8,rq:14,i:12,pri:'P0',prc:'pill-red'},
+    {id:'camunda8-order-process',type:'application',profile:'Not Integrable',pc:'pill-red',b:3,rs:8,rq:14,i:12,pri:'P0',prc:'pill-red'},
+    {id:'camunda-rest-service',type:'application',profile:'Not Integrable',pc:'pill-red',b:3,rs:8,rq:14,i:12,pri:'P1',prc:'pill-orange'},
+    {id:'bpmn-miwg-test-suite',type:'application',profile:'Not Integrable',pc:'pill-red',b:3,rs:8,rq:14,i:12,pri:'P1',prc:'pill-orange'},
+    {id:'camunda-bpm-examples',type:'monorepo',profile:'Remediation Req.',pc:'pill-orange',b:2,rs:9,rq:16,i:13,pri:'P1',prc:'pill-orange'}
   ],
   heatmap:[
-    {sec:'AUTH',b:4,rs:5,rq:2},{sec:'DATA',b:4,rs:2,rq:3},{sec:'API',b:0,rs:0,rq:3},{sec:'STATE',b:0,rs:3,rq:2},
-    {sec:'HITL',b:0,rs:0,rq:1},{sec:'DISC',b:0,rs:0,rq:1},{sec:'OBS',b:0,rs:0,rq:2},{sec:'ENG',b:0,rs:0,rq:5}
+    {sec:'DATA',b:5,rs:2,rq:3},{sec:'AUTH',b:4,rs:4,rq:1},{sec:'API',b:3,rs:0,rq:3},{sec:'STATE',b:0,rs:2,rq:0},
+    {sec:'HITL',b:0,rs:0,rq:1},{sec:'DISC',b:0,rs:0,rq:1},{sec:'OBS',b:0,rs:0,rq:2},{sec:'ENG',b:0,rs:0,rq:4}
   ],
   ccBlockerList:[
-    {id:'AUTH-Q1',title:'Machine Identity Authentication',repos:4,desc:'No machine identity authentication across 4 application services. Session-based, permitAll(), or no auth.'},
-    {id:'DATA-Q1',title:'Sensitive Data Classification',repos:4,desc:'Unclassified PII in databases across 4 services — customer names, emails, payment records exposed without field-level controls.'}
+    {id:'AUTH-Q1',title:'Machine Identity Authentication',repos:4,desc:'No machine identity authentication for inbound agent requests across 4 services. Hardcoded demo credentials or no API surface.'},
+    {id:'DATA-Q1',title:'Sensitive Data Classification',repos:5,desc:'No data classification scheme in any service. PII (creditor names, emails, invoice amounts) stored without classification metadata.'},
+    {id:'API-Q1',title:'Documented API Interface',repos:3,desc:'Three services lack a documented, addressable API surface. Zeebe job worker, generic engine API, or static data archive.'}
   ],
   ccRiskSafetyList:[
-    {id:'AUTH-Q2',cat:'AUTH',title:'Scoped Permissions',repos:5,desc:'No agent-specific scoped permissions. Coarse-grained auth or AdministratorAccess on IRSA roles.'},
-    {id:'AUTH-Q3',cat:'AUTH',title:'Action-Level Authorization',repos:5,desc:'No action-level authorization. Cannot restrict agents to read-only at application layer.'},
-    {id:'AUTH-Q6',cat:'AUTH',title:'Immutable Audit Logging',repos:5,desc:'No immutable, tamper-evident audit logging. No CloudTrail configuration.'},
-    {id:'AUTH-Q7',cat:'AUTH',title:'Agent Identity Suspension',repos:5,desc:'No mechanism to rapidly suspend individual agent identities.'},
-    {id:'STATE-Q1',cat:'STATE',title:'Compensation and Rollback',repos:4,desc:'No saga patterns, compensating transactions, or undo endpoints.'},
-    {id:'STATE-Q5',cat:'STATE',title:'Rate Limiting',repos:4,desc:'No per-client rate limiting in any application service.'},
-    {id:'DATA-Q2',cat:'DATA',title:'Data Residency',repos:4,desc:'No documented data residency requirements.'},
-    {id:'DATA-Q6',cat:'DATA',title:'PII Redaction in Logs',repos:4,desc:'PII logged without masking in application services.'}
+    {id:'AUTH-Q2',cat:'AUTH',title:'Scoped Permissions (Least Privilege)',repos:5,desc:'No scoped permission model. Single shared credentials with full access or no authentication at all.'},
+    {id:'AUTH-Q3',cat:'AUTH',title:'Action-Level Authorization',repos:5,desc:'No action-level authorization (ABAC or fine-grained RBAC). No method-level authorization checks.'},
+    {id:'AUTH-Q6',cat:'AUTH',title:'Immutable Audit Logging',repos:5,desc:'No immutable audit logging. No CloudTrail, no S3 Object Lock, no CloudWatch retention policies.'},
+    {id:'AUTH-Q7',cat:'AUTH',title:'Agent Identity Suspension',repos:5,desc:'No mechanism to suspend or revoke individual agent identities. Single shared credential or no identity management.'},
+    {id:'STATE-Q1',cat:'STATE',title:'Compensation and Rollback',repos:5,desc:'No compensation or rollback mechanisms. Read-only scope limits risk but no application-level compensation.'},
+    {id:'STATE-Q5',cat:'STATE',title:'Rate Limiting and Throttling',repos:5,desc:'No rate limiting at any layer. No API Gateway, no WAF, no application-level throttling.'},
+    {id:'DATA-Q2',cat:'DATA',title:'Data Residency and Sovereignty',repos:5,desc:'No data residency controls. European PII (Camunda GmbH Germany-based) subject to GDPR.'},
+    {id:'DATA-Q6',cat:'DATA',title:'PII Redaction in Logs',repos:5,desc:'No PII redaction. Creditor names, invoice numbers, email addresses logged in plaintext.'}
   ],
   ccRiskQualityList:[
-    {id:'API-Q2',cat:'API',title:'Machine-Readable API Spec',repos:4,desc:'No OpenAPI or machine-readable API specification.'},
-    {id:'API-Q3',cat:'API',title:'Structured Error Responses',repos:4,desc:'No structured error codes or retryable indicators.'},
-    {id:'HITL-Q3',cat:'HITL',title:'Sandbox/Staging',repos:4,desc:'No agent-testing-focused staging environments.'},
-    {id:'DATA-Q3',cat:'DATA',title:'Selective Query Support',repos:4,desc:'All services return unbounded result sets.'},
-    {id:'DATA-Q4',cat:'DATA',title:'System of Record',repos:4,desc:'No formal system-of-record designations.'},
-    {id:'DATA-Q5',cat:'DATA',title:'Temporal Metadata',repos:4,desc:'Timestamps inconsistent or absent.'},
-    {id:'DISC-Q1',cat:'DISC',title:'Schema Versioning',repos:4,desc:'No API versioning or breaking change detection.'},
-    {id:'OBS-Q1',cat:'OBS',title:'Distributed Tracing',repos:5,desc:'Only books-api has X-Ray. All others have zero tracing.'},
-    {id:'OBS-Q2',cat:'OBS',title:'Alerting',repos:5,desc:'No operational alerting configured.'},
-    {id:'ENG-Q1',cat:'ENG',title:'Infrastructure Governance',repos:5,desc:'No drift detection, no AWS Config rules.'},
-    {id:'ENG-Q2',cat:'ENG',title:'CI/CD + Contract Testing',repos:5,desc:'Only books-api has CI/CD. No contract testing.'},
-    {id:'ENG-Q3',cat:'ENG',title:'Rollback Capability',repos:5,desc:'Manual rollback only in most services.'},
-    {id:'ENG-Q4',cat:'ENG',title:'API Test Coverage',repos:5,desc:'Zero test files in most services.'},
-    {id:'ENG-Q5',cat:'ENG',title:'Encryption at Rest',repos:5,desc:'Default or no encryption on PII data stores.'}
+    {id:'API-Q2',cat:'API',title:'Machine-Readable API Specification',repos:5,desc:'No directly consumable machine-readable API specification in any repository.'},
+    {id:'API-Q3',cat:'API',title:'Structured Error Responses',repos:5,desc:'Error handling inconsistent and unstructured. No retryable boolean or error category field.'},
+    {id:'DISC-Q1',cat:'DISC',title:'Schema Versioning and API Contracts',repos:5,desc:'No consumer-driven contract tests, no OpenAPI spec diff tools, no breaking change detection.'},
+    {id:'OBS-Q1',cat:'OBS',title:'Distributed Tracing and Structured Logging',repos:5,desc:'No distributed tracing or structured logging. System.out.println, java.util.logging, or basic SLF4J.'},
+    {id:'OBS-Q2',cat:'OBS',title:'Alerting on Error Rates and Latency',repos:5,desc:'No alerting configuration. No CloudWatch alarms, no PagerDuty/OpsGenie, no SLO-based alerting.'},
+    {id:'ENG-Q1',cat:'ENG',title:'Infrastructure Governance',repos:5,desc:'No Infrastructure as Code. No Terraform, CloudFormation, CDK, Helm, or Kustomize files.'},
+    {id:'ENG-Q2',cat:'ENG',title:'CI/CD with API Contract Testing',repos:5,desc:'CI/CD maturity varies widely. 3 services have no CI/CD at all.'},
+    {id:'ENG-Q3',cat:'ENG',title:'Rollback Capability',repos:5,desc:'No automated rollback. No blue/green, no canary, no CodeDeploy rollback triggers.'},
+    {id:'HITL-Q3',cat:'HITL',title:'Sandbox/Staging Environment',repos:5,desc:'No dedicated sandbox or staging environments. H2 in-memory databases for testing only.'},
+    {id:'API-Q6',cat:'API',title:'Asynchronous Operation Support',repos:4,desc:'BPMN processes are long-running but no webhook/polling endpoints for external consumers.'},
+    {id:'ENG-Q4',cat:'ENG',title:'API Test Coverage',repos:3,desc:'Tests validate process logic through Java APIs but not through REST API endpoints.'},
+    {id:'ENG-Q5',cat:'ENG',title:'Encryption at Rest',repos:3,desc:'Process data stored in H2 file databases without encryption. No KMS keys.'},
+    {id:'DATA-Q4',cat:'DATA',title:'System of Record Designations',repos:3,desc:'No system-of-record designations. No master data management or conflict resolution.'},
+    {id:'DATA-Q5',cat:'DATA',title:'Temporal Metadata and Freshness',repos:3,desc:'No Cache-Control headers, no X-Data-Age headers, no last_refreshed indicators.'}
   ],
   remPriority:[
     {order:1,group:'Identity Foundation (AUTH-Q1)',services:'4 of 5',effort:'High',rationale:'Deploy shared Cognito User Pool with client_credentials. Foundation for all other security controls.'},
-    {order:2,group:'Data Protection (DATA-Q1)',services:'4 of 4 applicable',effort:'Medium',rationale:'Classify PII, implement field-level response filtering for agent endpoints.'},
-    {order:3,group:'Observability Stack',services:'All 5',effort:'Medium',rationale:'Deploy X-Ray/ADOT, structured logging, CloudWatch alerting portfolio-wide.'},
-    {order:4,group:'CI/CD & Contract Testing',services:'4 of 5',effort:'High',rationale:'Establish CI/CD pipelines with API contract testing. books-api as template.'},
-    {order:5,group:'API Surface & Versioning',services:'4 of 4 applicable',effort:'Medium',rationale:'Generate OpenAPI specs, add /v1/ versioning, structured error responses.'}
+    {order:2,group:'Data Classification (DATA-Q1)',services:'5 of 5',effort:'Medium',rationale:'Classify PII, implement field-level response filtering for agent endpoints. Affects all services.'},
+    {order:3,group:'API Surface (API-Q1)',services:'3 of 5',effort:'High',rationale:'Build REST API layers for Zeebe workers, business facades for engine APIs, read-only APIs for data archives.'},
+    {order:4,group:'Observability Stack',services:'All 5',effort:'Medium',rationale:'Deploy OpenTelemetry/X-Ray, structured logging, CloudWatch alerting portfolio-wide.'},
+    {order:5,group:'CI/CD & Contract Testing',services:'3 of 5',effort:'Medium',rationale:'Establish CI/CD pipelines with API contract testing. GitHub Actions templates.'}
   ],
-  pilotCandidates:[
-    {rank:1,service:'eks-saas-gitops',riskSafety:4,riskQuality:9,relevance:'Infrastructure platform — 0 BLOCKERs, Pilot-Ready (Safety Concerns)'}
-  ],
-  portfolioFindings:[
-    {id:'PORT-ARA-Q1',title:'Centralized Identity Plane',sev:'BLOCKER',sc:'pill-red',desc:'No shared identity provider for agent M2M authentication across the portfolio.'},
-    {id:'PORT-ARA-Q2',title:'Cross-Service Audit Correlation',sev:'RISK',sc:'pill-orange',desc:'Audit logs cannot be correlated across services. Only books-api has X-Ray tracing.'},
-    {id:'PORT-ARA-Q3',title:'Portfolio-Level Rate Limiting',sev:'RISK',sc:'pill-orange',desc:'No shared API gateway or WAF protects the portfolio perimeter from agent traffic.'},
-    {id:'PORT-ARA-Q4',title:'Transitive Dependency Safety',sev:'INFO',sc:'pill-blue',desc:'No transitive BLOCKER propagation. Foundation service has 0 BLOCKERs.'},
-    {id:'PORT-ARA-Q5',title:'Agent Identity Governance',sev:'RISK',sc:'pill-orange',desc:'No centralized mechanism to suspend or revoke agent identities across all services.'}
-  ],
-  programs:{aiDlc:true,aiDlcReason:'3/4 app services have no CI/CD; zero test coverage',agentStorming:true,asReason:'80% Remediation Required — refine agent scope before remediation',axe:false,eba:false}
+  programs:{aiDlc:true,aiDlcReason:'3/5 services have no CI/CD; zero API test coverage',agentStorming:true,asReason:'100% Remediation/Not-Integrable — refine agent scope before remediation',axe:false,eba:false}
 };
-
-const DEPS=[
-  {svc:'eks-saas-gitops',fi:2,fo:0,role:'Foundation'},
-  {svc:'aws-microservices',fi:0,fo:0,role:'Independent'},
-  {svc:'local-monolith',fi:0,fo:1,role:'Leaf'},
-  {svc:'unishop-monolith',fi:0,fo:1,role:'Leaf'},
-  {svc:'books-api',fi:0,fo:0,role:'Independent'}
-];
 
 const d=D;
 el.innerHTML=`
-<!-- KPI Cards -->
 <div class="section"><div class="grid grid-5">
   <div class="card"><div class="card-title">🛡️ Agent-Ready</div><div class="card-value score-red">${d.agentReady}<span style="font-size:1rem;color:var(--muted)"> / 5</span></div><div class="card-sub">0 BLOCKERs, 0 RISK-SAFETY</div></div>
   <div class="card"><div class="card-title">🚨 Total BLOCKERs</div><div class="card-value score-red">${d.blockers}</div><div class="card-sub">Sum across all 5 services</div></div>
@@ -139,7 +121,6 @@ el.innerHTML=`
   <div class="card"><div class="card-title">📋 RISK-QUALITY</div><div class="card-value score-yellow">${d.riskQuality}</div><div class="card-sub">Quality gaps (cross-cutting: ${d.ccRiskQuality})</div></div>
   <div class="card"><div class="card-title">🔗 Cross-Cutting</div><div class="card-value score-orange">${d.ccBlockers + d.ccRisks}</div><div class="card-sub">${d.ccBlockers} BLOCKERs + ${d.ccRisks} RISKs</div></div>
 </div></div>
-<!-- Readiness Profile Distribution -->
 <div class="section"><div class="section-title"><span>📈</span> Readiness Profile Distribution</div><div class="grid grid-5">
   <div class="card bg-green" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--green)">${d.agentReady}</div><div style="font-size:.82rem;color:var(--green)">✅ Agent-Ready</div></div>
   <div class="card bg-yellow" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--yellow)">${d.pilotReady}</div><div style="font-size:.82rem;color:var(--yellow)">🟡 Pilot-Ready</div></div>
@@ -147,84 +128,58 @@ el.innerHTML=`
   <div class="card bg-orange" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--orange)">${d.remReq}</div><div style="font-size:.82rem;color:var(--orange)">🟠 Remediation Req.</div></div>
   <div class="card bg-red" style="text-align:center"><div style="font-size:2.5rem;font-weight:700;color:var(--red)">${d.notInt}</div><div style="font-size:.82rem;color:var(--red)">❌ Not Integrable</div></div>
 </div></div>
-<!-- Charts Row -->
 <div class="section"><div class="grid grid-12">
   <div class="card span-4"><div class="card-title">🎯 Profile Distribution</div><div style="position:relative;height:260px"><canvas id="c-prof"></canvas></div></div>
   <div class="card span-4"><div class="card-title">📊 Severity by Service (Tiered)</div><div style="position:relative;height:260px"><canvas id="c-sev"></canvas></div></div>
   <div class="card span-4"><div class="card-title">🔥 Section Heatmap</div><div style="position:relative;height:260px"><canvas id="c-heat"></canvas></div></div>
 </div></div>
-<!-- Service-by-Service Summary -->
 <div class="section"><div class="section-title"><span>🔍</span> Service-by-Service Summary</div>
 <div class="card"><div class="table-wrap"><table>
   <thead><tr><th>Service</th><th>Repo Type</th><th>Profile</th><th>BLOCKERs</th><th>RISK-SAFETY</th><th>RISK-QUALITY</th><th>INFOs</th><th>Priority</th></tr></thead>
   <tbody>${d.services.map(s=>`<tr><td style="font-weight:600">${s.id}</td><td>${s.type}</td><td>${p(s.pc,s.profile)}</td><td class="${s.b>=1?'score-red':''}">${s.b}</td><td class="score-orange">${s.rs}</td><td class="score-yellow">${s.rq}</td><td>${s.i}</td><td>${p(s.prc,s.pri)}</td></tr>`).join('')}</tbody>
 </table></div></div></div>
-<!-- Cross-Cutting BLOCKERs -->
 <div class="section"><div class="section-title"><span>🚨</span> Cross-Cutting BLOCKERs (${d.ccBlockers})</div>
-<div class="grid grid-2">${d.ccBlockerList.map(b=>`<div class="card" style="border-left:3px solid var(--red)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-weight:700">${b.id}: ${b.title}</span>${p('pill-red',b.repos+' repos')}</div><div style="font-size:.82rem;color:var(--muted)">${b.desc}</div></div>`).join('')}</div></div>
-<!-- Cross-Cutting RISK-SAFETY -->
+<div class="grid grid-3">${d.ccBlockerList.map(b=>`<div class="card" style="border-left:3px solid var(--red)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-weight:700">${b.id}: ${b.title}</span>${p('pill-red',b.repos+' repos')}</div><div style="font-size:.82rem;color:var(--muted)">${b.desc}</div></div>`).join('')}</div></div>
 <div class="section"><div class="section-title"><span>⚠️</span> Cross-Cutting RISK-SAFETY (${d.ccRiskSafety})</div>
-<div style="font-size:.82rem;color:var(--muted);margin-bottom:12px">Agent safety gaps requiring coordinated attention — same safety risk in 3+ repos</div>
 ${d.ccRiskSafetyList.map(r=>`<details><summary>${r.id}: ${r.title} <span style="color:var(--muted);font-weight:400;font-size:.8rem;margin-left:auto">${p('pill-orange',r.repos+' repos')}</span></summary><div class="detail-body">${r.desc}</div></details>`).join('')}
 </div>
-<!-- Cross-Cutting RISK-QUALITY -->
 <div class="section"><div class="section-title"><span>📋</span> Cross-Cutting RISK-QUALITY (${d.ccRiskQuality})</div>
-<div style="font-size:.82rem;color:var(--muted);margin-bottom:12px">Quality patterns to address as capacity allows — same quality risk in 3+ repos</div>
 ${d.ccRiskQualityList.map(r=>`<details><summary>${r.id}: ${r.title} <span style="color:var(--muted);font-weight:400;font-size:.8rem;margin-left:auto">${p('pill-yellow',r.repos+' repos')}</span></summary><div class="detail-body">${r.desc}</div></details>`).join('')}
 </div>
-<!-- Remediation Priority -->
 <div class="section"><div class="section-title"><span>🎯</span> Remediation Priority</div>
 <div class="card"><div class="table-wrap"><table>
   <thead><tr><th>#</th><th>Group</th><th>Services</th><th>Effort</th><th>Rationale</th></tr></thead>
   <tbody>${d.remPriority.map(r=>`<tr><td style="font-weight:700">${r.order}</td><td style="font-weight:600">${r.group}</td><td>${r.services}</td><td>${p('pill-blue',r.effort)}</td><td style="font-size:.82rem;color:var(--muted)">${r.rationale}</td></tr>`).join('')}</tbody>
 </table></div></div></div>
-<!-- Pilot Candidate Ranking -->
-<div class="section"><div class="section-title"><span>🏆</span> Pilot Candidate Ranking</div>
-<div class="card"><div class="table-wrap"><table>
-  <thead><tr><th>Rank</th><th>Service</th><th>RISK-SAFETY</th><th>RISK-QUALITY</th><th>Relevance</th></tr></thead>
-  <tbody>${d.pilotCandidates.map(c=>`<tr><td style="font-weight:700">${c.rank}</td><td style="font-weight:600">${c.service}</td><td class="score-orange">${c.riskSafety}</td><td class="score-yellow">${c.riskQuality}</td><td style="font-size:.82rem;color:var(--muted)">${c.relevance}</td></tr>`).join('')}</tbody>
-</table></div></div></div>
-<!-- Dependency Map -->
-<div class="section"><div class="section-title"><span>🔗</span> Dependency Map</div>
-<div class="card"><div class="table-wrap"><table>
-  <thead><tr><th>Service</th><th>Fan-In</th><th>Fan-Out</th><th>Role</th><th>Profile</th></tr></thead>
-  <tbody>${DEPS.map(dep=>{const s=d.services.find(x=>x.id===dep.svc);return `<tr><td style="font-weight:600">${dep.svc}</td><td>${dep.fi}</td><td>${dep.fo}</td><td>${dep.role}</td><td>${s?p(s.pc,s.profile):''}</td></tr>`;}).join('')}</tbody>
-</table></div></div></div>
-<!-- Agentic Program Recommendations -->
 <div class="section"><div class="section-title"><span>🚀</span> Agentic Program Recommendations</div>
 <div class="grid grid-4">
   <div class="card" style="border-top:3px solid ${d.programs.aiDlc?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">AI DLC</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">AI Driven Development Lifecycle</div>${d.programs.aiDlc?p('pill-green','TRIGGERED — '+d.programs.aiDlcReason):p('pill-muted','Not Triggered')}</div>
   <div class="card" style="border-top:3px solid ${d.programs.agentStorming?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">AgentStorming</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Collaborative agent design workshop</div>${d.programs.agentStorming?p('pill-green','TRIGGERED — '+d.programs.asReason):p('pill-muted','Not Triggered')}</div>
-  <div class="card" style="border-top:3px solid ${d.programs.axe?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">AXE</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Agentic Experience Workshop</div>${d.programs.axe?p('pill-green','TRIGGERED'):p('pill-muted','Not Triggered — <1 Pilot-Ready')}</div>
-  <div class="card" style="border-top:3px solid ${d.programs.eba?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">EBA on Agentic AI</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Cross-cutting BLOCKERs in 5+ repos</div>${d.programs.eba?p('pill-green','TRIGGERED'):p('pill-muted','Not Triggered — BLOCKERs in 4 repos')}</div>
+  <div class="card" style="border-top:3px solid ${d.programs.axe?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">AXE</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Agentic Experience Workshop</div>${d.programs.axe?p('pill-green','TRIGGERED'):p('pill-muted','Not Triggered — 0 Pilot-Ready')}</div>
+  <div class="card" style="border-top:3px solid ${d.programs.eba?'var(--green)':'var(--border)'}"><div style="font-weight:700;margin-bottom:4px">EBA on Agentic AI</div><div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Cross-cutting BLOCKERs in 5+ repos</div>${d.programs.eba?p('pill-green','TRIGGERED'):p('pill-muted','Not Triggered — BLOCKERs in 4 repos max')}</div>
 </div></div>
-<!-- Portfolio-Level Findings -->
-<div class="section"><div class="section-title"><span>📑</span> Portfolio-Level Findings</div>
-<div class="grid grid-3">${d.portfolioFindings.map(f=>`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-weight:700;font-size:.85rem">${f.id}</span>${p(f.sc,f.sev)}</div><div style="font-weight:600;font-size:.85rem;margin-bottom:4px">${f.title}</div><div style="font-size:.78rem;color:var(--muted)">${f.desc}</div></div>`).join('')}</div></div>
-<!-- Readiness Snapshot -->
 <div class="section"><div class="section-title"><span>📋</span> Readiness Snapshot</div>
-<div class="card" style="font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:#a5b4fc;background:#181b24;line-height:1.8;padding:16px;white-space:pre">assessment_date: 2026-04-17
+<div class="card" style="font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:#a5b4fc;background:#181b24;line-height:1.8;padding:16px;white-space:pre">assessment_date: 2025-07-17
 total_services: 5
 agent_ready: 0
 pilot_ready: 0
-pilot_ready_safety_concerns: 1
-remediation_required: 4
-not_integrable: 0
-total_blockers: 8
-total_risks: 105
-  risk_safety: 37
-  risk_quality: 68
-total_infos: 59
-cross_cutting_blockers: 2
+pilot_ready_safety_concerns: 0
+remediation_required: 2
+not_integrable: 3
+total_blockers: 12
+total_risks: 113
+  risk_safety: 41
+  risk_quality: 72
+total_infos: 61
+cross_cutting_blockers: 3
 cross_cutting_risks: 22
   cross_cutting_risk_safety: 8
   cross_cutting_risk_quality: 14
 portfolio_level_blockers: 1
-portfolio_level_risks: 3
+portfolio_level_risks: 4
 write_enabled_services: 0
 read_only_services: 5</div></div>`;
 
-/* Charts */
 new Chart(document.getElementById('c-prof'),{type:'doughnut',data:{labels:['Agent-Ready','Pilot-Ready','Pilot (Safety)','Remediation Req.','Not Integrable'],datasets:[{data:[d.agentReady,d.pilotReady,d.pilotSafety,d.remReq,d.notInt],backgroundColor:['#22c55e','#eab308','#d4a017','#f97316','#ef4444'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3',font:{size:10},padding:10}}}}});
 new Chart(document.getElementById('c-sev'),{type:'bar',data:{labels:d.services.map(s=>s.id),datasets:[{label:'BLOCKERs',data:d.services.map(s=>s.b),backgroundColor:'#ef4444'},{label:'RISK-SAFETY',data:d.services.map(s=>s.rs),backgroundColor:'#f97316'},{label:'RISK-QUALITY',data:d.services.map(s=>s.rq),backgroundColor:'#eab308'},{label:'INFOs',data:d.services.map(s=>s.i),backgroundColor:'#6366f1'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:'#8b8fa3',font:{size:7},maxRotation:45},grid:{display:false}},y:{stacked:true,ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}}}}});
 new Chart(document.getElementById('c-heat'),{type:'bar',data:{labels:d.heatmap.map(h=>h.sec),datasets:[{label:'BLOCKERs',data:d.heatmap.map(h=>h.b),backgroundColor:'#ef4444'},{label:'RISK-SAFETY',data:d.heatmap.map(h=>h.rs),backgroundColor:'#f97316'},{label:'RISK-QUALITY',data:d.heatmap.map(h=>h.rq),backgroundColor:'#eab308'}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:10}}}},scales:{x:{stacked:true,ticks:{color:'#8b8fa3'},grid:{color:'#2d3148'}},y:{stacked:true,ticks:{color:'#8b8fa3',font:{size:11}},grid:{display:false}}}}});

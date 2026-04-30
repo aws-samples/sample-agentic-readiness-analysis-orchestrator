@@ -47,6 +47,8 @@ Extract the following fields from `additionalPlanContext`:
 | `portfolio_ara_report_path` | string | **Yes** | — | File path to the portfolio ARA report (e.g., `agentic-readiness-assessment/ecommerce-platform-v2-portfolio-ara-report.md`). |
 | `portfolio_mod_report_path` | string | **Yes** | — | File path to the portfolio MOD report (e.g., `modernization-assessment/ecommerce-platform-v2-portfolio-mod-report.md`). |
 | `portfolio_name` | string | **Yes** | — | Name of the portfolio (e.g., `ecommerce-platform-v2`). Used in the output filename and report title. |
+| `bpmn_opportunity_report_paths` | string[] | No | — | **Deprecated.** Use `portfolio_bao_report_path` instead. If individual report paths are provided, the Bridge TD will still attempt to read them but the preferred input is the portfolio-level BAO report. |
+| `portfolio_bao_report_path` | string | No | -- | File path to the Portfolio BAO report (e.g., `bpmn-opportunity-assessment/my-platform-portfolio-bao-report.md`). When present, the bridge report includes a BAO + ARA Readiness Matrix (Section 6). When absent, Section 6 is omitted and the bridge report works as before (ARA + MOD only). |
 
 **Example `additionalPlanContext`:**
 
@@ -55,6 +57,7 @@ additionalPlanContext: |
   portfolio_ara_report_path: "agentic-readiness-assessment/ecommerce-platform-v2-portfolio-ara-report.md"
   portfolio_mod_report_path: "modernization-assessment/ecommerce-platform-v2-portfolio-mod-report.md"
   portfolio_name: "ecommerce-platform-v2"
+  portfolio_bao_report_path: "bpmn-opportunity-assessment/ecommerce-platform-v2-portfolio-bao-report.md"
 ```
 
 #### 0.2 Validate Required Inputs
@@ -404,7 +407,72 @@ All findings are unique to their respective assessments and should be planned in
 
 ---
 
-### Step 6: Generate Bridge Report
+### Step 6: BAO + ARA Readiness Matrix (Conditional)
+
+When `portfolio_bao_report_path` is present in `additionalPlanContext`, read the Portfolio BAO report and cross-reference agent task dependencies against Portfolio ARA findings to produce a readiness matrix. When absent, skip this step entirely and omit Section 6 from the report.
+
+#### 6.1 Read Portfolio BAO Report
+
+Read the Portfolio BAO report at the specified path. Extract:
+- Portfolio opportunity summary (total tasks, agent count, categories)
+- Top agent opportunities with their dependencies
+- Dependency coverage (by type and vendor)
+- Unknown dependencies (tasks with no system references)
+
+#### 6.2 Build the Readiness Matrix
+
+For each agent-classified task in the BPMN reports:
+
+1. Identify the task's target system dependencies (from the dependency section of the BPMN report)
+2. Look up each target system in the portfolio ARA report:
+   - If the target system has an ARA report: record its readiness profile and BLOCKER count
+   - If the target system has no ARA report: mark as "unassessed"
+3. Classify the agent opportunity:
+   - **Ready**: target system is Agent-Ready or Pilot-Ready (0 BLOCKERs)
+   - **Blocked**: target system has 1+ ARA BLOCKERs
+   - **Unassessed**: target system has no ARA assessment
+
+#### 6.3 Output Format
+
+```markdown
+## Section 6: BAO + ARA Readiness Matrix
+
+> This section cross-references BAO-identified agent opportunities with ARA readiness
+> findings for their target systems. It answers: "Which agent opportunities can we build
+> today, which are blocked by ARA findings, and which need ARA assessment first?"
+
+### Readiness Matrix
+
+| BPMN Process | Agent Task | Target System | ARA Profile | BLOCKERs | Status |
+|---|---|---|---|---|---|
+| {process} | {task_name} | {target_ref} | {profile or "Unassessed"} | {count or "N/A"} | Ready / Blocked / Unassessed |
+
+### Summary
+
+| Status | Agent Opportunities | Description |
+|--------|--------------------:|-------------|
+| Ready | {N} | Target systems are Agent-Ready or Pilot-Ready, build agents now |
+| Blocked | {N} | Target systems have ARA BLOCKERs, resolve before building agents |
+| Unassessed | {N} | Target systems not yet evaluated by ARA, run ARA to determine readiness |
+
+### Blocked Opportunities Detail
+
+For each blocked agent opportunity, list the specific ARA BLOCKERs on the target system
+and cross-reference with the MOD co-requisites from Section 1:
+
+| Agent Task | Target System | ARA BLOCKER(s) | MOD Co-Requisite | In MOD Phase 0? |
+|---|---|---|---|---|
+| {task} | {system} | {blocker_ids} | {mod_ids or "None"} | Yes / No / N/A |
+
+> **Interpretation**: Blocked opportunities where the ARA BLOCKER has a MOD Phase 0 co-requisite
+> will be unblocked when MOD Phase 0 completes (see Section 2: Agentic Readiness Delta).
+```
+
+If no Portfolio BAO report is available or is unreadable, omit this entire section.
+
+---
+
+### Step 7: Generate Bridge Report
 
 Compile all sections into the final bridge report and save it.
 
@@ -429,6 +497,7 @@ Compile all sections into the final bridge report and save it.
 | MOD Readiness Gates Triggered | {count from Section 3} |
 | Unified Remediation Items | {count from Section 4} |
 | Deduplicated Shared Findings | {count from Section 5} |
+| BPMN Agent Opportunities (Ready / Blocked / Unassessed) | {X / Y / Z from Section 6, or "N/A" if no Portfolio BAO report} |
 
 ---
 
@@ -449,6 +518,10 @@ Compile all sections into the final bridge report and save it.
 ---
 
 {Section 5: Shared Findings Deduplication}
+
+---
+
+{Section 6: BAO + ARA Readiness Matrix -- included only when portfolio_bao_report_path is provided}
 ```
 
 #### 6.2 Save the Report
