@@ -192,7 +192,7 @@ Extract the following fields from `additionalPlanContext`:
 |-------|------|----------|---------|-------------|
 | `repo_type` | enum | No | `"application"` | Repository classification. One of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`. Determines which questions are scored as N/A. |
 | `agent_scope` | enum | No | `"read-only"` | The intended agent access level. One of: `read-only`, `write-enabled`. Determines severity of conditional BLOCKER (⚡) questions. |
-| `service_archetype` | enum | No | auto-detected | Service archetype for severity calibration. One of: `stateless-utility`, `stateful-crud`, `orchestrator`, `data-gateway`, `event-processor`. If not provided, auto-detected in Step 1.5. Only applies when `repo_type` is `application`. |
+| `service_archetype` | enum | No | auto-detected | Service archetype for severity calibration. One of: `stateless-utility`, `stateful-crud`, `orchestrator`, `data-gateway`, `event-processor`. If not provided, auto-detected in Step 1.6. Only applies when `repo_type` is `application`. |
 | `context` | string | No | — | Free-text description of the repository (e.g., "Legacy PHP e-commerce app running on EC2 with MySQL"). Used to frame findings and recommendations throughout the report. |
 | `priority` | enum | No | — | Repository priority within the portfolio. One of: `P0`, `P1`, `P2`. Recorded in report metadata. |
 | `tags` | string[] | No | — | User-defined tags for categorization (e.g., `["monolith", "php", "payment-critical"]`). Recorded in report metadata. |
@@ -214,7 +214,7 @@ If a field is absent from `additionalPlanContext`, apply these defaults:
 
 - **`repo_type`** → `"application"` — This is the most comprehensive assessment (no questions skipped). Defaulting to `application` ensures nothing is missed when classification is unknown.
 - **`agent_scope`** → `"read-only"` — This is the safer default. Conditional BLOCKER questions (⚡) are evaluated as INFO or RISK-SAFETY rather than BLOCKER, avoiding false escalation when the agent use case has not been scoped.
-- **`service_archetype`** → Auto-detected in Step 1.5 based on repository analysis. If auto-detection is inconclusive, defaults to `"stateful-crud"` (the most conservative archetype — no severity downgrades beyond standard scope calibration). Only applies when `repo_type` is `application`.
+- **`service_archetype`** → Auto-detected in Step 1.6 based on repository analysis. If auto-detection is inconclusive, defaults to `"stateful-crud"` (the most conservative archetype — no severity downgrades beyond standard scope calibration). Only applies when `repo_type` is `application`.
 - **`context`** → No default. If absent, findings and recommendations are written without additional framing.
 - **`priority`** → No default. If absent, omitted from report metadata.
 - **`tags`** → No default. If absent, omitted from report metadata.
@@ -330,7 +330,68 @@ Read all discovered files that are relevant to the assessment. Prioritize readin
 
 For large repositories, focus on files most relevant to the 43 evaluation questions. Not every source file needs to be read in full — prioritize entry points, API route definitions, authentication middleware, data access layers, and error handling patterns.
 
-### Step 1.5: Service Archetype Detection
+### Step 1.5: Target-System Surface Detection
+
+Before evaluating any question, classify what agent-accessible surfaces this target system actually exposes. The severity of many ARA questions depends on whether the relevant surface exists at all — a build tool that never handles user data should not score BLOCKER for "no PII classification"; a library with no HTTP server should not score RISK-QUALITY for "no machine-readable API spec." This step records the surfaces so downstream evaluation can downgrade or N/A questions that do not apply.
+
+Record each surface flag as `true`, `false`, or `unknown`. When `unknown`, the question evaluates normally (do not use `unknown` as a free pass — use it only when evidence is insufficient to decide).
+
+#### Surface Flags
+
+**`has_persistent_data_store`** — The system reads from or writes to a persistent data store that holds user or business data.
+
+- `true` signals: database connections (SQL/NoSQL/ORM imports), DynamoDB/RDS/DocumentDB/Neptune/Timestream clients with CRUD operations, S3 buckets used for user content (not build artifacts), Redis with writes, Elasticsearch with indexing, stateful caches with user data
+- `false` signals: library publishes no storage dependency, build tools only read source files, CLI/SDK wraps remote APIs without owning a data store, in-memory-only computations, reference/static data only (exchange rates, feature flags)
+- Used by: DATA-Q1, DATA-Q2, DATA-Q4, DATA-Q5, DATA-Q6
+
+**`has_http_rpc_surface`** — The system exposes an HTTP, gRPC, or GraphQL server that accepts inbound requests.
+
+- `true` signals: Express/Koa/Fastify/Hapi routes, Flask/FastAPI/Django URL configs, Spring `@RestController`, Go `http.HandleFunc` / gin routes, gRPC service definitions, GraphQL resolvers bound to server, AppSync resolvers, Lambda event handlers for API Gateway/ALB
+- `false` signals: library only exports functions, CLI-only tool, build-time processor, event consumer with no external surface, desktop/browser-only code
+- Used by: API-Q1 through API-Q8, DISC-Q1
+
+**`has_auth_surface`** — The system has authentication or authorization enforcement points (either issues identity, validates tokens, or enforces scoped access).
+
+- `true` signals: login/logout/token endpoints, JWT/OAuth middleware, IAM role assumption code, Cognito/Okta integration, API Gateway authorizers, route-level auth decorators, permission checks before data access
+- `false` signals: library delegates auth to caller, pass-through proxy, pure computation with no access control, utility that does not touch identity
+- Used by: AUTH-Q1, AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q6, AUTH-Q7
+
+**`has_write_operations`** — The system exposes or performs write operations that mutate persistent state or trigger side effects.
+
+- `true` signals: POST/PUT/PATCH/DELETE endpoints, state-mutating RPC methods, database writes behind the API surface, message publishing on state change, file system writes to user-owned paths
+- `false` signals: read-only API, query-only GraphQL schema, library produces a value without side effects, formatter/parser with no persistence
+- Used by: STATE-Q1, STATE-Q2, STATE-Q3, STATE-Q5, STATE-Q6
+
+**`has_logging_of_user_data`** — The system logs request/response data, user identifiers, or business-entity content that could contain PII if upstream callers pass PII in.
+
+- `true` signals: request-body logging middleware, access logs with user_id/email/customer fields, structured logs emitting entity payloads, error handlers printing full request context, telemetry that forwards user data
+- `false` signals: library only emits internal diagnostic logs (no user fields), logs are build-time only, structured logging explicitly excludes user fields via allowlist
+- Used by: DATA-Q6
+
+#### Outputs
+
+Record the five surface flags in the report metadata header alongside `repo_type` and `service_archetype`:
+
+```
+- **Surface flags**:
+  - has_persistent_data_store: true | false | unknown
+  - has_http_rpc_surface: true | false | unknown
+  - has_auth_surface: true | false | unknown
+  - has_write_operations: true | false | unknown
+  - has_logging_of_user_data: true | false | unknown
+```
+
+These flags feed the N/A / INFO downgrade decisions in Steps 2–9. When a question's evaluation block states "if `has_X_surface` is `false`, record as INFO and skip," obey that instruction.
+
+#### Archetype Override for Dev-Library-Applications
+
+Some repositories classify as `application` (have source + entry point) but function as libraries, CLIs, build tools, or frontend scaffolds — examples: build orchestration tools, SDK mocks, CLI utilities, Angular/React admin templates, IaC framework plugins. For these, the N/A mapping of `application` (all 43 questions apply) produces false-positive findings because the repo does not hold data, does not expose an API, and does not execute agent-invoked operations.
+
+When `service_archetype` is detected or declared as `stateless-utility` AND at least three of the five surface flags above are `false`, treat the repo as a **dev-library-application** for N/A and scoring purposes: apply the `library` N/A mapping from Step 1 (only ENG-Q1 through ENG-Q5 are non-N/A) as the baseline, then continue with the surface-flag downgrades for the questions that remain.
+
+This is an ARA-TD-internal override for scoring purposes only. The original `repo_type` value is preserved in the report metadata; the override and its rationale are recorded as an INFO note in the report preamble.
+
+### Step 1.6: Service Archetype Detection
 
 If `service_archetype` was provided in `additionalPlanContext`, use that value directly and skip auto-detection. Otherwise, analyze the file inventory from Step 1.3 and the file contents from Step 1.4 to classify the service archetype.
 
@@ -1656,6 +1717,6 @@ Strictly follow these rules at all times:
 - **Extended question scoring rules**: Extended questions that are "Not Evaluated" are excluded from all counts and from readiness profile determination — same as N/A. Extended questions that ARE triggered are scored normally (BLOCKER/RISK-SAFETY/RISK-QUALITY/RISK/INFO) and count toward the readiness profile.
 - **Conditional BLOCKER rules**: The 4 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2) must be evaluated at the severity determined by `agent_scope`. Do not override the conditional logic.
 - **Evaluation tier rules**: Core questions are always evaluated (unless N/A by repo_type). Extended questions are evaluated only when their trigger condition is met. Use the Evaluation Tier tables in the Summary section to determine which extended questions to trigger based on archetype, scope, and service characteristics.
-- **Archetype classification**: Use the `service_archetype` from `additionalPlanContext` if provided. Otherwise, auto-detect in Step 1.5. If auto-detection is inconclusive, default to `stateful-crud`. The archetype determines which extended questions are triggered — it does NOT override severity of core questions.
+- **Archetype classification**: Use the `service_archetype` from `additionalPlanContext` if provided. Otherwise, auto-detect in Step 1.6. If auto-detection is inconclusive, default to `stateful-crud`. The archetype determines which extended questions are triggered — it does NOT override severity of core questions.
 - **Repo type classification**: Use the `repo_type` from `additionalPlanContext`. If not provided, default to `application`. Apply the N/A mapping table exactly as defined.
 - **Report completeness**: The output report must contain all required sections: metadata header (including service archetype), readiness profile, summary counts (including extended question counts), BLOCKERs with remediation, RISKs with compensating controls, INFOs, detailed findings for all 43 questions, and evidence index.
