@@ -1,14 +1,14 @@
 ## Name
 
-Portfolio Modernization Readiness Assessment
+Portfolio Modernization Assessment
 
 ## Objective
 
-Aggregate individual repository Modernization Readiness Assessment (MOD) reports into a portfolio-level analysis that identifies cross-cutting modernization gaps, constructs service dependency graphs with coupling analysis, generates dependency-aware phased roadmaps, aggregates pathway triggers, assesses portfolio-wide risk, and provides resource allocation and AWS program recommendations — enabling coordinated modernization planning across the entire service estate.
+Aggregate individual repository Modernization Assessment (MOD) reports into a portfolio-level analysis that identifies cross-cutting modernization gaps, constructs service dependency graphs with coupling analysis, generates dependency-aware phased roadmaps, aggregates pathway triggers, assesses portfolio-wide risk, and provides resource allocation and AWS program recommendations — enabling coordinated modernization planning across the entire service estate.
 
 ## Summary
 
-This transformation consumes multiple individual MOD reports (`*-mod-report.md` files) from different repositories and produces a comprehensive portfolio-level view focused on modernization readiness. It performs intelligent discovery and parsing of MOD reports, calculates portfolio-wide score averages and category breakdowns, summarizes the technology stack across the portfolio, constructs a service dependency graph with coupling scores and blast radius analysis, identifies two-tier cross-cutting concerns (Foundational Blockers and Improvement Opportunities), generates a dependency-aware four-phase roadmap, aggregates pathway triggers across services, identifies integration opportunities, performs risk assessment with a likelihood-impact matrix, provides resource allocation recommendations, recommends AWS engagement programs, curates learning materials, and produces a service-by-service summary.
+This transformation consumes multiple individual MOD reports (`*-mod-report.md` files) from different repositories and produces a comprehensive portfolio-level modernization view. It performs intelligent discovery and parsing of MOD reports, calculates portfolio-wide score averages and category breakdowns, summarizes the technology stack across the portfolio, constructs a service dependency graph with coupling scores and blast radius analysis, identifies two-tier cross-cutting concerns (Foundational Blockers and Improvement Opportunities), generates a dependency-aware four-phase roadmap, aggregates pathway triggers across services, identifies integration opportunities, performs risk assessment with a likelihood-impact matrix, provides resource allocation recommendations, recommends AWS engagement programs, curates learning materials, and produces a service-by-service summary.
 
 The transformation follows a 10-step pipeline:
 1. **Read Context**: Parse additionalPlanContext for portfolio framing, preferences, and dependency information
@@ -863,7 +863,7 @@ The portfolio MOD report is saved as `portfolio-mod-report.md`. The complete rep
 ### Report Header
 
 ```markdown
-# Portfolio Modernization Readiness Assessment Report
+# Portfolio Modernization Assessment Report
 
 **Date**: <YYYY-MM-DD>
 **Services Assessed**: <count>
@@ -1630,7 +1630,7 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 The complete report structure, for reference:
 
 ```markdown
-# Portfolio Modernization Readiness Assessment Report
+# Portfolio Modernization Assessment Report
 
 1. Executive Dashboard
    - Portfolio Score Overview

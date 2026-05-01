@@ -16,7 +16,7 @@ There are two layers:
 | Assessment | Questions | Scoring | Focus |
 |---|---|---|---|
 | **ARA** (Agentic Readiness) | 43 across 8 sections | BLOCKER / RISK / INFO | Is this system safe for autonomous AI agents? |
-| **MOD** (Modernization Readiness) | 37 across 5 sections | 1-4 scale | How mature is the cloud architecture? |
+| **MOD** (Modernization) | 37 across 5 sections | 1-4 scale | How mature is the cloud architecture? |
 | **BAO** (BPMN Agentic Opportunity) | Per-task scoring | 4 categories + autonomy levels | Which process steps should become agents? |
 | **Bridge** | — | Cross-reference | What work is shared? What's the modernization dividend for agentic readiness? |
 
@@ -160,7 +160,7 @@ atx custom def publish -n agentic-readiness-assessment --sd agentic-readiness-as
   --description "Evaluate a repository against 43 agentic readiness criteria (BLOCKER/RISK/INFO)"
 
 atx custom def publish -n modernization-assessment --sd modernization-assessment \
-  --description "Evaluate a repository against 37 modernization readiness criteria (1-4 scale)"
+  --description "Evaluate a repository against 37 modernization criteria (1-4 scale)"
 
 atx custom def publish -n bpmn-opportunity-assessment --sd bpmn-opportunity-assessment \
   --description "Analyze BPMN 2.0 process models to identify agentic AI opportunities with cost estimates"

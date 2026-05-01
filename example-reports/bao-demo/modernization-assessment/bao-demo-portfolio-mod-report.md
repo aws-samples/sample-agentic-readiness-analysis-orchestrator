@@ -1,4 +1,4 @@
-# Portfolio Modernization Readiness Assessment Report
+# Portfolio Modernization Assessment Report
 
 **Date**: 2025-07-18
 **Services Assessed**: 5

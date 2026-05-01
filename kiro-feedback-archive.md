@@ -256,7 +256,7 @@ For reviewer look-up — maps analysis IDs to TODO/archive/rejection tracking.
 
 **MOD guardrails:**
 1. **1–4 numeric scoring is the rubric contract.** Importing BLOCKER/RISK/INFO (C24) would break overall/category score math, pathway triggers, and N/A handling.
-2. **Modernization readiness, not operational readiness.** MOD evaluates the work needed to modernize; WAFR/runtime ops are adjacent assessments.
+2. **Modernization, not operational readiness.** MOD evaluates the work needed to modernize; WAFR/runtime ops are adjacent assessments.
 3. **IaC is the superset.** Don't narrow to specific tools (R2).
 
 When a reviewer proposal would cross a guardrail, the pattern is: **reject as written, provide a counter-proposal that stays in scope.** Every rejection in this archive follows that pattern.

@@ -13,7 +13,7 @@ author: "AWS"
 This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive assessments across your entire service portfolio. Kiro reads your `portfolio-config.yaml`, handles repository cloning when needed, classifies each repository, and coordinates AWS Transform Custom transformations based on the configured `assessment_type`:
 
 - **Agentic Readiness Assessment (ARA)** — 43 questions across 8 sections using BLOCKER/RISK/INFO severity scoring. Evaluates whether systems are safe for autonomous AI agent integration.
-- **Modernization Readiness Assessment (MOD)** — 37 questions across 5 sections using 1-4 scale scoring. Evaluates cloud architecture maturity and identifies modernization pathways.
+- **Modernization Assessment (MOD)** — 37 questions across 5 sections using 1-4 scale scoring. Evaluates cloud architecture maturity and identifies modernization pathways.
 - **BPMN Agentic Opportunity Assessment** — Analyzes BPMN 2.0 process models to identify which tasks are candidates for agentic AI, classifies each by reasoning complexity and data readiness, and produces a prioritized opportunity map with cost estimates.
 
 The `assessment_type` field in `portfolio-config.yaml` controls which assessments run:

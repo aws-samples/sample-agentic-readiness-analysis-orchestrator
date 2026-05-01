@@ -1,10 +1,10 @@
-# Modernization Readiness Assessment Report
+# Modernization Assessment Report
 
 | Field | Value |
 |-------|-------|
 | **Repository** | greenshot |
 | **Date** | 2026-04-30 |
-| **TD Version** | Modernization Readiness Assessment v1.0 |
+| **TD Version** | Modernization Assessment v1.0 |
 | **Repo Type** | monorepo |
 | **Service Archetype** | stateless-utility (auto-detected) |
 | **Priority** | P2 |

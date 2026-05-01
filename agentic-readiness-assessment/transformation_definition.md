@@ -169,7 +169,7 @@ The readiness profile is determined by BLOCKER count and RISK-SAFETY count only.
 | **Remediation Required** | 1–2 | Any | Any | Remediate BLOCKERs first |
 | **Not Agent-Integrable** | 3+ | Any | Any | Deferred or descoped |
 
-This assessment does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers), agent-level AI governance (model policy, prompt-injection defense, safety evaluation), or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Readiness Assessment or agent-side governance reviews.
+This assessment does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers), agent-level AI governance (model policy, prompt-injection defense, safety evaluation), or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Assessment or agent-side governance reviews.
 
 ## Entry Criteria
 
