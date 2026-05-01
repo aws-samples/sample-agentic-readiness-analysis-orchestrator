@@ -1,10 +1,10 @@
-# Modernization Readiness Assessment Report
+# Modernization Assessment Report
 
 | Field | Value |
 |-------|-------|
 | **Repository** | aws-sdk-mock |
 | **Date** | 2025-07-16 |
-| **TD Version** | Modernization Readiness Assessment |
+| **TD Version** | Modernization Assessment |
 | **Repo Type** | application |
 | **Service Archetype** | stateless-utility (auto-detected) |
 | **Priority** | P2 |

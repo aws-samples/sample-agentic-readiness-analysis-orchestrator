@@ -4,7 +4,7 @@ Portfolio Agentic Readiness — Modernization Bridge Assessment
 
 ## Objective
 
-Cross-reference the portfolio-level Agentic Readiness Assessment (ARA) report and the portfolio-level Modernization Readiness Assessment (MOD) report to produce a unified bridge report that maps shared findings, quantifies the agentic readiness impact of modernization work, identifies foundational gaps that block ARA remediation, and deduplicates overlapping remediation items — enabling coordinated planning across both assessments.
+Cross-reference the portfolio-level Agentic Readiness Assessment (ARA) report and the portfolio-level Modernization Assessment (MOD) report to produce a unified bridge report that maps shared findings, quantifies the agentic readiness impact of modernization work, identifies foundational gaps that block ARA remediation, and deduplicates overlapping remediation items — enabling coordinated planning across both assessments.
 
 ## Summary
 

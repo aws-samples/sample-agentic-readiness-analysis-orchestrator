@@ -1,6 +1,6 @@
 ## Name
 
-Modernization Readiness Assessment
+Modernization Assessment
 
 ## Objective
 
@@ -8,7 +8,7 @@ Evaluate the cloud architecture maturity, operational readiness, and modernizati
 
 ## Summary
 
-This transformation performs a dedicated Modernization Readiness Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, container definitions, Kubernetes manifests, and Helm charts. It then evaluates what it finds against 37 questions across 5 sections — Infrastructure (INF), Application Architecture (APP), Data Platform (DATA), Security (SEC), and Operations (OPS):
+This transformation performs a dedicated Modernization Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, container definitions, Kubernetes manifests, and Helm charts. It then evaluates what it finds against 37 questions across 5 sections — Infrastructure (INF), Application Architecture (APP), Data Platform (DATA), Security (SEC), and Operations (OPS):
 
 - **INF** — Infrastructure, Platform, and DevOps (11 questions)
 - **APP** — Application Architecture (6 questions)
@@ -1524,7 +1524,7 @@ The assessment output is a structured Markdown report saved as `{repo-name}-mod-
 ### Section 1: Metadata Header
 
 ```markdown
-# Modernization Readiness Assessment Report
+# Modernization Assessment Report
 
 | Field | Value |
 |-------|-------|

@@ -1,10 +1,10 @@
-# Modernization Readiness Assessment Report
+# Modernization Assessment Report
 
 | Field | Value |
 |-------|-------|
 | **Repository** | druid |
 | **Date** | 2026-04-30 |
-| **TD Version** | Modernization Readiness Assessment v1.0 |
+| **TD Version** | Modernization Assessment v1.0 |
 | **Repo Type** | monorepo |
 | **Service Archetype** | data-gateway (auto-detected) |
 | **Priority** | P2 |
