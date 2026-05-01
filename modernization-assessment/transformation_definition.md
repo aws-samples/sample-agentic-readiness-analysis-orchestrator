@@ -25,7 +25,9 @@ Each question is scored on a 1–4 scale:
 | **2** | 🟠 Needs Work | Exists but significant gaps. Moderate effort needed. |
 | **1** | ❌ Not Present | Missing entirely or fundamentally inadequate. |
 
-Category scores are calculated as the arithmetic mean of all non-N/A question scores in that category. The overall score is the average of the 5 category scores (each category weighted equally regardless of question count). If all questions in a category are N/A for the detected repo_type, the category score is "N/A" and is excluded from the overall score average.
+Category scores are calculated as the arithmetic mean of all non-N/A, non-Not-Evaluated question scores in that category. The overall score is the average of the 5 category scores (each category weighted equally regardless of question count). If all questions in a category are N/A or Not Evaluated for the detected repo_type and archetype, the category score is "N/A" and is excluded from the overall score average.
+
+**Not Evaluated (archetype-N/A)** — Questions that are archetype-calibrated (currently INF-Q3, INF-Q4, APP-Q3, APP-Q4) may resolve to "not applicable by design" for a specific archetype. When the archetype column indicates the question does not apply (e.g., "No multi-step workflows exist — not applicable by design" for `stateless-utility` on INF-Q3), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from both category and overall score averaging — same exclusion as N/A. This prevents artificial score inflation from archetype-correct-but-uninformative "Score 4 by default" entries. The rubric columns still describe what evaluation would look like; the Not-Evaluated status means no evaluation was performed for this repo.
 
 The assessment evaluates 7 AWS Modernization Pathways, each with defined trigger conditions mapped to specific question IDs and contextual guards to prevent false positives:
 
@@ -340,6 +342,42 @@ If auto-detection was used, include a one- to two-sentence justification referen
 
 If archetype detection is skipped because `repo_type` is not `application`, omit these fields from the metadata header.
 
+### Step 1.6: Target-System Surface Detection
+
+Some MOD questions evaluate a system's maturity on a specific operational surface — a persistent data store, an at-rest-encryption surface, a multi-AZ surface. For repositories that **do not expose that surface at all** (e.g., a progress-bar library has no database, a build tool has no data at rest, a pure utility has no multi-AZ decision to make), scoring those questions with Score 1 ("no managed database" / "no encryption at rest") produces false positives and crowds out the genuine findings on repositories that *do* expose the surface.
+
+This step records five surface flags that feed surface-gated calibration on a small number of INF, SEC, and OPS questions. Surface flags are derived from the Step 1 file inventory — no additional scanning is needed.
+
+#### Flags
+
+| Flag | True when |
+|------|-----------|
+| `has_persistent_data_store` | IaC defines a database resource (`aws_rds_*`, `aws_dynamodb_*`, `aws_docdb_*`, `aws_neptune_*`, `aws_timestreamwrite_*`, `aws_elasticache_*`), a self-managed database is declared in Docker Compose / Kubernetes manifests / Helm charts, or the source code imports a database driver (JDBC, SQLAlchemy, Mongoose, go-sql-driver, `pymongo`, `redis`, etc.) paired with connection/pool configuration. Libraries that provide a database *adapter* without themselves deploying a store are `false`. |
+| `has_at_rest_data_surface` | Any of the following exists in IaC or detected at runtime: S3 buckets, RDS/Aurora/DynamoDB/DocumentDB/Neptune/Timestream/ElastiCache, EBS volumes attached to workloads, EFS file systems, managed block/object storage. `has_persistent_data_store=true` implies `has_at_rest_data_surface=true`. Source-code-only repositories with no deployment artifacts are `false`. |
+| `has_deployed_workload` | IaC defines deployable compute (`aws_ecs_*`, `aws_eks_*`, `aws_lambda_*`, `aws_instance`, `aws_apprunner_*`, EKS/ECS task definitions, Lambda functions) OR a Dockerfile exists AND deployment manifests (Helm chart, Kubernetes manifests, CloudFormation / Terraform) reference it. Pure library repos (no Dockerfile, no IaC, published via NpmPrettyMuch/PyPI/Maven Central) are `false`. |
+| `has_api_surface` | The codebase defines HTTP/gRPC/RPC endpoints (Express/FastAPI/Flask/Spring MVC/gRPC server bindings, API Gateway resources in IaC, ALB listeners, AppSync schemas). CLI tools, SDK libraries, and pure computation utilities are `false`. |
+| `has_multi_instance_deployment` | The deployment model supports more than one running instance — ASG with desired>1, Kubernetes Deployment with replicas>1, ECS service with desired_count>1, Lambda (inherently multi-instance), serverless. Single-EC2 or single-container deployments are `false`. Used for INF-Q9 multi-AZ calibration. |
+
+#### Surface-flag gates on scoring
+
+Questions marked with a surface gate below evaluate to **"Not Evaluated (archetype-N/A)"** when the required flag is `false`, rather than defaulting to Score 1.
+
+| Question | Gate flag required | Behavior when flag is `false` |
+|----------|-------------------|-------------------------------|
+| **INF-Q2** (Managed Databases) | `has_persistent_data_store` | Not Evaluated (archetype-N/A). Finding: "This system does not deploy a database. INF-Q2 does not apply." |
+| **SEC-Q2** (Encryption at Rest) | `has_at_rest_data_surface` | Not Evaluated (archetype-N/A). Finding: "This system has no deployed data-at-rest surface — no database, S3 bucket, EBS volume, or similar. SEC-Q2 does not apply." |
+| **INF-Q8** (Backup/Recovery) | `has_persistent_data_store` OR `has_at_rest_data_surface` | Not Evaluated (archetype-N/A). Finding: "This system has no persistent state to back up. INF-Q8 does not apply." |
+| **INF-Q9** (High Availability) | `has_deployed_workload` AND (`has_api_surface` OR `has_persistent_data_store`) | Not Evaluated (archetype-N/A). Finding: "This system has no deployed workload requiring HA evaluation. INF-Q9 does not apply." |
+| **OPS-Q2** (SLOs) | `has_api_surface` OR `has_persistent_data_store` | Not Evaluated (archetype-N/A). Finding: "This system has no user-facing surface for which SLOs are meaningful. OPS-Q2 does not apply." |
+
+When a flag is `true`, the question is evaluated normally against its rubric — surface flags never downgrade a real Score 1, they only prevent a false Score 1 on a system that does not expose the surface at all. Record the resolved surface flags in the report metadata:
+
+```markdown
+**Surface Flags**: has_persistent_data_store=<true|false>, has_at_rest_data_surface=<true|false>, has_deployed_workload=<true|false>, has_api_surface=<true|false>, has_multi_instance_deployment=<true|false>
+```
+
+Surface flags apply to all `repo_type` values where the flag is meaningful. Libraries (`library` repo_type) already receive Not-Evaluated treatment for most INF questions via the N/A mapping; surface flags tighten the same pattern for `application` and `monorepo` repos that happen to lack specific surfaces.
+
 ## N/A Mapping — Repository Type Question and Pathway Applicability
 
 Before evaluating any question or pathway, check the `repo_type` (resolved in Step 0) against the N/A mapping tables below. Questions and pathways mapped as N/A for the detected repo type are **not evaluated** — they are recorded directly in the N/A display format and excluded from scoring.
@@ -398,6 +436,19 @@ When a question is N/A for the detected `repo_type`, record it as:
 
 Replace `{repo_type}` with the actual resolved repo type value (e.g., "This is a `infrastructure-only` repository. This question does not apply.").
 
+### Not Evaluated (archetype-N/A) Display Format
+
+When an archetype-calibrated question (INF-Q3, APP-Q3, APP-Q4) resolves to "not applicable by design" for the detected archetype, record it as:
+
+| Field | Value |
+|-------|-------|
+| **Score** | Not Evaluated (archetype-N/A) |
+| **Finding** | This service is a `{archetype}`. {Question topic} is not applicable by design — {brief reason, e.g., "no multi-step workflows exist for a stateless utility"}. |
+| **Gap** | N/A |
+| **Recommendation** | N/A |
+
+Not-Evaluated questions are **excluded from category and overall score averaging** — treated identically to N/A for scoring purposes.
+
 When a pathway is N/A for the detected `repo_type`, record it in the pathway summary table as:
 
 | Field | Value |
@@ -405,14 +456,16 @@ When a pathway is N/A for the detected `repo_type`, record it in the pathway sum
 | **Status** | Not Applicable |
 | **Reason** | This is a `{repo_type}` repository. This pathway does not apply. |
 
-### N/A Scoring Rules
+### N/A and Not-Evaluated Scoring Rules
 
-N/A questions are **excluded from both the numerator and denominator** of category score averages:
+N/A questions and Not-Evaluated (archetype-N/A) questions are **both excluded from the numerator and denominator** of category score averages:
 
-1. **Category score calculation** — The category score is the arithmetic mean of only the non-N/A question scores in that category. N/A questions are excluded from both the sum of scores (numerator) and the count of questions (denominator). For example, if a category has 6 questions and 2 are N/A, the category score = (sum of 4 non-N/A scores) / 4.
-2. **All-N/A category** — If **all** questions in a category are N/A for the detected repo_type, the category score is **"N/A"** and that category is excluded from the overall score average. For example, if the Application Architecture category (APP-Q1 through APP-Q6) is entirely N/A for an `infrastructure-only` repo, the overall score is calculated from the remaining 4 categories instead of 5.
+1. **Category score calculation** — The category score is the arithmetic mean of only the non-N/A, non-Not-Evaluated question scores in that category. Both are excluded from the sum of scores (numerator) and the count of questions (denominator). For example, if a category has 6 questions, 1 is N/A for repo_type, and 1 is Not Evaluated (archetype-N/A), the category score = (sum of 4 remaining scores) / 4.
+2. **All-exclusion category** — If **all** questions in a category are N/A or Not Evaluated, the category score is **"N/A"** and that category is excluded from the overall score average.
 3. **Overall score calculation** — The overall score is the average of the non-N/A category scores. Each non-N/A category is weighted equally regardless of question count.
 4. **Pathway exclusion** — N/A pathways are listed in the pathway summary table with status "Not Applicable" but do not affect the count of triggered vs not-triggered pathways.
+
+> **Why Not-Evaluated matters:** A `stateless-utility` that correctly has no workflows (INF-Q3) should not score 4 "by design" — that inflates its infrastructure category above a `stateful-crud` with appropriate Step Functions coverage (realistic Score 3). Recording as Not Evaluated (archetype-N/A) keeps scores comparable across archetypes.
 
 ### N/A Inclusion Rule
 
@@ -461,6 +514,8 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 **Why it matters:** Self-managed databases — regardless of where they run (EC2, containers, on-premises) — introduce maintenance windows, manual patching, and operational overhead. Migrating to managed services eliminates ops burden and enables automatic backups, failover, and scaling.
 
+> **Note:** This question is **surface-gated** (Step 1.6). If `has_persistent_data_store` is `false` — the system does not deploy any database, managed or self-managed — record the question as **"Not Evaluated (archetype-N/A)"** and skip evaluation. A build tool, pure utility, or frontend-only application has no database and should not receive Score 1 for "no managed database."
+
 | Score | Criteria |
 |-------|----------|
 | **4** | All databases are managed services with automated failover. |
@@ -476,7 +531,11 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 **Why it matters:** Dedicated workflow orchestration provides visual workflow management, error handling, retry logic, and state management. Without it, all orchestration logic is buried in code — harder to maintain, debug, and evolve. However, not every service has workflows to orchestrate. A pure read-only utility or a simple CRUD service may have nothing multi-step to coordinate, and penalizing it for not adopting Step Functions would recommend complexity where none is warranted.
 
+> **Note:** This question uses archetype-sensitive calibration. A `stateless-utility` with no multi-step workflows records as "Not Evaluated (archetype-N/A)" rather than defaulting to Score 4. See the archetype rubric below.
+
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
+
+> **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (the rubric cell says "not applicable by design" or equivalent — for INF-Q3 this is `stateless-utility` Score 4), record the question as **"Not Evaluated (archetype-N/A)"** in the report and exclude it from category and overall score averaging. Do not report a default Score 4. Use the Not-Evaluated display format from Section 8 of the Report Template.
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
@@ -548,7 +607,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All scalable resource types have auto-scaling configured with appropriate min/max — compute (ECS/EKS/EC2 ASG/Lambda concurrency), data (DynamoDB capacity, Aurora replicas), and other managed services where applicable. |
+| **4** | All scalable resource types have auto-scaling configured with appropriate min/max — compute (ECS/EKS/EC2 ASG/Lambda concurrency), data (DynamoDB capacity, Aurora replicas), and other managed services where applicable. Mature deployments also use business-metric-driven scaling policies (custom CloudWatch metrics on requests-in-flight, orders-per-second, queue depth) where purely technical metrics (CPU, memory) are insufficient signals of load. |
 | **3** | Auto-scaling configured on primary workloads with workload-appropriate thresholds (custom target tracking or step policies) covering both compute and data layers. Auxiliary resources may use static capacity. |
 | **2** | Auto-scaling exists but uses only default/out-of-box settings (e.g., default ECS target tracking without tuning), OR coverage is limited to compute with no scaling on data or other managed services. No custom scaling policies or scheduled scaling. |
 | **1** | No auto-scaling — all capacity is statically provisioned. |
@@ -604,14 +663,14 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 **Question:** Are CI/CD pipelines automated with build, test, and deploy stages for both application code and infrastructure as code, or are deployments manual?
 
-**Why it matters:** Manual deployments create bottlenecks, are error-prone, and prevent rapid iteration. Automated pipelines enable continuous delivery with consistent quality gates.
+**Why it matters:** Manual deployments create bottlenecks, are error-prone, and prevent rapid iteration. Automated pipelines enable continuous delivery with consistent quality gates. CI/CD automation alone is not sufficient for modern agent-facing APIs — pipelines must also include security validation (SAST, DAST, dependency scanning). See **SEC-Q7** for the security-pipeline evaluation that pairs with INF-Q11's automation scoring.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Full CI/CD automation with test, build, and deploy stages including automated rollback. |
-| **3** | CI/CD pipeline exists with build and deploy, but limited automated testing. |
-| **2** | Partial automation — build is automated but deployment is manual or semi-manual. |
-| **1** | No CI/CD — all deployments are manual scripts or ClickOps. |
+| **4** | Full CI/CD automation covering both application code and infrastructure-as-code changes, with test, build, deploy, and automated rollback stages. |
+| **3** | CI/CD pipelines exist for application code and IaC with build and deploy stages, but limited automated testing, OR automation on one track (application or IaC) with manual steps on the other. |
+| **2** | Partial automation — build is automated but deployment is manual or semi-manual for application code and/or IaC changes. |
+| **1** | No CI/CD — all application and infrastructure deployments are manual scripts or ClickOps. |
 
 > **Look for:** .github/workflows/, buildspec.yml, appspec.yml, Jenkinsfile, CodePipeline definitions in IaC; pipeline stages with automated test, build, and deploy steps.
 
@@ -624,16 +683,18 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Question:** What programming languages are used and how mature is their ecosystem for cloud-native development?
 
-**Why it matters:** Language choice determines the breadth of AWS SDK support, the depth of cloud-native tooling, and the availability of modern framework ecosystems. Languages with first-class AWS SDK coverage and mature cloud-native libraries enable faster modernization; languages with narrower AWS tooling require more custom integration work to reach the same outcomes.
+**Why it matters:** Language choice determines the breadth of AWS SDK support, the depth of cloud-native tooling, and the availability of modern framework ecosystems. Languages with first-class AWS SDK coverage and mature cloud-native libraries enable faster modernization; languages with narrower AWS tooling require more custom integration work to reach the same outcomes. Within a given language, the version/framework/SDK combination matters too — modern Java with a current Spring Boot and AWS SDK v2 is materially different from Java 8 with Spring Boot 2.1 and SDK v1, and modern .NET (Core/.NET 6+) is materially different from .NET Framework 4.x.
+
+> **Two-axis calibration:** Score based on both (a) *language/runtime modernity* and (b) *framework/SDK modernity*. A modern language version with lagging framework/SDK lands in Score 3; compound regression across both axes lands in Score 2.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | Python, TypeScript/JavaScript, Go, or Java/Kotlin — first-class AWS SDK coverage, broad cloud-native tooling, mature framework ecosystems. |
-| **3** | .NET/C# or Rust — good AWS SDK coverage with narrower cloud-native tooling ecosystem. |
-| **2** | PHP, Ruby, Perl, or older Java versions (< 11) — functional AWS SDK but limited cloud-native tooling depth. |
-| **1** | Languages with limited AWS SDK and cloud-native tooling (e.g., COBOL, VB6, Classic ASP) — requires custom integration or migration planning for cloud services. |
+| **4** | Modern cloud-native language at a current version with matching modern framework and SDK. Examples: Python 3.10+, Node.js 18+ / TypeScript, Go 1.20+, Java 17+ / Kotlin with Spring Boot 3.x and AWS SDK v2; modern .NET (6/7/8/9/10) with current ASP.NET Core and AWS SDK for .NET v3. First-class AWS SDK coverage, broad cloud-native tooling, mature framework ecosystems. |
+| **3** | Cloud-native language at a modern version but with **framework or SDK lag** — e.g., Java 17 on Spring Boot 2.7, Node.js 18+ on Express with AWS SDK v2 partial adoption, Python 3.10+ on an older web framework, or Rust (good AWS SDK coverage but narrower cloud-native tooling ecosystem). Language choice is not the blocker; modernization is an SDK/framework upgrade. |
+| **2** | Compound legacy signals — **language version AND framework AND SDK all regressed**. Examples: Java 8 with Spring Boot 2.x and AWS SDK v1; .NET Framework 4.x with legacy ASP.NET (pre-Core) and AWS SDK for .NET v2 or older; Python 2.x; end-of-life Node.js with an unsupported framework. Also includes PHP, Ruby, or Perl — functional AWS SDK but limited cloud-native tooling depth regardless of version. These require a version upgrade in addition to framework/SDK modernization. |
+| **1** | Languages with limited or no AWS SDK and effectively no cloud-native tooling (e.g., COBOL, VB6, Classic ASP, PowerBuilder) — requires custom integration or migration planning for cloud services. |
 
-> **Look for:** File extensions; package.json, requirements.txt, pom.xml/build.gradle, go.mod, *.csproj.
+> **Look for:** File extensions; dependency manifests (package.json, requirements.txt, pom.xml/build.gradle, go.mod, *.csproj). Record the *version* alongside the language (e.g., `Java 8` vs `Java 17`, `.NET Framework 4.8` vs `.NET 8`), the framework version (Spring Boot 2.1 vs 3.x, ASP.NET Framework vs ASP.NET Core), and the AWS SDK major version (v1 vs v2 for Java/JS, v2 vs v3 for .NET) — all three axes drive the score.
 
 #### APP-Q2: Monolith vs Microservices
 
@@ -656,7 +717,11 @@ These questions evaluate the application's structural maturity, decomposition re
 
 **Why it matters:** Synchronous-only architectures create tight coupling, cascading failures, and timeout risks. Async patterns enable decoupling, resilience, and better handling of variable-latency operations. However, the correct async/sync ratio depends on what the service does. A pure utility or read-heavy data gateway has no inherent need for async communication — forcing it in would be complexity for its own sake. An orchestrator or event-processor with primarily synchronous coupling, in contrast, is an anti-pattern for its archetype.
 
+> **Note:** This question uses archetype-sensitive calibration. A `stateless-utility` where sync is the correct design records as "Not Evaluated (archetype-N/A)" rather than defaulting to Score 4. See the archetype rubric below.
+
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
+
+> **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (for APP-Q3 this is `stateless-utility` Score 4: "Sync request/response is the correct design; async not needed"), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from category and overall score averaging. Do not report a default Score 4.
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
@@ -675,7 +740,11 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 **Why it matters:** Blocking calls for long-running operations create timeout risks, poor user experience, and resource waste. Async patterns with status tracking enable better resource utilization and user feedback. However, many services have no operations that exceed 30 seconds — a pure utility doing stateless computation or a data-gateway doing indexed reads has no long-running work to offload. In those cases, this question is not a gap and should not drive a recommendation.
 
+> **Note:** This question uses archetype-sensitive calibration. A `stateless-utility` with no long-running operations records as "Not Evaluated (archetype-N/A)" rather than defaulting to Score 4. See the archetype rubric below.
+
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
+
+> **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (for APP-Q4 this is `stateless-utility` Score 4: "No operations exceed 30 seconds — not applicable by design"), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from category and overall score averaging. Do not report a default Score 4.
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
@@ -809,6 +878,8 @@ These questions evaluate the foundational security posture required for any mode
 
 **Why it matters:** Encryption at rest is a baseline security requirement. Customer-managed KMS keys provide control over key rotation, access policies, and audit trails.
 
+> **Note:** This question is **surface-gated** (Step 1.6). If `has_at_rest_data_surface` is `false` — the system has no deployed data-at-rest surface (no database, S3 bucket, EBS volume, EFS file system, or similar managed storage) — record the question as **"Not Evaluated (archetype-N/A)"** and skip evaluation. A library or CLI tool with no runtime state to encrypt should not receive Score 1 for "no encryption at rest."
+
 | Score | Criteria |
 |-------|----------|
 | **4** | Customer-managed KMS keys for all sensitive data stores, with centralized key management and documented rotation policy. |
@@ -852,16 +923,16 @@ These questions evaluate the foundational security posture required for any mode
 
 **Question:** Are secrets (database credentials, API keys, tokens) managed through a dedicated secrets management system (AWS Secrets Manager, HashiCorp Vault) with rotation, or are they hardcoded in code, environment variables, or configuration files?
 
-**Why it matters:** Hardcoded secrets are a critical security vulnerability and a common finding in legacy applications. Secrets management with rotation and audit trails is a baseline security requirement for any production system, not just agentic workloads.
+**Why it matters:** Hardcoded secrets are a critical security vulnerability and a common finding in legacy applications. Secrets management with rotation and audit trails is a baseline security requirement for any production system, not just agentic workloads. The presence of plaintext credentials anywhere in the repository — source code, application configs, or version-controlled env files — is a materially different posture than a system that uses parameter store or env vars without rotation, even when some secrets are already in a managed store. Score 1 reflects any plaintext credential presence; Score 2 reflects no-plaintext but no-rotation; Score 3 reflects managed secrets with rotation.
 
 | Score | Criteria |
 |-------|----------|
-| **4** | All secrets in Secrets Manager or Vault with automated rotation; no hardcoded credentials. |
-| **3** | Secrets Manager or Vault used for primary credentials (database, API keys). Some non-critical configs still in environment variables (e.g., feature flags, non-secret config). No rotation configured. |
-| **2** | Some secrets in Secrets Manager/Vault but production database credentials or API keys still in environment variables, config files, or parameter store without encryption. No rotation. |
-| **1** | Secrets hardcoded in code or committed to version control. |
+| **4** | All secrets in Secrets Manager or Vault with automated rotation configured; no hardcoded credentials; no production credentials in environment variables or parameter store without encryption. |
+| **3** | Secrets Manager or Vault used for all production credentials (database passwords, API keys, service tokens) with automated rotation configured on at least the highest-risk secrets. Some non-critical configs (feature flags, non-secret configuration) may still be in environment variables. No plaintext credentials in source. |
+| **2** | No plaintext credentials in source or version control, but production credentials are kept in environment variables, parameter store without encryption, or CloudFormation `NoEcho` parameters. Rotation is not configured. Includes cases where *some* secrets are in Secrets Manager/Vault but at least one production credential is still in plain env vars or unencrypted parameter store. |
+| **1** | Plaintext credentials present anywhere in the repository — source files, application configs, version-controlled env files (`.env`, `application.properties`, `application.yaml`), or connection strings in IaC without parameter/secret references. Score 1 applies even when a secrets manager exists elsewhere in the system, because any plaintext secret is a deployment-blocking issue. |
 
-> **Look for:** `aws_secretsmanager_*` in IaC; Vault client imports; hardcoded patterns (password=, secret=, api_key= in code); .env files committed to git.
+> **Look for:** `aws_secretsmanager_*` in IaC; Vault client imports; hardcoded patterns (`password=`, `secret=`, `api_key=`, `DB_PASSWORD=` values in code, YAML, `.env`, `.properties`); `.env` or `application.properties` files committed to git; connection strings with embedded credentials. For Score 2/3 differentiation, also check: whether parameter store usage references KMS-encrypted `SecureString` vs plain `String`; whether Secrets Manager resources have `rotation_lambda_arn` or `rotation_rules` attached; whether the `NoEcho` parameters in CloudFormation are backed by Secrets Manager at runtime.
 
 #### SEC-Q6: Compute Hardening and Patching
 
@@ -1459,6 +1530,7 @@ The assessment output is a structured Markdown report saved as `{repo-name}-mod-
 |-------|-------|
 | **Repository** | {repo-name} |
 | **Date** | {assessment-date} |
+| **TD Version** | {version ID of the published TD that produced this report — resolve via `atx custom def get -n modernization-assessment`} |
 | **Repo Type** | {repo_type} |
 | **Service Archetype** | {archetype} ({auto-detected or user-provided}) — omit row if repo_type is not `application` |
 | **Priority** | {priority or "—" if not provided} |
@@ -1497,16 +1569,17 @@ If `service_archetype` was auto-detected, include the one- to two-sentence justi
 | 1.5 – 2.4 | 🟠 Needs Work |
 | < 1.5 | ❌ Not Present |
 
-If a category score is "N/A" (all questions in that category are N/A for the detected repo_type), display:
+If a category score is "N/A" (all questions in that category are N/A or Not Evaluated for the detected repo_type and archetype), display:
 
 ```markdown
-| Application Architecture (APP) | N/A | N/A — all questions not applicable for {repo_type} |
+| Application Architecture (APP) | N/A | N/A — all questions not applicable for {repo_type}/{archetype} |
 ```
 
 **Scoring rules:**
-- Category score = arithmetic mean of non-N/A question scores in that category.
+- Category score = arithmetic mean of non-N/A, non-Not-Evaluated question scores in that category.
 - Overall score = arithmetic mean of non-N/A category scores (each category weighted equally).
-- N/A questions excluded from both numerator and denominator.
+- Both N/A and Not-Evaluated (archetype-N/A) questions are excluded from numerator and denominator.
+- If all questions in a category are N/A or Not Evaluated, category score = "N/A", excluded from overall average.
 - If all questions in a category are N/A, category score = "N/A", excluded from overall average.
 
 ### Section 3: Top 5 Gaps
