@@ -23,11 +23,11 @@
 
 ---
 
-## Readiness Profile: Remediation Required
+## Readiness Profile: Pilot-Ready (Safety Concerns)
 
-**BLOCKERs**: 1 | **RISK-SAFETY**: 6 | **RISK-QUALITY**: 9 | **INFOs**: 26
+**BLOCKERs**: 0 | **RISK-SAFETY**: 6 | **RISK-QUALITY**: 9 | **INFOs**: 27
 
-Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days.
+With DATA-Q1 reclassified from BLOCKER to INFO under the new tiered model (see INFOs below), CloudServer has no remaining BLOCKERs. Proceed with a supervised pilot; prioritize RISK-SAFETY remediation before expanding scope.
 
 ---
 
@@ -35,10 +35,10 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 1 |
+| BLOCKER | 0 |
 | RISK-SAFETY | 6 |
 | RISK-QUALITY | 9 |
-| INFO | 26 |
+| INFO | 27 |
 | N/A | 0 |
 | Not Evaluated (extended) | 1 |
 | **Total** | **43** |
@@ -53,17 +53,7 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ## BLOCKERs — Must Resolve Before Agent Deployment
 
-### DATA-Q1: Sensitive Data Classification — BLOCKER
-
-- **Severity**: BLOCKER
-- **Finding**: CloudServer stores user-uploaded objects of any content type, object metadata with owner information (canonical IDs, account names), and access keys/secrets in `conf/authdata.json`. **Stage A** confirms this system handles sensitive data: `has_persistent_data_store` is true, stored data includes user-specific fields (owner canonical IDs, account names), and the system stores credentials (access keys, secret keys). **Stage B**: While CloudServer supports server-side encryption (SSE-S3, SSE-KMS via KMIP and AWS KMS) through `lib/kms/wrapper.js`, there is no field-level data classification or tagging system. No data classification tags exist on storage resources. No PII detection tooling (e.g., Macie) is integrated. Encryption is available but opt-in per bucket — there is no enforcement of classification-based access controls that would prevent an agent from retrieving sensitive data without explicit authorization.
-- **Gap**: No sensitive data classification system. No field-level tagging. No classification-based access controls. Encryption is available but not mandatory by default (configurable per bucket via `bucketPutEncryption`).
-- **Remediation**:
-  - **Immediate**: Enable default bucket encryption globally by setting `defaultEncryptionKeyPerAccount: true` (already present in `config.json`) and enforce mandatory encryption at the deployment level. Document which buckets contain sensitive data.
-  - **Target State**: All data classified at the bucket level with sensitivity tags. Mandatory encryption enforced. Access controls tied to classification labels preventing agent access to sensitive buckets without explicit authorization.
-  - **Estimated Effort**: Medium (30–60 days for classification framework; encryption enforcement is low effort)
-  - **Dependencies**: AUTH-Q2 (scoped permissions must be in place to enforce classification-based access)
-- **Evidence**: `lib/kms/wrapper.js`, `lib/api/bucketPutEncryption.js`, `config.json` (defaultEncryptionKeyPerAccount), `conf/authdata.json`
+_None. DATA-Q1 was previously BLOCKER under the binary "formal classification absent" rule; under the tiered model it resolves to INFO (see INFOs section) because CloudServer is content-agnostic by design (S3 API), IAM authorization is enforced via Vault integration on every request, and S3-native primitives (object tags, bucket tagging, SSE-S3/SSE-KMS) provide the classification building blocks — classification is an operator responsibility, not a code defect._
 
 ## RISKs
 
@@ -255,6 +245,17 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 - **Evidence**: `.github/workflows/release.yaml`, `Dockerfile`
 
 ## INFOs — Architecture and Design Inputs
+
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered) — Demoted from BLOCKER
+
+- **Severity**: INFO
+- **Stage A**: Yes — CloudServer stores user-uploaded objects of any content type, object metadata with owner info, and access keys in `conf/authdata.json`.
+- **B1 — API response scoping: CLEAR.** S3 API is content-agnostic by design; no credentials echoed in responses. Vault-backed IAM validates credentials without returning them. `GetBucketPolicy`/`GetBucketACL`/`ServiceGet` expose only canonical IDs and policy documents (intentional).
+- **B2 — Access control differentiation: CLEAR.** Every API call validates authorization via Vault-backed IAM before returning data (`lib/api/apiUtils/authorization/permissionChecks.js`, `lib/metadata/metadataUtils.js`). No policy-bypass paths detected in read-only scope.
+- **B3 — Formal classification metadata: INFO.** Native S3 primitives (object tags, bucket tags, bucket-level SSE-S3/SSE-KMS) provide classification building blocks; enforcement is operator-configured.
+- **Overall**: Only B3 fires → **DATA-Q1 = INFO**. CloudServer correctly delegates classification to the S3 framework and operator configuration.
+- **Recommendation (aspirational)**: Enable default bucket encryption globally; adopt object-tag conventions; integrate with Macie where deployed.
+- **Evidence**: `lib/auth/vault.js`, `lib/api/bucketGetPolicy.js`, `lib/api/bucketGetACL.js`, `lib/api/objectGetTagging.js`, `lib/api/bucketGetEncryption.js`, `lib/metadata/metadataUtils.js`, `lib/kms/wrapper.js`.
 
 ### API-Q1: Documented API Interface
 - **Severity**: INFO
@@ -639,11 +640,15 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 ### 05 — Data Accessibility and Quality
 
 #### DATA-Q1: Sensitive Data Classification
-- **Severity**: BLOCKER
-- **Finding**: Stage A: YES — stores user objects, metadata with owner info, credentials. Stage B: SSE supported (SSE-S3, SSE-KMS) but no field-level classification, no PII detection, encryption opt-in per bucket.
-- **Gap**: No data classification system. No field-level tagging. No classification-based access controls.
-- **Recommendation**: Enable default encryption. Implement bucket-level classification tags.
-- **Evidence**: `lib/kms/wrapper.js`, `lib/api/bucketPutEncryption.js`, `config.json`
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
+- **Severity**: INFO
+- **Stage A**: Yes — CloudServer stores user-uploaded objects of any content type, object metadata with owner information (canonical IDs, account names), and access keys/secrets in `conf/authdata.json`.
+- **B1 — API response scoping: CLEAR.** S3 API is content-agnostic by design — CloudServer does not echo credentials in responses. Auth/IAM uses Vault integration for credential validation; credentials are never returned. `GetBucketPolicy`/`GetBucketACL`/`ServiceGet` return canonical IDs and policy documents (intentional), not secrets.
+- **B2 — Access control differentiation: CLEAR.** Every API call validates authorization via Vault-backed IAM before returning data. Bucket policies, bucket ACLs, and IAM policies are evaluated in `lib/api/apiUtils/authorization/permissionChecks.js` and `lib/metadata/metadataUtils.js`. No policy-bypass paths detected in read-only scope.
+- **B3 — Formal classification metadata: INFO.** Native S3 primitives (object tags via `bucketPutTagging`/`objectGetTagging`, bucket-level SSE via `bucketPutEncryption`/SSE-KMS through KMIP and AWS KMS) provide the classification building blocks. No automatic enforcement; classification is an operator responsibility.
+- **Overall**: Only B3 fires → **DATA-Q1 = INFO**. CloudServer provides S3 framework primitives for classification.
+- **Recommendation (aspirational)**: Enable default bucket encryption globally; adopt object-tag–based classification conventions; integrate with Macie for automated sensitivity scanning where deployed.
+- **Evidence**: `lib/auth/vault.js`, `lib/api/bucketGetPolicy.js`, `lib/api/bucketGetACL.js`, `lib/api/objectGetTagging.js`, `lib/api/bucketGetEncryption.js`, `lib/metadata/metadataUtils.js`, `lib/kms/wrapper.js`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

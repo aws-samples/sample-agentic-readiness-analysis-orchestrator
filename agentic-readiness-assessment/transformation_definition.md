@@ -90,13 +90,13 @@ Each question is scored using a severity model:
 | **RISK-QUALITY** | Affects agent effectiveness, not safety. | No profile impact — informational for prioritization. Address as capacity allows. |
 | **INFO** | No immediate gating impact. Shapes architecture decisions. | Feeds agent design and orchestration decisions. Not a deployment gate. |
 
-Four questions are **conditional BLOCKERs** (⚡) — their severity depends on the `agent_scope` context (write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q6, and DATA-Q2.
+Five questions are **conditional BLOCKERs** (⚡) — their severity depends on context (typically `agent_scope` write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, and DATA-Q2. DATA-Q1 additionally uses a tiered sub-check model (see its section for B1/B2/B3 evaluation).
 
 ### RISK Tier Assignment
 
 Each of the 24 RISK-severity questions is assigned to exactly one tier. The assignment is static — it does not depend on service characteristics.
 
-**RISK-SAFETY (9 questions):**
+**RISK-SAFETY (10 questions):**
 
 | Question ID | Topic | Safety Rationale |
 |-------------|-------|------------------|
@@ -107,6 +107,7 @@ Each of the 24 RISK-severity questions is assigned to exactly one tier. The assi
 | STATE-Q1 | Compensation/rollback | Agent-initiated writes cannot be undone |
 | STATE-Q4 | Circuit breakers | Runaway agent loops cascade through dependencies |
 | STATE-Q5 | Rate limiting | Agent traffic storms overwhelm services |
+| DATA-Q1 | Sensitive data scoping | Agent-facing APIs leak sensitive fields (B1 read-only, or B2 access differentiation missing) |
 | DATA-Q2 | Data residency | Agent moves data across compliance boundaries |
 | DATA-Q6 | PII in logs | Agent actions leak PII into observable surfaces |
 
@@ -130,7 +131,7 @@ Each of the 24 RISK-severity questions is assigned to exactly one tier. The assi
 | ENG-Q5 | Encryption at rest | Data at rest unencrypted |
 | HITL-Q3 | Sandbox/staging | No safe environment to test agent behavior |
 
-Note: AUTH-Q7 and STATE-Q1 appear in both the RISK-SAFETY tier table and the conditional BLOCKER list. Their *base* severity when the conditional resolves to RISK (read-only scope) is RISK-SAFETY. When the conditional resolves to BLOCKER (write-enabled scope), they are counted as BLOCKERs, not RISK-SAFETY. The tier label applies only when the resolved severity is RISK. Similarly, AUTH-Q6 resolves to RISK-SAFETY and DATA-Q2 resolves to RISK-SAFETY when their conditional resolves to RISK.
+Note: AUTH-Q7 and STATE-Q1 appear in both the RISK-SAFETY tier table and the conditional BLOCKER list. Their *base* severity when the conditional resolves to RISK (read-only scope) is RISK-SAFETY. When the conditional resolves to BLOCKER (write-enabled scope), they are counted as BLOCKERs, not RISK-SAFETY. The tier label applies only when the resolved severity is RISK. Similarly, AUTH-Q6 resolves to RISK-SAFETY and DATA-Q2 resolves to RISK-SAFETY when their conditional resolves to RISK. DATA-Q1 is tiered: B1 resolves to BLOCKER (write-enabled) or RISK-SAFETY (read-only), B2 resolves to RISK-SAFETY when triggered, B3 resolves to INFO when triggered; the overall DATA-Q1 severity is the highest sub-check that fires.
 
 ### Service Archetype Classification
 
@@ -1043,11 +1044,11 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### DATA-Q1: Sensitive Data Classification — BLOCKER
+#### DATA-Q1: Sensitive Data Classification — BLOCKER ⚡ (Conditional, Tiered)
 
-**Question:** Does this system store, process, or transmit sensitive data (PII, PHI, financial records, credentials), and if so, is it classified and tagged at the field level with controls preventing an agent from retrieving it without explicit authorization?
+**Question:** Does this system store, process, or transmit sensitive data (PII, PHI, financial records, credentials), and if so, are agent-facing API responses scoped to exclude sensitive fields that the agent has no business retrieving?
 
-**Why it matters:** Unclassified sensitive data in a retrieval pipeline is a regulatory and reputational risk. Classification must happen before agents get read access. However, the classification requirement only applies to systems that actually hold sensitive data — build tools, CLI utilities, pure computation libraries, and scaffolding templates that never touch PII should not be flagged for the absence of classification controls they have no reason to implement.
+**Why it matters:** Unscoped data access is a regulatory and reputational risk. The critical question is not whether a formal classification schema exists (most applications do not have one), but whether agent-facing APIs actually filter out sensitive fields. An agent calling `GET /users` should not receive password hashes, and an agent reading order history should not receive full credit card numbers. Access control differentiation (different scopes for sensitive vs non-sensitive) provides the second layer. Formal classification metadata is aspirational but not a deployment gate — most real-world applications (including well-engineered ones) lack field-level classification schemas yet still protect data correctly through API-level filtering.
 
 **Two-stage evaluation:**
 
@@ -1070,20 +1071,63 @@ Answer No if the system is clearly not a data-handling target. Representative No
 
 **If Stage A = Yes:** Proceed to Stage B.
 
-**Stage B — Classification and access control check (BLOCKER severity):**
-
-Evaluate whether sensitive data identified in Stage A is classified, tagged at the field level, and protected by controls that prevent an agent from retrieving it without explicit authorization. If classification is absent or partial, record as BLOCKER.
-
-**Archetype calibration:** For `stateless-utility` archetype (regardless of Stage A result): record as INFO. Stateless utilities operate on transient or public/reference data by definition; if they appear to handle sensitive data, the archetype classification should be revisited — recommend reclassifying before flagging DATA-Q1 as a blocker.
+**Archetype calibration:** For `stateless-utility` archetype (regardless of Stage A result): record as INFO. Stateless utilities operate on transient or public/reference data by definition; if they appear to handle sensitive data, the archetype classification should be revisited — recommend reclassifying before flagging DATA-Q1.
 
 **Dev-library-application override:** If the repo was classified as `dev-library-application` via the Step 1.5 override, skip directly to INFO without evaluating Stage A or Stage B. Libraries, CLIs, and scaffolds do not own the data that consuming applications store.
 
-**Look for (Stage B only):**
-- Data classification tags in IaC (`aws_s3_bucket` tags, DynamoDB table tags)
-- Field-level encryption
-- Column-level access controls
-- PII detection tools (Macie)
-- Data classification policies in documentation
+**Stage B — Tiered evaluation (only if Stage A = Yes):**
+
+Evaluate three layers of data protection for agent-facing access. Each layer has independent severity; the overall DATA-Q1 severity is the highest severity that fires.
+
+**B1: Agent-facing API response scoping — BLOCKER (conditional on `agent_scope`)**
+
+Does the application exclude sensitive fields from API responses that an agent would consume? Look for:
+- Password/secret fields excluded from serialization (e.g., `@JsonIgnore`, `exclude_fields`, `hidden` attributes, `write_only=True` in serializers)
+- Different response DTOs for internal vs external/agent consumers
+- GraphQL field-level authorization or field filtering
+- Explicit `select` projections in API handlers that omit sensitive columns
+- Sensitive data returned ONLY via dedicated, separately-authorized endpoints (not mixed into general-purpose list/detail responses)
+
+Severity logic for B1:
+- If `agent_scope` is `write-enabled` or `data-export-enabled` AND sensitive fields are returned in general API responses → **BLOCKER**
+- If `agent_scope` is `read-only` AND sensitive fields are returned in general API responses → **RISK-SAFETY**
+- If sensitive fields are properly excluded from API responses OR only accessible via separately-scoped endpoints → B1 contributes no finding (CLEAR)
+
+**B2: Access control differentiation — RISK-SAFETY**
+
+Do access controls distinguish between sensitive and non-sensitive data access? Look for:
+- OAuth scopes that separate data domains (e.g., `read:profile` vs `read:payment`)
+- Role-based access with granularity below "full admin vs no access"
+- API key permissions that limit which endpoints/fields are accessible
+- Row-level or column-level security in the database access layer
+
+Severity logic for B2:
+- If no differentiation exists (a single permission grants access to everything sensitive) → **RISK-SAFETY**
+- If differentiation exists → B2 contributes no finding (CLEAR)
+
+**B3: Formal classification metadata — INFO**
+
+Does the system have explicit, machine-readable data classification? Look for:
+- Data classification tags in IaC (S3 bucket tags, DynamoDB table tags with sensitivity labels)
+- Field-level sensitivity annotations in code (decorators, attributes)
+- PII detection tooling integrated (Macie, Presidio)
+- Data catalog entries with classification levels
+- Documented classification policies
+
+Severity logic for B3:
+- If absent → **INFO** (aspirational, not a deployment gate)
+- If present → Acknowledge as mature practice; contributes no finding
+
+**Overall DATA-Q1 severity:**
+- If B1 fires as BLOCKER → DATA-Q1 = BLOCKER
+- Else if B1 fires as RISK-SAFETY or B2 fires → DATA-Q1 = RISK-SAFETY
+- Else if only B3 is absent → DATA-Q1 = INFO
+- If all three are clear → DATA-Q1 = no finding
+
+**Look for (Stage B):**
+- B1 indicators: `@JsonIgnore`, `serialize: false`, `hidden_fields`, `write_only=True`, password exclusion in serializers, separate DTOs for API responses, field-level `@Authorize` in GraphQL, explicit column `select()` in query builders
+- B2 indicators: OAuth scope definitions with data-domain granularity, RBAC with more than two roles, API key permission matrices, row-level security policies
+- B3 indicators: Classification tags in IaC, field decorators (`@PII`, `@Sensitive`, `@Classified`), Macie/Presidio integration, data catalog references
 
 ---
 

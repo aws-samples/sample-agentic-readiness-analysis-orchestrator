@@ -25,7 +25,7 @@
 
 **BLOCKERs**: 2 | **RISK-SAFETY**: 8 | **RISK-QUALITY**: 11 | **INFOs**: 20
 
-Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days. The two BLOCKERs (AUTH-Q1: no authentication, DATA-Q1: no data classification) are fundamental gaps that must be addressed before any agent can safely interact with Conductor's APIs.
+Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days. The two BLOCKERs (AUTH-Q1: no authentication, DATA-Q1: workflow/task REST endpoints return full input/output payloads — including HTTP-task Authorization headers — without redaction) are fundamental gaps that must be addressed before any agent can safely interact with Conductor's APIs.
 
 ---
 
@@ -61,23 +61,27 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
   - **Dependencies**: AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7 all depend on this — identity infrastructure is the prerequisite for scoped permissions, action-level auth, audit logging attribution, and identity suspension.
 - **Evidence**: `build.gradle`, `dependencies.gradle`, `rest/src/main/java/com/netflix/conductor/rest/controllers/WorkflowResource.java`, `server/src/main/java/com/netflix/conductor/Conductor.java` — no security imports or configurations found.
 
-### DATA-Q1: Sensitive Data Classification
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 
 - **Severity**: BLOCKER
-- **Finding**: **Stage A = Yes.** Conductor stores workflow execution data including input/output payloads (`has_persistent_data_store=true`). Workflow payloads can contain any user-defined data — the orchestrated workflows may process PII, PHI, financial records, or credentials depending on the business processes being automated. The `ApplicationExceptionMapper.java` logs exception messages including request URIs, and `has_logging_of_user_data=true` based on the logging patterns observed. **Stage B**: While Conductor provides a `maskedFields` property in `WorkflowDef` (found in `common/src/main/java/com/netflix/conductor/common/metadata/workflow/WorkflowDef.java:113`), there is no systematic data classification or tagging at the field level. No data classification tags were found in any configuration. No integration with AWS Macie or equivalent data classification tools. The `maskedFields` feature is opt-in per workflow definition and has no enforcement mechanism — workflow authors must manually specify which fields to mask.
-- **Gap**: No field-level data classification or tagging system. The `maskedFields` feature is a partial control (opt-in, no enforcement, no classification taxonomy). An agent reading workflow execution data has no way to know which fields contain sensitive information.
+- **Stage A**: Yes — Conductor stores workflow execution state including arbitrary input/output payloads (`has_persistent_data_store=true`). Orchestrated workflows may process PII, PHI, financial records, or credentials depending on the business processes automated. `has_logging_of_user_data=true` based on `ApplicationExceptionMapper.java` logging request URIs.
+- **B1 — Agent-facing API response scoping: BLOCKER.** `WorkflowResource.getExecutionStatus()` (`rest/src/main/java/com/netflix/conductor/rest/controllers/WorkflowResource.java:217-230`) returns the full `Workflow` object via `workflowService.getExecutionStatus(workflowId, includeTasks)` with no field filtering. `TaskResource.getTask()` (`rest/.../TaskResource.java:75-82`) returns the complete `Task` object including `input` and `output`. The `@JsonIgnore` annotations on `WorkflowModel` (line 95) and `TaskModel` (lines 155-158) protect only the internal model — `toWorkflow()` and `toTask()` copy `input`/`output` into the public DTOs returned by REST. Critically, `HttpTask.java:138` calls `task.addOutput("response", response.asMap())`, persisting request `Authorization` headers and response headers unmasked into task output, which is then returned verbatim by the Task/Workflow REST endpoints. The `maskedFields` property on `WorkflowDef` (`common/.../WorkflowDef.java:113`) is opt-in, workflow-author-driven, and not enforced.
+- **B2 — Access control differentiation: RISK-SAFETY.** Zero `@PreAuthorize`/`@Secured`/SecurityFilterChain usage across 40+ sub-modules. All REST controllers (`WorkflowResource`, `TaskResource`, `MetadataResource`, `AdminResource`) and gRPC services are publicly accessible with no permission checks. (Also separately reflected by AUTH-Q1/AUTH-Q2/AUTH-Q3.)
+- **B3 — Formal classification metadata: INFO.** No `@Sensitive`/`@Secret`/`@PII` annotations. No Vault/AWS Secrets Manager integration for inline credentials. Optional `externalInputPayloadStoragePath`/`externalOutputPayloadStoragePath` exist but are not enforced for sensitive payloads.
+- **Overall**: B1 fires as BLOCKER under `agent_scope=read-only` (a read-only agent can still exfiltrate credentials embedded in workflow input/output and HTTP-task Authorization headers from any past execution). → DATA-Q1 = BLOCKER.
+- **Gap**: Workflow/task REST responses return unredacted input/output payloads, including HTTP-task auth headers captured verbatim. A read-only agent reading past executions becomes a credential exfiltration path.
 - **Remediation**:
-  - **Immediate**: Implement a data classification policy that categorizes workflow payload fields. Use the existing `maskedFields` mechanism to define mandatory masking for known-sensitive field patterns (e.g., `ssn`, `creditCard`, `password`, `email`).
-  - **Target State**: Field-level data classification taxonomy applied to all workflow definitions. Enforcement mechanism that rejects workflow definitions handling sensitive data without appropriate `maskedFields` configuration. Integration with a data classification tool (e.g., Macie) for payload scanning.
-  - **Estimated Effort**: High (classification taxonomy: 4–6 weeks; enforcement mechanism: 6–8 weeks; tooling integration: 8–12 weeks)
-  - **Dependencies**: DATA-Q6 (PII in logs) is closely related — classification informs redaction rules.
-- **Evidence**: `common/src/main/java/com/netflix/conductor/common/metadata/workflow/WorkflowDef.java` (maskedFields), `schemas/WorkflowDef.json` (maskedFields schema), `rest/src/main/java/com/netflix/conductor/rest/controllers/ApplicationExceptionMapper.java` (request URI logging).
+  - **Immediate**: Mask all headers whose names match a sensitive pattern (`Authorization`, `Cookie`, `X-Api-Key`, etc.) before `task.addOutput("response", ...)` in `HttpTask.java`. Redact matching keys in task input/output at the REST layer using a Jackson `@JsonFilter` or response-level serialization hook. Enforce `maskedFields` at validation time when definitions include known-sensitive patterns.
+  - **Target State**: REST responses exclude `input`/`output` by default for agent-scoped clients, with an opt-in, explicitly-scoped endpoint for full payload retrieval. HTTP-task captures strip credentials before persisting. Classification taxonomy applied to workflow definitions; Vault/Secrets Manager integration for all inline credentials.
+  - **Estimated Effort**: Medium for header masking and response redaction (3–6 weeks); High for full classification + secrets-manager integration (12+ weeks).
+  - **Dependencies**: Partially overlaps with DATA-Q6 (PII in logs). AUTH-Q1 (machine identity) and AUTH-Q2 (scoped permissions) reinforce B2.
+- **Evidence**: `rest/src/main/java/com/netflix/conductor/rest/controllers/WorkflowResource.java` (getExecutionStatus), `rest/src/main/java/com/netflix/conductor/rest/controllers/TaskResource.java` (getTask), `core/src/main/java/com/netflix/conductor/model/WorkflowModel.java` (`@JsonIgnore` on input/output; `toWorkflow()`), `core/src/main/java/com/netflix/conductor/model/TaskModel.java` (`toTask()`), `http-task/src/main/java/com/netflix/conductor/tasks/http/HttpTask.java` (`task.addOutput("response", response.asMap())`), `common/src/main/java/com/netflix/conductor/common/metadata/workflow/WorkflowDef.java` (maskedFields opt-in), `schemas/WorkflowDef.json`.
 
-**Note on BLOCKER count**: AUTH-Q1 and DATA-Q1 are definitive BLOCKERs. AUTH-Q6 resolves to RISK-SAFETY for read-only scope. DATA-Q2 resolves to RISK-SAFETY for read-only scope.
+**Note on BLOCKER count**: AUTH-Q1 and DATA-Q1 remain definitive BLOCKERs. For DATA-Q1, the BLOCKER is driven by sub-check B1 (payload and auth-header leakage in workflow/task REST responses); B2 reinforces it and B3 resolves to INFO. AUTH-Q6 resolves to RISK-SAFETY for read-only scope. DATA-Q2 resolves to RISK-SAFETY for read-only scope.
 
 **Final BLOCKER count**: After applying conditional BLOCKER rules for `agent_scope=read-only`:
 - AUTH-Q1: BLOCKER ✓
-- DATA-Q1: BLOCKER ✓  
+- DATA-Q1: BLOCKER ✓ (B1 fires regardless of scope because credentials in past workflow outputs are exfiltrable even via read-only access)
 - API-Q4: INFO (read-only scope)
 - STATE-Q1: RISK-SAFETY (read-only scope)
 - AUTH-Q6: RISK-SAFETY (read-only scope)
@@ -685,12 +689,12 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 - **Severity**: BLOCKER
-- **Finding**: Stage A = Yes (stores workflow payloads that may contain PII). Stage B: `maskedFields` is opt-in with no enforcement. No data classification taxonomy.
-- **Gap**: No field-level data classification or enforcement.
-- **Recommendation**: Implement classification taxonomy and enforcement mechanism.
-- **Evidence**: `common/src/main/java/com/netflix/conductor/common/metadata/workflow/WorkflowDef.java` (maskedFields), `schemas/WorkflowDef.json`.
+- **Finding**: Stage A = Yes (workflow/task payloads may contain PII, credentials). **B1 = BLOCKER**: `WorkflowResource.getExecutionStatus()` and `TaskResource.getTask()` return full `Workflow`/`Task` DTOs including `input`/`output`; `HttpTask.java:138` writes response headers (including any captured `Authorization`) into task output via `task.addOutput("response", response.asMap())`, then the Task/Workflow REST endpoints return it verbatim. `maskedFields` on `WorkflowDef` is opt-in and not enforced. **B2 = RISK-SAFETY**: No `@PreAuthorize`/`@Secured` anywhere — all controllers publicly accessible (also captured by AUTH-Q1/AUTH-Q2). **B3 = INFO**: No `@Sensitive` annotations, no Vault/Secrets Manager integration.
+- **Gap**: Agent-facing workflow/task responses return credentials embedded in past executions. Opt-in masking is not a control.
+- **Recommendation**: Mask sensitive header names in `HttpTask` before `addOutput`; apply response-level field redaction on Task/Workflow REST DTOs; enforce `maskedFields` at definition-validation time; integrate secrets manager for inline credentials.
+- **Evidence**: `rest/.../WorkflowResource.java` (getExecutionStatus), `rest/.../TaskResource.java` (getTask), `http-task/.../HttpTask.java:138`, `core/.../WorkflowModel.java` (`toWorkflow()`), `core/.../TaskModel.java` (`toTask()`), `common/.../WorkflowDef.java` (maskedFields).
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

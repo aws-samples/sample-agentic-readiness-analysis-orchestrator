@@ -24,9 +24,9 @@
 
 ## Readiness Profile: Remediation Required
 
-**BLOCKERs**: 2 | **RISK-SAFETY**: 9 | **RISK-QUALITY**: 16 | **INFOs**: 15
+**BLOCKERs**: 1 | **RISK-SAFETY**: 9 | **RISK-QUALITY**: 16 | **INFOs**: 16
 
-Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days.
+Resolve the remaining blocker (AUTH-Q1) before any agent deployment — including pilots. Estimated runway: 30–90 days.
 
 ---
 
@@ -34,10 +34,10 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 2 |
+| BLOCKER | 1 |
 | RISK-SAFETY | 9 |
 | RISK-QUALITY | 16 |
-| INFO | 15 |
+| INFO | 16 |
 | N/A | 0 |
 | Not Evaluated (extended) | 1 |
 | **Total** | **43** |
@@ -64,19 +64,7 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
   - **Dependencies**: AUTH-Q7 (agent identity suspension depends on having machine identities to suspend)
 - **Evidence**: `src/lib/auth.ts`, `src/lib/jwt.ts`, `src/lib/crypto.ts`, `src/app/api/auth/login/route.ts`
 
-### DATA-Q1: Sensitive Data Classification
-
-- **Severity**: BLOCKER
-- **Finding**: **Stage A**: The system handles sensitive data. The `User` model stores usernames and bcrypt-hashed passwords. The `Session` model stores IP-derived geolocation data (country, region, city), browser fingerprint data (browser, OS, device, screen, language). `WebsiteEvent` stores URL paths, referrer domains, page titles, UTM parameters, and click IDs (gclid, fbclid, msclkid, ttclid, twclid). `SessionData` and `EventData` store arbitrary key-value data which could include PII depending on what website owners track. `Revenue` stores financial transaction data (currency, revenue amounts). IP addresses are processed for geolocation (`src/lib/detect.ts`) and hashed for session ID generation but geolocation derivatives are stored. **Stage B**: No data classification tags exist on any database tables or columns. No field-level encryption beyond password hashing. No Amazon Macie integration. No column-level access controls. The Prisma schema has no classification metadata. The ClickHouse schema has no data classification.
-- **Gap**: Sensitive data (geolocation, browser fingerprints, arbitrary user-tracked data, revenue data) is stored without classification, tagging, or field-level access controls. An agent with read access could retrieve all data without restriction.
-- **Remediation**:
-  - **Immediate**: Document a data classification policy for all fields in `prisma/schema.prisma` and `db/clickhouse/schema.sql`. Classify fields as: Public (website name, domain), Internal (aggregated stats), Confidential (geolocation, browser fingerprint, session data), Restricted (passwords, revenue data, arbitrary event/session data).
-  - **Target State**: All data fields are classified and tagged. Access controls enforce classification — an agent with read-only scope cannot access Restricted or Confidential fields without explicit authorization. API responses filter fields based on the caller's classification clearance.
-  - **Estimated Effort**: Medium (3–6 weeks for classification + access control implementation)
-  - **Dependencies**: AUTH-Q1 (machine identity needed to enforce field-level access per agent)
-- **Evidence**: `prisma/schema.prisma`, `db/clickhouse/schema.sql`, `src/lib/detect.ts`, `src/app/api/send/route.ts`
-
-**Remediation Prioritization**: Resolve AUTH-Q1 (machine identity) first — you cannot enforce data access controls without knowing who is calling. Then resolve DATA-Q1 (data classification) to scope what data agents can access. With read-only agent scope, consider deploying a scoped read-only pilot after AUTH-Q1 is resolved, while DATA-Q1 classification is in progress.
+**Remediation Prioritization**: Resolve AUTH-Q1 (machine identity) first — you cannot enforce per-agent access controls without knowing who is calling. DATA-Q1 is no longer a BLOCKER (see INFOs); the application's Prisma projections already exclude password fields from API responses, and its RBAC provides access-control differentiation. After AUTH-Q1 is resolved, a scoped read-only pilot is viable.
 
 ## RISKs
 
@@ -384,6 +372,18 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 - **Evidence**: `docker-compose.yml` (no encryption config), `src/lib/crypto.ts` (application-level encryption for tokens), `src/lib/password.ts` (bcrypt for passwords)
 
 ## INFOs — Architecture and Design Inputs
+
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered) — Demoted from BLOCKER
+
+- **Severity**: INFO
+- **Stage A**: Yes — stores User (bcrypt passwords, username), Session (IP-derived geolocation, browser fingerprint), WebsiteEvent (referrer/UTM/click IDs), SessionData/EventData (arbitrary user-tracked fields), Revenue (financial amounts).
+- **B1 — Agent-facing API response scoping: CLEAR.** `findUser()` uses `select: { password: includePassword, ... }` with `includePassword` defaulting to false (`src/queries/prisma/user.ts:14-28`). The admin users list uses explicit `omit: { password: true }` (`src/app/api/admin/users/route.ts`). Login returns `{ token, user: { id, username, role, createdAt, isAdmin, teams } }` — password is never serialized.
+- **B2 — Access control differentiation: CLEAR.** Seven distinct roles with a real permission matrix (`src/lib/constants.ts` — `ROLE_PERMISSIONS` maps admin, user, view-only, team-owner, team-manager, team-member, team-view-only to specific capabilities). Resource-level guards in `src/permissions/website.ts` and `src/permissions/user.ts` enforce ownership and team-scope checks.
+- **B3 — Formal classification metadata: INFO.** No `@PII`/`@Sensitive` decorators, no Macie/Presidio integration, no documented classification policy.
+- **Overall**: Only B3 contributes a finding → **DATA-Q1 = INFO**. Systematic Prisma projections and granular RBAC mean the actual agent-leakage risk is low.
+- **Implication**: Not a deployment gate. Classification metadata is a governance concern, not a code-level safety gap.
+- **Recommendation (aspirational)**: Add schema-comment or decorator-based classification tags to `prisma/schema.prisma`; add a lint/CI check preventing `includePassword: true` outside authentication paths.
+- **Evidence**: `src/queries/prisma/user.ts`, `src/app/api/admin/users/route.ts`, `src/app/api/auth/login/route.ts`, `src/lib/constants.ts`, `src/permissions/website.ts`, `src/permissions/user.ts`, `prisma/schema.prisma`.
 
 ### API-Q4: Idempotent Write Operations ⚡
 
@@ -700,12 +700,15 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
-- **Severity**: BLOCKER
-- **Finding**: System handles sensitive data (geolocation, browser fingerprints, revenue, arbitrary event data). No classification tags or field-level access controls.
-- **Gap**: Sensitive data unclassified and unprotected.
-- **Recommendation**: Implement data classification policy and field-level access controls.
-- **Evidence**: `prisma/schema.prisma`, `db/clickhouse/schema.sql`, `src/lib/detect.ts`
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
+- **Severity**: INFO
+- **Stage A**: Yes — stores User (bcrypt passwords, username), Session (IP-derived geolocation, browser fingerprint), WebsiteEvent (referrer, UTM, click IDs), SessionData/EventData (arbitrary user-tracked fields), Revenue (financial amounts).
+- **B1 — API response scoping**: CLEAR. `findUser()` uses `select: { password: includePassword, ... }` with `includePassword` defaulting to false (`src/queries/prisma/user.ts:14-28`). The admin users list uses explicit `omit: { password: true }` (`src/app/api/admin/users/route.ts`). Login returns `{ token, user: { id, username, role, createdAt, isAdmin, teams } }` — password never serialized.
+- **B2 — Access control differentiation**: CLEAR. Seven distinct roles with a real permission matrix (`src/lib/constants.ts` — `ROLE_PERMISSIONS` maps admin, user, view-only, team-owner, team-manager, team-member, team-view-only to specific capabilities). Resource-level guards in `src/permissions/website.ts` and `src/permissions/user.ts` enforce ownership and team-scope checks.
+- **B3 — Formal classification metadata**: Absent → INFO. No `@PII`/`@Sensitive` decorators, no Macie/Presidio integration, no documented classification policy.
+- **Overall**: Highest sub-check firing is B3 (INFO) → DATA-Q1 = INFO. Not a deployment gate.
+- **Recommendation (aspirational)**: Add decorator-based or schema-comment classification tags on Prisma models to document sensitivity levels; consider adding a CI check that prevents `includePassword: true` outside authentication paths.
+- **Evidence**: `src/queries/prisma/user.ts`, `src/app/api/admin/users/route.ts`, `src/app/api/auth/login/route.ts`, `src/lib/constants.ts`, `src/permissions/website.ts`, `src/permissions/user.ts`, `prisma/schema.prisma` (no classification annotations).
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

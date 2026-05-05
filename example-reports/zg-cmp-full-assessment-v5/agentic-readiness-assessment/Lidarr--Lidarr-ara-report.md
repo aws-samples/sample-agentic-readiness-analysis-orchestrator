@@ -61,17 +61,21 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
   - **Dependencies**: AUTH-Q6 (audit logging) depends on this — identity must exist before it can be logged.
 - **Evidence**: `src/Lidarr.Http/Authentication/ApiKeyAuthenticationHandler.cs` (lines 51-59: single `_apiKey` comparison, generic claim), `src/NzbDrone.Core/Configuration/ConfigFileProvider.cs` (ApiKey property: single GUID), `src/Lidarr.Http/Middleware/LoggingMiddleware.cs` (logs IP and User-Agent only)
 
-### DATA-Q1: Sensitive Data Classification
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 
 - **Severity**: BLOCKER
-- **Finding**: Stage A: Yes — Lidarr stores sensitive credentials in its persistent data store. The database contains user-configured API keys for indexers (Newznab, Torznab, Gazelle), download client credentials (SABnzbd API keys, qBittorrent passwords, Transmission passwords), and notification service tokens (Discord webhooks, Telegram bot tokens, Plex tokens, email SMTP passwords). These are stored as plaintext in the `Settings` JSON column of the `Indexers`, `DownloadClients`, and `Notifications` tables. Stage B: No data classification exists — no field-level tags, no encryption at the field level, no access control differentiating credential fields from non-sensitive fields. Any API consumer with the shared API key can read all settings including embedded credentials via `/api/v1/indexer`, `/api/v1/downloadclient`, and `/api/v1/notification` endpoints.
-- **Gap**: Sensitive credentials are stored unclassified and unencrypted at the field level. No mechanism prevents an agent from retrieving embedded third-party API keys, passwords, and tokens through standard API calls.
+- **Stage A**: Yes — Lidarr stores the master application API key, admin Forms-auth password, SSL/proxy passwords, and per-provider third-party credentials (indexer API keys, SABnzbd/qBittorrent/Transmission passwords, notification service tokens).
+- **B1 — API response scoping: BLOCKER.** The framework's masking protection applies unevenly:
+  - **Provider settings path: CLEAR.** `src/Lidarr.Http/ClientSchema/SchemaBuilder.cs:38-44` replaces any `PrivacyLevel.ApiKey`/`PrivacyLevel.Password` field with `"********"` (`PRIVATE_VALUE`) before serialization. Provider settings (Newznab `ApiKey`, SABnzbd `ApiKey`/`Password`/`Username`, etc.) are all decorated with `Privacy = PrivacyLevel.ApiKey|Password`, so `GET /api/v1/indexer/{id}` and `GET /api/v1/downloadclient/{id}` return masked credentials. CLEAR.
+  - **HostConfigResource path: BLOCKER.** `src/Lidarr.Api.V1/Config/HostConfigResource.cs` is a plain POCO with public `string ApiKey`, `string Password`, `string PasswordConfirmation`, `string SslCertPassword`, `string ProxyPassword` — none decorated with `FieldDefinition`/`Privacy`. `HostConfigController.GetHostConfig()` reads `_configFileProvider.ToResource(_configService)` which copies these values directly. `GET /api/v1/config/host` returns the master API key, admin password, SSL cert password, and proxy password **unmasked in plaintext**.
+- **B2 — Access control differentiation: RISK-SAFETY.** Single global API key (`src/Lidarr.Http/Authentication/ApiKeyAuthenticationHandler.cs:35-50`). No multi-user RBAC; no read-only/admin scopes.
+- **B3 — Formal classification metadata: PARTIAL (contributes no finding).** `PrivacyLevel` enum (`FieldDefinitionAttribute.cs:95-101`) is formal classification, applied consistently to provider settings but **not** to `HostConfigResource`.
+- **Overall (read-only scope)**: B1 fires as BLOCKER — a read-only agent calling `GET /api/v1/config/host` exfiltrates the master API key (enabling impersonation) plus stored admin/SSL/proxy passwords. Credential-exfiltration BLOCKER. → **DATA-Q1 = BLOCKER**.
+- **Gap**: `HostConfigResource` bypasses the `SchemaBuilder`/`PrivacyLevel` masking that correctly protects provider settings.
 - **Remediation**:
-  - **Immediate**: Classify fields containing credentials (API keys, passwords, tokens) in indexer/download client/notification settings. Implement field-level redaction on API GET responses for credential fields (return `"********"` instead of actual values). Lidarr partially does this for password display in the UI but the API may still return full values.
-  - **Target State**: All credential fields are classified as sensitive, redacted in API responses by default, and optionally encrypted at rest in the database.
-  - **Estimated Effort**: Medium
-  - **Dependencies**: ENG-Q5 (encryption at rest) is related but independent.
-- **Evidence**: `src/NzbDrone.Core/Configuration/ConfigFileProvider.cs` (PostgresPassword stored in XML), `src/NzbDrone.Core/Datastore/ConnectionStringFactory.cs` (plaintext connection strings), `src/Lidarr.Api.V1/openapi.json` (settings endpoints expose full configuration objects)
+  - **Immediate**: Mask `ApiKey`, `Password`, `PasswordConfirmation`, `SslCertPassword`, `ProxyPassword` in `HostConfigResourceMapper.ToResource()`; or extend `SchemaBuilder` masking to non-provider resources via a `[Sensitive]` attribute.
+  - **Estimated Effort**: Low (the masking primitive exists; this is a coverage fix).
+- **Evidence**: `src/Lidarr.Api.V1/Config/HostConfigResource.cs` (unmasked credential properties), `src/Lidarr.Api.V1/Config/HostConfigController.cs` (returns resource without redaction), `src/Lidarr.Http/ClientSchema/SchemaBuilder.cs:38-44` (working masking pattern), `src/NzbDrone.Core/Annotations/FieldDefinitionAttribute.cs:95-101` (PrivacyLevel enum), `src/NzbDrone.Core/Indexers/Newznab/NewznabSettings.cs:62`, `src/NzbDrone.Core/Download/Clients/Sabnzbd/SabnzbdSettings.cs:54-62` (masked provider-side), `src/Lidarr.Http/Authentication/ApiKeyAuthenticationHandler.cs:35-50` (single global API key).
 
 ## RISKs
 
@@ -692,12 +696,12 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 - **Severity**: BLOCKER
-- **Finding**: Stores third-party API keys, passwords, tokens unclassified and unencrypted. No field-level access control.
-- **Gap**: Sensitive credentials unclassified and accessible via standard API calls.
-- **Recommendation**: Classify and redact credential fields in API responses.
-- **Evidence**: `src/NzbDrone.Core/Configuration/ConfigFileProvider.cs`, `src/NzbDrone.Core/Datastore/ConnectionStringFactory.cs`
+- **Finding**: B1 BLOCKER for `HostConfigResource` — `GET /api/v1/config/host` returns master `ApiKey`, admin `Password`, `SslCertPassword`, `ProxyPassword` unmasked. Provider settings (indexer/download client/notification) ARE properly masked via `PrivacyLevel` + `SchemaBuilder`. B2 RISK-SAFETY (single global API key). B3 partial. See BLOCKERs section above.
+- **Gap**: Coverage gap in the `HostConfigResource` path; the masking primitive exists and works for provider settings.
+- **Recommendation**: Mask credential fields in `HostConfigResourceMapper.ToResource()`.
+- **Evidence**: `src/Lidarr.Api.V1/Config/HostConfigResource.cs`, `src/Lidarr.Api.V1/Config/HostConfigController.cs`, `src/Lidarr.Http/ClientSchema/SchemaBuilder.cs:38-44`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

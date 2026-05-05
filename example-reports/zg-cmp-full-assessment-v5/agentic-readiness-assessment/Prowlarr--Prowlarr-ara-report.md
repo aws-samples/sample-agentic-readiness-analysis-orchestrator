@@ -66,25 +66,22 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ---
 
-### DATA-Q1: Sensitive Data Classification
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 
 - **Severity**: BLOCKER
-- **Finding**: Prowlarr stores sensitive data across multiple categories:
-  - **User credentials**: `Users` table stores `Username`, `Password` (hashed), `Salt`, and `Iterations` (`src/NzbDrone.Core/Authentication/User.cs`).
-  - **Indexer credentials**: Indexer definitions store API keys, cookies, usernames, and passwords in a JSON `Settings` column (visible in `src/NzbDrone.Core/Indexers/IndexerDefinition.cs` and exposed via `src/Prowlarr.Api.V1/Indexers/IndexerResource.cs`).
-  - **Download client credentials**: Download client settings similarly contain authentication tokens and connection strings.
-  - **Application sync credentials**: Connected *arr application settings contain API keys for remote systems.
-  
-  Stage A = **Yes** — the system stores user credentials, third-party API keys, and authentication secrets.
-  
-  Stage B: No field-level data classification, no tagging, no access controls differentiating which API consumers can read credential fields. The OpenAPI spec exposes indexer settings (including credential fields) to any authenticated caller. No data masking or field-level encryption.
-- **Gap**: Sensitive fields (passwords, API keys, tokens) are not classified at the schema level, not tagged, and not protected by field-level access controls. An agent with the shared API key can read indexer credentials.
+- **Stage A**: Yes — Prowlarr's *primary* purpose is storing indexer/tracker credentials (API keys, passkeys, cookies) AND downstream *arr app credentials (Sonarr/Radarr/Lidarr API keys for syncing). Also stores `Users` table with hashed passwords, master app API key, admin Forms-auth password.
+- **B1 — API response scoping: BLOCKER.**
+  - **Provider settings path: CLEAR.** `SchemaBuilder.ToSchema()` (`src/Prowlarr.Http/ClientSchema/SchemaBuilder.cs:39-42`) replaces `PrivacyLevel.ApiKey`/`PrivacyLevel.Password` fields with `"********"`. Indexer settings and Applications settings (downstream *arr credentials) are all masked.
+  - **HostConfigResource path: BLOCKER.** `src/Prowlarr.Api.V1/Config/HostConfigResource.cs` declares unmasked `string ApiKey`, `string Password`, `string SslCertPassword`, `string ProxyPassword` properties. `HostConfigController.GetHostConfig()` (`src/Prowlarr.Api.V1/Config/HostConfigController.cs:99-105`) returns these directly via `HostConfigResourceMapper.ToResource`. `GET /api/v1/config/host` returns the master API key and admin password **unmasked in plaintext**.
+  - **Metadata-leakage caveat**: `Field.cs:22` exposes the `Privacy` enum value itself in API responses, revealing which fields contain sensitive data (reconnaissance signal, not a direct leak).
+- **B2 — Access control differentiation: RISK-SAFETY.** Single global API key (`src/Prowlarr.Http/Authentication/ApiKeyAuthenticationHandler.cs:27-72`). Any valid key = full admin access; no read-only vs admin differentiation.
+- **B3 — Formal classification metadata: PARTIAL (contributes no finding).** `PrivacyLevel` enum is applied to provider/application settings but not `HostConfigResource`.
+- **Overall (read-only scope)**: B1 fires as BLOCKER — a read-only agent calling `GET /api/v1/config/host` exfiltrates the master API key, enabling impersonation across the entire Servarr stack that connects to Prowlarr (Sonarr/Radarr/Lidarr sync). Compounded credential risk. → **DATA-Q1 = BLOCKER**.
+- **Gap**: Same as the Servarr family — `HostConfigResource` bypasses the `SchemaBuilder`/`PrivacyLevel` protection that correctly masks provider settings.
 - **Remediation**:
-  - **Immediate**: Add a `SensitiveResourceAttribute` or equivalent to credential fields in API resources. Modify resource mappers to redact sensitive fields (replace with `"(redacted)"`) in API responses for read operations. Prowlarr already has a `FieldDefinition.Privacy` property in the client schema (`src/Prowlarr.Http/ClientSchema/`) — extend this to enforce server-side redaction.
-  - **Target State**: Credential fields are classified as sensitive at the schema level and are never returned in API GET responses. Write operations accept credentials but never echo them back.
-  - **Estimated Effort**: Medium (2–4 weeks)
-  - **Dependencies**: AUTH-Q2 (scoped permissions would allow some agents to access unredacted data if needed)
-- **Evidence**: `src/NzbDrone.Core/Authentication/User.cs`, `src/NzbDrone.Core/Indexers/IndexerDefinition.cs`, `src/Prowlarr.Api.V1/Indexers/IndexerResource.cs`, `src/Prowlarr.Http/ClientSchema/`
+  - **Immediate**: Mask `ApiKey`/`Password`/`SslCertPassword`/`ProxyPassword` in `HostConfigResourceMapper.ToResource()`. Consider omitting `Privacy` enum metadata from non-admin responses to reduce reconnaissance.
+  - **Estimated Effort**: Low.
+- **Evidence**: `src/Prowlarr.Api.V1/Config/HostConfigResource.cs` (unmasked credential properties), `src/Prowlarr.Api.V1/Config/HostConfigController.cs:99-105`, `src/Prowlarr.Http/ClientSchema/SchemaBuilder.cs:39-42` (working masking), `src/Prowlarr.Http/ClientSchema/Field.cs:22` (Privacy metadata exposed), `src/NzbDrone.Core/Annotations/FieldDefinitionAttribute.cs:26,95-101`, `src/Prowlarr.Http/Authentication/ApiKeyAuthenticationHandler.cs:27-72`, `src/NzbDrone.Core/Authentication/User.cs`, `src/NzbDrone.Core/Indexers/IndexerDefinition.cs`.
 
 ## RISKs
 
@@ -709,12 +706,12 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 - **Severity**: BLOCKER
-- **Finding**: Stores user credentials (hashed passwords, salts), indexer API keys/cookies, download client credentials, application sync API keys. No field-level classification or access controls.
-- **Gap**: Sensitive data not classified, tagged, or protected at the field level.
-- **Recommendation**: Implement field-level redaction for credential fields in API responses.
-- **Evidence**: `src/NzbDrone.Core/Authentication/User.cs`, `src/NzbDrone.Core/Indexers/IndexerDefinition.cs`
+- **Finding**: B1 BLOCKER for `HostConfigResource` — `GET /api/v1/config/host` returns master `ApiKey`, admin `Password`, `SslCertPassword`, `ProxyPassword` unmasked. Indexer and application-sync settings ARE properly masked via `PrivacyLevel` + `SchemaBuilder`. B2 RISK-SAFETY (single global API key). B3 partial. Compounded risk because the Prowlarr key enables impersonation across every connected *arr sync. See BLOCKERs section above.
+- **Gap**: Coverage gap in `HostConfigResource` + `Privacy` metadata itself leaks in `Field.cs` responses (reconnaissance).
+- **Recommendation**: Mask credential fields in `HostConfigResourceMapper.ToResource()`; consider suppressing `Privacy` metadata in non-admin responses.
+- **Evidence**: `src/Prowlarr.Api.V1/Config/HostConfigResource.cs`, `src/Prowlarr.Api.V1/Config/HostConfigController.cs:99-105`, `src/Prowlarr.Http/ClientSchema/SchemaBuilder.cs:39-42`, `src/Prowlarr.Http/ClientSchema/Field.cs:22`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

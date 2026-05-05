@@ -24,11 +24,11 @@
 
 ---
 
-## Readiness Profile: Not Agent-Integrable
+## Readiness Profile: Remediation Required
 
-**BLOCKERs**: 3 | **RISK-SAFETY**: 9 | **RISK-QUALITY**: 17 | **INFOs**: 11
+**BLOCKERs**: 2 | **RISK-SAFETY**: 9 | **RISK-QUALITY**: 17 | **INFOs**: 12
 
-> Exclude from agent toolset or plan major remediation before re-evaluation. Three BLOCKERs identified: undocumented API surface (API-Q1), no machine identity authentication mechanism (AUTH-Q1), and unclassified sensitive data (DATA-Q1). These must all be resolved before any agent integration — including pilots.
+> Resolve all blockers before any agent deployment — including pilots. Two BLOCKERs remain: undocumented API surface (API-Q1) and no machine identity authentication (AUTH-Q1). DATA-Q1 is no longer a BLOCKER: the server excludes password from responses and encrypts external-service credentials with a `credential_id` indirection (B1 CLEAR), and enforces strict per-organization multi-tenant isolation plus CASL/`FeatureAbilityGuard`/`PolicyGuard` RBAC (B2 CLEAR); only formal classification metadata (B3) is absent, which resolves to INFO.
 
 ---
 
@@ -36,10 +36,10 @@
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 3 |
+| BLOCKER | 2 |
 | RISK-SAFETY | 9 |
 | RISK-QUALITY | 17 |
-| INFO | 11 |
+| INFO | 12 |
 | N/A | 0 |
 | Not Evaluated (extended) | 3 |
 | **Total** | **43** |
@@ -76,17 +76,7 @@
   - **Dependencies**: Resolving this first enables AUTH-Q2 (scoped permissions) and AUTH-Q6 (audit attribution).
 - **Evidence**: `server/src/modules/auth/controller.ts`, `server/src/modules/session/service.ts`, `server/src/entities/user_personal_access_tokens.entity.ts`, `server/package.json` (passport-jwt, @nestjs/jwt).
 
-### DATA-Q1: Sensitive Data Classification
-
-- **Severity**: BLOCKER
-- **Finding**: **Stage A — Scope gate: YES.** The system stores PII and sensitive data including: user email, phone number, password digest, first/last name (`user.entity.ts`); invitation tokens, forgot-password tokens (`user.entity.ts`); encrypted credential values for data source connections (`credential.entity.ts` — `value_ciphertext`); SSO configuration secrets (`sso_config.entity.ts`); personal access token hashes (`user_personal_access_tokens.entity.ts`); session tokens (`user_sessions.entity.ts`); organization data. **Stage B — Classification check: FAIL.** While the `EncryptionService` provides AES-256-GCM column-level encryption (Lockbox pattern) for credential values, there is **no field-level data classification, no PII tagging, and no access control policy distinguishing sensitive fields from non-sensitive fields**. No Amazon Macie integration. No data classification tags in Terraform IaC. An agent with read access to the users API could retrieve email, phone number, and other PII without explicit authorization for those specific fields.
-- **Gap**: Sensitive data exists but is not classified or tagged at the field level. No controls prevent an agent from retrieving PII without explicit field-level authorization.
-- **Remediation**:
-  - **Immediate**: Create a data classification inventory mapping all entities to sensitivity levels (PII, PHI, credentials, public). Mark credential and SSO fields as restricted.
-  - **Target State**: Field-level access controls on API responses (e.g., serialization groups that exclude PII fields unless explicitly authorized). Data classification tags on database and IaC resources.
-  - **Estimated Effort**: High (4–8 weeks for classification + field-level access controls)
-  - **Dependencies**: AUTH-Q1 (machine identity) should be resolved first — you cannot enforce field-level access controls without knowing who is calling.
-- **Evidence**: `server/src/entities/user.entity.ts` (email, phoneNumber, password, invitationToken, forgotPasswordToken), `server/src/entities/credential.entity.ts` (valueCiphertext), `server/src/modules/encryption/service.ts`, `terraform/ECS/main.tf` (no data classification tags).
+**Remediation Prioritization**: Resolve API-Q1 (OpenAPI spec) and AUTH-Q1 (machine identity) first — they block every downstream control. DATA-Q1 is no longer a BLOCKER (see INFOs): password_digest is excluded from user responses, external-service credentials are stored encrypted under a `credential_id` indirection, and all data-source queries chain `organization_id` filters. The remaining gap is formal classification metadata (B3), which is aspirational, not a deployment gate.
 
 ## RISKs
 
@@ -359,6 +349,18 @@
 - **Evidence**: `terraform/ECS/main.tf` (aws_db_instance without storage_encrypted), `server/src/modules/encryption/service.ts` (application-level encryption).
 
 ## INFOs — Architecture and Design Inputs
+
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered) — Demoted from BLOCKER
+
+- **Severity**: INFO
+- **Stage A**: Yes — User (bcrypt passwords, username), Session (IP-derived geolocation, browser fingerprint), WebsiteEvent (referrer/UTM/click IDs), SessionData/EventData (arbitrary user-tracked fields), Revenue (financial amounts).
+- **B1 — Agent-facing API response scoping: CLEAR.** `findUser()` uses `select: { password: includePassword, ... }` with `includePassword` defaulting to false (`src/queries/prisma/user.ts:14-28`). `src/app/api/admin/users/route.ts` uses explicit `omit: { password: true }`. The login route (`src/app/api/auth/login/route.ts`) returns `{ token, user: { id, username, role, createdAt, isAdmin, teams } }` — password is never serialized into any response.
+- **B2 — Access control differentiation: CLEAR.** Seven distinct roles with a real permission matrix (`src/lib/constants.ts` — `ROLE_PERMISSIONS` maps admin, user, view-only, team-owner, team-manager, team-member, team-view-only to specific capabilities). Resource-level guards in `src/permissions/website.ts` and `src/permissions/user.ts` enforce ownership and team-scope checks.
+- **B3 — Formal classification metadata: INFO.** No `@PII`/`@Sensitive` decorators on Prisma models, no Macie/Presidio integration, no documented classification policy.
+- **Overall**: Only B3 contributes a finding → **DATA-Q1 = INFO**. Systematic response-shaping and granular RBAC mean the actual agent-leakage risk is low.
+- **Implication**: Not a deployment gate. Classification metadata is a governance concern, not a code-level safety gap.
+- **Recommendation (aspirational)**: Add schema-comment or decorator-based classification tags to `prisma/schema.prisma`; consider a lint/CI check that prevents `includePassword: true` outside authentication paths.
+- **Evidence**: `src/queries/prisma/user.ts`, `src/app/api/admin/users/route.ts`, `src/app/api/auth/login/route.ts`, `src/lib/constants.ts`, `src/permissions/website.ts`, `src/permissions/user.ts`, `prisma/schema.prisma`.
 
 ### API-Q4: Idempotent Write Operations ⚡
 - **Severity**: INFO
@@ -635,12 +637,15 @@
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
-- **Severity**: BLOCKER
-- **Finding**: Stage A: YES — stores PII (email, phone, password digest, tokens). Stage B: FAIL — no field-level classification, no PII tagging. Lockbox encryption protects credentials but no classification taxonomy.
-- **Gap**: Sensitive data unclassified. No field-level access controls.
-- **Recommendation**: Create data classification inventory. Implement field-level serialization controls.
-- **Evidence**: `server/src/entities/user.entity.ts`, `server/src/entities/credential.entity.ts`, `server/src/modules/encryption/service.ts`.
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
+- **Severity**: INFO
+- **Stage A**: Yes — stores user PII (email, phone, password digest, invitation/forgot-password tokens), encrypted external-service credentials (`credential.entity.ts` — `value_ciphertext`), SSO secrets, PAT hashes, session tokens.
+- **B1 — API response scoping**: CLEAR. User paginated queries explicitly omit password from the `select` clause (`server/src/modules/users/repositories/repository.ts:60-75`). The `EncryptionService` applies AES-256-GCM (Lockbox) per-column and returns `{ credential_id, encrypted: true }` references in API responses rather than plaintext; `tokenData` is explicitly filtered (`server/src/modules/data-sources/util.service.ts:106-131`).
+- **B2 — Access control differentiation**: CLEAR. All data-source queries chain `.andWhere('data_source.organization_id = :organizationId', ...)` (`server/src/modules/data-sources/repository.ts:67`). Controllers apply `@UseGuards(FeatureAbilityGuard)` and `@UseGuards(PolicyGuard)`; roles distinguish `USER_ROLE.ADMIN` from `END_USER` with CASL abilities (changeRole, archiveUser, inviteUser, etc.).
+- **B3 — Formal classification metadata**: Absent → INFO. No `@Sensitive`/`@PII` decorators, no Macie/Presidio, no classification tags in `terraform/ECS/main.tf`. Security is encryption-by-design.
+- **Overall**: Highest sub-check firing is B3 (INFO) → DATA-Q1 = INFO. Not a deployment gate.
+- **Recommendation (aspirational)**: Add entity-level classification metadata (custom decorators or schema comments) to document which columns are PII, credentials, or public; publish a brief DATA_CLASSIFICATION policy.
+- **Evidence**: `server/src/entities/user.entity.ts`, `server/src/entities/credential.entity.ts`, `server/src/modules/encryption/service.ts`, `server/src/modules/data-sources/repository.ts`, `server/src/modules/data-sources/util.service.ts`, `server/src/modules/users/repositories/repository.ts`, `server/src/modules/casl/casl-ability.factory.ts`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

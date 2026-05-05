@@ -52,17 +52,23 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ## BLOCKERs — Must Resolve Before Agent Deployment
 
-### DATA-Q1: Sensitive Data Classification — BLOCKER
+### DATA-Q1: Sensitive Data Classification — BLOCKER ⚡ (Tiered)
 
 - **Severity**: BLOCKER
-- **Finding**: ThingsBoard stores and processes sensitive data including user credentials (passwords, API keys, OAuth2 tokens), tenant-specific business data, device credentials (access tokens, X.509 certificates), and user PII (email addresses, names in the `tb_user` table). The SQL schema (`dao/src/main/resources/sql/schema-entities.sql`) defines tables for users, devices, customers, and credentials with no field-level classification tags. No data classification framework, Macie integration, or field-level access controls were found in the codebase. The `user_credentials` table stores password hashes and activation tokens. The `device_credentials` table stores device access tokens and X.509 certificates. The `oauth2_client` table stores client secrets. None of these fields carry classification metadata.
-- **Gap**: No sensitive data classification or tagging system exists. Fields containing PII, credentials, and business-sensitive data are not labeled at the schema or application level. No field-level access controls prevent an agent from retrieving credential fields through entity query APIs.
+- **Stage A**: Yes — ThingsBoard stores tenant PII (email, names, phone), user auth credentials (separate `UserCredentials` entity with password hash), device credentials (access tokens, MQTT basic, X.509 certificates, LwM2M RPK), OAuth2 client secrets, and integration configs with embedded broker/HTTP endpoint credentials.
+- **B1 — Agent-facing API response scoping: BLOCKER.**
+  - **User endpoint: CLEAR.** `User` entity (`common/data/.../User.java`) does not carry the password field — password lives in a separate `UserCredentials` entity that is never serialized via `GET /api/user/{id}`.
+  - **Device credentials endpoint: BLOCKER.** `DeviceController.getDeviceCredentialsByDeviceId()` (`application/src/main/java/org/thingsboard/server/controller/DeviceController.java:307-318`) returns the full `DeviceCredentials` entity (`common/data/.../DeviceCredentials.java`) with `credentialsId` and `credentialsValue` fields serialized **without `@JsonIgnore`**. A CUSTOMER_USER or TENANT_ADMIN calling `GET /api/device/{deviceId}/credentials` receives access tokens, MQTT passwords, X.509 PEM certificates, and LwM2M RPK credentials in plaintext. Service layer (`DefaultTbDeviceService.getDeviceCredentialsByDeviceId`) applies tenant isolation but does not mask the credentials themselves. A read-only agent with CUSTOMER_USER scope can iterate devices and exfiltrate every device's credentials.
+- **B2 — Access control differentiation: CLEAR (with caveat).** Three-tier authority model (`SYS_ADMIN` / `TENANT_ADMIN` / `CUSTOMER_USER` — `common/data/.../security/Authority.java`) with `@PreAuthorize` enforcement on every endpoint and `checkDeviceId(deviceId, Operation.READ_CREDENTIALS)` verifying tenant-scope. Tenant isolation is strong. Caveat: CUSTOMER_USER retains `READ_CREDENTIALS` for devices assigned to their customer — there is no finer read-only / no-credentials split.
+- **B3 — Formal classification metadata: INFO.** `DeviceCredentials` is separated from `Device` (good practice) and `UserCredentials` is separated from `User` (good practice) — structural classification exists, but no `@Sensitive`/`@Secret` annotations and no `@JsonIgnore` on `credentialsValue`.
+- **Overall (read-only scope)**: B1 fires as BLOCKER — device credentials endpoint returns access tokens and certificates in plaintext to any CUSTOMER_USER. A read-only agent scoped to a customer can exfiltrate every device's authentication material. → **DATA-Q1 = BLOCKER**.
+- **Gap**: Device credentials endpoint returns plaintext secrets. The structural separation of `DeviceCredentials` from `Device` is correct; the endpoint needs to either mask the value, return a reference-only shape, or be restricted to TENANT_ADMIN only (removing CUSTOMER_USER).
 - **Remediation**:
-  - **Immediate**: Inventory all tables and fields containing PII, credentials, and sensitive business data. Create a data classification map (PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED) for each field in the schema.
-  - **Target State**: Field-level classification tags on all sensitive columns, with API-layer enforcement that prevents agent identities from accessing RESTRICTED fields without explicit authorization.
-  - **Estimated Effort**: Medium (30–60 days for classification; 60–90 days for enforcement)
-  - **Dependencies**: AUTH-Q2 (scoped permissions must exist to enforce field-level access controls)
-- **Evidence**: `dao/src/main/resources/sql/schema-entities.sql`, `application/src/main/resources/thingsboard.yml`
+  - **Immediate**: Apply `@JsonIgnore` to `credentialsValue` on `DeviceCredentials` and introduce a `DeviceCredentialsSummary` DTO that returns `credentialsType` only (no value). Gate any value-revealing endpoint behind TENANT_ADMIN + explicit "reveal" intent.
+  - **Target State**: Device credentials are never returned in read responses; rotation and delivery of new credentials uses a secure out-of-band channel. Field-level encryption at rest (consider integration with a secrets manager).
+  - **Estimated Effort**: Medium (2–4 weeks for DTO + endpoint gating).
+  - **Dependencies**: Tenant isolation (B2) already in place; AUTH-Q6 audit logging should capture any credential-reveal call.
+- **Evidence**: `application/src/main/java/org/thingsboard/server/controller/DeviceController.java:307-318`, `common/data/src/main/java/org/thingsboard/server/common/data/security/DeviceCredentials.java` (unmasked `credentialsValue`/`credentialsId`), `application/src/main/java/org/thingsboard/server/service/entitiy/device/DefaultTbDeviceService.java:173-181`, `common/data/src/main/java/org/thingsboard/server/common/data/security/Authority.java`, `common/data/src/main/java/org/thingsboard/server/common/data/User.java` (no password field — correctly isolated).
 
 ## RISKs
 
@@ -621,12 +627,12 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 - **Severity**: BLOCKER
-- **Finding**: System stores PII, credentials, and device data with no classification or field-level tagging.
-- **Gap**: No data classification system.
-- **Recommendation**: See BLOCKERs section.
-- **Evidence**: `dao/src/main/resources/sql/schema-entities.sql`
+- **Finding**: B1 BLOCKER — `DeviceController.getDeviceCredentialsByDeviceId()` returns plaintext access tokens, MQTT passwords, and X.509 certificates to any CUSTOMER_USER via `GET /api/device/{deviceId}/credentials`. User endpoint is CLEAR (password lives in separate `UserCredentials` entity, not serialized with `User`). B2 CLEAR (three-tier `Authority` model with strong tenant isolation via `checkDeviceId` + `Operation.READ_CREDENTIALS`), but CUSTOMER_USER still retains `READ_CREDENTIALS`. B3 INFO (no `@JsonIgnore` or `@Sensitive` on `credentialsValue`). See BLOCKERs section above.
+- **Gap**: `credentialsValue` serialized unmasked; CUSTOMER_USER-scope read access sufficient to exfiltrate device credentials.
+- **Recommendation**: `@JsonIgnore` on `credentialsValue`; separate read endpoint gated to TENANT_ADMIN; out-of-band credential rotation.
+- **Evidence**: `application/src/main/java/org/thingsboard/server/controller/DeviceController.java:307-318`, `common/data/src/main/java/org/thingsboard/server/common/data/security/DeviceCredentials.java`, `common/data/src/main/java/org/thingsboard/server/common/data/User.java` (correctly isolated).
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

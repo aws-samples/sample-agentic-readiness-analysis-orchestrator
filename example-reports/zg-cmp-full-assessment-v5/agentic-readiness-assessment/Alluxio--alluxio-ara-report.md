@@ -22,11 +22,11 @@
 
 ---
 
-## Readiness Profile: Remediation Required
+## Readiness Profile: Pilot-Ready (Safety Concerns)
 
-**BLOCKERs**: 1 | **RISK-SAFETY**: 8 | **RISK-QUALITY**: 15 | **INFOs**: 17
+**BLOCKERs**: 0 | **RISK-SAFETY**: 8 | **RISK-QUALITY**: 15 | **INFOs**: 18
 
-Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days.
+With the DATA-Q1 reclassification from BLOCKER to INFO (see INFOs below), Alluxio has no remaining BLOCKERs. Proceed with a supervised pilot; prioritize RISK-SAFETY remediation before expanding agent scope.
 
 ---
 
@@ -34,10 +34,10 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 1 |
+| BLOCKER | 0 |
 | RISK-SAFETY | 8 |
 | RISK-QUALITY | 15 |
-| INFO | 17 |
+| INFO | 18 |
 | N/A | 0 |
 | Not Evaluated (extended) | 2 |
 | **Total** | **43** |
@@ -50,17 +50,7 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ## BLOCKERs — Must Resolve Before Agent Deployment
 
-### DATA-Q1: Sensitive Data Classification — BLOCKER
-
-- **Severity**: BLOCKER
-- **Finding**: Alluxio is a virtual distributed file system / caching layer that stores and caches arbitrary user files from Under File Systems (S3, HDFS, GCS, etc.). Since `has_persistent_data_store=true` and the stored data includes arbitrary user content (which can contain PII, PHI, financial records, credentials, or any other data stored in the underlying file systems), Stage A = Yes. Stage B evaluation: No field-level data classification tags, no PII detection (Macie or equivalent), no column-level access controls on cached data, and no data classification policies found in the codebase. The ACL system (POSIX-style owner/group/other + extended ACLs) controls access to files/directories but does not classify data content. Alluxio caches files opaquely — it has no awareness of whether cached content contains sensitive data.
-- **Gap**: No data classification framework exists. Alluxio caches files from underlying storage without classifying or tagging them by sensitivity level. An agent with read access to Alluxio could retrieve cached files containing PII, PHI, or financial data without any content-aware access control preventing it.
-- **Remediation**:
-  - **Immediate**: Implement a metadata tagging mechanism for sensitivity classification on Alluxio paths (leveraging the existing xattr support in `SetAttributePOptions`). Define a classification taxonomy (e.g., `sensitivity=public|internal|confidential|restricted`) and require classification before granting agent access.
-  - **Target State**: All agent-accessible paths have sensitivity classification metadata. Access controls enforce classification-aware restrictions (e.g., agents cannot read paths classified as `restricted` without explicit authorization).
-  - **Estimated Effort**: High
-  - **Dependencies**: Requires integration with upstream data governance (the UFS owners must classify their data). AUTH-Q2 (scoped permissions) interacts — classification without enforcement is insufficient.
-- **Evidence**: `core/transport/src/main/proto/grpc/file_system_master.proto` (FileInfo message, xattr field), `core/common/src/main/java/alluxio/security/authorization/AccessControlList.java`, `conf/alluxio-site.properties.template`
+_None. DATA-Q1 was previously BLOCKER under the binary "formal classification absent" rule; under the tiered model it resolves to INFO (see INFOs section). No BLOCKERs remain._
 
 ## RISKs
 
@@ -348,6 +338,17 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 - **Evidence**: `core/common/src/main/java/alluxio/conf/PropertyKey.java` (UNDERFS_S3_SERVER_SIDE_ENCRYPTION_ENABLED), `integration/kubernetes/helm-chart/alluxio/values.yaml`, `core/server/master/src/main/java/alluxio/master/metastore/rocks/RocksInodeStore.java`
 
 ## INFOs — Architecture and Design Inputs
+
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered) — Demoted from BLOCKER
+
+- **Severity**: INFO
+- **Stage A**: Yes — Alluxio caches arbitrary UFS content and stores UFS credentials (S3/HDFS/GCS) in configuration.
+- **B1 — API response scoping: CLEAR.** Configuration REST endpoints (`/master/info`, `/worker/info`, `/proxy/info`) use `useDisplayValue(true)` which triggers `InstancedConfiguration.java:131-133` to mask any property with `DisplayType.CREDENTIALS` as `"******"`. `CredentialPropertyKeys` provides a centralized, reflection-based registry of credential properties.
+- **B2 — Access control differentiation: CLEAR.** POSIX-style permissions with owner/group/world mode bits enforced by `PermissionChecker` on every file operation; extended ACLs via `AccessControlList`.
+- **B3 — Formal classification metadata: INFO.** `DisplayType.CREDENTIALS` is a property-level primitive; no file/path content classification.
+- **Overall**: Only B3 fires → **DATA-Q1 = INFO**. UFS credentials are properly masked via the `DisplayType.CREDENTIALS` pattern.
+- **Recommendation (aspirational)**: Add xattr-based path classification convention; integrate with UFS-level data governance.
+- **Evidence**: `core/common/src/main/java/alluxio/conf/InstancedConfiguration.java:131-133`, `core/common/src/main/java/alluxio/conf/CredentialPropertyKeys.java`, `core/common/src/main/java/alluxio/conf/PropertyKey.java` (DisplayType enum), `core/common/src/main/java/alluxio/security/authorization/AccessControlList.java`.
 
 ### API-Q1: Documented API Interface — INFO
 
@@ -686,12 +687,15 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
-- **Severity**: BLOCKER
-- **Finding**: Stage A = Yes (Alluxio caches arbitrary user files from UFS, `has_persistent_data_store=true`). Stage B: No data classification tags, no PII detection, no content-aware access controls. ACL system controls file/directory access but not data sensitivity classification.
-- **Gap**: No data classification framework. Cached files may contain sensitive data without classification.
-- **Recommendation**: Implement sensitivity classification using xattr metadata. Require classification before granting agent access.
-- **Evidence**: `core/transport/src/main/proto/grpc/file_system_master.proto` (xattr field), `core/common/src/main/java/alluxio/security/authorization/AccessControlList.java`
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
+- **Severity**: INFO
+- **Stage A**: Yes — Alluxio caches arbitrary UFS content which may include PII/credentials depending on source, and stores UFS connection credentials (S3 keys, HDFS Kerberos, GCS secrets) as configuration.
+- **B1 — API response scoping: CLEAR.** All configuration REST endpoints (`/master/info`, `/worker/info`, `/proxy/info`) call `getConfigurationInternal()` which applies `ConfigurationValueOptions.defaults().useDisplayValue(true)`. In `InstancedConfiguration.java:131-133`, any property whose `PropertyKey.DisplayType == CREDENTIALS` is masked to `"******"` before serialization. `CredentialPropertyKeys` provides a centralized registry of credential properties via reflection.
+- **B2 — Access control differentiation: CLEAR.** POSIX-style permissions with owner/group/world mode bits enforced by `PermissionChecker` on all file operations. Extended ACLs via `AccessControlList.java`. Audit context extracts owner/group/mode for logging.
+- **B3 — Formal classification metadata: INFO.** `DisplayType.CREDENTIALS` is a property-level classification primitive but not a field-level file/path classification system.
+- **Overall**: B1 CLEAR + B2 CLEAR + B3 INFO → **DATA-Q1 = INFO**. UFS credential exfiltration via config API is prevented by masking.
+- **Recommendation (aspirational)**: Add xattr-based path classification convention; integrate with UFS-level data governance.
+- **Evidence**: `core/common/src/main/java/alluxio/conf/InstancedConfiguration.java:131-133` (CREDENTIALS masking), `core/common/src/main/java/alluxio/conf/CredentialPropertyKeys.java`, `core/common/src/main/java/alluxio/conf/PropertyKey.java` (DisplayType.CREDENTIALS enum), `core/common/src/main/java/alluxio/security/authorization/AccessControlList.java`, `core/common/src/main/java/alluxio/security/authorization/Mode.java`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

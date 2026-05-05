@@ -59,17 +59,23 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
   - **Dependencies**: AUTH-Q6 (audit logging) — attribution is meaningless without logs that record it.
 - **Evidence**: `src/Sonarr.Http/Authentication/ApiKeyAuthenticationHandler.cs` (lines 59–67: single claim `ApiKey: true`), `src/NzbDrone.Core/Configuration/ConfigFileProvider.cs` (single `ApiKey` property)
 
-### DATA-Q1: Sensitive Data Classification
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 
 - **Severity**: BLOCKER
-- **Finding**: **Stage A: Yes** — Sonarr stores sensitive data in its database. Download client credentials (passwords, API keys), indexer API keys, and notification webhook URLs are stored as provider settings via `ProviderDefinition` / `ProviderSettingConverter`. PostgreSQL connection passwords are stored in the XML config file. **Stage B:** No field-level data classification exists. No data tagging in the database schema. No encryption at the field level for credentials stored in provider settings. Download client passwords and indexer API keys are stored in the `Settings` JSON column without field-level encryption or classification controls.
-- **Gap**: Sensitive credentials stored in the database are not classified, tagged, or protected with field-level controls. An agent with read access to the API could potentially retrieve provider settings that include embedded credentials.
+- **Stage A**: Yes — Sonarr stores the application's master API key, admin Forms-auth password, SSL certificate password, and proxy password in config; plus third-party indexer API keys, download client passwords, and notification webhook tokens as provider settings.
+- **B1 — API response scoping: BLOCKER.** Two distinct patterns exist and the framework's own masking protection applies unevenly:
+  - **Provider settings path: CLEAR.** Indexer/download client/notification settings flow through `SchemaBuilder.ToSchema()` (`src/Sonarr.Http/ClientSchema/SchemaBuilder.cs:40-44`), which replaces any field marked `PrivacyLevel.ApiKey` or `PrivacyLevel.Password` with `"********"` (`PRIVATE_VALUE`) before serialization. `ProviderControllerBase.GetAll()` calls `ToResource()` → `SchemaBuilder.ToSchema()` for every provider, so `GET /api/v3/indexer/{id}` and `GET /api/v3/downloadclient/{id}` return masked credentials. CLEAR.
+  - **HostConfigResource path: BLOCKER.** `src/Sonarr.Api.V3/Config/HostConfigResource.cs` is a plain POCO with public `string ApiKey`, `string Password`, `string PasswordConfirmation`, `string SslCertPassword`, and `string ProxyPassword` properties — **none** decorated with `FieldDefinition`/`Privacy`. `HostConfigController.GetHostConfig()` (`src/Sonarr.Api.V3/Config/HostConfigController.cs:106-116`) reads `_configFileProvider.ToResource(_configService)` which copies `model.ApiKey` → `resource.ApiKey` directly. The response to `GET /api/v3/config/host` returns the master API key, the admin Forms-auth password, the SSL certificate password, and the proxy password **unmasked in plaintext**.
+- **B2 — Access control differentiation: RISK-SAFETY.** Single global API key (`ApiKeyAuthenticationHandler.cs:55-76` compares against `_apiKey = config.ApiKey`). No multi-user RBAC; no read-only vs admin key scopes. Any authenticated caller has full access to `GET /config/host`.
+- **B3 — Formal classification metadata: PARTIAL (contributes no finding).** The `PrivacyLevel` enum (`Normal, Password, ApiKey, UserName` — `FieldDefinitionAttribute.cs:95-101`) IS formal field-level classification applied consistently to provider settings, but it is **not applied** to `HostConfigResource`. B3 is therefore partial: the primitive exists and works where it's used; the gap is coverage.
+- **Overall (read-only scope)**: B1 fires as BLOCKER because a read-only agent calling `GET /api/v3/config/host` exfiltrates the master API key itself (enabling impersonation of every future caller) plus stored admin, SSL, and proxy passwords. This is a credential-exfiltration BLOCKER regardless of scope. → **DATA-Q1 = BLOCKER**.
+- **Gap**: `HostConfigResource` bypasses the `SchemaBuilder`/`PrivacyLevel` protection that correctly masks provider settings. The master API key, admin password, SSL cert password, and proxy password are returned in plaintext.
 - **Remediation**:
-  - **Immediate**: Classify the `Settings` column in provider-related tables as containing credentials. Implement API-level response filtering to redact credential fields (passwords, API keys) from API responses unless explicitly requested by an elevated identity.
-  - **Target State**: All fields containing credentials are classified as `sensitive/credential`, redacted from API responses by default, and optionally encrypted at the field level in the database.
-  - **Estimated Effort**: Medium (3–6 weeks)
-  - **Dependencies**: AUTH-Q1 (per-agent identity) — field-level access control requires distinguishable identities.
-- **Evidence**: `src/NzbDrone.Core/ThingiProvider/ProviderDefinition.cs`, `src/NzbDrone.Core/Configuration/ConfigFileProvider.cs` (PostgresPassword, ApiKey properties), `src/NzbDrone.Core/Datastore/` (no field-level encryption or classification)
+  - **Immediate**: Redact or mask `ApiKey`, `Password`, `PasswordConfirmation`, `SslCertPassword`, and `ProxyPassword` in `HostConfigResourceMapper.ToResource()` before returning; or introduce a `[Sensitive]` attribute that `SchemaBuilder` honors for non-provider resources.
+  - **Target State**: All sensitive fields across the codebase flow through a single masking pipeline. `PrivacyLevel` applied uniformly. Separate endpoint for explicit "show API key" with additional confirmation.
+  - **Estimated Effort**: Low (2–4 weeks) — the masking primitive already exists; this is a coverage fix.
+  - **Dependencies**: AUTH-Q2 (scoped permissions) and AUTH-Q1 (per-agent identity) reinforce the fix. ENG-Q5 (encryption at rest) is complementary.
+- **Evidence**: `src/Sonarr.Api.V3/Config/HostConfigResource.cs` (unmasked `ApiKey`, `Password`, `SslCertPassword`, `ProxyPassword` properties), `src/Sonarr.Api.V3/Config/HostConfigController.cs:106-116` (returns resource without redaction), `src/Sonarr.Http/ClientSchema/SchemaBuilder.cs:40-44` (working masking for `PrivacyLevel.ApiKey`/`Password` in provider settings — shows the pattern that should be applied here), `src/NzbDrone.Core/Annotations/FieldDefinitionAttribute.cs` (PrivacyLevel enum), `src/Sonarr.Http/Authentication/ApiKeyAuthenticationHandler.cs:55-76` (single global API key).
 
 ## RISKs
 
@@ -663,12 +669,12 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 - **Severity**: BLOCKER
-- **Finding**: Stage A: Yes — stores download client credentials, indexer API keys, webhook URLs in database. Stage B: No field-level classification, no data tagging, no field-level encryption.
-- **Gap**: Sensitive credentials stored without classification or field-level access controls.
-- **Recommendation**: Classify credential fields, implement API response filtering to redact credentials by default.
-- **Evidence**: `src/NzbDrone.Core/ThingiProvider/ProviderDefinition.cs`, `src/NzbDrone.Core/Configuration/ConfigFileProvider.cs`
+- **Finding**: B1 BLOCKER for `HostConfigResource` — `GET /api/v3/config/host` returns master `ApiKey`, admin `Password`, `SslCertPassword`, `ProxyPassword` unmasked. Provider settings (indexer/download client/notification) ARE properly masked via `PrivacyLevel.ApiKey`/`PrivacyLevel.Password` + `SchemaBuilder.ToSchema()`. B2 RISK-SAFETY (single global API key, no RBAC). B3 partial. See BLOCKERs section above.
+- **Gap**: `HostConfigResource` bypasses the `SchemaBuilder` masking that correctly protects provider settings.
+- **Recommendation**: Apply the same masking pattern to `HostConfigResourceMapper.ToResource()`.
+- **Evidence**: `src/Sonarr.Api.V3/Config/HostConfigResource.cs`, `src/Sonarr.Api.V3/Config/HostConfigController.cs:106-116`, `src/Sonarr.Http/ClientSchema/SchemaBuilder.cs:40-44`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

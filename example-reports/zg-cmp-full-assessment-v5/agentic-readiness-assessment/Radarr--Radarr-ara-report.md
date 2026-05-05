@@ -64,17 +64,21 @@
   - **Dependencies**: Interacts with AUTH-Q6 (audit logging) — principal attribution is only useful if the principal is logged.
 - **Evidence**: `src/Radarr.Http/Authentication/ApiKeyAuthenticationHandler.cs`, `src/NzbDrone.Core/Configuration/ConfigFileProvider.cs` (single `ApiKey` property), `src/NzbDrone.Host/Startup.cs` (auth configuration)
 
-### DATA-Q1: Sensitive Data Classification
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 
 - **Severity**: BLOCKER
-- **Finding**: **Stage A**: The system stores sensitive data. Download client configurations include API keys, passwords, and credentials for indexers (Newznab, Torznab, HDBits, PassThePopcorn, etc.) and download clients, stored in the SQLite/PostgreSQL database. User authentication credentials (username/password hashes) are stored for forms-based auth. **Stage B**: No data classification tags exist at the field level. No field-level encryption is applied to stored credentials. Download client and indexer passwords are stored in the database without classification or access control differentiation. While the `ClientSchema` module includes a `PrivacyLevel` enum in `Field.cs` (indicating some awareness of sensitive fields in the UI), this does not constitute data classification with access controls preventing an agent from retrieving credentials via the API.
-- **Gap**: Sensitive credentials (download client API keys, indexer passwords) are stored without field-level classification, encryption, or access controls. An agent with the API key can retrieve all download client and indexer configurations including their credentials via `GET /api/v3/downloadclient` and `GET /api/v3/indexer`.
+- **Stage A**: Yes — Radarr stores the master API key, admin Forms-auth password, SSL/proxy passwords, and third-party provider credentials (indexer API keys, download client passwords).
+- **B1 — API response scoping: BLOCKER.**
+  - **Provider settings path: CLEAR.** `SchemaBuilder.ToSchema()` (`src/Radarr.Http/ClientSchema/SchemaBuilder.cs:40-44`) replaces any `PrivacyLevel.ApiKey`/`PrivacyLevel.Password` field with `"********"` before serialization. Indexer/download client/notification endpoints return masked credentials.
+  - **HostConfigResource path: BLOCKER.** `src/Radarr.Api.V3/Config/HostConfigResource.cs:27` declares `public string ApiKey { get; set; }` with **no FieldDefinition attribute**. `HostConfigController.GetHostConfig()` (`src/Radarr.Api.V3/Config/HostConfigController.cs:99-105`) returns the full resource, setting `resource.Username = user.Username; resource.Password = user.Password;` directly from the User service. `HostConfigResourceMapper` maps `model.ApiKey` to `resource.ApiKey` without filtering. `GET /api/v3/config/host` returns the master API key, admin password, SSL cert password, and proxy password **unmasked in plaintext**.
+- **B2 — Access control differentiation: RISK-SAFETY.** Single global API key; no multi-user RBAC.
+- **B3 — Formal classification metadata: PARTIAL (contributes no finding).** `PrivacyLevel` enum applied to provider settings but not to `HostConfigResource`.
+- **Overall (read-only scope)**: B1 fires as BLOCKER — master API key exfiltration enables complete system compromise regardless of read-only scope. → **DATA-Q1 = BLOCKER**.
+- **Gap**: `HostConfigResource` bypasses the `PrivacyLevel`/`SchemaBuilder` masking that correctly protects provider settings.
 - **Remediation**:
-  - **Immediate**: Implement field-level redaction on credential fields in API responses. When a GET request retrieves download client or indexer configurations, mask credential fields (return `"********"` instead of actual passwords/API keys). The `PrivacyLevel` enum already identifies sensitive fields — use it as the classification source.
-  - **Target State**: Sensitive fields are classified, redacted in API responses by default, and accessible only through a separate privileged endpoint or with an elevated scope.
-  - **Estimated Effort**: Medium (2–3 weeks)
-  - **Dependencies**: None
-- **Evidence**: `src/NzbDrone.Core/Configuration/ConfigFileProvider.cs` (credentials stored in config), `src/Radarr.Http/ClientSchema/` (PrivacyLevel enum), `src/Radarr.Api.V3/DownloadClient/`, `src/Radarr.Api.V3/Indexers/`, `src/Radarr.Api.V3/openapi.json`
+  - **Immediate**: Mask credential fields in `HostConfigResource` (apply `[Sensitive]` / `FieldDefinition` consistently). The masking primitive already exists in `SchemaBuilder`.
+  - **Estimated Effort**: Low.
+- **Evidence**: `src/Radarr.Api.V3/Config/HostConfigResource.cs:27` (unmasked `ApiKey`), `src/Radarr.Api.V3/Config/HostConfigController.cs:99-105` (returns `resource.Password = user.Password`), `src/Radarr.Http/ClientSchema/SchemaBuilder.cs:40-44` (working masking for provider settings), `src/NzbDrone.Core/Annotations/FieldDefinitionAttribute.cs:110-115` (PrivacyLevel enum).
 
 ## RISKs
 
@@ -695,12 +699,12 @@
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 - **Severity**: BLOCKER
-- **Finding**: Stores download client/indexer credentials without classification or field-level encryption.
-- **Gap**: No data classification or access controls on sensitive fields
-- **Recommendation**: Implement field-level redaction using existing PrivacyLevel enum
-- **Evidence**: `src/Radarr.Http/ClientSchema/`, `src/Radarr.Api.V3/DownloadClient/`
+- **Finding**: B1 BLOCKER for `HostConfigResource` — `GET /api/v3/config/host` returns master `ApiKey`, admin `Password`, `SslCertPassword`, `ProxyPassword` unmasked (these properties bypass the `PrivacyLevel`/`SchemaBuilder` masking that correctly protects provider settings). B2 RISK-SAFETY (single global API key). B3 partial (PrivacyLevel exists but not applied to HostConfigResource). See BLOCKERs section above for full details.
+- **Gap**: Coverage gap — `HostConfigResource` uses plain C# properties, not `FieldDefinition`-decorated fields, so `SchemaBuilder` never masks them.
+- **Recommendation**: Mask credential fields in `HostConfigResourceMapper.ToResource()`.
+- **Evidence**: `src/Radarr.Api.V3/Config/HostConfigResource.cs`, `src/Radarr.Api.V3/Config/HostConfigController.cs`, `src/Radarr.Http/ClientSchema/SchemaBuilder.cs:40-44`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

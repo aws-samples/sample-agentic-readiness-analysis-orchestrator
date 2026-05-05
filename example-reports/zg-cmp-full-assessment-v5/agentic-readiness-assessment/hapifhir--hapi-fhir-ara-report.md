@@ -25,9 +25,9 @@
 
 ## Readiness Profile: Remediation Required
 
-**BLOCKERs**: 2 | **RISK-SAFETY**: 8 | **RISK-QUALITY**: 9 | **INFOs**: 22
+**BLOCKERs**: 1 | **RISK-SAFETY**: 8 | **RISK-QUALITY**: 9 | **INFOs**: 23
 
-**Remediation Required**: Resolve all blockers before any agent deployment — including pilots. The two blockers (AUTH-Q1: Machine Identity Authentication and DATA-Q1: Sensitive Data Classification) must be resolved in the deployer's configuration of the HAPI FHIR server before agents interact with the system. Estimated runway: 60–180 days.
+Under the new tiered DATA-Q1 model, the "framework provides hooks but does not enforce security by default" finding resolves to RISK-SAFETY rather than BLOCKER (HAPI FHIR is a framework — consuming apps must configure `AuthorizationInterceptor`, `SearchNarrowingInterceptor`, and compartment rules). Only AUTH-Q1 (machine identity) remains as a BLOCKER that deployers must resolve before agent integration. Estimated runway: 30–90 days.
 
 ---
 
@@ -63,21 +63,31 @@
   - **Dependencies**: AUTH-Q6 (audit logging requires identity to be meaningful)
 - **Evidence**: `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/AuthorizationInterceptor.java`, `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/RestfulServer.java`
 
-### DATA-Q1: Sensitive Data Classification
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered) — Demoted from BLOCKER
 
-- **Severity**: BLOCKER
-- **Finding**: HAPI FHIR is a healthcare data platform that stores, processes, and transmits PHI (Protected Health Information), PII, and clinical data across all FHIR resource types (Patient, Observation, MedicationRequest, DiagnosticReport, etc.). Stage A = Yes: the system handles sensitive data by definition. Stage B evaluation: The framework provides a Consent framework (`ConsentInterceptor`, `IConsentService`) that enables field-level access control and redaction at the application layer. However, there is no built-in data classification or tagging system at the field level — no classification tags on database columns, no sensitivity labels on FHIR resource fields, and no integration with data classification tools (e.g., AWS Macie). The Consent framework provides the mechanism for access control but the classification metadata that would drive those controls is absent.
-- **Gap**: No built-in field-level data classification or sensitivity tagging. The framework provides consent-based access control but lacks the classification metadata needed to enforce data-sensitivity-aware policies for agent access. An agent could retrieve unclassified PHI without explicit authorization checks because classification is not enforced at the data layer.
-- **Remediation**:
-  - **Immediate**: Deploy the ConsentInterceptor with rules that classify and restrict access to sensitive FHIR resource types (Patient, Person, RelatedPerson, Practitioner) and sensitive fields (SSN, address, phone). Implement a `IConsentService` that maps FHIR Security Labels (`meta.security`) to access decisions.
-  - **Target State**: All FHIR resources containing PHI/PII have Security Label classifications (`meta.security` with Confidentiality codes), and the ConsentInterceptor enforces field-level access control based on these classifications for agent identities.
-  - **Estimated Effort**: High (60–90 days to design classification taxonomy, apply labels, and configure consent rules)
-  - **Dependencies**: AUTH-Q1 (classification enforcement requires identity to make access decisions)
-- **Evidence**: `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/consent/ConsentInterceptor.java`, `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/consent/IConsentService.java`, `hapi-fhir-jpaserver-base/` (JPA storage layer)
+_Resolved to RISK-SAFETY under the tiered model. See RISK-SAFETY section below._
 
 ## RISKs
 
 ### RISK-SAFETY — Must Address for Agent Safety
+
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered) — Demoted from BLOCKER
+
+- **Severity**: RISK-SAFETY
+- **Stage A**: Yes — HAPI FHIR handles PHI, PII, and clinical data across all FHIR resource types (Patient, Observation, MedicationRequest, etc.) by design.
+- **B1 — Agent-facing API response scoping: CLEAR at framework level.** The framework provides robust hooks: `SearchNarrowingInterceptor` (`hapi-fhir-server/.../SearchNarrowingInterceptor.java:93-250`) narrows searches to authorized compartments via `buildAuthorizedList()`. `AuthorizationInterceptor` (`.../AuthorizationInterceptor.java:77-150`) applies rules at `SERVER_INCOMING_REQUEST_PRE_HANDLED`, `STORAGE_PRESHOW_RESOURCES`, and `SERVER_OUTGOING_RESPONSE` pointcuts. FHIR-native `_summary` and `_elements` parameters support field selection.
+- **B2 — Access control differentiation: CLEAR at framework level.** `RuleBuilder` (`.../RuleBuilder.java:49-1088`) supports fluent allow/deny rules scoped by resource type, operation, instance, compartment (e.g., `inCompartment("Patient", patientId)`), and tenant. Default policy is `PolicyEnum.DENY` when the interceptor is registered.
+- **B3 — Formal classification metadata: CLEAR.** FHIR's native `Meta.security` IS formal, machine-readable classification — HL7 security-label CodeSystem with values like `ANONYMIZE`/`ENCRYPT`/`REDACT`. Framework supports the structure; enforcement is app responsibility.
+- **Framework default behavior concern**: If a deployer registers NO `AuthorizationInterceptor`, the server returns all PHI fields without authentication/authorization. This is the canonical framework-vs-application pattern; for any PHI deployment, configuring security is non-optional.
+- **Overall**: RISK-SAFETY at the framework level — hooks exist, defaults-deny works when enabled. A correctly-configured deployment moves this to CLEAR. The severity reflects the risk that a consumer might deploy without registering the interceptor.
+- **Compensating Controls**:
+  - Register `AuthorizationInterceptor` with explicit allow rules and default-deny
+  - Register `SearchNarrowingInterceptor` with compartment narrowing
+  - Apply `Meta.security` labels per HL7 confidentiality taxonomy on stored resources
+  - Test rules with representative PHI scenarios before agent exposure
+- **Remediation Timeline**: 30–60 days (configuration effort; the framework primitives exist)
+- **Recommendation**: Treat `AuthorizationInterceptor` registration as a required deployment step. Document the minimum rule set for agent access.
+- **Evidence**: `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/SearchNarrowingInterceptor.java:93-250`, `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/AuthorizationInterceptor.java:77-150`, `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/RuleBuilder.java:49-1088`, `hapi-fhir-docs/src/main/java/ca/uhn/hapi/fhir/docs/AuthorizationInterceptors.java` (reference compartment rules).
 
 #### AUTH-Q2: Scoped Permissions — RISK-SAFETY
 
@@ -579,12 +589,16 @@
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
-- **Severity**: BLOCKER
-- **Finding**: Healthcare data (PHI/PII) by definition. Stage A = Yes. Stage B: ConsentInterceptor provides access control mechanism but no built-in data classification or field-level sensitivity tagging.
-- **Gap**: No field-level data classification. Consent framework exists but classification metadata absent.
-- **Recommendation**: Implement FHIR Security Labels and ConsentInterceptor-based classification enforcement.
-- **Evidence**: `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/consent/ConsentInterceptor.java`, `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/consent/IConsentService.java`
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
+- **Severity**: RISK-SAFETY
+- **Stage A**: Yes — healthcare data (PHI/PII) by definition across all FHIR resource types.
+- **B1 — API response scoping**: CLEAR at framework level. HAPI FHIR provides robust hooks: `SearchNarrowingInterceptor` (compartment-based narrowing via `buildAuthorizedList()`), `AuthorizationInterceptor` with multi-pointcut hooks (`SERVER_INCOMING_REQUEST_PRE_HANDLED`, `STORAGE_PRESHOW_RESOURCES`, `SERVER_OUTGOING_RESPONSE`), and FHIR-native `_summary` / `_elements` parameters.
+- **B2 — Access control differentiation**: CLEAR at framework level. `RuleBuilder` supports fluent allow/deny rules scoped by resource type, operation, compartment, and tenant; default policy is `PolicyEnum.DENY` when the interceptor is registered.
+- **B3 — Formal classification metadata**: CLEAR. FHIR's native `Meta.security` is a formal, machine-readable classification primitive (HL7 security-label CodeSystem with `ANONYMIZE`/`ENCRYPT`/`REDACT`/etc.).
+- **Framework default behavior**: If a deployer registers no `AuthorizationInterceptor`, the server returns all PHI fields unfiltered. This is the framework pattern (consumers configure security); for any PHI deployment, configuring `AuthorizationInterceptor` is mandatory.
+- **Overall**: RISK-SAFETY at the framework level — hooks exist and work; the severity reflects the "unconfigured default returns all PHI" risk. A correctly configured deployment moves this to CLEAR.
+- **Recommendation**: Deployers must register `AuthorizationInterceptor` with explicit allow rules, register `SearchNarrowingInterceptor` for compartment narrowing, set default policy to `PolicyEnum.DENY`, and apply `Meta.security` labels per the HL7 confidentiality taxonomy.
+- **Evidence**: `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/SearchNarrowingInterceptor.java:93-250`, `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/AuthorizationInterceptor.java:77-150`, `hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/RuleBuilder.java:49-1088`, `hapi-fhir-docs/src/main/java/ca/uhn/hapi/fhir/docs/AuthorizationInterceptors.java` (example compartment rules).
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

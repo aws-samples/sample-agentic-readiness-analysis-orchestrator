@@ -15,9 +15,11 @@
 |---------|----------|------------|-------------|
 | ✅ Agent-Ready | 14 | 41% | 0 blockers, 0 RISK-SAFETY — broad agent deployment |
 | 🟡 Pilot-Ready | 1 | 3% | 0 blockers, 1–2 RISK-SAFETY — narrow pilot |
-| 🟡 Pilot-Ready (Safety Concerns) | 2 | 6% | 0 blockers, 3+ RISK-SAFETY — supervised pilot, prioritize safety |
-| 🟠 Remediation Required | 16 | 47% | 1–2 blockers — remediate before any agent deployment |
-| ❌ Not Agent-Integrable | 1 | 3% | 3+ blockers — deferred or descoped |
+| 🟡 Pilot-Ready (Safety Concerns) | 6 | 18% | 0 blockers, 3+ RISK-SAFETY — supervised pilot, prioritize safety |
+| 🟠 Remediation Required | 13 | 38% | 1–2 blockers — remediate before any agent deployment |
+| ❌ Not Agent-Integrable | 0 | 0% | 3+ blockers — deferred or descoped |
+
+> **Note (v5.1 update)**: The ARA DATA-Q1 question was revised from a binary BLOCKER (for any repo storing sensitive data without formal classification) to a tiered model evaluating three layers — B1: agent-facing API response scoping, B2: access control differentiation, B3: formal classification metadata. The highest layer that fires determines the overall severity. This eliminates false-positive BLOCKERs for applications that actually filter sensitive fields in their API responses (even without a formal classification schema) while preserving BLOCKERs for applications that genuinely leak credentials or PII through agent-facing APIs. Under the revised model, DATA-Q1 BLOCKERs dropped from 14 to 7 services; 5 services moved to DATA-Q1 = INFO, and 2 to DATA-Q1 = RISK-SAFETY. This is reflected in the readiness distribution above (Remediation Required 16 → 13, Pilot-Ready (Safety Concerns) 2 → 6, Not Agent-Integrable 1 → 0).
 
 ### Portfolio Summary
 
@@ -25,14 +27,14 @@
 |--------|-------|
 | Total Services Assessed | 34 |
 | Services Ready for Agents (Agent-Ready + Pilot-Ready) | 15 (44%) |
-| Services Requiring Remediation (Remediation Required + Not Agent-Integrable) | 17 (50%) |
+| Services Requiring Remediation (Remediation Required + Not Agent-Integrable) | 13 (38%) |
 | Cross-Cutting BLOCKERs (same blocker in 2+ repos) | 3 |
 | Cross-Cutting RISKs (same risk in 3+ repos) | 27 |
 | Services with Write-Enabled Agent Scope | 0 (0%) |
 | Services with Read-Only Agent Scope | 34 (100%) |
-| Total BLOCKERs across portfolio | 27 |
+| Total BLOCKERs across portfolio | 20 |
 | Total unique BLOCKER question IDs | 3 (API-Q1, AUTH-Q1, DATA-Q1) |
-| Total RISK-SAFETY findings across portfolio | 131 |
+| Total RISK-SAFETY findings across portfolio | 133 |
 | Total RISK-QUALITY findings across portfolio | 242 |
 
 ### Repo Type Distribution
@@ -49,8 +51,8 @@
 
 | Section | Repos Blocked | % of Applicable Repos | Top Blockers |
 |---------|--------------|----------------------|--------------|
-| DATA | 14 of 34 | 41% | DATA-Q1 |
 | AUTH | 11 of 34 | 32% | AUTH-Q1 |
+| DATA | 7 of 34 | 21% | DATA-Q1 (tiered B1 — credential leakage in agent-facing APIs) |
 | API | 2 of 34 | 6% | API-Q1 |
 | STATE | 0 of 34 | 0% | — |
 | HITL | 0 of 34 | 0% | — |
@@ -58,7 +60,7 @@
 | OBS | 0 of 34 | 0% | — |
 | ENG | 0 of 25 | 0% | — |
 
-> **Key Insight**: The DATA section (specifically DATA-Q1: Sensitive Data Classification) blocks the most repositories (14/34, 41%), followed by AUTH (AUTH-Q1: Machine Identity Authentication, 11/34, 32%). These two dimensions account for all BLOCKERs in the portfolio. The remaining 6 ARA sections have zero BLOCKERs across all 34 services.
+> **Key Insight (updated)**: After the DATA-Q1 rubric revision, AUTH (specifically AUTH-Q1: Machine Identity Authentication) is now the #1 BLOCKER category at 11/34 (32%). DATA section BLOCKERs dropped from 14 to 7 (21%) — the remaining 7 all have concrete B1 findings (credentials/PHI/access-tokens actually returned unmasked by agent-facing API endpoints): the four Servarr apps leak their master ApiKey via `GET /config/host`, ThingsBoard returns device credentials plaintext via `GET /device/{id}/credentials`, Druid serializes Kafka/Kinesis ingestion credentials in supervisor specs, and Conductor embeds HTTP-task Authorization headers in workflow task output. These are actionable, code-level gaps — not generic "classification framework absent" findings.
 
 ### Readiness Snapshot
 
@@ -68,14 +70,14 @@
 | total_services | 34 |
 | agent_ready | 14 |
 | pilot_ready | 1 |
-| pilot_ready_safety_concerns | 2 |
-| remediation_required | 16 |
-| not_integrable | 1 |
-| total_blockers | 27 |
-| total_risks | 373 |
-| total_risk_safety | 131 |
+| pilot_ready_safety_concerns | 6 |
+| remediation_required | 13 |
+| not_integrable | 0 |
+| total_blockers | 20 |
+| total_risks | 375 |
+| total_risk_safety | 133 |
 | total_risk_quality | 242 |
-| total_infos | 817 |
+| total_infos | 824 |
 | cross_cutting_blockers | 3 |
 | cross_cutting_risks | 27 |
 | cross_cutting_risk_safety | 9 |
@@ -107,19 +109,27 @@
   - **Priority**: Critical — affects 11 services (32% of portfolio). Identity is the foundation for all other security controls.
   - **Dependencies**: None — this is the foundational blocker that should be resolved first.
 
-### DATA-Q1: Sensitive Data Classification
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 
-- **Severity**: BLOCKER in 14 of 34 applicable services
-- **Affected Services**: Alluxio--alluxio, apache--druid, conductor-oss--conductor, FlowiseAI--Flowise, Graylog2--graylog2-server, hapifhir--hapi-fhir, Lidarr--Lidarr, Prowlarr--Prowlarr, Radarr--Radarr, scality--cloudserver, Sonarr--Sonarr, thingsboard--thingsboard, ToolJet--ToolJet, umami-software--umami
-- **Common Finding**: All 14 services store user data (credentials, PII, business data, or arbitrary user-uploaded content) but have no field-level data classification system. Data is stored in databases (PostgreSQL, SQLite, MongoDB, OpenSearch) or file systems without sensitivity labels, tags, or classification-based access controls. An agent with database read access could retrieve unclassified sensitive data without restriction.
-- **Root Cause Pattern**: Open-source projects focus on functional data access (CRUD operations) without implementing data governance layers. No project has field-level sensitivity tagging, PII detection integration (e.g., Amazon Macie), or classification-based access controls. Data stores treat all fields equally regardless of sensitivity.
+- **Severity**: BLOCKER in 7 of 34 applicable services (down from 14 under the binary rubric)
+- **Affected Services (BLOCKER)**: apache--druid, conductor-oss--conductor, Lidarr--Lidarr, Prowlarr--Prowlarr, Radarr--Radarr, Sonarr--Sonarr, thingsboard--thingsboard
+- **Also Affected at Lower Severity (not counted toward BLOCKER threshold)**: FlowiseAI--Flowise and hapifhir--hapi-fhir resolve to **RISK-SAFETY** under the tiered model (B2 / framework-hook defaults). Alluxio--alluxio, Graylog2--graylog2-server, scality--cloudserver, umami-software--umami, ToolJet--ToolJet resolve to **INFO** (B1 and B2 CLEAR; only B3 formal classification metadata absent).
+- **Common Finding (BLOCKER repos only)**: In every BLOCKER case the application's agent-facing API returns sensitive fields in plaintext through a specific endpoint:
+  - **Servarr family (Lidarr, Prowlarr, Radarr, Sonarr)**: `GET /api/v{1,3}/config/host` returns the master `ApiKey`, admin `Password`, `SslCertPassword`, and `ProxyPassword` unmasked. Provider settings (indexers, download clients) ARE correctly masked via the `PrivacyLevel.ApiKey`/`PrivacyLevel.Password` + `SchemaBuilder` pipeline; `HostConfigResource` bypasses this masking because it uses plain C# properties rather than `FieldDefinition`-decorated fields.
+  - **thingsboard**: `GET /api/device/{deviceId}/credentials` returns `DeviceCredentials.credentialsValue` (access tokens, MQTT passwords, X.509 PEM) plaintext to any CUSTOMER_USER — no `@JsonIgnore`.
+  - **apache/druid**: `GET /druid/indexer/v1/supervisor?full=true` returns `KafkaIndexTaskIOConfig.consumerProperties` (SASL/SSL credentials) and Kinesis AWS credentials serialized verbatim; no `PasswordProvider`-style abstraction.
+  - **conductor-oss/conductor**: `HttpTask.java:138` persists HTTP response headers (including `Authorization`) into task output via `task.addOutput("response", response.asMap())`; Workflow/Task REST endpoints return input/output payloads unredacted.
+- **Root Cause Pattern**: These are **coverage gaps**, not missing frameworks. In several cases (Servarr family, Flowise, Graylog) a masking primitive already exists in the codebase but is not applied on every path. The remediation is localized code changes, not cross-cutting governance work.
 - **Portfolio-Level Remediation**:
-  - **Approach**: Per-service fix — each project needs its own data classification implementation tailored to its data model and storage backend.
-  - **Immediate Action**: For each affected service, audit the data model to identify fields containing PII, credentials, PHI, or business-sensitive data. Implement a deny-list of known sensitive field patterns. Configure agent-accessible query endpoints to filter or redact classified fields from results.
-  - **Target State**: All agent-accessible data paths have sensitivity classification metadata. Access controls enforce classification-aware restrictions (agents cannot read fields classified as "restricted" without explicit authorization).
-  - **Estimated Effort**: High (4–12 weeks per service — requires data model audit, classification taxonomy design, and access control integration)
-  - **Priority**: Critical — affects 14 services (41% of portfolio), the most widespread BLOCKER. Data protection is essential before enabling any agent access.
-  - **Dependencies**: AUTH-Q1 should be resolved first — you need machine identity before you can enforce classification-based access controls per agent.
+  - **Approach**: Per-service fix — most of these are small, targeted code changes (add `@JsonIgnore`, extend masking to non-provider resources, introduce a summary DTO for credentials endpoints).
+  - **Servarr family (4 services)**: Single shared fix — extend `SchemaBuilder` masking (or a simple `[Sensitive]` attribute) to `HostConfigResource`. Remediation for one app applies directly to the other three.
+  - **thingsboard**: Apply `@JsonIgnore` to `credentialsValue`; introduce a `DeviceCredentialsSummary` DTO; consider restricting credential-reveal endpoints to TENANT_ADMIN only.
+  - **druid**: Filter sensitive keys from `consumerProperties` serialization (or introduce a filtered DTO); integrate with a secrets manager for inline credentials.
+  - **conductor**: Mask sensitive HTTP headers in `HttpTask` before `addOutput`; apply response-level field redaction on Task/Workflow DTOs; enforce `maskedFields` at definition-validation time.
+  - **Target State**: No agent-facing API endpoint returns credential values in plaintext. Sensitive-field masking is consistent across every code path that serializes domain objects.
+  - **Estimated Effort**: Low-to-Medium per service (1–4 weeks). The Servarr-family shared fix is a single multi-repo change.
+  - **Priority**: High — the remaining 7 DATA-Q1 BLOCKERs are credential-exfiltration paths. Remediation is localized and achievable in parallel with AUTH-Q1 work.
+  - **Dependencies**: Independent of AUTH-Q1 (the masking fix is a code change, not an authorization change). AUTH-Q1 resolution strengthens overall posture but does not gate these fixes.
 
 ### API-Q1: Documented API Interface (Notable but Below Cross-Cutting Threshold for Most)
 
@@ -424,7 +434,7 @@ While no inter-service dependencies exist in this portfolio, several **technolog
 Remediation of cross-cutting BLOCKERs should follow this general priority:
 
 1. **Identity and Access** — Resolve AUTH-Q1 (Machine Identity Authentication) first. You cannot enforce any other security control without machine identity and scoped permissions.
-2. **Data Integrity** — Resolve DATA-Q1 (Sensitive Data Classification) second. Protect data before enabling agent access to any data store.
+2. **Data Integrity** — Resolve DATA-Q1 (Sensitive Data Classification — tiered B1/B2/B3) second for the 7 BLOCKER services. Remediation is localized: mask specific endpoints that leak credentials (Servarr `HostConfigResource`, thingsboard `DeviceCredentials`, druid supervisor specs, conductor HTTP-task output). The remaining 2 services at RISK-SAFETY (Flowise, hapi-fhir) need follow-up but not before pilot; the 5 INFO-level services require no immediate action.
 3. **API Surface** — Resolve API-Q1 (Documented API Interface) third for the 2 affected services. Ensure a stable, documented integration surface for agent tools.
 
 ### Coordinated Remediation Plan
@@ -445,17 +455,20 @@ Remediation of cross-cutting BLOCKERs should follow this general priority:
 
 #### Group 2: Data Protection (DATA-Q1)
 
-**BLOCKERs addressed**: DATA-Q1 (Sensitive Data Classification)
-**Services affected**: Alluxio--alluxio, apache--druid, conductor-oss--conductor, FlowiseAI--Flowise, Graylog2--graylog2-server, hapifhir--hapi-fhir, Lidarr--Lidarr, Prowlarr--Prowlarr, Radarr--Radarr, scality--cloudserver, Sonarr--Sonarr, thingsboard--thingsboard, ToolJet--ToolJet, umami-software--umami (14 services)
+**BLOCKERs addressed**: DATA-Q1 (Sensitive Data Classification) — tiered B1/B2/B3
+**Services affected (BLOCKER, 7)**: apache--druid, conductor-oss--conductor, Lidarr--Lidarr, Prowlarr--Prowlarr, Radarr--Radarr, Sonarr--Sonarr, thingsboard--thingsboard
+**Services affected at lower severity**: FlowiseAI--Flowise, hapifhir--hapi-fhir (RISK-SAFETY, not BLOCKER); Alluxio--alluxio, Graylog2--graylog2-server, scality--cloudserver, umami-software--umami, ToolJet--ToolJet (INFO)
 
-- **What to do**:
-  - For each service, audit the data model and identify fields containing PII, credentials, PHI, or sensitive business data.
-  - Implement a classification taxonomy (`public`, `internal`, `confidential`, `restricted`) as metadata tags on data entities.
-  - Configure agent-accessible API endpoints to filter/redact fields classified as `confidential` or `restricted`.
-  - **\*arr suite pattern**: Credential fields (`ApiKey`, OAuth tokens, download client passwords) should be classified as `restricted`. Media metadata (titles, paths) classified as `internal`. Pattern reusable across all 4 *arr services.
-  - **Data platform pattern** (Alluxio, Druid, Graylog, CloudServer): These store arbitrary user data — implement path/column-level classification with deny-by-default for agent access to unclassified data.
-- **Expected outcome**: All agent-accessible data paths have sensitivity classification. Agents cannot retrieve `restricted` data without explicit authorization.
-- **Effort**: High per service (4–12 weeks), Very High cumulative (14 services)
+- **What to do (BLOCKER remediation)**:
+  - **Servarr family (Lidarr, Prowlarr, Radarr, Sonarr — single shared fix)**: Mask `ApiKey`, `Password`, `PasswordConfirmation`, `SslCertPassword`, `ProxyPassword` in `HostConfigResourceMapper.ToResource()`. The existing `SchemaBuilder`/`PrivacyLevel` masking pipeline (which correctly protects provider settings) needs to be extended to `HostConfigResource` (plain C# properties today). Estimated 1–2 weeks; pattern reusable across all 4 apps.
+  - **thingsboard**: Apply `@JsonIgnore` to `DeviceCredentials.credentialsValue`; introduce a `DeviceCredentialsSummary` DTO that returns `credentialsType` only (no value). Gate any value-revealing endpoint behind TENANT_ADMIN + explicit "reveal" intent. 2–4 weeks.
+  - **apache/druid**: Filter sensitive `consumerProperties` keys in Kafka/Kinesis supervisor spec serialization; annotate `awsAssumedRoleArn`/`awsExternalId` with `@JsonIgnore` on read paths. Longer-term: integrate with a secrets manager so supervisor specs reference secret names, not inline values. 3–6 weeks.
+  - **conductor**: Mask sensitive HTTP headers (`Authorization`, `Cookie`, `X-Api-Key`, etc.) in `HttpTask.java:138` before `task.addOutput("response", ...)`. Apply response-level field redaction on `Task`/`Workflow` REST DTOs via a Jackson `@JsonFilter` or response-shaping hook. Enforce `WorkflowDef.maskedFields` at definition-validation time for known-sensitive patterns. 3–6 weeks.
+- **What to do (RISK-SAFETY follow-up)**:
+  - **Flowise**: Default `getCredentialById` to returning the encrypted blob; require `reveal=true` + additional auth to decrypt. Mask `apiKey` in list responses (return truncated prefix).
+  - **hapi-fhir (deployer-level)**: Treat `AuthorizationInterceptor` registration as a required deployment step; configure `SearchNarrowingInterceptor` with compartment narrowing; apply `Meta.security` labels per HL7 confidentiality taxonomy.
+- **Expected outcome**: No agent-facing API endpoint returns credential values or PHI in plaintext. Sensitive-field masking is consistent across every code path that serializes domain objects.
+- **Effort**: Low-to-Medium per service (1–6 weeks). The Servarr-family fix is a single multi-repo change. Cumulative effort across all 7 BLOCKER repos: ~15–25 weeks of engineering time, parallelizable.
 
 #### Group 3: API Documentation (API-Q1)
 
@@ -478,7 +491,7 @@ Remediation of cross-cutting BLOCKERs should follow this general priority:
 | Program | Relevance | Trigger Findings | Suggested Timing | Next Step |
 |---------|-----------|-----------------|------------------|-----------|
 | AXE (Agentic Experience Workshop) | 15 services are Agent-Ready or Pilot-Ready | 14 Agent-Ready + 1 Pilot-Ready ≥ 3 threshold | After cross-cutting BLOCKER remediation | Request engagement via AWS SA |
-| EBA on Agentic AI | Systemic cross-cutting blockers across 11+ repos | AUTH-Q1 BLOCKER in 11 repos, DATA-Q1 BLOCKER in 14 repos — both exceed 5-repo threshold | After AXE engagement | Request EBA via AWS SA |
+| EBA on Agentic AI | Systemic cross-cutting blockers across 7–11 repos | AUTH-Q1 BLOCKER in 11 repos exceeds the 5-repo threshold; DATA-Q1 BLOCKER in 7 repos (down from 14) still exceeds the 5-repo threshold | After AXE engagement | Request EBA via AWS SA |
 | AgentStorming | Portfolio context describes validation/testing, not a clear agent use case | No clear agent scope defined for "ATX TD validation" portfolio | Before AXE | Request workshop via AWS SA |
 
 ### Program Details
@@ -501,9 +514,9 @@ Remediation of cross-cutting BLOCKERs should follow this general priority:
 
 #### EBA on Agentic AI (Experience-Based Acceleration)
 
-- **Why triggered**: Two cross-cutting BLOCKERs exceed the 5-repository threshold: AUTH-Q1 (Machine Identity Authentication) affects 11 repositories, and DATA-Q1 (Sensitive Data Classification) affects 14 repositories. These systemic gaps require coordinated architecture remediation that cannot be resolved through standard advisory alone.
+- **Why triggered**: Two cross-cutting BLOCKERs exceed the 5-repository threshold: AUTH-Q1 (Machine Identity Authentication) affects 11 repositories, and DATA-Q1 (Sensitive Data Classification — tiered) affects 7 repositories (down from 14 under the revised rubric). These systemic gaps require coordinated architecture remediation that cannot be resolved through standard advisory alone.
 - **What it provides**: An intensive, time-boxed engagement that accelerates the path from ARA findings to production agent deployment. Produces remediated systems, validated agent integrations, and a sequenced deployment roadmap.
-- **Suggested timing**: Run after AXE to accelerate implementation of the identified agent experience design. The EBA would focus on remediating the 17 services that require remediation.
+- **Suggested timing**: Run after AXE to accelerate implementation of the identified agent experience design. The EBA would focus on remediating the 13 services that require remediation.
 - **Recommended scope**: Prioritize the *arr suite (4 services with shared codebase) and high-value services (Conductor, ThingsBoard, ToolJet) for the EBA sprint.
 - **Next step**: Request EBA engagement via AWS Solutions Architect. Executive sponsorship recommended given the scale of remediation.
 
@@ -605,69 +618,69 @@ Remediation of cross-cutting BLOCKERs should follow this general priority:
 
 ### Individual Service Details
 
-#### ToolJet--ToolJet (Not Agent-Integrable)
+#### ToolJet--ToolJet (Remediation Required)
 
-- **Readiness Profile**: ❌ Not Agent-Integrable
+- **Readiness Profile**: 🟠 Remediation Required (was Not Agent-Integrable under binary DATA-Q1; now 2 BLOCKERs)
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (3): API-Q1 (no OpenAPI spec), AUTH-Q1 (no M2M auth), DATA-Q1 (unclassified sensitive data)
-- **RISKs** (26): 9 RISK-SAFETY (AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, STATE-Q1, STATE-Q4, STATE-Q5, DATA-Q2, DATA-Q6), 17 RISK-QUALITY
-- **Key Recommendations**: (1) Enable NestJS Swagger to generate OpenAPI spec, (2) Add OAuth2 client credentials for M2M auth, (3) Classify sensitive fields in PostgreSQL schema
+- **BLOCKERs** (2): API-Q1 (no OpenAPI spec), AUTH-Q1 (no M2M auth). DATA-Q1 = INFO under tiered model (B1 CLEAR: password excluded from User queries, credentials encrypted with `credential_id` indirection; B2 CLEAR: `organizationId` filtering + CASL/`FeatureAbilityGuard`/`PolicyGuard` RBAC; only B3 formal classification metadata absent).
+- **RISKs** (26): 9 RISK-SAFETY, 17 RISK-QUALITY
+- **Key Recommendations**: (1) Enable NestJS Swagger to generate OpenAPI spec, (2) Add OAuth2 client credentials for M2M auth, (3) (Aspirational) add schema-level classification decorators
 
 #### conductor-oss--conductor (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (2): AUTH-Q1 (no authentication at all), DATA-Q1 (no data classification)
+- **BLOCKERs** (2): AUTH-Q1 (no authentication at all), DATA-Q1 (B1 BLOCKER: `HttpTask.java:138` persists `Authorization` headers into task output; `WorkflowResource`/`TaskResource` return full `input`/`output` payloads unredacted via `toWorkflow()`/`toTask()`)
 - **RISKs** (19): 8 RISK-SAFETY, 11 RISK-QUALITY
-- **Key Recommendations**: (1) Deploy API Gateway with auth in front of Conductor, (2) Classify workflow data by sensitivity, (3) Implement audit logging
+- **Key Recommendations**: (1) Deploy API Gateway with auth in front of Conductor, (2) Mask sensitive headers in `HttpTask` before `addOutput`; apply response-level redaction on Task/Workflow DTOs; enforce `WorkflowDef.maskedFields` at validation time, (3) Implement audit logging
 
 #### hapifhir--hapi-fhir (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (2): AUTH-Q1 (no built-in machine identity), DATA-Q1 (no field-level data classification for FHIR resources)
+- **BLOCKERs** (1): AUTH-Q1 (no built-in machine identity). DATA-Q1 = RISK-SAFETY under tiered model (framework provides `AuthorizationInterceptor`/`SearchNarrowingInterceptor` hooks, FHIR-native `Meta.security` classification; RISK-SAFETY reflects "if no interceptor is registered, PHI returns unfiltered" — a deployer-configuration concern, not a code defect).
 - **RISKs** (17): 8 RISK-SAFETY, 9 RISK-QUALITY
-- **Key Recommendations**: (1) Implement SMART on FHIR authentication interceptor, (2) Add FHIR resource field-level classification for PHI, (3) Configure HAPI security interceptors
+- **Key Recommendations**: (1) Implement SMART on FHIR authentication interceptor, (2) Register `AuthorizationInterceptor` with default-deny + `SearchNarrowingInterceptor` with compartment narrowing, (3) Apply `Meta.security` labels per HL7 confidentiality taxonomy
 
 #### Lidarr--Lidarr (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (2): AUTH-Q1 (single shared API key), DATA-Q1 (unclassified credentials in DB)
+- **BLOCKERs** (2): AUTH-Q1 (single shared API key), DATA-Q1 (B1 BLOCKER: `GET /api/v1/config/host` returns master `ApiKey`, admin `Password`, `SslCertPassword`, `ProxyPassword` unmasked — provider settings are correctly masked via `PrivacyLevel`/`SchemaBuilder`)
 - **RISKs** (22): 8 RISK-SAFETY, 14 RISK-QUALITY
-- **Key Recommendations**: (1) Implement multi-key auth with principal attribution, (2) Classify credential fields as restricted
+- **Key Recommendations**: (1) Implement multi-key auth with principal attribution, (2) Mask credential fields in `HostConfigResourceMapper.ToResource()` using the existing `SchemaBuilder`/`PrivacyLevel` pattern
 
 #### Prowlarr--Prowlarr (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (2): AUTH-Q1 (single shared API key), DATA-Q1 (unclassified indexer credentials)
+- **BLOCKERs** (2): AUTH-Q1 (single shared API key), DATA-Q1 (B1 BLOCKER: same `HostConfigResource` leakage as Servarr family; compounded risk because Prowlarr's master key enables impersonation across every connected *arr application)
 - **RISKs** (23): 9 RISK-SAFETY, 14 RISK-QUALITY
-- **Key Recommendations**: (1) Multi-key auth (same pattern as Lidarr), (2) Classify credential fields
+- **Key Recommendations**: (1) Multi-key auth (same pattern as Lidarr), (2) Mask credential fields in `HostConfigResourceMapper.ToResource()`; consider suppressing `Privacy` metadata in non-admin responses
 
 #### Radarr--Radarr (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (2): AUTH-Q1 (single shared API key), DATA-Q1 (unclassified credentials)
+- **BLOCKERs** (2): AUTH-Q1 (single shared API key), DATA-Q1 (B1 BLOCKER: same `HostConfigResource` leakage pattern as Servarr family)
 - **RISKs** (22): 9 RISK-SAFETY, 13 RISK-QUALITY
-- **Key Recommendations**: (1) Multi-key auth (same pattern as Lidarr), (2) Classify credential fields
+- **Key Recommendations**: (1) Multi-key auth (same pattern as Lidarr), (2) Mask credential fields in `HostConfigResourceMapper.ToResource()` using existing `PrivacyLevel` pattern
 
 #### Sonarr--Sonarr (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (2): AUTH-Q1 (single shared API key), DATA-Q1 (unclassified credentials)
+- **BLOCKERs** (2): AUTH-Q1 (single shared API key), DATA-Q1 (B1 BLOCKER: same `HostConfigResource` leakage pattern as Servarr family)
 - **RISKs** (22): 9 RISK-SAFETY, 13 RISK-QUALITY
-- **Key Recommendations**: (1) Multi-key auth (same pattern as Lidarr), (2) Classify credential fields
+- **Key Recommendations**: (1) Multi-key auth (same pattern as Lidarr), (2) Mask credential fields in `HostConfigResourceMapper.ToResource()` using existing `PrivacyLevel` pattern
 
 #### umami-software--umami (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (2): AUTH-Q1 (human-only JWT auth), DATA-Q1 (unclassified PII and analytics data)
+- **BLOCKERs** (1): AUTH-Q1 (human-only JWT auth). DATA-Q1 = INFO under tiered model (B1 CLEAR: `findUser()` uses `select: { password: includePassword }` defaulting false; B2 CLEAR: 7-role RBAC with team-scope checks; only B3 absent).
 - **RISKs** (25): 9 RISK-SAFETY, 16 RISK-QUALITY
-- **Key Recommendations**: (1) Add M2M auth flow, (2) Classify user PII fields, (3) Implement PII redaction in logs
+- **Key Recommendations**: (1) Add M2M auth flow, (2) Implement PII redaction in logs, (3) (Aspirational) add decorator-based classification tags
 
 #### greenshot--greenshot (Remediation Required)
 
@@ -677,37 +690,37 @@ Remediation of cross-cutting BLOCKERs should follow this general priority:
 - **RISKs** (4): 2 RISK-SAFETY (AUTH-Q2, AUTH-Q3), 2 RISK-QUALITY (AUTH-Q5, DISC-Q1)
 - **Key Recommendations**: (1) Consider descoping from agent integration, or (2) Build CLI/API wrapper around screenshot capabilities
 
-#### Alluxio--alluxio (Remediation Required)
+#### Alluxio--alluxio (Pilot-Ready, Safety Concerns)
 
-- **Readiness Profile**: 🟠 Remediation Required
+- **Readiness Profile**: 🟡 Pilot-Ready (Safety Concerns) — promoted from Remediation Required after tiered DATA-Q1
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (1): DATA-Q1 (no data classification for cached files)
+- **BLOCKERs** (0). DATA-Q1 = INFO (B1 CLEAR: `DisplayType.CREDENTIALS` masks UFS credentials to `"******"` in config API; B2 CLEAR: POSIX permissions; only B3 path-level classification absent).
 - **RISKs** (23): 8 RISK-SAFETY, 15 RISK-QUALITY
-- **Key Recommendations**: (1) Implement path-level sensitivity classification using xattr, (2) Configure classification-aware access controls
+- **Key Recommendations**: (1) Prioritize RISK-SAFETY remediation before expanding scope, (2) (Aspirational) add xattr-based path classification
 
 #### apache--druid (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (1): DATA-Q1 (no field-level data classification in datasources)
+- **BLOCKERs** (1): DATA-Q1 (B1 BLOCKER: `SupervisorResource` returns Kafka `consumerProperties`, Kinesis AWS credentials, and other ingestion-source secrets serialized verbatim via `@JsonProperty`; no `PasswordProvider`-style abstraction)
 - **RISKs** (16): 5 RISK-SAFETY, 11 RISK-QUALITY
-- **Key Recommendations**: (1) Implement column-level classification on Druid datasources, (2) Configure agent-facing query endpoints to respect classification
+- **Key Recommendations**: (1) Add `@JsonIgnore` on sensitive `consumerProperties` keys (or introduce a filtered response DTO), (2) Integrate with a secrets manager so supervisor specs reference secret names not inline values
 
-#### FlowiseAI--Flowise (Remediation Required)
+#### FlowiseAI--Flowise (Pilot-Ready, Safety Concerns)
 
-- **Readiness Profile**: 🟠 Remediation Required
+- **Readiness Profile**: 🟡 Pilot-Ready (Safety Concerns) — promoted from Remediation Required after tiered DATA-Q1
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (1): DATA-Q1 (unclassified credentials and LLM flow data)
-- **RISKs** (17): 4 RISK-SAFETY, 13 RISK-QUALITY
-- **Key Recommendations**: (1) Classify Credential entity fields as restricted, (2) Implement field-level access controls
+- **BLOCKERs** (0). DATA-Q1 = RISK-SAFETY (B1 MIXED: list endpoints strip `encryptedData`; `getCredentialById` decrypts to plaintext for UI use; API keys list returns `apiKey` plaintext; B2 CLEAR: workspace scoping + permission-subset filtering; B3 INFO).
+- **RISKs** (18): 5 RISK-SAFETY, 13 RISK-QUALITY
+- **Key Recommendations**: (1) Default `getCredentialById` to encrypted blob; require explicit `reveal=true` parameter, (2) Mask `apiKey` in list responses (truncated prefix), (3) Continue RISK-SAFETY remediation
 
-#### Graylog2--graylog2-server (Remediation Required)
+#### Graylog2--graylog2-server (Pilot-Ready, Safety Concerns)
 
-- **Readiness Profile**: 🟠 Remediation Required
+- **Readiness Profile**: 🟡 Pilot-Ready (Safety Concerns) — promoted from Remediation Required after tiered DATA-Q1
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (1): DATA-Q1 (no log data classification)
+- **BLOCKERs** (0). DATA-Q1 = INFO (B1 CLEAR: password excluded via `@DbEntity.readableFields`, `EncryptedValue` wraps LDAP/webhook secrets; B2 CLEAR: granular GRN-based RBAC with `STREAMS_READ` isolation; B3 INFO for log-field PII).
 - **RISKs** (18): 6 RISK-SAFETY, 12 RISK-QUALITY
-- **Key Recommendations**: (1) Implement field-level classification for log fields, (2) Configure MCP SearchMessagesTool to filter classified fields
+- **Key Recommendations**: (1) AUTH-Q6 immutable audit logging, (2) (Aspirational) add log-field PII classification index for MCP tools
 
 #### Netflix--eureka (Remediation Required)
 
@@ -725,21 +738,21 @@ Remediation of cross-cutting BLOCKERs should follow this general priority:
 - **RISKs** (21): 7 RISK-SAFETY, 14 RISK-QUALITY
 - **Key Recommendations**: (1) Deploy API Gateway with auth in front of Zipkin, (2) Implement rate limiting
 
-#### scality--cloudserver (Remediation Required)
+#### scality--cloudserver (Pilot-Ready, Safety Concerns)
 
-- **Readiness Profile**: 🟠 Remediation Required
+- **Readiness Profile**: 🟡 Pilot-Ready (Safety Concerns) — promoted from Remediation Required after tiered DATA-Q1
 - **Repo Type**: application | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (1): DATA-Q1 (no data classification for stored objects)
+- **BLOCKERs** (0). DATA-Q1 = INFO (B1 CLEAR: S3 API is content-agnostic, no credentials echoed; B2 CLEAR: Vault-backed IAM enforced on every request; B3 INFO: native S3 object tagging / SSE primitives).
 - **RISKs** (15): 6 RISK-SAFETY, 9 RISK-QUALITY
-- **Key Recommendations**: (1) Implement object-level classification tagging, (2) Enforce encryption at rest by default
+- **Key Recommendations**: (1) Enable default bucket encryption globally, (2) (Aspirational) adopt object-tag classification conventions + Macie integration
 
 #### thingsboard--thingsboard (Remediation Required)
 
 - **Readiness Profile**: 🟠 Remediation Required
 - **Repo Type**: monorepo | **Agent Scope**: read-only | **Priority**: P2
-- **BLOCKERs** (1): DATA-Q1 (unclassified credentials, PII, device data)
+- **BLOCKERs** (1): DATA-Q1 (B1 BLOCKER: `GET /api/device/{id}/credentials` returns `DeviceCredentials.credentialsValue` — access tokens, MQTT passwords, X.509 PEM — plaintext to any CUSTOMER_USER; no `@JsonIgnore`)
 - **RISKs** (19): 6 RISK-SAFETY, 13 RISK-QUALITY
-- **Key Recommendations**: (1) Classify user_credentials, device_credentials, oauth2_client fields as restricted, (2) Implement field-level access controls on entity query APIs
+- **Key Recommendations**: (1) Apply `@JsonIgnore` to `DeviceCredentials.credentialsValue`; introduce a `DeviceCredentialsSummary` DTO; gate value-revealing endpoint to TENANT_ADMIN only, (2) Consider out-of-band credential rotation flow
 
 #### scality--backbeat (Pilot-Ready, Safety Concerns)
 

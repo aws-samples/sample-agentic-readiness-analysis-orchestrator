@@ -52,17 +52,21 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ## BLOCKERs — Must Resolve Before Agent Deployment
 
-### DATA-Q1: Sensitive Data Classification — BLOCKER
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 
 - **Severity**: BLOCKER
-- **Finding**: Apache Druid is a high-performance analytics database that ingests and stores arbitrary datasets supplied by users. The system has `has_persistent_data_store: true` — data is stored in deep storage (S3, HDFS, local filesystem), metadata in PostgreSQL/MySQL/Derby, and segments on Historical nodes. Since Druid ingests arbitrary data, it may store PII, PHI, financial records, or other sensitive data depending on the use case. No field-level data classification, tagging, column-level access controls, or PII detection tools (e.g., Amazon Macie) were found in the codebase. The authorization model operates at the datasource level (ResourceType.DATASOURCE) but does not classify or tag individual fields within a datasource as sensitive.
-- **Gap**: No field-level sensitive data classification exists. An agent querying Druid could retrieve PII or other sensitive data without any field-level access control preventing it. The only access control is at the datasource granularity.
+- **Stage A**: Yes — Druid ingests arbitrary user datasets (potentially PII/PHI) and stores credentials for external ingestion sources (Kafka SASL passwords, Kinesis AWS keys/assumed-role ARNs, JDBC passwords) in supervisor specs persisted to metadata storage.
+- **B1 — API response scoping: BLOCKER.** `SupervisorResource.specGet()` / `specGetStatus()` (`indexing-service/src/main/java/org/apache/druid/indexing/overlord/supervisor/SupervisorResource.java:282-290`) returns the full supervisor spec via `Response.ok(spec.get()).build()` with no field filtering. `KafkaIndexTaskIOConfig.getConsumerProperties()` (`extensions-core/kafka-indexing-service/.../KafkaIndexTaskIOConfig.java:165-168`) is `@JsonProperty`-serialized as a `Map<String, Object>` — **no `@JsonIgnore`** — so every Kafka SASL JAAS credential and SSL keystore password round-trips verbatim. `KinesisIndexTaskIOConfig` serializes `awsAssumedRoleArn` and `awsExternalId` with `@JsonProperty` (`extensions-core/kinesis-indexing-service/.../KinesisIndexTaskIOConfig.java:220-230`). No `PasswordProvider`-style abstraction hides secrets at serialization time. A single `GET /druid/indexer/v1/supervisor?full=true` call exfiltrates all ingestion-source credentials cluster-wide.
+- **B2 — Access control differentiation: PARTIAL / RISK-SAFETY.** `druid-basic-security` extension provides `BasicRoleBasedAuthorizer` (`extensions-core/druid-basic-security/.../BasicRoleBasedAuthorizer.java`) with resource/action granularity (DATASOURCE, TASK, CONFIG, STATE, QUERY × READ, WRITE). `SupervisorResource` uses `@ResourceFilters(SupervisorResourceFilter.class)`. But there is **no field-level authorization** — any user with DATASOURCE:READ receives the full supervisor spec including embedded credentials. B2 is not strong enough to prevent B1's leakage.
+- **B3 — Formal classification metadata: INFO.** No `@Sensitive`/`@Secret` annotations; no secrets manager integration (Vault/AWS Secrets Manager) for inline credentials.
+- **Overall (read-only scope)**: B1 fires as BLOCKER — read-only access is sufficient to exfiltrate cluster-wide ingestion credentials. → **DATA-Q1 = BLOCKER**.
+- **Gap**: Supervisor spec serialization returns credentials in plaintext; no masking layer; no secrets manager abstraction.
 - **Remediation**:
-  - **Immediate**: Implement a data classification inventory for datasources that will be exposed to agent queries. Tag datasources containing PII/PHI/financial data using Druid's existing datasource metadata or external catalog.
-  - **Target State**: Field-level or column-level classification with automated PII detection integrated into the ingestion pipeline. Agent-accessible views restricted to non-sensitive fields using Druid's VIEW authorization.
-  - **Estimated Effort**: High
-  - **Dependencies**: Requires AUTH-Q2 (scoped permissions) to enforce field-level restrictions. Interacts with DATA-Q6 (PII in logs).
-- **Evidence**: `server/src/main/java/org/apache/druid/server/security/ResourceType.java` (DATASOURCE-level only), `server/src/main/java/org/apache/druid/server/security/Authorizer.java`, absence of field-level classification in processing pipeline.
+  - **Immediate**: Add `@JsonIgnore` on `consumerProperties` map keys matching SASL/SSL password patterns (or introduce a filtered response DTO). Mask `awsAssumedRoleArn`/`awsExternalId` behind an explicit "reveal credentials" endpoint gated by a new permission.
+  - **Target State**: Integrate with a secrets manager; supervisor specs reference secret names, not inline values. Field-level authorization checks before serialization.
+  - **Estimated Effort**: Medium for masking; High for full secrets-manager refactor.
+  - **Dependencies**: Reinforces AUTH-Q2 and AUTH-Q3.
+- **Evidence**: `indexing-service/src/main/java/org/apache/druid/indexing/overlord/supervisor/SupervisorResource.java:282-290`, `extensions-core/kafka-indexing-service/src/main/java/org/apache/druid/indexing/kafka/KafkaIndexTaskIOConfig.java:165-168`, `extensions-core/kinesis-indexing-service/src/main/java/org/apache/druid/indexing/kinesis/KinesisIndexTaskIOConfig.java:220-230`, `extensions-core/druid-basic-security/src/main/java/org/apache/druid/security/basic/authorization/BasicRoleBasedAuthorizer.java`.
 
 ---
 
@@ -571,12 +575,12 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
 - **Severity**: BLOCKER
-- **Finding**: See BLOCKERs section above.
-- **Gap**: No field-level classification for sensitive data.
-- **Recommendation**: Implement data classification inventory for agent-accessible datasources.
-- **Evidence**: `server/src/main/java/org/apache/druid/server/security/ResourceType.java`
+- **Finding**: B1 BLOCKER — `SupervisorResource.specGet()` returns supervisor specs via `Response.ok(spec.get()).build()` with no field filtering; `KafkaIndexTaskIOConfig.getConsumerProperties()` and `KinesisIndexTaskIOConfig` serialize SASL/SSL/AWS credentials as `@JsonProperty` with no `@JsonIgnore`. A read-only agent calling `GET /druid/indexer/v1/supervisor?full=true` exfiltrates all ingestion-source credentials cluster-wide. B2 RISK-SAFETY (basic-security RBAC is datasource-level, no field-level authorization). B3 INFO (no secrets-manager abstraction). See BLOCKERs section above.
+- **Gap**: Supervisor spec serialization returns credentials unmasked; no `PasswordProvider`-style abstraction.
+- **Recommendation**: Add `@JsonIgnore` on sensitive `consumerProperties` keys; integrate secrets manager.
+- **Evidence**: `indexing-service/src/main/java/org/apache/druid/indexing/overlord/supervisor/SupervisorResource.java:282-290`, `extensions-core/kafka-indexing-service/.../KafkaIndexTaskIOConfig.java:165-168`, `extensions-core/kinesis-indexing-service/.../KinesisIndexTaskIOConfig.java:220-230`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

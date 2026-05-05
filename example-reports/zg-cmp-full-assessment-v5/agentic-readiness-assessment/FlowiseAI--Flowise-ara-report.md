@@ -26,11 +26,11 @@
 
 ---
 
-## Readiness Profile: Remediation Required
+## Readiness Profile: Pilot-Ready (Safety Concerns)
 
-**BLOCKERs**: 1 | **RISK-SAFETY**: 4 | **RISK-QUALITY**: 13 | **INFOs**: 21
+**BLOCKERs**: 0 | **RISK-SAFETY**: 5 | **RISK-QUALITY**: 13 | **INFOs**: 22
 
-Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days.
+With DATA-Q1 reclassified from BLOCKER to RISK-SAFETY under the new tiered model (see RISK-SAFETY section), Flowise has no remaining BLOCKERs. Proceed with a supervised pilot with elevated safety oversight; prioritize RISK-SAFETY remediation — especially the credential plaintext path in `GET /api/v1/credentials/:id` — before expanding agent scope.
 
 ---
 
@@ -56,23 +56,32 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ## BLOCKERs — Must Resolve Before Agent Deployment
 
-### DATA-Q1: Sensitive Data Classification
-
-- **Severity**: BLOCKER
-- **Finding**: **Stage A** — The system handles sensitive data: Lead entity stores name, email, phone (PII). Credential entity stores encrypted API keys and secrets. ChatMessage stores user-generated content that may contain PII. ApiKey stores secrets. **Stage B** — Credentials are encrypted at the field level using crypto-js (`encryptedData` field in Credential entity). API key secrets are hashed. The server supports AWS Secrets Manager for encryption key management. However, there is no field-level data classification tagging, no column-level access controls (beyond workspace isolation), and no PII detection tools (Macie). The data classification is implicit (credentials are encrypted, leads have PII fields) rather than formal.
-- **Gap**: System handles sensitive data (Stage A = Yes) but field-level classification is absent. Per TD Stage B: "If classification is absent or partial, record as BLOCKER." No formal field-level classification tags, no column-level access controls beyond workspace isolation, no PII detection tools. Compensating encryption exists for credentials but does not satisfy the classification and tagging requirement.
-- **Remediation**:
-  - **Immediate**: Add field-level data classification annotations to TypeORM entity definitions (e.g., `@Column({ comment: 'PII:email' })` on Lead.email, Lead.phone, Lead.name; `@Column({ comment: 'SECRET' })` on Credential.encryptedData, ApiKey.apiSecret). Create a data classification inventory document mapping each entity field to a sensitivity tier (PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED).
-  - **Target State**: All fields containing PII, credentials, or user-generated content are tagged with classification labels. API responses to agent-authenticated requests filter or redact RESTRICTED fields. A PII detection scan (e.g., AWS Macie) validates that classification is complete.
-  - **Estimated Effort**: Medium (30–60 days for classification tagging; additional 30 days for access control enforcement)
-  - **Dependencies**: Interacts with DATA-Q2 (data residency) — classified data enables residency enforcement. Interacts with DATA-Q6 (PII in logs) — classification informs redaction rules.
-- **Evidence**: `packages/server/src/database/entities/Credential.ts` (encryptedData), `packages/server/src/database/entities/Lead.ts` (name, email, phone), `packages/server/src/database/entities/ApiKey.ts` (apiSecret), `packages/server/src/database/entities/ChatMessage.ts` (content)
+_None. DATA-Q1 was previously BLOCKER under the binary "formal classification absent" rule; under the tiered model it resolves to RISK-SAFETY (see RISK-SAFETY section) because Flowise encrypts credentials at rest with AES-256 + ENCRYPTION_KEY (file-based or AWS Secrets Manager), strips `encryptedData` from list endpoints via `omit()`, and enforces workspace-scoped RBAC with per-permission subset filtering on API keys — but the GET-by-ID credential endpoint decrypts to plaintext and the `apiKey` field is stored/returned plaintext._
 
 ---
 
 ## RISKs
 
 ### RISK-SAFETY — Must Address for Agent Safety
+
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered) — Demoted from BLOCKER
+
+- **Severity**: RISK-SAFETY
+- **Stage A**: Yes — Lead PII (name/email/phone), Credential entity (encrypted API keys/secrets), ChatMessage content, ApiKey entity (plaintext `apiKey` column + hashed `apiSecret`).
+- **B1 — Agent-facing API response scoping: MIXED.**
+  - **Credential list (`GET /api/v1/credentials`)**: CLEAR. `getAllCredentials` strips `encryptedData` via `omit(c, ['encryptedData'])` (`packages/server/src/services/credentials/index.ts:63,71,102`).
+  - **Credential by ID (`GET /api/v1/credentials/:id`)**: RISK. `getCredentialById` calls `decryptCredentialData()` and returns `plainDataObj` containing the decrypted credential in plaintext (`packages/server/src/services/credentials/index.ts:138-147`). Intentional for UI use; a read-only agent scoped to this endpoint can extract decrypted LLM provider API keys and integration credentials one at a time.
+  - **API keys (`GET /api/v1/apikey`)**: RISK. List endpoint returns the full `ApiKey` object including the plaintext `apiKey` column (`packages/server/src/services/apikey/index.ts:109-131`); `apiSecret` is hashed.
+- **B2 — Access control differentiation: CLEAR.** Workspace-scoped queries (`api_key.workspaceId = :workspaceId`). Role-based filtering — non-admin users only see API keys whose permissions are a subset of their own (`packages/server/src/services/apikey/index.ts:118-124`). `validatePermissions` prevents API keys from carrying `workspace:*` or `admin:*` scopes.
+- **B3 — Formal classification metadata: INFO.** AES-256 encryption via `ENCRYPTION_KEY` (file-based or AWS Secrets Manager — `packages/server/src/utils/index.ts:1550-1598`) is classification-by-encryption; no formal decorators. Filesystem storage of the encryption key is acceptable for self-hosted but weaker than HSM/KMS.
+- **Overall (read-only scope)**: B1 fires as RISK-SAFETY (plaintext credentials returned on GET-by-ID; plaintext API keys in list). Because the agent is read-only, the damage is bounded to exfiltration (no escalation). → **DATA-Q1 = RISK-SAFETY**, not BLOCKER.
+- **Compensating Controls**:
+  - Restrict agent to endpoints that never call `getCredentialById` (list-only access)
+  - Rotate LLM provider keys regularly and monitor for anomalous usage
+  - Enforce per-workspace scoping in the agent's session
+- **Remediation Timeline**: 30–60 days
+- **Recommendation**: Default `getCredentialById` to returning the encrypted blob; require an explicit `reveal=true` parameter + additional auth to decrypt. Mask `apiKey` in list responses (return truncated prefix). Consider migrating `apiKey` to hashed storage with a derived display key.
+- **Evidence**: `packages/server/src/services/credentials/index.ts:63,71,102,138-147`, `packages/server/src/services/apikey/index.ts:109-131`, `packages/server/src/database/entities/Credential.ts`, `packages/server/src/database/entities/ApiKey.ts:7-8`, `packages/server/src/utils/index.ts:1550-1598`.
 
 #### AUTH-Q6: Immutable Audit Logging — RISK-SAFETY
 
@@ -635,12 +644,15 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ### 05 — Data Accessibility and Quality
 
-#### DATA-Q1: Sensitive Data Classification
-- **Severity**: BLOCKER
-- **Finding**: Stage A: System handles sensitive data — Lead entity (name, email, phone PII), Credential entity (encrypted API keys/secrets), ChatMessage (user content), ApiKey (secrets). Stage B: Credentials encrypted at field level via crypto-js. API key secrets hashed. AWS Secrets Manager for key management. However, no formal field-level classification tags, no column-level access controls beyond workspace isolation, no PII detection tools. Per TD Stage B: when sensitive data is identified but classification is absent or partial, record as BLOCKER.
-- **Gap**: System handles sensitive data (Stage A = Yes) but field-level classification is absent. No formal data classification tags, no column-level access controls beyond workspace isolation, no PII detection tools. Compensating encryption exists for credentials but does not satisfy the classification and tagging requirement.
-- **Recommendation**: Add field-level data classification annotations to TypeORM entity definitions. Create a data classification inventory mapping each entity field to a sensitivity tier (PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED). Implement PII detection scanning.
-- **Evidence**: `packages/server/src/database/entities/Credential.ts`, `packages/server/src/database/entities/Lead.ts`, `packages/server/src/database/entities/ApiKey.ts`, `packages/server/src/database/entities/ChatMessage.ts`
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
+- **Severity**: RISK-SAFETY
+- **Stage A**: Yes — Lead PII (name/email/phone), Credential encrypted data, ChatMessage content, ApiKey plaintext+hashed.
+- **B1 — Agent-facing API response scoping**: MIXED. Credential list (`getAllCredentials`) strips `encryptedData` via `omit(c, ['encryptedData'])` (`packages/server/src/services/credentials/index.ts:63,71,102`). But `getCredentialById` **decrypts** via `decryptCredentialData` and returns `plainDataObj` with the credential in plaintext (`packages/server/src/services/credentials/index.ts:138-147`). API keys list returns `apiKey` column in plaintext (`packages/server/src/services/apikey/index.ts:109-131`); `apiSecret` is hashed. Under `read-only` scope this is RISK-SAFETY (not BLOCKER) — the agent can call the endpoints but cannot escalate via writes.
+- **B2 — Access control differentiation**: CLEAR. Workspace-scoped queries; role-based filtering on API keys (non-admins see only permissions subset of their own); `validatePermissions` enforces that API keys cannot carry `workspace:*` / `admin:*`.
+- **B3 — Formal classification metadata**: INFO. AES-256 at-rest via `ENCRYPTION_KEY` (file or AWS Secrets Manager per `packages/server/src/utils/index.ts:1550-1598`) is a classification-by-encryption primitive; no formal decorators.
+- **Overall**: B1 fires as RISK-SAFETY under read-only → **DATA-Q1 = RISK-SAFETY**.
+- **Recommendation**: Mask `apiKey` in list responses (return truncated prefix only); require explicit intent parameter for `getCredentialById` to decrypt (default to encrypted blob); add field-level decorators for documentation.
+- **Evidence**: `packages/server/src/services/credentials/index.ts`, `packages/server/src/services/apikey/index.ts:109-131`, `packages/server/src/database/entities/Credential.ts`, `packages/server/src/database/entities/ApiKey.ts`, `packages/server/src/utils/index.ts:1550-1598`.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY

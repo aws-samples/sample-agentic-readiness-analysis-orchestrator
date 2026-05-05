@@ -21,11 +21,11 @@
 
 ---
 
-## Readiness Profile: Remediation Required
+## Readiness Profile: Pilot-Ready (Safety Concerns)
 
-**BLOCKERs**: 1 | **RISK-SAFETY**: 6 | **RISK-QUALITY**: 12 | **INFOs**: 20
+**BLOCKERs**: 0 | **RISK-SAFETY**: 6 | **RISK-QUALITY**: 12 | **INFOs**: 21
 
-Resolve all blockers before any agent deployment — including pilots. Estimated runway: 60–180 days.
+With DATA-Q1 reclassified from BLOCKER to INFO under the new tiered model (see INFOs below), Graylog has no remaining BLOCKERs. Proceed with a supervised pilot; prioritize RISK-SAFETY remediation (especially AUTH-Q6 audit immutability) before expanding scope.
 
 ---
 
@@ -33,10 +33,10 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 | Severity | Count |
 |----------|-------|
-| BLOCKER | 1 |
+| BLOCKER | 0 |
 | RISK-SAFETY | 6 |
 | RISK-QUALITY | 12 |
-| INFO | 20 |
+| INFO | 21 |
 | N/A | 0 |
 | Not Evaluated (extended) | 4 |
 | **Total** | **43** |
@@ -51,19 +51,7 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 ## BLOCKERs — Must Resolve Before Agent Deployment
 
-### DATA-Q1: Sensitive Data Classification — BLOCKER
-
-- **Severity**: BLOCKER
-- **Finding**: Graylog is a centralized log management platform that ingests, stores, and indexes log data from diverse sources. The system has `has_persistent_data_store=true` (MongoDB for metadata + OpenSearch for log indices). Log data routinely contains PII (usernames, email addresses, IP addresses), credentials (if application logs leak them), PHI (if healthcare systems forward logs), and other sensitive information. User account data (usernames, access tokens, session data) is stored in MongoDB via `AccessTokenServiceImpl` and `UserImpl`. Access tokens are encrypted at rest using `AccessTokenCipher`/`EncryptedValueService`, but no field-level data classification, tagging, or access controls exist for the log data itself that flows through the ingestion pipeline. There is no data classification taxonomy, no field-level sensitivity tagging, and no mechanism to prevent an agent from retrieving sensitive log fields via the MCP `search_messages` tool or REST API.
-- **Gap**: No field-level data classification or tagging system for ingested log data. No sensitivity-based access controls that prevent an agent from querying log fields containing PII, PHI, or credentials. The MCP `SearchMessagesTool` exposes arbitrary log fields to the agent without classification-based filtering.
-- **Remediation**:
-  - **Immediate**: Implement a field-level classification system for log data, starting with a deny-list of known sensitive field patterns (e.g., `password`, `credit_card`, `ssn`, `api_key`). Configure the MCP `SearchMessagesTool` to filter or redact classified fields from results returned to agents.
-  - **Target State**: All log fields have classification metadata (public, internal, confidential, restricted). Agent queries are filtered based on the agent identity's classification clearance level. Sensitive fields are redacted or excluded from MCP tool responses.
-  - **Estimated Effort**: High (requires data classification framework, field tagging pipeline, and MCP response filtering)
-  - **Dependencies**: AUTH-Q2 (scoped permissions) — field-level access controls depend on the agent identity's permission scope.
-- **Evidence**: `graylog2-server/src/main/java/org/graylog/mcp/tools/SearchMessagesTool.java`, `graylog2-server/src/main/java/org/graylog2/security/AccessTokenServiceImpl.java`, `graylog2-server/src/main/java/org/graylog2/security/encryption/EncryptedValueService.java`
-
----
+_None. DATA-Q1 was previously BLOCKER under the binary "formal classification absent" rule; under the tiered model it resolves to INFO (see INFOs section) because Graylog excludes password from user responses via explicit `readableFields`, wraps LDAP and webhook secrets in `EncryptedValue` (serialized as `{"is_set": true}` without plaintext), and enforces granular GRN-based RBAC. Log-content redaction for ingested PII is a source-system responsibility, not a Graylog code defect._
 
 ## RISKs
 
@@ -292,6 +280,17 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 ---
 
 ## INFOs — Architecture and Design Inputs
+
+### DATA-Q1: Sensitive Data Classification ⚡ (Tiered) — Demoted from BLOCKER
+
+- **Severity**: INFO
+- **Stage A**: Yes — user accounts (hashed passwords in MongoDB), LDAP bind passwords, webhook/notification secrets, access tokens, and ingested log content.
+- **B1 — API response scoping: CLEAR.** `UserImpl.java:78-82` `@DbEntity.readableFields` excludes the password field; `UserSummary` response never contains password hashes. `EncryptedValue` wrapper (`EncryptedValue.java:50-60`) serializes as `{"is_set": true}` for LDAP bind passwords and notification secrets — plaintext never leaves the server. Ingested log content is returned verbatim but stream-level permissions still gate access.
+- **B2 — Access control differentiation: CLEAR.** GRN-based RBAC with fine permissions (`USERS_READ/EDIT`, `EVENT_NOTIFICATIONS_READ/EDIT/DELETE`, `STREAMS_READ`, etc.). `isPermitted(permission, GRN)` checks enforced in resource handlers; `executionGuard.checkUserIsPermittedToSeeStreams()` in `MessagesResource`.
+- **B3 — Formal classification metadata: INFO.** `EncryptedValue` and `@DbEntity.readableFields` are classification-by-type primitives for secret/field exposure; no PII classification on ingested log fields.
+- **Overall**: Only B3 fires → **DATA-Q1 = INFO**. Graylog's secret handling and RBAC are robust; log-field PII is source-system–classified.
+- **Recommendation (aspirational)**: Add optional log-field PII classification index and MCP tool redaction layer; document that ingested log content is source-system–classified.
+- **Evidence**: `graylog2-server/src/main/java/org/graylog2/users/UserImpl.java` (readableFields), `UserSummary.java`, `EncryptedValue.java`, `EncryptedValueService.java`, `RestPermissions.java`, `MessagesResource.java`.
 
 ### API-Q1: Documented API Interface
 - **Severity**: INFO (BLOCKER question — no gap found)
@@ -634,10 +633,15 @@ Resolve all blockers before any agent deployment — including pilots. Estimated
 
 #### DATA-Q1: Sensitive Data Classification
 - **Severity**: BLOCKER
-- **Finding**: Log data may contain PII/PHI/credentials. User accounts and tokens in MongoDB. No field-level classification or tagging.
-- **Gap**: No data classification system for log data accessible to agents.
-- **Recommendation**: Implement field-level classification and MCP response filtering.
-- **Evidence**: `graylog2-server/src/main/java/org/graylog/mcp/tools/SearchMessagesTool.java`, `graylog2-server/src/main/java/org/graylog2/security/AccessTokenServiceImpl.java`
+#### DATA-Q1: Sensitive Data Classification ⚡ (Tiered)
+- **Severity**: INFO
+- **Stage A**: Yes — Graylog stores user accounts (hashed password in MongoDB), LDAP bind passwords, webhook/notification secrets, access tokens, and ingested log content (which may include PII from source systems).
+- **B1 — API response scoping: CLEAR.** `UserImpl.java:78-82` `@DbEntity` annotation marks `readableFields` excluding the password field; `UserSummary` response model contains no password hash. LDAP `AuthServiceBackend.systemUserPassword()` uses `EncryptedValue` wrapper whose serializer returns `{"is_set": true}` without the encrypted value or salt (`EncryptedValue.java:50-60`). Notification/webhook secrets follow the same `EncryptedValue` pattern. Ingested log-message content is returned verbatim (source-system responsibility), but stream-level permissions still gate access.
+- **B2 — Access control differentiation: CLEAR.** Granular GRN-based RBAC in `RestPermissions.java` with fine permission families (`USERS_READ/EDIT`, `EVENT_NOTIFICATIONS_READ/EDIT/DELETE`, `STREAMS_READ`, `DATANODE_READ`, etc.). `UsersResource.getbyId()` checks `isPermitted(USERS_EDIT, username)`. Stream-level access enforced via `executionGuard.checkUserIsPermittedToSeeStreams()` in `MessagesResource`.
+- **B3 — Formal classification metadata: INFO.** `EncryptedValue` wrapper IS a classification-by-type primitive for secret fields; `@DbEntity.readableFields` is a declarative field exposure list. No PII classification on log fields.
+- **Overall**: Only B3 fires for log-field PII classification → **DATA-Q1 = INFO**. Graylog properly excludes secrets from API responses and enforces RBAC.
+- **Recommendation (aspirational)**: Add an optional log-field classification index and MCP tool redaction layer; document that ingested log content is source-system-classified.
+- **Evidence**: `graylog2-server/src/main/java/org/graylog2/users/UserImpl.java` (readableFields), `UserSummary.java`, `EncryptedValue.java`, `EncryptedValueService.java`, `RestPermissions.java`, `MessagesResource.java`, `AuthorizationInterceptor` pattern via Shiro.
 
 #### DATA-Q2: Data Residency and Sovereignty ⚡
 - **Severity**: RISK-SAFETY
