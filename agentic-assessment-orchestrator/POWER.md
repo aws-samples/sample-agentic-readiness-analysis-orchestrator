@@ -43,10 +43,11 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 - Spawns parallel subagents to run `atx custom def exec -n <td_name> -g file://<generated-config> -x -t` concurrently
 - Waits for all individual assessments to complete
 - Generates portfolio-level ATX configs:
-  - Portfolio ARA: `context`, service inventory, `dependency_overrides`, `bpmn_opportunity_reports` (when BPMN reports exist)
-  - Portfolio MOD: `context`, `preferences`, service inventory, `dependency_overrides`
-- Runs portfolio TDs to generate aggregated reports
-- When `assessment_type: full` and `portfolio_bridge` is configured: runs the Bridge TD after both portfolio TDs complete, passing both portfolio report paths as input. If the Bridge TD fails, logs the failure and reports to the user without affecting the completed ARA/MOD reports. If `portfolio_bridge` is not configured, skips the bridge step and logs a warning: "portfolio_bridge not configured — bridge report will not be generated"
+  - Portfolio ARA: `context`, `service_inventory[]` (structured), `dependency_overrides[]` (structured)
+  - Portfolio MOD: `context`, `preferences`, `service_inventory[]` (structured), `dependency_overrides[]` (structured)
+  - Portfolio BAO (when `bpmn-opportunity` or `full` with `.bpmn` files present): `context`, `service_inventory[]`
+- Runs portfolio TDs to generate aggregated reports (Portfolio ARA TD, Portfolio MOD TD, Portfolio BAO TD as applicable)
+- When `assessment_type: full` and `portfolio_bridge` is configured: runs the Bridge TD after all portfolio TDs complete. The Bridge config includes `portfolio_ara_report_path`, `portfolio_mod_report_path`, `portfolio_name`, and `portfolio_bao_report_path` (when the BAO portfolio report exists). If the Bridge TD fails, logs the failure and reports to the user without affecting the completed portfolio reports. If `portfolio_bridge` is not configured, skips the bridge step and logs a warning: "portfolio_bridge not configured — bridge report will not be generated"
 - Consolidates ARA reports into `agentic-readiness-assessment/` folder, MOD reports into `modernization-assessment/` folder, BPMN Opportunity reports into `bpmn-opportunity-assessment/` folder, and the bridge report (if generated) at the portfolio root — cleans up temporary `.atx-config-*.yaml` files
 
 > All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) flags since assessments run at scale without human intervention.
@@ -67,7 +68,7 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 > ls {repo}/modernization-assessment/{project-name}-mod-report.md 2>/dev/null      # MOD
 > ls {repo}/bpmn-opportunity-assessment/*-bpmn-opportunity-report.md 2>/dev/null   # BPMN
 >
-> # V6: confirm the full artifact triple (md + json + html + metadata.json) was produced
+> # V6: confirm the full artifact bundle (md + json + html + metadata.json) was produced
 > ls {repo}/agentic-readiness-assessment/{project-name}-ara-report.{json,html,metadata.json} 2>/dev/null
 > ls {repo}/modernization-assessment/{project-name}-mod-report.{json,html,metadata.json} 2>/dev/null
 > ```
@@ -298,17 +299,28 @@ Where `atx-portfolio-ara-config.yaml` contains:
 ```yaml
 additionalPlanContext: |
   context: "Building customer-facing AI agents for support and order management"
-  
-  Portfolio: my-platform
-  Services assessed: 2
-  
-  Service inventory:
-  - service-a (P0, ./services/service-a) — Tags: monolith, php — repo_type: application
-  - service-b (P1, ./services/service-b) — Tags: backend, inventory — repo_type: application
-  
-  Dependency overrides:
-  - service-a -> service-b (sync): REST API calls for inventory checks
+  portfolio_name: "my-platform"
+  service_inventory:
+    - name: "service-a"
+      path: "./services/service-a"
+      priority: "P0"
+      repo_type: "application"
+      agent_scope: "write-enabled"
+      tags: ["monolith", "php"]
+    - name: "service-b"
+      path: "./services/service-b"
+      priority: "P1"
+      repo_type: "application"
+      agent_scope: "read-only"
+      tags: ["backend", "inventory"]
+  dependency_overrides:
+    - source: "service-a"
+      target: "service-b"
+      type: "sync"
+      description: "REST API calls for inventory checks"
 ```
+
+> **IMPORTANT:** `service_inventory` and `dependency_overrides` MUST be emitted as structured YAML object arrays — NOT as free-text bullet lists. The Portfolio ARA/MOD TDs parse these fields programmatically to populate service-by-service summaries, cross-reference with discovered reports, and (for MOD) pass `service_archetype` through to per-service TD invocations. A bullet-list string silently degrades every feature keyed off structured inventory data.
 
 **Portfolio MOD assessment (after all individual MOD assessments):**
 ```bash
@@ -322,16 +334,25 @@ additionalPlanContext: |
   preferences:
     prefer: ["eks", "aurora", "bedrock"]
     avoid: ["self-managed-kafka"]
-  
-  Portfolio: my-platform
-  Services assessed: 2
-  
-  Service inventory:
-  - service-a (P0, ./services/service-a) — Tags: monolith, php — repo_type: application
-  - service-b (P1, ./services/service-b) — Tags: backend, inventory — repo_type: application
-  
-  Dependency overrides:
-  - service-a -> service-b (sync): REST API calls for inventory checks
+  portfolio_name: "my-platform"
+  service_inventory:
+    - name: "service-a"
+      path: "./services/service-a"
+      priority: "P0"
+      repo_type: "application"
+      service_archetype: "stateful-crud"
+      tags: ["monolith", "php"]
+    - name: "service-b"
+      path: "./services/service-b"
+      priority: "P1"
+      repo_type: "application"
+      service_archetype: "data-gateway"
+      tags: ["backend", "inventory"]
+  dependency_overrides:
+    - source: "service-a"
+      target: "service-b"
+      type: "sync"
+      description: "REST API calls for inventory checks"
 ```
 
 > Always use `-x` (non-interactive) and `-t` (trust all tools) when running at scale. Note: these commands are long-running (5–15 min each). If a command times out, check for the output report file before assuming failure.
@@ -350,9 +371,8 @@ additionalPlanContext: |
   portfolio_ara_report_path: "agentic-readiness-assessment/my-platform-portfolio-ara-report.md"
   portfolio_mod_report_path: "modernization-assessment/my-platform-portfolio-mod-report.md"
   portfolio_name: "my-platform"
-  # Optional: include if BPMN opportunity reports exist
-  # bpmn_opportunity_report_paths:
-  #   - "bpmn-opportunity-assessment/process-name-bpmn-report.md"
+  # Optional: include if a BPMN opportunity portfolio report exists
+  # portfolio_bao_report_path: "bpmn-opportunity-assessment/my-platform-portfolio-bao-report.md"
 ```
 
 The bridge report is saved at the portfolio root as `{portfolio_name}-bridge-report.md`.
@@ -500,11 +520,12 @@ The `assessment_type` field controls which assessment paths are executed. It is 
 |----------------|-------------|
 | `agentic-readiness` | Run ARA only — evaluates agentic readiness with BLOCKER/RISK/INFO scoring (43 questions, 8 sections) |
 | `modernization` | Run MOD only — evaluates cloud architecture maturity with 1-4 scale scoring (37 questions, 5 sections) |
-| `full` | Run both ARA and MOD in parallel — produces both sets of reports |
+| `bpmn-opportunity` | Run BPMN opportunity analysis only — identifies agentic opportunities in BPMN 2.0 process models. Requires `.bpmn` files in the repositories. |
+| `full` | Run ARA + MOD + BPMN opportunity (when `.bpmn` files are present) in parallel — produces all report sets plus the portfolio Bridge report when `portfolio_bridge` is configured |
 
 **Assessment Type Validation:**
 - If `assessment_type` is missing → error (required field)
-- If `assessment_type` is not one of the 3 valid values → error
+- If `assessment_type` is not one of the 4 valid values → error
 - The `context` free-text field is optional and provides additional framing for recommendations (e.g., "Building a customer support agent that needs access to order and inventory data").
 - The `agent_scope` field is optional (enum: `read-only`, `write-enabled`) and is ARA-only — the Power passes it only to ARA ATX configs. It controls conditional BLOCKER severity in the ARA TD.
 
@@ -604,7 +625,7 @@ The agent interprets preferences intelligently:
 The full configuration schema is available in `portfolio-config.schema.json`. Key sections:
 
 - **portfolio_name** (required): Name identifier for the portfolio
-- **assessment_type** (required): One of `agentic-readiness`, `modernization`, `full`
+- **assessment_type** (required): One of `agentic-readiness`, `modernization`, `bpmn-opportunity`, `full`
 - **context** (optional): Free-text context for framing recommendations
 - **agent_scope** (optional): One of `read-only`, `write-enabled` — ARA-only, controls conditional BLOCKER severity
 - **transformation_definitions** (required): Names of the AWS Transform definitions to use
@@ -814,7 +835,7 @@ portfolio-config.yaml
           ▼
 ┌─────────────────────┐
 │  2. Validate         │  assessment_type must be one of:
-│     assessment_type  │  agentic-readiness | modernization | full
+│     assessment_type  │  agentic-readiness | modernization | bpmn-opportunity | full
 │     & config fields  │  Error if missing or invalid
 └─────────┬───────────┘
           │
@@ -1013,19 +1034,40 @@ After all subagents complete their individual assessments, Kiro generates portfo
 ```yaml
 additionalPlanContext: |
   context: "Building customer-facing AI agents for support and order management"
-  
-  Portfolio: ecommerce-platform
-  Services Assessed: 4
-  
-  Service Inventory:
-  - storefront-web (P0, ./services/storefront-web) — Tags: frontend, customer-facing — repo_type: application
-  - checkout-service (P0, ./services/checkout-service) — Tags: backend, payment — repo_type: application
-  - inventory-service (P1, ./services/inventory-service) — Tags: backend, data — repo_type: application
-  - infra-repo (P2, ./infrastructure) — repo_type: infrastructure-only
-  
-  Dependency Overrides:
-  - storefront-web -> checkout-service (sync): Storefront calls Checkout REST API for order placement
-  - checkout-service -> inventory-service (sync): Checkout validates inventory availability before order placement
+  portfolio_name: "ecommerce-platform"
+  service_inventory:
+    - name: "storefront-web"
+      path: "./services/storefront-web"
+      priority: "P0"
+      repo_type: "application"
+      agent_scope: "write-enabled"
+      tags: ["frontend", "customer-facing"]
+    - name: "checkout-service"
+      path: "./services/checkout-service"
+      priority: "P0"
+      repo_type: "application"
+      agent_scope: "write-enabled"
+      tags: ["backend", "payment"]
+    - name: "inventory-service"
+      path: "./services/inventory-service"
+      priority: "P1"
+      repo_type: "application"
+      agent_scope: "read-only"
+      tags: ["backend", "data"]
+    - name: "infra-repo"
+      path: "./infrastructure"
+      priority: "P2"
+      repo_type: "infrastructure-only"
+      agent_scope: "read-only"
+  dependency_overrides:
+    - source: "storefront-web"
+      target: "checkout-service"
+      type: "sync"
+      description: "Storefront calls Checkout REST API for order placement"
+    - source: "checkout-service"
+      target: "inventory-service"
+      type: "sync"
+      description: "Checkout validates inventory availability before order placement"
 ```
 
 **Generated Portfolio MOD ATX config example** (`.atx-config-portfolio-mod.yaml`):
@@ -1035,19 +1077,39 @@ additionalPlanContext: |
   preferences:
     prefer: ["eks", "aurora", "bedrock"]
     avoid: ["self-managed-kafka"]
-  
-  Portfolio: ecommerce-platform
-  Services Assessed: 4
-  
-  Service Inventory:
-  - storefront-web (P0, ./services/storefront-web) — Tags: frontend, customer-facing — repo_type: application
-  - checkout-service (P0, ./services/checkout-service) — Tags: backend, payment — repo_type: application
-  - inventory-service (P1, ./services/inventory-service) — Tags: backend, data — repo_type: application
-  - infra-repo (P2, ./infrastructure) — repo_type: infrastructure-only
-  
-  Dependency Overrides:
-  - storefront-web -> checkout-service (sync): Storefront calls Checkout REST API for order placement
-  - checkout-service -> inventory-service (sync): Checkout validates inventory availability before order placement
+  portfolio_name: "ecommerce-platform"
+  service_inventory:
+    - name: "storefront-web"
+      path: "./services/storefront-web"
+      priority: "P0"
+      repo_type: "application"
+      service_archetype: "stateful-crud"
+      tags: ["frontend", "customer-facing"]
+    - name: "checkout-service"
+      path: "./services/checkout-service"
+      priority: "P0"
+      repo_type: "application"
+      service_archetype: "orchestrator"
+      tags: ["backend", "payment"]
+    - name: "inventory-service"
+      path: "./services/inventory-service"
+      priority: "P1"
+      repo_type: "application"
+      service_archetype: "data-gateway"
+      tags: ["backend", "data"]
+    - name: "infra-repo"
+      path: "./infrastructure"
+      priority: "P2"
+      repo_type: "infrastructure-only"
+  dependency_overrides:
+    - source: "storefront-web"
+      target: "checkout-service"
+      type: "sync"
+      description: "Storefront calls Checkout REST API for order placement"
+    - source: "checkout-service"
+      target: "inventory-service"
+      type: "sync"
+      description: "Checkout validates inventory availability before order placement"
 ```
 
 ```bash
@@ -1081,17 +1143,44 @@ Portfolio MOD generates:
 modernization-assessment/{portfolio-name}-portfolio-mod-report.md
 ```
 
+### Step 2.4: Run Portfolio BAO TD (BPMN and Full Assessments)
+
+When `assessment_type` is `bpmn-opportunity` or `full` AND at least one repo produced a BPMN Opportunity individual report, Kiro runs the Portfolio BAO TD (configured as `transformation_definitions.portfolio_bpmn_opportunity`) to aggregate per-process BAO reports into a portfolio-level view.
+
+**Generated Portfolio BAO ATX config example** (`.atx-config-portfolio-bao.yaml`):
+```yaml
+additionalPlanContext: |
+  context: "Identifying agentic opportunities in loan origination workflows"
+  portfolio_name: "loan-platform"
+  service_inventory:
+    - name: "loan-origination-process"
+      path: "./processes/loan-origination"
+      priority: "P0"
+      tags: ["camunda", "loan"]
+```
+
+```bash
+atx custom def exec -n <portfolio_bpmn_opportunity> -p . -g file://.atx-config-portfolio-bao.yaml -x -t
+```
+
+Portfolio BAO generates:
+```
+bpmn-opportunity-assessment/{portfolio-name}-portfolio-bao-report.md
+```
+
+If `portfolio_bpmn_opportunity` is not configured in `transformation_definitions` and the assessment requires it, Kiro skips the portfolio BAO aggregation step and logs a warning. The Bridge TD's BAO+ARA Readiness Matrix (Section 6) only generates when `portfolio_bao_report_path` is passed in — skipping this step is a supported mode that just omits that section from the bridge report.
+
 ### Step 2.5: Run Bridge TD (Full Assessment Only)
 
-When `assessment_type: full` and `portfolio_bridge` is configured in `transformation_definitions`, Kiro runs the Bridge TD as a final step after both portfolio TDs complete. The Bridge TD cross-references the portfolio ARA and MOD reports to produce a unified remediation view.
+When `assessment_type: full` and `portfolio_bridge` is configured in `transformation_definitions`, Kiro runs the Bridge TD as a final step after all portfolio TDs complete. The Bridge TD cross-references the portfolio ARA, MOD, and (if available) BAO reports to produce a unified remediation view.
 
 **When the bridge step runs:**
 - `assessment_type` must be `full`
 - `portfolio_bridge` must be configured in `transformation_definitions`
-- Both Portfolio ARA TD and Portfolio MOD TD must have completed
+- Both Portfolio ARA TD and Portfolio MOD TD must have completed. Portfolio BAO is optional — its absence just omits Section 6 of the bridge report.
 
 **When the bridge step is skipped:**
-- `assessment_type` is `agentic-readiness` or `modernization` → bridge step is not applicable
+- `assessment_type` is `agentic-readiness`, `modernization`, or `bpmn-opportunity` → bridge step is not applicable
 - `assessment_type` is `full` but `portfolio_bridge` is not configured → Kiro skips the bridge step and logs a warning: "portfolio_bridge not configured — bridge report will not be generated"
 
 **Generated Bridge ATX config example** (`.atx-config-bridge.yaml`):
@@ -1100,16 +1189,14 @@ additionalPlanContext: |
   portfolio_ara_report_path: "agentic-readiness-assessment/ecommerce-platform-portfolio-ara-report.md"
   portfolio_mod_report_path: "modernization-assessment/ecommerce-platform-portfolio-mod-report.md"
   portfolio_name: "ecommerce-platform"
-  bpmn_opportunity_report_paths:
-    - "bpmn-opportunity-assessment/loan-origination-bpmn-report.md"
-    - "bpmn-opportunity-assessment/kyc-onboarding-bpmn-report.md"
+  portfolio_bao_report_path: "bpmn-opportunity-assessment/ecommerce-platform-portfolio-bao-report.md"
 ```
 
 **How Kiro generates the Bridge `additionalPlanContext`:**
 1. Set `portfolio_ara_report_path` to the path of the portfolio ARA report: `agentic-readiness-assessment/{portfolio_name}-portfolio-ara-report.md`
 2. Set `portfolio_mod_report_path` to the path of the portfolio MOD report: `modernization-assessment/{portfolio_name}-portfolio-mod-report.md`
 3. Set `portfolio_name` from the portfolio config
-4. If BPMN opportunity reports exist in `bpmn-opportunity-assessment/`, set `bpmn_opportunity_report_paths` to the list of report file paths. If no BPMN reports exist, omit this field.
+4. If a BPMN opportunity portfolio report exists at `bpmn-opportunity-assessment/{portfolio_name}-portfolio-bao-report.md` (produced by the Portfolio BAO TD — see Step 2 below), set `portfolio_bao_report_path` to that path. If no BPMN assessments were run, omit this field. Do NOT use the deprecated `bpmn_opportunity_report_paths[]` field — the Bridge TD consumes a single aggregated portfolio BAO report, not per-process reports.
 
 ```bash
 # Bridge TD (using transformation_definitions.portfolio_bridge):
@@ -1348,7 +1435,7 @@ repositories:
 
 ## Best Practices
 
-1. **Choose the right assessment_type** — Use `agentic-readiness` for agent safety evaluation, `modernization` for cloud maturity, or `full` for both
+1. **Choose the right assessment_type** — Use `agentic-readiness` for agent safety evaluation, `modernization` for cloud maturity, `bpmn-opportunity` for BPMN process analysis, or `full` for all three in parallel
 2. **Provide context** — Use the `context` field to frame recommendations for your specific situation
 3. **Run individual assessments first** — Portfolio assessment requires completed individual reports
 4. **Always use `-x -t` flags** — Non-interactive (`-x`) is mandatory for parallel execution at scale; trust all tools (`-t`) avoids prompts blocking subagents
@@ -1407,7 +1494,7 @@ repositories:
    ```
 2. Check required fields:
    - `portfolio_name` is a non-empty string
-   - `assessment_type` is one of: `agentic-readiness`, `modernization`, `full`
+   - `assessment_type` is one of: `agentic-readiness`, `modernization`, `bpmn-opportunity`, `full`
    - `transformation_definitions` has all 4 TD names: `agentic_readiness`, `modernization`, `portfolio_agentic_readiness`, `portfolio_modernization` (plus optional `portfolio_bridge` for full assessments)
    - Each repository has `name` and `path`
    - Paths are relative to portfolio root

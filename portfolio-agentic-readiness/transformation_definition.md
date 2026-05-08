@@ -878,7 +878,9 @@ Group related BLOCKERs that can be addressed together.>
 ### Agentic Programs
 
 ```markdown
-## Agentic Program Recommendations
+## Recommended Actions
+
+### Agentic Program Recommendations
 
 > These are engagement-level recommendations based on the portfolio's agentic readiness
 > profile. Discuss with your AWS Solutions Architect to determine eligibility and timing.
@@ -1006,7 +1008,7 @@ The complete report structure, for reference:
    - Cross-Cutting RISK-QUALITY — Same Quality Risk in 3+ Repos
 4. Service Dependency Map
 5. Portfolio Remediation Guidance
-6. Agentic Program Recommendations
+6. Recommended Actions (Agentic Program Recommendations)
 7. Portfolio-Level Findings
 8. Service-by-Service Summary
 9. Assessment Inventory
@@ -1021,14 +1023,41 @@ Strictly follow these rules at all times:
 - **N/A exclusion**: Questions scored as N/A for a service do NOT count as gaps for that service in cross-cutting analysis. A question that is N/A for a service is excluded from BLOCKER and RISK counts for cross-cutting identification.
 - **Cross-cutting thresholds**: BLOCKERs require 2+ repos. RISKs require 3+ repos. Do not lower these thresholds.
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
-- **Conditional BLOCKER accuracy**: When counting cross-cutting BLOCKERs for conditional questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2), only count services where the conditional resolved to BLOCKER (write-enabled scope, or for DATA-Q1 when B1 fires under write-enabled/data-export-enabled scope). Do not count services where it resolved to INFO/RISK (read-only scope, or for DATA-Q1 when only B2/B3 fired).
-- **Report completeness**: The output report must contain all required sections: executive dashboard, cross-cutting BLOCKERs, cross-cutting RISKs, service dependency map, remediation guidance, agentic program recommendations, service-by-service summary, and assessment inventory.
+- **Conditional BLOCKER accuracy**: When counting cross-cutting BLOCKERs for conditional questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2), only count services where the conditional resolved to BLOCKER (write-enabled scope, or for DATA-Q1 when B1 fires under write-enabled scope). Do not count services where it resolved to INFO/RISK (read-only scope, or for DATA-Q1 when only B2/B3 fired).
+- **Report completeness**: The output report must contain all required sections: executive dashboard, cross-cutting BLOCKERs, cross-cutting RISKs, service dependency map, remediation guidance, agentic program recommendations, portfolio-level findings (PORT-ARA-Q1 through PORT-ARA-Q5), service-by-service summary, and assessment inventory.
 
 ---
 
 ## V6 Additions
 
 V6 is strictly additive to the V5 Portfolio ARA TD. Every V5 section, cross-cutting narrative, agentic-program recommendation, and dependency-map content is preserved. V6 adds webapp-aligned JSON top-level keys, a `remediation_roadmap` that matches the webapp tab, and a `recommended_actions[]` array with canonical agentic-program coverage.
+
+---
+
+### V6 Three-Artifact Output Contract (Portfolio ARA)
+
+Every portfolio ARA assessment MUST emit THREE artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
+
+| Artifact | Filename | Purpose |
+|---|---|---|
+| Markdown report | `{portfolio-name}-portfolio-ara-report.md` | Richest-prose artifact. Contains every V5 section (Executive Dashboard, Cross-Cutting Analysis, Dependency Map, Agentic Program Recommendations, Readiness Profiles, Service-by-Service Summary). |
+| JSON report | `{portfolio-name}-portfolio-ara-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard. Every semantic field defined in the V6 Top-Level JSON Keys section below MUST be present. |
+| HTML report | `{portfolio-name}-portfolio-ara-report.html` | **Single self-contained HTML file** (no external asset fetches at render time). Renders a subset of the JSON per the V6 Portfolio ARA HTML Visual Contract below. MUST be emitted alongside the MD and JSON — it is NOT optional. |
+| Metadata sidecar | `{portfolio-name}-portfolio-ara-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
+
+The JSON artifact is the canonical contract. If the three artifacts disagree on any field, JSON wins.
+
+#### Metadata Sidecar Fields
+
+```json
+{
+  "version": "V6",
+  "assessment_type": "portfolio-ara",
+  "assessment_date": "YYYY-MM-DD",
+  "td_version": "portfolio-agentic-readiness-v6",
+  "report_format_version": "V6"
+}
+```
 
 ---
 
@@ -1050,7 +1079,7 @@ The Portfolio ARA JSON artifact MUST emit these top-level keys in the order show
 | `portfolio_level_findings[]` | Preserved V5 PORT-ARA-Q* cross-portfolio findings |
 | `dependency_map` | Preserved V5 dependency map |
 
-The canonical shape anchor is `.kiro/specs/assessment-standardization-v6/examples/portfolio-ara-report.example.json`.
+Canonical shape is fully defined by the V6 Top-Level JSON Keys table above. All required keys, types, and nesting are specified inline in this TD.
 
 #### `filter_vocab` (Req 10.9, Req 7A.6)
 
@@ -1062,9 +1091,8 @@ Contains ONLY values actually present in the run, so the webapp renders filter c
   "categories": ["API Surface", "Authentication & Authorization", "State Management", "Human-in-the-Loop", "Data Accessibility", "Discovery & Documentation", "Observability", "Engineering Maturity"],
   "efforts": ["High", "Medium", "Low"],
   "priorities": ["P0", "P1", "P2", "P3"],
-  "phases": [1, 2, 3, 4],
-  "classifications": ["Agent-Ready", "Pilot-Ready", "Remediation Required", "Not Agent-Integrable"],
-  "classification_sub_qualifiers": ["Pilot-Ready (Safety Concerns)"],
+  "phases": [1, 2, 3],
+  "classifications": ["Agent-Ready", "Pilot-Ready", "Pilot-Ready (Safety Concerns)", "Remediation Required", "Not Agent-Integrable"],
   "safety_impact": [true, false],
   "native_severities": ["BLOCKER", "RISK-SAFETY", "RISK-QUALITY", "INFO"]
 }
@@ -1078,6 +1106,32 @@ V5 `service_summary[]` → V6 `repositories[]` (same shape, preserved V5 fields 
 V5 `findings_index[]` → V6 `findings[]` (same shape, preserved V5 fields + V6 additions).
 
 All per-entry V5 fields are PRESERVED. V6 only adds the `category` display name field on findings and the `category_scores[].severity_status` on repositories.
+
+#### `findings[]` entry shape
+
+Each entry in `findings[]` mirrors the per-repo ARA 12-field finding shape (see the per-repo ARA TD's "V6 Unified Per-Finding Field Set" section), with the addition of a `repo_name` field for portfolio-level join:
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | Rubric question identifier (e.g., `"AUTH-Q1"`). |
+| `repo_name` | string | Source repository name (matches `repositories[].repo_name`). |
+| `category` | string | Webapp-facing category display name (e.g., `"Authentication & Authorization"`). |
+| `category_id` | string | Rubric short code (e.g., `"AUTH"`). |
+| `title` | string | Short finding title. |
+| `description` | string | Finding description. |
+| `gap` | string | What's missing or incorrect. |
+| `recommendation` | string | Remediation recommendation. |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified V6 severity. |
+| `native_severity` | enum | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — V5 ARA native severity for portfolio grouping. |
+| `safety_impact` | boolean | `true` for RISK-SAFETY findings and BLOCKERs flagged as agent-safety hazards. |
+| `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority (static per question_id). |
+| `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
+| `phase` | integer | `1`–`3` — derived roadmap phase (Phase 1 = blockers, Phase 2 = safety, Phase 3 = quality). |
+| `evidence` | object or null | `{file, lines}` reference or `null`. |
+
+Findings are sourced from each consumed per-repo ARA JSON's `findings[]` array; the portfolio TD adds `repo_name` and emits them into a flat array suitable for webapp filtering. The HTML Findings tab orders by severity descending (High → Medium → Low), then by repo_name, then by category display order (API → AUTH → STATE → HITL → DATA → DISC → OBS → ENG).
+
+Findings are NEVER emitted for questions that resolve to pass, N/A, or Not Evaluated at the per-repo level — the portfolio `findings[]` array only contains rows for which the source per-repo ARA JSON emitted a finding.
 
 ---
 
@@ -1167,25 +1221,107 @@ Each entry carries:
 
 `status` ∈ {Triggered, Applicable, Not Triggered}. `trigger_reason` is non-empty prose explaining why the program fires.
 
-The MD artifact renders this under an H2 heading **"## Recommended Actions"** that replaces the V5 "Agentic Program Recommendations" heading. The V5 section's rich prose is preserved verbatim beneath the H2 heading.
+The MD artifact renders this under an H2 heading **"## Recommended Actions"** (this is the canonical V6 heading — the V5 "## Agentic Program Recommendations" label is retained as an H3 subheading under the V6 H2 to preserve V5 prose without creating duplicate H2s). The V5 section's rich prose is preserved verbatim beneath the V6 H2.
 
 ---
 
 ### V6 Portfolio ARA HTML Visual Contract (Req 10, 22, 23, 28)
 
-The portfolio ARA HTML artifact is a single self-contained file rendering a subset of the portfolio JSON. Authoritative visual contract: `.kiro/specs/assessment-standardization-v6/examples/portfolio-ara-report.example.html.md`.
+The portfolio ARA HTML artifact is a single self-contained file rendering a subset of the portfolio JSON. The full visual contract is inlined below — do NOT reference external files.
 
-**Layout**: summary KPI card row above the tab bar; tab order **Repositories → Findings → Remediation** (no Pathways tab — pathways are MOD-only per Req 28).
+#### HTML Structure and Layout
 
-**Executive summary subsections**: Portfolio Status, Key Findings, Remediation Plan, Recommended Actions.
+**Header:**
+- Title: `Agentic Readiness - {portfolio_name}`
+- Subtitle line: `{date} · {N} repositories · agent_scope: {agent_scope}`
 
-**Stats card row**: 4 cards (ARA convention — the 4th card is the Agent-Ready count, not Low Severity).
+**Executive Summary** (top section, above the tab bar):
 
-**Three-chart row**: Portfolio Distribution, Severity by Repository, Section Heatmap.
+Prose intro: "This Agentic Readiness Analysis evaluates whether your {N} repositories can safely integrate with autonomous AI agents. The analysis examines eight key dimensions (API Surface, Authentication & Authorization, State Management, Human-in-the-Loop, Data Accessibility, Discovery & Documentation, Observability, Engineering Maturity)..."
 
-**Repositories table columns**: Name, Readiness, Language, LOC, Total Findings, High Severity, Medium Severity. **Omits the Low Severity column** per ARA convention.
+Subsections:
+1. **Portfolio Status** — "Out of {N} repositories analyzed, {A} are agent-ready and can integrate with AI agents immediately, {B} are pilot-ready for read-only operations, and {C} require remediation before agent deployment. The analysis identified {H} high severity findings (blockers) and {M} medium severity findings (risks)."
+2. **Key Findings** — Top 3 cross-cutting high severity areas as bullet list with repo counts
+3. **Remediation Plan** — 3-phase numbered list with finding counts and timelines
+4. **Recommended Actions** — Bullet list of triggered programs (AgentStorming, AXE, EBA on Agentic AI) with reasons
 
-**Remediation Roadmap**: 3-phase (Blockers → Safety → Quality) aligned with the `remediation_roadmap.items[]` grouping.
+**Stats Card Row** (4 cards):
+
+| Card | Value source | Subtitle |
+|---|---|---|
+| Total Findings | `summary.total_findings` | Across {M} repositories |
+| High Severity | `summary.high_severity_findings` | Blockers that must be fixed |
+| Medium Severity | `summary.medium_severity_findings` | Safety and quality risks |
+| Agent-Ready | `executive_dashboard.readiness_distribution.agent_ready.count` | Ready for integration |
+
+(ARA swaps "Low Severity" for "Agent-Ready" — this is ARA-specific.)
+
+**Charts Row** (3 visualizations):
+- **Portfolio Distribution** — pie/donut chart from `executive_dashboard.readiness_distribution`
+- **Severity by Repository** — stacked bar chart from per-repo counts in `repositories[]`
+- **Section Heatmap** — grid heatmap from `executive_dashboard.blocker_heatmap_by_section[]` (ARA-only)
+
+**Tab bar order:** Repositories → Findings → Remediation → AWS Programs. NO Pathways tab — pathways are MOD-only.
+
+#### Repositories Tab
+
+Table columns: `Name`, `Language`, `LOC`, `Total Findings`, `High Severity`, `Medium Severity`, `Agentic Readiness`
+
+- Source: `repositories[]`
+- Agentic Readiness = `classification.tier` (potentially with `sub_qualifier`)
+- Ordered by High count descending, then alphabetical
+- ARA **omits** the `Low Severity` column (MOD includes it)
+
+#### Findings Tab
+
+Download CSV control in header.
+
+Table columns: `Category`, `Repository`, `Finding Description`, `Remediation`, `Severity`, `Effort`
+
+- Source: `findings[]`
+- Finding Description = title (bold) + one-liner description
+- Ordered by severity (High first), then repo name, then category
+
+#### Remediation Roadmap Tab
+
+3-phase table:
+
+| Phase | Focus Area | Findings | Timeline | Key Actions |
+|---|---|---|---|---|
+| Phase 1 | Blockers — Must Fix Before Agent Deployment | N | 3-6 weeks | Machine Identity Auth, Data Classification, API Documentation |
+| Phase 2 | Safety Risks — Required for Production | N | 2-4 weeks | Audit Logging, Rollback, Rate Limiting, Authorization |
+| Phase 3 | Quality Risks — Recommended for Operations | N | 2-4 weeks | Distributed Tracing, Schema Versioning, Error Handling, API Testing |
+
+Source: `remediation_roadmap.items[]` grouped by phase
+
+#### Recommended AWS Programs Tab
+
+Table columns: `Program`, `Description`, `Why Recommended`, `Duration`
+
+- Source: `recommended_actions[]` filtered to `status == "Triggered"`
+- Programs: AgentStorming Workshop, AXE Workshop, EBA on Agentic AI
+
+#### Footer
+
+- `Generated by AWS Transform · Agentic Readiness Analysis Report v2.1`
+- `© {year} Amazon Web Services, Inc. All rights reserved.`
+
+#### Data Sourcing (JSON → HTML mapping)
+
+| Visual location | JSON source |
+|---|---|
+| Header | `metadata.{portfolio_name, assessment_date, services_assessed}` + agent_scope |
+| Executive Summary | `summary.*` + `executive_dashboard.*` + `recommended_actions[]` |
+| Stats cards | `summary.*` + `executive_dashboard.readiness_distribution.agent_ready.count` |
+| Portfolio Distribution chart | `executive_dashboard.readiness_distribution` |
+| Severity by Repository chart | Per-repo counts from `repositories[]` |
+| Section Heatmap chart | `executive_dashboard.blocker_heatmap_by_section[]` |
+| Repositories table | `repositories[]` |
+| Findings table | `findings[]` |
+| Remediation Roadmap | `remediation_roadmap.items[]` grouped by phase |
+| AWS Programs table | `recommended_actions[]` |
+
+**Content NOT in HTML** (MD-only): Sequencing Principles, per-service steps, Parallel Execution Tracks, Portfolio Risk Register, DATA-Q1 sub-check reasoning, conditional-resolution reasoning, root cause patterns.
 
 **HTML-escaping discipline** applies to every attacker-controlled string (repo names, evidence file paths, finding titles, finding descriptions, prose fields).
 

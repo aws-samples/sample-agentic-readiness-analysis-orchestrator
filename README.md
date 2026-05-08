@@ -299,7 +299,7 @@ Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution
 ├── agentic-assessment-orchestrator/    # Kiro Power (orchestration logic)
 │   └── POWER.md
 ├── portfolio-config.yaml               # Example portfolio config (full assessment)
-├── demo-bpmn-portfolio-config.yaml     # Demo config with open source BPMN repos
+├── demo-bao-portfolio-config.yaml      # Demo config with open source BPMN repos
 ├── portfolio-config.schema.json        # JSON schema for portfolio config
 ├── example-reports/                    # Generated example reports
 │   ├── v3-full-assessment/             # Full assessment (ARA + MOD + Bridge) across 5 repos

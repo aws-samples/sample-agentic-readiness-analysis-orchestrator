@@ -23,23 +23,25 @@ Each question is scored on a 1–4 scale:
 | **4** | ✅ Mature | Fully meets the criterion. No gaps. Best-practice implementation. |
 | **3** | 🟡 Partial | Partially meets the criterion. Minor gaps. Functional but improvable. |
 | **2** | 🟠 Needs Work | Exists but significant gaps. Moderate effort needed. |
-| **1** | ❌ Not Present | Missing entirely or fundamentally inadequate. |
+| **1** | ❌ Not Ready | Missing entirely or fundamentally inadequate. |
 
 Category scores are calculated as the arithmetic mean of all non-N/A, non-Not-Evaluated question scores in that category. The overall score is the average of the 5 category scores (each category weighted equally regardless of question count). If all questions in a category are N/A or Not Evaluated for the detected repo_type and archetype, the category score is "N/A" and is excluded from the overall score average.
 
 **Not Evaluated (archetype-N/A)** — Questions that are archetype-calibrated (currently INF-Q3, INF-Q4, APP-Q3, APP-Q4) may resolve to "not applicable by design" for a specific archetype. When the archetype column indicates the question does not apply (e.g., "No multi-step workflows exist — not applicable by design" for `stateless-utility` on INF-Q3), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from both category and overall score averaging — same exclusion as N/A. This prevents artificial score inflation from archetype-correct-but-uninformative "Score 4 by default" entries. The rubric columns still describe what evaluation would look like; the Not-Evaluated status means no evaluation was performed for this repo.
 
-The assessment evaluates 7 AWS Modernization Pathways, each with defined trigger conditions mapped to specific question IDs and contextual guards to prevent false positives:
+The assessment evaluates 7 AWS Modernization Pathways, each with defined trigger conditions mapped to specific question IDs and contextual guards to prevent false positives. Each pathway uses a **Primary + Supporting** trigger model — a pathway fires only when its Primary condition is met; Supporting conditions strengthen the case and inform the detail section but do not on their own trigger the pathway:
 
-| Pathway | Primary Triggers | Contextual Guard |
-|---------|-----------------|------------------|
-| **Move to Cloud Native** | APP-Q2 < 3, INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3 | — |
-| **Move to Containers** | INF-Q1 < 3, no container definitions found | Must be EC2/VM-based; SHALL NOT trigger if compute is already Lambda/Fargate/ECS |
-| **Move to Open Source** | DATA-Q4 < 3, commercial DB engines detected | — |
-| **Move to Managed Databases** | INF-Q2 < 3, DATA-Q3 < 3 | — |
-| **Move to Managed Analytics** | INF-Q4 < 3, data source sprawl with no unified access layer | Evidence of data processing workloads must exist |
-| **Move to Modern DevOps** | INF-Q10 < 3, INF-Q11 < 3, OPS-Q5 < 3, OPS-Q6 < 3 | — |
-| **Move to AI** | No AI/agent frameworks, no vector DB, no RAG, no agent eval framework | Requires AI/agent/LLM intent in portfolio or service context |
+| Pathway | Primary Trigger | Supporting Triggers | Contextual Guard |
+|---------|----------------|---------------------|------------------|
+| **Move to Cloud Native** | APP-Q2 < 3 | At least one of INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3 must also be true | — |
+| **Move to Containers** | INF-Q1 < 3 AND no container definitions found | — | Must be EC2/VM-based; SHALL NOT trigger if compute is already Lambda/Fargate/ECS |
+| **Move to Open Source** | DATA-Q4 < 3 | Commercial DB engines detected in INF-Q2 finding | — |
+| **Move to Managed Databases** | INF-Q2 < 3 | DATA-Q3 < 3 (strengthens, not required) | — |
+| **Move to Managed Analytics** | INF-Q4 < 3 | Data source sprawl with no unified access layer (DATA-Q2 finding) | Evidence of data processing workloads must exist |
+| **Move to Modern DevOps** | INF-Q10 < 3 OR INF-Q11 < 3 | OPS-Q5 < 3, OPS-Q6 < 3 (strengthen, not required) | — |
+| **Move to AI** | No AI/agent frameworks, no vector DB, no RAG, no agent eval framework | — | Requires AI/agent/LLM intent in portfolio or service context |
+
+Full trigger logic including severity interpretation, archetype calibration, and pathway detail content is defined in Step 7.1 through 7.7. This Summary table is a quick reference — Step 7 is authoritative.
 
 All 7 pathways appear in the pathway summary table with status: **Triggered**, **Not Triggered**, or **Not Applicable** (for repo_types where the pathway does not apply).
 
@@ -346,7 +348,7 @@ If archetype detection is skipped because `repo_type` is not `application`, omit
 
 Some MOD questions evaluate a system's maturity on a specific operational surface — a persistent data store, an at-rest-encryption surface, a multi-AZ surface. For repositories that **do not expose that surface at all** (e.g., a progress-bar library has no database, a build tool has no data at rest, a pure utility has no multi-AZ decision to make), scoring those questions with Score 1 ("no managed database" / "no encryption at rest") produces false positives and crowds out the genuine findings on repositories that *do* expose the surface.
 
-This step records five surface flags that feed surface-gated calibration on a small number of INF, SEC, and OPS questions. Surface flags are derived from the Step 1 file inventory — no additional scanning is needed.
+This step records six surface flags that feed surface-gated calibration on a small number of INF, SEC, and OPS questions. Surface flags are derived from the Step 1 file inventory — no additional scanning is needed.
 
 #### Flags
 
@@ -357,6 +359,7 @@ This step records five surface flags that feed surface-gated calibration on a sm
 | `has_deployed_workload` | IaC defines deployable compute (`aws_ecs_*`, `aws_eks_*`, `aws_lambda_*`, `aws_instance`, `aws_apprunner_*`, EKS/ECS task definitions, Lambda functions) OR a Dockerfile exists AND deployment manifests (Helm chart, Kubernetes manifests, CloudFormation / Terraform) reference it. Pure library repos (no Dockerfile, no IaC, published via NpmPrettyMuch/PyPI/Maven Central) are `false`. |
 | `has_api_surface` | The codebase defines HTTP/gRPC/RPC endpoints (Express/FastAPI/Flask/Spring MVC/gRPC server bindings, API Gateway resources in IaC, ALB listeners, AppSync schemas). CLI tools, SDK libraries, and pure computation utilities are `false`. |
 | `has_multi_instance_deployment` | The deployment model supports more than one running instance — ASG with desired>1, Kubernetes Deployment with replicas>1, ECS service with desired_count>1, Lambda (inherently multi-instance), serverless. Single-EC2 or single-container deployments are `false`. Used for INF-Q9 multi-AZ calibration. |
+| `has_iac_provisioning_aws_resources` | The repository contains IaC (Terraform, CDK, CloudFormation, Pulumi, SAM) that provisions AWS resources — any `aws_*` Terraform resources, CloudFormation `AWS::*` resource types, CDK constructs that synthesize AWS resources, or SAM templates. Repositories with only Dockerfiles, Kubernetes manifests, Helm charts, or CI/CD pipeline definitions (without AWS resource provisioning) are `false`. Libraries and application repos with no IaC are `false`. This flag distinguishes repos that *own* AWS infrastructure from repos that are *deployed onto* infrastructure managed elsewhere. **Foundation vs Application IaC:** This flag is `true` for both foundation IaC (CloudTrail, AWS Config, VPC baselines, Organization SCPs) and application IaC (ECS tasks, RDS instances, Lambda functions). The SEC-Q1 gate additionally checks for account-level scope — see the SEC-Q1 gate row for details. |
 
 #### Surface-flag gates on scoring
 
@@ -369,11 +372,30 @@ Questions marked with a surface gate below evaluate to **"Not Evaluated (archety
 | **INF-Q8** (Backup/Recovery) | `has_persistent_data_store` OR `has_at_rest_data_surface` | Not Evaluated (archetype-N/A). Finding: "This system has no persistent state to back up. INF-Q8 does not apply." |
 | **INF-Q9** (High Availability) | `has_deployed_workload` AND (`has_api_surface` OR `has_persistent_data_store`) | Not Evaluated (archetype-N/A). Finding: "This system has no deployed workload requiring HA evaluation. INF-Q9 does not apply." |
 | **OPS-Q2** (SLOs) | `has_api_surface` OR `has_persistent_data_store` | Not Evaluated (archetype-N/A). Finding: "This system has no user-facing surface for which SLOs are meaningful. OPS-Q2 does not apply." |
+| **SEC-Q1** (Audit Logging) | `has_iac_provisioning_aws_resources` AND evidence of account-level IaC scope | Not Evaluated (archetype-N/A). Finding: "Audit logging (CloudTrail) is an AWS account-level service provisioned once per account or organization — not per-application. This repo contains application-level IaC only (compute, databases, networking for this service) which is the correct scope for an application repo. CloudTrail evaluation belongs in the foundation/account-level infrastructure repo. Future: provide audit logging status via `additionalPlanContext`." |
+| **OPS-Q5** (Deployment Strategy) | `has_deployed_workload` | Not Evaluated (archetype-N/A). Finding: "No deployed workload found in this repo — deployment strategy cannot be assessed from source code alone. Deployment orchestration may exist in a separate deployment-config or GitOps repo. Future: provide deployment strategy evidence via `additionalPlanContext`." |
 
 When a flag is `true`, the question is evaluated normally against its rubric — surface flags never downgrade a real Score 1, they only prevent a false Score 1 on a system that does not expose the surface at all. Record the resolved surface flags in the report metadata:
 
+**SEC-Q1 Account-Level Scope Determination:**
+
+The SEC-Q1 gate requires both `has_iac_provisioning_aws_resources=true` AND evidence that the IaC operates at account/foundation level (not just application level). Evaluate SEC-Q1 only when the repo's IaC includes **account-level resources** such as:
+
+- `aws_cloudtrail`, `aws_config_*`, `aws_guardduty_*`, `aws_securityhub_*`
+- `aws_organizations_*`, `aws_iam_account_*`, Service Control Policies
+- Account-wide VPC baselines, Transit Gateway, shared networking
+- Centralized logging infrastructure (log archive buckets, log aggregation)
+
+**Do NOT evaluate SEC-Q1** when the repo contains only application-level IaC:
+- ECS/EKS/Lambda definitions for this service
+- RDS/DynamoDB/S3 for this service's data
+- Security groups, ALBs, API Gateways for this service
+- Service-specific IAM roles and policies
+
+**Rationale:** CloudTrail is provisioned once per AWS account or organization. An application repo that defines its own ECS service and RDS database is correctly scoped — it should not also define CloudTrail. Penalizing application IaC repos for lacking account-level resources produces false positives. Only repos whose explicit purpose is account/foundation infrastructure should be evaluated on SEC-Q1.
+
 ```markdown
-**Surface Flags**: has_persistent_data_store=<true|false>, has_at_rest_data_surface=<true|false>, has_deployed_workload=<true|false>, has_api_surface=<true|false>, has_multi_instance_deployment=<true|false>
+**Surface Flags**: has_persistent_data_store=<true|false>, has_at_rest_data_surface=<true|false>, has_deployed_workload=<true|false>, has_api_surface=<true|false>, has_multi_instance_deployment=<true|false>, has_iac_provisioning_aws_resources=<true|false>
 ```
 
 Surface flags apply to all `repo_type` values where the flag is meaningful. Libraries (`library` repo_type) already receive Not-Evaluated treatment for most INF questions via the N/A mapping; surface flags tighten the same pattern for `application` and `monorepo` repos that happen to lack specific surfaces.
@@ -584,6 +606,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 > **Look for:** `aws_vpc`, `aws_subnet`, `aws_security_group`; subnet tiers (public vs private); security group rules; overly permissive rules (0.0.0.0/0); default-VPC usage; managed networking signals — `aws_vpc_endpoint`, `aws_vpclattice_*`, `aws_vpc_ipam_*`, AWS PrivateLink configurations.
 
+> **⚠️ Scoring limitation — external context dependency:** VPC, subnet, and security group configurations are often managed in a dedicated infrastructure or networking repository rather than in application repos. The absence of network security IaC in the scanned repository does not confirm that the application runs without network isolation — it may be deployed into a VPC managed elsewhere. A Score of 1 has a moderate false-positive rate for application repos that do not own their networking layer. When `additionalPlanContext` provides network security evidence, use that to override the code-scan result.
+
 #### INF-Q6: API Entry Point
 
 **Question:** Is there an API Gateway, AppSync, ALB, or CloudFront as the entry point vs direct service exposure?
@@ -658,6 +682,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 | **1** | No IaC — all infrastructure created manually (ClickOps). |
 
 > **Look for:** Presence and coverage of .tf files, CDK stacks, CloudFormation templates, Helm charts. Check whether IaC covers compute, networking, databases, messaging, and operational resources (CloudWatch alarms, Route 53 health checks, Backup plans, and other DR-related resources).
+
+> **⚠️ Scoring limitation — external context dependency:** Infrastructure as Code is sometimes maintained in a dedicated infrastructure repository (e.g., a Terraform monorepo or a platform team's CDK project) rather than alongside application source code. The absence of IaC files in the scanned repository does not always confirm that infrastructure is manually provisioned — it may be managed in a separate repo. A Score of 1 has a moderate false-positive rate for application repos in organizations that separate IaC from application code. When `additionalPlanContext` provides IaC evidence (e.g., referencing a companion infra repo), use that to override the code-scan result.
 
 #### INF-Q11: CI/CD Automation
 
@@ -870,7 +896,11 @@ These questions evaluate the foundational security posture required for any mode
 | **2** | Partial logging — some services logged, others not. |
 | **1** | No CloudTrail or equivalent audit logging. |
 
+> **Note:** This question is **surface-gated** (Step 1.6). Evaluate SEC-Q1 only when the repo contains **account/foundation-level IaC** (CloudTrail, AWS Config, GuardDuty, Organization SCPs, centralized logging). Application-level IaC repos (ECS tasks, RDS instances, Lambda functions for a single service) are **Not Evaluated** — CloudTrail is an account-level concern that belongs in the foundation infrastructure repo, not in each application repo. See "SEC-Q1 Account-Level Scope Determination" in Step 1.6 for the full decision logic.
+
 > **Look for:** `aws_cloudtrail` in IaC; CloudTrail log file validation enabled; S3 bucket with object lock for logs; CloudWatch log retention policies.
+
+> **⚠️ Scoring limitation — external context dependency:** CloudTrail is an AWS account-level service typically configured once per account or organization, not per-application repository. This question is surface-gated — only repos with account/foundation-level IaC are evaluated (see gate note above). Even when evaluated, the absence of `aws_cloudtrail` in a foundation IaC repo may indicate it's managed at the organization level rather than per-account. When `additionalPlanContext` provides audit logging evidence (e.g., confirming account-level CloudTrail exists), use that to override the code-scan result.
 
 #### SEC-Q2: Encryption at Rest
 
@@ -997,7 +1027,11 @@ These questions evaluate the operational maturity and observability practices th
 | **2** | Basic availability/latency alarms but no formal SLO definitions. |
 | **1** | No SLOs — no formal definition of acceptable service levels. |
 
+> **Note:** This question is **surface-gated** (Step 1.6). If `has_api_surface` is `false` AND `has_persistent_data_store` is `false` — the system has no user-facing surface for which SLOs are meaningful — record the question as **"Not Evaluated (archetype-N/A)"** and skip evaluation.
+
 > **Look for:** SLO definitions in code or config; CloudWatch alarms on p99/p95 latency; error budget tracking; SLO dashboards.
+
+> **⚠️ Scoring limitation — external context dependency:** SLO definitions typically reside in external monitoring platforms (CloudWatch, Datadog, Grafana, PagerDuty) rather than in source code or IaC. A Score of 1 on this question indicates that no SLO evidence was found *in the repository being scanned* — it does not confirm that SLOs are absent from the operational environment. This question has a high false-positive rate for code-only assessments. When `additionalPlanContext` provides SLO evidence (e.g., via a future `external_observability` field), use that to override the code-scan result. This question is classified as **non-core (P2)** because the absence of in-repo SLO artifacts is not a reliable signal of operational immaturity.
 
 #### OPS-Q3: Business Metrics
 
@@ -1042,7 +1076,11 @@ These questions evaluate the operational maturity and observability practices th
 | **2** | Rolling deployments with basic health checks but no traffic shifting. |
 | **1** | Direct-to-production deployment with no staged rollout. |
 
+> **Note:** This question is **surface-gated** (Step 1.6). If `has_deployed_workload` is `false` — the repo has no Dockerfile with deployment manifests, no IaC defining compute, and no deployment configuration — record the question as **"Not Evaluated (archetype-N/A)"** and skip evaluation. A source-code-only repo whose deployment is managed in a separate GitOps or deployment-config repo should not receive Score 1 for "no deployment strategy."
+
 > **Look for:** CodeDeploy deployment config; Helm canary; Argo Rollouts; Lambda traffic shifting; ALB weighted target groups; feature flags.
+
+> **⚠️ Scoring limitation — external context dependency:** Deployment strategies are frequently configured in external systems (AWS CodeDeploy, ArgoCD, Spinnaker, Flux CD) or in separate deployment/GitOps repositories rather than in the application source repo. This question is surface-gated by `has_deployed_workload` — repos without deployment artifacts are Not Evaluated. For repos that DO have deployment artifacts, the absence of canary/blue-green evidence does not confirm that deployments are direct-to-production — deployment orchestration may exist in a separate system. When `additionalPlanContext` provides deployment strategy evidence, use that to override the code-scan result.
 
 #### OPS-Q6: Integration Testing
 
@@ -1567,7 +1605,7 @@ If `service_archetype` was auto-detected, include the one- to two-sentence justi
 | 3.5 – 4.0 | ✅ Mature |
 | 2.5 – 3.4 | 🟡 Partial |
 | 1.5 – 2.4 | 🟠 Needs Work |
-| < 1.5 | ❌ Not Present |
+| < 1.5 | ❌ Not Ready |
 
 If a category score is "N/A" (all questions in that category are N/A or Not Evaluated for the detected repo_type and archetype), display:
 
@@ -1818,7 +1856,7 @@ Every MOD finding emitted under V6 carries a top-level `severity` field with a v
 
 A score of 4 is the "passing" score and MUST NOT emit a finding — the question is recorded only under `evaluations[]` (Req 1 AC 11, Req 8). Similarly, N/A and Not Evaluated (archetype-N/A, extended-not-triggered) SHALL NOT emit findings (Req 1 AC 12). The question's 1–4 score still feeds Scoring Notes arithmetic and pathway trigger evaluation regardless of whether a finding was emitted.
 
-The V5 internal score is preserved verbatim in `mod_metadata.internal_score`, the core-question designation in `mod_metadata.core_question`, and the V5 human-readable label ("Not Present" / "Needs Work" / "Partial") in `mod_metadata.score_label`. See the `mod_metadata` subobject section below.
+The V5 internal score is preserved verbatim in `mod_metadata.internal_score`, the core-question designation in `mod_metadata.core_question`, and the V5 human-readable label ("Not Ready" / "Needs Work" / "Partial") in `mod_metadata.score_label`. See the `mod_metadata` subobject section below.
 
 #### V6 Category Display Names
 
@@ -1872,7 +1910,7 @@ Every V6 MOD finding MUST carry a populated `mod_metadata` subobject (emitted as
 | Field | Type | Description |
 |---|---|---|
 | `internal_score` | integer 1-3 | The preserved V5 1–4 score that emitted this finding. Values of 1, 2, or 3 only — a score of 4 is the passing score and emits no finding. |
-| `score_label` | enum | V5 human-readable label: `"Not Present"` (score 1) / `"Needs Work"` (score 2) / `"Partial"` (score 3). Score 4 is "Mature" but does not emit a finding. |
+| `score_label` | enum | V5 human-readable label: `"Not Ready"` (score 1) / `"Needs Work"` (score 2) / `"Partial"` (score 3). Score 4 is "Mature" but does not emit a finding. |
 | `archetype_calibrated` | boolean | `true` ONLY for INF-Q3, INF-Q4, APP-Q3, APP-Q4 when service archetype influenced the score. Always `false` on all other questions. When `true`, the MD artifact MUST include prose explaining how the archetype shaped the score (Req 3 AC 8). |
 | `core_question` | boolean | Mirrors the MOD rubric's core-question designation. Drives the severity mapping rule that turns `internal_score == 1` on a core question into a High finding, and the same score on a non-core question into a Medium finding. |
 
@@ -1910,7 +1948,7 @@ Concrete per-question defaults for all 37 MOD questions:
 | INF-Q10 | P1 | SEC-Q6 | P2 |
 | INF-Q11 | P1 | SEC-Q7 | P2 |
 | APP-Q1 | P2 | OPS-Q1 | P2 |
-| APP-Q2 | P1 | OPS-Q2 | P1 |
+| APP-Q2 | P1 | OPS-Q2 | P2 |
 | APP-Q3 | P2 | OPS-Q3 | P2 |
 | APP-Q4 | P2 | OPS-Q4 | P2 |
 | APP-Q5 | P2 | OPS-Q5 | P1 |
@@ -2061,21 +2099,23 @@ For every pathway with `status == "Triggered"`, the per-repo MOD MD artifact MUS
 
 #### Surface-Gating Discipline (Req 29 AC 2)
 
-Surface flags (`has_persistent_data_store`, `has_http_rpc_surface`, `has_auth_surface`, `has_write_operations`, `has_logging_of_user_data` — see Step 1.6) MUST be applied BEFORE pathway evaluation. If a surface flag is `false` for a question that would otherwise fire a pathway (e.g., DATA-Q3 < 3 would fire Move to Managed Databases, but `has_persistent_data_store == false` means DATA-Q3 was recorded as Not Evaluated), the question does NOT count toward pathway triggering. This prevents a pathway from firing on a question that was not actually evaluated.
+Surface flags (`has_persistent_data_store`, `has_at_rest_data_surface`, `has_deployed_workload`, `has_api_surface`, `has_multi_instance_deployment`, `has_iac_provisioning_aws_resources` — see Step 1.6) MUST be applied BEFORE pathway evaluation. If a surface flag is `false` for a question that would otherwise fire a pathway (e.g., DATA-Q3 < 3 would fire Move to Managed Databases, but `has_persistent_data_store == false` means DATA-Q3 was recorded as Not Evaluated), the question does NOT count toward pathway triggering. This prevents a pathway from firing on a question that was not actually evaluated.
 
 #### Key Trigger Conditions Reference
 
-The per-pathway trigger conditions used to populate `triggering_questions[]` come from the V5 Pathway Summary Table (Step 7) unchanged:
+The per-pathway trigger conditions used to populate `triggering_questions[]` come from the V5 Pathway Summary Table (Step 7) unchanged. V6 does NOT alter V5 trigger logic — it only surfaces the V5 reasoning as structured JSON. The canonical trigger logic is defined in Step 7.1 through 7.7 above; the table below is a quick reference:
 
-| `id` | Trigger condition | Contextual guard |
-|---|---|---|
-| `move-to-cloud-native` | APP-Q2 < 3 OR INF-Q1 < 3 OR APP-Q3 < 3 OR APP-Q4 < 3 | — |
-| `move-to-containers` | INF-Q1 < 3 AND no container definitions found | SHALL NOT trigger if compute is already Lambda/Fargate/ECS |
-| `move-to-open-source` | DATA-Q4 < 3 AND commercial DB engines detected | — |
-| `move-to-managed-databases` | INF-Q2 < 3 OR DATA-Q3 < 3 | — |
-| `move-to-managed-analytics` | INF-Q4 < 3 AND data source sprawl with no unified access layer | Evidence of data processing workloads must exist |
-| `move-to-modern-devops` | INF-Q10 < 3 OR INF-Q11 < 3 OR OPS-Q5 < 3 OR OPS-Q6 < 3 | — |
-| `move-to-ai` | No AI/agent frameworks, no vector DB, no RAG, no agent eval framework | Requires AI/agent/LLM intent in portfolio or service context |
+| `id` | Primary Trigger | Supporting Triggers (strengthen, not required) | Contextual Guard |
+|---|---|---|---|
+| `move-to-cloud-native` | APP-Q2 < 3 | At least one of INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3 must also be true | — |
+| `move-to-containers` | INF-Q1 < 3 AND no container definitions found | — | SHALL NOT trigger if compute is already Lambda/Fargate/ECS |
+| `move-to-open-source` | DATA-Q4 < 3 | Commercial DB engines detected in INF-Q2 finding | — |
+| `move-to-managed-databases` | INF-Q2 < 3 | DATA-Q3 < 3 (strengthens, not required) | — |
+| `move-to-managed-analytics` | INF-Q4 < 3 | Data source sprawl with no unified access layer (DATA-Q2 finding) | Evidence of data processing workloads must exist |
+| `move-to-modern-devops` | INF-Q10 < 3 OR INF-Q11 < 3 | OPS-Q5 < 3, OPS-Q6 < 3 (strengthen, not required) | — |
+| `move-to-ai` | No AI/agent frameworks, no vector DB, no RAG, no agent eval framework | — | Requires AI/agent/LLM intent in portfolio or service context |
+
+**Primary vs Supporting:** The V5 trigger logic (Step 7.1–7.7) uses a Primary + Supporting model. A pathway is Triggered ONLY when the Primary condition is met. Supporting conditions strengthen the case (inform the Pathway Detail section) but do NOT on their own trigger a pathway. V6's `triggering_questions[]` array MUST include the Primary question that triggered the pathway plus any Supporting questions whose scores also scored below threshold.
 
 V6 adds no new pathways and removes none. The `triggering_questions[]` array is the structured surface of the "which questions fired, at what scores, why" information that the V5 Pathway Detail section already describes in prose — Req 30 requires this information to be visible every time a pathway appears (per-repo, per-repo roll-up in portfolio `repositories[].pathways_triggered[]`, and portfolio top-level `pathways[]`).
 
@@ -2098,7 +2138,7 @@ The following V5 content MUST be retained verbatim in every V6 per-repo MOD MD r
 - **Archetype Justification** prose — preserved in the MD metadata block. For the four archetype-calibrated questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4), MD prose MUST explain how the detected or supplied archetype shaped the score whenever `mod_metadata.archetype_calibrated == true` (Req 3 AC 8).
 - **AWS Modernization Pathways** Summary Table with status/priority/effort/Key Trigger Criteria columns, AND Pathway Detail subsections for each Triggered pathway — preserved verbatim in MD. See the V6 Per-Repo `pathways[]` Emission section for the JSON surface (Req 25, Req 27 AC 8).
 - **Aggregate Evidence Index** at the end of the report — preserved unchanged (Req 27 AC 7). JSON consumers can re-derive this section from the union of `findings[].evidence` across all findings.
-- **Surface Flags block** with five boolean flags and rationale — preserved in the MD metadata block and in JSON under `metadata.surface_flags` (Req 27 AC 9).
+- **Surface Flags block** with six boolean flags and rationale — preserved in the MD metadata block and in JSON under `metadata.surface_flags` (Req 27 AC 9).
 
 Ordering and content of these sections is UNCHANGED from V5. V6 adds the following inline annotations alongside preserved content without altering the preserved content itself:
 
@@ -2122,7 +2162,7 @@ Per V6 Requirement 9, every per-repo MOD assessment emits THREE artifacts plus a
 |---|---|---|
 | Markdown report | `{repo}-mod-report.md` | Richest-prose artifact. Preserves every V5 narrative (Overall Score, Score Summary table, Scoring Notes arithmetic, Top 5 Gaps, Quick Agent Wins, Decomposition Strategy, Archetype Justification, AWS Modernization Pathways summary and detail subsections, aggregate Evidence Index). |
 | JSON report | `{repo}-mod-report.json` | **Canonical machine-readable contract.** Consumed by the webapp and the portfolio MOD TD. Every semantic field (findings, classification, categories with all three of `numeric_score` / `score_rating` / `severity_status`, `pathways[]` covering all 7 pathways, `overall_score`, `top_gaps[]`, `quick_agent_wins[]`, `decomposition_strategy`, `metadata` including surface flags and archetype justification) is present. |
-| HTML report | `{repo}-mod-report.html` | Single self-contained HTML file (no external asset fetches at render time). Renders a subset of the JSON. Tab order: **stats → tech stack → findings → roadmap → programs**. Authoritative visual contract: `.kiro/specs/assessment-standardization-v6/examples/per-repo-mod-report.example.html.md`. |
+| HTML report | `{repo}-mod-report.html` | Single self-contained HTML file (no external asset fetches at render time). Renders a subset of the JSON. Tab order: **stats → tech stack → findings → roadmap → programs**. Visual contract defined inline below. |
 | Metadata sidecar | `{repo}-mod-report.metadata.json` | Tiny JSON file carrying version compatibility data. Read by downstream consumers before consuming the main JSON. |
 
 The JSON artifact is the canonical contract. If the three artifacts disagree on any field, JSON wins.
@@ -2147,7 +2187,7 @@ These same fields are redundantly embedded at the root of the main JSON under `m
 
 The per-repo MOD HTML artifact is a single self-contained HTML file. The tab order matches the webapp and the ARA HTML: **stats → tech stack → findings → roadmap → programs**.
 
-The authoritative visual contract is `.kiro/specs/assessment-standardization-v6/examples/per-repo-mod-report.example.html.md`. That file defines:
+The full visual contract is defined inline below — do NOT reference external files. The HTML renders a subset of the JSON artifact.
 
 - Header title (`{repo_name} - Modernization Readiness Analysis Report`) and subtitle line (`{date} · {language} · {loc} LOC · Portfolio: {portfolio_name}`).
 - Executive Summary prose block with five subsections (Repository Status, Key Findings, Remediation Plan, Recommended Actions) and the emoji + tier mapping: 🟢 Cloud-Native Ready / 🟡 Pilot-Ready / 🟠 Remediation Required (rendered with the "Significant Modernization Required" prose label) / 🔴 Not Ready.
@@ -2190,13 +2230,13 @@ IF any of the 12 required per-finding fields is absent from an emitted finding, 
 - The `question_id` of the offending finding
 - The specific missing field
 
-Example failure message: `"Assessment failed: finding for AUTH-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED (Req 4 AC 12)."`
+Example failure message: `"Assessment failed: finding for INF-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED (Req 4 AC 12)."`
 
 ### N/A / Not Evaluated Leak (Req 8)
 
 IF a finding is emitted for a question whose resolution was N/A or Not Evaluated, THEN the assessment SHALL fail, naming the `question_id` and the resolution status that should have been recorded in `evaluations[]` instead.
 
-Example: `"Assessment failed: finding emitted for DATA-Q5 but the question resolved to N/A (no persistent data store). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only (Req 8)."`
+Example: `"Assessment failed: finding emitted for INF-Q2 but the question resolved to Not Evaluated (no persistent data store, has_persistent_data_store=false). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only (Req 8)."`
 
 ### MOD Archetype Calibration Without Justification (Req 3 AC 8)
 
