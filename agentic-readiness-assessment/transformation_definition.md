@@ -2049,11 +2049,9 @@ The sidecar carries minimum fields for version compatibility checks:
 
 ```json
 {
-  "version": "V6",
   "assessment_type": "ara",
   "assessment_date": "2026-04-30",
-  "td_version": "agentic-readiness-assessment-v6.0.1",
-  "report_format_version": "V6"
+  "td_version": "agentic-readiness-assessment"
 }
 ```
 

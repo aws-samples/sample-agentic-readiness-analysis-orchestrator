@@ -160,7 +160,7 @@ Scan the target directory structure to find all individual MOD report JSON artif
   - Has a `categories[]` array with entries for INF, APP, DATA, SEC, OPS
   - Has a `pathways[]` array with all 7 pathways
   - Has a `findings[]` array with question IDs (INF-Q1 through OPS-Q9) and the 12 per-finding fields
-  - Has a `metadata` object with `report_format_version`
+  - Has a `metadata` object with `assessment_type` and `td_version`
 - Exclude files that don't match the expected shape — log a warning for each excluded file
 - Log warnings for inaccessible or malformed files
 - **Terminate with a clear error if fewer than 2 valid MOD reports are found**
@@ -1942,11 +1942,9 @@ The JSON artifact is the canonical contract. If any artifacts disagree on a fiel
 
 ```json
 {
-  "version": "V6",
   "assessment_type": "portfolio-mod",
   "assessment_date": "YYYY-MM-DD",
-  "td_version": "portfolio-modernization-v6",
-  "report_format_version": "V6"
+  "td_version": "portfolio-modernization"
 }
 ```
 
@@ -1962,7 +1960,7 @@ The Portfolio MOD JSON artifact MUST emit these top-level keys in the order show
 | `metadata` | Version, assessment date, portfolio name, TD version, services_assessed, consumed_per_repo_json_files, preferences (optional) |
 | `summary` | 5 KPI counts: repositories_analyzed, total_findings, high_severity_findings, medium_severity_findings, low_severity_findings |
 | `filter_vocab` | Filter-eligible enums actually present in the run |
-| `executive_dashboard` | Portfolio score overview + `readiness_distribution_v5` + `classification_distribution_v6` (counts that agree) + category_score_averages + repo_type_distribution |
+| `executive_dashboard` | Portfolio score overview + `score_band_distribution` + `tier_distribution` (counts that agree) + category_score_averages + repo_type_distribution |
 | `technology_stack_summary` | Technology stack section |
 | `repositories[]` | Per-repo roll-up |
 | `findings[]` | Lightweight portfolio finding index. See "Portfolio `findings[]` entry shape" below. |
@@ -1993,7 +1991,7 @@ Display names only for categories.
 
 #### `executive_dashboard` dual-distribution
 
-`executive_dashboard` MUST carry both `readiness_distribution_v5` (numeric-score bands) and `classification_distribution_v6` (tier counts). The two must agree under the canonical equivalence table:
+`executive_dashboard` MUST carry both `score_band_distribution` (numeric-score bands) and `tier_distribution` (tier counts). The two must agree under the canonical equivalence table:
 - Mature (≥3.5) ≡ Cloud-Native Ready
 - Partial (2.5–3.4) ≡ Pilot-Ready
 - Needs Work (1.5–2.4) ≡ Remediation Required
@@ -2002,8 +2000,8 @@ Display names only for categories.
 ```json
 "executive_dashboard": {
   "portfolio_score_overview": { "portfolio_overall_score": 2.31, "score_range": { "min": 1.22, "max": 3.75 } },
-  "readiness_distribution_v5": { "mature": 3, "partial": 8, "needs_work": 18, "not_ready": 5 },
-  "classification_distribution_v6": { "cloud_native_ready": 3, "pilot_ready": 8, "remediation_required": 18, "not_ready": 5 },
+  "score_band_distribution": { "mature": 3, "partial": 8, "needs_work": 18, "not_ready": 5 },
+  "tier_distribution": { "cloud_native_ready": 3, "pilot_ready": 8, "remediation_required": 18, "not_ready": 5 },
   "category_score_averages": [ { "category_id": "INF", "category": "Infrastructure & DevOps", "average": 1.45 } ],
   "repo_type_distribution": { "application": 16, "monorepo": 18 }
 }
@@ -2014,7 +2012,7 @@ Display names only for categories.
 Each entry carries:
 - `repo_name`
 - `overall_score` (numeric 1.00-4.00)
-- `classification.tier` + `classification.classification_consistency_check` ("consistent" OR a structured `{status: "divergent", v5_band, v6_tier, reason}` object)
+- `classification.tier` + `classification.classification_consistency_check` ("consistent" OR a structured `{status: "divergent", score_band, count_tier, reason}` object)
 - `category_scores[]` — each entry with `numeric_score` + `score_rating` + `severity_status`
 - `surface_flags`, `repo_type`, `service_archetype`, `repository_priority`
 - `per_repo_md_path`, `per_repo_json_path`, `per_repo_html_path`
@@ -2214,7 +2212,7 @@ Subsections:
 | Low Severity | `summary.low_severity_findings` | Minor findings |
 
 **Charts Row** (2 visualizations):
-- **Portfolio Distribution** — pie/donut chart from `executive_dashboard.classification_distribution_v6`
+- **Portfolio Distribution** — pie/donut chart from `executive_dashboard.tier_distribution`
 - **Severity by Repository** — stacked bar chart from per-repo `counts.{high, medium, low}` in `repositories[]`
 
 (MOD portfolio does NOT have a Section Heatmap — that's ARA-only.)
@@ -2278,9 +2276,9 @@ Renders `pathways[]` with:
 | Visual location | JSON source |
 |---|---|
 | Header | `metadata.{portfolio_name, assessment_date, services_assessed}` |
-| Executive Summary | `executive_dashboard.classification_distribution_v6` + `summary.*` |
+| Executive Summary | `executive_dashboard.tier_distribution` + `summary.*` |
 | Stats cards | `summary.{total_findings, high_severity_findings, medium_severity_findings, low_severity_findings}` |
-| Portfolio Distribution chart | `executive_dashboard.classification_distribution_v6` |
+| Portfolio Distribution chart | `executive_dashboard.tier_distribution` |
 | Severity by Repository chart | Per-repo counts from `repositories[]` |
 | Repositories table | `repositories[]` |
 | Findings table | `findings[]` |
@@ -2303,14 +2301,6 @@ The portfolio TD consumes ONLY per-repo JSON. Failure modes are explicit, loud, 
 IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
 
 Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/modernization-assessment/foo--bar-mod-report.json, services/baz--qux/modernization-assessment/baz--qux-mod-report.json, services/wat--wub/modernization-assessment/wat--wub-mod-report.json."`
-
-### Version Mismatch
-
-IF any consumed per-repo JSON's `metadata.report_format_version` does not match the `report_format_version` value declared in this TD's metadata sidecar fields, THEN the portfolio assessment SHALL fail naming:
-- The offending file path
-- The unexpected `report_format_version` value
-
-Example: `"Portfolio assessment failed: services/foo--bar/modernization-assessment/foo--bar-mod-report.json has metadata.report_format_version='unsupported-version' which does not match the current report_format_version required by this TD."`
 
 ### Dangling Cross-Reference
 

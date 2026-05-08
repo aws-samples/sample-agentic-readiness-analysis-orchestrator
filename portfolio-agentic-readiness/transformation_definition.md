@@ -126,7 +126,7 @@ Scan the target directory structure to find all individual ARA report JSON artif
   - Has `assessment_type == "ara"` at the root
   - Has a `classification` object with `tier`, `blocker_count`, `risk_safety_count`
   - Has a `findings[]` array with question IDs (API-Q1 through ENG-Q5) and the 12 per-finding fields
-  - Has a `metadata` object with `report_format_version`
+  - Has a `metadata` object with `assessment_type` and `td_version`
 - Exclude files that don't match the expected shape — log a warning for each excluded file
 - Log warnings for inaccessible or malformed files
 - **Terminate with a clear error if fewer than 2 valid ARA reports are found**
@@ -1053,11 +1053,9 @@ The JSON artifact is the canonical contract. If any artifacts disagree on a fiel
 
 ```json
 {
-  "version": "V6",
   "assessment_type": "portfolio-ara",
   "assessment_date": "YYYY-MM-DD",
-  "td_version": "portfolio-agentic-readiness-v6",
-  "report_format_version": "V6"
+  "td_version": "portfolio-agentic-readiness"
 }
 ```
 
@@ -1364,14 +1362,6 @@ The portfolio TD consumes ONLY per-repo JSON. Failure modes are explicit, loud, 
 IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
 
 Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-assessment/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-assessment/wat--wub-ara-report.json."`
-
-### Version Mismatch
-
-IF any consumed per-repo JSON's `metadata.report_format_version` does not match the expected value declared in the metadata sidecar schema, THEN the portfolio assessment SHALL fail naming:
-- The offending file path
-- The unexpected `report_format_version` value
-
-Example: `"Portfolio assessment failed: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json has an unexpected metadata.report_format_version value."`
 
 ### Dangling Cross-Reference
 
