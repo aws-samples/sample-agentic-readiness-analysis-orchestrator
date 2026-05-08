@@ -197,7 +197,7 @@ Beyond `repo_type` (which determines N/A questions for non-application repos), t
 
 If the archetype cannot be determined with confidence, default to `stateful-crud` (the most conservative — triggers the most extended questions).
 
-The output is a **four-artifact bundle** (per the Three-Artifact Output Contract below) containing:
+The output is a **four-artifact bundle** (per the Four-Artifact Output Contract below) containing:
 - `{repo-name}-ara-report.md` — richest narrative
 - `{repo-name}-ara-report.json` — canonical machine-readable contract
 - `{repo-name}-ara-report.html` — single self-contained HTML visualization
@@ -446,7 +446,7 @@ Some repositories classify as `application` (have source + entry point) but func
 
 When `service_archetype` is detected or declared as `stateless-utility` AND at least three of the five surface flags above are `false`, treat the repo as a **dev-library-application** for N/A and scoring purposes: apply the `library` N/A mapping from Step 1 (only ENG-Q1 through ENG-Q5 are non-N/A) as the baseline, then continue with the surface-flag downgrades for the questions that remain.
 
-This is an ARA-TD-internal override for scoring purposes only. The original `repo_type` value is preserved in the report metadata; the override and its rationale are recorded as an INFO note in the report preamble.
+This override affects scoring only; it does not change the recorded `repo_type`. The original `repo_type` value is preserved in the report metadata, and the override with its rationale is recorded as an INFO note in the report preamble.
 
 ### Step 1.6: Service Archetype Detection
 
@@ -751,7 +751,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Question:** Can the system emit events or webhooks for meaningful state changes that agents may need to react to — such as record updates, status transitions, or completion of long-running operations?
 
-**Why it matters:** Request/response agents are reactive. Event-driven patterns unlock proactive agents that respond to real-world changes without polling. INFO for now because most initial deployments are request-driven, but becomes RISK when the use case requires time-sensitive reaction.
+**Why it matters:** Request/response agents are reactive. Event-driven patterns unlock proactive agents that respond to real-world changes without polling. Classified as INFO because most agent deployments are request-driven; teams targeting event-reactive agents on time-sensitive use cases should treat this as a stronger signal when scoring.
 
 **Look for:**
 - Webhook endpoints
@@ -878,7 +878,7 @@ When the target system serves multiple tenants, weak identity propagation compou
 
 **Why it matters:** Audit trails must identify whether an action was taken by a human or an agent, and which specific agent instance. Without immutable logs, you cannot prove compliance or conduct forensics.
 
-**Surface-flag calibration:** The conditional above determines severity only when the system has an agent-invocable surface. If the repo was classified as `dev-library-application` via Step 1.5, or if `has_auth_surface` is `false` AND `has_write_operations` is `false`, record as INFO with the rationale `"System does not execute agent-invoked write operations — audit logging is a consumer responsibility. The library/utility is called by applications that own the audit context."` This downgrade path addresses the observed pattern where 34/34 repos score identical RISK-SAFETY for "no audit logging found," even when the repo is a CLI tool or frontend template with no operations to audit.
+**Surface-flag calibration:** The conditional above determines severity only when the system has an agent-invocable surface. If the repo was classified as `dev-library-application` via Step 1.5, or if `has_auth_surface` is `false` AND `has_write_operations` is `false`, record as INFO with the rationale `"System does not execute agent-invoked write operations — audit logging is a consumer responsibility. The library/utility is called by applications that own the audit context."`
 
 **Look for:**
 - `aws_cloudtrail` in IaC
@@ -1492,7 +1492,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ## Report Template
 
-After evaluating all 43 questions across Steps 2–9, compile the findings into the **four-artifact bundle** defined in the Three-Artifact Output Contract below: `{repo-name}-ara-report.md` (narrative), `{repo-name}-ara-report.json` (canonical JSON), `{repo-name}-ara-report.html` (self-contained HTML), and `{repo-name}-ara-report.metadata.json` (version sidecar). This section specifies the MD structure; the JSON and HTML render subsets of the same data per the contract.
+After evaluating all 43 questions across Steps 2–9, compile the findings into the **four-artifact bundle** defined in the Four-Artifact Output Contract below: `{repo-name}-ara-report.md` (narrative), `{repo-name}-ara-report.json` (canonical JSON), `{repo-name}-ara-report.html` (self-contained HTML), and `{repo-name}-ara-report.metadata.json` (version sidecar). This section specifies the MD structure; the JSON and HTML render subsets of the same data per the contract.
 
 Create the report file with exactly this structure. Every section is required. All 43 questions must appear in the detailed findings — N/A questions are listed using the N/A display format, not omitted.
 
@@ -2014,8 +2014,8 @@ The `high_count`, `medium_count`, and `low_count` fields represent the unified s
 ### MD-Rendered Classification Rationale
 
 The per-repo ARA MD artifact MUST render a classification rationale paragraph immediately after the classification tier is first stated. The paragraph:
-1. States the specific counts that drove the tier (e.g., "This repo has 0 High findings, 8 Medium findings, and 5 of the Mediums are safety-impact").
-2. Names the matched rule ("≥3 safety-impact Medium findings under 0 High → Pilot-Ready (Safety Concerns)").
+1. States the specific counts that drove the tier (e.g., "This repo has 0 BLOCKER findings and 5 RISK-SAFETY findings").
+2. Names the matched rule (e.g., "0 BLOCKER, ≥3 RISK-SAFETY → Pilot-Ready (Safety Concerns)") — the exact string from the `rule_matched` column of the classification table.
 3. States the classification tier alongside the Readiness Profile (they are a named roll-up of the same severity counts).
 
 ### Conditional BLOCKER Preservation
@@ -2028,9 +2028,9 @@ The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA
 
 The conditional-BLOCKER resolution logic is defined in Steps 2–9 of the assessment process; the JSON fields above surface that reasoning in a structured form.
 
-## Three-Artifact Output Contract
+## Four-Artifact Output Contract
 
-Every per-repo ARA assessment emits THREE artifacts plus a metadata sidecar:
+Every per-repo ARA assessment emits four artifacts: three report artifacts plus a metadata sidecar.
 
 ### Artifacts
 
@@ -2041,7 +2041,7 @@ Every per-repo ARA assessment emits THREE artifacts plus a metadata sidecar:
 | HTML report | `{repo}-ara-report.html` | Single self-contained HTML file. Renders a subset of JSON. Tab order: stats → tech stack → findings → roadmap → programs. Visual contract defined inline below. |
 | Metadata sidecar | `{repo}-ara-report.metadata.json` | Tiny JSON file carrying version compatibility data. Read by downstream consumers before consuming the main JSON. |
 
-The JSON artifact is the canonical contract. If the three artifacts disagree on any field, JSON wins.
+The JSON artifact is the canonical contract. If any artifacts disagree on a field, JSON wins.
 
 ### Metadata Sidecar Fields
 
@@ -2068,7 +2068,7 @@ The full visual contract is defined inline below — do NOT reference external f
 #### HTML Structure and Layout
 
 **Header:**
-- Title: `{repo_name} - Agentic Readiness Analysis Report`
+- Title: `{repo_name} - Agentic Readiness Assessment Report`
 - Subtitle line: `{date} · {language} · {loc} LOC · Portfolio: {portfolio_name}`
 
 **Executive Summary:**
@@ -2160,7 +2160,7 @@ Focus on the High severity findings above.
 ```
 
 **Footer:**
-- `Generated by AWS Transform · Agentic Readiness Analysis Report v2.1`
+- `Generated by AWS Transform · Agentic Readiness Assessment Report`
 - `© {year} Amazon Web Services, Inc. All rights reserved.`
 
 #### Data Sourcing (JSON → HTML mapping)

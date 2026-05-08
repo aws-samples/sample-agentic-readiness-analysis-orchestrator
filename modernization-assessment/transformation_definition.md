@@ -47,7 +47,7 @@ All 7 pathways appear in the pathway summary table with status: **Triggered**, *
 
 When APP-Q2 (Monolith vs Microservices) scores less than 3, the report includes a **Decomposition Strategy** section with concrete approach options (Strangler Fig parallel track, conditional/adaptive, and big-bang with recommendation against), pattern recommendations linked to AWS prescriptive guidance (Anti-corruption Layer, Saga, Event Sourcing, Hexagonal Architecture), and level-of-effort estimates per approach.
 
-The output is a **four-artifact bundle** (per the Three-Artifact Output Contract below) containing:
+The output is a **four-artifact bundle** (per the Four-Artifact Output Contract below) containing:
 - `{repo-name}-mod-report.md` — richest narrative report
 - `{repo-name}-mod-report.json` — canonical machine-readable contract
 - `{repo-name}-mod-report.html` — single self-contained HTML visualization
@@ -463,7 +463,7 @@ Replace `{repo_type}` with the actual resolved repo type value (e.g., "This is a
 
 ### Not Evaluated (archetype-N/A) Display Format
 
-When an archetype-calibrated question (INF-Q3, APP-Q3, APP-Q4) resolves to "not applicable by design" for the detected archetype, record it as:
+When an archetype-calibrated question (INF-Q3, INF-Q4, APP-Q3, APP-Q4) resolves to "not applicable by design" for the detected archetype, record it as:
 
 | Field | Value |
 |-------|-------|
@@ -560,7 +560,7 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 **Archetype Calibration:** This question is archetype-sensitive. Apply the rubric below that matches the detected `service_archetype`. If `repo_type` is not `application` (and therefore no archetype was detected), use the `stateful-crud` column as the default.
 
-> **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (the rubric cell says "not applicable by design" or equivalent — for INF-Q3 this is `stateless-utility` Score 4), record the question as **"Not Evaluated (archetype-N/A)"** in the report and exclude it from category and overall score averaging. Do not report a default Score 4. Use the Not-Evaluated display format from Section 8 of the Report Template.
+> **Not Evaluated (archetype-N/A) rule:** If the resolved archetype column indicates the question does not apply (the rubric cell says "not applicable by design" or equivalent — for INF-Q3 this is `stateless-utility` Score 4), record the question as **"Not Evaluated (archetype-N/A)"** in the report and exclude it from category and overall score averaging. Do not report a default Score 4. Use the Not-Evaluated display format defined in the N/A Mapping section above.
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
@@ -1498,7 +1498,7 @@ The discovery scan (Step 1) is the single source of truth for what AI/agent arti
 
 ## Report Template
 
-The assessment emits a **four-artifact bundle** per the Three-Artifact Output Contract below: `{repo-name}-mod-report.md` (narrative), `{repo-name}-mod-report.json` (canonical JSON), `{repo-name}-mod-report.html` (self-contained HTML), and `{repo-name}-mod-report.metadata.json` (version sidecar). This section specifies the MD structure. The MD MUST contain all sections listed below in the specified order. Every section is required unless explicitly marked as conditional.
+The assessment emits a **four-artifact bundle** per the Four-Artifact Output Contract below: `{repo-name}-mod-report.md` (narrative), `{repo-name}-mod-report.json` (canonical JSON), `{repo-name}-mod-report.html` (self-contained HTML), and `{repo-name}-mod-report.metadata.json` (version sidecar). This section specifies the MD structure. The MD MUST contain all sections listed below in the specified order. Every section is required unless explicitly marked as conditional.
 
 ### Report Section Order
 
@@ -1573,7 +1573,6 @@ If a category score is "N/A" (all questions in that category are N/A or Not Eval
 - Overall score = arithmetic mean of non-N/A category scores (each category weighted equally).
 - Both N/A and Not-Evaluated (archetype-N/A) questions are excluded from numerator and denominator.
 - If all questions in a category are N/A or Not Evaluated, category score = "N/A", excluded from overall average.
-- If all questions in a category are N/A, category score = "N/A", excluded from overall average.
 
 ### Section 3: Top 5 Gaps
 
@@ -1815,7 +1814,7 @@ Every MOD finding MUST carry these 12 fields:
 | Field | Type | Description |
 |---|---|---|
 | `question_id` | string | MOD rubric question identifier (e.g., `"INF-Q1"`). |
-| `category` | string | Webapp-facing category display nameA (e.g., `"Infrastructure & DevOps"`). |
+| `category` | string | Webapp-facing category display name (e.g., `"Infrastructure & DevOps"`). |
 | `category_id` | string | Rubric short code (e.g., `"INF"`). |
 | `title` | string | Short finding title. |
 | `description` | string | Finding description. |
@@ -2114,9 +2113,9 @@ The MD artifact renders the following inline annotations alongside the content a
 
 ---
 
-### Three-Artifact Output Contract (MOD)
+### Four-Artifact Output Contract (MOD)
 
-Every per-repo MOD assessment emits THREE artifacts plus a metadata sidecar. This mirrors the ARA three-artifact contract with MOD-specific filenames and a MOD-specific HTML visual contract.
+Every per-repo MOD assessment emits four artifacts: three report artifacts plus a metadata sidecar. This mirrors the ARA four-artifact contract with MOD-specific filenames and a MOD-specific HTML visual contract.
 
 #### Artifacts
 
@@ -2127,7 +2126,7 @@ Every per-repo MOD assessment emits THREE artifacts plus a metadata sidecar. Thi
 | HTML report | `{repo}-mod-report.html` | Single self-contained HTML file (no external asset fetches at render time). Renders a subset of the JSON. Tab order: **stats → tech stack → findings → roadmap → programs**. Visual contract defined inline below. |
 | Metadata sidecar | `{repo}-mod-report.metadata.json` | Tiny JSON file carrying version compatibility data. Read by downstream consumers before consuming the main JSON. |
 
-The JSON artifact is the canonical contract. If the three artifacts disagree on any field, JSON wins.
+The JSON artifact is the canonical contract. If any artifacts disagree on a field, JSON wins.
 
 #### Metadata Sidecar Fields
 
@@ -2151,14 +2150,14 @@ The per-repo MOD HTML artifact is a single self-contained HTML file. The tab ord
 
 The full visual contract is defined inline below — do NOT reference external files. The HTML renders a subset of the JSON artifact.
 
-- Header title (`{repo_name} - Modernization Readiness Analysis Report`) and subtitle line (`{date} · {language} · {loc} LOC · Portfolio: {portfolio_name}`).
-- Executive Summary prose block with five subsections (Repository Status, Key Findings, Remediation Plan, Recommended Actions) and the emoji + tier mapping: 🟢 Cloud-Native Ready / 🟡 Pilot-Ready / 🟠 Remediation Required (rendered with the "Significant Modernization Required" prose label) / 🔴 Not Ready.
+- Header title (`{repo_name} - Modernization Readiness Assessment Report`) and subtitle line (`{date} · {language} · {loc} LOC · Portfolio: {portfolio_name}`).
+- Executive Summary prose block with four subsections (Repository Status, Key Findings, Remediation Plan, Recommended Actions) and the emoji + tier mapping: 🟢 Cloud-Native Ready / 🟡 Pilot-Ready / 🟠 Remediation Required (rendered with the "Significant Modernization Required" prose label) / 🔴 Not Ready.
 - Stats card row (4 cards): Total Findings, High Severity, Medium Severity, Low Severity. MOD KEEPS the Low Severity card (ARA omits Low per ARA convention).
 - Technology Stack table with Language / Lines of Code / Framework / Priority rows.
 - **Category-by-Category Breakdown table** with status values `Ready` (green), `Needs Work` (yellow/orange), `Critical` (red). This is the MOD convention — ARA uses `Ready` / `Needs Work` / `Blocked` instead.
 - **Detailed Findings cards** — simpler than ARA. Each card has `{question_id}: {title}` with a severity badge (uppercase `HIGH` / `MEDIUM` / `LOW`), a `Category:` line, a `FINDING` subsection with the finding description, and a `RECOMMENDATION` subsection. There is NO `GAP` subsection on MOD cards (ARA has one; MOD's gap description is absorbed into the finding description). Findings are ordered severity-descending (High → Medium → Low) then by category order (INF → APP → DATA → SEC → OPS).
 - Modernization Recommendation footer block (emoji-headlined with top-3 High-severity recommendations).
-- Footer line (`Generated by AWS Transform · Modernization Readiness Analysis Report v2.1`).
+- Footer line (`Generated by AWS Transform · Modernization Assessment Report`).
 
 **HTML-escaping discipline.** Every data value rendered in HTML originates from the JSON artifact (MD prose is NOT part of the HTML round-trip contract). All attacker-controlled strings MUST be HTML-escaped before embedding: repo names, evidence file paths, finding titles, finding descriptions, recommendation text, pathway names, and any other string that originates from repository content or from free-text fields in `additionalPlanContext`. Escape `<`, `>`, `&`, `"`, `'` at render time. This is the same escaping discipline applied to the ARA HTML artifact.
 
