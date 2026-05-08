@@ -23,7 +23,7 @@
 | Application Architecture (APP) | 2.83 / 4.0 | 🟡 Partial | Needs Work |
 | Data Platform Modernization (DATA) | 3.67 / 4.0 | ✅ Mature | Ready |
 | Security Baseline (SEC) | 2.00 / 4.0 | 🟠 Needs Work | Critical |
-| Operations & Observability (OPS) | 1.00 / 4.0 | ❌ Not Present | Needs Work |
+| Operations & Observability (OPS) | 1.00 / 4.0 | ❌ Not Ready | Needs Work |
 | **Overall** | **2.38 / 4.0** | **🟠 Needs Work** |  |
 
 **Scoring Notes:**

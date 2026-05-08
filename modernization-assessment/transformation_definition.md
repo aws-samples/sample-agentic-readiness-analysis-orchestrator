@@ -47,13 +47,16 @@ All 7 pathways appear in the pathway summary table with status: **Triggered**, *
 
 When APP-Q2 (Monolith vs Microservices) scores less than 3, the report includes a **Decomposition Strategy** section with concrete approach options (Strangler Fig parallel track, conditional/adaptive, and big-bang with recommendation against), pattern recommendations linked to AWS prescriptive guidance (Anti-corruption Layer, Saga, Event Sourcing, Hexagonal Architecture), and level-of-effort estimates per approach.
 
-A **Quick Agent Wins** section identifies agent opportunities based on assessment findings — only where the system has sufficient foundation to support them (e.g., API docs exist, CI/CD pipeline exists, structured logging in place).
+The output is a **four-artifact bundle** (per the Three-Artifact Output Contract below) containing:
+- `{repo-name}-mod-report.md` — richest narrative report
+- `{repo-name}-mod-report.json` — canonical machine-readable contract
+- `{repo-name}-mod-report.html` — single self-contained HTML visualization
+- `{repo-name}-mod-report.metadata.json` — version compatibility sidecar
 
-The output is a structured Markdown report saved as `{repo-name}-mod-report.md` containing:
+The MD report contains:
 - Metadata header (repo name, date, repo_type)
 - Overall and category score table
 - Top 5 gaps
-- Quick Agent Wins
 - Pathway summary table (all 7 pathways)
 - Pathway detail subsections (triggered pathways only)
 - Decomposition strategy (conditional on APP-Q2 < 3)
@@ -222,7 +225,7 @@ Analytics artifacts inform the Move to Managed Analytics pathway and INF-Q4 (asy
 
 **AI/Agent Frameworks:**
 
-AI artifacts inform the Move to AI pathway trigger and the Quick Agent Wins section.
+AI artifacts inform the Move to AI pathway trigger.
 
 - AI/ML framework imports in source code (Bedrock SDK, LangChain, Strands, OpenAI, Spring AI, HuggingFace, SageMaker SDK)
 - Vector database infrastructure (OpenSearch with vector engine, Pinecone, pgvector, Weaviate, Qdrant)
@@ -259,13 +262,13 @@ After scanning, compile a structured inventory of what was found. This inventory
 
 - **IaC files found** — Terraform, CloudFormation, CDK, Helm, Kustomize, and other IaC files with paths. Used by: INF-Q1 (managed compute), INF-Q2 (managed databases), INF-Q5 (network security), INF-Q7 (auto-scaling), INF-Q8 (backup/recovery), INF-Q9 (high availability), INF-Q10 (IaC coverage), SEC-Q1 (audit logging), SEC-Q2 (encryption at rest).
 - **Source code files found** — Application source files by language. Used by: APP-Q1 (languages), APP-Q2 (monolith vs microservices), APP-Q3 (async vs sync), APP-Q4 (long-running processes), DATA-Q2 (data access layer), DATA-Q4 (stored procedures).
-- **API spec files found** — OpenAPI, AsyncAPI, and GraphQL files. Used by: APP-Q5 (API versioning), APP-Q6 (service discovery), Quick Agent Wins.
+- **API spec files found** — OpenAPI, AsyncAPI, and GraphQL files. Used by: APP-Q5 (API versioning), APP-Q6 (service discovery).
 - **CI/CD config files found** — Pipeline definitions. Used by: INF-Q11 (CI/CD automation), OPS-Q5 (deployment strategy), OPS-Q6 (integration testing), SEC-Q7 (security pipeline).
 - **Container and Kubernetes files found** — Dockerfiles, compose files, Kubernetes manifests, Helm charts. Used by: INF-Q1 (managed compute), APP-Q2 (microservices detection), APP-Q6 (service discovery), OPS-Q5 (deployment strategy), Move to Containers pathway.
 - **Dependency manifests found** — Package manifests by ecosystem. Used by: APP-Q1 (language detection), identifying frameworks and libraries across multiple questions.
 - **Database artifacts found** — Database definitions in IaC, migration files, stored procedures, ORM configs, engine versions. Used by: INF-Q2 (managed databases), DATA-Q1–Q4, Move to Open Source pathway, Move to Managed Databases pathway.
 - **Analytics and streaming artifacts found** — Streaming infrastructure, data pipelines, ETL configs. Used by: INF-Q4 (async messaging/streaming), Move to Managed Analytics pathway.
-- **AI/agent artifacts found** — AI framework imports, vector DB configs, RAG patterns, eval frameworks. Used by: Move to AI pathway trigger, Quick Agent Wins.
+- **AI/agent artifacts found** — AI framework imports, vector DB configs, RAG patterns, eval frameworks. Used by: Move to AI pathway trigger.
 - **Configuration files found** — Config files by type. Used by: SEC-Q5 (secrets management), OPS-Q9 (resource tagging).
 - **Notable absences** — Record what was NOT found. Absence is evidence: if no IaC files exist, that informs INF-Q10. If no CI/CD configs exist, that informs INF-Q11. If no container files exist, that informs the Move to Containers pathway. If no AI/agent artifacts exist, that informs the Move to AI pathway. These absences are cited in evaluation steps.
 
@@ -1389,7 +1392,6 @@ If neither the portfolio-level context nor the service-level context contains an
 **When Triggered, Include in Pathway Detail Section:**
 - Current AI/agent infrastructure state (from discovery — what was and was not found)
 - Application domain and potential AI use cases based on assessment findings
-- Quick wins: identify immediate AI integration opportunities (link to Quick Agent Wins section)
 - Recommended AI services (respect `preferences`)
 - Representative AWS services: Amazon Bedrock, Amazon Bedrock AgentCore, Amazon Q, SageMaker, OpenSearch Service (vector engine), Amazon Kendra
 - Foundation requirements: what needs to be in place before AI integration (API surface, data access, observability)
@@ -1463,44 +1465,11 @@ The actual decomposition effort depends on these factors discovered during the a
 Use these factors to calibrate the effort estimate for the recommended approach. Include the calibrated estimate in the report.
 
 
-### Step 9: Quick Agent Wins
+### Step 9: AI/Agent Infrastructure Evaluation Logic
 
-Based on the assessment findings from Steps 2–6, identify agent opportunities that the current architecture can support. This section is discovery-based — it evaluates what the system already has in place and identifies where AI agents can deliver value with minimal additional investment.
+This section documents the evaluation logic that connects AI/agent discovery findings (from Step 1) to the Move to AI pathway (Step 7.7). The actual discovery scanning is performed in Step 1, and the Move to AI pathway evaluation is in Step 7.7. This section serves as a cross-reference explaining how AI/agent infrastructure signals flow through the assessment.
 
-**Inclusion Rule:** Only include a win where the system has sufficient foundation. These are not aspirational recommendations — they are actionable opportunities based on evidence found during the assessment. If the prerequisite condition is not met, do not include that win.
-
-#### 9.1 Quick Agent Win Evaluation Table
-
-For each potential win below, check the prerequisite condition against the assessment scores and discovery findings. Include the win in the report only if the condition is met.
-
-| Prerequisite Condition | Suggested Agent Win | Why It Works Now |
-|------------------------|---------------------|------------------|
-| API docs exist (APP-Q5 >= 2) and structured JSON responses detected in discovery | **API-aware agent** that discovers and invokes existing endpoints as tools | Existing API surface provides the tool interface; agent can call endpoints without new development. |
-| Database with clear, documented schema (DATA-Q2 >= 2) | **Data query agent** with natural language to SQL | Centralized data access layer provides a clean query interface; agent translates natural language to structured queries. |
-| CI/CD pipeline exists (INF-Q11 >= 2) | **DevOps agent** that triggers deployments, checks build status, and manages releases | Existing pipeline provides the automation surface; agent orchestrates pipeline actions via API. |
-| Documentation, README, or wiki content exists in repo (detected during discovery) | **RAG-based knowledge agent** using existing documentation as a knowledge base | Existing documentation provides the corpus; agent indexes and retrieves relevant content for developer questions. |
-| Workflow orchestration in place (INF-Q3 >= 2) | **Workflow automation agent** that monitors and manages existing Step Functions or orchestration workflows | Existing orchestration provides the execution surface; agent monitors workflow state and triggers actions. |
-| Structured logging and tracing in place (OPS-Q1 >= 2) | **Observability agent** that queries logs, traces incidents, and suggests root causes | Existing observability data provides the signal; agent correlates traces and logs to identify issues. |
-
-#### 9.2 How to Present Quick Agent Wins
-
-In the report, list only the wins where the prerequisite condition is met. For each included win:
-
-1. State the prerequisite condition and the evidence that satisfies it (specific scores and discovery findings).
-2. Describe the agent win and what it enables.
-3. Note any additional steps needed to operationalize the win (e.g., "API docs exist but need OpenAPI spec generation for full tool discovery").
-4. Estimate effort as **Low** (agent can use existing interfaces directly) or **Medium** (some preparation needed, such as generating API specs or indexing documentation).
-
-If no prerequisite conditions are met, include a brief note: "No Quick Agent Wins identified. The system lacks the foundational capabilities (API documentation, CI/CD automation, structured logging) needed to support agent integration. Address the gaps identified in the assessment before pursuing agent opportunities."
-
-These wins can be pursued in parallel with the modernization roadmap. They demonstrate agent value early while foundations are being improved.
-
-
-### Step 10: AI/Agent Infrastructure Evaluation Logic
-
-This section documents the evaluation logic that connects discovery findings (from Step 1) to the Move to AI pathway (Step 7.7) and the Quick Agent Wins (Step 9). The actual discovery scanning is performed in Step 1, and the Move to AI pathway evaluation is in Step 7.7. This section serves as a cross-reference explaining how AI/agent infrastructure signals flow through the assessment.
-
-#### 10.1 AI/Agent Discovery Signals
+#### 9.1 AI/Agent Discovery Signals
 
 During the discovery scan (Step 1), the following AI/agent infrastructure signals are identified and recorded in the file inventory:
 
@@ -1511,51 +1480,37 @@ During the discovery scan (Step 1), the following AI/agent infrastructure signal
 | **RAG Implementation** | Embedding generation calls, vector store query patterns, retrieval chain implementations, document chunking logic | Source code patterns: embedding API calls, similarity search queries, retrieval-augmented generation chains, document loaders and splitters |
 | **Agent Evaluation Frameworks** | Ragas imports, DeepEval imports, custom evaluation harness patterns, LLM-as-judge implementations | Test files with evaluation framework imports; evaluation configuration files; benchmark datasets |
 
-#### 10.2 How Discovery Signals Feed Downstream Steps
+#### 9.2 How Discovery Signals Feed the Move to AI Pathway
 
-The AI/agent discovery signals recorded in Step 1 are consumed by two downstream steps:
+The AI/agent discovery signals recorded in Step 1 are consumed by Step 7.7:
 
-**→ Move to AI Pathway (Step 7.7):**
 - The Move to AI pathway's primary trigger condition checks whether AI/agent frameworks were found during discovery.
 - If **no** AI/agent framework imports are detected, the primary trigger is met.
 - Supporting conditions check for absence of vector DB infrastructure, RAG implementation, and agent evaluation frameworks.
 - The pathway is triggered when the primary condition is met (no AI/agent frameworks), regardless of supporting conditions.
 - See Step 7.7 for the complete trigger logic and contextual guard.
 
-**→ Quick Agent Wins (Step 9):**
-- Quick Agent Wins are evaluated based on assessment scores (Steps 2–6), not directly on AI/agent discovery signals.
-- However, the presence of AI/agent infrastructure in discovery may indicate that some agent wins are already being pursued, which should be noted in the Quick Agent Wins section.
-- If AI/agent frameworks are already present, the Quick Agent Wins section should acknowledge existing AI capabilities and focus on expansion opportunities rather than initial adoption.
+The discovery scan (Step 1) is the single source of truth for what AI/agent artifacts exist. The Move to AI pathway (Step 7.7) consumes those findings through its trigger evaluation logic.
 
-#### 10.3 Cross-Reference Summary
-
-| Assessment Step | Uses AI/Agent Discovery Signals? | How |
-|-----------------|----------------------------------|-----|
-| Step 1: Discovery | Produces signals | Scans for AI/agent frameworks, vector DBs, RAG patterns, eval frameworks |
-| Steps 2–6: Question Evaluation | Indirectly | APP-Q1 finding may reference AI framework usage as part of language ecosystem evaluation |
-| Step 7.7: Move to AI Pathway | Directly | Primary and supporting trigger conditions check for absence of AI/agent infrastructure |
-| Step 9: Quick Agent Wins | Indirectly | Wins are based on assessment scores; existing AI infrastructure is noted as context |
-
-This cross-reference ensures that AI/agent infrastructure evaluation is not duplicated across steps. The discovery scan (Step 1) is the single source of truth for what AI/agent artifacts exist. The Move to AI pathway (Step 7.7) and Quick Agent Wins (Step 9) consume those findings through their respective evaluation logic.
+**Scope note:** The modernization assessment does NOT recommend specific agent use cases for the target system. That concern — where agents can add value to this system, given its foundations — belongs to the Agentic Readiness Assessment (ARA) and its downstream agentic-program recommendations. MOD's role is to identify modernization gaps; ARA's role is to identify agent integration opportunities.
 
 
 
 ## Report Template
 
-The assessment output is a structured Markdown report saved as `{repo-name}-mod-report.md`. The report MUST contain all sections listed below in the specified order. Every section is required unless explicitly marked as conditional.
+The assessment emits a **four-artifact bundle** per the Three-Artifact Output Contract below: `{repo-name}-mod-report.md` (narrative), `{repo-name}-mod-report.json` (canonical JSON), `{repo-name}-mod-report.html` (self-contained HTML), and `{repo-name}-mod-report.metadata.json` (version sidecar). This section specifies the MD structure. The MD MUST contain all sections listed below in the specified order. Every section is required unless explicitly marked as conditional.
 
 ### Report Section Order
 
 1. **Metadata Header**
 2. **Overall and Category Score Table**
 3. **Top 5 Gaps**
-4. **Quick Agent Wins**
-5. **Pathway Summary Table** (all 7 pathways)
-6. **Pathway Detail Subsections** (triggered pathways only)
-7. **Decomposition Strategy** (conditional — only when APP-Q2 < 3)
-8. **Detailed Findings for All 37 Questions**
-9. **Learning Materials**
-10. **Evidence Index**
+4. **Pathway Summary Table** (all 7 pathways)
+5. **Pathway Detail Subsections** (triggered pathways only)
+6. **Decomposition Strategy** (conditional — only when APP-Q2 < 3)
+7. **Detailed Findings for All 37 Questions**
+8. **Learning Materials**
+9. **Evidence Index**
 
 ---
 
@@ -1636,28 +1591,7 @@ If a category score is "N/A" (all questions in that category are N/A or Not Eval
 
 Select the 5 questions with the lowest scores (excluding N/A). Break ties by prioritizing questions that trigger pathways. If fewer than 5 non-N/A questions have gaps (score < 4), include only those with gaps.
 
-### Section 4: Quick Agent Wins
-
-```markdown
-## Quick Agent Wins
-
-{Include only wins where the prerequisite condition is met, as evaluated in Step 9.}
-```
-
-For each included win, present:
-
-```markdown
-### {Win Name}
-
-- **Prerequisite:** {condition and evidence}
-- **What it enables:** {description}
-- **Additional steps:** {any preparation needed}
-- **Effort:** {Low / Medium}
-```
-
-If no wins are identified, include: "No Quick Agent Wins identified. The system lacks the foundational capabilities needed to support agent integration. Address the gaps identified in this assessment before pursuing agent opportunities."
-
-### Section 5: Pathway Summary Table
+### Section 4: Pathway Summary Table
 
 ```markdown
 ## AWS Modernization Pathways
@@ -1675,7 +1609,7 @@ If no wins are identified, include: "No Quick Agent Wins identified. The system 
 
 All 7 pathways MUST appear in this table. Status values: Triggered, Not Triggered, Not Applicable.
 
-### Section 6: Pathway Detail Subsections
+### Section 5: Pathway Detail Subsections
 
 For each **Triggered** pathway, include a detail subsection with the content specified in Step 7 ("When Triggered, Include in Pathway Detail Section"). Do not include detail subsections for Not Triggered or Not Applicable pathways.
 
@@ -1689,7 +1623,7 @@ For each **Triggered** pathway, include a detail subsection with the content spe
 {Pathway-specific detail content as specified in Step 7}
 ```
 
-### Section 7: Decomposition Strategy (Conditional)
+### Section 6: Decomposition Strategy (Conditional)
 
 **Include this section ONLY when APP-Q2 < 3.** If APP-Q2 >= 3, omit this section entirely.
 
@@ -1699,7 +1633,7 @@ For each **Triggered** pathway, include a detail subsection with the content spe
 {Content from Step 8 — approach options, pattern recommendations, effort estimation}
 ```
 
-### Section 8: Detailed Findings for All 37 Questions
+### Section 7: Detailed Findings for All 37 Questions
 
 ```markdown
 ## Detailed Findings
@@ -1738,7 +1672,7 @@ Questions are grouped by section in the same order as the evaluation steps:
 4. Security Baseline (SEC-Q1 through SEC-Q7)
 5. Operations & Observability (OPS-Q1 through OPS-Q9)
 
-### Section 9: Learning Materials
+### Section 8: Learning Materials
 
 ```markdown
 ## Learning Materials
@@ -1758,7 +1692,7 @@ Include relevant links based on triggered pathways. Only include learning materi
 
 If no pathways are triggered, include: "No pathways triggered — no pathway-specific learning materials applicable. Refer to the [AWS SkillBuilder](https://skillbuilder.aws/) catalog for general cloud architecture training."
 
-### Section 10: Evidence Index
+### Section 9: Evidence Index
 
 ```markdown
 ## Evidence Index
@@ -1829,23 +1763,15 @@ The following fields from `additionalPlanContext` are not used by this TD and ar
 
 ---
 
-## V6 Additions
+## Unified Severity and Category Display Names
 
-This part of the TD is strictly additive to the V5 MOD contract above. Every V5 section, rubric question, N/A mapping, archetype calibration rule, score, scoring-notes arithmetic, pathway trigger logic, Top 5 Gaps, Quick Agent Wins, Decomposition Strategy, and report template remains authoritative and unchanged. V6 layers a unified severity vocabulary, per-finding field set, classification tier, pathway JSON surface, and three-artifact output contract on top of V5 so that MOD JSON can be consumed side-by-side with ARA JSON by a single webapp and a single portfolio aggregator.
+This TD emits findings in a unified severity vocabulary (High / Medium / Low) and canonical category display names so that MOD findings render in the same webapp tables, filters, and counters as ARA findings. The internal 1–4 score is preserved on every finding under `mod_metadata.internal_score` — it drives pathway triggers and Scoring Notes arithmetic.
 
-If V6 content conflicts with V5 content anywhere in this file, the V5 content is authoritative — V6 only adds surfaces, it never alters V5 scoring, V5 pathway triggers, or V5 narrative content.
+#### Unified Severity Mapping
 
----
+Every MOD finding carries a top-level `severity` field with a value from {High, Medium, Low}. The mapping from the internal 1–4 score is:
 
-### V6 Additions: Unified Severity and Category Display Names (MOD)
-
-V6 introduces a unified severity vocabulary (High / Medium / Low) and canonical category display names so that MOD findings render in the same webapp tables, filters, and counters as ARA findings. The V5 1–4 internal score is preserved on every finding under `mod_metadata.internal_score` — it still drives pathway triggers and Scoring Notes arithmetic exactly as before.
-
-#### V6 Unified Severity Mapping
-
-Every MOD finding emitted under V6 carries a top-level `severity` field with a value from {High, Medium, Low}. The mapping from the V5 internal 1–4 score is:
-
-| Condition | Unified V6 Severity |
+| Condition | Unified Severity |
 |---|---|
 | `internal_score == 1` AND `core_question == true` | High |
 | `internal_score == 1` AND `core_question == false` | Medium |
@@ -1854,13 +1780,13 @@ Every MOD finding emitted under V6 carries a top-level `severity` field with a v
 | `internal_score == 4` | (no finding — passing) |
 | N/A / Not Evaluated | (no finding) |
 
-A score of 4 is the "passing" score and MUST NOT emit a finding — the question is recorded only under `evaluations[]` (Req 1 AC 11, Req 8). Similarly, N/A and Not Evaluated (archetype-N/A, extended-not-triggered) SHALL NOT emit findings (Req 1 AC 12). The question's 1–4 score still feeds Scoring Notes arithmetic and pathway trigger evaluation regardless of whether a finding was emitted.
+A score of 4 is the "passing" score and MUST NOT emit a finding — the question is recorded only under `evaluations[]`. Similarly, N/A and Not Evaluated (archetype-N/A, extended-not-triggered) SHALL NOT emit findings. The question's 1–4 score still feeds Scoring Notes arithmetic and pathway trigger evaluation regardless of whether a finding was emitted.
 
-The V5 internal score is preserved verbatim in `mod_metadata.internal_score`, the core-question designation in `mod_metadata.core_question`, and the V5 human-readable label ("Not Ready" / "Needs Work" / "Partial") in `mod_metadata.score_label`. See the `mod_metadata` subobject section below.
+The internal score is preserved verbatim in `mod_metadata.internal_score`, the core-question designation in `mod_metadata.core_question`, and the human-readable label ("Not Ready" / "Needs Work" / "Partial") in `mod_metadata.score_label`. See the `mod_metadata` subobject section below.
 
-#### V6 Category Display Names
+#### Category Display Names
 
-Every V6 MOD finding carries both a short `category_id` code (the V5 rubric section prefix, used as `question_id` prefix) and a webapp-facing `category` display name. The canonical mapping (Req 7A AC 2):
+Every MOD finding carries both a short `category_id` code (the rubric section prefix, used as `question_id` prefix) and a webapp-facing `category` display name. The canonical mapping:
 
 | `category_id` | `category` display name |
 |---|---|
@@ -1870,63 +1796,104 @@ Every V6 MOD finding carries both a short `category_id` code (the V5 rubric sect
 | `SEC` | Security Baseline |
 | `OPS` | Operations & Observability |
 
-Both `category_id` and `category` are REQUIRED fields on every V6 MOD finding. MD and HTML section headers render the display name with the short code in parentheses where it adds clarity (e.g., "Infrastructure & DevOps (INF)"). The portfolio JSON `filter_vocab.categories[]` array carries display names only.
+Both `category_id` and `category` are REQUIRED fields on every MOD finding. MD and HTML section headers render the display name with the short code in parentheses where it adds clarity (e.g., "Infrastructure & DevOps (INF)"). The portfolio JSON `filter_vocab.categories[]` array carries display names only.
 
-#### DATA-Q* Namespace Collision Note (Req 17)
+#### DATA-Q* Namespace Collision Note
 
-The short code `DATA` is shared between MOD and the Agentic Readiness Assessment (ARA). MOD `DATA-Q1`..`DATA-Q4` and ARA `DATA-Q1`..`DATA-Q7` are DIFFERENT questions and MUST NOT be conflated. The unique join key across the two assessment types is `(assessment_type, question_id)` — never `question_id` alone. MOD `DATA` disambiguates to display name **"Data Platform"**; ARA `DATA` disambiguates to **"Data Accessibility"**. Every V6 JSON artifact emits `assessment_type` at the root (values `"mod"`, `"ara"`, `"portfolio-mod"`, `"portfolio-ara"`) so the join key is always present.
+The short code `DATA` is shared between MOD and the Agentic Readiness Assessment (ARA). MOD `DATA-Q1`..`DATA-Q4` and ARA `DATA-Q1`..`DATA-Q7` are DIFFERENT questions and MUST NOT be conflated. The unique join key across the two assessment types is `(assessment_type, question_id)` — never `question_id` alone. MOD `DATA` disambiguates to display name **"Data Platform"**; ARA `DATA` disambiguates to **"Data Accessibility"**. Every JSON artifact emits `assessment_type` at the root (values `"mod"`, `"ara"`, `"portfolio-mod"`, `"portfolio-ara"`) so the join key is always present.
 
 ---
 
-### V6 Unified Per-Finding Field Set and `mod_metadata` Subobject
+### Unified Per-Finding Field Set and `mod_metadata` Subobject
 
-This section defines the V6 per-finding JSON shape for MOD. It mirrors the ARA TD's per-finding field set — the 12 base fields are identical across ARA and MOD so a single webapp can render both without per-assessment branching — with a MOD-specific `mod_metadata` subobject replacing ARA's `ara_metadata`.
+This section defines the per-finding JSON shape for MOD. It mirrors the ARA TD's per-finding field set — the 12 base fields are identical across ARA and MOD so a single webapp can render both without per-assessment branching — with a MOD-specific `mod_metadata` subobject replacing ARA's `ara_metadata`.
 
-#### V6 Per-Finding Required Fields (Req 4)
+#### Per-Finding Required Fields
 
-Every V6 MOD finding MUST carry these 12 fields:
+Every MOD finding MUST carry these 12 fields:
 
 | Field | Type | Description |
 |---|---|---|
 | `question_id` | string | MOD rubric question identifier (e.g., `"INF-Q1"`). |
-| `category` | string | Webapp-facing category display name per Req 7A (e.g., `"Infrastructure & DevOps"`). |
+| `category` | string | Webapp-facing category display nameA (e.g., `"Infrastructure & DevOps"`). |
 | `category_id` | string | Rubric short code (e.g., `"INF"`). |
 | `title` | string | Short finding title. |
 | `description` | string | Finding description. |
 | `gap` | string | What is missing or inadequate relative to the rubric. |
 | `recommendation` | string | Remediation recommendation. |
-| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified V6 severity per the table above. |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity per the table above. |
 | `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — static per-question priority. See table below. |
 | `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
-| `phase` | integer | `1`–`4` — derived roadmap phase, default per Req 19. |
+| `phase` | integer | `1`–`4` — derived roadmap phase, default. |
 | `evidence` | object or null | `{file, lines}` reference to the gap location in the repo, or `null` when no file-and-line reference applies. |
 
-All 12 fields are REQUIRED on every emitted finding — missing any one fails the assessment and names the offending `question_id` (Req 4 AC 12). Findings are NEVER emitted for questions that resolve to pass (score 4), N/A, Not Evaluated (archetype-N/A), or Not Evaluated (extended-not-triggered); those questions appear only under `evaluations[]` (Req 8).
+All 12 fields are REQUIRED on every emitted finding — missing any one fails the assessment and names the offending `question_id`. Findings are NEVER emitted for questions that resolve to pass (score 4), N/A, Not Evaluated (archetype-N/A), or Not Evaluated (extended-not-triggered); those questions appear only under `evaluations[]`.
 
-#### V6 MOD Metadata Subobject (`mod_metadata`)
+#### MOD Metadata Subobject (`mod_metadata`)
 
-Every V6 MOD finding MUST carry a populated `mod_metadata` subobject (emitted as a sibling of the 12 required fields above) that preserves the V5 scoring detail so the full MOD rubric depth stays visible:
+Every MOD finding MUST carry a populated `mod_metadata` subobject (emitted as a sibling of the 12 required fields above) that preserves the scoring detail so the full MOD rubric depth stays visible:
 
 | Field | Type | Description |
 |---|---|---|
-| `internal_score` | integer 1-3 | The preserved V5 1–4 score that emitted this finding. Values of 1, 2, or 3 only — a score of 4 is the passing score and emits no finding. |
-| `score_label` | enum | V5 human-readable label: `"Not Ready"` (score 1) / `"Needs Work"` (score 2) / `"Partial"` (score 3). Score 4 is "Mature" but does not emit a finding. |
-| `archetype_calibrated` | boolean | `true` ONLY for INF-Q3, INF-Q4, APP-Q3, APP-Q4 when service archetype influenced the score. Always `false` on all other questions. When `true`, the MD artifact MUST include prose explaining how the archetype shaped the score (Req 3 AC 8). |
-| `core_question` | boolean | Mirrors the MOD rubric's core-question designation. Drives the severity mapping rule that turns `internal_score == 1` on a core question into a High finding, and the same score on a non-core question into a Medium finding. |
+| `internal_score` | integer 1-3 | The 1–4 score that emitted this finding. Values of 1, 2, or 3 only — a score of 4 is the passing score and emits no finding. |
+| `score_label` | enum | Human-readable label: `"Not Ready"` (score 1) / `"Needs Work"` (score 2) / `"Partial"` (score 3). Score 4 is "Mature" but does not emit a finding. |
+| `archetype_calibrated` | boolean | `true` ONLY for INF-Q3, INF-Q4, APP-Q3, APP-Q4 when service archetype influenced the score. Always `false` on all other questions. When `true`, the MD artifact MUST include prose explaining how the archetype shaped the score. |
+| `core_question` | boolean | Mirrors the MOD rubric's core-question designation (see "Core Question Designation Table" below). Drives the severity mapping rule that turns `internal_score == 1` on a core question into a High finding, and the same score on a non-core question into a Medium finding. |
 
-`mod_metadata` preserves V5 scoring detail. The V5 Score Summary table, Scoring Notes arithmetic, pathway trigger logic, and archetype-calibration prose all remain authoritative and unchanged — `mod_metadata` just surfaces the V5 per-finding scoring reasoning in structured JSON so the webapp and the portfolio aggregator can consume it without re-parsing MD.
+#### Core Question Designation Table (authoritative)
 
-#### Explicit Forbid: No `pathway_triggers` Field on Findings (Req 3 AC 10)
+Every MOD question has a static `core_question` value that does NOT change per-repo. This is the authoritative source for the `mod_metadata.core_question` field:
 
-MOD findings MUST NOT carry a `pathway_triggers` field (or any equivalent pathway-trigger evidence field) under `mod_metadata` or at any other level of the finding. Pathway trigger evidence lives ONLY on `pathways[]` entries via the `triggering_questions[]` array — see the V6 Per-Repo `pathways[]` Emission section below. This keeps the finding shape aligned with ARA and ensures that the portfolio MOD TD can consume pathway-trigger "why" evidence from a single authoritative location (`pathways[].contributing_repos[].triggering_questions[]`) per Req 30.
+| Question | Core? | Question | Core? |
+|---|---|---|---|
+| INF-Q1 Managed Compute | ✅ core | DATA-Q1 Unstructured Data Storage | ✅ core |
+| INF-Q2 Managed Databases | ✅ core | DATA-Q2 Unified Data Access Layer | non-core |
+| INF-Q3 Workflow Orchestration | non-core | DATA-Q3 Database Engine Version and EOL | ✅ core |
+| INF-Q4 Async Messaging and Streaming | non-core | DATA-Q4 Stored Procedures and Schema Complexity | ✅ core |
+| INF-Q5 Network Security | ✅ core | SEC-Q1 Audit Logging | ✅ core |
+| INF-Q6 API Entry Point | non-core | SEC-Q2 Encryption at Rest | ✅ core |
+| INF-Q7 Auto-Scaling | non-core | SEC-Q3 API Authentication | non-core |
+| INF-Q8 Backup and Recovery | non-core | SEC-Q4 Centralized Identity Integration | non-core |
+| INF-Q9 High Availability and Fault Isolation | non-core | SEC-Q5 Secrets Management | ✅ core |
+| INF-Q10 Infrastructure as Code Coverage | ✅ core | SEC-Q6 Compute Hardening and Patching | non-core |
+| INF-Q11 CI/CD Automation | ✅ core | SEC-Q7 Application Security Pipeline | non-core |
+| APP-Q1 Programming Languages | non-core | OPS-Q1 Distributed Tracing | non-core |
+| APP-Q2 Monolith vs Microservices | ✅ core | OPS-Q2 SLO Definitions | non-core |
+| APP-Q3 Async vs Sync Communication | non-core | OPS-Q3 Business Metrics | non-core |
+| APP-Q4 Long-Running Process Handling | non-core | OPS-Q4 Anomaly Detection and Alerting | non-core |
+| APP-Q5 API Versioning Strategy | non-core | OPS-Q5 Deployment Strategy | ✅ core |
+| APP-Q6 Service Discovery | non-core | OPS-Q6 Integration Testing | ✅ core |
+|  |  | OPS-Q7 Incident Response Automation | non-core |
+|  |  | OPS-Q8 Observability Ownership | non-core |
+|  |  | OPS-Q9 Resource Tagging Governance | non-core |
 
-#### V6 Per-Question Priority Table (Req 18)
+**Total: 14 core questions, 23 non-core questions** (37 total).
 
-The `priority` field on every MOD finding is STATIC per rubric question — it does not depend on per-repo context (Req 18 AC 6). Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`.
+**Derivation rationale** (matches the per-question priority table above):
+- All questions with `priority: P1` (the 14 P1 questions) are core.
+- All questions with `priority: P2` are non-core.
+- Core questions govern whether a score 1 creates a High-severity finding. Non-core questions at score 1 are Medium-severity.
+- This table is static — it does NOT depend on per-repo context. The same `(assessment_type, question_id)` pair always yields the same `core_question` value.
+
+**Worked severity mapping examples:**
+- `INF-Q1` with score 1 → core=true → **High** finding
+- `INF-Q3` with score 1 → core=false → **Medium** finding (non-core score 1 is not a High because INF-Q3 is archetype-calibrated and may score 1 correctly for some archetypes)
+- `OPS-Q2` with score 1 → core=false → **Medium** finding (OPS-Q2 has `⚠️ Scoring limitation — external context dependency` noted in the rubric, which is why it's non-core)
+- Any question with score 2 → **Medium** finding regardless of core_question
+
+`mod_metadata` preserves scoring detail. The Score Summary table, Scoring Notes arithmetic, pathway trigger logic, and archetype-calibration prose all remain authoritative and unchanged — `mod_metadata` just surfaces the per-finding scoring reasoning in structured JSON so the webapp and the portfolio aggregator can consume it without re-parsing MD.
+
+#### Explicit Forbid: No `pathway_triggers` Field on Findings
+
+MOD findings MUST NOT carry a `pathway_triggers` field (or any equivalent pathway-trigger evidence field) under `mod_metadata` or at any other level of the finding. Pathway trigger evidence lives ONLY on `pathways[]` entries via the `triggering_questions[]` array — see the Per-Repo `pathways[]` Emission section below. This keeps the finding shape aligned with ARA and ensures that the portfolio MOD TD can consume pathway-trigger "why" evidence from a single authoritative location (`pathways[].contributing_repos[].triggering_questions[]`).
+
+#### Per-Question Priority Table
+
+The `priority` field on every MOD finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`.
 
 **Authoritative source.** When `modernization-readiness-findings.csv` is present in the workspace, its per-question priority column is the authoritative source and overrides the defaults below. When the CSV is absent (current state of the workspace), the defaults in the table below are used.
 
-**Default derivation.** Priority is derived mechanically from V5 core/non-core designation: core questions default to P1, non-core questions default to P2, and the four archetype-calibrated questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4) default to P2 because their scoring is archetype-sensitive rather than uniformly critical. Specifically:
+**Default derivation.** Priority is derived mechanically from core/non-core designation: core questions default to P1, non-core questions default to P2, and the four archetype-calibrated questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4) default to P2 because their scoring is archetype-sensitive rather than uniformly critical. Specifically:
 
 - Core question → **P1**
 - Non-core question → **P2**
@@ -1959,7 +1926,7 @@ Concrete per-question defaults for all 37 MOD questions:
 
 (37 rows total — 11 INF + 6 APP + 4 DATA + 7 SEC + 9 OPS.) Per-finding `priority` is static per `question_id` and does not change per-repo, per-portfolio, or per-score. If `modernization-readiness-findings.csv` later lands in the workspace, the CSV's explicit per-question assignments replace these defaults wholesale.
 
-#### Default Phase Mapping from Priority (Req 19)
+#### Default Phase Mapping from Priority
 
 The default `phase` assignment on a finding derives mechanically from `priority`:
 
@@ -1970,17 +1937,17 @@ The default `phase` assignment on a finding derives mechanically from `priority`
 | P2 | 2 or 3 |
 | P3 | 3 or 4 |
 
-Per-repo MOD MAY pin a specific phase within the allowed band based on local remediation dependencies; portfolio MOD MAY further adjust `phase` based on cross-cutting dependencies across the portfolio (Req 19 AC 3–5). The `priority` value itself does NOT change per-repo or per-portfolio — only `phase` may be re-pinned within its allowed band. When `phase` is re-pinned away from the default, the JSON artifact records both the per-repo-adjusted value (as `phase`) and, if applicable, the portfolio-adjusted value under a sibling field per Req 19.
+Per-repo MOD MAY pin a specific phase within the allowed band based on local remediation dependencies; portfolio MOD MAY further adjust `phase` based on cross-cutting dependencies across the portfolio. The `priority` value itself does NOT change per-repo or per-portfolio — only `phase` may be re-pinned within its allowed band. When `phase` is re-pinned away from the default, the JSON artifact records both the per-repo-adjusted value (as `phase`) and, if applicable, the portfolio-adjusted value under a sibling field.
 
 ---
 
-### V6 Classification Rules (MOD) and V5/V6 Consistency Check
+### Classification Rules (MOD) and Classification Consistency Check
 
-The V6 per-repo MOD classification assigns each assessed repository to exactly one of four tiers based on the unified High / Medium counts derived from the severity mapping above. V6 also emits a classification consistency check that ensures the V5 numeric-score-driven repo rating and the V6 severity-count-driven tier tell the same story (Req 29).
+The per-repo MOD classification assigns each assessed repository to exactly one of four tiers based on the unified High / Medium counts derived from the severity mapping above. MOD also emits a classification consistency check that ensures the score-based tier (derived from the `overall_score` band) and the count-based tier (derived from High / Medium counts) tell the same story.
 
-MOD classification is deliberately SOFTER than ARA classification on "1 High." ARA gates on agent safety — a single High is a deployment blocker. MOD measures modernization maturity — a single High is typically one modernization gap rather than a deployment blocker. This is documented inline in the MD classification rationale block per Req 6 AC 7 and Req 16 AC 3.
+MOD classification is deliberately SOFTER than ARA classification on "1 High." ARA gates on agent safety — a single High is a deployment blocker. MOD measures modernization maturity — a single High is typically one modernization gap rather than a deployment blocker. This is documented inline in the MD classification rationale block.
 
-#### V6 Classification Table (Req 6)
+#### Classification Table
 
 | High count | Medium count | Tier | `rule_matched` |
 |---|---|---|---|
@@ -2005,59 +1972,59 @@ The classification object emitted in per-repo MOD JSON:
 }
 ```
 
-#### Per-Category Emission: Three Coexisting Labels (Req 7)
+#### Per-Category Emission: Three Coexisting Labels
 
 Each entry in the per-repo MOD JSON `categories[]` array MUST carry ALL THREE of the following labels. They coexist — they do NOT replace one another:
 
 | Field | Source | Values |
 |---|---|---|
-| `numeric_score` | V5 arithmetic mean of non-N/A non-Not-Evaluated question scores in that category | 1.00–4.00 (or `null` when every question in the category resolves to N/A or Not Evaluated) |
-| `score_rating` | V5 numeric-score band, derived from `numeric_score` using: ≥ 3.5 → Mature, 2.5–3.4 → Partial, 1.5–2.4 → Needs Work, < 1.5 → Not Ready | `"Mature"` / `"Partial"` / `"Needs Work"` / `"Not Ready"` (or `null` when `numeric_score` is `null`) |
-| `severity_status` | V6 severity-count-driven: High ≥ 1 → Critical; else Medium ≥ 1 → Needs Work; else Ready | `"Critical"` / `"Needs Work"` / `"Ready"` |
+| `numeric_score` | Arithmetic mean of non-N/A non-Not-Evaluated question scores in that category | 1.00–4.00 (or `null` when every question in the category resolves to N/A or Not Evaluated) |
+| `score_rating` | Numeric-score band, derived from `numeric_score` using: ≥ 3.5 → Mature, 2.5–3.4 → Partial, 1.5–2.4 → Needs Work, < 1.5 → Not Ready | `"Mature"` / `"Partial"` / `"Needs Work"` / `"Not Ready"` (or `null` when `numeric_score` is `null`) |
+| `severity_status` | Severity-count-driven: High ≥ 1 → Critical; else Medium ≥ 1 → Needs Work; else Ready | `"Critical"` / `"Needs Work"` / `"Ready"` |
 
-**Category-level divergence is ALLOWED** (Req 7 AC 8). Example: a category whose only finding is a Score-3 (Low-severity) finding has `numeric_score` 3.67, `score_rating` `"Mature"`, and `severity_status` `"Needs Work"`. That is EXPECTED — the numeric-score band still rounds to Mature while the unified severity count flags one Low-severity finding that needs attention. The JSON surfaces both honestly so consumers can reason about each lens independently. **Repo-level divergence between the V5 band and the V6 tier is NOT allowed** (Req 29) — see the consistency check below.
+**Category-level divergence is ALLOWED**. Example: a category whose only finding is a Score-3 (Low-severity) finding has `numeric_score` 3.67, `score_rating` `"Mature"`, and `severity_status` `"Needs Work"`. That is EXPECTED — the numeric-score band still rounds to Mature while the unified severity count flags one Low-severity finding that needs attention. The JSON surfaces both honestly so consumers can reason about each lens independently. **Repo-level divergence between the score-based band and the count-based tier is NOT allowed** — see the consistency check below.
 
-When every question in a category resolves to N/A or Not Evaluated, `numeric_score` and `score_rating` are `null`, `severity_status` is `"Ready"`, and the MD and JSON artifacts MUST include a note that the category was not evaluated (Req 7 AC 7).
+When every question in a category resolves to N/A or Not Evaluated, `numeric_score` and `score_rating` are `null`, `severity_status` is `"Ready"`, and the MD and JSON artifacts MUST include a note that the category was not evaluated.
 
-#### MD-Rendered Classification Rationale (Req 16)
+#### MD-Rendered Classification Rationale
 
 The per-repo MOD MD artifact MUST render a classification rationale paragraph immediately after the classification tier is first stated. The paragraph:
 
 1. States the specific counts that drove the tier (e.g., "This repo has 6 High findings, 4 Medium findings, 7 Low findings.").
 2. Names the matched rule (e.g., "2-11 High → Remediation Required").
-3. States the MOD classification rule and explicitly contrasts it with the ARA classification rule (Req 6 AC 7): ARA's "1 High" is an agent-deployment gate; MOD's "1 High" is typically a single modernization gap and maps to Pilot-Ready instead of Remediation Required.
+3. States the MOD classification rule and explicitly contrasts it with the ARA classification rule: ARA's "1 High" is an agent-deployment gate; MOD's "1 High" is typically a single modernization gap and maps to Pilot-Ready instead of Remediation Required.
 
-#### `classification_consistency_check` (Req 29)
+#### `classification_consistency_check`
 
-Every V6 MOD JSON `classification` object MUST include a `classification_consistency_check` field whose value is either:
+Every MOD JSON `classification` object MUST include a `classification_consistency_check` field whose value is either:
 
-- The string `"consistent"` when the V5 numeric-score band (derived from `overall_score`) and the V6 severity-count tier tell the same story per the Req 29 AC 1 equivalence table:
-  - V5 Mature (score ≥ 3.5) ≡ V6 Cloud-Native Ready
-  - V5 Partial (2.5–3.4) ≡ V6 Pilot-Ready
-  - V5 Needs Work (1.5–2.4) ≡ V6 Remediation Required
-  - V5 Not Ready (< 1.5) ≡ V6 Not Ready
+- The string `"consistent"` when the score-based tier (derived from `overall_score` band) and the count-based tier (derived from High / Medium counts) tell the same story per the equivalence table below:
+  - Score ≥ 3.5 (Mature band) ≡ Cloud-Native Ready
+  - Score 2.5–3.4 (Partial band) ≡ Pilot-Ready
+  - Score 1.5–2.4 (Needs Work band) ≡ Remediation Required
+  - Score < 1.5 (Not Ready band) ≡ Not Ready
 
 - A structured divergence object when the equivalence does NOT hold:
   ```json
   {
     "status": "divergent",
-    "v5_band": "Partial",
-    "v6_tier": "Remediation Required",
-    "reason": "Score 2.8 yields V5 Partial but 4 High findings force V6 Remediation Required. Surface gating review recommended on INF-Q2, INF-Q10, SEC-Q1, SEC-Q5."
+    "score_band": "Partial",
+    "count_tier": "Remediation Required",
+    "reason": "Score 2.8 yields Partial band but 4 High findings force Remediation Required tier. Surface gating review recommended on INF-Q2, INF-Q10, SEC-Q1, SEC-Q5."
   }
   ```
 
-When `classification_consistency_check.status == "divergent"`, the V6 MOD MD artifact MUST render a clearly-labeled warning block naming the divergence, the underlying V5 band, the V6 tier, and the reason (Req 29 AC 7). Repo-level divergence is a RELEASE BLOCKER and MUST be either (a) corrected by fixing surface-gating or scoring, or (b) documented in the divergence object and flagged for the maintainer (Req 29 AC 3). Silent divergence is not acceptable.
+When `classification_consistency_check.status == "divergent"`, the MOD MD artifact MUST render a clearly-labeled warning block naming the divergence, the underlying score-based band, the count-based tier, and the reason. Repo-level divergence is a RELEASE BLOCKER and MUST be either (a) corrected by fixing surface-gating or scoring, or (b) documented in the divergence object and flagged for the maintainer. Silent divergence is not acceptable.
 
 Category-level divergence between `score_rating` and `severity_status` (described above) is a different phenomenon — it is permitted and does NOT trigger the repo-level `classification_consistency_check` warning.
 
 ---
 
-### V6 Per-Repo `pathways[]` Emission
+### Per-Repo `pathways[]` Emission
 
-Every V6 per-repo MOD JSON artifact MUST emit a `pathways[]` array with exactly 7 entries — one per canonical pathway. This preserves the V5 AWS Modernization Pathways Summary Table (see the V5 pathway section above) and adds a structured JSON surface that the portfolio MOD TD consumes (Req 25, Req 30).
+Every per-repo MOD JSON artifact MUST emit a `pathways[]` array with exactly 7 entries — one per canonical pathway. This surfaces the AWS Modernization Pathways Summary Table as a structured JSON surface that the portfolio MOD TD consumes.
 
-#### The 7 Canonical Pathway IDs (Req 25 AC 2)
+#### The 7 Canonical Pathway IDs
 
 Each per-repo MOD JSON MUST emit one `pathways[]` entry per pathway, using these exact `id` values:
 
@@ -2069,7 +2036,7 @@ Each per-repo MOD JSON MUST emit one `pathways[]` entry per pathway, using these
 - `move-to-modern-devops`
 - `move-to-ai`
 
-The `name` field on each entry carries the human-readable label (e.g., `"Move to Cloud Native"`) matching the V5 Summary and the Pathway Summary Table in MD.
+The `name` field on each entry carries the human-readable label (e.g., `"Move to Cloud Native"`) matching the Pathway Summary Table in MD.
 
 #### Per-Entry Shape
 
@@ -2078,32 +2045,32 @@ Every `pathways[]` entry carries:
 | Field | Type | Description |
 |---|---|---|
 | `id` | enum | One of the 7 canonical IDs above. |
-| `name` | string | Display name matching the V5 table. |
-| `status` | enum | `"Triggered"` / `"Not Triggered"` / `"Not Applicable"` (Req 25 AC 4). |
+| `name` | string | Display name matching the pathway table. |
+| `status` | enum | `"Triggered"` / `"Not Triggered"` / `"Not Applicable"`. |
 | `priority` | enum or null | `"High"` / `"Medium"` / `"Low"` for Triggered pathways; `null` for Not Triggered or Not Applicable. |
 | `effort` | enum or null | `"High"` / `"Medium"` / `"Low"` for Triggered pathways; `null` for Not Triggered or Not Applicable. |
 | `key_trigger_criteria` | string | Prose describing the pathway's trigger condition from Step 7 (e.g., "APP-Q2 < 3 OR INF-Q1 < 3 OR APP-Q3 < 3 OR APP-Q4 < 3"). For Not Applicable pathways, this field states WHY the pathway does not apply to the repo's `repo_type`. |
 | `triggering_questions[]` | array | Tuples of `{question_id, score, note?}` identifying the questions consulted. See rules below. |
-| `detail` | object or null | Structured detail for Triggered pathways (AWS services, learning materials, immediate actions); `null` for Not Triggered or Not Applicable (Req 25 AC 11). |
+| `detail` | object or null | Structured detail for Triggered pathways (AWS services, learning materials, immediate actions); `null` for Not Triggered or Not Applicable. |
 | `not_triggered_reason` | string, optional | Prose explanation; present on Not Triggered pathways when `triggering_questions[]` alone does not convey the reason. |
 
-#### Status Rules (Req 25 AC 4, 7-9)
+#### Status Rules
 
-- **`"Triggered"`** — At least one rubric question named in the pathway's trigger condition (Step 7 of the V5 MOD TD) scored below its threshold after surface-gating and archetype-calibration were applied. The `triggering_questions[]` array MUST be non-empty and MUST contain ONLY `(question_id, score)` tuples whose `score < 3` AND whose `question_id` belongs to the pathway's trigger set (for pathways whose triggers are phrased as `"QUESTION < 3"`). This matches the V5 Step 7 trigger condition exactly — V6 does NOT alter pathway trigger logic; it just surfaces the consulted questions as structured JSON.
+- **`"Triggered"`** — At least one rubric question named in the pathway's trigger condition (Step 7 above) scored below its threshold after surface-gating and archetype-calibration were applied. The `triggering_questions[]` array MUST be non-empty and MUST contain ONLY `(question_id, score)` tuples whose `score < 3` AND whose `question_id` belongs to the pathway's trigger set (for pathways whose triggers are phrased as `"QUESTION < 3"`). This matches the Step 7 trigger condition exactly — the JSON surfaces the consulted questions as structured data without altering the trigger logic.
 
-- **`"Not Triggered"`** — All rubric questions in the pathway's trigger set scored at or above their threshold (e.g., score ≥ 3), OR the contextual guard from the V5 Pathway Summary Table blocked the trigger (e.g., "Must be EC2/VM-based" for Move to Containers when the workload is already on Lambda/Fargate/ECS). The `triggering_questions[]` array carries the consulted questions with a per-question `note` explaining why each did NOT fire (e.g., `{"question_id": "INF-Q1", "score": 3, "note": "INF-Q1 = 3 meets threshold; pathway not needed"}`). For guard-blocked pathways, a pathway-level `not_triggered_reason` field explains the guard (e.g., `"not_triggered_reason": "Workload already runs on Lambda/Fargate/ECS; container pathway does not apply"`).
+- **`"Not Triggered"`** — All rubric questions in the pathway's trigger set scored at or above their threshold (e.g., score ≥ 3), OR the contextual guard from the Pathway Summary Table blocked the trigger (e.g., "Must be EC2/VM-based" for Move to Containers when the workload is already on Lambda/Fargate/ECS). The `triggering_questions[]` array carries the consulted questions with a per-question `note` explaining why each did NOT fire (e.g., `{"question_id": "INF-Q1", "score": 3, "note": "INF-Q1 = 3 meets threshold; pathway not needed"}`). For guard-blocked pathways, a pathway-level `not_triggered_reason` field explains the guard (e.g., `"not_triggered_reason": "Workload already runs on Lambda/Fargate/ECS; container pathway does not apply"`).
 
 - **`"Not Applicable"`** — The pathway does not apply to the repo's `repo_type` (e.g., "Move to Containers" is N/A for a `library` repo because there is no deployable workload). The `key_trigger_criteria` field MUST carry the prose reason (e.g., `"Not applicable — repo_type is 'library' and the pathway requires a deployable workload"`). The `triggering_questions[]` array MAY be empty.
 
-For every pathway with `status == "Triggered"`, the per-repo MOD MD artifact MUST emit a Pathway Detail subsection containing the V5-specified content from Step 7's "When Triggered, Include in Pathway Detail Section" guidance (Req 25 AC 10). The corresponding `pathways[].detail` JSON object carries the structured fields (triggered_questions, recommended AWS services, immediate actions, learning materials) so that the portfolio MOD TD can aggregate pathway detail content from JSON alone (Req 25 AC 11).
+For every pathway with `status == "Triggered"`, the per-repo MOD MD artifact MUST emit a Pathway Detail subsection containing the content specified in Step 7's "When Triggered, Include in Pathway Detail Section" guidance. The corresponding `pathways[].detail` JSON object carries the structured fields (triggered_questions, recommended AWS services, immediate actions, learning materials) so that the portfolio MOD TD can aggregate pathway detail content from JSON alone.
 
-#### Surface-Gating Discipline (Req 29 AC 2)
+#### Surface-Gating Discipline
 
 Surface flags (`has_persistent_data_store`, `has_at_rest_data_surface`, `has_deployed_workload`, `has_api_surface`, `has_multi_instance_deployment`, `has_iac_provisioning_aws_resources` — see Step 1.6) MUST be applied BEFORE pathway evaluation. If a surface flag is `false` for a question that would otherwise fire a pathway (e.g., DATA-Q3 < 3 would fire Move to Managed Databases, but `has_persistent_data_store == false` means DATA-Q3 was recorded as Not Evaluated), the question does NOT count toward pathway triggering. This prevents a pathway from firing on a question that was not actually evaluated.
 
 #### Key Trigger Conditions Reference
 
-The per-pathway trigger conditions used to populate `triggering_questions[]` come from the V5 Pathway Summary Table (Step 7) unchanged. V6 does NOT alter V5 trigger logic — it only surfaces the V5 reasoning as structured JSON. The canonical trigger logic is defined in Step 7.1 through 7.7 above; the table below is a quick reference:
+The per-pathway trigger conditions used to populate `triggering_questions[]` come from the Pathway Summary Table (Step 7) unchanged. The canonical trigger logic is defined in Step 7.1 through 7.7 above; the table below is a quick reference:
 
 | `id` | Primary Trigger | Supporting Triggers (strengthen, not required) | Contextual Guard |
 |---|---|---|---|
@@ -2115,59 +2082,54 @@ The per-pathway trigger conditions used to populate `triggering_questions[]` com
 | `move-to-modern-devops` | INF-Q10 < 3 OR INF-Q11 < 3 | OPS-Q5 < 3, OPS-Q6 < 3 (strengthen, not required) | — |
 | `move-to-ai` | No AI/agent frameworks, no vector DB, no RAG, no agent eval framework | — | Requires AI/agent/LLM intent in portfolio or service context |
 
-**Primary vs Supporting:** The V5 trigger logic (Step 7.1–7.7) uses a Primary + Supporting model. A pathway is Triggered ONLY when the Primary condition is met. Supporting conditions strengthen the case (inform the Pathway Detail section) but do NOT on their own trigger a pathway. V6's `triggering_questions[]` array MUST include the Primary question that triggered the pathway plus any Supporting questions whose scores also scored below threshold.
+**Primary vs Supporting:** The trigger logic (Step 7.1–7.7) uses a Primary + Supporting model. A pathway is Triggered ONLY when the Primary condition is met. Supporting conditions strengthen the case (inform the Pathway Detail section) but do NOT on their own trigger a pathway. The `triggering_questions[]` array MUST include the Primary question that triggered the pathway plus any Supporting questions whose scores also scored below threshold.
 
-V6 adds no new pathways and removes none. The `triggering_questions[]` array is the structured surface of the "which questions fired, at what scores, why" information that the V5 Pathway Detail section already describes in prose — Req 30 requires this information to be visible every time a pathway appears (per-repo, per-repo roll-up in portfolio `repositories[].pathways_triggered[]`, and portfolio top-level `pathways[]`).
+The `triggering_questions[]` array is the structured surface of the "which questions fired, at what scores, why" information that the Pathway Detail section describes in prose — this information must be visible every time a pathway appears (per-repo, per-repo roll-up in portfolio `repositories[].pathways_triggered[]`, and portfolio top-level `pathways[]`).
 
 ---
 
-### V6 MD Preservation of V5 Content
+### MD Report Contents
 
-The V6 per-repo MOD MD artifact is strictly additive relative to V5. Every V5 section that V5 emitted continues to appear in V6 MD with ordering, prose, and arithmetic preserved verbatim. V6 only adds new artifacts (JSON, HTML, metadata sidecar) and new inline annotations (unified severity badges, classification tier with rule match, per-finding priority/effort/phase, category `severity_status`, consistency-check warning when divergent).
+#### MD Sections
 
-#### Preserved V5 MD Sections (Req 27)
+The following content MUST be retained in every per-repo MOD MD report:
 
-The following V5 content MUST be retained verbatim in every V6 per-repo MOD MD report:
+- **Overall Score line** rendered in the MD metadata block as `Overall Score: X.XX / 4.0` using the repo-level numeric score. Preserved as a first-class field in JSON under `overall_score`.
+- **Score Summary table** — per-category numeric scores with the ✅ Mature / 🟡 Partial / 🟠 Needs Work / ❌ Not Ready emoji rating (the `score_rating` label). Rendered unchanged.
+- **Scoring Notes** arithmetic breakdown (e.g., `"INF: (3+1+2+2+1+2+1+2+2+2+2) / 11 = 20/11 = 1.82"`) — preserved in MD. JSON does NOT need to carry Scoring Notes because the final numeric scores are already in `categories[].numeric_score`.
+- **Top 5 Gaps** table — rendered in MD with columns `#`, `Question`, `Score`, `Gap`, `Impact`. JSON carries the same data under `top_gaps[]`.
+- **Decomposition Strategy** conditional section (fires when APP-Q2 < 3) — rendered in MD including the three approach options (Strangler Fig parallel track, conditional/adaptive, big-bang with recommendation against), pattern recommendations (Anti-corruption Layer, Saga, Event Sourcing, Hexagonal Architecture), and level-of-effort estimates. JSON carries a structured `decomposition_strategy` object when the condition fires, `null` otherwise.
+- **Archetype Justification** prose — rendered in the MD metadata block. For the four archetype-calibrated questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4), MD prose MUST explain how the detected or supplied archetype shaped the score whenever `mod_metadata.archetype_calibrated == true`.
+- **AWS Modernization Pathways** Summary Table with status/priority/effort/Key Trigger Criteria columns, AND Pathway Detail subsections for each Triggered pathway. See the Per-Repo `pathways[]` Emission section for the JSON surface.
+- **Aggregate Evidence Index** at the end of the report. JSON consumers can re-derive this section from the union of `findings[].evidence` across all findings.
+- **Surface Flags block** with six boolean flags and rationale — rendered in the MD metadata block and in JSON under `metadata.surface_flags`.
 
-- **Overall Score line** rendered in the MD metadata block as `Overall Score: X.XX / 4.0` using the V5 repo-level numeric score. Preserved as a first-class field in JSON under `overall_score` (Req 27 AC 1).
-- **Score Summary table** — per-category numeric scores with the V5 ✅ Mature / 🟡 Partial / 🟠 Needs Work / ❌ Not Ready emoji rating (the `score_rating` label). Rendered unchanged (Req 27 AC 2).
-- **Scoring Notes** arithmetic breakdown (e.g., `"INF: (3+1+2+2+1+2+1+2+2+2+2) / 11 = 20/11 = 1.82"`) — preserved in MD. JSON does NOT need to carry Scoring Notes because the final numeric scores are already in `categories[].numeric_score` (Req 27 AC 3).
-- **Top 5 Gaps** table — preserved in MD with columns `#`, `Question`, `Score`, `Gap`, `Impact`. JSON carries the same data under `top_gaps[]` (Req 27 AC 4).
-- **Quick Agent Wins** prose — preserved in MD. JSON carries the structured array under `quick_agent_wins[]` with `{name, prerequisite, what_it_enables, additional_steps, effort}` per entry (Req 27 AC 5).
-- **Decomposition Strategy** conditional section (fires when APP-Q2 < 3) — preserved in MD including the three approach options (Strangler Fig parallel track, conditional/adaptive, big-bang with recommendation against), pattern recommendations (Anti-corruption Layer, Saga, Event Sourcing, Hexagonal Architecture), and level-of-effort estimates. JSON carries a structured `decomposition_strategy` object when the condition fires, `null` otherwise (Req 27 AC 6).
-- **Archetype Justification** prose — preserved in the MD metadata block. For the four archetype-calibrated questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4), MD prose MUST explain how the detected or supplied archetype shaped the score whenever `mod_metadata.archetype_calibrated == true` (Req 3 AC 8).
-- **AWS Modernization Pathways** Summary Table with status/priority/effort/Key Trigger Criteria columns, AND Pathway Detail subsections for each Triggered pathway — preserved verbatim in MD. See the V6 Per-Repo `pathways[]` Emission section for the JSON surface (Req 25, Req 27 AC 8).
-- **Aggregate Evidence Index** at the end of the report — preserved unchanged (Req 27 AC 7). JSON consumers can re-derive this section from the union of `findings[].evidence` across all findings.
-- **Surface Flags block** with six boolean flags and rationale — preserved in the MD metadata block and in JSON under `metadata.surface_flags` (Req 27 AC 9).
+The MD artifact renders the following inline annotations alongside the content above:
 
-Ordering and content of these sections is UNCHANGED from V5. V6 adds the following inline annotations alongside preserved content without altering the preserved content itself:
-
-- Per-finding unified severity badges ("High" / "Medium" / "Low") next to the V5 score label.
+- Per-finding unified severity badges ("High" / "Medium" / "Low") next to the score label.
 - Classification tier (Cloud-Native Ready / Pilot-Ready / Remediation Required / Not Ready) with the matched-rule annotation, rendered after the Overall Score line.
 - Per-finding `priority`, `effort`, `phase` values in the finding header block.
-- Category `severity_status` (Ready / Needs Work / Critical) in the Score Summary table as a new column alongside the V5 `score_rating`.
-- Classification-consistency warning block rendered immediately after the classification tier WHEN `classification_consistency_check.status == "divergent"` (Req 29 AC 7).
-
-No V5 narrative is moved, shortened, or removed. If any V5 content would otherwise conflict with a V6 annotation, the V5 content stays — the V6 annotation is rendered alongside it, not in place of it.
+- Category `severity_status` (Ready / Needs Work / Critical) in the Score Summary table as a new column alongside the `score_rating`.
+- Classification-consistency warning block rendered immediately after the classification tier WHEN `classification_consistency_check.status == "divergent"`.
 
 ---
 
-### V6 Three-Artifact Output Contract (MOD)
+### Three-Artifact Output Contract (MOD)
 
-Per V6 Requirement 9, every per-repo MOD assessment emits THREE artifacts plus a metadata sidecar. This mirrors the ARA three-artifact contract with MOD-specific filenames and a MOD-specific HTML visual contract.
+Every per-repo MOD assessment emits THREE artifacts plus a metadata sidecar. This mirrors the ARA three-artifact contract with MOD-specific filenames and a MOD-specific HTML visual contract.
 
 #### Artifacts
 
 | Artifact | Filename | Purpose |
 |---|---|---|
-| Markdown report | `{repo}-mod-report.md` | Richest-prose artifact. Preserves every V5 narrative (Overall Score, Score Summary table, Scoring Notes arithmetic, Top 5 Gaps, Quick Agent Wins, Decomposition Strategy, Archetype Justification, AWS Modernization Pathways summary and detail subsections, aggregate Evidence Index). |
-| JSON report | `{repo}-mod-report.json` | **Canonical machine-readable contract.** Consumed by the webapp and the portfolio MOD TD. Every semantic field (findings, classification, categories with all three of `numeric_score` / `score_rating` / `severity_status`, `pathways[]` covering all 7 pathways, `overall_score`, `top_gaps[]`, `quick_agent_wins[]`, `decomposition_strategy`, `metadata` including surface flags and archetype justification) is present. |
+| Markdown report | `{repo}-mod-report.md` | Richest-prose artifact. Renders every narrative section (Overall Score, Score Summary table, Scoring Notes arithmetic, Top 5 Gaps, Decomposition Strategy, Archetype Justification, AWS Modernization Pathways summary and detail subsections, aggregate Evidence Index). |
+| JSON report | `{repo}-mod-report.json` | **Canonical machine-readable contract.** Consumed by the webapp and the portfolio MOD TD. Every semantic field (findings, classification, categories with all three of `numeric_score` / `score_rating` / `severity_status`, `pathways[]` covering all 7 pathways, `overall_score`, `top_gaps[]`, `decomposition_strategy`, `metadata` including surface flags and archetype justification) is present. |
 | HTML report | `{repo}-mod-report.html` | Single self-contained HTML file (no external asset fetches at render time). Renders a subset of the JSON. Tab order: **stats → tech stack → findings → roadmap → programs**. Visual contract defined inline below. |
 | Metadata sidecar | `{repo}-mod-report.metadata.json` | Tiny JSON file carrying version compatibility data. Read by downstream consumers before consuming the main JSON. |
 
 The JSON artifact is the canonical contract. If the three artifacts disagree on any field, JSON wins.
 
-#### Metadata Sidecar Fields (Req 15)
+#### Metadata Sidecar Fields
 
 The sidecar carries the minimum fields required for version compatibility checks:
 
@@ -2183,7 +2145,7 @@ The sidecar carries the minimum fields required for version compatibility checks
 
 These same fields are redundantly embedded at the root of the main JSON under `metadata` so that consumers which skip the sidecar still have direct access.
 
-#### HTML Visual Contract (Req 9 AC 6-7, Req 22, Req 23)
+#### HTML Visual Contract
 
 The per-repo MOD HTML artifact is a single self-contained HTML file. The tab order matches the webapp and the ARA HTML: **stats → tech stack → findings → roadmap → programs**.
 
@@ -2198,7 +2160,7 @@ The full visual contract is defined inline below — do NOT reference external f
 - Modernization Recommendation footer block (emoji-headlined with top-3 High-severity recommendations).
 - Footer line (`Generated by AWS Transform · Modernization Readiness Analysis Report v2.1`).
 
-**HTML-escaping discipline.** Every data value rendered in HTML originates from the JSON artifact (MD prose is NOT part of the HTML round-trip contract). All attacker-controlled strings MUST be HTML-escaped before embedding: repo names, evidence file paths, finding titles, finding descriptions, recommendation text, pathway names, and any other string that originates from repository content or from free-text fields in `additionalPlanContext`. Escape `<`, `>`, `&`, `"`, `'` at render time. This is the same escaping discipline applied to the ARA HTML artifact (Req 9 AC 9).
+**HTML-escaping discipline.** Every data value rendered in HTML originates from the JSON artifact (MD prose is NOT part of the HTML round-trip contract). All attacker-controlled strings MUST be HTML-escaped before embedding: repo names, evidence file paths, finding titles, finding descriptions, recommendation text, pathway names, and any other string that originates from repository content or from free-text fields in `additionalPlanContext`. Escape `<`, `>`, `&`, `"`, `'` at render time. This is the same escaping discipline applied to the ARA HTML artifact.
 
 #### Artifact Layout
 
@@ -2215,37 +2177,32 @@ The full visual contract is defined inline below — do NOT reference external f
 
 ---
 
-End of V6 Additions.
+## Error Handling
 
+The TD is explicit about failure modes — no defensive inference, no silent skips. Failures name the offending element (question_id, file path, field) so assessors can remediate.
 
----
-
-## V6 Error Handling (Req 3, 4, 8, 29)
-
-The V6 TD is explicit about failure modes — no defensive inference, no silent skips. Failures name the offending element (question_id, file path, field) so assessors can remediate.
-
-### Required-Field Failure (Req 4 AC 12)
+### Required-Field Failure
 
 IF any of the 12 required per-finding fields is absent from an emitted finding, THEN the assessment SHALL fail, naming:
 - The `question_id` of the offending finding
 - The specific missing field
 
-Example failure message: `"Assessment failed: finding for INF-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED (Req 4 AC 12)."`
+Example failure message: `"Assessment failed: finding for INF-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED."`
 
-### N/A / Not Evaluated Leak (Req 8)
+### N/A / Not Evaluated Leak
 
 IF a finding is emitted for a question whose resolution was N/A or Not Evaluated, THEN the assessment SHALL fail, naming the `question_id` and the resolution status that should have been recorded in `evaluations[]` instead.
 
-Example: `"Assessment failed: finding emitted for INF-Q2 but the question resolved to Not Evaluated (no persistent data store, has_persistent_data_store=false). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only (Req 8)."`
+Example: `"Assessment failed: finding emitted for INF-Q2 but the question resolved to Not Evaluated (no persistent data store, has_persistent_data_store=false). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only."`
 
-### MOD Archetype Calibration Without Justification (Req 3 AC 8)
+### MOD Archetype Calibration Without Justification
 
 IF a MOD finding carries `mod_metadata.archetype_calibrated: true` but the MD artifact does NOT contain prose explaining how the archetype shaped the score, THEN the assessment SHALL fail naming the `question_id`.
 
-### MOD V5/V6 Classification Divergence (Req 29 AC 3, 7)
+### MOD Classification Divergence
 
-IF the repo-level V5 overall_score band and V6 classification tier diverge under the Req 29 equivalence table, THEN the TD SHALL EITHER:
+IF the repo-level score-based band (derived from `overall_score`) and the count-based classification tier (derived from High / Medium counts) diverge under the equivalence table in the Classification section, THEN the TD SHALL EITHER:
 1. Correct the scoring by re-applying surface-gating and archetype-calibration rules to eliminate the divergence, OR
-2. Emit `classification.classification_consistency_check` as a structured `{status: "divergent", v5_band, v6_tier, reason}` object AND render a clearly-labeled warning block in the MD artifact naming the divergence, v5_band, v6_tier, and reason.
+2. Emit `classification.classification_consistency_check` as a structured `{status: "divergent", score_band, count_tier, reason}` object AND render a clearly-labeled warning block in the MD artifact naming the divergence, score_band, count_tier, and reason.
 
 Silent divergence is NOT acceptable — repo-level divergence is a release blocker unless explicitly documented.

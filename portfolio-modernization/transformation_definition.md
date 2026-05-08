@@ -23,7 +23,13 @@ The transformation follows a 10-step pipeline:
 9. **Pathway Aggregation**: Aggregate pathway triggers across the portfolio
 10. **Synthesis**: Integration opportunities, risk assessment, resource allocation, AWS programs, learning materials
 
-The output is a detailed Markdown report saved as `portfolio-mod-report.md` containing:
+The output is a **four-artifact bundle** (per the Three-Artifact Output Contract below) containing:
+- `{portfolio_name}-portfolio-mod-report.md` — narrative prose report
+- `{portfolio_name}-portfolio-mod-report.json` — canonical machine-readable contract
+- `{portfolio_name}-portfolio-mod-report.html` — single self-contained HTML visualization
+- `{portfolio_name}-portfolio-mod-report.metadata.json` — version compatibility sidecar
+
+The MD report contains:
 - Executive dashboard with portfolio score overview and category averages
 - Technology stack summary
 - Service dependency map with coupling scores, fan-in/fan-out, blast radius, circular dependencies
@@ -38,7 +44,7 @@ The output is a detailed Markdown report saved as `portfolio-mod-report.md` cont
 - Learning materials mapped to portfolio skill gaps
 - Service-by-service summary
 
-This portfolio TD focuses on cross-cutting modernization concerns, dependency-aware roadmaps, and pathway aggregation. It does not include ARA readiness profiles, agent scope evaluation, or Quick Agent Wins aggregation.
+This portfolio TD focuses on cross-cutting modernization concerns, dependency-aware roadmaps, and pathway aggregation. It does not include ARA readiness profiles or agent scope evaluation.
 
 ## Entry Criteria
 
@@ -1032,7 +1038,7 @@ Portfolio-level scores are included in the readiness snapshot but NOT in the por
 
 ## Report Template
 
-The portfolio MOD report is saved as `portfolio-mod-report.md`. The complete report structure is defined below.
+The portfolio MOD TD emits a **four-artifact bundle** per the Three-Artifact Output Contract: `{portfolio_name}-portfolio-mod-report.md` (narrative), `.json` (canonical), `.html` (self-contained), `.metadata.json` (sidecar). This section specifies the MD structure; the JSON and HTML render subsets of the same data per the contract.
 
 ---
 
@@ -1896,21 +1902,21 @@ Strictly follow these rules at all times:
 
 ---
 
-## V6 Additions
+## Output Contract
 
-V6 is strictly additive to the V5 Portfolio MOD TD. Every V5 section is preserved — Sequencing Principles, Phase 0 Cross-Cutting Foundation, Phase 1 Quick Wins, Phase 2 Foundation, Phase 3 Advanced, Total Portfolio Effort, per-service modernization plans with per-service Dependencies and Estimated Effort, Parallel Execution Tracks, Pathway Details subsections, Integration Opportunities, Risk Assessment (Portfolio Risk Register), Resource Allocation Recommendations, and Recommended Self-Paced Learning Materials all remain verbatim in MD. V6 layers a webapp-aligned JSON surface on top and promotes four execution-roadmap fields from MD-only to additive structured JSON per Open Decision 2.
+This section defines the portfolio MOD JSON contract, HTML visual contract, and error-handling behavior. The MD sections above remain the narrative artifact; the JSON is the canonical machine-readable contract consumed by the webapp; the HTML is a single self-contained visualization.
 
 ---
 
-### V6 Three-Artifact Output Contract (Portfolio MOD)
+### Three-Artifact Output Contract (Portfolio MOD)
 
 Every portfolio MOD assessment MUST emit THREE artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
 
 | Artifact | Filename | Purpose |
 |---|---|---|
-| Markdown report | `{portfolio-name}-portfolio-mod-report.md` | Richest-prose artifact. Contains every V5 section (Executive Dashboard, Technology Stack, Dependency Map, Cross-Cutting Concerns, Roadmap, Pathways, Integration Opportunities, Risk Assessment, Resource Allocation, AWS Programs, Learning Materials, Service-by-Service Summary). |
-| JSON report | `{portfolio-name}-portfolio-mod-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard. Every semantic field defined in the V6 Top-Level JSON Keys section below MUST be present. |
-| HTML report | `{portfolio-name}-portfolio-mod-report.html` | **Single self-contained HTML file** (no external asset fetches at render time). Renders a subset of the JSON per the V6 Portfolio MOD HTML Visual Contract below. MUST be emitted alongside the MD and JSON — it is NOT optional. |
+| Markdown report | `{portfolio-name}-portfolio-mod-report.md` | Narrative-prose artifact. Contains every section defined above (Executive Dashboard, Technology Stack, Dependency Map, Cross-Cutting Concerns, Roadmap, Pathways, Integration Opportunities, Risk Assessment, Resource Allocation, AWS Programs, Learning Materials, Service-by-Service Summary). |
+| JSON report | `{portfolio-name}-portfolio-mod-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard. Every semantic field defined in the Top-Level JSON Keys section below MUST be present. |
+| HTML report | `{portfolio-name}-portfolio-mod-report.html` | **Single self-contained HTML file** (no external asset fetches at render time). Renders a subset of the JSON per the Portfolio MOD HTML Visual Contract below. MUST be emitted alongside the MD and JSON — it is NOT optional. |
 | Metadata sidecar | `{portfolio-name}-portfolio-mod-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
 
 The JSON artifact is the canonical contract. If the three artifacts disagree on any field, JSON wins.
@@ -1929,7 +1935,7 @@ The JSON artifact is the canonical contract. If the three artifacts disagree on 
 
 ---
 
-### V6 Top-Level JSON Keys (Req 10)
+### Top-Level JSON Keys
 
 The Portfolio MOD JSON artifact MUST emit these top-level keys in the order shown:
 
@@ -1939,21 +1945,21 @@ The Portfolio MOD JSON artifact MUST emit these top-level keys in the order show
 | `metadata` | Version, assessment date, portfolio name, TD version, services_assessed, consumed_per_repo_json_files, preferences (optional) |
 | `summary` | 5 KPI counts: repositories_analyzed, total_findings, high_severity_findings, medium_severity_findings, low_severity_findings |
 | `filter_vocab` | Filter-eligible enums actually present in the run |
-| `executive_dashboard` | Portfolio score overview + `readiness_distribution_v5` + `classification_distribution_v6` (counts that agree per Req 29.4) + category_score_averages + repo_type_distribution |
-| `technology_stack_summary` | Preserved V5 section |
-| `repositories[]` | Per-repo roll-up (renamed from V5 `service_summary[]`) |
-| `findings[]` | Lightweight portfolio finding index (renamed from V5 `findings_index[]`) |
-| `remediation_roadmap` | See §"V6 Remediation Roadmap" — grouping `pathway` |
+| `executive_dashboard` | Portfolio score overview + `readiness_distribution_v5` + `classification_distribution_v6` (counts that agree) + category_score_averages + repo_type_distribution |
+| `technology_stack_summary` | Technology stack section |
+| `repositories[]` | Per-repo roll-up |
+| `findings[]` | Lightweight portfolio finding index. See "Portfolio `findings[]` entry shape" below. |
+| `remediation_roadmap` | See §"Remediation Roadmap" — grouping `pathway` |
 | `recommended_actions[]` | Canonical AWS programs (MAP, MMP, WAMP, EBA, OLA, VMP, ISV WMP) |
-| `pathways[]` | All 7 AWS Modernization Pathways with JSON-pointer back-references; see §"V6 Pathways Aggregation" |
-| `dependency_map` | Preserved V5 dependency map |
-| `roadmap_phases[]` | Optional, additive (Open Decision 2 promotion 1) |
-| `parallel_execution_tracks[]` | Optional, additive (Open Decision 2 promotion 3) |
-| `portfolio_risk_register[]` | Optional, additive (Open Decision 2 promotion 4) |
+| `pathways[]` | All 7 AWS Modernization Pathways with JSON-pointer back-references; see §"Pathways Aggregation" |
+| `dependency_map` | Portfolio dependency map |
+| `roadmap_phases[]` | Optional, additive |
+| `parallel_execution_tracks[]` | Optional, additive |
+| `portfolio_risk_register[]` | Optional, additive |
 
-Canonical shape is fully defined by the V6 Top-Level JSON Keys table above. All required keys, types, and nesting are specified inline in this TD.
+Canonical shape is fully defined by the Top-Level JSON Keys table above. All required keys, types, and nesting are specified inline in this TD.
 
-#### `filter_vocab` (Req 10.9)
+#### `filter_vocab`
 
 ```json
 {
@@ -1966,15 +1972,15 @@ Canonical shape is fully defined by the V6 Top-Level JSON Keys table above. All 
 }
 ```
 
-Display names only for categories (Req 7A AC 6).
+Display names only for categories.
 
-#### `executive_dashboard` V5/V6 dual-distribution (Req 29)
+#### `executive_dashboard` dual-distribution
 
-`executive_dashboard` MUST carry both `readiness_distribution_v5` (V5 numeric-score bands) and `classification_distribution_v6` (V6 tier counts). The two must agree under the canonical Req 29 AC 1 equivalence table:
-- V5 Mature (≥3.5) ≡ V6 Cloud-Native Ready
-- V5 Partial (2.5–3.4) ≡ V6 Pilot-Ready
-- V5 Needs Work (1.5–2.4) ≡ V6 Remediation Required
-- V5 Not Ready (<1.5) ≡ V6 Not Ready
+`executive_dashboard` MUST carry both `readiness_distribution_v5` (numeric-score bands) and `classification_distribution_v6` (tier counts). The two must agree under the canonical equivalence table:
+- Mature (≥3.5) ≡ Cloud-Native Ready
+- Partial (2.5–3.4) ≡ Pilot-Ready
+- Needs Work (1.5–2.4) ≡ Remediation Required
+- Not Ready (<1.5) ≡ Not Ready
 
 ```json
 "executive_dashboard": {
@@ -1986,22 +1992,47 @@ Display names only for categories (Req 7A AC 6).
 }
 ```
 
-#### `repositories[]` (Req 10.11, Req 29.4, Req 30.2)
+#### `repositories[]`
 
 Each entry carries:
 - `repo_name`
-- `overall_score` (V5 numeric 1.00-4.00, preserved)
-- `classification.tier` (V6) + `classification.classification_consistency_check` ("consistent" OR a structured `{status: "divergent", v5_band, v6_tier, reason}` object per Req 29.4)
-- `category_scores[]` — each entry with `numeric_score` + `score_rating` + `severity_status` (Req 7)
-- `surface_flags`, `repo_type`, `service_archetype`, `repository_priority` (preserved V5 fields)
+- `overall_score` (numeric 1.00-4.00)
+- `classification.tier` + `classification.classification_consistency_check` ("consistent" OR a structured `{status: "divergent", v5_band, v6_tier, reason}` object)
+- `category_scores[]` — each entry with `numeric_score` + `score_rating` + `severity_status`
+- `surface_flags`, `repo_type`, `service_archetype`, `repository_priority`
 - `per_repo_md_path`, `per_repo_json_path`, `per_repo_html_path`
-- `pathways_triggered[]` — OBJECT list (not bare IDs) where each entry carries `{id, priority, effort, triggering_questions[]}` with inlined `(question_id, score, note, evidence)` per Req 30 AC 2.
+- `pathways_triggered[]` — OBJECT list (not bare IDs) where each entry carries `{id, priority, effort, triggering_questions[]}` with inlined `(question_id, score, note, evidence)`.
 
-V5→V6 key renames: `service_summary[]` → `repositories[]`, `findings_index[]` → `findings[]`. All V5 per-entry fields preserved; V6 adds `category_scores[].severity_status` and the `pathways_triggered[]` object shape.
+#### Portfolio `findings[]` entry shape
+
+Each entry is a **lightweight per-repo finding reference** (not a full copy). Rationale: the webapp Findings tab only needs enough to render a sortable, filterable table; full prose (`description`, `gap`, `recommendation`) is available in the per-repo JSON via click-through. Keeping the portfolio JSON lightweight prevents it from growing quadratically with portfolio size.
+
+Each entry carries these 11 fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | MOD rubric question identifier (e.g., `"INF-Q1"`). |
+| `repo_name` | string | Source repository name (matches `repositories[].repo_name`). |
+| `category` | string | Webapp-facing category display name (e.g., `"Infrastructure & DevOps"`). |
+| `category_id` | string | Rubric short code (e.g., `"INF"`). |
+| `title` | string | Short finding title from the per-repo report. |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity. |
+| `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority (static). |
+| `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
+| `phase` | integer | `1`–`4` — derived roadmap phase. |
+| `evidence` | object or null | `{file, lines}` reference or `null`. |
+| `mod_metadata` | object | `{internal_score, score_label, archetype_calibrated, core_question}` — per-finding metadata. |
+
+**Fields NOT present in the portfolio `findings[]` entry** (by design — available via per-repo JSON click-through):
+- `description`, `gap`, `recommendation` — these are full-prose fields in the per-repo MOD JSON. The portfolio aggregates but does not duplicate them. The webapp Findings tab uses `title` + severity + priority + evidence for its row summary, and links to the per-repo JSON for full detail.
+
+Findings are sourced by reading each consumed per-repo MOD JSON's `findings[]` and projecting the 11 fields above plus `repo_name`. Ordering: severity descending (High → Medium → Low), then repo_name, then category display order (INF → APP → DATA → SEC → OPS).
+
+Findings are NEVER emitted for questions that resolve to passing (score 4), N/A, Not Evaluated (archetype-N/A), or Not Evaluated (surface-gated) at the per-repo level — the portfolio `findings[]` array only contains rows for which the source per-repo MOD JSON emitted a finding.
 
 ---
 
-### V6 Pathways Aggregation (Req 13, 30)
+### Pathways Aggregation
 
 `pathways[]` aggregates per-repo pathway information across all consumed repos. Every entry carries:
 
@@ -2034,17 +2065,17 @@ V5→V6 key renames: `service_summary[]` → `repositories[]`, `findings_index[]
 }
 ```
 
-#### JSON-pointer back-reference (Req 13 AC 9, Req 30 AC 7)
+#### JSON-pointer back-reference
 
-`contributing_repos[].per_repo_pathway_source` MUST be a JSON-pointer fragment (RFC 6901) of the form `/pathways/{index}` where `{index}` names the exact position in the per-repo MOD JSON's `pathways[]` array. ALTERNATIVELY, a URI reference form ending in `#/pathways/{index}` is accepted. The portfolio TD MUST NOT emit a best-effort match by name or id — the JSON-pointer is authoritative. Unresolvable pointers fail the assessment (see error-handling TD task 13).
+`contributing_repos[].per_repo_pathway_source` MUST be a JSON-pointer fragment (RFC 6901) of the form `/pathways/{index}` where `{index}` names the exact position in the per-repo MOD JSON's `pathways[]` array. ALTERNATIVELY, a URI reference form ending in `#/pathways/{index}` is accepted. The portfolio TD MUST NOT emit a best-effort match by name or id — the JSON-pointer is authoritative. Unresolvable pointers fail the assessment (see error-handling section below).
 
-#### Inlined evidence (Req 30 AC 3)
+#### Inlined evidence
 
 `triggering_questions[].evidence` is INLINED on the portfolio entry (copied from per-repo `findings[].evidence` for the triggering question id) so the webapp can render pathway evidence in the Pathways tab without a second per-repo JSON fetch.
 
 ---
 
-### V6 Remediation Roadmap (Req 13.11-13.12, 14)
+### Remediation Roadmap
 
 The Portfolio MOD JSON emits `remediation_roadmap` with `grouping: "pathway"`:
 
@@ -2067,15 +2098,15 @@ The Portfolio MOD JSON emits `remediation_roadmap` with `grouping: "pathway"`:
 }
 ```
 
-`items[]` is a ONE-TO-ONE summary projection of `pathways[]` entries with `portfolio_status == "Triggered"`, sorted descending by `triggered_in_repos_count` (Req 13 AC 11-12). Consumers needing per-repo evidence dereference through `pathways[].contributing_repos[]`.
+`items[]` is a ONE-TO-ONE summary projection of `pathways[]` entries with `portfolio_status == "Triggered"`, sorted descending by `triggered_in_repos_count`. Consumers needing per-repo evidence dereference through `pathways[].contributing_repos[]`.
 
 MD rendering under an H2 heading **"## Remediation Roadmap"** matching the webapp tab label.
 
 ---
 
-### V6 Recommended Actions (Req 14A)
+### Recommended Actions
 
-The Portfolio MOD JSON emits `recommended_actions[]` with minimum-set coverage per Req 14A AC 5:
+The Portfolio MOD JSON emits `recommended_actions[]` with minimum-set coverage:
 
 | `id` | `name` | `acronym` | `type` |
 |---|---|---|---|
@@ -2087,13 +2118,13 @@ The Portfolio MOD JSON emits `recommended_actions[]` with minimum-set coverage p
 | `vmp` | VMware Migration Program | VMP | program |
 | `isv-wmp` | ISV Workload Migration Program | ISV WMP | program |
 
-Same entry envelope as Portfolio ARA. `status ∈ {Triggered, Applicable, Not Triggered}` with non-empty `trigger_reason`. Replaces V5 "AWS Programs & Engagement Recommendations" heading — preserved MD prose is retained verbatim beneath the V6 H2 **"## Recommended Actions"**.
+Same entry envelope as Portfolio ARA. `status ∈ {Triggered, Applicable, Not Triggered}` with non-empty `trigger_reason`. Emitted under the H2 heading **"## Recommended Actions"**.
 
 ---
 
-### V6 MD-Retained Execution-Roadmap Content (Req 31)
+### MD-Retained Execution-Roadmap Content
 
-The Portfolio MOD MD artifact MUST retain the following V5 sections VERBATIM:
+The Portfolio MOD MD artifact contains the following sections:
 
 - Sequencing Principles (numbered list)
 - Phase 0 Cross-Cutting Foundation
@@ -2109,34 +2140,34 @@ The Portfolio MOD MD artifact MUST retain the following V5 sections VERBATIM:
 - Resource Allocation Recommendations
 - Recommended Self-Paced Learning Materials
 
-V6 cross-references JSON `remediation_roadmap.items[]` as the summary projection of these MD sections.
+The JSON `remediation_roadmap.items[]` is a summary projection of these MD sections.
 
-#### Open Decision 2 additive JSON fields
+#### Additive structured JSON fields
 
-V6 promotes four MD-only fields to additive structured JSON (MD content unchanged):
+Four execution-roadmap fields are also emitted as additive structured JSON alongside the MD content:
 
-1. **Top-level `roadmap_phases[]`** (Req 31.1, 31.2, 31.11):
+1. **Top-level `roadmap_phases[]`**:
    ```json
    [{ "phase": 0, "name": "Cross-Cutting Foundation", "calendar_window": "Months 0-3", "objective": "…", "estimated_effort": "Medium" }]
    ```
 
-2. **`pathways[].roadmap_phase_alignment`** (Req 31.5, 31.11): optional string per pathway (e.g., `"Phase 2-3"`) aligning the pathway with the roadmap phases.
+2. **`pathways[].roadmap_phase_alignment`**: optional string per pathway (e.g., `"Phase 2-3"`) aligning the pathway with the roadmap phases.
 
-3. **Top-level `parallel_execution_tracks[]`** (Req 31.4, 31.11):
+3. **Top-level `parallel_execution_tracks[]`**:
    ```json
    [{ "track_name": "Database Track", "pathways": ["move-to-managed-databases"], "repos_count": 14, "can_run_in_parallel": true, "dependencies": [] }]
    ```
 
-4. **Top-level `portfolio_risk_register[]`** (Req 31.6, 31.11):
+4. **Top-level `portfolio_risk_register[]`**:
    ```json
    [{ "risk": "Lift-and-shift stalls modernization ROI", "likelihood": "Medium", "impact": "High", "priority": "P1", "mitigation": "Pair lift-and-shift with Move to Containers milestones", "phase": 2 }]
    ```
 
-MD ordering and content of these sections is UNCHANGED. The additive JSON fields are optional and exist so consumers can reason about the roadmap structurally without parsing MD.
+These additive JSON fields are optional and exist so consumers can reason about the roadmap structurally without parsing MD.
 
 ---
 
-### V6 Portfolio MOD HTML Visual Contract (Req 10, 22, 23, 28)
+### Portfolio MOD HTML Visual Contract
 
 The portfolio MOD HTML artifact is a single self-contained file rendering a subset of the portfolio JSON. The full visual contract is inlined below — do NOT reference external files.
 
@@ -2246,28 +2277,23 @@ Renders `pathways[]` with:
 
 ---
 
-End of V6 Additions.
+## Error Handling
 
+The portfolio TD consumes ONLY per-repo JSON. Failure modes are explicit, loud, and actionable.
 
----
-
-## V6 Error Handling (Req 11, 13)
-
-The V6 portfolio TD consumes ONLY per-repo JSON (Req 11 AC 1-2). Failure modes are explicit, loud, and actionable.
-
-### Missing Per-Repo JSON (Req 11 AC 5)
+### Missing Per-Repo JSON
 
 IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
 
-Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-assessment/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-assessment/wat--wub-ara-report.json (Req 11 AC 5)."`
+Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-assessment/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-assessment/wat--wub-ara-report.json."`
 
-### Version Mismatch (Req 11 AC 6)
+### Version Mismatch
 
-IF any consumed per-repo JSON's `metadata.report_format_version` is not `"V6"`, THEN the portfolio assessment SHALL fail naming:
+IF any consumed per-repo JSON's `metadata.report_format_version` does not match the `report_format_version` value declared in this TD's metadata sidecar fields, THEN the portfolio assessment SHALL fail naming:
 - The offending file path
 - The unexpected `report_format_version` value
 
-Example: `"Portfolio assessment failed: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json has metadata.report_format_version='V5' but V6 is required (Req 11 AC 6)."`
+Example: `"Portfolio assessment failed: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json has metadata.report_format_version='unsupported-version' which does not match the current report_format_version required by this TD."`
 
 ### Dangling Cross-Reference
 
@@ -2275,12 +2301,12 @@ IF a `question_id` or `repo_name` referenced in portfolio JSON does not resolve 
 
 Example: `"Portfolio assessment failed: findings[3].question_id='AUTH-Q9' does not match any rubric question in consumed ARA per-repo JSONs."`
 
-### Unresolvable JSON-Pointer (Req 13 AC 9)
+### Unresolvable JSON-Pointer
 
 IF a `pathways[].contributing_repos[].per_repo_pathway_source` JSON-pointer does NOT resolve to a valid index in the target per-repo MOD JSON's `pathways[]` array, THEN the portfolio assessment SHALL fail naming the pointer and the source file.
 
-Example: `"Portfolio MOD assessment failed: pathways[1].contributing_repos[2].per_repo_pathway_source='/pathways/9' exceeds the per-repo pathways[] cardinality (7) in services/Lidarr--Lidarr/modernization-assessment/Lidarr--Lidarr-mod-report.json (Req 13 AC 9)."`
+Example: `"Portfolio MOD assessment failed: pathways[1].contributing_repos[2].per_repo_pathway_source='/pathways/9' exceeds the per-repo pathways[] cardinality (7) in services/Lidarr--Lidarr/modernization-assessment/Lidarr--Lidarr-mod-report.json."`
 
 ### No Silent Fallback
 
-The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. V6 consumes JSON-only (Req 11 AC 1).
+The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. The portfolio TD consumes JSON-only.

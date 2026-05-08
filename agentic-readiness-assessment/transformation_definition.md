@@ -92,15 +92,15 @@ Each question is scored using a severity model:
 
 Five questions are **conditional BLOCKERs** (⚡) — their severity depends on context (typically `agent_scope` write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, and DATA-Q2. DATA-Q1 additionally uses a tiered sub-check model (see its section for B1/B2/B3 evaluation).
 
-### V6 Additions: Unified Severity and Category Display Names
+### Unified Severity and Category Display Names
 
-The content in this sub-section is layered on top of the V5 severity model above; it does not replace or renumber any V5 rule. Every V5 narrative, count, and classification rule stands as-is. V6 introduces a unified severity vocabulary and canonical category display names so that a single webapp and portfolio aggregator can consume ARA and MOD findings side-by-side.
+A unified severity vocabulary and canonical category display names are emitted on every finding so that a single webapp and portfolio aggregator can consume ARA and MOD findings side-by-side.
 
-#### V6 Unified Severity Mapping
+#### Unified Severity Mapping
 
-Per the V6 standardization (Req 1), every V6 finding carries a unified severity tag alongside its native ARA severity:
+Every finding carries a unified severity tag alongside its native ARA severity:
 
-| Native ARA Severity | Unified V6 Severity | `ara_metadata.safety_impact` |
+| Native ARA Severity | Unified Severity | `ara_metadata.safety_impact` |
 |---|---|---|
 | BLOCKER (unconditional) | High | true if agent-safety hazard, else false |
 | BLOCKER (conditional, resolved as BLOCKER) | High | per conditional-resolution reasoning |
@@ -110,13 +110,13 @@ Per the V6 standardization (Req 1), every V6 finding carries a unified severity 
 | Passing question | (no finding) | n/a |
 | N/A / Not Evaluated | (no finding, recorded in `evaluations[]`) | n/a |
 
-The unified severity is emitted as the top-level `severity` field on each finding. The V5 native severity is preserved in `ara_metadata.native_severity`.
+The unified severity is emitted as the top-level `severity` field on each finding. The native ARA severity is preserved in `ara_metadata.native_severity`.
 
-#### V6 Category Display Names
+#### Category Display Names
 
-Every V6 finding carries both a short `category_id` code (the V5 rubric section identifier, used as question_id prefix) and a webapp-facing `category` display name. The canonical mapping (Req 7A):
+Every finding carries both a short `category_id` code (the rubric section identifier, used as question_id prefix) and a webapp-facing `category` display name. The canonical mapping:
 
-| `category_id` (V5 short code) | `category` (V6 display name) |
+| `category_id` (short code) | `category` (display name) |
 |---|---|
 | `API` | API Surface |
 | `AUTH` | Authentication & Authorization |
@@ -127,9 +127,9 @@ Every V6 finding carries both a short `category_id` code (the V5 rubric section 
 | `OBS` | Observability |
 | `ENG` | Engineering Maturity |
 
-Both `category_id` and `category` are REQUIRED fields on every V6 finding. Consumers (webapp filter chips, portfolio aggregation) use the display name directly.
+Both `category_id` and `category` are REQUIRED fields on every finding. Consumers (webapp filter chips, portfolio aggregation) use the display name directly.
 
-#### DATA-Q* Namespace Collision (Req 17)
+#### DATA-Q* Namespace Collision
 
 The short code `DATA` is shared between ARA and the Modernization assessment (MOD). ARA `DATA-Q1`..`DATA-Q7` and MOD `DATA-Q1`..`DATA-Q4` are DIFFERENT questions and MUST NOT be conflated. The unique join key across assessment types is `(assessment_type, question_id)`, never `question_id` alone. ARA `DATA` disambiguates to display name "Data Accessibility"; MOD `DATA` disambiguates to "Data Platform".
 
@@ -197,7 +197,13 @@ Beyond `repo_type` (which determines N/A questions for non-application repos), t
 
 If the archetype cannot be determined with confidence, default to `stateful-crud` (the most conservative — triggers the most extended questions).
 
-The output is a structured Markdown report saved as `{repo-name}-ara-report.md` containing:
+The output is a **four-artifact bundle** (per the Three-Artifact Output Contract below) containing:
+- `{repo-name}-ara-report.md` — richest narrative
+- `{repo-name}-ara-report.json` — canonical machine-readable contract
+- `{repo-name}-ara-report.html` — single self-contained HTML visualization
+- `{repo-name}-ara-report.metadata.json` — version compatibility sidecar
+
+The MD report contains:
 - Metadata header (repo name, date, repo_type, agent_scope)
 - Readiness profile (Agent-Ready, Pilot-Ready, Pilot-Ready (Safety Concerns), Remediation Required, or Not Agent-Integrable)
 - BLOCKER/RISK-SAFETY/RISK-QUALITY/INFO summary counts (excluding N/A questions)
@@ -1486,7 +1492,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ## Report Template
 
-After evaluating all 43 questions across Steps 2–9, compile the findings into a structured Markdown report. Save the report as `{repo-name}-ara-report.md` in the repository's output directory.
+After evaluating all 43 questions across Steps 2–9, compile the findings into the **four-artifact bundle** defined in the Three-Artifact Output Contract below: `{repo-name}-ara-report.md` (narrative), `{repo-name}-ara-report.json` (canonical JSON), `{repo-name}-ara-report.html` (self-contained HTML), and `{repo-name}-ara-report.metadata.json` (version sidecar). This section specifies the MD structure; the JSON and HTML render subsets of the same data per the contract.
 
 Create the report file with exactly this structure. Every section is required. All 43 questions must appear in the detailed findings — N/A questions are listed using the N/A display format, not omitted.
 
@@ -1867,7 +1873,7 @@ The complete report structure, for reference:
 
 Strictly follow these rules at all times:
 
-- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure in the repository. Only create the output report file.
+- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
 - **Be specific — cite evidence**: Always reference actual file names, resource names, and patterns found. Never write "there may be..." — state what was found or what was not found.
 - **Absence is evidence**: If a search for a specific artifact finds nothing (e.g., no OpenAPI spec, no IaC files, no audit logging configuration), that absence is itself a finding. State it clearly and score accordingly.
 - **Read before judging**: Do not score a question without actually reading relevant files. If relevant files have not been found yet, keep searching.
@@ -1882,54 +1888,54 @@ Strictly follow these rules at all times:
 - **Report completeness**: The output report must contain all required sections: metadata header (including service archetype), readiness profile, summary counts (including extended question counts), BLOCKERs with remediation, RISKs with compensating controls, INFOs, detailed findings for all 43 questions, and evidence index.
 
 
-## V6 Unified Per-Finding Field Set and `ara_metadata` Subobject
+## Unified Per-Finding Field Set and `ara_metadata` Subobject
 
-This section is strictly additive to the V5 ARA contract. Every V5 narrative, table, N/A mapping, and report template above remains authoritative. V6 layers a unified per-finding field set and a required `ara_metadata` subobject on top of V5 findings so that ARA JSON can be consumed side-by-side with MOD JSON by a single webapp and portfolio aggregator.
+Every ARA finding carries a unified per-finding field set plus a required `ara_metadata` subobject so that ARA JSON can be consumed side-by-side with MOD JSON by a single webapp and portfolio aggregator.
 
-### V6 Per-Finding Required Fields (Req 4)
+### Per-Finding Required Fields
 
-Every V6 ARA finding MUST carry these 12 fields:
+Every ARA finding MUST carry these 12 fields:
 
 | Field | Type | Description |
 |---|---|---|
 | `question_id` | string | Rubric question identifier (e.g., `"AUTH-Q1"`). |
-| `category` | string | Webapp-facing category display name per Req 7A (e.g., `"Authentication & Authorization"`). |
+| `category` | string | Webapp-facing category display name (e.g., `"Authentication & Authorization"`). |
 | `category_id` | string | Rubric short code (e.g., `"AUTH"`). |
 | `title` | string | Short finding title. |
 | `description` | string | Finding description. |
 | `gap` | string | What's missing or incorrect. |
 | `recommendation` | string | Remediation recommendation. |
-| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified V6 severity. |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity. |
 | `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority. See table below. |
 | `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
 | `phase` | integer | `1`–`4` — derived roadmap phase. |
 | `evidence` | object or null | `{file, lines}` reference to the gap location, or `null` when not applicable. |
 
-All 12 fields are REQUIRED on every emitted finding — missing any one fails the assessment and names the offending `question_id` (Req 4 AC 12). Findings are never emitted for questions that resolve to pass, N/A, Not Evaluated (extended), or any other non-finding outcome; those questions appear only under `evaluations[]` (Req 8).
+All 12 fields are REQUIRED on every emitted finding — missing any one fails the assessment and names the offending `question_id`. Findings are never emitted for questions that resolve to pass, N/A, Not Evaluated (extended), or any other non-finding outcome; those questions appear only under `evaluations[]`.
 
-### V6 ARA Metadata Subobject (`ara_metadata`)
+### ARA Metadata Subobject (`ara_metadata`)
 
-Every V6 ARA finding MUST carry a populated `ara_metadata` subobject that preserves the V5 rubric depth and the conditional-resolution reasoning produced in Steps 2–9. The subobject is emitted as a sibling field to the 12 required fields above.
+Every ARA finding MUST carry a populated `ara_metadata` subobject that preserves the rubric depth and the conditional-resolution reasoning produced in Steps 2–9. The subobject is emitted as a sibling field to the 12 required fields above.
 
 | Field | Type | Presence | Description |
 |---|---|---|---|
-| `native_severity` | enum | always | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — the V5 native ARA severity. |
+| `native_severity` | enum | always | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — the native ARA severity. |
 | `safety_impact` | boolean | always | `true` for RISK-SAFETY findings and BLOCKERs that are agent-safety hazards; `false` for RISK-QUALITY and INFO. |
 | `conditional_resolution` | string | conditional BLOCKERs only | Prose reasoning that resolved the conditional severity for this repo. |
 | `agent_scope` | enum | conditional BLOCKERs only | `"read-only"` / `"write-enabled"` — the scope value that drove the resolution. |
 | `resolution_reasoning` | string | conditional BLOCKERs only | Prose explaining why the finding was gated under this scope. |
-| `remediation_timeline` | string | optional (RISK findings) | e.g., `"60–90 days"`. V5-preserved. |
-| `compensating_controls` | string[] | optional | V5-preserved compensating-controls list. |
-| `blocker_remediation` | object | optional (BLOCKER findings) | `{immediate, target_state, estimated_effort, dependencies[]}`. V5-preserved. |
-| `data_q1_subchecks` | object | only when `question_id == "DATA-Q1"` | B1/B2/B3 sub-check reasoning. V5-preserved. |
+| `remediation_timeline` | string | optional (RISK findings) | e.g., `"60–90 days"`. |
+| `compensating_controls` | string[] | optional | Compensating-controls list. |
+| `blocker_remediation` | object | optional (BLOCKER findings) | `{immediate, target_state, estimated_effort, dependencies[]}`. |
+| `data_q1_subchecks` | object | only when `question_id == "DATA-Q1"` | B1/B2/B3 sub-check reasoning. |
 
 The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) MUST carry the `conditional_resolution`, `agent_scope`, and `resolution_reasoning` trio. DATA-Q1 additionally carries `data_q1_subchecks` with `{b1, b2, b3}`, each having `{fired, severity, reasoning}`. The overall DATA-Q1 `severity` is the unified mapping of the highest sub-check that fires.
 
-`ara_metadata` preserves V5 detail — it does not replace any V5 prose. The classification tier and count rules in the V5 Summary and Report Template sections remain authoritative and unchanged. `native_severity` is the join key back to V5 BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO counts.
+`ara_metadata` preserves rubric detail. The classification tier and count rules in the Summary and Report Template sections remain authoritative. `native_severity` is the join key back to BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO counts.
 
-### V6 Per-Question Priority Table (Req 18, design §Open Decision 1)
+### Per-Question Priority Table
 
-The `priority` field on every finding is STATIC per rubric question — it does not depend on per-repo context (Req 18 AC 6). Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`. Per design §Open Decision 1, priority is derived mechanically from the V5 native tier:
+The `priority` field on every finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`. Priority is derived mechanically from the native tier:
 
 | ARA native severity tier | Default per-question priority |
 |---|---|
@@ -1968,15 +1974,15 @@ Concrete per-question assignments for all 43 ARA questions:
 
 The conditional BLOCKERs are distributed across P0 and P1 in the table above (DATA-Q1 and STATE-Q1 at P0; API-Q4, AUTH-Q6, DATA-Q2 at P1). Per-finding `priority` is static per `question_id` — the ARA native tier still drives classification counts through `ara_metadata.native_severity`; `priority` is a separate, static-per-question field that does not change with `agent_scope` or per-repo resolution.
 
-The default `phase` assignment derives mechanically from `priority` (Req 19): P0 → Phase 1, P1 → Phase 1, P2 → Phase 2 or 3, P3 → Phase 3 or 4. Per-repo ARA MAY pin a specific phase within the allowed band based on remediation dependencies; portfolio TDs MAY further adjust `phase` based on cross-cutting dependencies across the portfolio. The `priority` value itself does not change per-repo or per-portfolio.
+The default `phase` assignment derives mechanically from `priority`: P0 → Phase 1, P1 → Phase 1, P2 → Phase 2 or 3, P3 → Phase 3 or 4. Per-repo ARA MAY pin a specific phase within the allowed band based on remediation dependencies; portfolio TDs MAY further adjust `phase` based on cross-cutting dependencies across the portfolio. The `priority` value itself does not change per-repo or per-portfolio.
 
-## V6 Classification Rules (Req 5)
+## Classification Rules
 
-The V6 per-repo ARA classification is a named roll-up of the V5 Readiness Profile (Summary section, "Readiness Profile Determination" in the Report Template). The classification uses the V5 `blocker_count` and `risk_safety_count` derived from the V5 severity counts — it does NOT use `medium_count`. This guarantees that the V5 Readiness Profile and the V6 tier always agree on the same repo (per design decision D1: V5 wins on classification).
+The per-repo ARA classification is a named roll-up of the Readiness Profile (Summary section, "Readiness Profile Determination" in the Report Template). The classification uses `blocker_count` and `risk_safety_count` derived from the severity counts — it does NOT use `medium_count`. This guarantees that the Readiness Profile and the classification tier always agree on the same repo.
 
 ### Classification Table
 
-| `blocker_count` | `risk_safety_count` | Tier | Sub-qualifier | V5 Readiness Profile | `rule_matched` |
+| `blocker_count` | `risk_safety_count` | Tier | Sub-qualifier | Readiness Profile | `rule_matched` |
 |---|---|---|---|---|---|
 | 0 | 0 | Agent-Ready | none | Agent-Ready | "0 BLOCKER, 0 RISK-SAFETY → Agent-Ready" |
 | 0 | 1 or 2 | Pilot-Ready | none | Pilot-Ready | "0 BLOCKER, 1-2 RISK-SAFETY → Pilot-Ready" |
@@ -2003,41 +2009,41 @@ The classification object emitted in JSON:
 }
 ```
 
-The `high_count`, `medium_count`, and `low_count` fields represent the unified V6 severity counts (BLOCKER→High, RISK-SAFETY+RISK-QUALITY→Medium, INFO→Low when emitted). They are informational — they feed the webapp filter chips — but do NOT drive classification. Only `blocker_count` and `risk_safety_count` do.
+The `high_count`, `medium_count`, and `low_count` fields represent the unified severity counts (BLOCKER→High, RISK-SAFETY+RISK-QUALITY→Medium, INFO→Low when emitted). They are informational — they feed the webapp filter chips — but do NOT drive classification. Only `blocker_count` and `risk_safety_count` do.
 
-### MD-Rendered Classification Rationale (Req 16)
+### MD-Rendered Classification Rationale
 
 The per-repo ARA MD artifact MUST render a classification rationale paragraph immediately after the classification tier is first stated. The paragraph:
 1. States the specific counts that drove the tier (e.g., "This repo has 0 High findings, 8 Medium findings, and 5 of the Mediums are safety-impact").
 2. Names the matched rule ("≥3 safety-impact Medium findings under 0 High → Pilot-Ready (Safety Concerns)").
-3. Contrasts the V6 classification with the V5 Readiness Profile (no change to counts — V6 is a named roll-up of V5 severity counts).
+3. States the classification tier alongside the Readiness Profile (they are a named roll-up of the same severity counts).
 
-### Conditional BLOCKER Preservation (Req 20.5)
+### Conditional BLOCKER Preservation
 
-The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) retain V5 conditional-severity resolution unchanged. V6 adds the `ara_metadata.conditional_resolution`, `ara_metadata.agent_scope`, and `ara_metadata.resolution_reasoning` fields to surface the V5 reasoning in JSON. The fields carry:
+The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) use conditional-severity resolution. The `ara_metadata.conditional_resolution`, `ara_metadata.agent_scope`, and `ara_metadata.resolution_reasoning` fields surface the reasoning in JSON:
 
 - `conditional_resolution`: Free-text prose that describes which native severity was assigned (e.g., "Resolved to BLOCKER: agent_scope=write-enabled AND no transaction scope").
 - `agent_scope`: The `read-only` or `write-enabled` value that drove the resolution (sourced from `additionalPlanContext.agent_scope`).
 - `resolution_reasoning`: Free-text prose explaining WHY the resolution was applied to this repo (e.g., "DATA-Q1 B1 fired because agent-facing APIs return credentials unmasked in HostConfigResource.cs").
 
-V6 does NOT alter any V5 conditional-severity rule. The conditional-BLOCKER resolution logic (Step 2 through Step 9 of the V5 assessment process) is preserved verbatim. V6 just adds a structured JSON surface for the V5 reasoning.
+The conditional-BLOCKER resolution logic is defined in Steps 2–9 of the assessment process; the JSON fields above surface that reasoning in a structured form.
 
-## V6 Three-Artifact Output Contract (Req 9, 15, 22, 23)
+## Three-Artifact Output Contract
 
-Per V6 Requirement 9, every per-repo ARA assessment emits THREE artifacts plus a metadata sidecar:
+Every per-repo ARA assessment emits THREE artifacts plus a metadata sidecar:
 
 ### Artifacts
 
 | Artifact | Filename | Purpose |
 |---|---|---|
-| Markdown report | `{repo}-ara-report.md` | Richest-prose artifact. Preserves every V5 narrative (rubric quotes, compensating-control discussion, BLOCKER Remediation blocks, Archetype Justification, etc.). |
+| Markdown report | `{repo}-ara-report.md` | Richest-prose artifact. Carries every rubric narrative (rubric quotes, compensating-control discussion, BLOCKER Remediation blocks, Archetype Justification, etc.). |
 | JSON report | `{repo}-ara-report.json` | **Canonical machine-readable contract.** Consumed by webapp and portfolio TD. Every semantic field (findings, classification, categories, metadata, surface flags) is present. |
 | HTML report | `{repo}-ara-report.html` | Single self-contained HTML file. Renders a subset of JSON. Tab order: stats → tech stack → findings → roadmap → programs. Visual contract defined inline below. |
 | Metadata sidecar | `{repo}-ara-report.metadata.json` | Tiny JSON file carrying version compatibility data. Read by downstream consumers before consuming the main JSON. |
 
 The JSON artifact is the canonical contract. If the three artifacts disagree on any field, JSON wins.
 
-### Metadata Sidecar Fields (Req 15)
+### Metadata Sidecar Fields
 
 The sidecar carries minimum fields for version compatibility checks:
 
@@ -2053,11 +2059,11 @@ The sidecar carries minimum fields for version compatibility checks:
 
 These same fields are redundantly embedded at the root of the main JSON under `metadata` (so consumers that skip the sidecar still have access).
 
-### HTML Visual Contract (Req 22, 23)
+### HTML Visual Contract
 
 The per-repo ARA HTML artifact is a single self-contained HTML file (no external asset fetches at render time). The tab order matches the webapp: **stats → tech stack → findings → roadmap → programs**.
 
-The full visual contract is defined inline below — do NOT reference external files. Every field rendered in HTML originates from the JSON artifact; MD prose is NOT part of the HTML round-trip contract. All attacker-controlled strings (repo names, evidence file paths, finding titles, descriptions, pathway names) MUST be HTML-escaped before embedding (Req 9 AC 9).
+The full visual contract is defined inline below — do NOT reference external files. Every field rendered in HTML originates from the JSON artifact; MD prose is NOT part of the HTML round-trip contract. All attacker-controlled strings (repo names, evidence file paths, finding titles, descriptions, pathway names) MUST be HTML-escaped before embedding.
 
 #### HTML Structure and Layout
 
@@ -2189,20 +2195,20 @@ Focus on the High severity findings above.
 
 ---
 
-## V6 Error Handling (Req 3, 4, 8, 29)
+## Error Handling
 
-The V6 TD is explicit about failure modes — no defensive inference, no silent skips. Failures name the offending element (question_id, file path, field) so assessors can remediate.
+The TD is explicit about failure modes — no defensive inference, no silent skips. Failures name the offending element (question_id, file path, field) so assessors can remediate.
 
-### Required-Field Failure (Req 4 AC 12)
+### Required-Field Failure
 
 IF any of the 12 required per-finding fields is absent from an emitted finding, THEN the assessment SHALL fail, naming:
 - The `question_id` of the offending finding
 - The specific missing field
 
-Example failure message: `"Assessment failed: finding for AUTH-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED (Req 4 AC 12)."`
+Example failure message: `"Assessment failed: finding for AUTH-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED."`
 
-### N/A / Not Evaluated Leak (Req 8)
+### N/A / Not Evaluated Leak
 
 IF a finding is emitted for a question whose resolution was N/A or Not Evaluated, THEN the assessment SHALL fail, naming the `question_id` and the resolution status that should have been recorded in `evaluations[]` instead.
 
-Example: `"Assessment failed: finding emitted for DATA-Q5 but the question resolved to N/A (no persistent data store). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only (Req 8)."`
+Example: `"Assessment failed: finding emitted for DATA-Q5 but the question resolved to N/A (no persistent data store). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only."`

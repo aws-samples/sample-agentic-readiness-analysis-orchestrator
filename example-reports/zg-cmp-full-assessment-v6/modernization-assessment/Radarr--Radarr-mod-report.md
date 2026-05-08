@@ -18,11 +18,11 @@
 
 | Category | Score | Rating | Severity Status |
 |----------|-------|--------|-----------------|
-| Infrastructure & DevOps (INF) | 1.22 / 4.0 | ❌ Not Present | Critical |
+| Infrastructure & DevOps (INF) | 1.22 / 4.0 | ❌ Not Ready | Critical |
 | Application Architecture (APP) | 2.33 / 4.0 | 🟠 Needs Work | Critical |
 | Data Platform (DATA) | 2.75 / 4.0 | 🟡 Partial | Needs Work |
 | Security Baseline (SEC) | 1.67 / 4.0 | 🟠 Needs Work | Critical |
-| Operations & Observability (OPS) | 1.33 / 4.0 | ❌ Not Present | Critical |
+| Operations & Observability (OPS) | 1.33 / 4.0 | ❌ Not Ready | Critical |
 | **Overall** | **1.86 / 4.0** | **🟠 Needs Work** | |
 
 **Scoring Notes:**

@@ -1,0 +1,973 @@
+{
+  "assessment_type": "mod",
+  "metadata": {
+    "repository": "umami-software--umami",
+    "assessment_date": "2026-05-08",
+    "td_version": "modernization-assessment",
+    "report_format_version": "V6",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application owns persistent state in PostgreSQL (users, websites, sessions, events, revenue) and exposes CRUD operations across 75 API route handlers managing entity lifecycle. Classified as stateful-crud.",
+    "priority": "P1",
+    "tags": ["typescript", "analytics", "web-app"],
+    "context": "Self-hosted privacy-focused web analytics.",
+    "preferences": {
+      "prefer": ["eks", "aurora", "dynamodb", "api-gateway", "eventbridge", "bedrock"],
+      "avoid": ["self-managed-kafka", "self-managed-kubernetes", "oracle"]
+    },
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": false
+    }
+  },
+  "overall_score": 1.79,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 8,
+    "medium_count": 7,
+    "low_count": 3,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.27,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.17,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 2.75,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.67,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.11,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q3", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q6", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q9", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q10", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q11", "score": 3, "status": "evaluated"},
+    {"question_id": "APP-Q1", "score": 4, "status": "evaluated"},
+    {"question_id": "APP-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q3", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "APP-Q6", "score": 2, "status": "evaluated"},
+    {"question_id": "DATA-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "DATA-Q2", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q4", "score": 4, "status": "evaluated"},
+    {"question_id": "SEC-Q1", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "SEC-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "SEC-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q6", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q3", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q4", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q6", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q9", "score": 1, "status": "evaluated"}
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No managed compute — self-hosted Docker containers",
+      "description": "All compute runs as self-hosted Docker containers with no managed container orchestration (ECS, EKS, Fargate) or serverless (Lambda).",
+      "gap": "No elastic scaling, manual patching, no health-based replacement. Single container deployment cannot respond to traffic spikes.",
+      "recommendation": "Migrate to ECS on Fargate or EKS (preferred) for managed container orchestration. The existing Dockerfile and health check endpoint provide a strong foundation.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Self-managed PostgreSQL in Docker container",
+      "description": "PostgreSQL 15 runs self-managed in a Docker container. No managed database services (RDS, Aurora, DynamoDB) are configured.",
+      "gap": "No automated failover, no managed backups, manual patching. A container failure results in database unavailability.",
+      "recommendation": "Migrate to Aurora PostgreSQL (preferred). The application already supports read replicas and uses environment-variable-based connection strings, making migration straightforward.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No workflow orchestration for multi-step operations",
+      "description": "Multi-step business operations (event ingestion pipeline, report generation) are handled as inline application logic with no dedicated workflow orchestration.",
+      "gap": "No dedicated orchestration, error handling, or retry mechanisms for multi-step operations. Failures in the event ingestion pipeline are handled ad-hoc.",
+      "recommendation": "Adopt AWS Step Functions for multi-step workflows such as the event ingestion pipeline and report generation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/app/api/send/route.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Self-managed Kafka for async messaging",
+      "description": "Self-managed Kafka (kafkajs library) is used for async event ingestion to ClickHouse. No managed messaging services (SQS, SNS, EventBridge, MSK) are in use.",
+      "gap": "Kafka requires manual broker management, scaling, and patching. Cross-service state changes are handled synchronously.",
+      "recommendation": "Replace self-managed Kafka with Amazon MSK Serverless or EventBridge (preferred). The existing Kafka producer pattern maps directly to managed alternatives.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/lib/kafka.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No network security configuration",
+      "description": "No VPC, subnet, security group, or network segmentation configuration exists. Docker Compose exposes port 3000 directly with no network isolation between tiers.",
+      "gap": "No network security — database and application on same network with no segmentation, no private subnets, no security groups.",
+      "recommendation": "Deploy into a VPC with private subnets for the database tier and public subnets behind ALB for the application tier.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No API Gateway or load balancer",
+      "description": "No API Gateway, ALB, or CloudFront configured. The application serves directly on port 3000 with no edge protection.",
+      "gap": "No throttling, no DDoS protection, no centralized auth at the network edge. Direct service exposure.",
+      "recommendation": "Deploy API Gateway (preferred) for throttling, auth, and request validation. Use CloudFront for global tracker script distribution.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "next.config.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No auto-scaling configured",
+      "description": "Single instance deployment with no auto-scaling. Cannot respond to analytics collection traffic spikes.",
+      "gap": "Static single-instance capacity. Traffic spikes from viral content or bot attacks cannot be absorbed.",
+      "recommendation": "Configure auto-scaling on ECS/EKS services. The application's stateless design (sessions in Redis) makes horizontal scaling straightforward.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No backup and recovery configuration",
+      "description": "PostgreSQL data stored in Docker volume with no automated backups, no PITR, no snapshot lifecycle.",
+      "gap": "No backup configuration — data loss from volume failure has no recovery path.",
+      "recommendation": "Aurora PostgreSQL provides automated backups with 35-day retention and PITR by default. If self-managed, implement pg_dump to S3.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Single-instance deployment — no high availability",
+      "description": "All resources run as single instances with no multi-AZ deployment. Any host failure takes down the entire service.",
+      "gap": "Single-AZ, single-instance deployment. No fault isolation or automatic recovery from infrastructure failures.",
+      "recommendation": "Deploy across 2+ AZs using ECS/EKS with multi-AZ task placement and Aurora Multi-AZ automatic failover.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Infrastructure as Code",
+      "description": "0% IaC coverage. No Terraform, CDK, CloudFormation, Helm, or Kustomize. Only docker-compose and PaaS configs (Heroku, Netlify) exist.",
+      "gap": "Cannot reproduce environments, no audit trail for infrastructure changes, no disaster recovery automation.",
+      "recommendation": "Adopt AWS CDK (TypeScript) to define all infrastructure. Start with compute and database layers as highest-impact targets.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD automation lacks deployment stage",
+      "description": "GitHub Actions CI (build+test) and CD (Docker image publish) exist but no automated deployment stage. Images are published but not deployed.",
+      "gap": "No automated deployment — images published but deployment requires manual action. No IaC deployment automation.",
+      "recommendation": "Add deployment stage to CD pipeline targeting ECS/EKS. Implement environment promotion (dev → staging → production).",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/cd.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith with shared database coupling",
+      "description": "Single deployable monolith with identifiable modules but shared PostgreSQL database, direct cross-module table joins, and single Docker image.",
+      "gap": "No independent deployability. All 75 API routes deploy together. Shared database prevents independent scaling of modules.",
+      "recommendation": "Begin Strangler Fig decomposition starting with event collection service and analytics query service.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "prisma/schema.prisma", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Primarily synchronous communication patterns",
+      "description": "Main application flow is entirely synchronous. Kafka exists only for the optional ClickHouse event ingestion path. Cross-domain state changes use synchronous DB transactions.",
+      "gap": "State changes crossing domain boundaries are tightly coupled via synchronous transactions. No event-driven decoupling.",
+      "recommendation": "Introduce EventBridge for cross-domain state change events. Convert event ingestion to always use managed async messaging.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/lib/db.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-running analytics queries handled synchronously",
+      "description": "Analytics queries over large datasets and report generation are synchronous. No async job processing or status polling for heavy operations.",
+      "gap": "Analytics queries may exceed 30 seconds under load with no timeout protection or async offloading.",
+      "recommendation": "Implement async job processing for report generation using Step Functions or SQS + Lambda workers. Add status polling endpoints.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/lib/prisma.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No API versioning strategy",
+      "description": "75 API routes use unversioned paths. No /v1/ prefixes, no version headers, no versioning annotations. Breaking changes deploy directly.",
+      "gap": "No versioning — critical for the tracker script embedded on third-party websites that cannot be updated atomically.",
+      "recommendation": "Implement URL-path versioning (/api/v1/) especially for the public data collection endpoint and tracker script.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/app/api/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Environment variables for service endpoints — no dynamic discovery",
+      "description": "External dependencies configured via environment variables (DATABASE_URL, REDIS_URL, KAFKA_URL). No dynamic service discovery.",
+      "gap": "Hard-configured endpoints create deployment coupling. No dynamic resolution when decomposed into microservices.",
+      "recommendation": "Adopt Kubernetes service discovery or AWS Cloud Map when migrating to EKS. Acceptable for monolith phase.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/lib/prisma.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "No managed object storage for unstructured data",
+      "description": "No S3 or managed object storage. GeoIP database files stored locally on container filesystem. No document parsing pipeline.",
+      "gap": "GeoIP data on local filesystem. No S3 for data exports or backup artifacts.",
+      "recommendation": "Store GeoIP databases in S3. Use S3 for report exports and backup artifacts with lifecycle policies.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Mostly centralized data access with some raw SQL bypass",
+      "description": "Prisma ORM with 9 query modules and raw SQL analytics layer. Centralized routing in db.ts. Some direct rawQuery usage bypasses module structure.",
+      "gap": "rawQuery function allows arbitrary SQL from any module, partially bypassing the centralized query pattern.",
+      "recommendation": "Maintain query module structure during decomposition. Ensure all data access routes through the query layer.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/lib/db.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "PostgreSQL 15 pinned but no upgrade procedure documented",
+      "description": "PostgreSQL 15 explicitly pinned in docker-compose. Not approaching EOL (2027) but no documented version-update procedure.",
+      "gap": "No documented upgrade procedure covering downtime, rollback, or risk acknowledgment.",
+      "recommendation": "Document upgrade procedure. Plan migration to Aurora PostgreSQL which handles major version upgrades with managed blue/green.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No encryption at rest for database storage",
+      "description": "PostgreSQL data in unencrypted Docker volume. User data stored in plaintext on disk (usernames, session data, website domains).",
+      "gap": "No at-rest encryption for the database volume containing PII.",
+      "recommendation": "Migrate to Aurora PostgreSQL which provides encryption at rest by default. Use customer-managed KMS keys.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "JWT auth on management APIs; collection endpoint intentionally open",
+      "description": "JWT Bearer token auth with AES-256-GCM encryption on all management endpoints. Collection endpoint (/api/send) intentionally unauthenticated for third-party use.",
+      "gap": "Open collection endpoint has no gateway-level throttling. Internal endpoints lack additional network isolation.",
+      "recommendation": "Add API Gateway throttling for the collection endpoint. Network-level isolation for internal endpoints.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/lib/auth.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Self-managed auth with SSO capability",
+      "description": "Application manages its own authentication (username/password in PostgreSQL). SSO support exists but is not the default authentication path.",
+      "gap": "Primary auth is self-managed. Not integrated with centralized IdP by default.",
+      "recommendation": "Integrate with Amazon Cognito as centralized IdP. The existing SSO endpoint provides the federation foundation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/app/api/auth/sso/route.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets in environment variables with no rotation",
+      "description": "All secrets via environment variables. No plaintext in source. No Secrets Manager, no rotation, no encryption for env vars.",
+      "gap": "Production credentials in plain environment variables with no rotation mechanism.",
+      "recommendation": "Adopt AWS Secrets Manager with automatic rotation. Reference secrets from ECS task definitions via ARNs.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No compute hardening or vulnerability scanning",
+      "description": "Docker image uses node:22-alpine with non-root user but no vulnerability scanning, no hardened base image, no patching strategy.",
+      "gap": "No patching strategy. Relies on rebuilding with newer base images without scanning for known CVEs.",
+      "recommendation": "Add container image scanning (ECR scanning or Trivy) to CI/CD. Consider AWS-maintained base images.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "Dockerfile", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No security scanning in CI/CD pipeline",
+      "description": "No Dependabot, SAST, DAST, or container scanning. CI only runs tests and builds. 72+ dependencies unchecked for vulnerabilities.",
+      "gap": "Vulnerabilities in dependencies and application code reach production undetected.",
+      "recommendation": "Add Dependabot for dependency scanning. Add CodeQL/Semgrep for SAST. Add ECR image scanning. Configure blocking gates.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No distributed tracing",
+      "description": "No OpenTelemetry, X-Ray, or any tracing instrumentation. Only debug-level logging via the 'debug' library.",
+      "gap": "Cannot diagnose request flows or identify performance bottlenecks across HTTP → DB → Kafka paths.",
+      "recommendation": "Instrument with OpenTelemetry SDK for Node.js with X-Ray or ADOT for end-to-end tracing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No SLO definitions",
+      "description": "No SLOs for event collection availability, dashboard API latency, or data freshness. Only a basic Docker health check exists.",
+      "gap": "No formal service level objectives. Cannot measure whether the system meets user expectations.",
+      "recommendation": "Define SLOs: collection endpoint availability ≥99.9%, p99 <200ms; dashboard API p95 <2s.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No custom business metrics",
+      "description": "No CloudWatch metrics, no custom dashboards. The application tracks analytics for users but does not instrument its own operational metrics.",
+      "gap": "Cannot measure events/sec, active sessions, query latency, or platform health.",
+      "recommendation": "Publish custom CloudWatch metrics for events collected/sec, sessions/min, error rates by endpoint, query duration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No alerting or anomaly detection",
+      "description": "No CloudWatch alarms, no PagerDuty integration, no threshold-based alerts. Failures go undetected until user reports.",
+      "gap": "No alerting — degradations and failures are invisible to operators.",
+      "recommendation": "Configure CloudWatch alarms for error rates and latency. Enable anomaly detection on the collection endpoint.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Direct-to-production deployment with no staged rollout",
+      "description": "Deployment by pulling latest Docker image. No canary, blue/green, or rolling deployment. No automatic rollback.",
+      "gap": "Bad releases affect all users immediately with no rollback capability.",
+      "recommendation": "Adopt ECS blue/green via CodeDeploy or Kubernetes rolling updates with readiness probes on EKS.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/cd.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration tests exist but not run in CI",
+      "description": "6 Cypress E2E tests with dedicated docker-compose exist. However, CI only runs 3 Jest unit tests. Critical paths (event collection, analytics) untested.",
+      "gap": "Integration tests not in CI pipeline. Critical workflows have no automated regression protection.",
+      "recommendation": "Add Cypress tests to CI pipeline. Expand coverage to event collection and analytics queries.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "cypress/e2e/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No incident response automation",
+      "description": "No runbooks, no self-healing patterns, no automated remediation. Docker restart policy is the only recovery mechanism.",
+      "gap": "Incident response is entirely ad hoc. No documented procedures for common failure scenarios.",
+      "recommendation": "Create runbooks for database failures, Kafka producer issues, and high memory usage. Implement SSM Automation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No observability ownership",
+      "description": "No CODEOWNERS for monitoring, no service dashboards, no alarms with owners, no SLO team attribution. No observability infrastructure exists.",
+      "gap": "No observability to own. Monitoring is nonexistent, not just unowned.",
+      "recommendation": "Establish observability ownership during cloud migration. Define CODEOWNERS for monitoring configuration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No resource tagging governance",
+      "description": "No AWS resources exist to tag. No tagging standard defined for when infrastructure is created.",
+      "gap": "No tagging governance. When AWS resources are created, no standard exists for cost allocation or ownership tracking.",
+      "recommendation": "Define tagging standard (Service, Environment, Team, CostCenter) before creating AWS infrastructure.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "No IaC — all infrastructure manually created via Docker Compose",
+      "impact": "Cannot reproduce environments, no disaster recovery, no audit trail"
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
+      "score": 1,
+      "gap": "Self-hosted Docker containers with no managed container orchestration",
+      "impact": "No elastic scaling, manual patching, no health-based replacement"
+    },
+    {
+      "rank": 3,
+      "question_id": "INF-Q2",
+      "title": "Managed Databases",
+      "score": 1,
+      "gap": "PostgreSQL self-managed in Docker container",
+      "impact": "No automated failover, manual backups, patching burden"
+    },
+    {
+      "rank": 4,
+      "question_id": "OPS-Q1",
+      "title": "Distributed Tracing",
+      "score": 1,
+      "gap": "No tracing instrumentation",
+      "impact": "Cannot diagnose request flows or identify bottlenecks"
+    },
+    {
+      "rank": 5,
+      "question_id": "SEC-Q7",
+      "title": "Application Security Pipeline",
+      "score": 1,
+      "gap": "No SAST, DAST, or dependency scanning",
+      "impact": "Vulnerabilities reach production undetected"
+    }
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "DevOps Agent",
+      "prerequisite": "CI/CD pipeline exists (INF-Q11 = 3)",
+      "what_it_enables": "Agent that triggers deployments, checks build status, and manages Docker image releases",
+      "additional_steps": "Add deployment stage to pipeline. Add webhook or API trigger for agent invocation.",
+      "effort": "Medium"
+    },
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "Documentation exists in repository (README.md, code comments, 52+ i18n files)",
+      "what_it_enables": "Knowledge agent indexing project documentation to assist developers with setup and API usage",
+      "additional_steps": "Generate API documentation from route handlers and Zod schemas to enrich the knowledge base.",
+      "effort": "Medium"
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Strangler Fig (Parallel Track)",
+    "rationale": "APP-Q2=2 indicates identifiable modules with shared database coupling. Clear functional domains exist for incremental extraction.",
+    "extraction_order": [
+      "Event Collection Service",
+      "Analytics Query Service",
+      "User & Team Management Service"
+    ],
+    "patterns": ["Anti-corruption Layer", "Event Sourcing", "Saga Pattern", "Hexagonal Architecture"]
+  },
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=2 (primary), INF-Q1=1, APP-Q3=2, APP-Q4=2 (all supporting conditions met)",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2},
+        {"question_id": "INF-Q1", "score": 1},
+        {"question_id": "APP-Q3", "score": 2},
+        {"question_id": "APP-Q4", "score": 2}
+      ],
+      "detail": {
+        "aws_services": ["Lambda", "API Gateway", "Step Functions", "EventBridge", "ECS/EKS", "Aurora"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/CMK2J48MVN"],
+        "immediate_actions": ["Identify service boundaries", "Extract event collection service first", "Adopt EventBridge for cross-domain events"]
+      }
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1=1 but Dockerfile and docker-compose already exist. Application is already containerized — the pathway requires no container definitions to be found.",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 1, "note": "Score meets threshold but contextual guard blocks: container definitions (Dockerfile, docker-compose) already exist"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "Application is already containerized with Dockerfile, docker-compose.yml, and multi-architecture builds. The Move to Containers pathway targets EC2/VM workloads with no containerization."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures); PostgreSQL is already open source. No commercial DB engines detected.",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "Score 4 — no stored procedures or proprietary SQL. Trigger threshold not met."}
+      ],
+      "detail": null,
+      "not_triggered_reason": "PostgreSQL is already open source. No commercial database engines (Oracle, SQL Server) detected. DATA-Q4=4 indicates no proprietary SQL coupling."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2=1 (self-managed PostgreSQL in Docker)",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": 1},
+        {"question_id": "DATA-Q3", "score": 3}
+      ],
+      "detail": {
+        "aws_services": ["Aurora PostgreSQL", "DynamoDB", "ElastiCache", "MemoryDB"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC"],
+        "immediate_actions": ["Migrate PostgreSQL to Aurora", "Migrate Redis to ElastiCache", "Update DATABASE_URL connection string"]
+      }
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q4=2 (self-managed Kafka); data processing workloads exist (ClickHouse analytics ingestion pipeline)",
+      "triggering_questions": [
+        {"question_id": "INF-Q4", "score": 2}
+      ],
+      "detail": {
+        "aws_services": ["MSK Serverless", "Kinesis Data Streams", "Redshift Serverless", "Athena", "EventBridge"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/RWZA84NMVV"],
+        "immediate_actions": ["Replace self-managed Kafka with MSK Serverless or EventBridge", "Evaluate Redshift Serverless as ClickHouse replacement"]
+      }
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=1 (no IaC), OPS-Q5=1 (direct-to-production), OPS-Q6=2 (integration tests not in CI)",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 1},
+        {"question_id": "INF-Q11", "score": 3},
+        {"question_id": "OPS-Q5", "score": 1},
+        {"question_id": "OPS-Q6", "score": 2}
+      ],
+      "detail": {
+        "aws_services": ["CDK", "CodePipeline", "CodeDeploy", "CodeBuild", "ECR", "CloudWatch"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/1FGEQKGPQD"],
+        "immediate_actions": ["Create CDK project for infrastructure", "Add deployment stage to GitHub Actions", "Add Cypress tests to CI"]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context. Context: 'Self-hosted privacy-focused web analytics' contains no AI-related signal terms.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. The context 'Self-hosted privacy-focused web analytics' does not contain AI-related signal terms (AI, agent, LLM, Bedrock, etc.)."
+    }
+  ]
+}

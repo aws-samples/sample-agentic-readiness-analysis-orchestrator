@@ -51,7 +51,7 @@ Recalculated overall: (1.50 + 2.50 + 2.67 + 2.25 + 1.38) / 5 = 10.30/5 = 2.06
 | Application Architecture (APP) | 2.50 / 4.0 | 🟠 Needs Work | Critical |
 | Data Platform Modernization (DATA) | 2.67 / 4.0 | 🟡 Partial | Needs Work |
 | Security Baseline (SEC) | 2.25 / 4.0 | 🟠 Needs Work | Critical |
-| Operations & Observability (OPS) | 1.38 / 4.0 | ❌ Not Present | Critical |
+| Operations & Observability (OPS) | 1.38 / 4.0 | ❌ Not Ready | Critical |
 | **Overall** | **2.06 / 4.0** | **🟠 Needs Work** | |
 
 ---

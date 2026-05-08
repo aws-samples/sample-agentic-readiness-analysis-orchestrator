@@ -21,12 +21,12 @@
 
 | Category | Score | Rating | Severity Status |
 |----------|-------|--------|-----------------|
-| Infrastructure, Platform, and DevOps (INF) | 1.29 / 4.0 | ❌ Not Present | Critical |
+| Infrastructure, Platform, and DevOps (INF) | 1.29 / 4.0 | ❌ Not Ready | Critical |
 | Application Architecture (APP) | 1.83 / 4.0 | 🟠 Needs Work | Critical |
 | Data Platform Modernization (DATA) | 3.00 / 4.0 | 🟡 Partial | Needs Work |
-| Security Baseline (SEC) | 1.40 / 4.0 | ❌ Not Present | Critical |
-| Operations & Observability (OPS) | 1.33 / 4.0 | ❌ Not Present | Critical |
-| **Overall** | **1.50 / 4.0** | **❌ Not Present** | **Critical** |
+| Security Baseline (SEC) | 1.40 / 4.0 | ❌ Not Ready | Critical |
+| Operations & Observability (OPS) | 1.33 / 4.0 | ❌ Not Ready | Critical |
+| **Overall** | **1.50 / 4.0** | **❌ Not Ready** | **Critical** |
 
 **Scoring Notes:**
 - INF: (1+NE+1+1+1+1+1+NE+NE+1+2) / 7 = 9/7 = 1.29 (INF-Q2, INF-Q8, INF-Q9 Not Evaluated due to surface flags)

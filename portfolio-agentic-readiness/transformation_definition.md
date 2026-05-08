@@ -19,7 +19,13 @@ The transformation follows a 7-step pipeline:
 6. **Dependency Mapping**: Construct service dependency map from dependency_overrides
 7. **Recommendations**: Generate remediation guidance and agentic program recommendations
 
-The output is a detailed Markdown report saved as `portfolio-ara-report.md` containing:
+The output is a **four-artifact bundle** containing:
+- `{portfolio_name}-portfolio-ara-report.md` — richest narrative
+- `{portfolio_name}-portfolio-ara-report.json` — canonical machine-readable contract
+- `{portfolio_name}-portfolio-ara-report.html` — single self-contained HTML visualization
+- `{portfolio_name}-portfolio-ara-report.metadata.json` — version compatibility sidecar
+
+The MD report contains:
 - Executive dashboard with readiness distribution by profile
 - Blocker heatmap by section (which dimensions block the most repos)
 - Readiness snapshot (structured, machine-parseable metrics for dashboard consumption)
@@ -607,7 +613,7 @@ Record portfolio-level question results in a dedicated section of the report, se
 
 ## Report Template
 
-The portfolio ARA report is saved as `portfolio-ara-report.md`. The complete report structure is defined below.
+The portfolio ARA TD emits a **four-artifact bundle**: `{portfolio_name}-portfolio-ara-report.md` (narrative), `.json` (canonical), `.html` (self-contained), `.metadata.json` (sidecar). This section specifies the MD structure; the JSON and HTML render subsets of the same data.
 
 ---
 
@@ -1028,21 +1034,15 @@ Strictly follow these rules at all times:
 
 ---
 
-## V6 Additions
-
-V6 is strictly additive to the V5 Portfolio ARA TD. Every V5 section, cross-cutting narrative, agentic-program recommendation, and dependency-map content is preserved. V6 adds webapp-aligned JSON top-level keys, a `remediation_roadmap` that matches the webapp tab, and a `recommended_actions[]` array with canonical agentic-program coverage.
-
----
-
-### V6 Three-Artifact Output Contract (Portfolio ARA)
+### Three-Artifact Output Contract (Portfolio ARA)
 
 Every portfolio ARA assessment MUST emit THREE artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
 
 | Artifact | Filename | Purpose |
 |---|---|---|
-| Markdown report | `{portfolio-name}-portfolio-ara-report.md` | Richest-prose artifact. Contains every V5 section (Executive Dashboard, Cross-Cutting Analysis, Dependency Map, Agentic Program Recommendations, Readiness Profiles, Service-by-Service Summary). |
-| JSON report | `{portfolio-name}-portfolio-ara-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard. Every semantic field defined in the V6 Top-Level JSON Keys section below MUST be present. |
-| HTML report | `{portfolio-name}-portfolio-ara-report.html` | **Single self-contained HTML file** (no external asset fetches at render time). Renders a subset of the JSON per the V6 Portfolio ARA HTML Visual Contract below. MUST be emitted alongside the MD and JSON — it is NOT optional. |
+| Markdown report | `{portfolio-name}-portfolio-ara-report.md` | Richest-prose artifact. Contains Executive Dashboard, Cross-Cutting Analysis, Dependency Map, Agentic Program Recommendations, Readiness Profiles, and Service-by-Service Summary. |
+| JSON report | `{portfolio-name}-portfolio-ara-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard. Every semantic field defined in the Top-Level JSON Keys section below MUST be present. |
+| HTML report | `{portfolio-name}-portfolio-ara-report.html` | **Single self-contained HTML file** (no external asset fetches at render time). Renders a subset of the JSON per the Portfolio ARA HTML Visual Contract below. MUST be emitted alongside the MD and JSON — it is NOT optional. |
 | Metadata sidecar | `{portfolio-name}-portfolio-ara-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
 
 The JSON artifact is the canonical contract. If the three artifacts disagree on any field, JSON wins.
@@ -1061,7 +1061,7 @@ The JSON artifact is the canonical contract. If the three artifacts disagree on 
 
 ---
 
-### V6 Top-Level JSON Keys (Req 10)
+### Top-Level JSON Keys
 
 The Portfolio ARA JSON artifact MUST emit these top-level keys in the order shown:
 
@@ -1072,16 +1072,17 @@ The Portfolio ARA JSON artifact MUST emit these top-level keys in the order show
 | `summary` | 5 KPI counts: repositories_analyzed, total_findings, high_severity_findings, medium_severity_findings, low_severity_findings |
 | `filter_vocab` | Filter-eligible values for webapp UI chips |
 | `executive_dashboard` | Readiness distribution, portfolio summary, repo-type distribution, blocker heatmap |
-| `repositories[]` | Per-repo roll-up (renamed from V5 `service_summary[]`) |
-| `findings[]` | Lightweight portfolio finding index (renamed from V5 `findings_index[]`) |
-| `remediation_roadmap` | See §"V6 Remediation Roadmap" below |
+| `repositories[]` | Per-repo roll-up |
+| `findings[]` | Per-repo findings propagated up. Each entry is a 12-field per-repo finding plus `repo_name`. One entry per (repo × question_id). Used by webapp Findings tab. |
+| `cross_cutting_findings[]` | Portfolio-aggregated findings where the same question_id fires at the same tier across 2+ repos (BLOCKER) or 3+ repos (RISK). One entry per question_id. Used by webapp Cross-Cutting view. |
+| `remediation_roadmap` | See §"Remediation Roadmap" below |
 | `recommended_actions[]` | Canonical agentic programs (AI DLC, AgentStorming, AXE, EBA on Agentic AI) |
-| `portfolio_level_findings[]` | Preserved V5 PORT-ARA-Q* cross-portfolio findings |
-| `dependency_map` | Preserved V5 dependency map |
+| `portfolio_level_findings[]` | PORT-ARA-Q* cross-portfolio findings |
+| `dependency_map` | Dependency map |
 
-Canonical shape is fully defined by the V6 Top-Level JSON Keys table above. All required keys, types, and nesting are specified inline in this TD.
+Canonical shape is fully defined by the Top-Level JSON Keys table above. All required keys, types, and nesting are specified inline in this TD.
 
-#### `filter_vocab` (Req 10.9, Req 7A.6)
+#### `filter_vocab`
 
 Contains ONLY values actually present in the run, so the webapp renders filter chips without extra network calls:
 
@@ -1098,18 +1099,21 @@ Contains ONLY values actually present in the run, so the webapp renders filter c
 }
 ```
 
-`filter_vocab.categories[]` carries display names only (Req 7A AC 6) — NOT short codes.
+`filter_vocab.categories[]` carries display names only — NOT short codes.
 
-#### V5 → V6 key renames
+#### `findings[]` vs `cross_cutting_findings[]` — two distinct arrays
 
-V5 `service_summary[]` → V6 `repositories[]` (same shape, preserved V5 fields + V6 additions).
-V5 `findings_index[]` → V6 `findings[]` (same shape, preserved V5 fields + V6 additions).
+The Portfolio ARA JSON emits **two separate finding arrays**, each with its own schema and purpose:
 
-All per-entry V5 fields are PRESERVED. V6 only adds the `category` display name field on findings and the `category_scores[].severity_status` on repositories.
+1. **`findings[]`** — per-repo findings propagated up from the consumed per-repo ARA JSONs. One entry per (repo × question_id) with a `repo_name` field so the webapp can filter by repo. Each entry uses the same 12-field shape as per-repo findings plus `repo_name`. Used by the webapp's Findings tab.
 
-#### `findings[]` entry shape
+2. **`cross_cutting_findings[]`** — portfolio-aggregated findings where the same question_id appears as BLOCKER in 2+ repos or RISK in 3+ repos (see Step 4 and Step 4b). One entry per question_id with aggregated metadata (`affected_repos_count`, `applicable_repos_count`, `affected_services[]`, `cross_cutting_type`). Used by the webapp's Cross-Cutting Concerns view.
 
-Each entry in `findings[]` mirrors the per-repo ARA 12-field finding shape (see the per-repo ARA TD's "V6 Unified Per-Finding Field Set" section), with the addition of a `repo_name` field for portfolio-level join:
+Both arrays coexist — `findings[]` answers "what's wrong per-repo?" and `cross_cutting_findings[]` answers "what's wrong across the portfolio?". A single question_id may appear in both arrays: once per repo in `findings[]`, and once aggregated in `cross_cutting_findings[]`.
+
+#### `findings[]` entry shape (per-repo propagation)
+
+Each entry mirrors the per-repo ARA 12-field finding shape, plus `repo_name`:
 
 | Field | Type | Description |
 |---|---|---|
@@ -1121,21 +1125,43 @@ Each entry in `findings[]` mirrors the per-repo ARA 12-field finding shape (see 
 | `description` | string | Finding description. |
 | `gap` | string | What's missing or incorrect. |
 | `recommendation` | string | Remediation recommendation. |
-| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified V6 severity. |
-| `native_severity` | enum | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — V5 ARA native severity for portfolio grouping. |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity. |
+| `native_severity` | enum | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — ARA native severity for portfolio grouping. |
 | `safety_impact` | boolean | `true` for RISK-SAFETY findings and BLOCKERs flagged as agent-safety hazards. |
 | `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority (static per question_id). |
 | `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
 | `phase` | integer | `1`–`3` — derived roadmap phase (Phase 1 = blockers, Phase 2 = safety, Phase 3 = quality). |
 | `evidence` | object or null | `{file, lines}` reference or `null`. |
 
-Findings are sourced from each consumed per-repo ARA JSON's `findings[]` array; the portfolio TD adds `repo_name` and emits them into a flat array suitable for webapp filtering. The HTML Findings tab orders by severity descending (High → Medium → Low), then by repo_name, then by category display order (API → AUTH → STATE → HITL → DATA → DISC → OBS → ENG).
+Findings are sourced from each consumed per-repo ARA JSON's `findings[]` array; the portfolio TD adds `repo_name` and emits them into a flat array. Ordering: severity descending, then repo_name, then category display order (API → AUTH → STATE → HITL → DATA → DISC → OBS → ENG).
 
 Findings are NEVER emitted for questions that resolve to pass, N/A, or Not Evaluated at the per-repo level — the portfolio `findings[]` array only contains rows for which the source per-repo ARA JSON emitted a finding.
 
+#### `cross_cutting_findings[]` entry shape (portfolio aggregation)
+
+Each entry aggregates the same question_id across multiple repos where it fires at the same tier:
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | Rubric question identifier. |
+| `category` | string | Webapp-facing category display name. |
+| `category_id` | string | Rubric short code. |
+| `title` | string | Short finding title (shared across affected repos). |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity of the aggregated tier. |
+| `native_severity` | enum | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — native severity. |
+| `cross_cutting_type` | enum | `"blocker"` / `"risk_safety"` / `"risk_quality"` — the tier that triggered this cross-cutting entry. |
+| `affected_repos_count` | integer | Number of repos where this question fires at this tier. |
+| `applicable_repos_count` | integer | Number of repos where this question is not N/A (denominator). |
+| `affected_services` | string[] | Repo names where this question fires at this tier. |
+| `common_finding_summary` | string | Prose summary of the finding pattern across affected repos. |
+| `root_cause_pattern` | string | Common root cause identified across repos. |
+| `portfolio_remediation` | object | `{approach, immediate_action, target_state, estimated_effort, priority, dependencies[]}` per Step 6.1. |
+
+Cross-cutting entries are generated per Step 4 (BLOCKER threshold: 2+ repos) and Step 4b (RISK threshold: 3+ repos). Step 6 populates `portfolio_remediation` for each entry.
+
 ---
 
-### V6 Remediation Roadmap (Req 12, 14, 31.7)
+### Remediation Roadmap
 
 The Portfolio ARA JSON emits `remediation_roadmap` with `grouping: "phase_category"`. Each `items[]` entry carries:
 
@@ -1175,7 +1201,7 @@ The Portfolio ARA JSON emits `remediation_roadmap` with `grouping: "phase_catego
 }
 ```
 
-#### Sources for item fields (Req 11.1-11.6 — JSON-only consumption)
+#### Sources for item fields (JSON-only consumption)
 
 - `per_repo_evidence` sourced from per-repo ARA JSON `findings[].evidence`. NEVER parsed from per-repo MD.
 - `conditional_resolution` and `agent_scope` sourced from per-repo ARA JSON `findings[].ara_metadata.{conditional_resolution, agent_scope}` for the five conditional BLOCKERs (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2).
@@ -1186,15 +1212,15 @@ The Portfolio ARA JSON emits `remediation_roadmap` with `grouping: "phase_catego
 The Portfolio ARA MD artifact renders these items under an H2 heading **"## Remediation Roadmap"** that matches the webapp tab label. Each item is rendered as an H3 subsection with:
 - Title: `"Phase {N} — {category}"`
 - Table of `{affected_services, per_repo_evidence, agent_scope, resolution_reasoning}`
-- Preserved V5 Cross-Cutting narratives (BLOCKER Remediation blocks, Cross-Cutting RISK-SAFETY prose, Cross-Cutting RISK-QUALITY prose) are retained verbatim within the item.
+- Cross-Cutting narratives (BLOCKER Remediation blocks, Cross-Cutting RISK-SAFETY prose, Cross-Cutting RISK-QUALITY prose) are retained verbatim within the item.
 
-Req 31.7: the ARA execution-sequencing narrative (Phase 1 BLOCKER resolution, Phase 2 RISK-SAFETY hardening, Phase 3 RISK-QUALITY improvements) is preserved in MD prose.
+The ARA execution-sequencing narrative (Phase 1 BLOCKER resolution, Phase 2 RISK-SAFETY hardening, Phase 3 RISK-QUALITY improvements) is preserved in MD prose.
 
 ---
 
-### V6 Recommended Actions (Req 14A)
+### Recommended Actions
 
-The Portfolio ARA JSON emits `recommended_actions[]` as an array of agentic-program entries. Minimum-set coverage (Req 14A AC 4):
+The Portfolio ARA JSON emits `recommended_actions[]` as an array of agentic-program entries. Minimum-set coverage:
 
 | `id` | `name` | `acronym` | `type` |
 |---|---|---|---|
@@ -1221,11 +1247,11 @@ Each entry carries:
 
 `status` ∈ {Triggered, Applicable, Not Triggered}. `trigger_reason` is non-empty prose explaining why the program fires.
 
-The MD artifact renders this under an H2 heading **"## Recommended Actions"** (this is the canonical V6 heading — the V5 "## Agentic Program Recommendations" label is retained as an H3 subheading under the V6 H2 to preserve V5 prose without creating duplicate H2s). The V5 section's rich prose is preserved verbatim beneath the V6 H2.
+The MD artifact renders this under an H2 heading **"## Recommended Actions"**. The "## Agentic Program Recommendations" label is retained as an H3 subheading under that H2 to preserve rich program prose without creating duplicate H2s.
 
 ---
 
-### V6 Portfolio ARA HTML Visual Contract (Req 10, 22, 23, 28)
+### Portfolio ARA HTML Visual Contract
 
 The portfolio ARA HTML artifact is a single self-contained file rendering a subset of the portfolio JSON. The full visual contract is inlined below — do NOT reference external files.
 
@@ -1327,28 +1353,23 @@ Table columns: `Program`, `Description`, `Why Recommended`, `Duration`
 
 ---
 
-End of V6 Additions.
+## Error Handling
 
+The portfolio TD consumes ONLY per-repo JSON. Failure modes are explicit, loud, and actionable.
 
----
-
-## V6 Error Handling (Req 11, 13)
-
-The V6 portfolio TD consumes ONLY per-repo JSON (Req 11 AC 1-2). Failure modes are explicit, loud, and actionable.
-
-### Missing Per-Repo JSON (Req 11 AC 5)
+### Missing Per-Repo JSON
 
 IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
 
-Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-assessment/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-assessment/wat--wub-ara-report.json (Req 11 AC 5)."`
+Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-assessment/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-assessment/wat--wub-ara-report.json."`
 
-### Version Mismatch (Req 11 AC 6)
+### Version Mismatch
 
-IF any consumed per-repo JSON's `metadata.report_format_version` is not `"V6"`, THEN the portfolio assessment SHALL fail naming:
+IF any consumed per-repo JSON's `metadata.report_format_version` does not match the expected value declared in the metadata sidecar schema, THEN the portfolio assessment SHALL fail naming:
 - The offending file path
 - The unexpected `report_format_version` value
 
-Example: `"Portfolio assessment failed: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json has metadata.report_format_version='V5' but V6 is required (Req 11 AC 6)."`
+Example: `"Portfolio assessment failed: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json has an unexpected metadata.report_format_version value."`
 
 ### Dangling Cross-Reference
 
@@ -1358,4 +1379,4 @@ Example: `"Portfolio assessment failed: findings[3].question_id='AUTH-Q9' does n
 
 ### No Silent Fallback
 
-The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. V6 consumes JSON-only (Req 11 AC 1).
+The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. The TD consumes JSON-only.

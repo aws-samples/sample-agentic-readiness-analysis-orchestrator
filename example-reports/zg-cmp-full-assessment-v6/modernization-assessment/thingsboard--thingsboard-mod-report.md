@@ -22,7 +22,7 @@
 
 | Category | Score | Rating | Severity Status |
 |----------|-------|--------|-----------------|
-| Infrastructure, Platform, and DevOps (INF) | 1.27 / 4.0 | ❌ Not Present | Critical |
+| Infrastructure, Platform, and DevOps (INF) | 1.27 / 4.0 | ❌ Not Ready | Critical |
 | Application Architecture (APP) | 2.33 / 4.0 | 🟠 Needs Work | Critical |
 | Data Platform Modernization (DATA) | 2.50 / 4.0 | 🟡 Partial | Needs Work |
 | Security Baseline (SEC) | 1.86 / 4.0 | 🟠 Needs Work | Critical |

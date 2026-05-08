@@ -23,8 +23,8 @@
 | Infrastructure, Platform, and DevOps (INF) | 2.00 / 4.0 | 🟠 Needs Work | Critical |
 | Application Architecture (APP) | 2.25 / 4.0 | 🟠 Needs Work | Critical |
 | Data Platform Modernization (DATA) | 2.75 / 4.0 | 🟡 Partial | Needs Work |
-| Security Baseline (SEC) | 1.29 / 4.0 | ❌ Not Present | Critical |
-| Operations & Observability (OPS) | 1.22 / 4.0 | ❌ Not Present | Critical |
+| Security Baseline (SEC) | 1.29 / 4.0 | ❌ Not Ready | Critical |
+| Operations & Observability (OPS) | 1.22 / 4.0 | ❌ Not Ready | Critical |
 | **Overall** | **1.90 / 4.0** | **🟠 Needs Work** | **Critical** |
 
 **Scoring Notes:**

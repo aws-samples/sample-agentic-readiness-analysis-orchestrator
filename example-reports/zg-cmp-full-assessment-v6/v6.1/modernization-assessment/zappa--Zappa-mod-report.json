@@ -1,0 +1,693 @@
+{
+  "assessment_type": "mod",
+  "version": "V6",
+  "metadata": {
+    "repository": "zappa--Zappa",
+    "date": "2025-05-08",
+    "td_version": "modernization-assessment",
+    "report_format_version": "V6",
+    "repo_type": "application",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Zappa is a CLI tool and library with no persistent database connections, no user-specific state, no write-back endpoints, and no deployed API surface of its own. All operations are stateless command executions that orchestrate AWS resources on behalf of users.",
+    "priority": "P2",
+    "tags": ["python", "serverless"],
+    "context": "Python framework for deploying WSGI apps on AWS Lambda.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_at_rest_data_surface": false,
+      "has_deployed_workload": false,
+      "has_api_surface": false,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": false
+    }
+  },
+  "overall_score": 1.98,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 4,
+    "medium_count": 15,
+    "low_count": 1,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.50,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.00,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 3.75,
+      "score_rating": "Mature",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.20,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.43,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
+      "score": 1,
+      "gap": "No managed compute infrastructure — CLI tool with no deployed workload",
+      "impact": "Cannot evaluate cloud-native compute readiness"
+    },
+    {
+      "rank": 2,
+      "question_id": "SEC-Q3",
+      "title": "API Authentication",
+      "score": 1,
+      "gap": "No API authentication — CLI tool exposes no HTTP endpoints",
+      "impact": "No API surface to protect; limits service exposure potential"
+    },
+    {
+      "rank": 3,
+      "question_id": "SEC-Q4",
+      "title": "Centralized Identity Integration",
+      "score": 1,
+      "gap": "No centralized identity integration — uses AWS IAM credential chain only",
+      "impact": "No unified access control beyond environment-level credentials"
+    },
+    {
+      "rank": 4,
+      "question_id": "SEC-Q7",
+      "title": "Application Security Pipeline",
+      "score": 1,
+      "gap": "No SAST, dependency scanning, or container scanning in CI/CD",
+      "impact": "Dependency vulnerabilities may reach published packages undetected"
+    },
+    {
+      "rank": 5,
+      "question_id": "APP-Q2",
+      "title": "Monolith vs Microservices",
+      "score": 1,
+      "gap": "Tightly-coupled monolith with core.py (3,866 LOC) god class and no module boundaries",
+      "impact": "Limits independent testability, maintainability, and team autonomy"
+    }
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "Documentation exists (extensive README, CHANGELOG, docs/ directory, CONTRIBUTING.md, example/ with detailed usage guides)",
+      "what_it_enables": "Index Zappa's documentation to answer developer questions about configuration, deployment patterns, and version migration",
+      "additional_steps": "Convert README sections into structured chunks; generate embeddings for settings reference and event source documentation",
+      "effort": "Low"
+    },
+    {
+      "name": "DevOps Agent",
+      "prerequisite": "CI/CD pipeline exists (INF-Q11 = 4)",
+      "what_it_enables": "Trigger CI runs, check build status across Python 3.9-3.14 matrix, monitor coverage reports, and manage CD workflow",
+      "additional_steps": "Expose GitHub Actions API access to the agent; define trigger conditions for manual CD workflow dispatch",
+      "effort": "Medium"
+    }
+  ],
+  "decomposition_strategy": {
+    "current_state": "Single Python package with tightly coupled modules. core.py (3,866 LOC god class) and cli.py (3,655 LOC) are heavily intertwined.",
+    "recommended_approach": "Strangler Fig (Parallel Track)",
+    "approaches": [
+      {
+        "name": "Strangler Fig (Parallel Track)",
+        "effort": "Medium to High",
+        "recommended": true,
+        "description": "Extract handler as standalone package first, then progressively extract AWS service modules from core.py"
+      },
+      {
+        "name": "Conditional / Adaptive",
+        "effort": "Low to Medium",
+        "recommended": true,
+        "description": "Keep monolithic package but refactor core.py into internal modules with clear interfaces"
+      },
+      {
+        "name": "Big-Bang Rewrite",
+        "effort": "Very High",
+        "recommended": false,
+        "description": "Rewrite as multi-package monorepo. Not recommended — high risk of breaking existing user base"
+      }
+    ]
+  },
+  "evaluations": [
+    {"question_id": "INF-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q2", "score": null, "status": "not_evaluated", "reason": "Surface-gated: has_persistent_data_store=false"},
+    {"question_id": "INF-Q3", "score": null, "status": "not_evaluated", "reason": "Archetype-N/A: stateless-utility, no multi-step workflows"},
+    {"question_id": "INF-Q4", "score": null, "status": "not_evaluated", "reason": "Archetype-N/A: stateless-utility, sync is correct design"},
+    {"question_id": "INF-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q6", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q8", "score": null, "status": "not_evaluated", "reason": "Surface-gated: no persistent state to back up"},
+    {"question_id": "INF-Q9", "score": null, "status": "not_evaluated", "reason": "Surface-gated: has_deployed_workload=false"},
+    {"question_id": "INF-Q10", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q11", "score": 4, "status": "evaluated"},
+    {"question_id": "APP-Q1", "score": 4, "status": "evaluated"},
+    {"question_id": "APP-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "APP-Q3", "score": null, "status": "not_evaluated", "reason": "Archetype-N/A: stateless-utility, sync correct"},
+    {"question_id": "APP-Q4", "score": null, "status": "not_evaluated", "reason": "Archetype-N/A: stateless-utility, no long-running operations"},
+    {"question_id": "APP-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "APP-Q6", "score": 2, "status": "evaluated"},
+    {"question_id": "DATA-Q1", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q2", "score": 4, "status": "evaluated"},
+    {"question_id": "DATA-Q3", "score": 4, "status": "evaluated"},
+    {"question_id": "DATA-Q4", "score": 4, "status": "evaluated"},
+    {"question_id": "SEC-Q1", "score": null, "status": "not_evaluated", "reason": "Surface-gated: no account-level IaC"},
+    {"question_id": "SEC-Q2", "score": null, "status": "not_evaluated", "reason": "Surface-gated: has_at_rest_data_surface=false"},
+    {"question_id": "SEC-Q3", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q4", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q6", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q2", "score": null, "status": "not_evaluated", "reason": "Surface-gated: no user-facing surface"},
+    {"question_id": "OPS-Q3", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q4", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q5", "score": null, "status": "not_evaluated", "reason": "Surface-gated: has_deployed_workload=false"},
+    {"question_id": "OPS-Q6", "score": 4, "status": "evaluated"},
+    {"question_id": "OPS-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q9", "score": 1, "status": "evaluated"}
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No managed compute infrastructure",
+      "description": "Zappa is a CLI tool published to PyPI with no deployed compute infrastructure. No Lambda functions, ECS tasks, or EC2 instances run this tool as a service.",
+      "gap": "No managed compute — all execution happens locally or in ephemeral CI environments.",
+      "recommendation": "If a hosted deployment service is desired, consider ECS/Fargate or Lambda. For the current CLI use case, this gap is structural.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "setup.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No network security configuration",
+      "description": "No VPC, subnet, security group, or network segmentation — CLI tool with no deployed network infrastructure.",
+      "gap": "No network security configuration — tool is not deployed in a VPC.",
+      "recommendation": "Not applicable for a CLI tool. If deployed as a hosted service, private subnets with least-privilege security groups would be required.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No API entry point",
+      "description": "Zappa exposes no HTTP API — it is CLI-only. No API Gateway, ALB, or CloudFront serves as an entry point.",
+      "gap": "No API entry point — tool is CLI-only.",
+      "recommendation": "If a programmatic API is desired, expose deployment operations via API Gateway with authentication and throttling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "setup.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No auto-scaling configuration",
+      "description": "No auto-scaling — Zappa has no deployed compute to scale. It runs as a local CLI process.",
+      "gap": "No auto-scaling — no workload to scale.",
+      "recommendation": "Not applicable for a CLI tool. No action needed.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No IaC for own infrastructure",
+      "description": "No IaC defines Zappa's own operational infrastructure. GitHub Actions workflows exist but no Terraform/CDK manages repository settings, secrets, or branch protections.",
+      "gap": "0% IaC coverage for the project's own infrastructure.",
+      "recommendation": "Consider Terraform GitHub provider to codify repository settings, branch protection rules, and environment/secret management.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Tightly-coupled monolith",
+      "description": "Single Python package with no module boundaries. core.py (3,866 LOC) is a god class. cli.py (3,655 LOC) directly instantiates and orchestrates core.py with pervasive cross-module coupling.",
+      "gap": "No module boundaries, no clear interfaces, god class pattern. Single deployable unit with no separation of concerns.",
+      "recommendation": "Refactor into bounded modules: separate Lambda handler runtime as independent package, extract AWS service adapters from core.py into focused modules, define clean interfaces between CLI and orchestration layers.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No API versioning strategy",
+      "description": "No API versioning — CLI tool with no HTTP API surface. Settings format (zappa_settings.json) has no explicit version field for schema evolution.",
+      "gap": "No API versioning — settings format changes handled implicitly via deprecation warnings.",
+      "recommendation": "Add a settings schema version field to zappa_settings.json to enable forward-compatible configuration parsing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "test_settings.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Environment variables for endpoints only",
+      "description": "Uses environment variables for AWS endpoint configuration via boto3. boto3 handles AWS service endpoint resolution internally. No dynamic service discovery needed for a CLI tool.",
+      "gap": "No dynamic service discovery, but boto3 endpoint resolution is adequate for the use case.",
+      "recommendation": "No action needed. boto3's endpoint resolution is the correct pattern for AWS SDK-based tools.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "S3 usage without parsing pipeline",
+      "description": "Zappa uses S3 for deployment package storage (ZIP uploads) but has no parsing or extraction pipeline for the stored data.",
+      "gap": "Data in S3 but no automated parsing or extraction pipeline.",
+      "recommendation": "For deployment tool use case, no parsing pipeline is needed. If deployment analytics are desired, consider S3 event-driven processing.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No API authentication",
+      "description": "No API authentication — Zappa is a CLI tool with no HTTP endpoints. Authentication to AWS is handled by the boto3 credential chain.",
+      "gap": "No API authentication — no API surface exists to protect.",
+      "recommendation": "If a programmatic API is exposed in the future, implement OAuth2/JWT authentication. For CLI use case, boto3 credential chain is appropriate.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "setup.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No centralized identity integration",
+      "description": "No centralized identity integration. Relies on AWS IAM credential chain for all authentication. No Cognito, Okta, or other IdP integration.",
+      "gap": "No centralized identity — relies entirely on local AWS credential configuration.",
+      "recommendation": "For a CLI tool, AWS IAM credential chain with SSO support (aws sso login) is standard. Document AWS SSO/IAM Identity Center integration in README.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Credentials in environment variables without rotation",
+      "description": "No plaintext credentials in source. AWS credentials handled via boto3 credential chain and GitHub Secrets with OIDC for PyPI. However, no Secrets Manager integration and no rotation configured.",
+      "gap": "Production credentials in environment variables without rotation. No Secrets Manager integration.",
+      "recommendation": "Document credential rotation best practices. Consider supporting AWS Secrets Manager for secret retrieval. Encourage IAM roles and SSO over long-lived access keys.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/cd.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No compute hardening or patching",
+      "description": "No compute hardening — Zappa has no deployed compute to harden. Tool runs on developer machines and GitHub-hosted CI runners (auto-patched).",
+      "gap": "No compute hardening — no deployed workload to harden.",
+      "recommendation": "For CI, GitHub-hosted runners are auto-patched. Add dependency vulnerability scanning for the package itself.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No application security pipeline",
+      "description": "No SAST, DAST, or dependency vulnerability scanning in CI/CD. Pipeline has lint checks but no security-focused scanning. No Dependabot, pip-audit, safety, Bandit, or Semgrep.",
+      "gap": "No security scanning — zero security validation steps in pipeline.",
+      "recommendation": "Add Dependabot for dependency updates. Integrate pip-audit or safety for vulnerability detection. Add Bandit or Semgrep for Python SAST. Configure blocking gates on critical findings.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No distributed tracing",
+      "description": "No tracing instrumented in the Zappa CLI tool itself. While it configures X-Ray for deployed apps, the tool has no tracing for its own deployment operations.",
+      "gap": "No tracing of deployment operations. Complex multi-step deployments have no end-to-end trace visibility.",
+      "recommendation": "Consider OpenTelemetry instrumentation for core.py to trace deployment operations and identify AWS API bottlenecks.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "Pipfile", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No business metrics",
+      "description": "No custom metrics published. Deployment success rates, package sizes, and deployment durations are not tracked.",
+      "gap": "No business metrics — deployment operations are not measured or tracked.",
+      "recommendation": "Consider publishing deployment telemetry (success/failure rate, duration, package size) to inform tool improvement priorities.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No anomaly detection or alerting",
+      "description": "No alerting configured — no deployed service to monitor.",
+      "gap": "No alerting — no production service to alert on.",
+      "recommendation": "Not applicable for a CLI tool. If deployment metrics are added, alerting on failure rate spikes would be valuable.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No incident response automation",
+      "description": "No runbooks, automated remediation, or incident workflows. Ad hoc troubleshooting only.",
+      "gap": "No runbooks or incident response automation.",
+      "recommendation": "Add structured troubleshooting guides for common deployment failures (CloudFormation rollback, Lambda size limits, IAM permission errors).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No observability ownership",
+      "description": "No observability ownership defined. No CODEOWNERS for monitoring, no dashboards, no team-attributed alarms.",
+      "gap": "No observability ownership — no production service with monitoring needs.",
+      "recommendation": "Not applicable for a CLI tool. If deployed as a hosted service, define CODEOWNERS for observability assets.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No resource tagging governance",
+      "description": "No resource tagging governance for own infrastructure (none exists). Zappa supports user-configurable tags for deployed resources but has no tagged AWS resources itself.",
+      "gap": "No tagging governance — no AWS resources owned by this repo.",
+      "recommendation": "No action needed for the tool itself. Document tagging best practices for users configuring zappa_settings.json.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=1 (monolith), INF-Q1=1 (no managed compute)",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 1, "note": "Tightly-coupled monolith with god class pattern"},
+        {"question_id": "INF-Q1", "score": 1, "note": "No managed compute infrastructure"}
+      ],
+      "detail": {
+        "recommended_services": ["Lambda", "API Gateway", "Step Functions", "EventBridge", "ECS/EKS"],
+        "patterns": ["Hexagonal Architecture", "Anti-corruption Layer"],
+        "immediate_actions": ["Extract handler.py + wsgi.py + asgi.py as standalone lightweight package", "Define clean interfaces between CLI, orchestration, and handler layers"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/CMK2J48MVN", "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"]
+      }
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1=1 but no deployed workload exists — CLI tool published to PyPI, not a running service. Contextual guard prevents triggering.",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 1, "note": "Score meets threshold but contextual guard blocks: no deployed workload to containerize"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "Zappa is a CLI tool published to PyPI. There is no running service to containerize — compute is Lambda-based when users deploy via Zappa. The contextual guard 'must be EC2/VM-based' prevents this pathway."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures); no commercial database engines detected",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "No stored procedures — trigger condition not met (requires < 3)"}
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q2 Not Evaluated (no database); DATA-Q3=4 (no database to version)",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": null, "note": "Not Evaluated (surface-gated) — no database exists"},
+        {"question_id": "DATA-Q3", "score": 4, "note": "No database engines to manage — trigger condition not met"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No database exists in this repository. INF-Q2 was not evaluated due to surface gating (has_persistent_data_store=false)."
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q4 Not Evaluated (archetype-N/A); no data processing workloads exist",
+      "triggering_questions": [
+        {"question_id": "INF-Q4", "score": null, "note": "Not Evaluated (archetype-N/A) — cannot trigger pathway"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "INF-Q4 was Not Evaluated (archetype-N/A for stateless-utility). No data processing workloads exist in this repository."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=1 (no IaC for own infrastructure)",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 1, "note": "No IaC defines project's own operational infrastructure"}
+      ],
+      "detail": {
+        "recommended_services": ["GitHub Dependabot", "Bandit/Semgrep", "Terraform GitHub provider"],
+        "immediate_actions": ["Add Dependabot for dependency vulnerability scanning", "Add Bandit/Semgrep for Python SAST", "Consider Terraform for GitHub repo settings"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/1FGEQKGPQD", "https://skillbuilder.aws/learn/R4B13K95YQ"]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. The context 'Python framework for deploying WSGI apps on AWS Lambda' contains no AI-related signal terms."
+    }
+  ]
+}

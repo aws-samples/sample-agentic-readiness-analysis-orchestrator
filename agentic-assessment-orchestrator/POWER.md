@@ -68,12 +68,12 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 > ls {repo}/modernization-assessment/{project-name}-mod-report.md 2>/dev/null      # MOD
 > ls {repo}/bpmn-opportunity-assessment/*-bpmn-opportunity-report.md 2>/dev/null   # BPMN
 >
-> # V6: confirm the full artifact bundle (md + json + html + metadata.json) was produced
+> # confirm the full artifact bundle (md + json + html + metadata.json) was produced
 > ls {repo}/agentic-readiness-assessment/{project-name}-ara-report.{json,html,metadata.json} 2>/dev/null
 > ls {repo}/modernization-assessment/{project-name}-mod-report.{json,html,metadata.json} 2>/dev/null
 > ```
 >
-> The `.md` presence check remains the authoritative success signal — all four V6 artifacts are produced together or none are.
+> The `.md` presence check remains the authoritative success signal — all four artifacts are produced together or none are.
 >
 > **Rules:**
 > 1. Set `timeout: 1200000` (20 min) on the executeBash call. This prevents terminal freezes from stdout buffer overflow.
@@ -92,7 +92,7 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 - Configurable preferences to steer MOD technology recommendations
 - Bridge report cross-referencing ARA, MOD, and BPMN findings for unified remediation planning (full assessment only, when `portfolio_bridge` is configured)
 - Consolidated reports organized by assessment type
-- **V6 three-artifact output** — each per-repo and portfolio assessment emits three artifacts plus a metadata sidecar: `{name}-report.md` (richest narrative), `{name}-report.json` (canonical machine-readable contract for webapp consumption), `{name}-report.html` (single self-contained visualization), and `{name}-report.metadata.json` (version compatibility sidecar). JSON is authoritative on any conflict.
+- **Four-artifact output** — each per-repo and portfolio assessment emits three artifacts plus a metadata sidecar: `{name}-report.md` (richest narrative), `{name}-report.json` (canonical machine-readable contract for webapp consumption), `{name}-report.html` (single self-contained visualization), and `{name}-report.metadata.json` (version compatibility sidecar). JSON is authoritative on any conflict between artifacts.nflict.
 
 **When to Use:**
 - Planning agentic AI adoption across microservices
@@ -1301,18 +1301,18 @@ Individual reports (before consolidation) are generated at:
 - MOD: `{repo}/modernization-assessment/{project-name}-mod-report.md`
 - Bridge: `{portfolio-name}-bridge-report.md` at portfolio root (no consolidation needed)
 
-### V6 Artifact Format
+### Artifact Format
 
-As of V6, every per-repo and portfolio assessment emits a four-file bundle:
+Every per-repo and portfolio assessment emits a four-file bundle:
 
 | Artifact | Purpose |
 |---|---|
-| `{name}-report.md` | Richest-prose artifact. Preserves every V5 narrative (rubric quotes, BLOCKER Remediation blocks, Score Summary tables, Scoring Notes arithmetic, Top 5 Gaps, Quick Agent Wins, Decomposition Strategy, Pathway Detail subsections, Execution Roadmap, Portfolio Risk Register, etc.). |
-| `{name}-report.json` | **Canonical machine-readable contract.** Consumed by the webapp and by portfolio TDs. JSON validates against the V6 JSON Schema at `.kiro/specs/assessment-standardization-v6/schema/v6.schema.json`. If artifacts disagree on any field, JSON wins. |
+| `{name}-report.md` | Richest-prose artifact. Contains all narrative (rubric quotes, BLOCKER Remediation blocks, Score Summary tables, Scoring Notes arithmetic, Top 5 Gaps, Decomposition Strategy, Pathway Detail subsections, Execution Roadmap, Portfolio Risk Register, etc.). |
+| `{name}-report.json` | **Canonical machine-readable contract.** Consumed by the webapp and by portfolio TDs. If artifacts disagree on any field, JSON wins. |
 | `{name}-report.html` | Single self-contained HTML file. No external asset fetches at render time. Every data value originates from the JSON; MD prose is NOT part of the HTML round-trip contract. |
-| `{name}-report.metadata.json` | Tiny sidecar carrying `{version, assessment_type, assessment_date, td_version, report_format_version}`. Downstream consumers (webapp, Bridge TD, future specs) can read this before consuming the main JSON to verify `version == "V6"` and `report_format_version == "V6"`. The same fields are redundantly embedded at the root of the main JSON under `metadata` so consumers that skip the sidecar still have access. |
+| `{name}-report.metadata.json` | Tiny sidecar carrying `{version, assessment_type, assessment_date, td_version, report_format_version}`. Downstream consumers (webapp, Bridge TD, future specs) can read this before consuming the main JSON to verify `version` and `report_format_version`. The same fields are redundantly embedded at the root of the main JSON under `metadata` so consumers that skip the sidecar still have access. |
 
-The Power consolidates all four artifacts into the destination folder (`agentic-readiness-assessment/`, `modernization-assessment/`, etc.) and the portfolio root for portfolio artifacts. No orchestrator logic changes are required — V6 TDs still emit `.md` so the existing "check for report file" logic continues to work unchanged.
+The Power consolidates all four artifacts into the destination folder (`agentic-readiness-assessment/`, `modernization-assessment/`, etc.) and the portfolio root for portfolio artifacts. No orchestrator logic changes are required — TDs emit `.md` so the existing "check for report file" logic continues to work unchanged.
 
 ## Example Usage
 

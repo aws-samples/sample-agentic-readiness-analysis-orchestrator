@@ -25,8 +25,8 @@
 | Infrastructure, Platform, and DevOps (INF) | N/A | N/A — all questions not applicable for this CLI tool | Ready |
 | Application Architecture (APP) | 2.00 / 4.0 | 🟠 Needs Work | Critical |
 | Data Platform Modernization (DATA) | N/A | N/A — all questions not applicable | Ready |
-| Security Baseline (SEC) | 1.50 / 4.0 | ❌ Not Present | Critical |
-| Operations & Observability (OPS) | 1.17 / 4.0 | ❌ Not Present | Critical |
+| Security Baseline (SEC) | 1.50 / 4.0 | ❌ Not Ready | Critical |
+| Operations & Observability (OPS) | 1.17 / 4.0 | ❌ Not Ready | Critical |
 | **Overall** | **1.56 / 4.0** | **🟠 Needs Work** | |
 
 **Scoring Notes:**
