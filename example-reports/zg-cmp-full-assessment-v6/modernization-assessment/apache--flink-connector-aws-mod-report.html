@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>apache--flink-connector-aws - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; line-height: 1.6; padding: 2rem; }
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 1.8rem; color: #fff; margin-bottom: 0.5rem; }
+.subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+.executive-summary { background: #1a1a2e; border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid #2a2a3e; }
+.executive-summary h2 { font-size: 1.2rem; color: #fff; margin-bottom: 1rem; }
+.status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; }
+.status-pilot { background: #3d3d00; color: #ffd700; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+.stat-card { background: #1a1a2e; border-radius: 12px; padding: 1.5rem; text-align: center; border: 1px solid #2a2a3e; }
+.stat-card .number { font-size: 2rem; font-weight: 700; }
+.stat-card .label { color: #888; font-size: 0.85rem; margin-top: 0.25rem; }
+.high { color: #ff4444; }
+.medium { color: #ffa500; }
+.low { color: #ffd700; }
+.total { color: #fff; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #2a2a3e; }
+th { background: #1a1a2e; color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+td { font-size: 0.9rem; }
+.section { margin-bottom: 2rem; }
+.section h2 { font-size: 1.3rem; color: #fff; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #2a2a3e; }
+.finding-card { background: #1a1a2e; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; border: 1px solid #2a2a3e; }
+.finding-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+.finding-title { font-weight: 600; color: #fff; }
+.severity-badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+.severity-high { background: #4a0000; color: #ff4444; }
+.severity-medium { background: #4a2800; color: #ffa500; }
+.severity-low { background: #3d3d00; color: #ffd700; }
+.finding-category { color: #888; font-size: 0.8rem; margin-bottom: 0.75rem; }
+.finding-section { margin-bottom: 0.75rem; }
+.finding-section-title { font-size: 0.75rem; text-transform: uppercase; color: #666; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+.finding-section-content { font-size: 0.9rem; color: #ccc; }
+.category-table .status-ready { color: #44ff44; }
+.category-table .status-needs-work { color: #ffa500; }
+.category-table .status-critical { color: #ff4444; }
+.footer { text-align: center; color: #666; font-size: 0.8rem; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #2a2a3e; }
+.recommendation-box { background: #0d1b2a; border: 1px solid #1b3a5c; border-radius: 12px; padding: 1.5rem; margin-top: 2rem; }
+.recommendation-box h3 { color: #4da6ff; margin-bottom: 0.75rem; }
+.recommendation-box li { margin-left: 1.5rem; margin-bottom: 0.5rem; color: #ccc; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>apache--flink-connector-aws - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2026-05-07 &middot; Java &middot; Multi-module Maven Library &middot; Priority: P2</p>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="status-badge status-pilot">&#x1F7E1; Pilot-Ready</span></p>
+<p style="margin-top: 1rem;"><strong>Key Findings:</strong> This Apache Flink AWS connector library scores 2.68/4.0 overall. Application Architecture and Data Platform categories are mature (3.50+), reflecting well-structured multi-module design with clear boundaries and unified data access patterns. Security Baseline and Infrastructure &amp; DevOps categories need work — primarily driven by absent audit logging, lack of automated release pipeline, and static CI credentials without rotation.</p>
+<p style="margin-top: 0.75rem;"><strong>Remediation Plan:</strong> 1 High-severity finding (audit logging) and 6 Medium-severity findings primarily in DevOps automation and security hardening. 6 Low-severity findings in application architecture and observability. Most findings are addressable with low-to-medium effort within existing GitHub Actions infrastructure.</p>
+<p style="margin-top: 0.75rem;"><strong>Recommended Actions:</strong> (1) Add CodeQL and dependency scanning to CI pipeline. (2) Migrate E2E test credentials to OIDC role assumption. (3) Create automated release workflow. (4) Add CODEOWNERS and incident runbooks.</p>
+<p style="margin-top: 0.75rem; font-size: 0.85rem; color: #888;"><strong>Classification:</strong> 1 High finding &rarr; Pilot-Ready. MOD classification: 1 High maps to Pilot-Ready (not Remediation Required) because a single modernization gap is typically not a deployment blocker — unlike ARA where 1 High gates agent deployment.</p>
+</div>
+
+<div class="stats-row">
+<div class="stat-card"><div class="number total">13</div><div class="label">Total Findings</div></div>
+<div class="stat-card"><div class="number high">1</div><div class="label">High Severity</div></div>
+<div class="stat-card"><div class="number medium">6</div><div class="label">Medium Severity</div></div>
+<div class="stat-card"><div class="number low">6</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="section">
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Language</td><td>Java 11 (targeting 17), Python 3.8+</td></tr>
+<tr><td>Framework</td><td>Apache Flink 2.0.0</td></tr>
+<tr><td>AWS SDK</td><td>AWS SDK for Java v2 (2.40.3)</td></tr>
+<tr><td>Build System</td><td>Maven 3.8.x (20 modules)</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Category-by-Category Breakdown</h2>
+<table class="category-table">
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>2.00 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Application Architecture (APP)</td><td>3.50 / 4.0</td><td>Mature</td><td class="status-ready">Ready</td></tr>
+<tr><td>Data Platform (DATA)</td><td>3.67 / 4.0</td><td>Mature</td><td class="status-ready">Ready</td></tr>
+<tr><td>Security Baseline (SEC)</td><td>2.00 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>2.25 / 4.0</td><td>Needs Work</td><td class="status-needs-work">Needs Work</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<div class="finding-header">
+<span class="finding-title">SEC-Q1: No audit logging configured</span>
+<span class="severity-badge severity-high">HIGH</span>
+</div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section">
+<div class="finding-section-title">Finding</div>
+<div class="finding-section-content">No CloudTrail, audit logging, or equivalent logging infrastructure is configured in this repository. GitHub Actions provides inherent workflow run logging, but no explicit audit trail for builds, releases, or security events is configured.</div>
+</div>
+<div class="finding-section">
+<div class="finding-section-title">Recommendation</div>
+<div class="finding-section-content">Enable GitHub audit log streaming. Add automated CHANGELOG generation. Ensure Apache release signing and verification steps are documented and auditable.</div>
+</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header">
+<span class="finding-title">INF-Q10: Partial IaC coverage</span>
+<span class="severity-badge severity-medium">MEDIUM</span>
+</div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section">
+<div class="finding-section-title">Finding</div>
+<div class="finding-section-content">CI/CD pipeline definitions exist in GitHub Actions YAML, constituting partial IaC. No infrastructure-as-code for build environments, Maven repository configurations, or release infrastructure beyond workflow definitions.</div>
+</div>
+<div class="finding-section">
+<div class="finding-section-title">Recommendation</div>
+<div class="finding-section-content">Codify build environment requirements as reusable composite actions or container definitions. If AWS resources are used for E2E testing, define them in IaC.</div>
+</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header">
+<span class="finding-title">INF-Q11: CI/CD lacks release pipeline and security scanning</span>
+<span class="severity-badge severity-medium">MEDIUM</span>
+</div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section">
+<div class="finding-section-title">Finding</div>
+<div class="finding-section-content">GitHub Actions CI/CD pipeline automates build and test (multi-JDK matrix, unit tests, E2E tests, license checking). Release/publish workflow to Maven Central is not automated, and no security scanning gate exists.</div>
+</div>
+<div class="finding-section">
+<div class="finding-section-title">Recommendation</div>
+<div class="finding-section-content">Add automated release workflow for Maven Central publishing. Integrate OWASP dependency-check or Snyk as CI step. Add CodeQL as a required check.</div>
+</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header">
+<span class="finding-title">SEC-Q5: CI secrets without rotation</span>
+<span class="severity-badge severity-medium">MEDIUM</span>
+</div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section">
+<div class="finding-section-title">Finding</div>
+<div class="finding-section-content">CI/CD secrets (AWS credentials for E2E tests) stored as GitHub Actions secrets. No plaintext in source. However, secrets are static without rotation and not managed by a dedicated secrets manager.</div>
+</div>
+<div class="finding-section">
+<div class="finding-section-title">Recommendation</div>
+<div class="finding-section-content">Migrate E2E test authentication to OIDC-based role assumption (matching ATX workflow pattern). Implement GitHub secret rotation if static credentials required.</div>
+</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header">
+<span class="finding-title">SEC-Q6: No dependency vulnerability scanning</span>
+<span class="severity-badge severity-medium">MEDIUM</span>
+</div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section">
+<div class="finding-section-title">Finding</div>
+<div class="finding-section-content">CI runs on ubuntu-latest with JDK and Maven pinned. No vulnerability scanning of dependencies or build environment. Third-party GitHub Actions used without SHA pinning.</div>
+</div>
+<div class="finding-section">
+<div class="finding-section-title">Recommendation</div>
+<div class="finding-section-content">Pin third-party GitHub Actions to commit SHAs. Add OWASP dependency-check to CI. Enable Dependabot for automated dependency updates.</div>
+</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header">
+<span class="finding-title">OPS-Q7: No incident response automation</span>
+<span class="severity-badge severity-medium">MEDIUM</span>
+</div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section">
+<div class="finding-section-title">Finding</div>
+<div class="finding-section-content">No runbooks, incident response automation, or structured response procedures found. Build failures handled ad hoc with no automation for common issues.</div>
+</div>
+<div class="finding-section">
+<div class="finding-section-title">Recommendation</div>
+<div class="finding-section-content">Create structured runbooks for common scenarios (build failure triage, dependency CVE response, Flink compatibility issues). Add GitHub Actions for automated security advisory responses.</div>
+</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header">
+<span class="finding-title">OPS-Q8: No observability ownership defined</span>
+<span class="severity-badge severity-medium">MEDIUM</span>
+</div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section">
+<div class="finding-section-title">Finding</div>
+<div class="finding-section-content">Repository has ASF configuration for committer access but no per-module dashboards, named owners for operational aspects, or structured observability of library issues.</div>
+</div>
+<div class="finding-section">
+<div class="finding-section-title">Recommendation</div>
+<div class="finding-section-content">Define CODEOWNERS file mapping modules to responsible maintainers. Add SECURITY.md with named contacts and response SLAs. Create GitHub issue templates for module-specific reports.</div>
+</div>
+</div>
+
+</div>
+
+<div class="recommendation-box">
+<h3>&#x1F680; Modernization Recommendations</h3>
+<ol>
+<li><strong>SEC-Q1 (High):</strong> Establish audit logging for release processes and security events — enable GitHub audit log streaming and automated CHANGELOG generation.</li>
+<li><strong>INF-Q11 (Medium):</strong> Add CodeQL SAST and OWASP dependency-check to CI pipeline to catch security vulnerabilities before release.</li>
+<li><strong>SEC-Q5 (Medium):</strong> Migrate E2E test credentials from static GitHub secrets to OIDC-based role assumption to eliminate long-lived credential exposure.</li>
+</ol>
+</div>
+
+<div class="footer">
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</div>
+
+</div>
+</body>
+</html>

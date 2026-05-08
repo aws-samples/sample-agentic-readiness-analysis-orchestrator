@@ -1,0 +1,678 @@
+{
+  "metadata": {
+    "version": "V6",
+    "assessment_type": "ara",
+    "assessment_date": "2026-05-07",
+    "td_version": "agentic-readiness-assessment",
+    "report_format_version": "V6",
+    "target": "arrow-py--arrow",
+    "repository_type": "library",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Arrow is a pure computation library with no persistent state, no HTTP/RPC surface, no auth surface, no write operations, and no logging of user data. It exports functions and classes for date/time manipulation only.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["python", "library"],
+    "context": "Python library for human-friendly date and time handling.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_http_rpc_surface": false,
+      "has_auth_surface": false,
+      "has_write_operations": false,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Agent-Ready",
+    "sub_qualifier": null,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 33,
+    "safety_impact_medium_count": 0,
+    "rule_matched": "0 High, ≤1 Medium → Agent-Ready"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 0,
+    "risk_quality_count": 0,
+    "info_count": 33,
+    "na_count": 5,
+    "not_evaluated_count": 5,
+    "total": 43,
+    "core_questions_evaluated": 19,
+    "extended_questions_triggered": 14,
+    "extended_questions_not_triggered": 5
+  },
+  "readiness_profile": {
+    "profile": "Agent-Ready",
+    "deployment_gate": "Cleared for autonomous operation. Instrument observability. Define scope explicitly. Run controlled pilot first."
+  },
+  "findings": [
+    {
+      "question_id": "API-Q1",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Documented API Interface",
+      "description": "Arrow exposes a Python library API (import arrow) with comprehensive Sphinx documentation. No HTTP/REST/GraphQL/AsyncAPI interface exists — this is a library, not a service.",
+      "gap": "No network-level API interface (expected for a library)",
+      "recommendation": "None required. Consuming applications wrapping Arrow in a service are responsible for their own API documentation.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Machine-Readable API Specification",
+      "description": "No HTTP/RPC surface — machine-readable spec is not applicable. Arrow's API contract is expressed via Python type hints, __all__ exports, and Sphinx documentation.",
+      "gap": "N/A — not applicable for libraries",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Structured Error Responses",
+      "description": "No HTTP/RPC surface — structured error responses are not applicable. Arrow uses typed Python exceptions (ParserError).",
+      "gap": "N/A — not applicable for libraries",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/parser.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Idempotent Write Operations",
+      "description": "Read-only agents do not execute write operations. Arrow is a pure computation library with no write endpoints or state mutations.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/api.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND library has no write operations.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Arrow is a pure computation library with no write endpoints. Read-only agent scope means idempotency is informational only."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Structured Response Format",
+      "description": "Returns Python objects (Arrow instances). No serialization format concern for in-process library calls.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Rate Limit Documentation and Headers",
+      "description": "No HTTP/RPC surface — rate limits are not applicable for an in-process library.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Machine Identity Authentication",
+      "description": "Arrow is a computation library with no authentication surface. It does not authenticate callers. PyPI publishing uses GitHub Actions secrets appropriately.",
+      "gap": "No machine identity mechanism (expected — libraries are consumed, not called over network)",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/release.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Scoped Permissions (Least Privilege)",
+      "description": "No authorization model — all exported functions equally available. Expected for a computation library.",
+      "gap": "No access control (expected for libraries)",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Action-Level Authorization",
+      "description": "No actions requiring differential authorization. All operations are pure computations.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/api.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Identity Propagation and Delegation",
+      "description": "No identity propagation surface. Arrow is invoked as a local function call with no network boundary.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/api.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credential Management",
+      "description": "PyPI API token managed via GitHub Actions secrets. No credentials hardcoded in source code.",
+      "gap": "None identified",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/release.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Immutable Audit Logging",
+      "description": "System does not execute agent-invoked write operations — audit logging is a consumer responsibility.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: has_auth_surface=false AND has_write_operations=false.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Library does not execute agent-invoked write operations. Audit logging is a consumer responsibility."
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Agent Identity Suspension",
+      "description": "System does not issue or enforce agent identities — suspension is a consumer responsibility.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Compensation and Rollback",
+      "description": "System exposes no write operations — compensation logic is not applicable. Pure computation library.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: has_write_operations=false AND has_http_rpc_surface=false. Archetype stateless-utility.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Arrow has no write operations and no HTTP/RPC surface. Compensation logic is not applicable for a pure computation library."
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Concurrency Controls",
+      "description": "Arrow produces immutable Arrow instances — no shared mutable state. Thread-safe by design.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience",
+      "description": "No external service dependencies. Arrow is self-contained with only local computation dependencies (python-dateutil, tzdata).",
+      "gap": "No circuit breakers (not needed — no external calls)",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "pyproject.toml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Rate Limiting and Throttling",
+      "description": "No HTTP/RPC surface — rate limiting is not applicable for an in-process library.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Blast Radius and Transaction Limits",
+      "description": "Read-only agents cannot modify records. Arrow has no state-mutating operations.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/api.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Draft/Pending State",
+      "description": "Read-only agents do not make state changes. Arrow has no state mutation concepts.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Configurable Approval Gates",
+      "description": "No operations require approval gates in a computation library.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/api.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging Environment",
+      "description": "Libraries do not own staging environments. Arrow provides comprehensive local testing via tox/pytest with 99%+ coverage across 3 OS and 8 Python versions.",
+      "gap": "No staging environment (expected — testing is local for libraries)",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "tox.ini", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Sensitive Data Classification",
+      "description": "Stage A = No. Not a data-handling target — no PII/PHI/financial/credential data is stored, processed, or logged. Arrow operates exclusively on temporal values.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: Stage A = No. Pure computation library (date/time) is not a data-handling target.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Arrow operates exclusively on temporal values (dates, times, timestamps, timezones) which are not user-identifying data. No PII/PHI/financial/credential data is stored, processed, or logged.",
+        "data_q1_subchecks": {
+          "b1": {"fired": false, "severity": null, "reasoning": "Stage A = No. Not a data-handling target. B1 not evaluated."},
+          "b2": {"fired": false, "severity": null, "reasoning": "Stage A = No. Not a data-handling target. B2 not evaluated."},
+          "b3": {"fired": false, "severity": null, "reasoning": "Stage A = No. Not a data-handling target. B3 not evaluated."}
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Data Residency and Sovereignty",
+      "description": "No persistent data store and no user-data logging — residency requirements do not apply. Arrow holds no data subject to residency constraints.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "pyproject.toml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: has_persistent_data_store=false AND has_logging_of_user_data=false.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Arrow has no persistent data store and no user-data logging. It performs in-memory temporal computations only."
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Selective Query Support",
+      "description": "No query endpoints. Arrow returns bounded results (single Arrow instances, tuples, or bounded generators).",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Temporal Metadata and Freshness",
+      "description": "Arrow IS a temporal data library — it inherently provides timezone-aware datetime handling with UTC normalization. This is the library's core purpose.",
+      "gap": "None — temporal handling is the primary feature",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "PII Redaction in Logs",
+      "description": "System does not log user data and holds no user data — PII-in-logs risk is not applicable. Arrow has no logging infrastructure.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Data Quality Awareness",
+      "description": "Not applicable for a computation library. Arrow validates input data (raises ParserError for invalid formats) but does not maintain datasets requiring quality scores.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "arrow/parser.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Schema Versioning and API Contracts",
+      "description": "Arrow uses semantic versioning with tag-based releases. Well-defined __all__ export list. Type annotations with mypy strict mode. CHANGELOG.rst documents changes. No automated breaking-change detection in CI.",
+      "gap": "No automated API-breaking-change detection tool in CI pipeline",
+      "recommendation": "Consider adding griffe or pyright --verifytypes to CI for automated API compatibility checks.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "description": "Excellent naming conventions: humanize(), dehumanize(), shift(), floor(), ceil(), span(), replace(), format(), is_between(). No legacy abbreviations.",
+      "gap": "None",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Data Catalog / Metadata Layer",
+      "description": "Comprehensive Sphinx documentation on ReadTheDocs. API guides, getting-started guides, and release notes available.",
+      "gap": "No formal data catalog (not applicable for a computation library)",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "docs/api-guide.rst", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Distributed Tracing and Structured Logging",
+      "description": "Library/utility — tracing and correlation are consumer concerns. Arrow has no logging or tracing instrumentation.",
+      "gap": "No tracing (expected for libraries)",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/arrow.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Alerting on Error Rates and Latency",
+      "description": "Library/utility — alerting is a consumer concern. No API surface to monitor.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Business Outcome Metrics",
+      "description": "Not applicable for a computation library. No business outcomes to measure at the library level.",
+      "gap": "N/A",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "arrow/__init__.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q6", "status": "not_evaluated_extended", "trigger": "Service has operations >30s OR long-running workflows"},
+    {"question_id": "API-Q7", "status": "not_evaluated_extended", "trigger": "Service has state changes (stateful-crud, orchestrator)"},
+    {"question_id": "STATE-Q2", "status": "not_evaluated_extended", "trigger": "Service has persistent state (stateful-crud, data-gateway, orchestrator)"},
+    {"question_id": "STATE-Q7", "status": "not_evaluated_extended", "trigger": "Service is P0 priority OR is on the critical path"},
+    {"question_id": "DATA-Q4", "status": "not_evaluated_extended", "trigger": "Service has persistent state (stateful-crud, data-gateway)"},
+    {"question_id": "ENG-Q1", "status": "na", "reason": "This is a library repository. This question does not apply."},
+    {"question_id": "ENG-Q2", "status": "na", "reason": "This is a library repository. This question does not apply."},
+    {"question_id": "ENG-Q3", "status": "na", "reason": "This is a library repository. This question does not apply."},
+    {"question_id": "ENG-Q4", "status": "na", "reason": "This is a library repository. This question does not apply."},
+    {"question_id": "ENG-Q5", "status": "na", "reason": "This is a library repository. This question does not apply."}
+  ]
+}

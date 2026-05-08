@@ -1679,3 +1679,282 @@ Strictly follow these rules at all times:
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
 - **All 7 pathways in aggregation**: The pathway aggregation table must include all 7 pathways, even if none are triggered. Every assessed repo must appear in exactly one column per pathway row.
 - **Report completeness**: The output report must contain all required sections: executive dashboard, technology stack summary, service dependency map, cross-cutting concerns, phased roadmap, pathway aggregation, integration opportunities, risk assessment, resource allocation, AWS programs, learning materials, service-by-service summary, and assessment inventory.
+
+
+---
+
+## V6 Additions
+
+V6 is strictly additive to the V5 Portfolio MOD TD. Every V5 section is preserved — Sequencing Principles, Phase 0 Cross-Cutting Foundation, Phase 1 Quick Wins, Phase 2 Foundation, Phase 3 Advanced, Total Portfolio Effort, per-service modernization plans with per-service Dependencies and Estimated Effort, Parallel Execution Tracks, Pathway Details subsections, Integration Opportunities, Risk Assessment (Portfolio Risk Register), Resource Allocation Recommendations, and Recommended Self-Paced Learning Materials all remain verbatim in MD. V6 layers a webapp-aligned JSON surface on top and promotes four execution-roadmap fields from MD-only to additive structured JSON per Open Decision 2.
+
+---
+
+### V6 Top-Level JSON Keys (Req 10)
+
+The Portfolio MOD JSON artifact MUST emit these top-level keys in the order shown:
+
+| Key | Description |
+|---|---|
+| `assessment_type` | Literal `"portfolio-mod"` |
+| `metadata` | Version, assessment date, portfolio name, TD version, services_assessed, consumed_per_repo_json_files, preferences (optional) |
+| `summary` | 5 KPI counts: repositories_analyzed, total_findings, high_severity_findings, medium_severity_findings, low_severity_findings |
+| `filter_vocab` | Filter-eligible enums actually present in the run |
+| `executive_dashboard` | Portfolio score overview + `readiness_distribution_v5` + `classification_distribution_v6` (counts that agree per Req 29.4) + category_score_averages + repo_type_distribution |
+| `technology_stack_summary` | Preserved V5 section |
+| `repositories[]` | Per-repo roll-up (renamed from V5 `service_summary[]`) |
+| `findings[]` | Lightweight portfolio finding index (renamed from V5 `findings_index[]`) |
+| `remediation_roadmap` | See §"V6 Remediation Roadmap" — grouping `pathway` |
+| `recommended_actions[]` | Canonical AWS programs (MAP, MMP, WAMP, EBA, OLA, VMP, ISV WMP) |
+| `pathways[]` | All 7 AWS Modernization Pathways with JSON-pointer back-references; see §"V6 Pathways Aggregation" |
+| `dependency_map` | Preserved V5 dependency map |
+| `roadmap_phases[]` | Optional, additive (Open Decision 2 promotion 1) |
+| `parallel_execution_tracks[]` | Optional, additive (Open Decision 2 promotion 3) |
+| `portfolio_risk_register[]` | Optional, additive (Open Decision 2 promotion 4) |
+
+Canonical shape anchor: `.kiro/specs/assessment-standardization-v6/examples/portfolio-mod-report.example.json`.
+
+#### `filter_vocab` (Req 10.9)
+
+```json
+{
+  "severities": ["High", "Medium", "Low"],
+  "categories": ["Infrastructure & DevOps", "Application Architecture", "Data Platform", "Security Baseline", "Operations & Observability"],
+  "efforts": ["High", "Medium", "Low"],
+  "priorities": ["P0", "P1", "P2", "P3"],
+  "phases": [1, 2, 3, 4],
+  "classifications": ["Cloud-Native Ready", "Pilot-Ready", "Remediation Required", "Not Ready"]
+}
+```
+
+Display names only for categories (Req 7A AC 6).
+
+#### `executive_dashboard` V5/V6 dual-distribution (Req 29)
+
+`executive_dashboard` MUST carry both `readiness_distribution_v5` (V5 numeric-score bands) and `classification_distribution_v6` (V6 tier counts). The two must agree under the canonical Req 29 AC 1 equivalence table:
+- V5 Mature (≥3.5) ≡ V6 Cloud-Native Ready
+- V5 Partial (2.5–3.4) ≡ V6 Pilot-Ready
+- V5 Needs Work (1.5–2.4) ≡ V6 Remediation Required
+- V5 Not Ready (<1.5) ≡ V6 Not Ready
+
+```json
+"executive_dashboard": {
+  "portfolio_score_overview": { "portfolio_overall_score": 2.31, "score_range": { "min": 1.22, "max": 3.75 } },
+  "readiness_distribution_v5": { "mature": 3, "partial": 8, "needs_work": 18, "not_ready": 5 },
+  "classification_distribution_v6": { "cloud_native_ready": 3, "pilot_ready": 8, "remediation_required": 18, "not_ready": 5 },
+  "category_score_averages": [ { "category_id": "INF", "category": "Infrastructure & DevOps", "average": 1.45 } ],
+  "repo_type_distribution": { "application": 16, "monorepo": 18 }
+}
+```
+
+#### `repositories[]` (Req 10.11, Req 29.4, Req 30.2)
+
+Each entry carries:
+- `repo_name`
+- `overall_score` (V5 numeric 1.00-4.00, preserved)
+- `classification.tier` (V6) + `classification.classification_consistency_check` ("consistent" OR a structured `{status: "divergent", v5_band, v6_tier, reason}` object per Req 29.4)
+- `category_scores[]` — each entry with `numeric_score` + `score_rating` + `severity_status` (Req 7)
+- `surface_flags`, `repo_type`, `service_archetype`, `repository_priority` (preserved V5 fields)
+- `per_repo_md_path`, `per_repo_json_path`, `per_repo_html_path`
+- `pathways_triggered[]` — OBJECT list (not bare IDs) where each entry carries `{id, priority, effort, triggering_questions[]}` with inlined `(question_id, score, note, evidence)` per Req 30 AC 2.
+
+V5→V6 key renames: `service_summary[]` → `repositories[]`, `findings_index[]` → `findings[]`. All V5 per-entry fields preserved; V6 adds `category_scores[].severity_status` and the `pathways_triggered[]` object shape.
+
+---
+
+### V6 Pathways Aggregation (Req 13, 30)
+
+`pathways[]` aggregates per-repo pathway information across all consumed repos. Every entry carries:
+
+```json
+{
+  "id": "move-to-cloud-native",
+  "name": "Move to Cloud Native",
+  "portfolio_status": "Triggered",
+  "triggered_in_repos_count": 18,
+  "applicable_repos_count": 32,
+  "priority": "High",
+  "effort": "High",
+  "description": "Decompose monoliths, adopt serverless patterns, implement event-driven architecture.",
+  "recommended_aws_programs": ["Migration Acceleration Program (MAP)", "EBA"],
+  "contributing_repos": [
+    {
+      "repo_name": "Lidarr--Lidarr",
+      "per_repo_pathway_source": "/pathways/0",
+      "per_repo_json_path": "services/Lidarr--Lidarr/modernization-assessment/Lidarr--Lidarr-mod-report.json",
+      "triggering_questions": [
+        { "question_id": "APP-Q2", "score": 2, "note": "Monolith", "evidence": { "file": "src/", "lines": null } },
+        { "question_id": "INF-Q1", "score": 1, "note": "No managed compute", "evidence": { "file": "azure-pipelines.yml", "lines": null } }
+      ]
+    }
+  ],
+  "per_repo_not_triggered_reasons": [
+    { "repo_name": "arrow-py--arrow", "consulted_questions": [ { "question_id": "APP-Q2", "score": 4, "note": "Primary trigger not met." } ] }
+  ],
+  "roadmap_phase_alignment": "Phase 2-3"
+}
+```
+
+#### JSON-pointer back-reference (Req 13 AC 9, Req 30 AC 7)
+
+`contributing_repos[].per_repo_pathway_source` MUST be a JSON-pointer fragment (RFC 6901) of the form `/pathways/{index}` where `{index}` names the exact position in the per-repo MOD JSON's `pathways[]` array. ALTERNATIVELY, a URI reference form ending in `#/pathways/{index}` is accepted. The portfolio TD MUST NOT emit a best-effort match by name or id — the JSON-pointer is authoritative. Unresolvable pointers fail the assessment (see error-handling TD task 13).
+
+#### Inlined evidence (Req 30 AC 3)
+
+`triggering_questions[].evidence` is INLINED on the portfolio entry (copied from per-repo `findings[].evidence` for the triggering question id) so the webapp can render pathway evidence in the Pathways tab without a second per-repo JSON fetch.
+
+---
+
+### V6 Remediation Roadmap (Req 13.11-13.12, 14)
+
+The Portfolio MOD JSON emits `remediation_roadmap` with `grouping: "pathway"`:
+
+```json
+"remediation_roadmap": {
+  "grouping": "pathway",
+  "total_pathways": 4,
+  "total_items": 4,
+  "items": [
+    {
+      "pathway_id": "move-to-cloud-native",
+      "pathway": "Move to Cloud Native",
+      "description": "…",
+      "repos_count": 18,
+      "applicable_repos_count": 32,
+      "priority": "High",
+      "effort": "High"
+    }
+  ]
+}
+```
+
+`items[]` is a ONE-TO-ONE summary projection of `pathways[]` entries with `portfolio_status == "Triggered"`, sorted descending by `triggered_in_repos_count` (Req 13 AC 11-12). Consumers needing per-repo evidence dereference through `pathways[].contributing_repos[]`.
+
+MD rendering under an H2 heading **"## Remediation Roadmap"** matching the webapp tab label.
+
+---
+
+### V6 Recommended Actions (Req 14A)
+
+The Portfolio MOD JSON emits `recommended_actions[]` with minimum-set coverage per Req 14A AC 5:
+
+| `id` | `name` | `acronym` | `type` |
+|---|---|---|---|
+| `map` | Migration Acceleration Program | MAP | program |
+| `mmp` | Microsoft Modernization Program | MMP | program |
+| `wamp` | Windows App Modernization Program | WAMP | program |
+| `eba` | Experience-Based Acceleration | EBA | program |
+| `ola` | Optimization and Licensing Assessment | OLA | program |
+| `vmp` | VMware Migration Program | VMP | program |
+| `isv-wmp` | ISV Workload Migration Program | ISV WMP | program |
+
+Same entry envelope as Portfolio ARA. `status ∈ {Triggered, Applicable, Not Triggered}` with non-empty `trigger_reason`. Replaces V5 "AWS Programs & Engagement Recommendations" heading — preserved MD prose is retained verbatim beneath the V6 H2 **"## Recommended Actions"**.
+
+---
+
+### V6 MD-Retained Execution-Roadmap Content (Req 31)
+
+The Portfolio MOD MD artifact MUST retain the following V5 sections VERBATIM:
+
+- Sequencing Principles (numbered list)
+- Phase 0 Cross-Cutting Foundation
+- Phase 1 Quick Wins
+- Phase 2 Foundation
+- Phase 3 Advanced
+- Total Portfolio Effort
+- Per-service modernization plans with per-service Dependencies and Estimated Effort
+- Parallel Execution Tracks
+- Pathway Details subsections with Cross-Service Synergies / Roadmap Phase Alignment / Relevant Learning Materials per triggered pathway
+- Integration Opportunities
+- Risk Assessment (Portfolio Risk Register table)
+- Resource Allocation Recommendations
+- Recommended Self-Paced Learning Materials
+
+V6 cross-references JSON `remediation_roadmap.items[]` as the summary projection of these MD sections.
+
+#### Open Decision 2 additive JSON fields
+
+V6 promotes four MD-only fields to additive structured JSON (MD content unchanged):
+
+1. **Top-level `roadmap_phases[]`** (Req 31.1, 31.2, 31.11):
+   ```json
+   [{ "phase": 0, "name": "Cross-Cutting Foundation", "calendar_window": "Months 0-3", "objective": "…", "estimated_effort": "Medium" }]
+   ```
+
+2. **`pathways[].roadmap_phase_alignment`** (Req 31.5, 31.11): optional string per pathway (e.g., `"Phase 2-3"`) aligning the pathway with the roadmap phases.
+
+3. **Top-level `parallel_execution_tracks[]`** (Req 31.4, 31.11):
+   ```json
+   [{ "track_name": "Database Track", "pathways": ["move-to-managed-databases"], "repos_count": 14, "can_run_in_parallel": true, "dependencies": [] }]
+   ```
+
+4. **Top-level `portfolio_risk_register[]`** (Req 31.6, 31.11):
+   ```json
+   [{ "risk": "Lift-and-shift stalls modernization ROI", "likelihood": "Medium", "impact": "High", "priority": "P1", "mitigation": "Pair lift-and-shift with Move to Containers milestones", "phase": 2 }]
+   ```
+
+MD ordering and content of these sections is UNCHANGED. The additive JSON fields are optional and exist so consumers can reason about the roadmap structurally without parsing MD.
+
+---
+
+### V6 Portfolio MOD HTML Visual Contract (Req 10, 22, 23, 28)
+
+The portfolio MOD HTML artifact is a single self-contained file rendering a subset of the portfolio JSON. Authoritative visual contract: `.kiro/specs/assessment-standardization-v6/examples/portfolio-mod-report.example.html.md`.
+
+**Layout**: summary KPI card row above the tab bar; tab order **Repositories → Findings → Remediation → Pathways**. The Pathways tab is V6-new and surfaces `pathways[].contributing_repos[].triggering_questions[]` evidence.
+
+**Executive summary subsections**: Portfolio Status, Modernization Readiness, Roadmap Overview, Recommended Actions.
+
+**Stats card row**: 4 cards including the Low Severity card (MOD convention, unlike ARA which omits it).
+
+**Two-chart row**: Portfolio Distribution, Severity by Repository (no Section Heatmap — MOD convention).
+
+**Repositories table columns**: Name, Readiness, Language, LOC, Total Findings, High, Medium, **Low** (MOD includes Low column).
+
+**Remediation Roadmap**: 4-phase (Infrastructure → Security & Data → Application → Operations) aligned with the `remediation_roadmap.items[]` entries grouped by pathway.
+
+**AWS Programs & Engagement Recommendations table**: renders `recommended_actions[]` with Triggered / Applicable / Not Triggered status column.
+
+**Pathways tab**: renders `pathways[]` with `portfolio_status`, `triggered_in_repos_count`, and `contributing_repos[].triggering_questions[]` evidence inlined per Req 30.
+
+**HTML-escaping discipline** applies to every attacker-controlled string.
+
+---
+
+End of V6 Additions.
+
+
+---
+
+## V6 Error Handling (Req 11, 13)
+
+The V6 portfolio TD consumes ONLY per-repo JSON (Req 11 AC 1-2). Failure modes are explicit, loud, and actionable.
+
+### Missing Per-Repo JSON (Req 11 AC 5)
+
+IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
+
+Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-assessment/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-assessment/wat--wub-ara-report.json (Req 11 AC 5)."`
+
+### Version Mismatch (Req 11 AC 6)
+
+IF any consumed per-repo JSON's `metadata.report_format_version` is not `"V6"`, THEN the portfolio assessment SHALL fail naming:
+- The offending file path
+- The unexpected `report_format_version` value
+
+Example: `"Portfolio assessment failed: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json has metadata.report_format_version='V5' but V6 is required (Req 11 AC 6)."`
+
+### Dangling Cross-Reference
+
+IF a `question_id` or `repo_name` referenced in portfolio JSON does not resolve into at least one consumed per-repo JSON of the matching `assessment_type`, THEN the portfolio assessment SHALL fail naming the dangling reference.
+
+Example: `"Portfolio assessment failed: findings[3].question_id='AUTH-Q9' does not match any rubric question in consumed ARA per-repo JSONs."`
+
+### Unresolvable JSON-Pointer (Req 13 AC 9)
+
+IF a `pathways[].contributing_repos[].per_repo_pathway_source` JSON-pointer does NOT resolve to a valid index in the target per-repo MOD JSON's `pathways[]` array, THEN the portfolio assessment SHALL fail naming the pointer and the source file.
+
+Example: `"Portfolio MOD assessment failed: pathways[1].contributing_repos[2].per_repo_pathway_source='/pathways/9' exceeds the per-repo pathways[] cardinality (7) in services/Lidarr--Lidarr/modernization-assessment/Lidarr--Lidarr-mod-report.json (Req 13 AC 9)."`
+
+### No Silent Fallback
+
+The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. V6 consumes JSON-only (Req 11 AC 1).

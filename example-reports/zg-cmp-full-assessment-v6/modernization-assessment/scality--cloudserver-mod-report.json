@@ -1,0 +1,1028 @@
+{
+  "assessment_type": "mod",
+  "version": "V6",
+  "metadata": {
+    "repository": "scality--cloudserver",
+    "date": "2025-01-08",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application owns persistent state via MongoDB (metadata) and file/object storage backends, exposes CRUD operations on S3 objects and buckets, and manages object lifecycle. Classified as stateful-crud.",
+    "priority": "P2",
+    "tags": ["javascript", "storage", "s3"],
+    "context": "Scality open-source S3-compatible object-storage server.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": true
+    },
+    "report_format_version": "V6",
+    "td_version": "modernization-assessment"
+  },
+  "overall_score": 2.22,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 3,
+    "medium_count": 23,
+    "low_count": 11,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.73,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.50,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 2.75,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 2.14,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 2.00,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q5",
+      "title": "Network Security",
+      "score": 1,
+      "gap": "No VPC, security groups, or network segmentation defined in any IaC",
+      "impact": "Services lack network isolation; no blast radius containment"
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q6",
+      "title": "API Entry Point",
+      "score": 1,
+      "gap": "No API Gateway, ALB, or CloudFront in front of services",
+      "impact": "No throttling, auth offload, or request validation at the edge"
+    },
+    {
+      "rank": 3,
+      "question_id": "INF-Q7",
+      "title": "Auto-Scaling",
+      "score": 1,
+      "gap": "No auto-scaling configuration found anywhere",
+      "impact": "Cannot respond to traffic spikes; over-provisioning or outages likely"
+    },
+    {
+      "rank": 4,
+      "question_id": "INF-Q8",
+      "title": "Backup and Recovery",
+      "score": 1,
+      "gap": "No backup configuration for MongoDB or any data store",
+      "impact": "Data loss risk with no recovery mechanism"
+    },
+    {
+      "rank": 5,
+      "question_id": "SEC-Q1",
+      "title": "Audit Logging",
+      "score": 1,
+      "gap": "No CloudTrail or equivalent audit logging infrastructure",
+      "impact": "No forensic capability; compliance gaps"
+    }
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "DevOps Agent",
+      "prerequisite": "CI/CD pipeline exists (INF-Q11 = 3) — GitHub Actions workflows with build, test, and deploy stages",
+      "what_it_enables": "An agent that triggers deployments, checks build status across 7+ CI workflow jobs, and manages releases",
+      "additional_steps": "Expose workflow dispatch APIs and add structured build status reporting",
+      "effort": "Low"
+    },
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "Documentation exists — README.md, DESIGN.md, CONTRIBUTING.md, TESTING.md, CLAUDE.md, plus Sphinx docs",
+      "what_it_enables": "A RAG-based knowledge agent that indexes existing documentation for developer questions",
+      "additional_steps": "Index docs/ directory into a vector store; configure Bedrock for retrieval",
+      "effort": "Medium"
+    },
+    {
+      "name": "Observability Agent",
+      "prerequisite": "Structured logging and metrics in place (OPS-Q1 = 2) — Prometheus metrics, Grafana dashboards, werelogs",
+      "what_it_enables": "An agent that queries Prometheus metrics, correlates with logs, suggests root causes",
+      "additional_steps": "Add trace ID propagation; configure Bedrock for log analysis",
+      "effort": "Medium"
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Strangler Fig (Parallel Track)",
+    "rationale": "Identifiable modules with existing process separation (metadata server, data server) provide natural extraction boundaries",
+    "extraction_priority": [
+      "Metadata Service (mdserver.js)",
+      "Data Service (dataserver.js)",
+      "KMS Service (lib/kms/)",
+      "Management Agent (managementAgent.js)",
+      "S3 API Gateway (lib/api/)"
+    ],
+    "patterns": ["Anti-corruption Layer", "Saga Pattern", "Event Sourcing", "Hexagonal Architecture"]
+  },
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=2 (monolith), INF-Q1=2 (limited managed compute), APP-Q3=3 but APP-Q4=2 (long-running processes sync)",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2, "note": "Monolith with identifiable modules but single deployable"},
+        {"question_id": "INF-Q1", "score": 2, "note": "Containerized but no managed orchestration"},
+        {"question_id": "APP-Q4", "score": 2, "note": "Long-running operations handled synchronously"}
+      ],
+      "detail": {
+        "aws_services": ["EKS", "API Gateway", "EventBridge", "Step Functions", "Aurora"],
+        "patterns": ["Strangler Fig", "Anti-corruption Layer", "Event Sourcing", "Saga"],
+        "immediate_actions": ["Define EKS cluster in IaC", "Extract metadata service", "Define inter-service contracts"]
+      }
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1=2 but container definitions already exist (8 Dockerfiles, docker-compose); contextual guard prevents trigger",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 2, "note": "Score below threshold but Dockerfiles exist — guard blocks"}
+      ],
+      "not_triggered_reason": "Container definitions (Dockerfile, docker-compose.yaml) already exist. The workload is already containerized; the gap is in managed orchestration, not containerization itself.",
+      "detail": null
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=3 (minimal stored procedures); no commercial DB engines detected — MongoDB is open source",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 3, "note": "Score meets threshold; no commercial engines detected"}
+      ],
+      "not_triggered_reason": "No commercial database engines detected. MongoDB is open source. No Oracle, SQL Server, or other licensed products found.",
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2=2 (MongoDB and Redis self-managed in Docker containers)",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": 2, "note": "MongoDB and Redis self-managed with no managed service equivalents"}
+      ],
+      "detail": {
+        "aws_services": ["DocumentDB", "ElastiCache", "DynamoDB"],
+        "migration_tools": ["AWS DMS"],
+        "immediate_actions": ["Create DocumentDB cluster with Multi-AZ", "Migrate Redis to ElastiCache", "Update connection strings via env vars"]
+      }
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No data processing workloads or streaming infrastructure detected; contextual guard prevents trigger",
+      "triggering_questions": [],
+      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found. The application is an S3-compatible storage server, not a data processing workload.",
+      "detail": null
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=2 (partial IaC coverage), OPS-Q5=2 (no canary/blue-green deployment)",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 2, "note": "Only monitoring has IaC; no production infrastructure defined"},
+        {"question_id": "OPS-Q5", "score": 2, "note": "Image push only; no staged deployment strategy"}
+      ],
+      "detail": {
+        "aws_services": ["CDK", "CodePipeline", "CodeBuild", "CodeDeploy", "EKS", "CloudWatch"],
+        "immediate_actions": ["Define production infrastructure in IaC", "Add deployment stages to CI/CD", "Implement blue/green via EKS"]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context",
+      "triggering_questions": [],
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. The context describes an S3-compatible object-storage server with no mention of AI, agent, LLM, or ML use cases.",
+      "detail": null
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q1", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q3", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q6", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q9", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q10", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q11", "score": 3, "status": "evaluated"},
+    {"question_id": "APP-Q1", "score": 3, "status": "evaluated"},
+    {"question_id": "APP-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "APP-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q6", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q1", "score": 2, "status": "evaluated"},
+    {"question_id": "DATA-Q2", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q4", "score": 3, "status": "evaluated"},
+    {"question_id": "SEC-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "SEC-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q6", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q7", "score": 3, "status": "evaluated"},
+    {"question_id": "OPS-Q1", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q3", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q6", "score": 3, "status": "evaluated"},
+    {"question_id": "OPS-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q8", "score": 3, "status": "evaluated"},
+    {"question_id": "OPS-Q9", "score": 2, "status": "evaluated"}
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Network Security Infrastructure",
+      "description": "No VPC, subnet, security group, or network segmentation configuration exists. All services bind to localhost or 0.0.0.0. Docker compose uses network_mode: host.",
+      "gap": "Complete absence of network security infrastructure — no private subnets, no security groups, no network segmentation between API, metadata, and data tiers.",
+      "recommendation": "Define VPC with private subnets for database and application tiers. Place S3 API behind ALB in private subnets. Use security groups with least-privilege rules.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": ".github/docker/docker-compose.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Present",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Managed API Entry Point",
+      "description": "S3 API is exposed directly on port 8000 with no gateway, load balancer, or CDN. All security and traffic control is application-level.",
+      "gap": "No managed entry point provides throttling, DDoS protection, request validation, or traffic management.",
+      "recommendation": "Deploy ALB in front of the service. For external-facing deployments, add CloudFront. Consider API Gateway for per-endpoint throttling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Present",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Auto-Scaling Configuration",
+      "description": "No auto-scaling exists. Clusters config set to 1. No ASG, ECS scaling, HPA, or Lambda concurrency defined.",
+      "gap": "All capacity is statically provisioned. Cannot respond to traffic spikes or scale down during low demand.",
+      "recommendation": "Configure HPA in EKS based on request rate from existing Prometheus metrics on port 8002. Add cluster autoscaler for node-level scaling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Present",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Backup and Recovery Configuration",
+      "description": "No backup configuration for MongoDB or any data store. No aws_backup_plan, backup_retention_period, or point-in-time recovery.",
+      "gap": "No automated backup or recovery mechanism. Data loss event would be unrecoverable from configuration in this repository.",
+      "recommendation": "Enable automated backups on DocumentDB with 7+ day retention and PITR. Implement S3 versioning for object data. Define AWS Backup plans in IaC.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Present",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Audit Logging Infrastructure",
+      "description": "No CloudTrail or infrastructure audit logging. Server access logs write to local filesystem without immutable storage or tamper protection.",
+      "gap": "No infrastructure-level audit trail. Server access logs lack immutability. No log file validation.",
+      "recommendation": "Enable CloudTrail for all AWS API calls. Ship server access logs to S3 with Object Lock. Configure CloudWatch Logs with defined retention.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Present",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No SLO Definitions",
+      "description": "No formal SLOs defined. Prometheus alerts define thresholds but lack error budgets, SLO documentation, or measurement over time windows.",
+      "gap": "Alerting thresholds exist but no formal SLOs. Cannot measure whether service meets user expectations over time.",
+      "recommendation": "Define SLOs for critical S3 operations: availability (99.9%), p99 latency for GET/PUT/LIST/DELETE, error rate. Track error budgets.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "monitoring/alerts.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Present",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Incident Response Automation",
+      "description": "No runbooks, SSM Automation documents, or self-healing patterns exist. Alerts fire but response is entirely manual.",
+      "gap": "No incident response automation. No runbooks for common failure modes (MongoDB failover, Redis unavailability, backend timeout).",
+      "recommendation": "Create runbooks for common incidents. Implement self-healing with Kubernetes liveness/readiness probes and restart policies.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "monitoring/alerts.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Present",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Containerized Without Managed Orchestration",
+      "description": "Application is containerized (Docker, multi-stage build) but no managed orchestration (EKS/ECS/Fargate) is defined in IaC.",
+      "gap": "Containerized but no managed orchestration layer. Production deployment model is undefined in code.",
+      "recommendation": "Define EKS cluster infrastructure in Terraform/CDK. Create Kubernetes manifests for production deployment with resource limits, health checks, and scaling.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "Dockerfile", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Self-Managed Databases",
+      "description": "MongoDB configured as self-managed replica set in Docker. Redis self-managed via Docker container. No managed database services provisioned.",
+      "gap": "Both MongoDB and Redis are self-managed with no managed service equivalents (DocumentDB, ElastiCache).",
+      "recommendation": "Migrate to Amazon DocumentDB for metadata and ElastiCache for Redis. Define in IaC with Multi-AZ and automated backups.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Workflow Orchestration Hardcoded",
+      "description": "Multi-step workflows (multipart upload, replication, lifecycle, KMS migration) are hardcoded application logic with no dedicated orchestration service.",
+      "gap": "Multi-step operations are hardcoded state machines without dedicated orchestration. Error handling and retry logic embedded in application code.",
+      "recommendation": "Adopt Step Functions for background workflows (replication, lifecycle). Keep latency-sensitive operations (multipart upload) in-process.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/routes/routeBackbeat.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Managed Messaging Infrastructure",
+      "description": "Cross-service communication uses synchronous HTTP. Bucket notifications use dummy type. No SQS, SNS, EventBridge, or MSK defined.",
+      "gap": "State changes that trigger replication or lifecycle flow synchronously. Bucket notifications are non-functional (dummy type).",
+      "recommendation": "Adopt EventBridge for bucket event notifications. Use SQS for decoupling replication and lifecycle workflows from the API path.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Limited High Availability Configuration",
+      "description": "MongoDB replica set provides data redundancy but no multi-AZ deployment defined in IaC. No load balancer distributes traffic.",
+      "gap": "Database has replica set pattern. Application layer has no multi-AZ or multi-instance HA defined.",
+      "recommendation": "Deploy across 2+ AZs in EKS with 2+ replicas. Configure DocumentDB Multi-AZ. Use ALB with cross-zone load balancing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Partial IaC Coverage",
+      "description": "IaC limited to monitoring (Prometheus alerts, Grafana dashboard) and CI (GitHub Actions, Docker compose). No production infrastructure in IaC.",
+      "gap": "Production infrastructure (compute, databases, networking, security, scaling) not defined in code.",
+      "recommendation": "Create Terraform/CDK modules for VPC, EKS, DocumentDB, ElastiCache, ALB, IAM, CloudWatch.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "monitoring/alerts.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith with Identifiable Modules",
+      "description": "Single deployable container with clear module boundaries (api, auth, data, metadata, kms, management) and separate entry points but shared process.",
+      "gap": "Single deployable unit prevents independent scaling. Shared config and in-process dependencies create coupling.",
+      "recommendation": "Extract metadata and data services as independent containers on EKS using existing process separation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "index.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-Running Operations Handled Synchronously",
+      "description": "Object copy, SSE/KMS migration, and lifecycle transitions can exceed 30 seconds. Only multipart upload follows async pattern (S3 protocol).",
+      "gap": "Large object copy and lifecycle transitions lack async job tracking. SSE migration has 300s timeout with no status polling.",
+      "recommendation": "Implement async job processing with status polling for large copy and lifecycle operations. Use Step Functions or SQS workers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/api/objectCopy.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No API Versioning for Internal Extensions",
+      "description": "S3 protocol routes inherit AWS versioning (appropriate). CloudServer-specific extensions (Backbeat, management, health) have no version prefix.",
+      "gap": "Internal API extensions lack versioning. Breaking changes affect all consumers simultaneously.",
+      "recommendation": "Add version prefixes to internal routes (/v1/backbeat/, /v1/management/). Document API compatibility.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/routes/routeBackbeat.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Operational Data on Local Filesystem",
+      "description": "Server access logs stored locally (/logs/server-access.log). Operational data in Docker volumes (localData/, localMetadata/).",
+      "gap": "Operational data lacks durability of managed object storage. No parsing pipeline for access logs.",
+      "recommendation": "Route server access logs to S3 with parsing pipeline. Store operational data in S3 for durability.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Partial Encryption at Rest",
+      "description": "Object data encryption well-implemented via multiple KMS backends. MongoDB metadata and local storage volumes lack encryption at rest.",
+      "gap": "Object encryption exists but metadata in MongoDB and local volumes have no encryption. No customer-managed KMS key for infrastructure.",
+      "recommendation": "Enable encryption at rest on DocumentDB with customer-managed KMS key. Enable EBS encryption for persistent volumes.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/kms/wrapper.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Proprietary Identity Provider",
+      "description": "Identity managed through Scality Vault service rather than standard IdP. No OIDC/SAML federation. Fallback to static accounts in dev mode.",
+      "gap": "No standard centralized IdP integration. No SSO, no OIDC/SAML configured directly.",
+      "recommendation": "Integrate with Cognito for user identity and OIDC federation. Replace Vault dependency with Cognito + IAM when deploying to AWS.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/auth/vault.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets in Environment Variables Without Rotation",
+      "description": "Docker secrets and env vars used. No Secrets Manager or rotation. Config has placeholder credentials (kmsAWS.ak: 'tbd'). Dev accounts committed.",
+      "gap": "No dedicated secrets management with rotation. Production credentials in env vars without encryption.",
+      "recommendation": "Adopt AWS Secrets Manager with automatic rotation for database credentials and backend access keys.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "conf/authdata.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Limited Compute Hardening",
+      "description": "Multi-stage Docker build with slim base. No vulnerability scanning on images. No hardened base (Bottlerocket/distroless). Dependency review PR-only.",
+      "gap": "No container image vulnerability scanning. Debian-based image rather than hardened alternative. No runtime patching strategy.",
+      "recommendation": "Add container scanning (Trivy/ECR) to CI. Consider Bottlerocket base. Implement Dependabot for automated dependency updates.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "Dockerfile", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Distributed Tracing",
+      "description": "Structured logging with request IDs (werelogs) and Prometheus metrics exist but no distributed tracing (X-Ray, OpenTelemetry) instrumented.",
+      "gap": "Cannot trace requests across S3 API → metadata → data → external backends. Request IDs not propagated as trace contexts.",
+      "recommendation": "Instrument OpenTelemetry SDK with X-Ray exporter. Propagate W3C traceparent between internal services.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Infrastructure Metrics Only",
+      "description": "Prometheus metrics and UTAPI usage tracking exist but focus on operational data. No business-outcome metrics published to CloudWatch.",
+      "gap": "Missing business metrics: storage growth rate, data transfer costs, SLA adherence per customer, capacity planning signals.",
+      "recommendation": "Publish UTAPI metrics to CloudWatch. Add business metrics dashboards for per-account storage and API distribution.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/utapi/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Static Threshold Alerting Only",
+      "description": "Prometheus alerts use fixed thresholds (error rate 3%/5%, latency per operation). No anomaly detection or dynamic baselines.",
+      "gap": "Cannot detect gradual degradation or novel failure modes. No composite alarms or multi-signal correlation.",
+      "recommendation": "Enable CloudWatch anomaly detection on key metrics. Configure composite alarms for multi-signal alerting.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "monitoring/alerts.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Staged Deployment Strategy",
+      "description": "Release workflow builds and pushes images to GHCR only. No canary, blue/green, or rolling deployment with health checks defined.",
+      "gap": "No staged deployment. Releases go directly to registry without progressive rollout or automated rollback.",
+      "recommendation": "Implement canary deployments via EKS with Argo Rollouts. Start with rolling updates and health check gates.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/release.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No AWS Resource Tagging Standard",
+      "description": "Docker image labels exist (git.repository, git.commit-sha). Prometheus labels defined. No AWS resource tagging strategy.",
+      "gap": "No tagging standard for AWS resources. When IaC is created, no governance in place.",
+      "recommendation": "Define tagging standard (Environment, Service, Team, CostCenter) before IaC creation. Use default_tags in Terraform.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/release.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Lacks Deployment Stages",
+      "description": "Comprehensive CI (lint, test, build) via GitHub Actions. Release pushes images but no deployment automation to staging/production.",
+      "gap": "Build and test automated. Deployment limited to image push — no staging or production deployment automation.",
+      "recommendation": "Add deployment stages: staging deploy, integration test, promotion, canary/blue-green to production.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/tests.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "AWS SDK v2 in Maintenance Mode",
+      "description": "Node.js 22 (modern runtime) but uses aws-sdk v2 (maintenance mode) rather than modular @aws-sdk v3.",
+      "gap": "AWS SDK v2 lacks tree-shaking, modern middleware, and TypeScript-first design of v3.",
+      "recommendation": "Migrate from aws-sdk v2 to @aws-sdk/* v3 modular packages. Consider gradual TypeScript adoption.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Mix of Sync and Async Patterns",
+      "description": "Communication primarily sync HTTP between internal components. Some async: bucket notifications (dummy), Backbeat replication, WebSocket management.",
+      "gap": "State changes triggering replication/lifecycle flow synchronously. Bucket notifications non-functional.",
+      "recommendation": "Convert bucket notifications to EventBridge. Move replication triggers to SQS for decoupling.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "config.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Environment Variable Service Configuration",
+      "description": "Endpoints configured via env vars and config.json. Docker entrypoint generates config from 40+ env vars. No dynamic service discovery.",
+      "gap": "Requires restart for endpoint changes. No dynamic discovery for failover or routing.",
+      "recommendation": "Leverage Kubernetes DNS in EKS. Adopt AWS Cloud Map or VPC Lattice for cross-cluster communication.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "docker-entrypoint.sh", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Custom Authentication Implementation",
+      "description": "Strong AWS Sig V4 auth for S3 ops. Health check restricted by IP. Internal routes may have weaker auth patterns.",
+      "gap": "Custom-implemented auth rather than standard OAuth2/JWT. Internal service routes may lack strong mutual auth.",
+      "recommendation": "Add mTLS for internal service-to-service communication. Use Cognito authorizers for management endpoints behind API Gateway.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/auth/vault.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "SAST Present but Incomplete Pipeline",
+      "description": "CodeQL for SAST (JS, Python, Ruby). Dependency review on PRs. Missing container scanning, DAST, and blocking security gates.",
+      "gap": "No container image scanning, no DAST, no blocking gate on critical findings.",
+      "recommendation": "Add container scanning to build job. Configure CodeQL to block on critical findings. Add npm audit to CI.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/codeql.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Mostly Centralized Data Access with Bypasses",
+      "description": "Primary data and metadata access is centralized through lib/metadata/ and lib/data/ abstractions supporting multiple backends. However, configuration data, auth data, and some operational queries bypass the main abstraction layers.",
+      "gap": "While primary data and metadata access is centralized, configuration data, auth data, and some operational queries bypass the main abstraction layers.",
+      "recommendation": "Consolidate remaining direct access patterns through the existing abstraction layers. Ensure all MongoDB access goes through the metadata abstraction rather than direct driver calls.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/metadata/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Database Engine Versions Approaching Unpinned State",
+      "description": "MongoDB driver version is pinned (mongodb ^6.11.0) and compatible with MongoDB 6.0-8.0. Redis uses redis:alpine without explicit version pinning. No documented version-update procedure exists.",
+      "gap": "MongoDB server version not explicitly pinned in CI Docker image. Redis version unpinned. No documented version-update procedure covering downtime, rollback, and risk.",
+      "recommendation": "Pin MongoDB server version explicitly in CI compose. Pin Redis version. Document a version-update procedure. When migrating to DocumentDB, engine version will be managed by AWS.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Minor MongoDB-Specific Query Patterns",
+      "description": "No stored procedures, triggers, or proprietary SQL. All business logic in the Node.js application layer. Some MongoDB-specific query patterns ($regex, $in) may need adjustment for DocumentDB compatibility.",
+      "gap": "Minor: some MongoDB-specific query patterns may need adjustment when migrating to DocumentDB, which has some MongoDB compatibility gaps.",
+      "recommendation": "Validate DocumentDB compatibility for existing MongoDB queries before migration. Test aggregation queries against DocumentDB's supported operations.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/metadata/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Tests Limited to Local Docker Environment",
+      "description": "Comprehensive functional test suites run in CI against local Docker environment (MongoDB, Redis, PyKMIP, storage backends). Coverage reported to Codecov with 80% patch target. Missing integration tests against deployed production-like infrastructure.",
+      "gap": "Integration tests exist and are comprehensive for local Docker testing. Missing: integration tests against deployed staging infrastructure (real DocumentDB, real ElastiCache, real EKS).",
+      "recommendation": "Add a staging integration test stage that runs the AWS SDK functional test suite against a deployed staging environment (EKS + DocumentDB + ElastiCache).",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/tests.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Assets Lack Explicit Ownership Attribution",
+      "description": "Monitoring directory contains maintained observability assets: Prometheus alerts, Grafana dashboard, dashboard generator, and alert test cases. No CODEOWNERS references observability assets, no named team/person ownership on alarms, no SLO attribution.",
+      "gap": "Observability assets exist and are maintained. Missing: explicit team/person ownership attribution on alarms, CODEOWNERS for monitoring/, SLO definitions tied to specific teams.",
+      "recommendation": "Add CODEOWNERS entries for monitoring/ directory. Add team attribution labels to Prometheus alerts. Define SLOs with team ownership for accountability.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "monitoring/alerts.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ]
+}
