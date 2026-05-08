@@ -1,0 +1,591 @@
+{
+  "metadata": {
+    "version": "V6",
+    "assessment_type": "ara",
+    "assessment_date": "2025-01-08",
+    "td_version": "agentic-readiness-assessment",
+    "report_format_version": "V6",
+    "target": "/Users/lucasdu/Documents/AWS-MAC/2026-projects/sample-agentic-readiness-assessment/services/scality--cloudserver",
+    "repository_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application owns persistent state (MongoDB for metadata, multiple data backends for objects), exposes full CRUD operations on S3 objects/buckets, and manages per-user data with entity lifecycle (versioning, lifecycle policies, object lock).",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["javascript", "storage", "s3"],
+    "context": "Scality open-source S3-compatible object-storage server.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 1,
+    "medium_count": 18,
+    "low_count": 0,
+    "safety_impact_medium_count": 9,
+    "rule_matched": "1-2 High → Remediation Required"
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No machine identity authentication with principal attribution",
+      "description": "The application authenticates via AWS Signature V2/V4 validated against either an in-memory credential store or an external Vault service. However, there is no support for service account or machine identity authentication with principal attribution (no OAuth2 client credentials flow, no mTLS, no API key scheme with per-agent identity tracking).",
+      "gap": "No machine identity authentication mechanism exists that can distinguish which agent made a call. The system authenticates S3 access keys but has no concept of machine/agent identity attribution beyond the access key itself.",
+      "recommendation": "Create dedicated IAM-style accounts per agent in the Vault backend with distinct access keys. Ensure the server access log is enabled by default so agent actions are attributable.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/auth/vault.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Create dedicated per-agent access keys in Vault with distinct canonical IDs",
+          "target_state": "Each agent has a unique identity with its own access key, and all operations are attributed to that identity in immutable audit logs",
+          "estimated_effort": "Medium",
+          "dependencies": ["AUTH-Q6"]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Scoped permissions incomplete — IAM integration pending",
+      "description": "The authorization model supports bucket policies with condition keys, ACLs, and IAM-style policies. However, IAM integration is incomplete (TODO comment in code). Service users bypass authorization checks entirely.",
+      "gap": "IAM-level scoped permissions may be incomplete. Service user bypass means any identity designated as a service user gets full access.",
+      "recommendation": "Complete IAM integration and ensure agent identities are never classified as service users.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/api/apiUtils/authorization/permissionChecks.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use bucket policies to restrict agent access to specific buckets and operations",
+          "Create agent-specific S3 access keys in Vault with scoped IAM policies at the Vault layer"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Action-level authorization depends on incomplete IAM",
+      "description": "The bucket policy engine supports action-level conditions. ACLs provide coarser-grained control. Action-level authorization available through bucket policies but IAM-level enforcement may be incomplete.",
+      "gap": "Action-level authorization available via bucket policies but IAM-level action enforcement may be incomplete per noted TODO.",
+      "recommendation": "Ensure bucket policies are applied to all agent-accessible buckets with explicit action-level allow/deny.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/api/apiUtils/authorization/permissionChecks.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Deploy bucket policies on every bucket that agent identities access",
+          "Use Vault IAM policies to restrict agent accounts to specific S3 actions"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Audit logging exists but is file-based, mutable, and disabled by default",
+      "description": "Server access logger implements comprehensive S3-compatible access logging with requester identity, operation, timing, and error details in JSON format. However, logging is disabled by default, logs are written to local files with no immutability guarantee, and logs can be dropped under backpressure.",
+      "gap": "Audit logging exists but is not immutable — file-based logs can be modified or deleted. Logging disabled by default.",
+      "recommendation": "Enable server access logging by default and forward logs to an immutable, append-only store external to the server.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/utilities/serverAccessLogger.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations but audit logging is still important for system maturity and forensics.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Enable server access logging in configuration and ship logs to an immutable store",
+          "Configure log streaming to a SIEM for real-time monitoring"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No immediate agent identity suspension mechanism",
+      "description": "No built-in mechanism to suspend or revoke individual agent identities without restarting the server. In-memory backend requires editing config and restarting. Vault backend delegates to external service.",
+      "gap": "No immediate identity suspension mechanism within the application. Requires external Vault operations or server restart.",
+      "recommendation": "Implement a hot-reloadable deny-list for access keys that can be updated without server restart.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/auth/vault.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use the Vault backend where accounts can be disabled externally",
+          "Implement a deny-list at the rate-limiting layer to block specific access keys"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No circuit breakers or resilience patterns for external dependencies",
+      "description": "The application calls MongoDB, Redis, Vault, KMIP, and cloud storage backends with no circuit breaker pattern, no retry with exponential backoff, and no configurable timeouts. Rate limiter fails open when Redis is unavailable.",
+      "gap": "No circuit breakers, no retry logic with backoff, no configurable timeouts on external dependency calls.",
+      "recommendation": "Implement circuit breaker patterns for MongoDB, Redis, and Vault clients. Add configurable timeouts.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/api/apiUtils/rateLimit/tokenBucket.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Deploy a service mesh with circuit breaker and retry policies",
+          "Set requestTimeout to a non-zero value in configuration"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Rate limiting per-bucket only, disabled by default, fails open",
+      "description": "Token bucket rate limiter with GCRA algorithm is implemented but is per-S3-bucket only (not per-agent), disabled by default, fails open when Redis is unavailable, and exempts service users.",
+      "gap": "No per-agent rate limiting. Disabled by default. Fails open. Service users exempt.",
+      "recommendation": "Enable rate limiting by default, add per-access-key rate limiting, and fix fail-open behavior.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/api/apiUtils/rateLimit/tokenBucket.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Enable rate limiting and set conservative per-bucket limits",
+          "Deploy an API gateway with per-identity rate limiting",
+          "Ensure agent identities never have service user ARN status"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Access control differentiation insufficient — service user bypass",
+      "description": "Stage A = Yes (system stores user-specific data). B1: CLEAR — S3 returns user-owned data as-is. B2: RISK-SAFETY — service user bypass provides undifferentiated access. B3: INFO — no formal classification.",
+      "gap": "Service user bypass provides undifferentiated access to all data. No granularity between sensitive and non-sensitive data access below bucket-policy level.",
+      "recommendation": "Implement role-based access tiers in Vault that distinguish between sensitive and non-sensitive bucket access.",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/api/apiUtils/authorization/serviceUser.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, B2 fired",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q1 B2 fired because service user bypass provides undifferentiated access to all stored data with no role granularity.",
+        "data_q1_subchecks": {
+          "b1": {"fired": false, "severity": null, "reasoning": "S3 returns user-owned data. Server does not inject sensitive fields into listings."},
+          "b2": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "Service user bypass grants full access. No OAuth scopes or multi-tier access control."},
+          "b3": {"fired": true, "severity": "INFO", "reasoning": "No formal data classification metadata exists."}
+        },
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use bucket policies to create data-domain separation",
+          "Never grant agent identities service user status"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Data residency configurable but no egress enforcement for agents",
+      "description": "System supports multiple storage locations with per-bucket residency configuration. No application-level controls prevent an agent from reading region-restricted data and transmitting it externally.",
+      "gap": "Data residency configuration exists at storage layer but no controls prevent data egress via API once read.",
+      "recommendation": "Add residency metadata to bucket configurations that agent orchestration layers can enforce.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "locationConfig.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents still access data subject to residency requirements. Data residency is relevant even when no modification occurs.",
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Implement network-level controls to prevent data egress",
+          "Tag buckets with residency requirements and enforce at orchestration layer"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII redaction in server access logs",
+      "description": "Server access logger records clientIP, awsAccessKeyID, userAgent, requester, objectKey (may contain PII), and requestURI with no PII redaction or masking applied.",
+      "gap": "No PII redaction in access logs. Object keys, access key IDs, and IP addresses logged in full.",
+      "recommendation": "Add configurable PII redaction filter to the server access logger.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "lib/utilities/serverAccessLogger.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Implement a log scrubbing layer before forwarding logs to external systems",
+          "Enforce naming conventions that prevent PII in object keys"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No machine-readable API specification in repository",
+      "description": "No OpenAPI, AsyncAPI, or Smithy specification exists. The API follows the AWS S3 protocol implicitly through code.",
+      "gap": "No machine-readable API specification. Agent tool generation requires manual definition.",
+      "recommendation": "Reference the AWS S3 API model or generate an OpenAPI spec from route definitions.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "lib/api/api.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use the official AWS S3 API model as the machine-readable spec",
+          "Generate an OpenAPI spec from the route definitions"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No explicit retryable indicator in error responses",
+      "description": "S3-compatible error responses with structured error codes but no explicit retryable boolean. Agents must infer retryability from HTTP status codes.",
+      "gap": "No retryable indicator in error responses.",
+      "recommendation": "Document retry semantics per error code in agent tool definitions.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "lib/api/apiUtils/rateLimit/tokenBucket.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Document retry semantics per error code for agent tool definitions",
+          "S3 SDKs already implement retry logic for known error codes"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No distributed tracing — cannot trace agent requests through backends",
+      "description": "Structured logging via werelogs. Prometheus metrics. Request IDs generated per request. No distributed tracing (no OpenTelemetry, no X-Ray, no traceparent propagation).",
+      "gap": "No distributed tracing. Cannot trace agent-initiated requests through backend dependencies.",
+      "recommendation": "Add OpenTelemetry SDK instrumentation with trace context propagation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "lib/utilities/monitoringHandler.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use requestID from server access logs to correlate requests",
+          "Add OpenTelemetry instrumentation"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Alerting rules defined but require external AlertManager deployment",
+      "description": "Prometheus alerting rules exist for 5xx rates and latency. No alerting infrastructure defined. No auth-specific anomaly alerts.",
+      "gap": "No alerting infrastructure deployment in this repo. No auth failure rate alerts.",
+      "recommendation": "Deploy AlertManager with existing rules. Add auth anomaly alerts.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "monitoring/alerts.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Deploy Prometheus AlertManager alongside CloudServer",
+          "Add auth failure rate and rate limit exhaustion alerts"
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No API contract testing or breaking change detection",
+      "description": "No explicit schema versioning, no breaking change detection in CI. Functional tests serve as implicit contract validation against the S3 API.",
+      "gap": "No formal API contract testing or schema diffing in CI.",
+      "recommendation": "Add OpenAPI spec generation and diff checking in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/tests.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Comprehensive functional test suite serves as de facto contract",
+          "AWS SDK compatibility tests provide implicit contract validation"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Infrastructure as Code in repository",
+      "description": "No Terraform, CloudFormation, CDK, Helm, or Kustomize files. Deployment is container-based but integration infrastructure is not defined declaratively.",
+      "gap": "No IaC for the deployment infrastructure or integration surface.",
+      "recommendation": "Create IaC definitions for production deployment including networking, secrets, and IAM.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "Dockerfile",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "IaC may exist in a separate deployment repository",
+          "Docker Compose provides reproducible CI environments"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "CI/CD exists but lacks API contract testing",
+      "description": "GitHub Actions CI includes linting, unit, functional, and multi-backend tests. No API contract tests, no Pact, no OpenAPI validation, no schema diffing.",
+      "gap": "No API contract testing in CI pipeline.",
+      "recommendation": "Add S3 API compatibility tests or OpenAPI spec validation in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/tests.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Functional tests against the AWS SDK serve as implicit API contract tests",
+          "CodeQL scanning provides security analysis"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No automated rollback capability",
+      "description": "Release workflow pushes tagged Docker images to GHCR. No blue-green, no canary, no automatic rollback triggers. Manual image tag revert required.",
+      "gap": "No automated rollback capability. Manual Docker image tag revert only.",
+      "recommendation": "Implement deployment orchestration with health-check-based rollback triggers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/release.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Docker image tags are immutable — rollback = deploy previous tag",
+          "Implement deployment orchestration externally"
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Local testing environment exists but no production-equivalent staging",
+      "description": "Docker Compose provides full local environment with all dependencies. In-memory backend for lightweight testing. No production-equivalent staging/sandbox with realistic data.",
+      "gap": "No production-equivalent staging/sandbox with realistic data shape.",
+      "recommendation": "Define staging configuration with seed data scripts.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/docker/docker-compose.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use Docker Compose environment as a functional sandbox",
+          "In-memory backend provides zero-risk testing surface"
+        ]
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "status": "pass", "severity": null},
+    {"question_id": "API-Q2", "status": "finding", "severity": "Medium"},
+    {"question_id": "API-Q3", "status": "finding", "severity": "Medium"},
+    {"question_id": "API-Q4", "status": "info", "severity": "Low"},
+    {"question_id": "API-Q5", "status": "info", "severity": "Low"},
+    {"question_id": "API-Q6", "status": "not_evaluated", "severity": null},
+    {"question_id": "API-Q7", "status": "not_evaluated", "severity": null},
+    {"question_id": "API-Q8", "status": "info", "severity": "Low"},
+    {"question_id": "AUTH-Q1", "status": "finding", "severity": "High"},
+    {"question_id": "AUTH-Q2", "status": "finding", "severity": "Medium"},
+    {"question_id": "AUTH-Q3", "status": "finding", "severity": "Medium"},
+    {"question_id": "AUTH-Q4", "status": "info", "severity": "Low"},
+    {"question_id": "AUTH-Q5", "status": "info", "severity": "Low"},
+    {"question_id": "AUTH-Q6", "status": "finding", "severity": "Medium"},
+    {"question_id": "AUTH-Q7", "status": "finding", "severity": "Medium"},
+    {"question_id": "STATE-Q1", "status": "info", "severity": "Low"},
+    {"question_id": "STATE-Q2", "status": "not_evaluated", "severity": null},
+    {"question_id": "STATE-Q3", "status": "info", "severity": "Low"},
+    {"question_id": "STATE-Q4", "status": "finding", "severity": "Medium"},
+    {"question_id": "STATE-Q5", "status": "finding", "severity": "Medium"},
+    {"question_id": "STATE-Q6", "status": "info", "severity": "Low"},
+    {"question_id": "STATE-Q7", "status": "not_evaluated", "severity": null},
+    {"question_id": "HITL-Q1", "status": "info", "severity": "Low"},
+    {"question_id": "HITL-Q2", "status": "info", "severity": "Low"},
+    {"question_id": "HITL-Q3", "status": "finding", "severity": "Medium"},
+    {"question_id": "DATA-Q1", "status": "finding", "severity": "Medium"},
+    {"question_id": "DATA-Q2", "status": "finding", "severity": "Medium"},
+    {"question_id": "DATA-Q3", "status": "not_evaluated", "severity": null},
+    {"question_id": "DATA-Q4", "status": "not_evaluated", "severity": null},
+    {"question_id": "DATA-Q5", "status": "not_evaluated", "severity": null},
+    {"question_id": "DATA-Q6", "status": "finding", "severity": "Medium"},
+    {"question_id": "DATA-Q7", "status": "info", "severity": "Low"},
+    {"question_id": "DISC-Q1", "status": "finding", "severity": "Medium"},
+    {"question_id": "DISC-Q2", "status": "info", "severity": "Low"},
+    {"question_id": "DISC-Q3", "status": "info", "severity": "Low"},
+    {"question_id": "OBS-Q1", "status": "finding", "severity": "Medium"},
+    {"question_id": "OBS-Q2", "status": "finding", "severity": "Medium"},
+    {"question_id": "OBS-Q3", "status": "info", "severity": "Low"},
+    {"question_id": "ENG-Q1", "status": "finding", "severity": "Medium"},
+    {"question_id": "ENG-Q2", "status": "finding", "severity": "Medium"},
+    {"question_id": "ENG-Q3", "status": "finding", "severity": "Medium"},
+    {"question_id": "ENG-Q4", "status": "not_evaluated", "severity": null},
+    {"question_id": "ENG-Q5", "status": "not_evaluated", "severity": null}
+  ]
+}

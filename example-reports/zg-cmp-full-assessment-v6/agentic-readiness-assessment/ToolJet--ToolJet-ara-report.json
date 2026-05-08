@@ -1,0 +1,780 @@
+{
+  "metadata": {
+    "version": "V6",
+    "assessment_type": "ara",
+    "assessment_date": "2026-05-08",
+    "td_version": "agentic-readiness-assessment-v6.0.1",
+    "report_format_version": "V6",
+    "target": "/Users/lucasdu/Documents/AWS-MAC/2026-projects/sample-agentic-readiness-assessment/services/ToolJet--ToolJet",
+    "repository_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application owns persistent state in PostgreSQL (84 TypeORM entities), exposes full CRUD operations on business entities (apps, users, organizations, data sources, workflows), and manages entity lifecycle with status fields and versioning.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": [
+      "javascript",
+      "low-code",
+      "frontend"
+    ],
+    "context": "Open-source low-code internal-tool builder.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 1,
+    "medium_count": 18,
+    "low_count": 10,
+    "safety_impact_medium_count": 9,
+    "rule_matched": "1-2 High \u2192 Remediation Required"
+  },
+  "summary": {
+    "blocker_count": 1,
+    "risk_safety_count": 9,
+    "risk_quality_count": 9,
+    "info_count": 10,
+    "na_count": 0,
+    "not_evaluated_count": 14,
+    "total": 43,
+    "core_questions_evaluated": 24,
+    "extended_questions_triggered": 5,
+    "extended_questions_not_triggered": 14
+  },
+  "readiness_profile": {
+    "profile": "Remediation Required",
+    "recommendation": "Remediate BLOCKERs first",
+    "deployment_gate": "Resolve all blockers before any agent deployment \u2014 including pilots."
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No machine identity authentication for agents",
+      "description": "The application supports JWT-based authentication via PassportJS with session management designed for human users. There is no support for service account or machine identity authentication (OAuth 2.0 client credentials, API key with principal attribution, or mTLS).",
+      "gap": "No dedicated machine identity authentication mechanism exists. An agent cannot authenticate as an independent principal separate from a human user.",
+      "recommendation": "Implement an API key authentication strategy that creates independent machine principals with attribution logged in audit entries.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/modules/auth/controller.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Implement an API key authentication strategy that creates independent machine principals (not tied to human user accounts) with attribution logged in audit entries.",
+          "target_state": "Agents authenticate via OAuth 2.0 client credentials or dedicated API keys, each mapped to a unique machine principal visible in audit logs.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "AUTH-Q6"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Coarse-grained permissions lack resource-instance scoping",
+      "description": "CASL-based authorization supports per-feature, per-role permissions but is coarse-grained at feature level, not resource-instance level. No mechanism to grant an agent read-only access to specific apps or data sources.",
+      "gap": "No resource-instance-level permission scoping. An agent identity with 'view apps' permission sees all apps in the organization.",
+      "recommendation": "Implement resource-instance-level permissions in the CASL ability factory to allow agent identities to be scoped to specific app IDs or data source IDs.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/modules/ability/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Assign agent identities the most restrictive role (End User) with custom group permissions limited to specific features",
+          "Create a dedicated organization/workspace for agent-accessible resources to limit blast radius"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Action-level authorization coupled to human role hierarchy",
+      "description": "CASL authorization enforces action-level checks at the controller level. The AbilityGuard validates permissions before allowing route access. However, action-level auth is coupled to human role hierarchy and not independently configurable per agent identity.",
+      "gap": "Action-level authorization exists but cannot be independently configured per machine identity.",
+      "recommendation": "Extend the CASL ability factory to support per-principal action overrides, allowing machine identities to have custom action restrictions independent of the role hierarchy.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/interceptors/ability.guard.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Use the End User role (most restricted action set) for any agent identity",
+          "Implement API Gateway-level method restrictions to limit which HTTP methods an agent token can invoke"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Audit logs stored in mutable database without immutability guarantees",
+      "description": "The application has a ResponseInterceptor that emits audit log events captured in an audit_logs table. However, audit log storage is in the application's own PostgreSQL database \u2014 not immutable, not tamper-evident, and has no log integrity validation.",
+      "gap": "Audit logs stored in mutable application database with no tamper-evidence or immutability guarantees. No external immutable log sink configured.",
+      "recommendation": "Integrate with CloudTrail or configure an S3 bucket with object lock to receive audit log streams. Add a principal_type field to distinguish human vs. machine actions.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/interceptors/response.interceptor.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, so audit logging is important but not a deployment blocker.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, reducing audit-trail urgency from BLOCKER to RISK-SAFETY.",
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Ship audit logs to an external immutable store (S3 with object lock, CloudTrail Data Events)",
+          "Configure database-level write-once protections on the audit_logs table"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No independent agent identity suspension mechanism",
+      "description": "User accounts can be deactivated and sessions invalidated. However, there is no dedicated mechanism to suspend a specific agent/machine identity independently since no machine identity concept exists.",
+      "gap": "No independent agent identity suspension mechanism. Suspending an agent would require disabling the human user account.",
+      "recommendation": "Once machine identities exist (AUTH-Q1), add an immediate suspension endpoint that revokes all active sessions for a specific machine principal.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/entities/user.entity.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Implement session-level revocation at the API Gateway layer",
+          "Use short-lived tokens for agent access so natural expiry limits exposure"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No circuit breaker protection for external dependency calls",
+      "description": "No circuit breaker library is used. The only retry logic is a hand-coded 3-attempt retry for PostgREST schema reconfiguration. The application makes external calls to 47+ data source connectors without circuit breaker protection.",
+      "gap": "No circuit breaker pattern for external dependency calls. A failing data source connector could cascade failures back to calling agents.",
+      "recommendation": "Add a circuit breaker library (opossum for Node.js) around external data source calls. Configure per-connector timeout and failure thresholds.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/modules/tooljet-db/helper.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Configure API Gateway-level timeout limits on agent-facing endpoints",
+          "Implement data source query timeout limits at the application level"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No global API rate limiting",
+      "description": "Only the Workflows module has rate limiting (100 requests per 60 seconds via @nestjs/throttler on webhook endpoints). There is no global rate limiting on the API.",
+      "gap": "No global API rate limiting. An agent calling endpoints at machine speed would face no throttling.",
+      "recommendation": "Apply @nestjs/throttler globally with sensible defaults, and configure API Gateway throttling in the Terraform ECS configuration.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/modules/workflows/controllers/webhook.controller.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Deploy an API Gateway or load balancer with rate limiting in front of the application",
+          "Configure WAF rate rules at the infrastructure layer"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII redaction in logging pipeline",
+      "description": "The application uses Pino for logging with request context. There is no PII redaction middleware \u2014 no log scrubbing, no field masking, no Macie integration. User emails, names, and potentially sensitive data source connection strings could appear in logs.",
+      "gap": "No PII redaction in logging pipeline. User-identifying information and potentially sensitive data source credentials may appear in application logs and traces.",
+      "recommendation": "Implement Pino redaction paths for sensitive fields (password, email, connectionString, apiKey) and add a log sanitization middleware.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/modules/logging/service.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Configure Pino serializers to redact sensitive fields",
+          "Apply CloudWatch log filters to mask PII patterns before storage"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No machine-readable API specification",
+      "description": "No OpenAPI, Swagger, AsyncAPI, or GraphQL schema files exist. API is defined implicitly through NestJS controller decorators across 60+ modules.",
+      "gap": "No machine-readable API specification for agent tool generation.",
+      "recommendation": "Add @nestjs/swagger integration and annotate controllers with API decorators to auto-generate an OpenAPI specification.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/package.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Use @nestjs/swagger decorators on existing controllers to auto-generate an OpenAPI spec",
+          "Manually document the most critical agent-facing endpoints as a bridge"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Error responses lack retryable classification",
+      "description": "Global AllExceptionsFilter produces structured JSON errors with statusCode, timestamp, path, message, code. Missing a retryable boolean or error category field.",
+      "gap": "Error responses lack a retryable field. Agents cannot programmatically determine whether to retry without parsing message strings.",
+      "recommendation": "Extend AllExceptionsFilter to include an isRetryable boolean and an errorCategory field.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/modules/app/filters/all-exceptions-filter.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Document which HTTP status codes are retriable vs terminal for agent consumption",
+          "Add error category to the response filter output"
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No API versioning or breaking change detection",
+      "description": "184 TypeORM schema migrations provide database schema versioning. However, there is no API versioning, no breaking change detection in CI, and no consumer-driven contract tests.",
+      "gap": "No API versioning strategy. No breaking change detection tooling in CI pipeline.",
+      "recommendation": "Implement URL-based API versioning and add schema comparison tooling to the CI pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/migrations/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Pin agent tool definitions to specific endpoint paths and validate responses in agent tests",
+          "Add OpenAPI diff checks in CI once a spec is generated"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Distributed tracing only available in Enterprise edition",
+      "description": "OpenTelemetry SDK is integrated but only for Enterprise/Cloud editions. CE edition has no distributed tracing. Pino provides structured JSON logging with correlation IDs.",
+      "gap": "Distributed tracing is available only in Enterprise/Cloud editions. CE deployment has no trace ID propagation.",
+      "recommendation": "Make OpenTelemetry tracing available in the CE edition.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/otel/tracing.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Enable OTEL in CE deployments by configuring the tracing module as an optional plugin",
+          "Use Pino transaction IDs as a correlation mechanism for single-service debugging"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No alerting configuration for API error rates or latency",
+      "description": "No alerting configuration found. Terraform ECS has CloudWatch log groups and Container Insights but no alarms. Sentry is integrated for error tracking but not latency alerting.",
+      "gap": "No configured alerting thresholds for API error rates or latency.",
+      "recommendation": "Add CloudWatch alarms for ALB 5xx rates, p99 latency, and unhealthy host count.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/ECS/main.tf",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Configure CloudWatch alarms on ALB target group error rates in Terraform",
+          "Use Sentry performance monitoring alerts as a bridge"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "IaC exists but lacks drift detection and enforced peer review",
+      "description": "Infrastructure is defined as code across 24 Terraform files, Helm charts, and Kubernetes manifests. No drift detection and no evidence of mandatory peer review on IaC changes.",
+      "gap": "IaC exists but lacks two of three governance controls: no drift detection and no enforced peer review for infrastructure changes.",
+      "recommendation": "Add CODEOWNERS rules for IaC directories, require terraform plan in CI, and configure AWS Config rules for drift detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Add a CODEOWNERS file requiring IaC team review for terraform/ and deploy/ directories",
+          "Add terraform plan as a CI check on PRs that modify IaC files"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API contract testing in CI pipeline",
+      "description": "CI pipeline includes build, lint, unit tests (Jest), and E2E tests (Cypress). No API contract tests, no Pact, no OpenAPI validation, no schema comparison tools.",
+      "gap": "No API contract testing in CI. Breaking changes to API endpoints would not be caught before production.",
+      "recommendation": "Add consumer-driven contract tests or OpenAPI schema validation in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/ci.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Add Cypress API-level tests that validate response schemas",
+          "Implement OpenAPI spec generation + diff as part of CI"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No automated rollback triggers",
+      "description": "Deployments use Docker image tagging and kubectl set image. Helm chart supports standard rollback. No automated rollback trigger on health check failure.",
+      "gap": "No automated rollback trigger. Rollback is possible but requires manual intervention.",
+      "recommendation": "Configure automated rollback triggers via Kubernetes rolling update with readiness probes or Helm rollback on failed health checks.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/deploy-to-stage.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Use Helm rollback commands in incident response runbooks",
+          "Configure Kubernetes rollout undo triggers on readiness probe failures"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No infrastructure-level encryption at rest configured",
+      "description": "Terraform ECS configuration does not specify encryption at rest for RDS. LOCKBOX_MASTER_KEY provides application-level encryption for data source credentials only.",
+      "gap": "No infrastructure-level encryption at rest. Database storage unencrypted by default.",
+      "recommendation": "Add storage_encrypted = true and kms_key_id to RDS configuration. Enable encryption at rest on ElastiCache Redis.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/ECS/main.tf",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Enable RDS encryption at rest when provisioning",
+          "Ensure Redis ElastiCache has encryption at rest enabled"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Compensation and Rollback",
+      "description": "No compensation or rollback patterns for multi-step operations. Workflow status tracking exists but no compensating transactions.",
+      "gap": "No rollback capability for multi-step application operations.",
+      "recommendation": "Implement saga patterns or compensation logic for critical multi-step workflows before enabling write-scope agents.",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/modules/workflows/constants/index.ts",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "STATE-Q1 is a conditional BLOCKER. With read-only scope, it resolves to RISK-SAFETY because compensation capability is relevant for system maturity.",
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": [
+          "Limit agent scope to read-only operations until compensation patterns are implemented",
+          "Implement human-in-the-loop approval for any multi-step workflows"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Data Residency and Sovereignty",
+      "description": "No explicit data residency configuration in the codebase. Self-hosted deployment means operator controls data location.",
+      "gap": "No application-level data residency enforcement or documentation.",
+      "recommendation": "Document data residency considerations for operators deploying in regulated environments.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "terraform/ECS/variables.tf",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q2 is a conditional BLOCKER. With read-only scope, it resolves to RISK-SAFETY because data residency is still relevant for read-only agents.",
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": [
+          "Ensure LLM/agent endpoints are deployed in the same region as the ToolJet instance",
+          "Document data residency requirements for operators deploying in regulated environments"
+        ]
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "API-Q1",
+      "status": "pass",
+      "severity": null
+    },
+    {
+      "question_id": "API-Q2",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "API-Q3",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "API-Q4",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "API-Q5",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "API-Q6",
+      "status": "not_evaluated",
+      "severity": null
+    },
+    {
+      "question_id": "API-Q7",
+      "status": "not_evaluated",
+      "severity": null
+    },
+    {
+      "question_id": "API-Q8",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "status": "finding",
+      "severity": "BLOCKER"
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "STATE-Q1",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "STATE-Q2",
+      "status": "not_evaluated",
+      "severity": null
+    },
+    {
+      "question_id": "STATE-Q3",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "STATE-Q4",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "STATE-Q5",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "STATE-Q6",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "STATE-Q7",
+      "status": "not_evaluated",
+      "severity": null
+    },
+    {
+      "question_id": "HITL-Q1",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "HITL-Q2",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "HITL-Q3",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "DATA-Q1",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "DATA-Q2",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "DATA-Q3",
+      "status": "not_evaluated",
+      "severity": null
+    },
+    {
+      "question_id": "DATA-Q4",
+      "status": "not_evaluated",
+      "severity": null
+    },
+    {
+      "question_id": "DATA-Q5",
+      "status": "not_evaluated",
+      "severity": null
+    },
+    {
+      "question_id": "DATA-Q6",
+      "status": "finding",
+      "severity": "RISK-SAFETY"
+    },
+    {
+      "question_id": "DATA-Q7",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "DISC-Q1",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "DISC-Q2",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "DISC-Q3",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "OBS-Q1",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "OBS-Q2",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "OBS-Q3",
+      "status": "info",
+      "severity": "INFO"
+    },
+    {
+      "question_id": "ENG-Q1",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "ENG-Q2",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "ENG-Q3",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    },
+    {
+      "question_id": "ENG-Q4",
+      "status": "not_evaluated",
+      "severity": null
+    },
+    {
+      "question_id": "ENG-Q5",
+      "status": "finding",
+      "severity": "RISK-QUALITY"
+    }
+  ]
+}

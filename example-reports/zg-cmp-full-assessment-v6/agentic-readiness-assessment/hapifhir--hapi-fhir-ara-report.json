@@ -1,0 +1,586 @@
+{
+  "metadata": {
+    "version": "V6",
+    "assessment_type": "ara",
+    "assessment_date": "2026-05-08",
+    "td_version": "agentic-readiness-assessment-v6.0.1",
+    "report_format_version": "V6",
+    "target": "/Users/lucasdu/Documents/AWS-MAC/2026-projects/sample-agentic-readiness-assessment/services/hapifhir--hapi-fhir",
+    "assessed_by": "AWS Transform Custom — Agentic Readiness Assessment",
+    "repository_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "HAPI FHIR provides a full JPA/Hibernate persistence layer with CRUD operations on FHIR resources, database migrations, and entity lifecycle management.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["java", "healthcare", "rest-api"],
+    "context": "Open-source Java implementation of the HL7 FHIR healthcare standard.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Pilot-Ready",
+    "sub_qualifier": "Pilot-Ready (Safety Concerns)",
+    "high_count": 0,
+    "medium_count": 19,
+    "low_count": 10,
+    "safety_impact_medium_count": 7,
+    "rule_matched": "0 High, ≥2 Medium, ≥3 safety-impact Medium → Pilot-Ready (Safety Concerns)"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 7,
+    "risk_quality_count": 12,
+    "info_count": 10,
+    "na_count": 0,
+    "not_evaluated_count": 4,
+    "pass_count": 10,
+    "total": 43,
+    "core_questions_evaluated": 24,
+    "extended_questions_triggered": 15,
+    "extended_questions_not_triggered": 4
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Scoped Permissions (Least Privilege) — Framework-level support only",
+      "description": "HAPI FHIR provides a comprehensive AuthorizationInterceptor with RuleBuilder supporting fine-grained rules. However, no IAM policies, API Gateway resource policies, or platform-level least-privilege enforcement are defined in this repository.",
+      "gap": "No infrastructure-as-code defining IAM roles, API Gateway policies, or platform-level permission scoping for agent identities.",
+      "recommendation": "Create deployment templates (IaC) defining agent-specific IAM roles with explicit action-level permissions integrated with the existing AuthorizationInterceptor.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/AuthorizationInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Deploy with API Gateway authorizers that enforce agent-specific IAM roles with read-only resource policies",
+          "Configure AuthorizationInterceptor rules at deployment time to limit agent identities to specific FHIR resource types and operations"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Immutable Audit Logging — Audit events stored in mutable datastore",
+      "description": "HAPI FHIR provides BALP interceptor generating AuditEvent resources and Hibernate Envers for entity-level audit trails. Audit events stored in same mutable database. No immutable log storage configured.",
+      "gap": "Audit events generated but stored in mutable datastore. No immutable, tamper-evident audit log storage.",
+      "recommendation": "Implement an IAuditDataStore that writes to an immutable external store (S3 with Object Lock or CloudWatch Logs with retention policy).",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "hapi-fhir-storage/src/main/java/ca/uhn/fhir/jpa/interceptor/BalpAuditCaptureInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, downgraded from conditional BLOCKER",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "AUTH-Q6 evaluated as RISK-SAFETY because agent_scope is read-only. Audit logging remains important but is not a deployment blocker.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Forward AuditEvent resources to an external immutable log sink",
+          "Deploy with AWS CloudTrail enabled for API-level audit trail"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Agent Identity Suspension — No built-in revocation mechanism",
+      "description": "HAPI FHIR does not include built-in mechanisms for suspending or revoking individual agent identities. BearerTokenAuthInterceptor validates tokens but provides no revocation interface.",
+      "gap": "No mechanism to immediately suspend or revoke a specific agent identity without impacting other consumers.",
+      "recommendation": "Integrate with an external identity provider supporting immediate per-client credential revocation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/auth/BearerTokenAuthInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use an external identity provider (Cognito, Okta) with per-client disable capability",
+          "Deploy behind API Gateway with per-API-key revocation"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience — Retry only, no circuit breaker",
+      "description": "Spring Retry with exponential backoff exists but no formal circuit breaker pattern. External calls to terminology servers and subscription endpoints lack circuit breaker protection.",
+      "gap": "No circuit breaker implementation. Cascading failures from external dependencies not prevented.",
+      "recommendation": "Add Resilience4j circuit breaker annotations on methods calling external terminology servers and subscription endpoints.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "hapi-fhir-storage/src/main/java/ca/uhn/fhir/jpa/util/Retrier.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Add Resilience4j circuit breaker at deployment for external service calls",
+          "Configure timeout limits on HTTP client connections to external services"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Rate Limiting and Throttling — No production rate limiter",
+      "description": "No production rate limiting middleware. Only TransactionConcurrencySemaphoreInterceptor for concurrent transaction bundle processing.",
+      "gap": "No per-client or per-endpoint rate limiting to prevent runaway agent loops.",
+      "recommendation": "Deploy with API Gateway usage plans defining per-agent throttle limits.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "hapi-fhir-jpaserver-base/src/main/java/ca/uhn/fhir/jpa/interceptor/TransactionConcurrencySemaphoreInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Deploy behind AWS API Gateway with usage plans and throttle settings",
+          "Add WAF rate-based rules at the infrastructure layer"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Data Residency and Sovereignty — No residency enforcement for healthcare PHI",
+      "description": "HAPI FHIR stores healthcare data (PHI) subject to HIPAA, GDPR. Multi-tenancy supported but no data residency enforcement implemented.",
+      "gap": "No data residency enforcement. Healthcare PHI with no controls preventing agent transmission to LLM endpoints in other jurisdictions.",
+      "recommendation": "Deploy with region-locked infrastructure. Implement data classification identifying fields requiring residency controls.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "hapi-fhir-jpaserver-base/src/main/java/ca/uhn/fhir/jpa/partition/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, downgraded from conditional BLOCKER",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q2 evaluated as RISK-SAFETY because agent_scope is read-only. Residency still relevant but lower risk when no data modification occurs.",
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Deploy with region-locked infrastructure ensuring LLM endpoints co-located with data",
+          "Implement VPC endpoints to Amazon Bedrock in same AWS region"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "PII Redaction in Logs — No PHI scrubbing in logging pipeline",
+      "description": "LoggingInterceptor with configurable templates can include request headers, parameters, and response bodies. No built-in PII/PHI scrubbing or log redaction middleware.",
+      "gap": "Healthcare data in request/response bodies can leak into application logs.",
+      "recommendation": "Implement a custom logging interceptor that scrubs PHI. Integrate with Amazon Macie for log-level PII detection.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/LoggingInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Configure LoggingInterceptor to log only request metadata without body content",
+          "Deploy with CloudWatch log filters that mask PHI patterns"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Machine-Readable API Specification — Dynamic generation only",
+      "description": "OpenApiInterceptor auto-generates OpenAPI 3.x specs at runtime. No static OpenAPI spec committed to repository.",
+      "gap": "No static, version-controlled OpenAPI specification for offline agent tool generation.",
+      "recommendation": "Add a build step that exports the generated OpenAPI spec as a static artifact.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "hapi-fhir-server-openapi/src/main/java/ca/uhn/fhir/rest/openapi/OpenApiInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Export generated OpenAPI spec as a build artifact",
+          "Use FHIR CapabilityStatement as canonical interface contract"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Structured Error Responses — Missing retryable signal",
+      "description": "All errors converted to FHIR OperationOutcome with severity, code, diagnostics. No explicit retryable boolean.",
+      "gap": "Missing retryable indicator. Agents must infer from HTTP status codes.",
+      "recommendation": "Add retryable extension to OperationOutcome responses.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/ExceptionHandlingInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Document mapping from OperationOutcome issue codes to retryable/terminal",
+          "Agents infer retryability from HTTP status codes"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credential Management — No secrets management integration",
+      "description": "No built-in secrets management (Vault, Secrets Manager). Credentials via Spring properties or environment variables. @SensitiveNoDisplay prevents serialization but no rotation.",
+      "gap": "No secrets management system integration. No rotation support.",
+      "recommendation": "Integrate with AWS Secrets Manager via Spring Cloud AWS for credential management with automatic rotation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "hapi-fhir-base/src/main/java/ca/uhn/fhir/model/api/annotation/SensitiveNoDisplay.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Configure Spring Boot to read secrets from AWS Secrets Manager",
+          "Use environment variables injected from secrets store at deployment time"
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging Environment — No dedicated staging config",
+      "description": "Spring Boot auto-configuration allows local testing with in-memory databases. Sample apps exist. No dedicated sandbox with production-equivalent data shape.",
+      "gap": "No staging environment with production-equivalent data for safe agent testing.",
+      "recommendation": "Create Docker Compose-based staging with synthetic FHIR data (Synthea-generated patients).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "hapi-fhir-spring-boot/hapi-fhir-spring-boot-samples/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use Spring Boot with H2 in-memory database for local agent testing",
+          "Create Docker Compose environment with sample FHIR data"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "System of Record Designations — No master data management",
+      "description": "No system-of-record designations or master data management processes built in. FHIR meta.source available but not enforced.",
+      "gap": "No golden record pattern. Agents querying multiple systems encounter conflicting data.",
+      "recommendation": "Configure FHIR resource provenance tracking. Implement HAPI FHIR MDM module.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use FHIR resource meta.source to identify originating system",
+          "Implement MDM module for patient matching"
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Schema Versioning and API Contracts — No CI breaking change detection",
+      "description": "Multi-version FHIR support with content negotiation. No breaking-change detection tooling in CI.",
+      "gap": "No automated contract testing in CI. Breaking API changes not automatically detected.",
+      "recommendation": "Add OpenAPI spec diff or Pact contract tests to CI pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "hapi-fhir-converter/src/main/java/ca/uhn/hapi/converters/server/VersionedApiConverterInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "FHIR specification versioning provides strong stability guarantees",
+          "CapabilityStatement declares supported operations as contract"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Distributed Tracing and Structured Logging — Partial implementation",
+      "description": "OpenTelemetry dependency and MDC usage present. No trace context propagation or structured JSON logging built-in.",
+      "gap": "No trace context propagation. No JSON structured logging. No consistent correlation_id.",
+      "recommendation": "Add server interceptor propagating traceparent headers and JSON logging via Logback encoder.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "pom.xml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Configure Logback JSON encoder at deployment",
+          "Add OpenTelemetry Java agent for automatic trace propagation"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Alerting on Error Rates and Latency — No alerting defined",
+      "description": "No alerting configuration in repository. Performance logging exists but no threshold alerting.",
+      "gap": "No alerting infrastructure defined.",
+      "recommendation": "Add IaC defining CloudWatch alarms for 5xx error rates and p99 latency.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "hapi-fhir-server/src/main/java/ca/uhn/fhir/rest/server/interceptor/PerformanceTracingLoggingInterceptor.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Configure CloudWatch alarms on API Gateway metrics at deployment",
+          "Use AWS X-Ray with anomaly detection"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Infrastructure Governance — No IaC in repository",
+      "description": "No infrastructure-as-code. No Terraform, CloudFormation, CDK, Helm, or Kustomize files found.",
+      "gap": "Agent-facing integration surface not defined as code.",
+      "recommendation": "Create deployment IaC defining API Gateway, IAM roles, VPC, database, and secrets management.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Create separate IaC repository for deployment infrastructure",
+          "Use CDK or Terraform for deployment stack"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "CI/CD with API Contract Testing — No contract testing",
+      "description": "Extensive CI/CD with parallel testing, CodeQL, Codecov. No API contract testing (Pact, Spring Cloud Contract, OpenAPI diff).",
+      "gap": "Breaking API changes not automatically detected in CI.",
+      "recommendation": "Add consumer-driven contract tests to CI pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/parallel-pipeline-build.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "313+ REST API integration tests provide significant coverage",
+          "FHIR specification compliance tests serve as de facto contract tests"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Rollback Capability — No deployment rollback defined",
+      "description": "No blue/green, canary, or CodeDeploy rollback mechanism. Release workflow handles versioning only.",
+      "gap": "No rollback strategy for broken agent-facing APIs.",
+      "recommendation": "Define deployment IaC with blue/green or canary deployment and automatic rollback triggers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/release.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Maven Central versioning allows consumers to pin previous versions",
+          "Deployment-level rollback at infrastructure layer"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Encryption at Rest — No encryption configuration defined",
+      "description": "No encryption-at-rest configuration. Library delegates entirely to infrastructure. No kms_key_id references.",
+      "gap": "No encryption defined. Healthcare PHI may be unencrypted without infrastructure configuration.",
+      "recommendation": "Define IaC with KMS encryption on all data stores (RDS, S3, EBS).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Configure RDS/Aurora encryption with KMS at deployment",
+          "Enable EBS encryption for all volumes"
+        ]
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "status": "pass", "severity": null},
+    {"question_id": "API-Q2", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "API-Q3", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "API-Q4", "status": "info", "severity": "INFO"},
+    {"question_id": "API-Q5", "status": "info", "severity": "INFO"},
+    {"question_id": "API-Q6", "status": "pass", "severity": null},
+    {"question_id": "API-Q7", "status": "info", "severity": "INFO"},
+    {"question_id": "API-Q8", "status": "info", "severity": "INFO"},
+    {"question_id": "AUTH-Q1", "status": "pass", "severity": null},
+    {"question_id": "AUTH-Q2", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "AUTH-Q3", "status": "pass", "severity": null},
+    {"question_id": "AUTH-Q4", "status": "pass", "severity": null},
+    {"question_id": "AUTH-Q5", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "AUTH-Q6", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "AUTH-Q7", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "STATE-Q1", "status": "info", "severity": "INFO"},
+    {"question_id": "STATE-Q2", "status": "pass", "severity": null},
+    {"question_id": "STATE-Q3", "status": "not_evaluated", "severity": null},
+    {"question_id": "STATE-Q4", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "STATE-Q5", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "STATE-Q6", "status": "info", "severity": "INFO"},
+    {"question_id": "STATE-Q7", "status": "not_evaluated", "severity": null},
+    {"question_id": "HITL-Q1", "status": "not_evaluated", "severity": null},
+    {"question_id": "HITL-Q2", "status": "not_evaluated", "severity": null},
+    {"question_id": "HITL-Q3", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "DATA-Q1", "status": "pass", "severity": null},
+    {"question_id": "DATA-Q2", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "DATA-Q3", "status": "pass", "severity": null},
+    {"question_id": "DATA-Q4", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "DATA-Q5", "status": "pass", "severity": null},
+    {"question_id": "DATA-Q6", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "DATA-Q7", "status": "info", "severity": "INFO"},
+    {"question_id": "DISC-Q1", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "DISC-Q2", "status": "info", "severity": "INFO"},
+    {"question_id": "DISC-Q3", "status": "info", "severity": "INFO"},
+    {"question_id": "OBS-Q1", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "OBS-Q2", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "OBS-Q3", "status": "info", "severity": "INFO"},
+    {"question_id": "ENG-Q1", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "ENG-Q2", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "ENG-Q3", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "ENG-Q4", "status": "pass", "severity": null},
+    {"question_id": "ENG-Q5", "status": "finding", "severity": "RISK-QUALITY"}
+  ]
+}

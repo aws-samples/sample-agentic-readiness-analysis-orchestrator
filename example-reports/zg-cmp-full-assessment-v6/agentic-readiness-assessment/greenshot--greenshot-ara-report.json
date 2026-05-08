@@ -1,0 +1,226 @@
+{
+  "metadata": {
+    "version": "V6",
+    "assessment_type": "ara",
+    "assessment_date": "2026-05-08",
+    "td_version": "agentic-readiness-assessment-v6.0.1",
+    "report_format_version": "V6",
+    "target": "/Users/lucasdu/Documents/AWS-MAC/2026-projects/sample-agentic-readiness-assessment/services/greenshot--greenshot",
+    "repository_type": "application",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Greenshot is a native Windows desktop application that captures and annotates screenshots locally. It has no persistent data store, no HTTP/RPC server surface, no authentication surface for external callers, and no write operations exposed to agents.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["csharp", "desktop", "windows"],
+    "context": "Windows screenshot and annotation tool.",
+    "dev_library_application_override": true,
+    "dev_library_application_rationale": "Service archetype is stateless-utility AND all five surface flags are false. This repository functions as a desktop end-user tool with no agent-callable surface.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_http_rpc_surface": false,
+      "has_auth_surface": false,
+      "has_write_operations": false,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Agent-Ready",
+    "sub_qualifier": null,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 5,
+    "safety_impact_medium_count": 0,
+    "rule_matched": "0 High, ≤1 Medium → Agent-Ready"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 0,
+    "risk_quality_count": 0,
+    "info_count": 5,
+    "na_count": 5,
+    "not_evaluated_count": 33,
+    "total": 43,
+    "core_questions_evaluated": 10,
+    "extended_questions_triggered": 0,
+    "extended_questions_not_triggered": 33
+  },
+  "findings": [
+    {
+      "question_id": "API-Q1",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No API surface — desktop application",
+      "description": "Greenshot is a native Windows desktop application (WinExe, .NET Framework 4.8). It does not expose any REST, GraphQL, gRPC, or AsyncAPI interface. The application is launched via system tray and interacts with users through WinForms/WPF UI and hotkeys. No HTTP listener or server component exists.",
+      "gap": "No API surface exists for agent consumption. Integration requires UI automation or building a wrapper.",
+      "recommendation": "If agent integration is desired, build a lightweight API wrapper or evaluate headless alternatives.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Greenshot/Greenshot.csproj",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No authentication surface for external callers",
+      "description": "Greenshot has no authentication surface for external callers. It is a desktop application running under local Windows user context. OAuth2 client flows exist for outbound calls to Box, Dropbox, and Imgur APIs, but no inbound authentication is implemented.",
+      "gap": "No machine identity mechanism exists because no agent-callable surface exists.",
+      "recommendation": "No action required. If repackaged as a service, implement machine identity (OAuth2 client credentials or API keys with principal attribution).",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Greenshot.Base/Core/OAuth/OAuth2Helper.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No audit logging — desktop application",
+      "description": "System does not execute agent-invoked write operations — audit logging is a consumer responsibility. Greenshot uses log4net for local diagnostic logging but this is not an immutable audit trail.",
+      "gap": "No immutable audit logging — expected for a desktop application with no agent-callable surface.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Greenshot/log4net-release.xml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND surface-flag downgrade (has_auth_surface=false, has_write_operations=false)",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "System does not execute agent-invoked write operations. No auth surface and no write operations exist. Audit logging is a consumer responsibility for this desktop utility."
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No write operations — compensation not applicable",
+      "description": "System exposes no write operations — compensation logic is not applicable. Greenshot is a desktop screenshot tool; its operations are user-initiated and local.",
+      "gap": "No agent-initiated write workflows exist to require compensation.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Greenshot/GreenshotMain.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND surface-flag downgrade (has_write_operations=false, has_http_rpc_surface=false)",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "System exposes no write operations and no HTTP/RPC surface. No multi-step write workflows exist that would need compensation. Desktop application with user-initiated local operations only."
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Not a data-handling target",
+      "description": "Not a data-handling target — no PII/PHI/financial/credential data is stored, processed, or logged by the system in an agent-accessible manner. Screenshots are stored locally. OAuth tokens are encrypted in local INI files for end-user use.",
+      "gap": "No data classification concern for agent integration.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Greenshot.Base/Core/CoreConfiguration.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: dev-library-application override applied, Stage A = No (not a data-handling target)",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Desktop screenshot tool with no persistent data store accessible to agents. OAuth tokens are stored locally encrypted for end-user use. No PII/PHI/financial data is exposed to external callers.",
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Stage A resolved to No — system is not a data-handling target. B1 not evaluated."
+          },
+          "b2": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Stage A resolved to No — system is not a data-handling target. B2 not evaluated."
+          },
+          "b3": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Stage A resolved to No — system is not a data-handling target. B3 not evaluated."
+          }
+        }
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "status": "finding", "severity": "Low", "native_severity": "INFO"},
+    {"question_id": "API-Q2", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No HTTP/RPC surface"},
+    {"question_id": "API-Q3", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No HTTP/RPC surface"},
+    {"question_id": "API-Q4", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "agent_scope read-only"},
+    {"question_id": "API-Q5", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "API-Q6", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "API-Q7", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "API-Q8", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "AUTH-Q1", "status": "finding", "severity": "Low", "native_severity": "INFO"},
+    {"question_id": "AUTH-Q2", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No agent-callable surface"},
+    {"question_id": "AUTH-Q3", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No agent-callable surface"},
+    {"question_id": "AUTH-Q4", "status": "not_evaluated", "reason": "Extended question not triggered — stateless-utility archetype"},
+    {"question_id": "AUTH-Q5", "status": "not_evaluated", "reason": "Extended question not triggered — dev-library-application override"},
+    {"question_id": "AUTH-Q6", "status": "finding", "severity": "Low", "native_severity": "INFO"},
+    {"question_id": "AUTH-Q7", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No auth surface"},
+    {"question_id": "STATE-Q1", "status": "finding", "severity": "Low", "native_severity": "INFO"},
+    {"question_id": "STATE-Q2", "status": "not_evaluated", "reason": "Extended question not triggered — no persistent state"},
+    {"question_id": "STATE-Q3", "status": "not_evaluated", "reason": "Extended question not triggered — agent_scope read-only"},
+    {"question_id": "STATE-Q4", "status": "not_evaluated", "reason": "Extended question not triggered — stateless-utility"},
+    {"question_id": "STATE-Q5", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No HTTP/RPC surface"},
+    {"question_id": "STATE-Q6", "status": "not_evaluated", "reason": "Extended question not triggered — agent_scope read-only"},
+    {"question_id": "STATE-Q7", "status": "not_evaluated", "reason": "Extended question not triggered — not P0 priority"},
+    {"question_id": "HITL-Q1", "status": "not_evaluated", "reason": "Extended question not triggered — agent_scope read-only"},
+    {"question_id": "HITL-Q2", "status": "not_evaluated", "reason": "Extended question not triggered — agent_scope read-only"},
+    {"question_id": "HITL-Q3", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "dev-library-application override"},
+    {"question_id": "DATA-Q1", "status": "finding", "severity": "Low", "native_severity": "INFO"},
+    {"question_id": "DATA-Q2", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No persistent data store"},
+    {"question_id": "DATA-Q3", "status": "not_evaluated", "reason": "Extended question not triggered — no list/query endpoints"},
+    {"question_id": "DATA-Q4", "status": "not_evaluated", "reason": "Extended question not triggered — no persistent state"},
+    {"question_id": "DATA-Q5", "status": "not_evaluated", "reason": "Extended question not triggered — no persistent state"},
+    {"question_id": "DATA-Q6", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No user data logging"},
+    {"question_id": "DATA-Q7", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "DISC-Q1", "status": "not_evaluated", "reason": "Extended question not triggered — dev-library-application override"},
+    {"question_id": "DISC-Q2", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "DISC-Q3", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "OBS-Q1", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No HTTP/RPC surface — library/utility"},
+    {"question_id": "OBS-Q2", "status": "info_downgrade", "severity": "Low", "native_severity": "INFO", "reason": "No HTTP/RPC surface — library/utility"},
+    {"question_id": "OBS-Q3", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "ENG-Q1", "status": "na", "reason": "dev-library-application override — library N/A mapping"},
+    {"question_id": "ENG-Q2", "status": "na", "reason": "dev-library-application override — library N/A mapping"},
+    {"question_id": "ENG-Q3", "status": "na", "reason": "dev-library-application override — library N/A mapping"},
+    {"question_id": "ENG-Q4", "status": "na", "reason": "dev-library-application override — library N/A mapping"},
+    {"question_id": "ENG-Q5", "status": "na", "reason": "dev-library-application override — library N/A mapping"}
+  ]
+}

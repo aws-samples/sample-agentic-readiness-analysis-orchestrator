@@ -1,0 +1,760 @@
+{
+  "metadata": {
+    "version": "V6",
+    "assessment_type": "ara",
+    "assessment_date": "2025-05-08",
+    "td_version": "agentic-readiness-assessment",
+    "report_format_version": "V6",
+    "target": "/Users/lucasdu/Documents/AWS-MAC/2026-projects/sample-agentic-readiness-assessment/services/zappa--Zappa",
+    "repository_type": "application",
+    "service_archetype": "stateless-utility",
+    "archetype_detection": "auto-detected",
+    "archetype_justification": "Zappa is a CLI tool and Lambda runtime library with no persistent data store, no HTTP API surface of its own, no authentication enforcement surface, and no write operations.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["python", "serverless"],
+    "context": "Python framework for deploying WSGI apps on AWS Lambda.",
+    "dev_library_application_override": true,
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_http_rpc_surface": false,
+      "has_auth_surface": false,
+      "has_write_operations": false,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Agent-Ready",
+    "sub_qualifier": null,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 38,
+    "safety_impact_medium_count": 0,
+    "rule_matched": "0 High, ≤1 Medium → Agent-Ready"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 0,
+    "risk_quality_count": 0,
+    "info_count": 38,
+    "na_count": 5,
+    "not_evaluated_count": 0,
+    "total": 43,
+    "core_questions_evaluated": 19,
+    "extended_questions_triggered": 19,
+    "extended_questions_not_triggered": 0
+  },
+  "findings": [
+    {
+      "question_id": "API-Q1",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No HTTP/RPC surface — CLI tool only",
+      "description": "Zappa exposes no HTTP/RPC surface of its own. It is a CLI tool (zappa deploy, zappa update, zappa tail) that creates API Gateway resources for user applications. The tool itself has no API that an agent would call directly.",
+      "gap": "No API surface exists to document — this is expected for a CLI/library tool.",
+      "recommendation": "If agent integration is desired, consider wrapping Zappa CLI commands in a task-based API or using AWS SDK calls directly.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "setup.py", "lines": "entry_points console_scripts"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No HTTP/RPC surface — machine-readable spec not applicable",
+      "description": "No HTTP/RPC surface — machine-readable spec is not applicable. Zappa is a CLI tool; its interface is command-line arguments, not an API spec.",
+      "gap": "No API surface to specify.",
+      "recommendation": "None needed. The zappa template command outputs CloudFormation JSON for deployed API Gateway resources.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No HTTP/RPC surface — structured errors not applicable",
+      "description": "No HTTP/RPC surface — structured error responses are not applicable. The Lambda handler returns structured JSON error responses for user applications as pass-through behavior.",
+      "gap": "No API surface.",
+      "recommendation": "None needed for Zappa itself.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/handler.py", "lines": "326-347"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No write API endpoints — CLI tool",
+      "description": "Agent scope is read-only. Additionally, Zappa has no write API endpoints — it is a CLI tool. Write operations are user-initiated CLI commands, not agent-callable endpoints.",
+      "gap": "No write API endpoints exist.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/cli.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND no write API endpoints exist.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, and Zappa has no write API endpoints to call — it is a CLI tool."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "CLI text output — no agent-consumable responses",
+      "description": "Zappa's Lambda handler returns JSON responses to API Gateway for user applications. The CLI itself outputs text to stdout. No agent-consumable API responses exist from Zappa itself.",
+      "gap": "CLI tool output only.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "zappa/handler.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q6",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Async support for user apps only — no agent surface",
+      "description": "Zappa supports async task execution via Lambda/SNS for user applications. As a CLI tool, Zappa's own operations are synchronous. No agent-callable async patterns exist.",
+      "gap": "No agent-callable surface.",
+      "recommendation": "None needed for Zappa itself.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/asynchronous.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q7",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Event sources for user apps — no Zappa events",
+      "description": "Zappa supports SNS, SQS, DynamoDB Streams, Kinesis, and EventBridge as event sources for user applications. Zappa itself does not emit events for its own state changes.",
+      "gap": "CLI tool state changes are not event-emitting.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No API surface — rate limit headers not applicable",
+      "description": "Zappa creates API Gateway usage plans and throttling for user applications. It has no API surface of its own that would require rate limit headers.",
+      "gap": "No API surface.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Delegates authentication to AWS IAM via boto3",
+      "description": "Zappa delegates all authentication to AWS IAM via boto3 sessions. It does not implement or enforce machine identity authentication itself. Deployed Lambda functions assume IAM roles defined by assume_policy.json.",
+      "gap": "System does not issue or enforce agent identities — authentication is a consumer/platform responsibility.",
+      "recommendation": "Agent identity for Zappa-deployed applications should be configured at the API Gateway/Lambda level, not within Zappa itself.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/policies/assume_policy.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Default IAM policies are broad but overridable",
+      "description": "Zappa provides IAM policy templates with broad wildcards. These are defaults for convenience — users can override with scoped custom policies. Zappa does not enforce permissions itself.",
+      "gap": "Default policies are overly broad, but documented and overridable. Zappa is a tool, not a target system.",
+      "recommendation": "Document best practices for least-privilege policies when deploying agent-facing applications via Zappa.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/policies/attach_policy.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Action-level auth delegated to AWS IAM",
+      "description": "Zappa does not implement action-level authorization. It delegates to AWS IAM which natively supports action-level controls.",
+      "gap": "System does not enforce action-level auth — consumer/platform responsibility.",
+      "recommendation": "None needed for Zappa itself.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Identity propagation via Lambda event/context pass-through",
+      "description": "Zappa's Lambda handler passes through requestContext (authorizer context, Cognito identity, IAM caller identity) to user WSGI/ASGI applications. Identity propagation is handled by API Gateway and Lambda, not by Zappa code.",
+      "gap": "Pass-through behavior — no identity propagation logic in Zappa itself.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/handler.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credentials via boto3 chain and S3 REMOTE_ENV",
+      "description": "Zappa supports loading secrets from S3 via REMOTE_ENV setting. No hardcoded credentials found. AWS credentials consumed from standard boto3 credential chain.",
+      "gap": "No formal secrets rotation mechanism — S3-based secrets require manual rotation.",
+      "recommendation": "Consider recommending AWS Secrets Manager integration over S3-based REMOTE_ENV for automatic rotation.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "zappa/handler.py", "lines": "load_remote_settings method"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No audit logging — consumer responsibility",
+      "description": "Zappa does not implement audit logging. It relies on AWS CloudTrail for API calls and CloudWatch Logs for application logging. No CloudTrail configuration is managed by Zappa itself.",
+      "gap": "Audit logging is a platform/consumer concern for this tool.",
+      "recommendation": "User applications deployed via Zappa should configure CloudTrail and structured logging independently.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: has_auth_surface=false AND has_write_operations=false. System does not execute agent-invoked write operations — audit logging is a consumer responsibility.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Zappa is a CLI tool/library that does not execute agent-invoked operations. Audit logging is owned by the consuming applications and the AWS platform (CloudTrail)."
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Agent identity suspension — consumer responsibility",
+      "description": "System does not issue or enforce agent identities — suspension is a consumer responsibility. Agent identity suspension for Zappa-deployed apps would be handled via IAM role deactivation or API Gateway API key deletion.",
+      "gap": "Zappa does not manage agent identities.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "CLI rollback command — no agent-callable compensation",
+      "description": "Zappa's CLI supports 'zappa rollback <n>' to revert to previous Lambda versions. This is a user-initiated CLI operation, not an agent-callable API. The tool has no multi-step write workflows requiring compensation.",
+      "gap": "No agent-callable write operations.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/cli.py", "lines": "rollback command"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND stateless-utility archetype with no write operations. Stateless utilities have no multi-step write sequences.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Zappa is a stateless CLI tool with no agent-callable write workflows. The rollback command is user-initiated, not agent-invoked."
+      }
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "CLI status command — no agent-queryable state",
+      "description": "Zappa's CLI provides 'zappa status' to query deployment state. This is a CLI command, not a queryable API. The Lambda handler itself is stateless.",
+      "gap": "CLI tool with no agent-queryable state surface.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/cli.py", "lines": "status command"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Stateless — no concurrent write concerns",
+      "description": "Zappa is stateless. No concurrent write operations exist. Lambda concurrency is managed at the AWS platform level.",
+      "gap": "No concurrent write operations.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No circuit breakers — CLI tool uses boto3 defaults",
+      "description": "Zappa does not implement circuit breakers or retry logic. Its Lambda handler directly invokes user WSGI/ASGI apps. The CLI uses boto3's built-in retry logic.",
+      "gap": "CLI tool without runtime resilience requirements.",
+      "recommendation": "User applications should implement their own resilience patterns.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No HTTP/RPC surface — rate limiting not applicable",
+      "description": "System exposes no HTTP/RPC surface — API-layer rate limiting is not applicable. Zappa creates API Gateway throttling for user applications but has no API surface of its own.",
+      "gap": "No API surface.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No write operations — transaction limits not applicable",
+      "description": "Read-only agents cannot modify records, trigger spend, or delete data. Zappa has no transaction limit mechanism because it has no agent-callable write operations.",
+      "gap": "No write operations.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Lambda auto-scaling — no capacity concerns for CLI tool",
+      "description": "Zappa-deployed Lambda functions auto-scale via AWS Lambda's concurrency model. Zappa does not own or manage infrastructure capacity.",
+      "gap": "CLI tool with no runtime capacity concerns.",
+      "recommendation": "None needed for Zappa itself.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No draft/pending state — CLI tool",
+      "description": "Zappa has no draft/pending state mechanism. Commands either execute immediately or are dry-run capable. No agent-callable approval workflow exists.",
+      "gap": "CLI tool with no agent-callable state changes.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/cd.yml", "lines": "dry-run parameter"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No configurable approval gates — CLI tool",
+      "description": "No configurable approval gates exist within Zappa. The CD workflow uses GitHub environment protection rules for Zappa's own releases, not for user applications.",
+      "gap": "CLI tool.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/cd.yml", "lines": "environment: protected"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Staging is consumer concern — test suite uses mocks",
+      "description": "Library/utility — staging environments are consumer concerns. Zappa supports multi-stage deployments for user apps. Zappa itself uses mocked AWS calls (placebo) for testing.",
+      "gap": "Library/CLI tool.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "tests/placebo/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Not a data-handling target — no sensitive data",
+      "description": "Stage A = No. Zappa does not store, process, or transmit sensitive data. It handles deployment artifacts temporarily in S3 and passes environment variables to Lambda, but does not own or persist user data.",
+      "gap": "Not a data-handling target.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/handler.py", "lines": "load_remote_settings method"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: Stage A = No — not a data-handling target. Dev-library-application override also applies.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Zappa is a deployment tool that does not store, process, or log PII/PHI/financial/credential data. It temporarily handles deployment zips in S3 and passes env vars to Lambda at cold start.",
+        "data_q1_subchecks": {
+          "b1": {"fired": false, "severity": null, "reasoning": "Stage A = No — skipped."},
+          "b2": {"fired": false, "severity": null, "reasoning": "Stage A = No — skipped."},
+          "b3": {"fired": false, "severity": null, "reasoning": "Stage A = No — skipped."}
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No persistent data — residency not applicable",
+      "description": "No persistent data store and no user-data logging — residency requirements do not apply. Zappa deploys to user-specified AWS regions.",
+      "gap": "No data residency concern for the tool.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/core.py", "lines": "AWS_REGIONS list"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: has_persistent_data_store=false AND has_logging_of_user_data=false. No persistent data store and no user-data logging.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Zappa holds no data subject to residency constraints. It deploys to user-specified regions but does not persist user data."
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No query API — CLI tool",
+      "description": "Zappa has no query API. It is a CLI tool. The Lambda handler passes requests through to user applications.",
+      "gap": "No query surface.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No persistent data — no system of record concern",
+      "description": "Zappa owns no persistent data. Deployment state is stored in AWS (CloudFormation stacks, Lambda versions, S3 buckets) — AWS is the system of record.",
+      "gap": "No data ownership.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/core.py", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Stateless utility — no temporal data concerns",
+      "description": "Zappa is stateless and does not manage temporal data. Downgraded to INFO for stateless-utility archetype.",
+      "gap": "No temporal data concerns.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No user data in logs — PII risk not applicable",
+      "description": "System does not log user data and holds no user data — PII-in-logs risk is not applicable. Common Log Format logs method, path, status, and size only.",
+      "gap": "No PII in Zappa's logging surface.",
+      "recommendation": "None needed. Note: DEBUG mode logs raw Lambda events which could contain user request data.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "zappa/handler.py", "lines": "common_log call"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No datasets — data quality not applicable",
+      "description": "Zappa owns no datasets. No data quality metrics exist because there is no data to measure.",
+      "gap": "No data.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantic versioning via PyPI — no formal API contracts",
+      "description": "Zappa is published to PyPI with semantic versioning (v0.62.1). CHANGELOG.md documents breaking changes. Comprehensive test suite (8,400+ lines) serves as implicit contract validation.",
+      "gap": "No formal contract testing for CLI interface stability.",
+      "recommendation": "Consider documenting CLI interface stability guarantees if agents will wrap CLI commands.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "CHANGELOG.md", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Clear configuration field names",
+      "description": "Zappa's configuration keys use clear, descriptive names (app_function, aws_region, s3_bucket, django_settings, keep_warm, timeout_seconds). No legacy abbreviations.",
+      "gap": "None — naming is already clear.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "example/zappa_settings.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "README as primary documentation — no data catalog needed",
+      "description": "No data catalog exists — expected for a CLI tool/library with no data. README serves as primary documentation for configuration options.",
+      "gap": "No data to catalog.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "README.md", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "X-Ray support for user apps — library tracing is consumer concern",
+      "description": "Library/utility — tracing and correlation are consumer concerns. Zappa supports X-Ray tracing as pass-through for deployed applications. Uses standard Python logging module.",
+      "gap": "Library/CLI tool. Tracing is a consumer concern.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "zappa/core.py", "lines": "X-Ray configuration"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No alerting — consumer responsibility",
+      "description": "Library/utility — alerting is a consumer concern. Zappa does not configure CloudWatch alarms for deployed applications.",
+      "gap": "CLI tool.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No business metrics — deployment tool",
+      "description": "Zappa is a deployment tool with no business outcomes to measure. Deployed user applications should define their own business metrics.",
+      "gap": "No business operations.",
+      "recommendation": "None needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "ENG-Q1", "status": "N/A", "reason": "application repository with library N/A mapping applied (dev-library-application override)"},
+    {"question_id": "ENG-Q2", "status": "N/A", "reason": "application repository with library N/A mapping applied (dev-library-application override)"},
+    {"question_id": "ENG-Q3", "status": "N/A", "reason": "application repository with library N/A mapping applied (dev-library-application override)"},
+    {"question_id": "ENG-Q4", "status": "N/A", "reason": "application repository with library N/A mapping applied (dev-library-application override)"},
+    {"question_id": "ENG-Q5", "status": "N/A", "reason": "application repository with library N/A mapping applied (dev-library-application override)"}
+  ]
+}
