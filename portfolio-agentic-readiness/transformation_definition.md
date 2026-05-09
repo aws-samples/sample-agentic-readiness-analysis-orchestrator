@@ -8,23 +8,32 @@ Aggregate individual repository Agentic Readiness Assessment (ARA) reports into 
 
 ## Summary
 
-This transformation consumes multiple individual ARA reports (`*-ara-report.md` files) from different repositories and produces a comprehensive portfolio-level view focused exclusively on agentic readiness. It performs intelligent discovery and parsing of ARA reports, identifies cross-cutting BLOCKERs and RISKs that appear across multiple services, constructs a service dependency map from portfolio configuration, generates portfolio-level remediation guidance, recommends agentic enablement programs, and produces a service-by-service summary.
+This transformation consumes multiple individual ARA report JSON artifacts (`*-ara-report.json` files) from different repositories and produces a comprehensive portfolio-level view focused exclusively on agentic readiness. It performs intelligent discovery and parsing of ARA report JSONs, identifies cross-cutting BLOCKERs and RISKs that appear across multiple services, constructs a service dependency map from portfolio configuration, generates portfolio-level remediation guidance, recommends agentic enablement programs, and produces a service-by-service summary.
 
-The transformation follows a 7-step pipeline:
-1. **Read Context**: Parse additionalPlanContext for portfolio framing
-2. **Discovery**: Locate all ARA report files in the directory structure
-3. **Parsing**: Extract readiness profiles, severity counts, and per-question findings from each report
-4. **Executive Dashboard**: Build readiness distribution across the portfolio
-5. **Cross-Cutting Analysis**: Identify BLOCKERs appearing in 2+ repos and RISKs appearing in 3+ repos
-6. **Dependency Mapping**: Construct service dependency map from dependency_overrides
-7. **Recommendations**: Generate remediation guidance and agentic program recommendations
+The transformation follows a 9-step pipeline:
+1. **Read Context** (Step 0): Parse additionalPlanContext for portfolio framing
+2. **Discovery** (Step 1): Locate all ARA report files in the directory structure
+3. **Parsing** (Step 2): Extract readiness profiles, severity counts, and per-question findings from each report
+4. **Executive Dashboard** (Step 3): Build readiness distribution across the portfolio
+5. **Cross-Cutting BLOCKERs** (Step 4): Identify BLOCKERs appearing in 2+ repos
+6. **Cross-Cutting RISKs** (Step 4b): Identify RISKs meeting the scaling threshold (max(3, 33% of applicable repos)), split by RISK-SAFETY and RISK-QUALITY tiers
+7. **Dependency Mapping** (Step 5): Construct service dependency map from dependency_overrides
+8. **Remediation Guidance** (Step 6): Generate portfolio-level remediation for cross-cutting BLOCKERs
+9. **Agentic Programs** (Step 7): Recommend AI DLC, AgentStorming, AXE, EBA on Agentic AI where triggered
+10. **Portfolio-Level Questions** (Step 8): Evaluate PORT-ARA-Q1 through PORT-ARA-Q5 — capabilities only visible across multiple repos
 
-The output is a detailed Markdown report saved as `portfolio-ara-report.md` containing:
+The output is a **four-artifact bundle** containing:
+- `{portfolio_name}-portfolio-ara-report.md` — richest narrative
+- `{portfolio_name}-portfolio-ara-report.json` — canonical machine-readable contract
+- `{portfolio_name}-portfolio-ara-report.html` — single self-contained HTML visualization
+- `{portfolio_name}-portfolio-ara-report.metadata.json` — version compatibility sidecar
+
+The MD report contains:
 - Executive dashboard with readiness distribution by profile
 - Blocker heatmap by section (which dimensions block the most repos)
 - Readiness snapshot (structured, machine-parseable metrics for dashboard consumption)
 - Cross-cutting BLOCKERs (same blocker question in 2+ repos)
-- Cross-cutting RISKs (same risk question in 3+ repos)
+- Cross-cutting RISKs (same risk question appearing in max(3, 33% of applicable repos))
 - Service dependency map from dependency_overrides
 - Portfolio-level remediation guidance for cross-cutting blockers
 - Agentic program recommendations (AI DLC, AgentStorming, AXE, EBA on Agentic AI)
@@ -34,8 +43,8 @@ This portfolio TD focuses exclusively on cross-cutting BLOCKER/RISK identificati
 
 ## Entry Criteria
 
-- At least 2 individual ARA reports exist in repository directories
-- ARA reports follow the expected structure: readiness profile, BLOCKER/RISK/INFO counts, detailed findings
+- At least 2 individual ARA report JSON artifacts exist in repository directories
+- ARA report JSONs follow the expected schema: `assessment_type == "ara"`, `classification` object, `findings[]` array with per-finding 12-field shape
 - Reports are accessible at specified paths or in a common directory structure
 - Write permissions exist to create the output directory and portfolio report file
 
@@ -95,28 +104,30 @@ additionalPlanContext: |
 
 ### Step 1: Discovery — Locate ARA Reports
 
-Scan the target directory structure to find all individual ARA reports.
+Scan the target directory structure to find all individual ARA report JSON artifacts.
 
 #### 1.1 Discovery Process
 
-- Recursively search for files matching the pattern `*-ara-report.md` in the directory tree
-- For each report found, extract the project/service name from the filename (the prefix before `-ara-report.md`)
+- Recursively search for files matching the pattern `*-ara-report.json` in the directory tree
+- For each report found, extract the project/service name from the filename (the prefix before `-ara-report.json`)
 - Extract the repository path (parent directory or grandparent directory of the report file)
-- Create an inventory of all services assessed with their report file locations
+- Create an inventory of all services assessed with their JSON file locations
 - Validate minimum requirement: at least 2 reports must be discovered
 
 **Input Options:**
 - A parent directory containing multiple repository folders, each with an ARA report, OR
-- A list of explicit paths to ARA report files (from `service_inventory` paths)
+- A list of explicit paths to ARA report JSON files (from `service_inventory` paths)
 
 #### 1.2 Validation
 
 - Verify each discovered file exists and is readable
-- Verify each file follows the expected ARA report structure:
-  - Contains a "Readiness Profile" section
-  - Contains BLOCKER/RISK/INFO summary counts
-  - Contains detailed findings with question IDs (API-Q1 through ENG-Q5)
-- Exclude files that don't match the expected ARA report structure — log a warning for each excluded file
+- Verify each file is a valid JSON document
+- Verify each file is the expected ARA report shape:
+  - Has `assessment_type == "ara"` at the root
+  - Has a `classification` object with `tier`, `blocker_count`, `risk_safety_count`
+  - Has a `findings[]` array with question IDs (API-Q1 through ENG-Q5) and the 12 per-finding fields
+  - Has a `metadata` object with `assessment_type` and `td_version`
+- Exclude files that don't match the expected shape — log a warning for each excluded file
 - Log warnings for inaccessible or malformed files
 - **Terminate with a clear error if fewer than 2 valid ARA reports are found**
 
@@ -126,54 +137,59 @@ After discovery, compile a structured inventory:
 
 | Field | Source |
 |-------|--------|
-| Service name | Extracted from filename prefix |
-| Report file path | Full path to the `*-ara-report.md` file |
+| Service name | Extracted from filename prefix (or `metadata.repo_name` if present) |
+| Report file path | Full path to the `*-ara-report.json` file |
 | Repository path | Parent directory of the report |
-| Priority | From `service_inventory` if available, otherwise not set |
-| Repo type | Extracted from report metadata header |
-| Agent scope | Extracted from report metadata header |
+| Priority | From `service_inventory` if available, otherwise from `metadata.priority` in the JSON if present |
+| Repo type | From `metadata.repo_type` in the JSON |
+| Agent scope | From `metadata.agent_scope` in the JSON |
 
 Cross-reference discovered reports with `service_inventory` (if provided) to enrich metadata. If a service appears in `service_inventory` but no report is found, log a warning: "Service '{name}' listed in service_inventory but no ARA report found at expected path."
 
 ### Step 2: Parse Individual ARA Reports
 
-For each ARA report found, extract the data needed for portfolio-level analysis.
+For each ARA report JSON found, extract the data needed for portfolio-level analysis.
 
 #### 2.1 Service Metadata
 
-Extract from the report metadata header:
+Extract from the JSON `metadata` object at the root:
 
-- **Service/repository name** — from the report header or filename
-- **Assessment date** — from the report metadata (validate YYYY-MM-DD format)
-- **Repo type** — from the metadata line `**Repository Type**: <value>` (e.g., `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`). If absent, assume `application`.
-- **Agent scope** — from the metadata line `**Agent Scope**: <value>` (e.g., `read-only`, `write-enabled`). If absent, assume `read-only`.
+- **Service/repository name** — from `metadata.repo_name` (or derive from the filename)
+- **Assessment date** — from `metadata.assessment_date` (validate YYYY-MM-DD format)
+- **Repo type** — from `metadata.repo_type` (one of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`). If absent, assume `application`.
+- **Agent scope** — from `metadata.agent_scope` (one of: `read-only`, `write-enabled`). If absent, assume `read-only`.
 
 #### 2.2 Readiness Profile
 
-Extract the readiness profile from the "Readiness Profile" section:
+Extract the classification from the JSON `classification` object at the root:
 
-- **Profile** — One of: `Agent-Ready`, `Pilot-Ready`, `Pilot-Ready (Safety Concerns)`, `Remediation Required`, `Not Agent-Integrable`
-- **Blocker count** — Number of BLOCKERs (excluding N/A)
-- **Risk count** — Number of RISKs (excluding N/A)
-- **Info count** — Number of INFOs (excluding N/A)
-- **N/A count** — Number of questions scored as N/A
+- **Profile** — from `classification.tier` (+ `classification.sub_qualifier` when present). One of: `Agent-Ready`, `Pilot-Ready`, `Pilot-Ready (Safety Concerns)`, `Remediation Required`, `Not Agent-Integrable`
+- **Blocker count** — from `classification.blocker_count`
+- **Risk-safety count** — from `classification.risk_safety_count`
+- **Risk-quality count** — from `classification.risk_quality_count`
+- **Info count** — from `classification.info_count`
 
 #### 2.3 Detailed Findings (Per-Question)
 
-For each question in the report, extract:
+From the JSON `findings[]` array, extract for each entry:
 
-- **Question ID** — e.g., API-Q1, AUTH-Q7, ENG-Q3
-- **Severity** — BLOCKER, RISK, INFO, or N/A
-- **Finding** — What was observed
-- **Gap** — What is missing (or N/A)
-- **Recommendation** — What to do (or N/A)
+- **Question ID** — `findings[i].question_id` (e.g., API-Q1, AUTH-Q7, ENG-Q3)
+- **Native severity** — `findings[i].ara_metadata.native_severity` (BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO)
+- **Unified severity** — `findings[i].severity` (High / Medium / Low)
+- **Finding description** — `findings[i].description`
+- **Gap** — `findings[i].gap`
+- **Recommendation** — `findings[i].recommendation`
+- **Evidence** — `findings[i].evidence` ({file, lines} or null)
+- **Safety impact** — `findings[i].safety_impact` (boolean)
+
+From the JSON `evaluations[]` array (if present), extract entries for questions that resolved to N/A, Not Evaluated (extended), or passing — these do NOT appear in `findings[]`.
 
 **N/A Handling During Parsing:**
 
-When a question has severity N/A:
-- Record it as N/A in the parsed data
+When a question is in `evaluations[]` with status `N/A`:
+- Record it as N/A for this service
 - **Do NOT treat N/A as a gap** — a question that is N/A for a service does not count as a BLOCKER or RISK for that service in cross-cutting analysis
-- Track which questions are N/A per service for use in cross-cutting analysis (Steps 3 and 4)
+- Track which questions are N/A per service for use in cross-cutting analysis (Steps 4 and 4b)
 
 #### 2.4 Conditional BLOCKER Tracking
 
@@ -182,7 +198,7 @@ For the 5 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DAT
 - The agent_scope that determined the resolution
 - For DATA-Q1: which sub-checks (B1 API response scoping, B2 access control differentiation, B3 formal classification metadata) contributed to the resolved severity
 
-This is used in cross-cutting analysis to distinguish between services where a conditional question resolved as BLOCKER vs. those where it resolved as INFO/RISK. DATA-Q1 in particular can now resolve to BLOCKER, RISK-SAFETY, or INFO for data-handling applications (not a BLOCKER-or-INFO binary) — aggregation logic must treat its tiered resolutions accordingly rather than assuming any DATA-Q1 flag equals a BLOCKER.
+This is used in cross-cutting analysis to distinguish between services where a conditional question resolved as BLOCKER vs. those where it resolved as INFO/RISK. DATA-Q1 resolves to BLOCKER, RISK-SAFETY, or INFO for data-handling applications based on which sub-checks fire — aggregation logic must treat its tiered resolutions accordingly rather than assuming any DATA-Q1 flag equals a BLOCKER.
 
 #### 2.5 Error Handling
 
@@ -223,7 +239,7 @@ Calculate portfolio-wide summary metrics:
 | Total unique BLOCKERs across portfolio | Count of distinct question IDs that appear as BLOCKER in any service |
 | Total unique RISKs across portfolio | Count of distinct question IDs that appear as RISK in any service |
 | Cross-cutting BLOCKERs | Count of question IDs that appear as BLOCKER in 2+ services (from Step 4) |
-| Cross-cutting RISKs | Count of question IDs that appear as RISK in 3+ services (from Step 4) |
+| Cross-cutting RISKs | Count of question IDs that appear as RISK at-or-above the scaling threshold, max(3, 33% of applicable repos) (from Step 4b) |
 | Services with write-enabled agent scope | Count and percentage |
 | Services with read-only agent scope | Count and percentage |
 
@@ -297,14 +313,14 @@ Fields:
 | `remediation_required` | integer | Count with Remediation Required profile |
 | `not_integrable` | integer | Count with Not Agent-Integrable profile |
 | `total_blockers` | integer | Sum of BLOCKER counts across all services |
-| `total_risks` | integer | Sum of RISK counts across all services (RISK-SAFETY + RISK-QUALITY, retained for backward compatibility) |
+| `total_risks` | integer | Sum of RISK counts across all services (RISK-SAFETY + RISK-QUALITY combined) |
 | `total_risk_safety` | integer | Sum of RISK-SAFETY counts across all services |
 | `total_risk_quality` | integer | Sum of RISK-QUALITY counts across all services |
 | `total_infos` | integer | Sum of INFO counts across all services |
 | `cross_cutting_blockers` | integer | Count of question IDs that are BLOCKER in 2+ repos |
-| `cross_cutting_risks` | integer | Count of question IDs that are RISK in 3+ repos (RISK-SAFETY + RISK-QUALITY, retained for backward compatibility) |
-| `cross_cutting_risk_safety` | integer | Count of RISK-SAFETY questions in 3+ repos |
-| `cross_cutting_risk_quality` | integer | Count of RISK-QUALITY questions in 3+ repos |
+| `cross_cutting_risks` | integer | Count of question IDs that are RISK at-or-above scaling threshold (RISK-SAFETY + RISK-QUALITY combined) |
+| `cross_cutting_risk_safety` | integer | Count of RISK-SAFETY questions at-or-above scaling threshold |
+| `cross_cutting_risk_quality` | integer | Count of RISK-QUALITY questions at-or-above scaling threshold |
 | `portfolio_level_blockers` | integer | Count of portfolio-level questions (PORT-ARA-Q1–Q5) scored as BLOCKER |
 | `portfolio_level_risks` | integer | Count of portfolio-level questions (PORT-ARA-Q1–Q5) scored as RISK |
 | `write_enabled_services` | integer | Count with write-enabled agent scope |
@@ -322,6 +338,13 @@ For each of the 43 ARA question IDs:
 2. **Exclude services where the question is N/A** — a question that is N/A for a service does not count as a BLOCKER for that service
 3. Count the number of services where the question has severity = BLOCKER
 4. **If the count is 2 or more**, flag the question as a cross-cutting BLOCKER
+
+**Fan-in escalation rule:** Additionally, a BLOCKER in a single service is escalated to cross-cutting status (annotated as "Single-service BLOCKER with portfolio-wide blast radius") when ANY of the following are true:
+- The service has fan-in ≥ 3 in `dependency_overrides` (3+ other services depend on it)
+- The service is marked P0 priority in `service_inventory`
+- The service is on the critical path (appears as a transitive dependency for 50%+ of the portfolio)
+
+This ensures that a critical gateway service with a BLOCKER is not invisible simply because the gap is unique to that service.
 
 **Algorithm:**
 
@@ -360,7 +383,7 @@ For each cross-cutting BLOCKER, record:
 For conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2):
 - Only count a service as having a BLOCKER if the conditional resolved to BLOCKER for that service (i.e., agent_scope was "write-enabled" or, for DATA-Q1, B1 fired under write-enabled/data-export-enabled scope)
 - Services where the conditional resolved to INFO or RISK (agent_scope was "read-only", or for DATA-Q1 only B2/B3 fired) do NOT count toward the cross-cutting BLOCKER threshold
-- Count these services under the cross-cutting RISK analysis instead (Section 4b)
+- Count these services under the cross-cutting RISK analysis instead (Step 4b)
 - Note in the output which services have write-enabled scope (and thus BLOCKER) vs. read-only scope (and thus INFO/RISK) for these questions. For DATA-Q1, also note which sub-check (B1/B2/B3) drove the resolved severity.
 
 ### Step 4b: Identify Cross-Cutting RISKs
@@ -375,7 +398,7 @@ For each of the 43 ARA question IDs, determine the question's RISK tier (RISK-SA
 2. Collect the severity for that question across all services
 3. **Exclude services where the question is N/A** — a question that is N/A for a service does not count as a RISK for that service
 4. Count the number of services where the question has severity matching the specific tier (RISK-SAFETY or RISK-QUALITY)
-5. **If the count is 3 or more**, flag the question as a cross-cutting finding for that tier
+5. **If the count meets the threshold** — max(3, 33% of applicable repos), with a floor of 2 for portfolios with fewer than 4 applicable repos — flag the question as a cross-cutting finding for that tier
 
 **Algorithm:**
 
@@ -394,14 +417,17 @@ for each question_id in all_43_questions:
         if severity == tier:  # Match the specific tier
             risk_services.append(service)
     
-    if len(risk_services) >= 3:
+    risk_threshold = max(3, ceil(len(applicable_services) * 0.33))
+    if len(applicable_services) < 4:
+        risk_threshold = 2  # Small portfolio accommodation
+    if len(risk_services) >= risk_threshold:
         flag as cross-cutting {tier} finding
         record: question_id, tier, risk_services, applicable_services count
 ```
 
-**RISK-SAFETY questions (10):** AUTH-Q2, AUTH-Q3, AUTH-Q6, AUTH-Q7, STATE-Q1, STATE-Q4, STATE-Q5, DATA-Q1, DATA-Q2, DATA-Q6
+**RISK-SAFETY questions (16):** AUTH-Q2, AUTH-Q3, AUTH-Q4, AUTH-Q5, AUTH-Q6, AUTH-Q7, STATE-Q1, STATE-Q3, STATE-Q4, STATE-Q5, STATE-Q6, DATA-Q1, DATA-Q2, DATA-Q6, HITL-Q1, HITL-Q2
 
-**RISK-QUALITY questions (15):** API-Q2, API-Q3, DATA-Q3, DATA-Q4, DATA-Q5, DISC-Q1, OBS-Q1, OBS-Q2, OBS-Q3, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, HITL-Q3
+**RISK-QUALITY questions (17):** API-Q2, API-Q3, API-Q6, STATE-Q2, STATE-Q7, DATA-Q3, DATA-Q4, DATA-Q5, DISC-Q1, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3, ENG-Q4, ENG-Q5, HITL-Q3
 
 Note: AUTH-Q6, STATE-Q1, DATA-Q1, and DATA-Q2 are conditional BLOCKER questions. When the conditional resolves to RISK (read-only scope, or for DATA-Q1 when only B2 fires), they resolve to RISK-SAFETY. Only count services where the resolved severity matches RISK-SAFETY for these questions.
 
@@ -483,7 +509,7 @@ If `dependency_overrides` is not provided:
 
 > Dependencies were inferred from individual ARA report findings (not explicitly provided via `dependency_overrides`). Inferred dependencies may be incomplete — they reflect only what was observable in the assessed code and report context. For authoritative dependency data, add `dependency_overrides` to the portfolio config.
 
-If no dependencies can be inferred from the reports, fall back to the current behavior: display a note that no dependency information was available and produce the service-by-service summary without dependency enrichment.
+If no dependencies can be inferred from the reports, display a note that no dependency information was available and produce the service-by-service summary without dependency enrichment.
 
 ### Step 6: Generate Portfolio-Level Remediation Guidance
 
@@ -528,9 +554,9 @@ Evaluate each program against its trigger condition. Include a program in the re
 
 | Program | Description | Trigger Condition | How to Evaluate |
 |---------|-------------|-------------------|-----------------|
-| **AI DLC (AI Driven Development Lifecycle)** | Workshop for adopting the AI Driven Development Lifecycle, emphasizing two dimensions: (1) AI Powered Execution with Human Oversight — AI creates detailed work plans, seeks clarification, and defers critical decisions to humans who possess contextual understanding and business knowledge; (2) Dynamic Team Collaboration — as AI handles routine tasks, teams unite in collaborative spaces for real-time problem solving, creative thinking, and rapid decision-making, shifting from isolated work to high-energy teamwork that accelerates innovation and delivery. | Portfolio shows teams without established AI-assisted development practices, or when engineering maturity scores indicate manual development workflows that could benefit from AI-driven automation. | Check ENG category scores across the portfolio. If the average ENG score is below 2.5, or if 50%+ of services show no CI/CD automation (ENG-Q2 score < 2), recommend AI DLC. Also recommend if the portfolio context mentions desire for AI-assisted development practices. |
+| **AI DLC (AI Driven Development Lifecycle)** | Workshop for adopting the AI Driven Development Lifecycle, emphasizing two dimensions: (1) AI Powered Execution with Human Oversight — AI creates detailed work plans, seeks clarification, and defers critical decisions to humans who possess contextual understanding and business knowledge; (2) Dynamic Team Collaboration — as AI handles routine tasks, teams unite in collaborative spaces for real-time problem solving, creative thinking, and rapid decision-making, shifting from isolated work to high-energy teamwork that accelerates innovation and delivery. | Portfolio shows teams without established AI-assisted development practices, or when engineering maturity findings indicate manual development workflows that could benefit from AI-driven automation. | Check ENG section findings across the portfolio. If 50%+ of services have RISK-QUALITY or worse findings on ENG-Q1 (Infra Governance), ENG-Q2 (CI/CD + Contracts), or ENG-Q3 (Rollback), recommend AI DLC. Also recommend if the portfolio context mentions desire for AI-assisted development practices. |
 | **AgentStorming** | A workshop format that builds on EventStorming by adding Cognitive Complexity Analysis and Agentic Workflow Design to pinpoint where agentic AI delivers real value versus traditional automation. Gives customers a structured, repeatable path from "where should we use AI?" to a qualified, implementation-ready answer. | Portfolio shows inconsistent process documentation, lack of process modeling syntax, or unclear agent opportunity identification across business units. Run before ARA to identify where agents should operate. | Check if the portfolio context mentions unclear agent use cases, or if the assessment was run without a clear `context` field describing the agent use case. If the portfolio has no defined agent scope or the context is vague (e.g., "exploring AI opportunities"), recommend AgentStorming. Also recommend if 50%+ of services have no clear agent integration path identified in their individual reports. |
-| **AXE (Agentic Experience Workshop)** | A strategic methodology that helps enterprises implement agentic AI solutions by starting with desired customer and employee experience and working backwards to define AI agents and technical architecture. Built on the proven D2E methodology with 580+ successful engagements, AXE delivers a six-phase framework covering business process mapping, task identification, evaluation metrics, data architecture, governance, and guardrails. The Guardrails & Boundaries phase aligns with ARA, which evaluates whether target systems have the technical controls needed to safely support autonomous agents. Together, they provide a complete assess-to-implement pathway: ARA validates system readiness while AXE designs the agent experience and implementation roadmap. | Portfolio shows 3+ services in "Pilot-Ready" or "Agent-Ready" state, or when business has defined customer/employee experience goals but lacks technical implementation roadmap. | Count services with profile Agent-Ready or Pilot-Ready. If count >= 3, recommend AXE. Also recommend if the portfolio `context` describes experience-level goals (e.g., "customer support agent", "employee productivity") without a corresponding technical implementation plan. |
+| **AXE (Agent Experience Engagement)** | A strategic methodology that helps enterprises implement agentic AI solutions by starting with desired customer and employee experience and working backwards to define AI agents and technical architecture. Built on the proven D2E methodology with 580+ successful engagements, AXE delivers a six-phase framework covering business process mapping, task identification, evaluation metrics, data architecture, governance, and guardrails. The Guardrails & Boundaries phase aligns with ARA, which evaluates whether target systems have the technical controls needed to safely support autonomous agents. Together, they provide a complete assess-to-implement pathway: ARA validates system readiness while AXE designs the agent experience and implementation roadmap. | Portfolio shows 3+ services in "Pilot-Ready" or "Agent-Ready" state, or when business has defined customer/employee experience goals but lacks technical implementation roadmap. | Count services with profile Agent-Ready or Pilot-Ready. If count >= 3, recommend AXE. Also recommend if the portfolio `context` describes experience-level goals (e.g., "customer support agent", "employee productivity") without a corresponding technical implementation plan. |
 | **EBA on Agentic AI** (Experience-Based Acceleration) | An Agentic EBA is an intensive, time-boxed engagement that accelerates an organization's path from agentic readiness assessment to production deployment of autonomous AI agents. It is designed for organizations where executive leadership has committed to an agentic AI transformation and where portfolio-level ARA findings reveal systemic gaps that cannot be resolved through standard advisory engagements alone. The engagement embeds AWS expertise to compress multi-quarter remediation cycles into a focused sprint, producing working outcomes — remediated systems, validated agent integrations, and a sequenced deployment roadmap that customers can keep doing. | Portfolio-level ARA results show systemic cross-cutting blockers appearing across five or more repositories, requiring coordinated architecture remediation. | Count cross-cutting BLOCKERs (same BLOCKER in 2+ repos). If any single cross-cutting BLOCKER affects 5 or more repositories, recommend EBA on Agentic AI. |
 
 #### 7.2 Program Sequencing Guidance
@@ -607,7 +633,7 @@ Record portfolio-level question results in a dedicated section of the report, se
 
 ## Report Template
 
-The portfolio ARA report is saved as `portfolio-ara-report.md`. The complete report structure is defined below.
+The portfolio ARA TD emits a **four-artifact bundle**: `{portfolio_name}-portfolio-ara-report.md` (narrative), `.json` (canonical), `.html` (self-contained), `.metadata.json` (sidecar). This section specifies the MD structure; the JSON and HTML render subsets of the same data.
 
 ---
 
@@ -646,7 +672,7 @@ The portfolio ARA report is saved as `portfolio-ara-report.md`. The complete rep
 | Services Ready for Agents (Agent-Ready + Pilot-Ready) | N (X%) |
 | Services Requiring Remediation | N (X%) |
 | Cross-Cutting BLOCKERs (same blocker in 2+ repos) | N |
-| Cross-Cutting RISKs (same risk in 3+ repos) | N |
+| Cross-Cutting RISKs (same risk at-or-above scaling threshold) | N |
 | Services with Write-Enabled Agent Scope | N (X%) |
 | Services with Read-Only Agent Scope | N (X%) |
 
@@ -707,6 +733,7 @@ The portfolio ARA report is saved as `portfolio-ara-report.md`. The complete rep
 ### <question_id>: <question topic>
 
 - **Severity**: BLOCKER in <N> of <M applicable> services
+- **Cross-cutting basis**: <"BLOCKER in 2+ repos" OR "Single-service BLOCKER with portfolio-wide blast radius (fan-in ≥ 3 / P0 priority / critical path)" — populate only when escalation rule applies>
 - **Affected Services**: <comma-separated service names>
 - **Common Finding**: <summarized finding pattern across affected services>
 - **Root Cause Pattern**: <common root cause identified across services>
@@ -740,13 +767,13 @@ No BLOCKER-severity questions appear in 2 or more repositories. Individual servi
 ```markdown
 ## Cross-Cutting RISKs
 
-### Cross-Cutting RISK-SAFETY — Same Safety Risk in 3+ Repos
+### Cross-Cutting RISK-SAFETY — Recurring Safety Risks Across Portfolio
 
-> These are RISK-SAFETY questions that appear in 3 or more repositories.
+> These are RISK-SAFETY questions that appear in at least **max(3, 33% of applicable repos)** (floor of 2 for portfolios with fewer than 4 applicable repos for the question).
 > They represent portfolio-wide agent safety gaps requiring coordinated attention.
 > Questions scored as N/A for a service do not count as gaps for that service.
 
-### <question_id>: <question topic>
+#### <question_id>: <question topic>
 
 - **Severity**: RISK-SAFETY in <N> of <M applicable> services
 - **Affected Services**: <comma-separated service names>
@@ -759,15 +786,15 @@ No BLOCKER-severity questions appear in 2 or more repositories. Individual servi
 
 <If no cross-cutting RISK-SAFETY findings are identified:>
 
-No RISK-SAFETY questions appear in 3 or more repositories.
+No RISK-SAFETY questions meet the cross-cutting scaling threshold.
 
-### Cross-Cutting RISK-QUALITY — Same Quality Risk in 3+ Repos
+### Cross-Cutting RISK-QUALITY — Recurring Quality Risks Across Portfolio
 
-> These are RISK-QUALITY questions that appear in 3 or more repositories.
+> These are RISK-QUALITY questions that appear in at least **max(3, 33% of applicable repos)** (floor of 2 for portfolios with fewer than 4 applicable repos for the question).
 > They represent portfolio-wide quality patterns to address as capacity allows.
 > Questions scored as N/A for a service do not count as gaps for that service.
 
-### <question_id>: <question topic>
+#### <question_id>: <question topic>
 
 - **Severity**: RISK-QUALITY in <N> of <M applicable> services
 - **Affected Services**: <comma-separated service names>
@@ -780,7 +807,7 @@ No RISK-SAFETY questions appear in 3 or more repositories.
 
 <If no cross-cutting RISK-QUALITY findings are identified:>
 
-No RISK-QUALITY questions appear in 3 or more repositories.
+No RISK-QUALITY questions meet the cross-cutting scaling threshold.
 ```
 
 If no cross-cutting RISKs are identified in either tier:
@@ -788,13 +815,13 @@ If no cross-cutting RISKs are identified in either tier:
 ```markdown
 ## Cross-Cutting RISKs
 
-### Cross-Cutting RISK-SAFETY — Same Safety Risk in 3+ Repos
+### Cross-Cutting RISK-SAFETY — Recurring Safety Risks Across Portfolio
 
-No RISK-SAFETY questions appear in 3 or more repositories.
+No RISK-SAFETY questions meet the cross-cutting scaling threshold.
 
-### Cross-Cutting RISK-QUALITY — Same Quality Risk in 3+ Repos
+### Cross-Cutting RISK-QUALITY — Recurring Quality Risks Across Portfolio
 
-No RISK-QUALITY questions appear in 3 or more repositories. Individual service RISKs are listed in the service-by-service summary below.
+No RISK-QUALITY questions meet the cross-cutting scaling threshold. Individual service RISKs are listed in the service-by-service summary below.
 ```
 
 ---
@@ -878,7 +905,9 @@ Group related BLOCKERs that can be addressed together.>
 ### Agentic Programs
 
 ```markdown
-## Agentic Program Recommendations
+## Recommended Actions
+
+### Agentic Program Recommendations
 
 > These are engagement-level recommendations based on the portfolio's agentic readiness
 > profile. Discuss with your AWS Solutions Architect to determine eligibility and timing.
@@ -903,14 +932,6 @@ Group related BLOCKERs that can be addressed together.>
 <If no programs are triggered:>
 > No specific agentic program recommendations based on current findings. As the
 > portfolio's agentic readiness improves, re-assess to identify program eligibility.
-
-### Program Details
-
-<For each recommended program, provide a brief paragraph:>
-
-#### <Program Name>
-
-<Why this program was recommended, what it provides, and suggested timing.>
 ```
 
 ---
@@ -1002,11 +1023,11 @@ The complete report structure, for reference:
    - Readiness Snapshot
 2. Cross-Cutting BLOCKERs — Same Blocker in 2+ Repos
 3. Cross-Cutting RISKs
-   - Cross-Cutting RISK-SAFETY — Same Safety Risk in 3+ Repos
-   - Cross-Cutting RISK-QUALITY — Same Quality Risk in 3+ Repos
+   - Cross-Cutting RISK-SAFETY — Recurring Safety Risks Across Portfolio
+   - Cross-Cutting RISK-QUALITY — Recurring Quality Risks Across Portfolio
 4. Service Dependency Map
 5. Portfolio Remediation Guidance
-6. Agentic Program Recommendations
+6. Recommended Actions (Agentic Program Recommendations)
 7. Portfolio-Level Findings
 8. Service-by-Service Summary
 9. Assessment Inventory
@@ -1019,7 +1040,346 @@ Strictly follow these rules at all times:
 - **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio report file.
 - **Minimum 2 reports**: The portfolio assessment requires at least 2 valid ARA reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Questions scored as N/A for a service do NOT count as gaps for that service in cross-cutting analysis. A question that is N/A for a service is excluded from BLOCKER and RISK counts for cross-cutting identification.
-- **Cross-cutting thresholds**: BLOCKERs require 2+ repos. RISKs require 3+ repos. Do not lower these thresholds.
+- **Cross-cutting thresholds**: BLOCKERs require 2+ repos. RISKs require max(3, 33% of applicable repos) with a floor of 2 for portfolios with fewer than 4 applicable repos. Do not lower these thresholds.
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
-- **Conditional BLOCKER accuracy**: When counting cross-cutting BLOCKERs for conditional questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2), only count services where the conditional resolved to BLOCKER (write-enabled scope, or for DATA-Q1 when B1 fires under write-enabled/data-export-enabled scope). Do not count services where it resolved to INFO/RISK (read-only scope, or for DATA-Q1 when only B2/B3 fired).
-- **Report completeness**: The output report must contain all required sections: executive dashboard, cross-cutting BLOCKERs, cross-cutting RISKs, service dependency map, remediation guidance, agentic program recommendations, service-by-service summary, and assessment inventory.
+- **Conditional BLOCKER accuracy**: When counting cross-cutting BLOCKERs for conditional questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2), only count services where the conditional resolved to BLOCKER (write-enabled scope, or for DATA-Q1 when B1 fires under write-enabled scope). Do not count services where it resolved to INFO/RISK (read-only scope, or for DATA-Q1 when only B2/B3 fired).
+- **Report completeness**: The output report must contain all required sections: executive dashboard, cross-cutting BLOCKERs, cross-cutting RISKs, service dependency map, remediation guidance, agentic program recommendations, portfolio-level findings (PORT-ARA-Q1 through PORT-ARA-Q5), service-by-service summary, and assessment inventory.
+
+---
+
+### Four-Artifact Output Contract (Portfolio ARA)
+
+Every portfolio ARA assessment emits four artifacts: three report artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
+
+| Artifact | Filename | Purpose |
+|---|---|---|
+| Markdown report | `{portfolio-name}-portfolio-ara-report.md` | Richest-prose artifact. Contains Executive Dashboard, Cross-Cutting Analysis, Dependency Map, Agentic Program Recommendations, Readiness Profiles, and Service-by-Service Summary. |
+| JSON report | `{portfolio-name}-portfolio-ara-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard. Every semantic field defined in the Top-Level JSON Keys section below MUST be present. |
+| HTML report | `{portfolio-name}-portfolio-ara-report.html` | **Single self-contained HTML file** (no external asset fetches at render time). Renders a subset of the JSON per the Portfolio ARA HTML Visual Contract below. MUST be emitted alongside the MD and JSON — it is NOT optional. |
+| Metadata sidecar | `{portfolio-name}-portfolio-ara-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
+
+The JSON artifact is the canonical contract. If any artifacts disagree on a field, JSON wins.
+
+#### Metadata Sidecar Fields
+
+```json
+{
+  "assessment_type": "portfolio-ara",
+  "assessment_date": "YYYY-MM-DD",
+  "td_version": "portfolio-agentic-readiness"
+}
+```
+
+---
+
+### Top-Level JSON Keys
+
+The Portfolio ARA JSON artifact MUST emit these top-level keys in the order shown:
+
+| Key | Description |
+|---|---|
+| `assessment_type` | Literal `"portfolio-ara"` |
+| `metadata` | Version, assessment date, portfolio name, TD version, services_assessed, consumed_per_repo_json_files count |
+| `summary` | 5 KPI counts: repositories_analyzed, total_findings, high_severity_findings, medium_severity_findings, low_severity_findings |
+| `filter_vocab` | Filter-eligible values for webapp UI chips |
+| `executive_dashboard` | Readiness distribution, portfolio summary, repo-type distribution, blocker heatmap |
+| `repositories[]` | Per-repo roll-up |
+| `findings[]` | Per-repo findings propagated up. Each entry is a 12-field per-repo finding plus `repo_name`. One entry per (repo × question_id). Used by webapp Findings tab. |
+| `cross_cutting_findings[]` | Portfolio-aggregated findings where the same question_id fires at the same tier across 2+ repos (BLOCKER) or meets the scaling threshold (RISK, max(3, 33% of applicable repos)). One entry per question_id. Used by webapp Cross-Cutting view. |
+| `remediation_roadmap` | See §"Remediation Roadmap" below |
+| `recommended_actions[]` | Canonical agentic programs (AI DLC, AgentStorming, AXE, EBA on Agentic AI) |
+| `portfolio_level_findings[]` | PORT-ARA-Q* cross-portfolio findings |
+| `dependency_map` | Dependency map |
+
+Canonical shape is fully defined by the Top-Level JSON Keys table above. All required keys, types, and nesting are specified inline in this TD.
+
+#### `filter_vocab`
+
+Contains ONLY values actually present in the run, so the webapp renders filter chips without extra network calls:
+
+```json
+{
+  "severities": ["High", "Medium", "Low"],
+  "categories": ["API Surface", "Authentication & Authorization", "State Management", "Human-in-the-Loop", "Data Accessibility", "Discovery & Documentation", "Observability", "Engineering Maturity"],
+  "efforts": ["High", "Medium", "Low"],
+  "priorities": ["P0", "P1", "P2", "P3"],
+  "phases": [1, 2, 3],
+  "classifications": ["Agent-Ready", "Pilot-Ready", "Pilot-Ready (Safety Concerns)", "Remediation Required", "Not Agent-Integrable"],
+  "safety_impact": [true, false],
+  "native_severities": ["BLOCKER", "RISK-SAFETY", "RISK-QUALITY", "INFO"]
+}
+```
+
+`filter_vocab.categories[]` carries display names only — NOT short codes.
+
+#### `findings[]` vs `cross_cutting_findings[]` — two distinct arrays
+
+The Portfolio ARA JSON emits **two separate finding arrays**, each with its own schema and purpose:
+
+1. **`findings[]`** — per-repo findings propagated up from the consumed per-repo ARA JSONs. One entry per (repo × question_id) with a `repo_name` field so the webapp can filter by repo. Each entry uses the same 12-field shape as per-repo findings plus `repo_name`. Used by the webapp's Findings tab.
+
+2. **`cross_cutting_findings[]`** — portfolio-aggregated findings where the same question_id appears as BLOCKER in 2+ repos or RISK meeting the scaling threshold (max(3, 33% of applicable repos); see Step 4 and Step 4b). One entry per question_id with aggregated metadata (`affected_repos_count`, `applicable_repos_count`, `affected_services[]`, `cross_cutting_type`). Used by the webapp's Cross-Cutting Concerns view.
+
+Both arrays coexist — `findings[]` answers "what's wrong per-repo?" and `cross_cutting_findings[]` answers "what's wrong across the portfolio?". A single question_id may appear in both arrays: once per repo in `findings[]`, and once aggregated in `cross_cutting_findings[]`.
+
+#### `findings[]` entry shape (per-repo propagation)
+
+Each entry mirrors the per-repo ARA 12-field finding shape, plus `repo_name`:
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | Rubric question identifier (e.g., `"AUTH-Q1"`). |
+| `repo_name` | string | Source repository name (matches `repositories[].repo_name`). |
+| `category` | string | Webapp-facing category display name (e.g., `"Authentication & Authorization"`). |
+| `category_id` | string | Rubric short code (e.g., `"AUTH"`). |
+| `title` | string | Short finding title. |
+| `description` | string | Finding description. |
+| `gap` | string | What's missing or incorrect. |
+| `recommendation` | string | Remediation recommendation. |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity. |
+| `native_severity` | enum | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — ARA native severity for portfolio grouping. |
+| `safety_impact` | boolean | `true` for RISK-SAFETY findings and BLOCKERs flagged as agent-safety hazards. |
+| `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority (static per question_id). |
+| `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
+| `phase` | integer | `1`–`3` — derived roadmap phase (Phase 1 = blockers, Phase 2 = safety, Phase 3 = quality). |
+| `evidence` | object or null | `{file, lines}` reference or `null`. |
+
+Findings are sourced from each consumed per-repo ARA JSON's `findings[]` array; the portfolio TD adds `repo_name` and emits them into a flat array. Ordering: severity descending, then repo_name, then category display order (API → AUTH → STATE → HITL → DATA → DISC → OBS → ENG).
+
+Findings are NEVER emitted for questions that resolve to pass, N/A, or Not Evaluated at the per-repo level — the portfolio `findings[]` array only contains rows for which the source per-repo ARA JSON emitted a finding.
+
+#### `cross_cutting_findings[]` entry shape (portfolio aggregation)
+
+Each entry aggregates the same question_id across multiple repos where it fires at the same tier:
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | Rubric question identifier. |
+| `category` | string | Webapp-facing category display name. |
+| `category_id` | string | Rubric short code. |
+| `title` | string | Short finding title (shared across affected repos). |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity of the aggregated tier. |
+| `native_severity` | enum | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — native severity. |
+| `cross_cutting_type` | enum | `"blocker"` / `"risk_safety"` / `"risk_quality"` — the tier that triggered this cross-cutting entry. |
+| `affected_repos_count` | integer | Number of repos where this question fires at this tier. |
+| `applicable_repos_count` | integer | Number of repos where this question is not N/A (denominator). |
+| `affected_services` | string[] | Repo names where this question fires at this tier. |
+| `common_finding_summary` | string | Prose summary of the finding pattern across affected repos. |
+| `root_cause_pattern` | string | Common root cause identified across repos. |
+| `portfolio_remediation` | object | `{approach, immediate_action, target_state, estimated_effort, priority, dependencies[]}` per Step 6.1. |
+
+Cross-cutting entries are generated per Step 4 (BLOCKER threshold: 2+ repos OR fan-in escalation) and Step 4b (RISK threshold: max(3, 33% of applicable repos)). Step 6 populates `portfolio_remediation` for each entry.
+
+---
+
+### Remediation Roadmap
+
+The Portfolio ARA JSON emits `remediation_roadmap` with `grouping: "phase_category"`. Each `items[]` entry carries:
+
+```json
+{
+  "phase": 1,
+  "category": "Machine Identity Authentication",
+  "category_question_id": "AUTH-Q1",
+  "native_severity": "BLOCKER",
+  "severity": "High",
+  "safety_impact": true,
+  "common_finding_summary": "…",
+  "root_cause_pattern": "…",
+  "remediation": "Implement OAuth2 client credentials or per-agent API keys with principal attribution",
+  "remediation_detail": {
+    "approach": "per_service_fix",
+    "immediate_action": "…",
+    "target_state": "…",
+    "dependencies": []
+  },
+  "affected_repos_count": 11,
+  "applicable_repos_count": 34,
+  "effort": "Medium",
+  "priority": "P0",
+  "affected_services": [
+    {
+      "repo_name": "Lidarr--Lidarr",
+      "per_repo_evidence": { "file": "src/…/HostConfigResource.cs", "lines": "10-45" },
+      "agent_scope": "read-only",
+      "resolution_reasoning": "…",
+      "conditional_resolution": "…"
+    }
+  ],
+  "also_affected_at_lower_severity": [
+    { "repo_name": "FlowiseAI--Flowise", "resolved_severity": "RISK-SAFETY", "reason": "B2 — framework-hook defaults" }
+  ]
+}
+```
+
+#### Sources for item fields (JSON-only consumption)
+
+- `per_repo_evidence` sourced from per-repo ARA JSON `findings[].evidence`. NEVER parsed from per-repo MD.
+- `conditional_resolution` and `agent_scope` sourced from per-repo ARA JSON `findings[].ara_metadata.{conditional_resolution, agent_scope}` for the five conditional BLOCKERs (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2).
+- `also_affected_at_lower_severity[]` populated for DATA-Q1 items when different repos' B1/B2/B3 sub-checks fire at different severity tiers. Sourced from per-repo `findings[].ara_metadata.data_q1_subchecks`.
+
+#### MD rendering
+
+The Portfolio ARA MD artifact renders these items under an H2 heading **"## Remediation Roadmap"** that matches the webapp tab label. Each item is rendered as an H3 subsection with:
+- Title: `"Phase {N} — {category}"`
+- Table of `{affected_services, per_repo_evidence, agent_scope, resolution_reasoning}`
+- Cross-Cutting narratives (BLOCKER Remediation blocks, Cross-Cutting RISK-SAFETY prose, Cross-Cutting RISK-QUALITY prose) are retained verbatim within the item.
+
+The ARA execution-sequencing narrative (Phase 1 BLOCKER resolution, Phase 2 RISK-SAFETY hardening, Phase 3 RISK-QUALITY improvements) is preserved in MD prose.
+
+---
+
+### Recommended Actions
+
+The Portfolio ARA JSON emits `recommended_actions[]` as an array of agentic-program entries. Minimum-set coverage:
+
+| `id` | `name` | `acronym` | `type` |
+|---|---|---|---|
+| `ai-dlc` | AI Driven Development Lifecycle | AI DLC | workshop |
+| `agentstorming` | AgentStorming | AgentStorming | workshop |
+| `axe` | Agent Experience Engagement | AXE | program |
+| `eba-agentic-ai` | EBA on Agentic AI | EBA Agentic AI | program |
+
+Each entry carries:
+
+```json
+{
+  "id": "axe",
+  "name": "Agent Experience Engagement",
+  "acronym": "AXE",
+  "type": "program",
+  "status": "Triggered",
+  "trigger_reason": "19 BLOCKERs across authentication and data classification; structured implementation engagement recommended.",
+  "suggested_timing": "After initial triage",
+  "duration": "4-week engagement",
+  "what_it_provides": "Hands-on agent-integration engagement with AWS Solutions Architects."
+}
+```
+
+`status` ∈ {Triggered, Applicable, Not Triggered}. `trigger_reason` is non-empty prose explaining why the program fires.
+
+The MD artifact renders this under an H2 heading **"## Recommended Actions"**. The "## Agentic Program Recommendations" label is retained as an H3 subheading under that H2 to preserve rich program prose without creating duplicate H2s.
+
+---
+
+### Portfolio ARA HTML Visual Contract
+
+The portfolio ARA HTML artifact is a single self-contained file rendering a subset of the portfolio JSON. The full visual contract is inlined below — do NOT reference external files.
+
+#### HTML Structure and Layout
+
+**Header:**
+- Title: `Agentic Readiness - {portfolio_name}`
+- Subtitle line: `{date} · {N} repositories · agent_scope: {agent_scope}`
+
+**Executive Summary** (top section, above the tab bar):
+
+Prose intro: "This Agentic Readiness Analysis evaluates whether your {N} repositories can safely integrate with autonomous AI agents. The analysis examines eight key dimensions (API Surface, Authentication & Authorization, State Management, Human-in-the-Loop, Data Accessibility, Discovery & Documentation, Observability, Engineering Maturity)..."
+
+Subsections:
+1. **Portfolio Status** — "Out of {N} repositories analyzed, {A} are agent-ready and can integrate with AI agents immediately, {B} are pilot-ready for read-only operations, and {C} require remediation before agent deployment. The analysis identified {H} high severity findings (blockers) and {M} medium severity findings (risks)."
+2. **Key Findings** — Top 3 cross-cutting high severity areas as bullet list with repo counts
+3. **Remediation Plan** — 3-phase numbered list with finding counts and timelines
+4. **Recommended Actions** — Bullet list of triggered programs (AI DLC, AgentStorming, AXE, EBA on Agentic AI) with reasons
+
+**Stats Card Row** (4 cards):
+
+| Card | Value source | Subtitle |
+|---|---|---|
+| Total Findings | `summary.total_findings` | Across {M} repositories |
+| High Severity | `summary.high_severity_findings` | Blockers that must be fixed |
+| Medium Severity | `summary.medium_severity_findings` | Safety and quality risks |
+| Agent-Ready | `executive_dashboard.readiness_distribution.agent_ready.count` | Ready for integration |
+
+(ARA swaps "Low Severity" for "Agent-Ready" — this is ARA-specific.)
+
+**Charts Row** (3 visualizations):
+- **Portfolio Distribution** — pie/donut chart from `executive_dashboard.readiness_distribution`
+- **Severity by Repository** — stacked bar chart from per-repo counts in `repositories[]`
+- **Section Heatmap** — grid heatmap from `executive_dashboard.blocker_heatmap_by_section[]` (ARA-only)
+
+**Tab bar order:** Repositories → Findings → Remediation → AWS Programs. NO Pathways tab — pathways are MOD-only.
+
+#### Repositories Tab
+
+Table columns: `Name`, `Language`, `LOC`, `Total Findings`, `High Severity`, `Medium Severity`, `Agentic Readiness`
+
+- Source: `repositories[]`
+- Agentic Readiness = `classification.tier` (potentially with `sub_qualifier`)
+- Ordered by High count descending, then alphabetical
+- ARA **omits** the `Low Severity` column (MOD includes it)
+
+#### Findings Tab
+
+Download CSV control in header.
+
+Table columns: `Category`, `Repository`, `Finding Description`, `Remediation`, `Severity`, `Effort`
+
+- Source: `findings[]`
+- Finding Description = title (bold) + one-liner description
+- Ordered by severity (High first), then repo name, then category
+
+#### Remediation Roadmap Tab
+
+3-phase table:
+
+| Phase | Focus Area | Findings | Timeline | Key Actions |
+|---|---|---|---|---|
+| Phase 1 | Blockers — Must Fix Before Agent Deployment | N | 3-6 weeks | Machine Identity Auth, Data Classification, API Documentation |
+| Phase 2 | Safety Risks — Required for Production | N | 2-4 weeks | Audit Logging, Rollback, Rate Limiting, Authorization |
+| Phase 3 | Quality Risks — Recommended for Operations | N | 2-4 weeks | Distributed Tracing, Schema Versioning, Error Handling, API Testing |
+
+Source: `remediation_roadmap.items[]` grouped by phase
+
+#### Recommended AWS Programs Tab
+
+Table columns: `Program`, `Description`, `Why Recommended`, `Duration`
+
+- Source: `recommended_actions[]` filtered to `status == "Triggered"`
+- Canonical programs: AI DLC, AgentStorming, AXE, EBA on Agentic AI
+
+#### Footer
+
+- `Generated by AWS Transform · Portfolio Agentic Readiness Assessment Report`
+- `© {year} Amazon Web Services, Inc. All rights reserved.`
+
+#### Data Sourcing (JSON → HTML mapping)
+
+| Visual location | JSON source |
+|---|---|
+| Header | `metadata.{portfolio_name, assessment_date, services_assessed}` + agent_scope |
+| Executive Summary | `summary.*` + `executive_dashboard.*` + `recommended_actions[]` |
+| Stats cards | `summary.*` + `executive_dashboard.readiness_distribution.agent_ready.count` |
+| Portfolio Distribution chart | `executive_dashboard.readiness_distribution` |
+| Severity by Repository chart | Per-repo counts from `repositories[]` |
+| Section Heatmap chart | `executive_dashboard.blocker_heatmap_by_section[]` |
+| Repositories table | `repositories[]` |
+| Findings table | `findings[]` |
+| Remediation Roadmap | `remediation_roadmap.items[]` grouped by phase |
+| AWS Programs table | `recommended_actions[]` |
+
+**Content NOT in HTML** (MD-only): Sequencing Principles, per-service steps, Parallel Execution Tracks, Portfolio Risk Register, DATA-Q1 sub-check reasoning, conditional-resolution reasoning, root cause patterns.
+
+**HTML-escaping discipline** applies to every attacker-controlled string (repo names, evidence file paths, finding titles, finding descriptions, prose fields).
+
+---
+
+## Error Handling
+
+The portfolio TD consumes ONLY per-repo JSON. Failure modes are explicit, loud, and actionable.
+
+### Missing Per-Repo JSON
+
+IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
+
+Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-assessment/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-assessment/wat--wub-ara-report.json."`
+
+### Dangling Cross-Reference
+
+IF a `question_id` or `repo_name` referenced in portfolio JSON does not resolve into at least one consumed per-repo JSON of the matching `assessment_type`, THEN the portfolio assessment SHALL fail naming the dangling reference.
+
+Example: `"Portfolio assessment failed: findings[3].question_id='AUTH-Q9' does not match any rubric question in consumed ARA per-repo JSONs."`
+
+### No Silent Fallback
+
+The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. The TD consumes JSON-only.

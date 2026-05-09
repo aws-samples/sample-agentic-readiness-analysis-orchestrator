@@ -18,7 +18,7 @@ This transformation performs a dedicated Agentic Readiness Assessment on a codeb
 - **AUTH** — Authentication, Authorization, and Identity (7 questions: all core)
 - **STATE** — State Management and Transactional Integrity (7 questions: 3 core + 4 extended)
 - **HITL** — Human-in-the-Loop and Approval Workflows (3 questions: 1 core + 2 extended)
-- **DATA** — Data Accessibility and Quality (7 questions: 3 core + 4 extended)
+- **DATA** — Data Accessibility and Quality (7 questions: 4 core + 3 extended)
 - **DISC** — Discoverability and Semantic Readiness (3 questions: 1 core + 2 extended)
 - **OBS** — Observability of Target Systems (3 questions: 2 core + 1 extended)
 - **ENG** — Engineering and Deployment Maturity (5 questions: 3 core + 2 extended)
@@ -27,20 +27,20 @@ This transformation performs a dedicated Agentic Readiness Assessment on a codeb
 
 Not all 43 questions are evaluated for every service. Questions are organized into two tiers:
 
-**Core (24 questions)** — Always evaluated for applicable repo types. These directly determine whether an agent can safely call this service:
+**Core (25 questions)** — Always evaluated for applicable repo types. These directly determine whether an agent can safely call this service:
 
 | Section | Core Questions | Why Core |
 |---------|---------------|----------|
 | AUTH | Q1, Q2, Q3, Q4, Q5, Q6, Q7 (all 7) | Identity is always critical for agent safety |
 | API | Q1, Q2, Q3, Q4 | Minimum viable integration surface |
 | STATE | Q1, Q5, Q6 | Write safety and rate protection |
-| DATA | Q1, Q2, Q6 | Data classification, residency, PII protection |
+| DATA | Q1, Q2, Q4, Q6 | Data classification, residency, input validation, PII protection |
 | OBS | Q1, Q2 | Debuggability of agent-initiated requests |
 | ENG | Q1, Q2, Q3 | Infrastructure governance and deployment safety |
 | HITL | Q3 | Agent testing environment |
 | DISC | Q1 | Schema stability for agent tool bindings |
 
-**Extended (19 questions)** — Evaluated only when triggered by service characteristics (archetype, scope, or detected patterns). When not triggered, recorded as "Not Evaluated (extended)" and excluded from scoring.
+**Extended (18 questions)** — Evaluated only when triggered by service characteristics (archetype, scope, or detected patterns). When not triggered, recorded as "Not Evaluated (extended)" and excluded from scoring.
 
 | Question | Trigger Condition |
 |----------|------------------|
@@ -55,7 +55,6 @@ Not all 43 questions are evaluated for every service. Questions are organized in
 | HITL-Q1 | agent_scope is write-enabled |
 | HITL-Q2 | agent_scope is write-enabled |
 | DATA-Q3 | Service has list/query endpoints with potentially unbounded results |
-| DATA-Q4 | Service has persistent state (stateful-crud, data-gateway) |
 | DATA-Q5 | Service has persistent state (stateful-crud, data-gateway, orchestrator) |
 | DATA-Q7 | Always evaluated as INFO |
 | DISC-Q2 | Always evaluated as INFO |
@@ -68,17 +67,17 @@ Not all 43 questions are evaluated for every service. Questions are organized in
 
 | Configuration | N/A | Core | Extended Triggered | Total Evaluated |
 |--------------|-----|------|--------------------|-----------------|
-| application / stateless-utility / read-only | 0 | 24 | ~3 (INFOs only) | ~27 |
-| application / stateless-utility / write-enabled | 0 | 24 | ~5 | ~29 |
-| application / stateful-crud / read-only | 0 | 24 | ~11 | ~35 |
-| application / stateful-crud / write-enabled | 0 | 24 | ~15 | ~39 |
-| application / orchestrator / read-only | 0 | 24 | ~8 | ~32 |
-| application / orchestrator / write-enabled | 0 | 24 | ~11 | ~35 |
-| application / data-gateway / read-only | 0 | 24 | ~8 | ~32 |
-| application / event-processor / read-only | 0 | 24 | ~4 | ~28 |
+| application / stateless-utility / read-only | 0 | 25 | ~3 (INFOs only) | ~28 |
+| application / stateless-utility / write-enabled | 0 | 25 | ~5 | ~30 |
+| application / stateful-crud / read-only | 0 | 25 | ~10 | ~35 |
+| application / stateful-crud / write-enabled | 0 | 25 | ~14 | ~39 |
+| application / orchestrator / read-only | 0 | 25 | ~8 | ~33 |
+| application / orchestrator / write-enabled | 0 | 25 | ~11 | ~36 |
+| application / data-gateway / read-only | 0 | 25 | ~7 | ~32 |
+| application / event-processor / read-only | 0 | 25 | ~4 | ~29 |
 | infrastructure-only | 29 | 14 | 0 | 14 |
 | deployment-config | 35 | 8 | 0 | 8 |
-| library | 5 | 24 | ~9 | ~33 |
+| library | 5 | 25 | ~8 | ~33 |
 | monorepo | per-service | per-service | per-service | per-service |
 
 Each question is scored using a severity model:
@@ -92,38 +91,87 @@ Each question is scored using a severity model:
 
 Five questions are **conditional BLOCKERs** (⚡) — their severity depends on context (typically `agent_scope` write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, and DATA-Q2. DATA-Q1 additionally uses a tiered sub-check model (see its section for B1/B2/B3 evaluation).
 
+### Unified Severity and Category Display Names
+
+A unified severity vocabulary and canonical category display names are emitted on every finding so that a single webapp and portfolio aggregator can consume ARA and MOD findings side-by-side.
+
+#### Unified Severity Mapping
+
+Every finding carries a unified severity tag alongside its native ARA severity:
+
+| Native ARA Severity | Unified Severity | `ara_metadata.safety_impact` |
+|---|---|---|
+| BLOCKER (unconditional) | High | true if agent-safety hazard, else false |
+| BLOCKER (conditional, resolved as BLOCKER) | High | per conditional-resolution reasoning |
+| RISK-SAFETY | Medium | true (always) |
+| RISK-QUALITY | Medium | false (always) |
+| INFO (when finding emitted) | Low | false |
+| Passing question | (no finding) | n/a |
+| N/A / Not Evaluated | (no finding, recorded in `evaluations[]`) | n/a |
+
+The unified severity is emitted as the top-level `severity` field on each finding. The native ARA severity is preserved in `ara_metadata.native_severity`.
+
+#### Category Display Names
+
+Every finding carries both a short `category_id` code (the rubric section identifier, used as question_id prefix) and a webapp-facing `category` display name. The canonical mapping:
+
+| `category_id` (short code) | `category` (display name) |
+|---|---|
+| `API` | API Surface |
+| `AUTH` | Authentication & Authorization |
+| `STATE` | State Management |
+| `HITL` | Human-in-the-Loop |
+| `DATA` | Data Accessibility |
+| `DISC` | Discovery & Documentation |
+| `OBS` | Observability |
+| `ENG` | Engineering Maturity |
+
+Both `category_id` and `category` are REQUIRED fields on every finding. Consumers (webapp filter chips, portfolio aggregation) use the display name directly.
+
+#### DATA-Q* Namespace Collision
+
+The short code `DATA` is shared between ARA and the Modernization assessment (MOD). ARA `DATA-Q1`..`DATA-Q7` and MOD `DATA-Q1`..`DATA-Q4` are DIFFERENT questions and MUST NOT be conflated. The unique join key across assessment types is `(assessment_type, question_id)`, never `question_id` alone. ARA `DATA` disambiguates to display name "Data Accessibility"; MOD `DATA` disambiguates to "Data Platform".
+
 ### RISK Tier Assignment
 
-Each of the 24 RISK-severity questions is assigned to exactly one tier. The assignment is static — it does not depend on service characteristics.
+Each RISK-severity question is assigned to exactly one tier. The assignment is static — it does not depend on service characteristics. Scope-calibrated RISK questions (HITL-Q1, HITL-Q2, STATE-Q3, STATE-Q6) only count toward totals when agent_scope is write-enabled (they downgrade to INFO under read-only scope).
 
-**RISK-SAFETY (10 questions):**
+**RISK-SAFETY (16 questions):**
 
 | Question ID | Topic | Safety Rationale |
 |-------------|-------|------------------|
 | AUTH-Q2 | Scoped permissions | Overly broad agent permissions create blast radius risk |
 | AUTH-Q3 | Action-level authorization | Agent could delete when only read is intended |
+| AUTH-Q4 | Identity propagation | Agent-on-behalf-of-user privilege escalation risk |
+| AUTH-Q5 | Credential management | Hardcoded/unrotated credentials exposable via prompt injection |
 | AUTH-Q6 | Audit logging | No audit trail for agent actions = undetectable harm |
 | AUTH-Q7 | Identity suspension | Cannot revoke a compromised agent identity |
 | STATE-Q1 | Compensation/rollback | Agent-initiated writes cannot be undone |
+| STATE-Q3 | Concurrency controls | Race conditions from concurrent agent instances corrupt state |
 | STATE-Q4 | Circuit breakers | Runaway agent loops cascade through dependencies |
 | STATE-Q5 | Rate limiting | Agent traffic storms overwhelm services |
+| STATE-Q6 | Blast radius limits | Agent error blast radius unbounded without transaction limits |
 | DATA-Q1 | Sensitive data scoping | Agent-facing APIs leak sensitive fields (B1 read-only, or B2 access differentiation missing) |
 | DATA-Q2 | Data residency | Agent moves data across compliance boundaries |
 | DATA-Q6 | PII in logs | Agent actions leak PII into observable surfaces |
+| HITL-Q1 | Draft/pending state | No draft state for reversible agent-proposed writes |
+| HITL-Q2 | Approval gates | No human approval option for high-risk agent actions |
 
-**RISK-QUALITY (15 questions):**
+**RISK-QUALITY (17 questions):**
 
 | Question ID | Topic | Quality Rationale |
 |-------------|-------|-------------------|
 | API-Q2 | Machine-readable spec | Agent tool generation requires manual work |
 | API-Q3 | Structured errors | Agent cannot distinguish retriable vs terminal errors |
+| API-Q6 | Async operation support | Long-running ops fail against agent timeouts |
+| STATE-Q2 | Queryable current state | Agent cannot inspect state before action |
+| STATE-Q7 | Degradation signaling | Agent reasons on stale/degraded data without awareness |
 | DATA-Q3 | Pagination | Agent gets unbounded result sets |
-| DATA-Q4 | System of record | Agent reads stale data |
+| DATA-Q4 | Input validation | Agent sends malformed payloads without rejection |
 | DATA-Q5 | Temporal metadata | Agent cannot reason about data freshness |
 | DISC-Q1 | Schema versioning | Agent tool bindings break silently |
 | OBS-Q1 | Tracing | Cannot debug agent-initiated requests |
 | OBS-Q2 | Alerting | No alerts for agent anomalies |
-| OBS-Q3 | Agent metrics | No visibility into agent behavior |
 | ENG-Q1 | Infra governance | No IaC = manual, error-prone changes |
 | ENG-Q2 | CI/CD + contracts | Agent tool breakage not caught in pipeline |
 | ENG-Q3 | Rollback | Cannot roll back agent-breaking deployments |
@@ -131,7 +179,7 @@ Each of the 24 RISK-severity questions is assigned to exactly one tier. The assi
 | ENG-Q5 | Encryption at rest | Data at rest unencrypted |
 | HITL-Q3 | Sandbox/staging | No safe environment to test agent behavior |
 
-Note: AUTH-Q7 and STATE-Q1 appear in both the RISK-SAFETY tier table and the conditional BLOCKER list. Their *base* severity when the conditional resolves to RISK (read-only scope) is RISK-SAFETY. When the conditional resolves to BLOCKER (write-enabled scope), they are counted as BLOCKERs, not RISK-SAFETY. The tier label applies only when the resolved severity is RISK. Similarly, AUTH-Q6 resolves to RISK-SAFETY and DATA-Q2 resolves to RISK-SAFETY when their conditional resolves to RISK. DATA-Q1 is tiered: B1 resolves to BLOCKER (write-enabled) or RISK-SAFETY (read-only), B2 resolves to RISK-SAFETY when triggered, B3 resolves to INFO when triggered; the overall DATA-Q1 severity is the highest sub-check that fires.
+Note: The 5 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) resolve to different severities based on `agent_scope`. When the conditional resolves to RISK (read-only scope), their *base* severity is RISK-SAFETY — so STATE-Q1, AUTH-Q6, and DATA-Q2 appear in the RISK-SAFETY tier table above. When the conditional resolves to BLOCKER (write-enabled scope), they are counted as BLOCKERs, not RISK-SAFETY. The tier label applies only when the resolved severity is RISK. DATA-Q1 is additionally tiered: B1 resolves to BLOCKER (write-enabled) or RISK-SAFETY (read-only), B2 resolves to RISK-SAFETY when triggered, B3 resolves to INFO when triggered; the overall DATA-Q1 severity is the highest sub-check that fires. AUTH-Q7 is NOT a conditional BLOCKER — it is an unconditional RISK-SAFETY.
 
 ### Service Archetype Classification
 
@@ -147,7 +195,13 @@ Beyond `repo_type` (which determines N/A questions for non-application repos), t
 
 If the archetype cannot be determined with confidence, default to `stateful-crud` (the most conservative — triggers the most extended questions).
 
-The output is a structured Markdown report saved as `{repo-name}-ara-report.md` containing:
+The output is a **four-artifact bundle** (per the Four-Artifact Output Contract below) containing:
+- `{repo-name}-ara-report.md` — richest narrative
+- `{repo-name}-ara-report.json` — canonical machine-readable contract
+- `{repo-name}-ara-report.html` — single self-contained HTML visualization
+- `{repo-name}-ara-report.metadata.json` — version compatibility sidecar
+
+The MD report contains:
 - Metadata header (repo name, date, repo_type, agent_scope)
 - Readiness profile (Agent-Ready, Pilot-Ready, Pilot-Ready (Safety Concerns), Remediation Required, or Not Agent-Integrable)
 - BLOCKER/RISK-SAFETY/RISK-QUALITY/INFO summary counts (excluding N/A questions)
@@ -227,7 +281,7 @@ If `repo_type` is present but not one of the 5 recognized values (`application`,
 Record the resolved values from Steps 0.1–0.2 in the assessment context. They will be used in subsequent steps as follows:
 
 - **`repo_type`** → Used in the N/A Mapping (Step 1) to determine which questions are scored as N/A for the detected repo type. Included in the report metadata header.
-- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q6, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK-SAFETY. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
+- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK-SAFETY. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
 - **`service_archetype`** → Used in Steps 2–9 (Evaluation) to calibrate severity for archetype-sensitive questions. When a question is calibrated to INFO for the detected archetype, it is recorded as INFO (not RISK) and does not count toward the RISK total. Calibration only downgrades severity — it never upgrades. Included in the report metadata header. Only applies when `repo_type` is `application`.
 - **`context`** → Used throughout the report to frame findings and recommendations with repository-specific context.
 - **`priority`** → Recorded in the report metadata header.
@@ -343,7 +397,7 @@ Record each surface flag as `true`, `false`, or `unknown`. When `unknown`, the q
 
 - `true` signals: database connections (SQL/NoSQL/ORM imports), DynamoDB/RDS/DocumentDB/Neptune/Timestream clients with CRUD operations, S3 buckets used for user content (not build artifacts), Redis with writes, Elasticsearch with indexing, stateful caches with user data
 - `false` signals: library publishes no storage dependency, build tools only read source files, CLI/SDK wraps remote APIs without owning a data store, in-memory-only computations, reference/static data only (exchange rates, feature flags)
-- Used by: DATA-Q1, DATA-Q2, DATA-Q4, DATA-Q5, DATA-Q6
+- Used by: DATA-Q1, DATA-Q2, DATA-Q5, DATA-Q6
 
 **`has_http_rpc_surface`** — The system exposes an HTTP, gRPC, or GraphQL server that accepts inbound requests.
 
@@ -390,7 +444,7 @@ Some repositories classify as `application` (have source + entry point) but func
 
 When `service_archetype` is detected or declared as `stateless-utility` AND at least three of the five surface flags above are `false`, treat the repo as a **dev-library-application** for N/A and scoring purposes: apply the `library` N/A mapping from Step 1 (only ENG-Q1 through ENG-Q5 are non-N/A) as the baseline, then continue with the surface-flag downgrades for the questions that remain.
 
-This is an ARA-TD-internal override for scoring purposes only. The original `repo_type` value is preserved in the report metadata; the override and its rationale are recorded as an INFO note in the report preamble.
+This override affects scoring only; it does not change the recorded `repo_type`. The original `repo_type` value is preserved in the report metadata, and the override with its rationale is recorded as an INFO note in the report preamble.
 
 ### Step 1.6: Service Archetype Detection
 
@@ -420,15 +474,20 @@ If `service_archetype` was provided in `additionalPlanContext`, use that value d
 └─────────┬───────────────────────┘
           │
           ▼
-┌─────────────────────────────────┐
-│ Calls 3+ downstream services?    │
-│ (HTTP/gRPC clients to other      │
-│  services, service addresses     │
-│  in env vars, fan-out pattern)   │
-│                                  │
-│  YES → orchestrator              │
-│  NO  → Continue ▼                │
-└─────────┬───────────────────────┘
+┌──────────────────────────────────────┐
+│ Orchestrates multi-service           │
+│ workflows?                           │
+│ (Calls 3+ downstream services        │
+│  AND coordinates multi-step          │
+│  sequences: saga patterns,           │
+│  compensating actions, workflow      │
+│  state machines, Step Functions,     │
+│  or sequential service calls         │
+│  with error/rollback handling)       │
+│                                      │
+│  YES → orchestrator                  │
+│  NO  → Continue ▼                    │
+└─────────┬────────────────────────────┘
           │
           ▼
 ┌─────────────────────────────────┐
@@ -640,6 +699,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Consistent error response format across endpoints
 - Minimum: error code, error message, and a retryable boolean or category
 
+**Cross-reference — input validation:** Input validation and schema enforcement is evaluated as a dedicated question in DATA-Q4. When evaluating API-Q3, note whether validation *error responses* are structured (field name, constraint violated, accepted format) — that evidence feeds both API-Q3 (error structure quality) and DATA-Q4 (whether validation exists at all). See DATA-Q4 for the full evaluation criteria.
+
 ---
 
 #### API-Q4: Idempotent Write Operations — BLOCKER ⚡ (Conditional)
@@ -675,7 +736,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q6: Asynchronous Operation Support — RISK
+#### API-Q6: Asynchronous Operation Support — RISK-QUALITY
 
 **Question:** Does the application support async patterns for long-running tasks (job submission, polling endpoint, or webhook callback)?
 
@@ -695,7 +756,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 **Question:** Can the system emit events or webhooks for meaningful state changes that agents may need to react to — such as record updates, status transitions, or completion of long-running operations?
 
-**Why it matters:** Request/response agents are reactive. Event-driven patterns unlock proactive agents that respond to real-world changes without polling. INFO for now because most initial deployments are request-driven, but becomes RISK when the use case requires time-sensitive reaction.
+**Why it matters:** Request/response agents are reactive. Event-driven patterns unlock proactive agents that respond to real-world changes without polling. Classified as INFO because most agent deployments are request-driven; teams targeting event-reactive agents on time-sensitive use cases should treat this as a stronger signal when scoring.
 
 **Look for:**
 - Webhook endpoints
@@ -758,6 +819,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - API Gateway resource policies
 - Condition keys in IAM policies
 
+**Evaluation threshold:** The system passes if it supports creating scoped permissions for a caller identity — i.e., the authorization model allows differentiating access levels (not all callers get the same permissions). It does NOT require that every policy in the repo is perfectly scoped. Evidence of wildcard policies on non-production or internal-only roles does not fail this question if production-facing roles demonstrate scope differentiation. Fail if ALL authorization is coarse-grained (single shared role, no mechanism to scope down).
+
 ---
 
 #### AUTH-Q3: Action-Level Authorization — RISK-SAFETY
@@ -775,7 +838,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### AUTH-Q4: Identity Propagation and Delegation — RISK
+#### AUTH-Q4: Identity Propagation and Delegation — RISK-SAFETY
 
 **Question:** Does the system support identity propagation through service calls (JWT/OAuth token exchange, on-behalf-of flows), and can it distinguish between an agent acting under its own service identity vs. acting on behalf of a specific human user?
 
@@ -797,7 +860,7 @@ When the target system serves multiple tenants, weak identity propagation compou
 
 ---
 
-#### AUTH-Q5: Credential Management — RISK
+#### AUTH-Q5: Credential Management — RISK-SAFETY
 
 **Question:** Are credentials managed through a secrets management system (AWS Secrets Manager, HashiCorp Vault) with rotation, or are they embedded in code, environment variables, or configuration files?
 
@@ -822,7 +885,7 @@ When the target system serves multiple tenants, weak identity propagation compou
 
 **Why it matters:** Audit trails must identify whether an action was taken by a human or an agent, and which specific agent instance. Without immutable logs, you cannot prove compliance or conduct forensics.
 
-**Surface-flag calibration:** The conditional above determines severity only when the system has an agent-invocable surface. If the repo was classified as `dev-library-application` via Step 1.5, or if `has_auth_surface` is `false` AND `has_write_operations` is `false`, record as INFO with the rationale `"System does not execute agent-invoked write operations — audit logging is a consumer responsibility. The library/utility is called by applications that own the audit context."` This downgrade path addresses the observed pattern where 34/34 repos score identical RISK-SAFETY for "no audit logging found," even when the repo is a CLI tool or frontend template with no operations to audit.
+**Surface-flag calibration:** The conditional above determines severity only when the system has an agent-invocable surface. If the repo was classified as `dev-library-application` via Step 1.5, or if `has_auth_surface` is `false` AND `has_write_operations` is `false`, record as INFO with the rationale `"System does not execute agent-invoked write operations — audit logging is a consumer responsibility. The library/utility is called by applications that own the audit context."`
 
 **Look for:**
 - `aws_cloudtrail` in IaC
@@ -880,7 +943,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### STATE-Q2: Queryable Current State — RISK
+#### STATE-Q2: Queryable Current State — RISK-QUALITY
 
 **Question:** Does the application expose its current state in a queryable form that an agent can inspect before taking action?
 
@@ -894,7 +957,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### STATE-Q3: Concurrency Controls — RISK ⚡ (Scope-Calibrated)
+#### STATE-Q3: Concurrency Controls — RISK-SAFETY ⚡ (Scope-Calibrated)
 
 **Question:** Does the application support optimistic locking or concurrency controls to prevent race conditions when multiple agent instances operate simultaneously?
 
@@ -944,7 +1007,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### STATE-Q6: Blast Radius and Transaction Limits — RISK ⚡ (Scope-Calibrated)
+#### STATE-Q6: Blast Radius and Transaction Limits — RISK-SAFETY ⚡ (Scope-Calibrated)
 
 **Question:** Can the system enforce configurable limits on agent-initiated actions — such as maximum records modified per run, maximum spend per hour, or maximum delete operations per session — independently of general rate limits?
 
@@ -959,19 +1022,24 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Examples: `max_refunds_per_hour=50`, `max_records_per_bulk_operation=500`, `max_spend_per_session=$1000`
 - Configurable per agent identity, not just per API endpoint
 
+**Evaluation threshold:** This question evaluates whether the system can limit the *business impact* of agent operations beyond API-layer rate limiting (STATE-Q5). Pass if ANY of the following exist: (a) configurable per-caller business transaction limits, (b) bulk operation size caps (e.g., batch delete limited to N records), (c) spend/cost thresholds per session or caller identity. These need not be agent-specific — general per-caller business limits satisfy this question. Fail if the only protection is API-level throttling (requests/second) with no business-domain caps on operation scope.
+
 ---
 
-#### STATE-Q7: Infrastructure Capacity for Agent Traffic — RISK
+#### STATE-Q7: Graceful Degradation Signaling — RISK-QUALITY
 
-**Question:** Is the backend infrastructure sized and tested for the unpredictable, exploratory traffic patterns that agents generate?
+**Question:** Does the system signal degraded mode to callers via machine-readable indicators — so an agent can detect when it is receiving stale, partial, or fallback responses rather than authoritative data?
 
-**Why it matters:** APIs designed for human-paced interaction are load-tested for known traffic profiles. Agents don't respect those assumptions — they explore, retry, and fan out. Agent-induced load can starve unrelated systems sharing the backend.
+**Why it matters:** Agents making autonomous decisions on degraded data produce incorrect outcomes at machine speed. If the system fails over to a stale cache, returns partial results from a degraded dependency, or operates in read-only mode, agents need a machine-readable signal to adjust behavior (e.g., defer decisions, request human review, retry later). Without this, agents treat degraded responses as authoritative.
 
 **Look for:**
-- Load test results or configurations
-- Auto-scaling policies
-- Capacity planning documentation
-- Circuit breakers isolating agent traffic from other consumers
+- Health endpoints returning granular states (healthy / degraded / read-only / partial)
+- `X-Degraded: true` or `X-Data-Freshness: stale` response headers
+- `Retry-After` headers on 503 responses
+- Circuit breaker configs with fallback responses that include degradation metadata
+- `Cache-Control` headers with `stale-while-revalidate` or `must-revalidate`
+- Response envelope fields like `{ "data_status": "cached", "cached_at": "..." }`
+- Feature flag states exposed in response metadata
 
 
 ### Step 5: Human-in-the-Loop and Approval Workflows (3 questions)
@@ -984,7 +1052,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### HITL-Q1: Draft/Pending State — RISK ⚡ (Scope-Calibrated)
+#### HITL-Q1: Draft/Pending State — RISK-SAFETY ⚡ (Scope-Calibrated)
 
 **Question:** Does the application have the concept of a pending or draft state that an agent can write to before a human approves and commits?
 
@@ -1000,9 +1068,11 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Two-step commit patterns (create-then-confirm)
 - Status-based state machines
 
+**Evaluation threshold:** Pass if the system has ANY mechanism where a state change can be proposed without being immediately committed — allowing a human (or supervisory process) to review before finalization. This includes: status enums with PENDING/DRAFT/PROPOSED states, two-step APIs (create-then-confirm), or explicit approval workflow endpoints. Pre-existing business workflow states count IF they can be repurposed for agent-initiated proposals (e.g., an order with status=PENDING_REVIEW). Fail only if all write operations are immediately committed with no reviewable intermediate state.
+
 ---
 
-#### HITL-Q2: Configurable Approval Gates — RISK ⚡ (Scope-Calibrated)
+#### HITL-Q2: Configurable Approval Gates — RISK-SAFETY ⚡ (Scope-Calibrated)
 
 **Question:** Can specific operations be configured to require a human approval step before the application executes them — configurable by operation type?
 
@@ -1089,7 +1159,7 @@ Does the application exclude sensitive fields from API responses that an agent w
 - Sensitive data returned ONLY via dedicated, separately-authorized endpoints (not mixed into general-purpose list/detail responses)
 
 Severity logic for B1:
-- If `agent_scope` is `write-enabled` or `data-export-enabled` AND sensitive fields are returned in general API responses → **BLOCKER**
+- If `agent_scope` is `write-enabled` AND sensitive fields are returned in general API responses → **BLOCKER**
 - If `agent_scope` is `read-only` AND sensitive fields are returned in general API responses → **RISK-SAFETY**
 - If sensitive fields are properly excluded from API responses OR only accessible via separately-scoped endpoints → B1 contributes no finding (CLEAR)
 
@@ -1169,18 +1239,23 @@ Severity logic for B3:
 
 ---
 
-#### DATA-Q4: System of Record Designations — RISK-QUALITY
+#### DATA-Q4: Input Validation and Schema Enforcement — RISK-QUALITY
 
-**Question:** Are there authoritative system-of-record designations for key entities, and is there a master data management process that resolves conflicts across systems?
+**Question:** Does the system validate and reject malformed inputs at the API boundary with structured error responses that identify which field failed and why?
 
-**Why it matters:** Agents reasoning across multiple systems will encounter conflicting records. Without a golden record, decisions will be inconsistent.
+**Why it matters:** LLMs constructing API calls produce malformed payloads — partial JSON, special characters, oversized strings, out-of-range values, or injection-like fragments. Target systems that accept garbage inputs silently corrupt state. Systems that crash on unexpected input create cascading failures. Systems that return generic 400 errors without field-level detail force agents into blind retry loops. The target system must validate inputs and return structured rejection signals that enable agents to self-correct.
 
 **Look for:**
-- Master data management references
-- System-of-record designations in documentation
-- Data ownership definitions
-- Conflict resolution logic
-- Golden record patterns
+- Request validation libraries (joi, zod, yup, pydantic, javax.validation, class-validator, marshmallow)
+- OpenAPI request body schema validation middleware
+- API Gateway request validators
+- Parameterized queries (protection against injection)
+- Input sanitization middleware
+- Request size limits (`max_body_size`, payload limits)
+- Type-safe request parsing (TypeScript interfaces, Rust serde, Go struct tags)
+- Structured validation error responses with field-level detail (e.g., `{ "errors": [{ "field": "email", "constraint": "format", "message": "..." }] }`)
+
+**Evaluation threshold:** Pass if the system has ANY systematic input validation at the API boundary — either framework-level (validation annotations, middleware) or explicit (manual checks with structured error responses). Presence of parameterized queries alone is insufficient (that prevents injection but doesn't validate business rules). Fail if endpoints accept arbitrary input shapes without validation, or if validation errors return unstructured 400/500 responses with no field identification.
 
 ---
 
@@ -1336,7 +1411,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### OBS-Q3: Business Outcome Metrics — RISK-QUALITY
+#### OBS-Q3: Business Outcome Metrics — INFO
 
 **Question:** Are custom metrics published for business outcomes, not just infrastructure metrics?
 
@@ -1436,7 +1511,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ## Report Template
 
-After evaluating all 43 questions across Steps 2–9, compile the findings into a structured Markdown report. Save the report as `{repo-name}-ara-report.md` in the repository's output directory.
+After evaluating all 43 questions across Steps 2–9, compile the findings into the **four-artifact bundle** defined in the Four-Artifact Output Contract below: `{repo-name}-ara-report.md` (narrative), `{repo-name}-ara-report.json` (canonical JSON), `{repo-name}-ara-report.html` (self-contained HTML), and `{repo-name}-ara-report.metadata.json` (version sidecar). This section specifies the MD structure; the JSON and HTML render subsets of the same data per the contract.
 
 Create the report file with exactly this structure. Every section is required. All 43 questions must appear in the detailed findings — N/A questions are listed using the N/A display format, not omitted.
 
@@ -1521,7 +1596,7 @@ Display the severity distribution for all non-N/A questions. N/A questions are e
 | Not Evaluated (extended) | <count> |
 | **Total** | **43** |
 
-**Core Questions Evaluated**: 24 (or fewer if repo_type N/A applies)
+**Core Questions Evaluated**: 25 (or fewer if repo_type N/A applies)
 **Extended Questions Triggered**: <count>
 **Extended Questions Not Triggered**: <count>
 **Questions N/A (repo_type: <repo_type>)**: <N/A count>
@@ -1646,14 +1721,14 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q5). This s
 ### 01 — API Surface and Interface Design
 
 #### API-Q1: Documented API Interface
-- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / RISK / INFO / N/A>
+- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO / N/A>
 - **Finding**: <what was observed, with specific file and resource references>
 - **Gap**: <what is missing, or "N/A">
 - **Recommendation**: <specific next step, or "N/A">
 - **Evidence**: <files cited, or "N/A">
 
 #### API-Q2: Machine-Readable API Specification
-- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / RISK / INFO / N/A>
+- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO / N/A>
 - **Finding**: <what was observed>
 - **Gap**: <what is missing, or "N/A">
 - **Recommendation**: <specific next step, or "N/A">
@@ -1664,7 +1739,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q5). This s
 ### 02 — Authentication, Authorization, and Identity
 
 #### AUTH-Q1: Machine Identity Authentication
-- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / RISK / INFO / N/A>
+- **Severity**: <BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO / N/A>
 - **Finding**: <what was observed>
 - **Gap**: <what is missing, or "N/A">
 - **Recommendation**: <specific next step, or "N/A">
@@ -1708,7 +1783,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q5). This s
 - **Evidence**: N/A
 ```
 
-**For conditional BLOCKER (⚡) questions** (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2), include the resolved severity based on `agent_scope`:
+**For conditional BLOCKER (⚡) questions** (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2), include the resolved severity based on `agent_scope`:
 
 ```markdown
 #### <question_id>: <question topic> ⚡
@@ -1817,16 +1892,374 @@ The complete report structure, for reference:
 
 Strictly follow these rules at all times:
 
-- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure in the repository. Only create the output report file.
+- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
 - **Be specific — cite evidence**: Always reference actual file names, resource names, and patterns found. Never write "there may be..." — state what was found or what was not found.
 - **Absence is evidence**: If a search for a specific artifact finds nothing (e.g., no OpenAPI spec, no IaC files, no audit logging configuration), that absence is itself a finding. State it clearly and score accordingly.
+- **Search completeness for absence claims**: Before declaring an artifact absent, search using ALL detection patterns listed in the question's "Look for" section. At minimum: (1) scan file names matching common conventions (e.g., `openapi.*`, `swagger.*`, `*.tf`, `*.smithy`), (2) grep source files for framework-specific imports or annotations listed in "Look for", (3) check the dependency manifest (package.json, pom.xml, requirements.txt, go.mod) for relevant libraries. If the repo has >500 files, focus on directories most likely to contain the artifact (e.g., `/api`, `/docs`, `/infra`, `/config`, root-level config files). Declare absence only after all detection patterns return zero results. State which patterns were searched in the evidence field.
 - **Read before judging**: Do not score a question without actually reading relevant files. If relevant files have not been found yet, keep searching.
 - **IaC is ground truth**: Trust IaC definitions over README descriptions. What is deployed is what is defined in the IaC.
 - **Do not skip questions**: All 43 questions must appear in the report. Questions that are N/A for the detected `repo_type` use the N/A display format. Extended questions that are not triggered use the "Not Evaluated (extended)" display format. Both are listed, not omitted.
 - **N/A scoring rules**: Questions scored as N/A are excluded from BLOCKER, RISK-SAFETY, RISK-QUALITY, and INFO counts and from readiness profile determination.
-- **Extended question scoring rules**: Extended questions that are "Not Evaluated" are excluded from all counts and from readiness profile determination — same as N/A. Extended questions that ARE triggered are scored normally (BLOCKER/RISK-SAFETY/RISK-QUALITY/RISK/INFO) and count toward the readiness profile.
-- **Conditional BLOCKER rules**: The 4 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2) must be evaluated at the severity determined by `agent_scope`. Do not override the conditional logic.
+- **Extended question scoring rules**: Extended questions that are "Not Evaluated" are excluded from all counts and from readiness profile determination — same as N/A. Extended questions that ARE triggered are scored normally (BLOCKER/RISK-SAFETY/RISK-QUALITY/INFO) and count toward the readiness profile.
+- **Conditional BLOCKER rules**: The 5 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) must be evaluated at the severity determined by `agent_scope`. Do not override the conditional logic.
 - **Evaluation tier rules**: Core questions are always evaluated (unless N/A by repo_type). Extended questions are evaluated only when their trigger condition is met. Use the Evaluation Tier tables in the Summary section to determine which extended questions to trigger based on archetype, scope, and service characteristics.
 - **Archetype classification**: Use the `service_archetype` from `additionalPlanContext` if provided. Otherwise, auto-detect in Step 1.6. If auto-detection is inconclusive, default to `stateful-crud`. The archetype determines which extended questions are triggered — it does NOT override severity of core questions.
 - **Repo type classification**: Use the `repo_type` from `additionalPlanContext`. If not provided, default to `application`. Apply the N/A mapping table exactly as defined.
 - **Report completeness**: The output report must contain all required sections: metadata header (including service archetype), readiness profile, summary counts (including extended question counts), BLOCKERs with remediation, RISKs with compensating controls, INFOs, detailed findings for all 43 questions, and evidence index.
+
+
+## Unified Per-Finding Field Set and `ara_metadata` Subobject
+
+Every ARA finding carries a unified per-finding field set plus a required `ara_metadata` subobject so that ARA JSON can be consumed side-by-side with MOD JSON by a single webapp and portfolio aggregator.
+
+### Per-Finding Required Fields
+
+Every ARA finding MUST carry these 12 fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | Rubric question identifier (e.g., `"AUTH-Q1"`). |
+| `category` | string | Webapp-facing category display name (e.g., `"Authentication & Authorization"`). |
+| `category_id` | string | Rubric short code (e.g., `"AUTH"`). |
+| `title` | string | Short finding title. |
+| `description` | string | Finding description. |
+| `gap` | string | What's missing or incorrect. |
+| `recommendation` | string | Remediation recommendation. |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity. |
+| `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority. See table below. |
+| `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
+| `phase` | integer | `1`–`4` — derived roadmap phase. |
+| `evidence` | object or null | `{file: string, lines: string}` reference to the gap location (e.g., `{"file": "src/auth.ts", "lines": "42-58"}`), or `null` when no specific file location applies. `lines` is a string range like `"12-15"` or single line like `"42"`. |
+
+All 12 fields are REQUIRED on every emitted finding — missing any one fails the assessment and names the offending `question_id`. Findings are never emitted for questions that resolve to pass, N/A, Not Evaluated (extended), or any other non-finding outcome; those questions appear only under `evaluations[]`.
+
+### ARA Metadata Subobject (`ara_metadata`)
+
+Every ARA finding MUST carry a populated `ara_metadata` subobject that preserves the rubric depth and the conditional-resolution reasoning produced in Steps 2–9. The subobject is emitted as a sibling field to the 12 required fields above.
+
+| Field | Type | Presence | Description |
+|---|---|---|---|
+| `native_severity` | enum | always | `"BLOCKER"` / `"RISK-SAFETY"` / `"RISK-QUALITY"` / `"INFO"` — the native ARA severity. |
+| `safety_impact` | boolean | always | `true` for RISK-SAFETY findings and BLOCKERs that are agent-safety hazards; `false` for RISK-QUALITY and INFO. |
+| `conditional_resolution` | string | conditional BLOCKERs only | Prose reasoning that resolved the conditional severity for this repo. |
+| `agent_scope` | enum | conditional BLOCKERs only | `"read-only"` / `"write-enabled"` — the scope value that drove the resolution. |
+| `resolution_reasoning` | string | conditional BLOCKERs only | Prose explaining why the finding was gated under this scope. |
+| `remediation_timeline` | string | optional (RISK findings) | e.g., `"60–90 days"`. |
+| `compensating_controls` | string[] | optional | Compensating-controls list. |
+| `blocker_remediation` | object | optional (BLOCKER findings) | `{immediate, target_state, estimated_effort, dependencies[]}`. |
+| `data_q1_subchecks` | object | only when `question_id == "DATA-Q1"` | B1/B2/B3 sub-check reasoning. |
+
+The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) MUST carry the `conditional_resolution`, `agent_scope`, and `resolution_reasoning` trio. DATA-Q1 additionally carries `data_q1_subchecks` with `{b1, b2, b3}`, each having `{fired, severity, reasoning}`. The overall DATA-Q1 `severity` is the unified mapping of the highest sub-check that fires.
+
+`ara_metadata` preserves rubric detail. The classification tier and count rules in the Summary and Report Template sections remain authoritative. `native_severity` is the join key back to BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO counts.
+
+### Evaluations Array (`evaluations[]`)
+
+Questions that do NOT produce a finding (pass, N/A, Not Evaluated) are recorded in `evaluations[]`. Every one of the 43 question IDs appears in EITHER `findings[]` OR `evaluations[]` — never both, never neither.
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | e.g., `"AUTH-Q1"` |
+| `category_id` | string | e.g., `"AUTH"` |
+| `title` | string | Question title (e.g., "Machine Identity Authentication") |
+| `status` | enum | `"pass"` / `"na"` / `"not_evaluated_extended"` / `"not_evaluated_archetype"` |
+| `reason` | string | Why this status was assigned (e.g., "Infrastructure-only repo — API questions are N/A", "Extended question not triggered — no persistent state") |
+
+### Remediation Roadmap (`remediation_roadmap`)
+
+| Field | Type | Description |
+|---|---|---|
+| `phases` | integer[] | `[1, 2, 3]` — the phases used in this report |
+| `items[]` | object[] | Per-phase remediation items |
+| `items[].phase` | integer | 1, 2, or 3 |
+| `items[].phase_name` | string | "Blockers", "Safety", or "Quality" |
+| `items[].findings` | string[] | Array of `question_id` values in this phase |
+| `items[].summary` | string | 1-2 sentence description of the phase focus |
+
+### Recommended Actions (`recommended_actions[]`)
+
+| Field | Type | Description |
+|---|---|---|
+| `action` | string | Short action title (e.g., "Deploy centralized identity provider") |
+| `question_ids` | string[] | Related finding question IDs |
+| `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` |
+| `effort` | enum | `"High"` / `"Medium"` / `"Low"` |
+| `rationale` | string | Why this action is recommended |
+
+### Per-Question Priority Table
+
+The `priority` field on every finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`. The native severity tier provides a baseline, but individual question priorities are hand-tuned to reflect operational impact (e.g., scope-calibrated questions that resolve to INFO under read-only scope receive lower priority than their tier baseline; questions with high remediation dependency on other findings may be elevated). The concrete per-question table below is authoritative — use it directly rather than deriving from severity tier:
+
+| ARA native severity tier | Default per-question priority |
+|---|---|
+| Unconditional BLOCKER | P0 |
+| Conditional BLOCKER (resolves as BLOCKER under write-enabled scope) | P0 |
+| RISK-SAFETY | P1 |
+| RISK-QUALITY | P2 |
+| INFO | P3 |
+
+Concrete per-question assignments for all 43 ARA questions:
+
+| Question | Priority | Question | Priority |
+|---|---|---|---|
+| API-Q1 | P0 | DATA-Q1 | P0 |
+| API-Q2 | P2 | DATA-Q2 | P1 |
+| API-Q3 | P2 | DATA-Q3 | P2 |
+| API-Q4 | P1 | DATA-Q4 | P2 |
+| API-Q5 | P3 | DATA-Q5 | P2 |
+| API-Q6 | P2 | DATA-Q6 | P1 |
+| API-Q7 | P2 | DATA-Q7 | P3 |
+| API-Q8 | P3 | DISC-Q1 | P2 |
+| AUTH-Q1 | P0 | DISC-Q2 | P3 |
+| AUTH-Q2 | P1 | DISC-Q3 | P3 |
+| AUTH-Q3 | P1 | OBS-Q1 | P2 |
+| AUTH-Q4 | P2 | OBS-Q2 | P2 |
+| AUTH-Q5 | P2 | OBS-Q3 | P3 |
+| AUTH-Q6 | P1 | ENG-Q1 | P2 |
+| AUTH-Q7 | P1 | ENG-Q2 | P2 |
+| STATE-Q1 | P0 | ENG-Q3 | P2 |
+| STATE-Q2 | P2 | ENG-Q4 | P3 |
+| STATE-Q3 | P1 | ENG-Q5 | P2 |
+| STATE-Q4 | P1 | HITL-Q1 | P1 |
+| STATE-Q5 | P1 | HITL-Q2 | P1 |
+| STATE-Q6 | P2 | HITL-Q3 | P2 |
+| STATE-Q7 | P2 | | |
+
+The conditional BLOCKERs are distributed across P0 and P1 in the table above (DATA-Q1 and STATE-Q1 at P0; API-Q4, AUTH-Q6, DATA-Q2 at P1). Per-finding `priority` is static per `question_id` — the ARA native tier still drives classification counts through `ara_metadata.native_severity`; `priority` is a separate, static-per-question field that does not change with `agent_scope` or per-repo resolution.
+
+The default `phase` assignment derives mechanically from `priority`: P0 → Phase 1, P1 → Phase 1, P2 → Phase 2 or 3, P3 → Phase 3 or 4. Per-repo ARA MAY pin a specific phase within the allowed band based on remediation dependencies; portfolio TDs MAY further adjust `phase` based on cross-cutting dependencies across the portfolio. The `priority` value itself does not change per-repo or per-portfolio.
+
+## Classification Rules
+
+The per-repo ARA classification is a named roll-up of the Readiness Profile (Summary section, "Readiness Profile Determination" in the Report Template). The classification uses `blocker_count` and `risk_safety_count` derived from the severity counts — it does NOT use `medium_count`. This guarantees that the Readiness Profile and the classification tier always agree on the same repo.
+
+### Classification Table
+
+| `blocker_count` | `risk_safety_count` | Tier | Sub-qualifier | Readiness Profile | `rule_matched` |
+|---|---|---|---|---|---|
+| 0 | 0 | Agent-Ready | none | Agent-Ready | "0 BLOCKER, 0 RISK-SAFETY → Agent-Ready" |
+| 0 | 1 or 2 | Pilot-Ready | none | Pilot-Ready | "0 BLOCKER, 1-2 RISK-SAFETY → Pilot-Ready" |
+| 0 | ≥ 3 | Pilot-Ready | "Pilot-Ready (Safety Concerns)" | Pilot-Ready (Safety Concerns) | "0 BLOCKER, ≥3 RISK-SAFETY → Pilot-Ready (Safety Concerns)" |
+| 1 or 2 | any | Remediation Required | none | Remediation Required | "1-2 BLOCKER → Remediation Required" |
+| ≥ 3 | any | Not Agent-Integrable | none | Not Agent-Integrable | "≥3 BLOCKER → Not Agent-Integrable" |
+
+Tier values: {Agent-Ready, Pilot-Ready, Remediation Required, Not Agent-Integrable}. Sub-qualifier is ONLY "Pilot-Ready (Safety Concerns)" and ONLY applied when tier is Pilot-Ready AND `risk_safety_count` ≥ 3. RISK-QUALITY count has no effect on classification — it is reported but does not change the tier.
+
+The classification object emitted in JSON:
+
+```json
+{
+  "tier": "Pilot-Ready",
+  "sub_qualifier": "Pilot-Ready (Safety Concerns)",
+  "blocker_count": 0,
+  "risk_safety_count": 5,
+  "risk_quality_count": 7,
+  "info_count": 3,
+  "high_count": 0,
+  "medium_count": 12,
+  "low_count": 3,
+  "rule_matched": "0 BLOCKER, ≥3 RISK-SAFETY → Pilot-Ready (Safety Concerns)"
+}
+```
+
+The `high_count`, `medium_count`, and `low_count` fields represent the unified severity counts (BLOCKER→High, RISK-SAFETY+RISK-QUALITY→Medium, INFO→Low when emitted). They are informational — they feed the webapp filter chips — but do NOT drive classification. Only `blocker_count` and `risk_safety_count` do.
+
+### MD-Rendered Classification Rationale
+
+The per-repo ARA MD artifact MUST render a classification rationale paragraph immediately after the classification tier is first stated. The paragraph:
+1. States the specific counts that drove the tier (e.g., "This repo has 0 BLOCKER findings and 5 RISK-SAFETY findings").
+2. Names the matched rule (e.g., "0 BLOCKER, ≥3 RISK-SAFETY → Pilot-Ready (Safety Concerns)") — the exact string from the `rule_matched` column of the classification table.
+3. States the classification tier alongside the Readiness Profile (they are a named roll-up of the same severity counts).
+
+### Conditional BLOCKER Preservation
+
+The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) use conditional-severity resolution. The `ara_metadata.conditional_resolution`, `ara_metadata.agent_scope`, and `ara_metadata.resolution_reasoning` fields surface the reasoning in JSON:
+
+- `conditional_resolution`: Free-text prose that describes which native severity was assigned (e.g., "Resolved to BLOCKER: agent_scope=write-enabled AND no transaction scope").
+- `agent_scope`: The `read-only` or `write-enabled` value that drove the resolution (sourced from `additionalPlanContext.agent_scope`).
+- `resolution_reasoning`: Free-text prose explaining WHY the resolution was applied to this repo (e.g., "DATA-Q1 B1 fired because agent-facing APIs return credentials unmasked in HostConfigResource.cs").
+
+The conditional-BLOCKER resolution logic is defined in Steps 2–9 of the assessment process; the JSON fields above surface that reasoning in a structured form.
+
+## Four-Artifact Output Contract
+
+Every per-repo ARA assessment emits four artifacts: three report artifacts plus a metadata sidecar.
+
+### Artifacts
+
+| Artifact | Filename | Purpose |
+|---|---|---|
+| Markdown report | `{repo}-ara-report.md` | Richest-prose artifact. Carries every rubric narrative (rubric quotes, compensating-control discussion, BLOCKER Remediation blocks, Archetype Justification, etc.). |
+| JSON report | `{repo}-ara-report.json` | **Canonical machine-readable contract.** Consumed by webapp and portfolio TD. Every semantic field (findings, classification, categories, metadata, surface flags) is present. |
+| HTML report | `{repo}-ara-report.html` | Single self-contained HTML file. Renders a subset of JSON. Tab order: stats → tech stack → findings → roadmap → programs. Visual contract defined inline below. |
+| Metadata sidecar | `{repo}-ara-report.metadata.json` | Tiny JSON file carrying version compatibility data. Read by downstream consumers before consuming the main JSON. |
+
+The JSON artifact is the canonical contract. If any artifacts disagree on a field, JSON wins.
+
+### Metadata Sidecar Fields
+
+The sidecar carries minimum fields for version compatibility checks:
+
+```json
+{
+  "assessment_type": "ara",
+  "assessment_date": "2026-04-30",
+  "td_version": "agentic-readiness-assessment"
+}
+```
+
+These same fields are redundantly embedded at the root of the main JSON under `metadata` (so consumers that skip the sidecar still have access).
+
+### HTML Visual Contract
+
+The per-repo ARA HTML artifact is a single self-contained HTML file (no external asset fetches at render time). The tab order matches the webapp: **stats → tech stack → findings → roadmap → programs**.
+
+The full visual contract is defined inline below — do NOT reference external files. Every field rendered in HTML originates from the JSON artifact; MD prose is NOT part of the HTML round-trip contract. All attacker-controlled strings (repo names, evidence file paths, finding titles, descriptions, pathway names) MUST be HTML-escaped before embedding.
+
+#### HTML Structure and Layout
+
+**Header:**
+- Title: `{repo_name} - Agentic Readiness Assessment Report`
+- Subtitle line: `{date} · {language} · {loc} LOC · Portfolio: {portfolio_name}`
+
+**Executive Summary:**
+
+Prose paragraph: what the report evaluates, which eight dimensions are examined (API Surface, Authentication & Authorization, State Management, Human-in-the-Loop, Data Accessibility, Discovery & Documentation, Observability, Engineering Maturity).
+
+**Overall Analysis:** `{emoji} {tier_label}` — classification tier with emoji mapping:
+- 🟢 Agent-Ready
+- 🟡 Pilot-Ready
+- 🟠 Remediation Required (rendered as "Significant Remediation Required")
+- 🚫 Not Agent-Integrable (rendered as "Not Agent-Integrable - Defer or Descope")
+
+**Quick Stats:** Total Findings: N, By Severity: X High, Y Medium, Z Low, Estimated Remediation: {window}
+
+**Stats Card Row** (4 cards):
+
+| Card | Value source | Subtitle |
+|---|---|---|
+| Total Findings | `counts.total` | Across all dimensions |
+| High Severity | `counts.high` | Critical findings |
+| Medium Severity | `counts.medium` | Important findings |
+| Low Severity | `counts.low` | Minor findings |
+
+**Repository Details — Technology Stack table:**
+
+| Attribute | Value |
+|---|---|
+| Language | `metadata.tech_stack.language` |
+| Lines of Code | `metadata.tech_stack.loc` |
+| Framework | `metadata.tech_stack.framework` |
+| Architecture | `metadata.tech_stack.architecture` |
+
+**Findings by Dimension table:**
+
+| Dimension | Total Findings | High Severity | Medium Severity | Low Severity | Status |
+|---|---|---|---|---|---|
+| API Surface | N | X | Y | Z | Blocked / Needs Work / Ready |
+| Authentication & Authorization | N | X | Y | Z | status |
+| State Management | N | X | Y | Z | status |
+| Human-in-the-Loop | N | X | Y | Z | status |
+| Data Accessibility | N | X | Y | Z | status |
+| Discovery & Documentation | N | X | Y | Z | status |
+| Observability | N | X | Y | Z | status |
+| Engineering Maturity | N | X | Y | Z | status |
+
+Status values: `Ready` (green), `Needs Work` (yellow), `Blocked` (red). The dimension order matches the 8-section rubric order from the Summary section (API → AUTH → STATE → HITL → DATA → DISC → OBS → ENG).
+
+**Detailed Findings** — per-finding card structure:
+
+```
+{question_id}: {title}          [severity badge]
+Section: {section_short_code}
+
+FINDING
+{finding_description}
+
+GAP
+{gap}
+
+RECOMMENDATION
+{recommendation}
+
+Effort: {effort} ({timeline_window})
+File: {evidence.file}
+Lines: {evidence.lines}
+```
+
+Ordered by severity (High → Medium → Low) then by section order (AUTH → API → STATE → DATA → OBS → ENG).
+
+**Remediation Roadmap table:**
+
+| Phase | Category | Modernization Pathway | Findings |
+|---|---|---|---|
+| 1 | Authentication Foundation | Machine Identity | N |
+
+Source: `remediation_roadmap.items[]`
+
+**Recommended Actions:**
+- Custom Transformation row (always present)
+- AWS Programs subsection: EBA, MAP
+
+**Agent Deployment Recommendation** (footer block):
+
+```
+{emoji} {tier_label}
+
+This repository has {n} blocker(s) that must be resolved before any agent deployment.
+Focus on the High severity findings above.
+```
+
+**Footer:**
+- `Generated by AWS Transform · Agentic Readiness Assessment Report`
+- `© {year} Amazon Web Services, Inc. All rights reserved.`
+
+#### Data Sourcing (JSON → HTML mapping)
+
+| Visual location | JSON source |
+|---|---|
+| Header | `metadata.{portfolio_name, assessment_date, language, loc}` + `repo_name` |
+| Overall Analysis | `classification.tier` + `classification.sub_qualifier` |
+| Stats cards | `counts.{high, medium, low, total}` |
+| Technology Stack | `metadata.tech_stack.*` |
+| Findings by Dimension | Per-category counts from `findings[]` + `severity_status` |
+| Detailed Findings | `findings[]` (all 12 fields) |
+| Remediation Roadmap | `remediation_roadmap.items[]` |
+| Recommended Actions | `recommended_actions[]` |
+| Deployment Recommendation | `classification.tier` → emoji mapping |
+
+**Content NOT in HTML** (MD-only): Rubric quotes, compensating-control discussion, BLOCKER Remediation blocks, conditional-resolution reasoning, DATA-Q1 sub-checks.
+
+### Artifact Layout
+
+```
+{portfolio-or-repo}/
+└── services/
+    └── {repo-name}/
+        └── agentic-readiness-assessment/
+            ├── {repo-name}-ara-report.md
+            ├── {repo-name}-ara-report.json
+            ├── {repo-name}-ara-report.html
+            └── {repo-name}-ara-report.metadata.json
+```
+
+
+---
+
+## Error Handling
+
+The TD is explicit about failure modes — no defensive inference, no silent skips. Failures name the offending element (question_id, file path, field) so assessors can remediate.
+
+### Required-Field Failure
+
+IF any of the 12 required per-finding fields is absent from an emitted finding, THEN the assessment SHALL fail, naming:
+- The `question_id` of the offending finding
+- The specific missing field
+
+Example failure message: `"Assessment failed: finding for AUTH-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED."`
+
+### N/A / Not Evaluated Leak
+
+IF a finding is emitted for a question whose resolution was N/A or Not Evaluated, THEN the assessment SHALL fail, naming the `question_id` and the resolution status that should have been recorded in `evaluations[]` instead.
+
+Example: `"Assessment failed: finding emitted for DATA-Q5 but the question resolved to N/A (no persistent data store). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only."`

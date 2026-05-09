@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alluxio--alluxio - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+header { background: #232f3e; color: white; padding: 30px; border-radius: 8px; margin-bottom: 24px; }
+header h1 { font-size: 24px; margin-bottom: 8px; }
+header .subtitle { color: #adb5bd; font-size: 14px; }
+.executive-summary { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; border-left: 4px solid #f0ad4e; }
+.executive-summary h2 { margin-bottom: 16px; font-size: 20px; }
+.tier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 14px; }
+.tier-remediation { background: #fff3cd; color: #856404; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.stat-card .number { font-size: 36px; font-weight: bold; }
+.stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; margin-top: 4px; }
+.stat-high .number { color: #dc3545; }
+.stat-medium .number { color: #f0ad4e; }
+.stat-low .number { color: #5bc0de; }
+.stat-total .number { color: #333; }
+section { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+section h2 { font-size: 18px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #eee; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+th { background: #f8f9fa; font-weight: 600; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+.badge-high { background: #f8d7da; color: #721c24; }
+.badge-medium { background: #fff3cd; color: #856404; }
+.badge-low { background: #d1ecf1; color: #0c5460; }
+.status-critical { color: #dc3545; font-weight: bold; }
+.status-needs-work { color: #f0ad4e; font-weight: bold; }
+.status-ready { color: #28a745; font-weight: bold; }
+.finding-card { border: 1px solid #eee; border-radius: 6px; padding: 16px; margin-bottom: 12px; }
+.finding-card h3 { font-size: 15px; margin-bottom: 8px; }
+.finding-card .category-line { font-size: 12px; color: #666; margin-bottom: 8px; }
+.finding-card .finding-section { margin-top: 10px; }
+.finding-card .finding-section h4 { font-size: 12px; text-transform: uppercase; color: #666; margin-bottom: 4px; }
+.finding-card .finding-section p { font-size: 14px; }
+.pathway-table tr td:first-child { font-weight: 600; }
+.footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Alluxio--alluxio - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2026-05-07 &middot; Java &middot; ~2,860 Java files + 178 TSX + 74 Go &middot; Priority: P2</p>
+</header>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:12px"><strong>Key Findings:</strong> This distributed storage caching system (data-gateway archetype) has significant modernization gaps across security (no audit logging, no encryption at rest, no secrets management), operations (no SLOs, no alerting, no deployment strategy), and infrastructure (no cloud IaC, no network security). The application layer is more mature with clear module boundaries and well-designed data access patterns, but runs on Java 8 with EOL dependencies.</p>
+<p style="margin-top:12px"><strong>Remediation Plan:</strong> Phase 1 focuses on security foundations (audit logging, encryption, secrets management, network isolation) and DevOps automation (IaC, CI/CD deployment, security scanning). Phase 2 addresses architecture modernization (Java 17 upgrade, service extraction, observability).</p>
+<p style="margin-top:12px"><strong>Recommended Actions:</strong></p>
+<ol style="margin-top:8px;margin-left:20px;font-size:14px">
+<li>Enable CloudTrail + KMS encryption at rest + Secrets Manager integration</li>
+<li>Add Terraform/CDK for cloud infrastructure + ArgoCD for deployment automation</li>
+<li>Implement network security (NetworkPolicies, private subnets, TLS between components)</li>
+</ol>
+</div>
+
+<div class="stats-row">
+<div class="stat-card stat-total"><div class="number">32</div><div class="label">Total Findings</div></div>
+<div class="stat-card stat-high"><div class="number">5</div><div class="label">High Severity</div></div>
+<div class="stat-card stat-medium"><div class="number">24</div><div class="label">Medium Severity</div></div>
+<div class="stat-card stat-low"><div class="number">3</div><div class="label">Low Severity</div></div>
+</div>
+
+<section>
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Language</td><td>Java 8, Go 1.18, TypeScript (Node 10.11)</td></tr>
+<tr><td>Lines of Code</td><td>~2,860 Java + 178 TSX + 74 Go files</td></tr>
+<tr><td>Framework</td><td>gRPC 1.54, Jersey 2.34, Jetty 9.4, React 16.8</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</table>
+</section>
+
+<section>
+<h2>Category-by-Category Breakdown</h2>
+<table>
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>2.00 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Application Architecture (APP)</td><td>2.25 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.75 / 4.0</td><td>Partial</td><td class="status-needs-work">Needs Work</td></tr>
+<tr><td>Security Baseline (SEC)</td><td>1.29 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.22 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+</table>
+</section>
+
+<section>
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> SEC-Q1: Audit Logging - Not Ready</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No CloudTrail or equivalent audit logging. No immutable log storage. Application logging exists (Log4j) but no security audit trail.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Enable CloudTrail. Configure S3 Object Lock for immutable logs. Add application-level audit logging for filesystem operations.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> SEC-Q2: Encryption at Rest - Not Ready</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No encryption-at-rest for RocksDB metadata, journal data, or cached data. No KMS integration. PVCs do not reference encrypted StorageClasses.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Configure encrypted EBS StorageClasses. Enable S3 encryption for UFS. Add KMS key management via IaC.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> INF-Q5: Network Security - Not Ready</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No VPC, security groups, NACLs, or NetworkPolicy resources defined. OTEL collector uses insecure communication. No TLS between components.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add Kubernetes NetworkPolicy to Helm chart. Deploy on EKS in private subnets. Enable gRPC TLS. Add VPC endpoints.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q7: Auto-Scaling - Not Ready</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No HPA, VPA, or Cluster Autoscaler. Master StatefulSet has fixed replicas. Worker DaemonSet is node-count-bound.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Implement HPA for Proxy. Configure Karpenter on EKS for node scaling. Add KEDA with CloudWatch metrics.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q8: Backup and Recovery - Not Ready</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No automated backup for RocksDB metadata or journal. PVCs have no snapshot lifecycle. No restore procedure documented.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Implement EBS snapshot lifecycle for Master PVCs. Configure UFS journal to S3 with versioning. Add backup CronJob.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q4: Centralized Identity - Not Ready</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>Custom JAAS login module. Identity from OS-level user. No Cognito, Okta, LDAP, OIDC, or SAML integration.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Integrate with Cognito for admin/API access. Implement OIDC federation. Enable SSO for WebUI. Use IRSA on EKS.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q6: Compute Hardening - Not Ready</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No patching strategy. CentOS 7 (EOL) base image. Custom compiled libfuse. No vulnerability scanning. Go 1.18 (EOL).</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Use Amazon Linux 2023 or Bottlerocket. Enable ECR scanning. Integrate Trivy in CI. Remove CentOS 7.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q7: Security Pipeline - Not Ready</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No Dependabot, Snyk, SonarQube, CodeQL, or container scanning. No security gates in pipeline.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add Dependabot for Maven/Go/npm. Integrate CodeQL for SAST. Add ECR scanning. Configure security gates.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> OPS-Q2: SLO Definitions - Not Ready</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No SLO/SLI definitions. No error budgets. Prometheus/Grafana deployed without SLO dashboards or alerting rules.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define SLOs for cache hit ratio (&gt;95%), metadata p99 (&lt;10ms), read throughput (&gt;1GB/s). Implement error budget tracking.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> OPS-Q5: Deployment Strategy - Not Ready</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No canary, blue/green, or progressive delivery. Manual Helm upgrades only. No ArgoCD/Flux.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Implement ArgoCD for GitOps on EKS. Configure Argo Rollouts for canary on Proxy. Rolling updates with readiness gates.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q7: Incident Response - Not Ready</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No runbooks. No SSM Automation. No self-healing beyond K8s pod restarts. No incident response documentation.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create runbooks for Master failover, Worker recovery, journal restore. Implement SSM Automation documents.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q2: Managed Databases - Self-Managed RocksDB</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>All persistent state uses embedded RocksDB. No managed database services. Architecturally deliberate for latency but limits operational capabilities.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Evaluate Aurora/DynamoDB for journal durability. Migrate ZooKeeper to managed alternative.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q10: IaC Coverage - Partial K8s Only</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Helm charts cover K8s layer. No Terraform/CloudFormation/CDK for VPC, IAM, S3, EKS cluster.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create Terraform or CDK modules for EKS, VPC, IAM (IRSA), S3, CloudWatch. Target 90%+ coverage.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q11: CI/CD - No Deployment Automation</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>GitHub Actions for CI (tests, checkstyle). No CD pipeline. No deployment automation.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Extend CI with ECR push, Helm publishing, ArgoCD deployment, and IaC pipeline.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> APP-Q2: Distributed Monolith</h3>
+<p class="category-line">Category: Application Architecture</p>
+<div class="finding-section"><h4>Finding</h4><p>Single codebase with identifiable modules compiled into shared assemblies. Cannot independently version or deploy components.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Extract S3 proxy and table catalog as independent services. Keep core Master/Worker topology.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q5: Secrets Management - Env Vars Only</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No Secrets Manager or Vault. Credentials in environment variables. No rotation configured.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Integrate Secrets Manager. Use IRSA on EKS. Configure automated rotation.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q1: Managed Compute - Mix of K8s and Legacy VM</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Comprehensive K8s support (Helm, Operator, CSI) but not targeting specific managed service. Vagrant/Ansible still maintained.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Standardize on EKS. Add EKS-specific configs (IRSA, EBS CSI, ALB Ingress). Deprecate Vagrant path.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> APP-Q6: Service Discovery - K8s DNS + Static Files</h3>
+<p class="category-line">Category: Application Architecture</p>
+<div class="finding-section"><h4>Finding</h4><p>K8s DNS provides discovery for containerized deployments. Non-K8s path uses static host files.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Current K8s DNS approach is appropriate for EKS. Add Cloud Map for multi-cluster. Deprecate static files.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> DATA-Q2: Unified Data Access - Well Structured</h3>
+<p class="category-line">Category: Data Platform</p>
+<div class="finding-section"><h4>Finding</h4><p>Well-designed UnderFileSystem interface with 15 storage backends. Clear MetaStore interface. Mostly centralized.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Maintain current pattern. No significant action needed.</p></div>
+</div>
+
+</section>
+
+<section>
+<h2>Modernization Pathways</h2>
+<table class="pathway-table">
+<tr><th>Pathway</th><th>Status</th><th>Priority</th><th>Effort</th></tr>
+<tr><td>Move to Cloud Native</td><td><strong style="color:#dc3545">Triggered</strong></td><td>High</td><td>High</td></tr>
+<tr><td>Move to Containers</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+<tr><td>Move to Open Source</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+<tr><td>Move to Managed Databases</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+<tr><td>Move to Managed Analytics</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+<tr><td>Move to Modern DevOps</td><td><strong style="color:#dc3545">Triggered</strong></td><td>High</td><td>Medium</td></tr>
+<tr><td>Move to AI</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+</table>
+</section>
+
+<section>
+<h2>Modernization Recommendations</h2>
+<p>&#x1F7E0; <strong>Top 3 Immediate Actions:</strong></p>
+<ol style="margin-top:12px;margin-left:20px">
+<li><strong>Security Foundations (Phase 1):</strong> Enable CloudTrail, KMS encryption at rest, Secrets Manager, and network isolation via NetworkPolicies and private subnets.</li>
+<li><strong>DevOps Automation (Phase 1):</strong> Create Terraform/CDK for cloud infrastructure, extend CI/CD with deployment automation via ArgoCD, add security scanning (Dependabot + CodeQL).</li>
+<li><strong>Observability &amp; Operations (Phase 1-2):</strong> Define SLOs, configure alerting rules, implement deployment strategy with canary/rolling updates.</li>
+</ol>
+</section>
+
+<div class="footer">
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Netflix--eureka - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1117; color: #e0e0e0; line-height: 1.6; padding: 2rem; }
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 1.8rem; color: #fff; margin-bottom: 0.25rem; }
+.subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+.section-title { font-size: 1.3rem; color: #fff; margin: 2rem 0 1rem; border-bottom: 1px solid #2a2d35; padding-bottom: 0.5rem; }
+.executive-summary { background: #1a1d24; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid #2a2d35; }
+.executive-summary h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #fff; }
+.status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; }
+.status-red { background: #3d1515; color: #ff6b6b; border: 1px solid #5c2020; }
+.status-orange { background: #3d2a15; color: #ffa94d; border: 1px solid #5c4020; }
+.status-yellow { background: #3d3515; color: #ffd43b; border: 1px solid #5c5020; }
+.status-green { background: #153d1f; color: #69db7c; border: 1px solid #205c30; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+.stat-card { background: #1a1d24; border-radius: 8px; padding: 1.25rem; text-align: center; border: 1px solid #2a2d35; }
+.stat-card .number { font-size: 2rem; font-weight: 700; }
+.stat-card .label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-high .number { color: #ff6b6b; }
+.stat-medium .number { color: #ffa94d; }
+.stat-low .number { color: #ffd43b; }
+.stat-total .number { color: #74c0fc; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
+th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #2a2d35; }
+th { background: #1a1d24; color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+td { font-size: 0.9rem; }
+.finding-card { background: #1a1d24; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; border: 1px solid #2a2d35; }
+.finding-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+.finding-title { font-weight: 600; color: #fff; }
+.severity-badge { padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.sev-high { background: #3d1515; color: #ff6b6b; }
+.sev-medium { background: #3d2a15; color: #ffa94d; }
+.sev-low { background: #3d3515; color: #ffd43b; }
+.finding-category { font-size: 0.8rem; color: #888; margin-bottom: 0.5rem; }
+.finding-section { margin-top: 0.75rem; }
+.finding-section-title { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+.finding-section p { font-size: 0.85rem; color: #ccc; }
+.category-status { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
+.cat-critical { background: #3d1515; color: #ff6b6b; }
+.cat-needs-work { background: #3d2a15; color: #ffa94d; }
+.cat-ready { background: #153d1f; color: #69db7c; }
+.recommendation-block { background: #1a1d24; border-radius: 8px; padding: 1.5rem; margin-top: 2rem; border: 1px solid #2a2d35; }
+.recommendation-block h3 { color: #fff; margin-bottom: 1rem; }
+.recommendation-block li { margin-bottom: 0.5rem; font-size: 0.9rem; color: #ccc; }
+.footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #2a2d35; text-align: center; color: #666; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Netflix--eureka - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2026-05-07 &middot; Java &middot; ~25K LOC &middot; Priority: P2</p>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="status-badge status-orange">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:0.75rem"><strong>Key Findings:</strong> Netflix Eureka is a Java 8 service-discovery server and client built with legacy Netflix OSS stack (Jersey 1.x, Servlet 2.5, AWS SDK v1). It has no infrastructure as code, no containerization, no deployment pipeline, and no security controls. The application architecture is modular but deployed as a single WAR with no managed compute.</p>
+<p style="margin-top:0.75rem"><strong>Classification Rationale:</strong> This repo has 10 High findings, 7 Medium findings, 0 Low findings. Rule matched: 2-11 High → Remediation Required. Note: MOD classification treats 1 High as Pilot-Ready (a single modernization gap), unlike ARA where 1 High is a deployment blocker for agent safety.</p>
+<p style="margin-top:0.75rem"><strong>Remediation Plan:</strong> Phase 1 focuses on foundational infrastructure (IaC, containers, CI/CD deployment, security baselines). Phase 2 addresses application modernization (Java 17, Spring Boot 3.x, observability). Phase 3 handles advanced patterns (async messaging, workflow orchestration).</p>
+</div>
+
+<div class="stats-row">
+<div class="stat-card stat-total"><div class="number">17</div><div class="label">Total Findings</div></div>
+<div class="stat-card stat-high"><div class="number">10</div><div class="label">High Severity</div></div>
+<div class="stat-card stat-medium"><div class="number">7</div><div class="label">Medium Severity</div></div>
+<div class="stat-card stat-low"><div class="number">0</div><div class="label">Low Severity</div></div>
+</div>
+
+<h2 class="section-title">Technology Stack</h2>
+<table>
+<tr><th>Property</th><th>Value</th></tr>
+<tr><td>Language</td><td>Java 8</td></tr>
+<tr><td>Framework</td><td>Jersey 1.x (JAX-RS), Servlet 2.5, Netflix OSS (Servo, Archaius, Governator)</td></tr>
+<tr><td>Build System</td><td>Gradle 8.14.3 (Nebula Netflix OSS plugin)</td></tr>
+<tr><td>AWS SDK</td><td>v1 (1.11.277)</td></tr>
+<tr><td>Deployment</td><td>WAR artifact (no containers)</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</table>
+
+<h2 class="section-title">Category-by-Category Breakdown</h2>
+<table>
+<tr><th>Category</th><th>Score</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.29 / 4.0</td><td><span class="category-status cat-critical">Critical</span></td></tr>
+<tr><td>Application Architecture (APP)</td><td>1.83 / 4.0</td><td><span class="category-status cat-critical">Critical</span></td></tr>
+<tr><td>Data Platform (DATA)</td><td>3.00 / 4.0</td><td><span class="category-status cat-needs-work">Needs Work</span></td></tr>
+<tr><td>Security Baseline (SEC)</td><td>1.40 / 4.0</td><td><span class="category-status cat-critical">Critical</span></td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.33 / 4.0</td><td><span class="category-status cat-critical">Critical</span></td></tr>
+</table>
+
+<h2 class="section-title">Detailed Findings</h2>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q1: No managed compute &mdash; WAR deployment with no containerization</span><span class="severity-badge sev-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>All compute is undefined. Application packaged as WAR for external servlet container. No ECS, EKS, Lambda, Fargate, or EC2 resource definitions exist.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Containerize: convert WAR to embedded server, create Dockerfile, deploy to EKS. Define EKS cluster and service resources in Terraform or CDK.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q5: No network security infrastructure defined</span><span class="severity-badge sev-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No VPC, subnet, security group, or network policy definitions exist. Zero network security configuration.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Define VPC with private subnets, security groups restricting access to port 8080, and VPC endpoints for AWS service access.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q10: Zero Infrastructure as Code</span><span class="severity-badge sev-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No Terraform, CloudFormation, CDK, Helm charts, or Kustomize files exist. All infrastructure must be manually created.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Add Terraform or CDK for EKS cluster, VPC, ALB, ECR, IAM, CloudWatch alarms, and Route 53 records.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">SEC-Q1: No CloudTrail or audit logging</span><span class="severity-badge sev-high">HIGH</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No CloudTrail configured. Application logging via Log4j 1.x (EOL) with console appender only. No structured logs, no retention.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Configure CloudTrail for API-level auditing. Replace Log4j 1.x with Logback + JSON encoder. Ship to CloudWatch Logs.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">OPS-Q5: No deployment strategy</span><span class="severity-badge sev-high">HIGH</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Repository only publishes library artifacts to Maven Central. No production deployment pipeline, no canary, no blue/green.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Implement rolling updates with health probes in EKS. For higher safety, add canary deployments via Argo Rollouts.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">OPS-Q6: Minimal integration testing</span><span class="severity-badge sev-high">HIGH</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Single integration test among ~110 primarily unit test files. No peer replication or multi-instance cluster tests.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Add Testcontainers-based integration suite for multi-instance peer replication, client failover, and registry lifecycle.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q3: Multi-step operations hardcoded with no orchestration</span><span class="severity-badge sev-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Peer replication batching, registry sync, and self-preservation are hardcoded with custom batching frameworks.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Evaluate Step Functions for peer replication observability. Current in-process approach may be appropriate for latency-sensitive service discovery.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q4: No messaging &mdash; peer replication via synchronous HTTP</span><span class="severity-badge sev-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No messaging infrastructure. All peer replication via synchronous HTTP batch requests. No SQS, SNS, EventBridge, or any messaging.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Evaluate EventBridge or SQS for peer state propagation. Migrating to AWS Cloud Map eliminates this concern.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q11: CI/CD limited to artifact publication</span><span class="severity-badge sev-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>GitHub Actions automate build and publish to Maven Central, but no deployment pipeline exists for production workloads.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Extend with Docker build, ECR push, Helm packaging, and EKS deployment. Add IaC pipeline.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">APP-Q1: Compound legacy &mdash; Java 8, Jersey 1.x, AWS SDK v1</span><span class="severity-badge sev-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Java 8 with Jersey 1.x (1.19.1), AWS SDK v1 (1.11.277), Servlet API 2.5. Compound regression across all axes.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Migrate to Java 17+ with Spring Boot 3.x and AWS SDK v2. Sequence: Java 17 → Spring Boot 3.x → AWS SDK v2.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">APP-Q2: Monolith with shared in-memory state</span><span class="severity-badge sev-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>10 Gradle submodules with clear boundaries, but deployed as single WAR. Shared in-memory registry couples all modules.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Containerize as single service first. Evaluate AWS Cloud Map as managed replacement.</p></div>
+</div>
+
+<div class="recommendation-block">
+<h3>&#x1F7E0; Modernization Recommendations</h3>
+<ol>
+<li><strong>Containerize the application</strong> &mdash; Convert WAR to embedded server, create Dockerfile, deploy to EKS with proper VPC networking and security groups (addresses INF-Q1, INF-Q5, INF-Q10).</li>
+<li><strong>Establish CI/CD deployment pipeline</strong> &mdash; Extend GitHub Actions with container build, ECR push, and EKS deployment with canary strategy (addresses INF-Q11, OPS-Q5).</li>
+<li><strong>Add security foundations</strong> &mdash; Configure CloudTrail, replace Log4j 1.x, add Dependabot for vulnerability scanning, implement mTLS for peer communication (addresses SEC-Q1, SEC-Q6, SEC-Q7).</li>
+</ol>
+</div>
+
+<div class="footer">
+<p>Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1</p>
+</div>
+</div>
+</body>
+</html>

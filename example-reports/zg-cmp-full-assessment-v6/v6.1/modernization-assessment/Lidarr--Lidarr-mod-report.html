@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lidarr--Lidarr - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+header { background: #232f3e; color: white; padding: 30px; border-radius: 8px; margin-bottom: 24px; }
+header h1 { font-size: 1.5rem; margin-bottom: 8px; }
+header .subtitle { color: #adb5bd; font-size: 0.9rem; }
+.executive-summary { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; border-left: 4px solid #f0ad4e; }
+.executive-summary h2 { margin-bottom: 16px; font-size: 1.2rem; }
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: 600; font-size: 0.85rem; }
+.status-remediation { background: #fff3cd; color: #856404; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; border-radius: 8px; padding: 20px; text-align: center; }
+.stat-card .number { font-size: 2rem; font-weight: 700; }
+.stat-card .label { font-size: 0.85rem; color: #666; margin-top: 4px; }
+.stat-card.high .number { color: #dc3545; }
+.stat-card.medium .number { color: #f0ad4e; }
+.stat-card.low .number { color: #28a745; }
+.section { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; }
+.section h2 { font-size: 1.2rem; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #eee; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+th { background: #f8f9fa; font-weight: 600; }
+.severity-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+.severity-high { background: #f8d7da; color: #721c24; }
+.severity-medium { background: #fff3cd; color: #856404; }
+.severity-low { background: #d4edda; color: #155724; }
+.category-status { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.8rem; font-weight: 600; }
+.cat-critical { background: #f8d7da; color: #721c24; }
+.cat-needs-work { background: #fff3cd; color: #856404; }
+.cat-ready { background: #d4edda; color: #155724; }
+.finding-card { border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.finding-card h4 { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.finding-card .category-line { font-size: 0.85rem; color: #666; margin-bottom: 8px; }
+.finding-card .finding-section { margin-top: 12px; }
+.finding-card .finding-section h5 { font-size: 0.8rem; text-transform: uppercase; color: #666; margin-bottom: 4px; }
+.finding-card .finding-section p { font-size: 0.9rem; }
+.tabs { display: flex; border-bottom: 2px solid #e9ecef; margin-bottom: 20px; }
+.tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; font-weight: 500; color: #666; }
+.tab.active { border-bottom-color: #232f3e; color: #232f3e; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.recommendation-block { background: #f0f7ff; border-left: 3px solid #0073bb; padding: 16px; border-radius: 0 8px 8px 0; margin-top: 16px; }
+.recommendation-block h4 { color: #0073bb; margin-bottom: 8px; }
+footer { text-align: center; color: #999; font-size: 0.8rem; padding: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Lidarr--Lidarr - Modernization Readiness Analysis Report</h1>
+<div class="subtitle">2026-05-08 &middot; C# / .NET 8.0 &middot; TypeScript &middot; Priority: P2</div>
+</header>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="status-badge status-remediation">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:12px"><strong>Key Findings:</strong> This music collection manager is a self-hosted .NET 8.0 monolith with no cloud deployment model. It has mature application code (.NET 8.0, comprehensive test suite, clean data access patterns) but lacks all cloud infrastructure: no IaC, no containers, no managed compute, no network security, and no observability beyond NLog and Sentry.</p>
+<p style="margin-top:12px"><strong>Remediation Plan:</strong> Phase 1 focuses on establishing cloud foundations (containerize, create IaC, add deployment pipeline). Phase 2 addresses security and observability gaps. Phase 3 handles architecture evolution (decomposition, service discovery).</p>
+<p style="margin-top:12px"><strong>Recommended Actions:</strong></p>
+<ol style="margin-top:8px;padding-left:20px">
+<li>Create a Dockerfile and deploy to Amazon EKS with Aurora PostgreSQL</li>
+<li>Define IaC (CDK/Terraform) for complete AWS infrastructure</li>
+<li>Add deployment stages to CI/CD pipeline (build → ECR → EKS)</li>
+</ol>
+<p style="margin-top:12px;font-size:0.85rem;color:#666">This repo has 9 High findings, 8 Medium findings, 3 Low findings. Rule: 2-11 High &rarr; Remediation Required. Note: MOD &quot;1 High&quot; maps to Pilot-Ready (a single modernization gap), unlike ARA where 1 High is a deployment blocker.</p>
+</div>
+
+<div class="stats-row">
+<div class="stat-card"><div class="number">20</div><div class="label">Total Findings</div></div>
+<div class="stat-card high"><div class="number">9</div><div class="label">High Severity</div></div>
+<div class="stat-card medium"><div class="number">8</div><div class="label">Medium Severity</div></div>
+<div class="stat-card low"><div class="number">3</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="section">
+<div class="tabs">
+<div class="tab active" onclick="showTab('stats')">Stats</div>
+<div class="tab" onclick="showTab('techstack')">Tech Stack</div>
+<div class="tab" onclick="showTab('findings')">Findings</div>
+<div class="tab" onclick="showTab('roadmap')">Roadmap</div>
+<div class="tab" onclick="showTab('programs')">Programs</div>
+</div>
+
+<div id="stats" class="tab-content active">
+<h2>Category-by-Category Breakdown</h2>
+<table>
+<thead><tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.22 / 4.0</td><td>Not Ready</td><td><span class="category-status cat-critical">Critical</span></td></tr>
+<tr><td>Application Architecture (APP)</td><td>2.33 / 4.0</td><td>Needs Work</td><td><span class="category-status cat-needs-work">Needs Work</span></td></tr>
+<tr><td>Data Platform (DATA)</td><td>3.00 / 4.0</td><td>Partial</td><td><span class="category-status cat-needs-work">Needs Work</span></td></tr>
+<tr><td>Security Baseline (SEC)</td><td>1.60 / 4.0</td><td>Not Ready</td><td><span class="category-status cat-critical">Critical</span></td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.43 / 4.0</td><td>Not Ready</td><td><span class="category-status cat-critical">Critical</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<div id="techstack" class="tab-content">
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Language</th><td>C# (.NET 8.0), TypeScript 5.7</td></tr>
+<tr><th>Framework</th><td>ASP.NET Core 8.0, React 18, Redux</td></tr>
+<tr><th>Database</th><td>SQLite (default), PostgreSQL (optional)</td></tr>
+<tr><th>ORM</th><td>Dapper (micro-ORM)</td></tr>
+<tr><th>CI/CD</th><td>Azure Pipelines (build/test only)</td></tr>
+<tr><th>Logging</th><td>NLog, Sentry</td></tr>
+<tr><th>Priority</th><td>P2</td></tr>
+<tr><th>Tags</th><td>csharp, media, desktop</td></tr>
+</table>
+</div>
+
+<div id="findings" class="tab-content">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> INF-Q1: No Managed Compute</h4>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><h5>Finding</h5><p>All compute is bare-metal/VM-based. Lidarr is distributed as self-contained executables and OS-specific packages with no managed compute services (ECS, EKS, Lambda, Fargate).</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Containerize the application using .NET 8.0 native container support and deploy to Amazon EKS. The environment variable configuration pattern and configurable port binding make it container-ready.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> INF-Q2: Self-Managed Databases</h4>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><h5>Finding</h5><p>Databases are entirely self-managed. SQLite is the default; PostgreSQL is optional. Both run on same host or user-managed infrastructure with no managed service.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Migrate PostgreSQL workloads to Amazon Aurora PostgreSQL. Aurora provides automated backups, Multi-AZ failover, and read replica auto-scaling.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> INF-Q5: No Network Security</h4>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><h5>Finding</h5><p>No VPC, security groups, NACLs, or network segmentation defined. Network security relies entirely on host OS firewall configuration.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Provision within a VPC with private subnets. Place application behind ALB/API Gateway with database in private subnets using least-privilege security groups.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> INF-Q10: No Infrastructure as Code</h4>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><h5>Finding</h5><p>No IaC exists. No Terraform, CloudFormation, CDK, Helm charts, or Kubernetes manifests found.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Create IaC using CDK or Terraform to define AWS infrastructure: EKS cluster, Aurora PostgreSQL, ECR, VPC networking, ALB/API Gateway.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> SEC-Q4: No Centralized Identity</h4>
+<div class="category-line">Category: Security Baseline</div>
+<div class="finding-section"><h5>Finding</h5><p>Application manages its own authentication entirely with no external IdP integration. No OIDC, SAML, or federated identity.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Integrate with Amazon Cognito as the identity provider. Implement OIDC authentication flow for web UI and token-based auth for API.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> SEC-Q6: No Compute Hardening</h4>
+<div class="category-line">Category: Security Baseline</div>
+<div class="finding-section"><h5>Finding</h5><p>No compute hardening or patching strategy beyond application self-update. No vulnerability scanning, no hardened images.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Use hardened base images (Bottlerocket for EKS, distroless for containers). Enable ECR scanning. Integrate vulnerability scanning in CI/CD.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> INF-Q6: No API Entry Point</h4>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><h5>Finding</h5><p>Services exposed directly via Kestrel with no gateway, load balancer, or CDN. No throttling, no WAF, no managed TLS termination.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Deploy behind Amazon API Gateway for REST API with throttling, validation, and auth. Use CloudFront for frontend static assets.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> INF-Q7: No Auto-Scaling</h4>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><h5>Finding</h5><p>No auto-scaling mechanisms configured. Application runs as single-instance process with no scaling capability.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>When deployed to EKS, configure Horizontal Pod Autoscaler (HPA) based on CPU/memory and request rate.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-high">HIGH</span> INF-Q8: No Automated Backups</h4>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><h5>Finding</h5><p>No automated backup configuration. SQLite on local filesystem. Manual backup feature exists but is not scheduled.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Leverage Aurora automated backups with PITR. Configure AWS Backup for cross-region replication.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-medium">MEDIUM</span> INF-Q11: CI/CD Without Deployment</h4>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><h5>Finding</h5><p>Azure Pipelines provides comprehensive build and test but no deployment stage. Artifacts produced but not deployed automatically.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Add deployment stages: build container &rarr; push to ECR &rarr; deploy to EKS staging &rarr; smoke tests &rarr; promote to production.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-medium">MEDIUM</span> APP-Q2: Monolith</h4>
+<div class="category-line">Category: Application Architecture</div>
+<div class="finding-section"><h5>Finding</h5><p>Single deployable unit with 15 projects but shared database access and cross-module coupling. Internal event aggregator provides some decoupling.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Begin with Conditional/Adaptive approach: containerize as-is, then extract high-value services (notifications, downloads, metadata).</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-medium">MEDIUM</span> APP-Q3: Primarily Synchronous</h4>
+<div class="category-line">Category: Application Architecture</div>
+<div class="finding-section"><h5>Finding</h5><p>Communication primarily synchronous. Internal event aggregator is fire-and-forget but in-process only. External calls all sync HTTP.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Adopt EventBridge for cross-service state changes when decomposing. Use SQS for durable work queues.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-medium">MEDIUM</span> SEC-Q5: No Secrets Management</h4>
+<div class="category-line">Category: Security Baseline</div>
+<div class="finding-section"><h5>Finding</h5><p>No plaintext credentials in source, but production credentials in environment variables without rotation or centralized management.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Store all credentials in AWS Secrets Manager with automated rotation. Use IAM roles for service-to-service authentication.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-medium">MEDIUM</span> DATA-Q1: Local Filesystem Storage</h4>
+<div class="category-line">Category: Data Platform</div>
+<div class="finding-section"><h5>Finding</h5><p>Music files, cover art, and metadata stored on local filesystems with no cloud object storage or CDN.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Store cover art in S3 with CloudFront CDN. Consider S3 File Gateway for media file access.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-medium">MEDIUM</span> OPS-Q1: No Distributed Tracing</h4>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="finding-section"><h5>Finding</h5><p>No distributed tracing. NLog and Sentry only. No trace ID propagation or OpenTelemetry.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Integrate OpenTelemetry .NET SDK. Export to AWS X-Ray. Add W3C TraceContext headers.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-low">LOW</span> DATA-Q2: Mostly Centralized Data Access</h4>
+<div class="category-line">Category: Data Platform</div>
+<div class="finding-section"><h5>Finding</h5><p>Data access mostly centralized through BasicRepository pattern. Some direct Dapper access for complex queries.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Maintain existing pattern. Connection string update is the primary change for Aurora migration.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-low">LOW</span> DATA-Q3: Database Versions Partially Managed</h4>
+<div class="category-line">Category: Data Platform</div>
+<div class="finding-section"><h5>Finding</h5><p>CI tests against PostgreSQL 14/15. No explicit version pin in deployment. No documented upgrade procedure.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Pin engine version in IaC. Plan PG 14 EOL migration (Nov 2026).</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="severity-badge severity-low">LOW</span> OPS-Q6: Integration Tests With Gaps</h4>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="finding-section"><h5>Finding</h5><p>Integration tests exist in CI against PostgreSQL in Docker. Automation tests provide E2E coverage. Minor coverage gaps.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Expand coverage to all critical API workflows. Add contract tests for third-party consumers.</p></div>
+</div>
+
+</div>
+
+<div id="roadmap" class="tab-content">
+<h2>Modernization Roadmap</h2>
+<h3 style="margin: 16px 0 8px">Phase 1: Foundation (P1 findings)</h3>
+<ul style="padding-left: 20px; margin-bottom: 16px">
+<li>Create Dockerfile and deploy to EKS (INF-Q1)</li>
+<li>Define IaC for complete AWS infrastructure (INF-Q10)</li>
+<li>Provision VPC with private subnets and security groups (INF-Q5)</li>
+<li>Migrate PostgreSQL to Aurora (INF-Q2)</li>
+<li>Add deployment stages to CI/CD (INF-Q11)</li>
+<li>Implement Secrets Manager for all credentials (SEC-Q5)</li>
+</ul>
+<h3 style="margin: 16px 0 8px">Phase 2: Security &amp; Observability</h3>
+<ul style="padding-left: 20px; margin-bottom: 16px">
+<li>Integrate Cognito for identity (SEC-Q4)</li>
+<li>Add compute hardening and vulnerability scanning (SEC-Q6)</li>
+<li>Deploy API Gateway / ALB in front (INF-Q6)</li>
+<li>Configure auto-scaling (INF-Q7)</li>
+<li>Implement OpenTelemetry tracing (OPS-Q1)</li>
+<li>Add business metrics with CloudWatch EMF (OPS-Q3)</li>
+<li>Configure anomaly detection and alerting (OPS-Q4)</li>
+<li>Add dependency/SAST scanning to pipeline (SEC-Q7)</li>
+</ul>
+<h3 style="margin: 16px 0 8px">Phase 3: Architecture Evolution</h3>
+<ul style="padding-left: 20px; margin-bottom: 16px">
+<li>Externalize events to EventBridge (INF-Q4, APP-Q3)</li>
+<li>Extract notification service (APP-Q2 decomposition)</li>
+<li>Implement service discovery (APP-Q6)</li>
+<li>Define SLOs (OPS-Q2)</li>
+<li>Create runbooks (OPS-Q7)</li>
+<li>Establish observability ownership (OPS-Q8)</li>
+</ul>
+</div>
+
+<div id="programs" class="tab-content">
+<h2>AWS Modernization Pathways</h2>
+<table>
+<thead><tr><th>Pathway</th><th>Status</th><th>Priority</th><th>Effort</th></tr></thead>
+<tbody>
+<tr><td>Move to Cloud Native</td><td><span class="severity-badge severity-high">TRIGGERED</span></td><td>High</td><td>High</td></tr>
+<tr><td>Move to Containers</td><td><span class="severity-badge severity-medium">TRIGGERED</span></td><td>Medium</td><td>Medium</td></tr>
+<tr><td>Move to Open Source</td><td><span style="color:#666">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>Move to Managed Databases</td><td><span style="color:#666">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>Move to Managed Analytics</td><td><span style="color:#666">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>Move to Modern DevOps</td><td><span class="severity-badge severity-high">TRIGGERED</span></td><td>High</td><td>Medium</td></tr>
+<tr><td>Move to AI</td><td><span style="color:#666">Not Triggered</span></td><td>—</td><td>—</td></tr>
+</tbody>
+</table>
+
+<div class="recommendation-block" style="margin-top:24px">
+<h4>&#x1F680; Recommended Starting Point</h4>
+<p><strong>Move to Containers</strong> &mdash; The application is already .NET 8.0 with environment variable configuration and configurable port binding. Creating a Dockerfile and deploying to EKS is the lowest-friction first step that unblocks all other modernization pathways.</p>
+</div>
+</div>
+
+</div>
+
+<footer>
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</footer>
+</div>
+
+<script>
+function showTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

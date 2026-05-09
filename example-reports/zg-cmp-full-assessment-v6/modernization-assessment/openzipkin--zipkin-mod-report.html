@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>openzipkin--zipkin - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+header { background: #1a1a2e; color: white; padding: 30px; border-radius: 8px; margin-bottom: 20px; }
+header h1 { font-size: 1.8em; margin-bottom: 5px; }
+header .subtitle { opacity: 0.8; font-size: 0.9em; }
+.executive-summary { background: white; padding: 24px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #f0932b; }
+.executive-summary h2 { margin-bottom: 12px; }
+.tier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
+.tier-remediation { background: #ffe0b2; color: #e65100; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.stat-card { background: white; padding: 20px; border-radius: 8px; text-align: center; }
+.stat-card .number { font-size: 2em; font-weight: bold; }
+.stat-card .label { font-size: 0.85em; color: #666; }
+.stat-high .number { color: #d32f2f; }
+.stat-medium .number { color: #f57c00; }
+.stat-low .number { color: #fbc02d; }
+.stat-total .number { color: #1565c0; }
+.section { background: white; padding: 24px; border-radius: 8px; margin-bottom: 20px; }
+.section h2 { margin-bottom: 16px; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+th { background: #f8f9fa; font-weight: 600; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; }
+.badge-high { background: #ffcdd2; color: #c62828; }
+.badge-medium { background: #fff3e0; color: #e65100; }
+.badge-low { background: #fff9c4; color: #f57f17; }
+.status-critical { color: #d32f2f; font-weight: bold; }
+.status-needs-work { color: #f57c00; font-weight: bold; }
+.status-ready { color: #388e3c; font-weight: bold; }
+.finding-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.finding-card h3 { font-size: 1em; margin-bottom: 8px; }
+.finding-card .category-line { font-size: 0.85em; color: #666; margin-bottom: 8px; }
+.finding-card .finding-section { margin-top: 10px; }
+.finding-card .finding-section h4 { font-size: 0.8em; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.footer { text-align: center; padding: 20px; color: #999; font-size: 0.85em; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>openzipkin--zipkin - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2026-05-07 &middot; Java 17 &middot; Spring Boot 3.5.12 &middot; Distributed tracing system</p>
+</header>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:12px"><strong>Overall Score:</strong> 2.28 / 4.0</p>
+<p style="margin-top:8px">This repo has 5 High findings, 20 Medium findings, 5 Low findings. Rule matched: &quot;2-11 High &rarr; Remediation Required.&quot;</p>
+<p style="margin-top:12px"><strong>Key Findings:</strong> Zipkin is a well-structured, modern Java application (Spring Boot 3.5, Java 17) with comprehensive containerization and integration testing. However, it lacks infrastructure-as-code, managed database services, network security, API authentication, and operational practices (SLOs, alerting, deployment strategy). The application code is cloud-ready; the deployment infrastructure is not.</p>
+<p style="margin-top:12px"><strong>Recommended Actions:</strong></p>
+<ol style="margin-left:20px;margin-top:4px">
+<li>Define infrastructure in Terraform/CDK (VPC, EKS, Aurora, OpenSearch)</li>
+<li>Enable security baseline (CloudTrail, KMS encryption, API authentication)</li>
+<li>Implement operational practices (SLOs, alerting, canary deployments)</li>
+</ol>
+</div>
+
+<div class="stats-row">
+<div class="stat-card stat-total"><div class="number">30</div><div class="label">Total Findings</div></div>
+<div class="stat-card stat-high"><div class="number">5</div><div class="label">High Severity</div></div>
+<div class="stat-card stat-medium"><div class="number">20</div><div class="label">Medium Severity</div></div>
+<div class="stat-card stat-low"><div class="number">5</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="section">
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Language</td><td>Java 17 (+ TypeScript/React frontend)</td></tr>
+<tr><td>Framework</td><td>Spring Boot 3.5.12, Armeria 1.37.0</td></tr>
+<tr><td>Build System</td><td>Maven (multi-module) + NPM/Vite</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Category-by-Category Breakdown</h2>
+<table>
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.73 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Application Architecture (APP)</td><td>2.83 / 4.0</td><td>Partial</td><td class="status-needs-work">Needs Work</td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.50 / 4.0</td><td>Partial</td><td class="status-needs-work">Needs Work</td></tr>
+<tr><td>Security Baseline (SEC)</td><td>2.14 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>2.22 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> INF-Q5: No Network Security Infrastructure</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No IaC defines VPC, subnets, security groups, NACLs, or any network segmentation. Docker Compose examples expose services on default Docker networking with no isolation.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define VPC with private subnets for databases and public subnet for the Zipkin server. Create security groups with least-privilege rules. Use VPC endpoints for AWS service access.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> INF-Q10: Zero Infrastructure as Code Coverage</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No Terraform, CloudFormation, CDK, Helm charts, or Kustomize files exist. All infrastructure would need to be created manually.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create Terraform modules defining EKS cluster, VPC/networking, Aurora MySQL, OpenSearch domain, MSK cluster, ALB, and monitoring.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> SEC-Q1: No Audit Logging</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No CloudTrail or equivalent audit logging configuration exists. No forensic trail for API access or infrastructure changes.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define CloudTrail in IaC with log file validation and S3 Object Lock for immutable storage.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> SEC-Q2: No Encryption at Rest</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No KMS or encryption at rest configuration exists. Docker-based databases use default unencrypted storage.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Enable Aurora storage encryption with KMS, OpenSearch domain encryption, and define customer-managed KMS keys.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> OPS-Q2: No SLO Definitions</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No SLO definitions exist. No CloudWatch alarms on latency percentiles or error budgets. Micrometer metrics available but not consumed by SLO definitions.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define SLOs for query API p99 latency, span ingestion success rate, and service availability. Implement error budget tracking.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q1: Containerized but No Managed Orchestration</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Multi-stage Dockerfile exists. Docker Compose demonstrates deployment. No IaC defines ECS/EKS/Fargate resources.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Deploy on Amazon EKS with a Helm chart. Define EKS cluster infrastructure in Terraform/CDK.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q2: Databases Self-Managed in Docker</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>MySQL, Cassandra, and Elasticsearch deployed as self-managed Docker containers with no managed database services.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Migrate to Aurora MySQL, Amazon Keyspaces or Cassandra on EKS, and Amazon OpenSearch Service.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q6: No Managed API Entry Point</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No API Gateway, ALB, CloudFront, or any managed entry point is defined. The Zipkin server exposes port 9411 directly.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Deploy an ALB in front of EKS, or use API Gateway for the query API with throttling and authentication.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q7: No Auto-Scaling Configuration</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No auto-scaling configuration exists. No ASG, ECS service scaling, EKS HPA, or Lambda concurrency limits defined.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Configure HPA on EKS based on CPU/memory and custom metrics. Consider Karpenter for node-level autoscaling.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q8: No Backup and Recovery Configuration</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No backup or recovery configuration exists. No backup_retention_period, no aws_backup_plan, no PITR configuration.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Enable Aurora automated backups with PITR, OpenSearch automated snapshots, and define an AWS Backup plan.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q9: No High Availability Configuration</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No multi-AZ deployment configuration exists. Docker Compose examples run single instances of each service.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Deploy on EKS across 2+ AZs with multiple replicas. Configure Aurora Multi-AZ and multi-AZ OpenSearch domain.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q11: Partial CI/CD Automation</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>GitHub Actions provides automated build, test, and Docker image publication. No infrastructure deployment automation exists.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Extend GitHub Actions with Terraform plan/apply stages and Helm deployment to EKS.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> APP-Q2: Single Deployable Monolith</h3>
+<p class="category-line">Category: Application Architecture</p>
+<div class="finding-section"><h4>Finding</h4><p>All collectors, storage backends, query API, and UI packaged into one Spring Boot application. Well-structured Maven multi-module layout with clean interfaces.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Consider separating collectors (write path) from query API (read path) as independent deployments.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> APP-Q5: No Formal API Versioning Strategy</h3>
+<p class="category-line">Category: Application Architecture</p>
+<div class="finding-section"><h4>Finding</h4><p>No OpenAPI spec exists. URL path versioning (/api/v2/) used but no formal strategy or backward compatibility guarantees.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Generate OpenAPI specification from Java API. Document versioning strategy and backward compatibility guarantees.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> APP-Q6: Environment Variable Endpoints Without Dynamic Discovery</h3>
+<p class="category-line">Category: Application Architecture</p>
+<div class="finding-section"><h4>Finding</h4><p>Service endpoints configured via environment variables. Eureka support exists but is opt-in and legacy.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>On EKS, leverage Kubernetes-native service discovery (CoreDNS). Consider AWS Cloud Map for cross-cluster discovery.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> DATA-Q1: No Object Storage for Data</h3>
+<p class="category-line">Category: Data Platform</p>
+<div class="finding-section"><h4>Finding</h4><p>Trace data stored only in databases (Cassandra, Elasticsearch, MySQL). No S3 or object storage tier for archival.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Consider S3 for long-term trace archival with lifecycle policies to reduce database storage costs.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> DATA-Q3: Database Versions Not Pinned</h3>
+<p class="category-line">Category: Data Platform</p>
+<div class="finding-section"><h4>Finding</h4><p>Versions defined only in Docker image tags with no explicit version pinning in infrastructure code.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Explicitly pin engine versions in IaC. Document supported versions and create an update procedure.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q3: No API Authentication</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No API authentication configured. All endpoints open with CORS allowed-origins: &quot;*&quot;.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Deploy API Gateway with OAuth2/JWT authentication. Implement mTLS for collector endpoints.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q4: No Centralized Identity Integration</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No centralized identity provider integration. The application manages no authentication at all.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Integrate with Amazon Cognito for user authentication. Use IAM roles for service-to-service auth.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q3: No Business Metrics</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Prometheus metrics via Micrometer exist but appear to be infrastructure metrics only. No custom business metrics defined.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Publish custom CloudWatch metrics for traces ingested per minute, unique services, query volume, and storage growth.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q4: No Alerting Configuration</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No alerting exists. No CloudWatch alarms, anomaly detection, or integration with incident management tools.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define CloudWatch alarms for error rate spikes, latency anomalies, and storage throttle activation. Enable anomaly detection.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q5: No Staged Deployment Strategy</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Docker images built and pushed to registries. No canary or blue/green deployment defined.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Implement canary deployments on EKS using Argo Rollouts with automated analysis.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q7: No Incident Response Automation</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No runbooks, no automated incident response, no self-healing. All incident response is ad hoc.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create runbooks for common failures. Automate pod restart on health failures and collector scaling on queue depth.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q8: No Observability Ownership</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No CODEOWNERS for observability, no dashboards with owners, no SLO team attribution.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define dashboards per component, assign alarm owners, and document escalation paths.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q9: No Resource Tagging</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No resource tagging because no IaC exists. No tagging standards documented.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Implement tagging standard (Environment, Service, Team, CostCenter) with Terraform default_tags and Config enforcement.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> DATA-Q2: Unified Data Access Layer — Minor Gaps</h3>
+<p class="category-line">Category: Data Platform</p>
+<div class="finding-section"><h4>Finding</h4><p>Well-defined StorageComponent abstraction with implementations for each backend. Some auxiliary operations have backend-specific paths.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>No immediate action needed. Consider consolidating auxiliary operations through the same interface over time.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> DATA-Q4: Minimal MySQL-Specific SQL Constructs</h3>
+<p class="category-line">Category: Data Platform</p>
+<div class="finding-section"><h4>Finding</h4><p>MySQL schema uses ENGINE=InnoDB ROW_FORMAT=COMPRESSED. No stored procedures or triggers. Compatible with Aurora MySQL.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>No action needed for Aurora MySQL migration. ROW_FORMAT and ENGINE clauses would need removal only for PostgreSQL migration.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> SEC-Q5: Secrets via Environment Variables Without Rotation</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>Production credentials via environment variables. No dedicated secrets management service or rotation configured.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Integrate AWS Secrets Manager with automated rotation. Use External Secrets Operator on EKS.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> SEC-Q6: Vulnerability Scanning Without Registry Scanning</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>Trivy scanning in CI, minimal Alpine image, non-root user. No ECR scanning or continuous monitoring.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Push to ECR with image scanning. Enable AWS Inspector for continuous vulnerability monitoring.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> OPS-Q6: Integration Tests Without End-to-End Deployment Tests</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Comprehensive per-backend integration tests via Testcontainers. No end-to-end deployment validation.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add post-deployment smoke tests for the full collector &rarr; storage &rarr; query pipeline.</p></div>
+</div>
+
+</div>
+
+<div class="section">
+<h2>Modernization Recommendation</h2>
+<p><strong>&#x1F7E0; Top Priority Actions:</strong></p>
+<ol style="margin-left:20px;margin-top:8px">
+<li><strong>Define Infrastructure as Code</strong> — Create Terraform/CDK for VPC, EKS, Aurora, OpenSearch (addresses INF-Q5, INF-Q10, INF-Q2)</li>
+<li><strong>Enable Security Baseline</strong> — CloudTrail, KMS encryption, API authentication (addresses SEC-Q1, SEC-Q2, SEC-Q3)</li>
+<li><strong>Define SLOs and Alerting</strong> — Formalize service levels and enable anomaly detection (addresses OPS-Q2, OPS-Q4)</li>
+</ol>
+</div>
+
+<div class="footer">
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</div>
+</div>
+</body>
+</html>

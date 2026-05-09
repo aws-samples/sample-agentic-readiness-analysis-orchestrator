@@ -1,0 +1,537 @@
+{
+  "assessment_type": "mod",
+  "metadata": {
+    "version": "V6",
+    "assessment_type": "mod",
+    "assessment_date": "2025-05-07",
+    "td_version": "modernization-assessment",
+    "report_format_version": "V6",
+    "repository": "dwyl--aws-sdk-mock",
+    "repo_type": "library",
+    "priority": "P2",
+    "tags": ["typescript", "testing", "aws-sdk"],
+    "context": "Mock library for the AWS SDK, used in JS/TS test suites.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_at_rest_data_surface": false,
+      "has_deployed_workload": false,
+      "has_api_surface": false,
+      "has_multi_instance_deployment": false
+    }
+  },
+  "overall_score": 2.99,
+  "classification": {
+    "tier": "Pilot-Ready",
+    "high_count": 0,
+    "medium_count": 3,
+    "low_count": 12,
+    "rule_matched": "0 High, ≥2 Medium → Pilot-Ready",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": null,
+      "score_rating": null,
+      "severity_status": "Ready"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 3.33,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 2.75,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 2.86,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 3.00,
+      "score_rating": "Partial",
+      "severity_status": "Low"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "APP-Q5",
+      "title": "API Versioning Strategy",
+      "score": 2,
+      "gap": "No formal versioning strategy for the library's public API",
+      "impact": "Breaking changes in exports could affect downstream consumers without warning"
+    },
+    {
+      "rank": 2,
+      "question_id": "DATA-Q3",
+      "title": "Database Engine Version and EOL",
+      "score": 2,
+      "gap": "AWS SDK dependency version range uses caret ranges without explicit pinning; Node.js 18 approaching EOL",
+      "impact": "Implicit dependency resolution may introduce unexpected breaking changes"
+    },
+    {
+      "rank": 3,
+      "question_id": "SEC-Q3",
+      "title": "API Authentication",
+      "score": 2,
+      "gap": "No input validation on public API functions; setSDK() uses require() with user-provided path",
+      "impact": "Potential for arbitrary module loading if misused in non-test environments"
+    },
+    {
+      "rank": 4,
+      "question_id": "APP-Q2",
+      "title": "Monolith vs Microservices",
+      "score": 3,
+      "gap": "All logic in a single 664-line file rather than decomposed into internal modules",
+      "impact": "Reduced maintainability as the library grows"
+    },
+    {
+      "rank": 5,
+      "question_id": "APP-Q6",
+      "title": "Service Discovery",
+      "score": 3,
+      "gap": "Default registry limited to 10 AWS services; no auto-discovery of installed @aws-sdk/client-* packages",
+      "impact": "Consumers must manually configure non-default services"
+    }
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "Documentation exists — README.md, CONTRIBUTING.md, and inline JSDoc comments",
+      "what_it_enables": "A knowledge agent can index the library's documentation and source code to answer developer questions about mock usage patterns, API behavior, and troubleshooting",
+      "additional_steps": "Generate structured API documentation (e.g., TypeDoc output) for richer indexing",
+      "effort": "Low"
+    }
+  ],
+  "decomposition_strategy": null,
+  "findings": [
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Single-file module structure limits maintainability",
+      "description": "All core logic resides in a single 664-line file (src/index.ts) rather than being decomposed into focused internal modules for registry management, service stubbing, and method mocking.",
+      "gap": "No internal module decomposition. All logic in one file makes navigation, testing individual concerns, and parallel development harder.",
+      "recommendation": "Consider internal decomposition of src/index.ts into focused modules (e.g., registry.ts, service-mocker.ts, method-mocker.ts) for maintainability without changing the public API.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/index.ts", "lines": "1-664"},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No formal API versioning strategy",
+      "description": "The library uses npm semver (v6.2.2) but has no CHANGELOG, no deprecation annotations, and README still references AWS SDK v2 patterns despite being rewritten for v3.",
+      "gap": "No CHANGELOG tracking breaking changes. README content is partially outdated. No deprecation warnings for APIs that may change.",
+      "recommendation": "Add a CHANGELOG.md documenting breaking changes per version. Add JSDoc @deprecated annotations for legacy APIs. Update README to accurately reflect v3-only status.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Limited default client registry",
+      "description": "The default registry covers only 10 AWS services. Consumers must manually register other services via setSDKInstance(). No auto-discovery of installed @aws-sdk/client-* packages.",
+      "gap": "Default registry limited to 10 services; no auto-discovery mechanism.",
+      "recommendation": "Consider implementing automatic discovery of installed @aws-sdk/client-* packages to reduce manual registry configuration for consumers.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/index.ts", "lines": "73-84"},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "No structured documentation generation pipeline",
+      "description": "Documentation is manually maintained markdown files (README.md, CONTRIBUTING.md) with JSDoc comments in source. No automated TypeDoc or similar generation pipeline exists.",
+      "gap": "No automated documentation generation or structured documentation pipeline.",
+      "recommendation": "Add TypeDoc generation to the build pipeline to produce structured API documentation from JSDoc comments.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "README.md", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Internal state not encapsulated",
+      "description": "The services object and _clientRegistry are module-level variables with no encapsulation boundary. All access flows through public API functions, but direct mutation is technically possible.",
+      "gap": "Module-level mutable state without encapsulation boundary.",
+      "recommendation": "Consider encapsulating services and _clientRegistry in a class or closure to enforce access only through the public API.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/index.ts", "lines": "85-90"},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Dependency version ranges and Node.js EOL risk",
+      "description": "All 11 AWS SDK dependencies use caret ranges (^3.750.0) allowing minor version drift. Node.js 18 engine minimum is approaching/past EOL (April 2025). CI matrix includes non-LTS Node 21.",
+      "gap": "Caret ranges allow drift. Node.js 18 approaching EOL. No documented version update procedure.",
+      "recommendation": "Update minimum Node.js engine to >=20 (current LTS). Add Node.js 22 to CI matrix and remove 21 (non-LTS). Document version update procedure for AWS SDK dependencies.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Hard-coded service registry acts as implicit schema",
+      "description": "The defaultClientRegistry hard-codes 10 AWS service mappings that consumers depend on. Adding new services requires source code changes to the library.",
+      "gap": "Hard-coded registry creates maintenance burden when new AWS services are needed.",
+      "recommendation": "Consider making the default registry configurable or auto-discovered rather than hard-coded.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/index.ts", "lines": "73-84"},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No input validation on public API functions",
+      "description": "setSDK() uses require(path) with a user-provided path without validation. setSDKInstance() accepts any object without type checking. While this is a test utility, lack of validation could enable loading arbitrary modules.",
+      "gap": "No input validation on setSDK() path parameter or setSDKInstance() input.",
+      "recommendation": "Add input validation to setSDK() to restrict the path parameter. Document that setSDK() should only be used with trusted paths in test environments.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/index.ts", "lines": "115-130"},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No library-level audit logging",
+      "description": "GitHub Actions CI provides build/test audit logging. npm registry logs publish events. The library itself uses only console.log for error cases, not structured audit events.",
+      "gap": "No library-level structured audit logging beyond console.log in restore functions.",
+      "recommendation": "For a library, explicit audit logging is not required. Existing CI/CD and npm registry audit trails are sufficient.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/index.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No package signing or provenance attestation",
+      "description": "The library has no data-at-rest surface. npm handles package integrity via SHA checksums. No explicit npm package provenance or signing is configured.",
+      "gap": "No npm package provenance attestation beyond built-in checksums.",
+      "recommendation": "Consider enabling npm package provenance via GitHub Actions for supply chain attestation.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No CODEOWNERS file for ownership governance",
+      "description": "The library relies on npm and GitHub OAuth for identity. No CODEOWNERS file defines code review ownership for critical paths.",
+      "gap": "No CODEOWNERS file. Branch protection rules not visible in repository.",
+      "recommendation": "Add a CODEOWNERS file for src/ and test/ paths. Ensure branch protection requires review approval.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No documented secret rotation policy",
+      "description": "GitHub Actions secrets are used for CODECOV_TOKEN. No plaintext credentials in source. However, no rotation policy is documented.",
+      "gap": "No documented rotation policy for the Codecov token.",
+      "recommendation": "Document secret rotation procedures. Consider short-lived OIDC tokens where supported.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No npm audit step in CI pipeline",
+      "description": "Dependabot is configured for weekly dependency updates. CI tests across 3 Node versions and 3 OSes. No explicit npm audit step to block builds on vulnerabilities.",
+      "gap": "No npm audit in CI. Dependabot handles updates but does not block on critical vulnerabilities.",
+      "recommendation": "Add npm audit --audit-level=high to CI workflow to fail builds on high-severity vulnerabilities.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No SAST in CI pipeline",
+      "description": "Dependabot is configured for dependency scanning. ESLint is configured but not run in CI (lint script runs only tsc). No SAST tool (CodeQL, Semgrep) is integrated. Snyk badge suggests external monitoring.",
+      "gap": "No SAST tool in CI. ESLint configured but not executed in pipeline.",
+      "recommendation": "Add GitHub CodeQL or Semgrep to CI. Fix lint script to include ESLint alongside TypeScript compilation.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No trace context consideration in mocked responses",
+      "description": "No OpenTelemetry instrumentation. Mocked AWS calls do not propagate trace context. This is expected behavior for mocks but undocumented.",
+      "gap": "No explicit consideration of trace context propagation in mocked responses.",
+      "recommendation": "Document that mocked calls do not propagate trace context so consumers know to use real clients for tracing tests.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/index.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q1", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q2", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q3", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q4", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q5", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q6", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q7", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q8", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q9", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q10", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q11", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "APP-Q1", "status": "pass", "score": 4},
+    {"question_id": "APP-Q2", "status": "finding", "score": 3},
+    {"question_id": "APP-Q3", "status": "pass", "score": 4},
+    {"question_id": "APP-Q4", "status": "pass", "score": 4},
+    {"question_id": "APP-Q5", "status": "finding", "score": 2},
+    {"question_id": "APP-Q6", "status": "finding", "score": 3},
+    {"question_id": "DATA-Q1", "status": "finding", "score": 3},
+    {"question_id": "DATA-Q2", "status": "finding", "score": 3},
+    {"question_id": "DATA-Q3", "status": "finding", "score": 2},
+    {"question_id": "DATA-Q4", "status": "finding", "score": 3},
+    {"question_id": "SEC-Q1", "status": "finding", "score": 3},
+    {"question_id": "SEC-Q2", "status": "finding", "score": 3},
+    {"question_id": "SEC-Q3", "status": "finding", "score": 2},
+    {"question_id": "SEC-Q4", "status": "finding", "score": 3},
+    {"question_id": "SEC-Q5", "status": "finding", "score": 3},
+    {"question_id": "SEC-Q6", "status": "finding", "score": 3},
+    {"question_id": "SEC-Q7", "status": "finding", "score": 3},
+    {"question_id": "OPS-Q1", "status": "finding", "score": 3},
+    {"question_id": "OPS-Q2", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q3", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q4", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q5", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q6", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q7", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q8", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q9", "status": "N/A", "reason": "library repo_type"}
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and the pathway requires a deployable workload.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and there is no deployable workload to containerize.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4 = 3 (no stored procedures); no commercial DB engines detected. Library has no database dependency.",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 3, "note": "DATA-Q4 = 3 meets threshold; no commercial DB engines detected"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No commercial database engines detected. Library has no database dependency."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and the pathway requires database infrastructure.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and the pathway requires data processing workloads.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and the pathway requires deployment pipelines.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. The context describes a mock library for testing — no AI/agent/LLM signal terms found."
+    }
+  ]
+}

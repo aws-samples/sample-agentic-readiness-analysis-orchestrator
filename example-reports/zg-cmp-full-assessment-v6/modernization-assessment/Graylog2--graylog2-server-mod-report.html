@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Graylog2--graylog2-server - Modernization Readiness Analysis Report</title>
+<style>
+:root{--high:#dc3545;--medium:#fd7e14;--low:#ffc107;--ready:#28a745;--bg:#f8f9fa;--card:#fff;--border:#dee2e6;--text:#212529;--text-muted:#6c757d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding:2rem}
+.container{max-width:1200px;margin:0 auto}
+h1{font-size:1.75rem;margin-bottom:.25rem}
+.subtitle{color:var(--text-muted);margin-bottom:2rem;font-size:.9rem}
+.executive-summary{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin-bottom:2rem}
+.executive-summary h2{font-size:1.25rem;margin-bottom:1rem}
+.status-badge{display:inline-block;padding:.25rem .75rem;border-radius:4px;font-weight:600;font-size:.85rem}
+.status-remediation{background:#fff3cd;color:#856404;border:1px solid #ffc107}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1.25rem;text-align:center}
+.stat-card .number{font-size:2rem;font-weight:700}
+.stat-card .label{font-size:.8rem;color:var(--text-muted);text-transform:uppercase}
+.stat-high .number{color:var(--high)}
+.stat-medium .number{color:var(--medium)}
+.stat-low .number{color:var(--low)}
+.tech-table{width:100%;border-collapse:collapse;margin-bottom:2rem;background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.tech-table th,.tech-table td{padding:.75rem 1rem;text-align:left;border-bottom:1px solid var(--border)}
+.tech-table th{background:#f1f3f5;font-weight:600;font-size:.85rem;text-transform:uppercase}
+.category-table{width:100%;border-collapse:collapse;margin-bottom:2rem;background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.category-table th,.category-table td{padding:.75rem 1rem;text-align:left;border-bottom:1px solid var(--border)}
+.category-table th{background:#f1f3f5;font-weight:600}
+.status-critical{color:var(--high);font-weight:600}
+.status-needs-work{color:var(--medium);font-weight:600}
+.status-ready{color:var(--ready);font-weight:600}
+.findings-section{margin-bottom:2rem}
+.findings-section h2{font-size:1.25rem;margin-bottom:1rem}
+.finding-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1rem}
+.finding-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem}
+.finding-title{font-weight:600;font-size:.95rem}
+.severity-badge{padding:.2rem .5rem;border-radius:3px;font-size:.75rem;font-weight:700;text-transform:uppercase;color:#fff}
+.severity-high{background:var(--high)}
+.severity-medium{background:var(--medium)}
+.severity-low{background:var(--low);color:#212529}
+.finding-category{font-size:.8rem;color:var(--text-muted);margin-bottom:.5rem}
+.finding-section-label{font-size:.75rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-top:.75rem;margin-bottom:.25rem}
+.finding-text{font-size:.9rem}
+.recommendation-footer{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin-top:2rem}
+.recommendation-footer h2{font-size:1.25rem;margin-bottom:1rem}
+.recommendation-item{margin-bottom:.75rem;padding-left:1.5rem;position:relative}
+.recommendation-item::before{content:"⚠️";position:absolute;left:0}
+footer{text-align:center;color:var(--text-muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Graylog2--graylog2-server - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2025-05-07 &middot; Java 21 / TypeScript 5.9 &middot; ~8,100 source files &middot; Priority: P2</p>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="status-badge status-remediation">🟠 Remediation Required</span></p>
+<p style="margin-top:.75rem"><strong>Key Findings:</strong> This Graylog centralized log-management server scores 1.99/4.0 overall. The repository contains a mature Java 21 application with strong testing but lacks infrastructure-as-code, deployment automation, and cloud-native operational practices. 8 High-severity findings indicate significant modernization gaps primarily in infrastructure provisioning and operational maturity.</p>
+<p style="margin-top:.75rem"><strong>Classification:</strong> This repo has 8 High findings, 9 Medium findings, 3 Low findings. Rule matched: 2-11 High &rarr; Remediation Required. MOD classification treats 1 High as Pilot-Ready (a single modernization gap), unlike ARA which treats 1 High as a deployment blocker for agent safety.</p>
+<p style="margin-top:.75rem"><strong>Recommended Actions:</strong> (1) Create IaC for EKS, DocumentDB, and OpenSearch Service infrastructure. (2) Containerize the application with production Dockerfile and Kubernetes manifests. (3) Implement CI/CD deployment pipeline with canary strategy. (4) Enable CloudTrail, encryption at rest, and secrets management.</p>
+</div>
+
+<div class="stats-row">
+<div class="stat-card"><div class="number">20</div><div class="label">Total Findings</div></div>
+<div class="stat-card stat-high"><div class="number">8</div><div class="label">High Severity</div></div>
+<div class="stat-card stat-medium"><div class="number">9</div><div class="label">Medium Severity</div></div>
+<div class="stat-card stat-low"><div class="number">3</div><div class="label">Low Severity</div></div>
+</div>
+
+<h2 style="margin-bottom:1rem">Technology Stack</h2>
+<table class="tech-table">
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Language</td><td>Java 21, TypeScript 5.9.3</td></tr>
+<tr><td>Framework</td><td>Google Guice 7.0.0, Jersey 4.0.2 (Jakarta EE), React 18.3.1</td></tr>
+<tr><td>Database</td><td>MongoDB 7.0/8.0, OpenSearch 2.x/3.x</td></tr>
+<tr><td>Messaging</td><td>Kafka 4.2.0 (client), AMQP 5.29.0 (client)</td></tr>
+<tr><td>AI/Agent</td><td>MCP 1.1.0 (Model Context Protocol server)</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</table>
+
+<h2 style="margin-bottom:1rem">Category-by-Category Breakdown</h2>
+<table class="category-table">
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.36 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr><td>Application Architecture (APP)</td><td>2.17 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.75 / 4.0</td><td>Partial</td><td class="status-needs-work">Needs Work</td></tr>
+<tr><td>Security Baseline (SEC)</td><td>2.00 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.56 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+</table>
+
+<div class="findings-section">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q1: No Managed Compute Infrastructure</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No managed compute (ECS/EKS/Lambda/Fargate) defined. No IaC for any compute resources. Application is packaged for self-managed deployment via Sonatype Nexus.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Containerize the application and deploy on Amazon EKS. Create a production Dockerfile, define Kubernetes manifests with StatefulSets for journal-dependent components.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q2: All Databases Self-Managed</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">MongoDB via localhost connection string. OpenSearch managed by custom data-node module. Docker-compose defines self-hosted MongoDB 7.0 and OpenSearch 2.10.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Migrate MongoDB to Amazon DocumentDB and OpenSearch to Amazon OpenSearch Service for automated backups, Multi-AZ failover, and managed patching.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q5: No Network Security Configuration</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No VPC, subnet, security group, or NACL definitions. No IaC defining network topology. TLS disabled by default.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Define VPC infrastructure with private subnets. Use security groups with least-privilege rules. Enable TLS by default. Consider VPC endpoints for AWS service access.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q10: Zero Infrastructure as Code</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No Terraform, CloudFormation, CDK, Helm charts, or Kustomize files found. All infrastructure created and managed externally.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Create IaC (Terraform or AWS CDK) defining EKS cluster, DocumentDB, OpenSearch Service, VPC/networking, ALB/API Gateway, IAM roles, and backup plans.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">SEC-Q1: No CloudTrail Audit Logging</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No CloudTrail or equivalent infrastructure audit logging configured. OpenSearch security audit covers only the OpenSearch layer.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Enable CloudTrail with log file validation and immutable storage (S3 Object Lock). Route CloudTrail logs into Graylog for centralized audit analysis.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">SEC-Q2: No Encryption at Rest</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No encryption at rest configuration. No KMS keys. Docker-compose runs databases without encryption. Only application-level EncryptedValue for stored credentials.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Enable encryption at rest on DocumentDB (KMS), OpenSearch Service (KMS), and EBS volumes. Define customer-managed KMS keys with rotation policy.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">OPS-Q2: No SLO Definitions</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No SLO definitions, error budget tracking, or availability targets. 200+ Prometheus metrics available but unused for SLO measurement.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Define SLOs for critical user journeys: log ingestion latency (p99), search response time (p99), API availability (99.9%). Use Amazon Managed Grafana.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">OPS-Q5: No Deployment Strategy</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No deployment automation. CI builds and tests only. No blue/green, canary, or rolling deployment. Actual deployment is manual.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Implement canary deployments on EKS using ArgoCD Rollouts with progressive traffic shifting and automatic rollback on error rate increase.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q3: Workflows Hardcoded in Custom Framework</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">Multi-step workflows implemented as hardcoded state machines in the custom Periodical framework with 26+ scheduled background tasks.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Adopt AWS Step Functions for multi-step operations. EventBridge can trigger workflows based on system events.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q6: No Managed API Entry Point</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No API Gateway, ALB, or managed entry point. REST API exposed directly on configurable ports.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Deploy behind API Gateway for external access. API Gateway provides throttling, validation, and centralized authentication.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q7: No Auto-Scaling</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No auto-scaling configuration. Application supports clustering but scaling is entirely manual.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Configure HPA on EKS based on custom Prometheus metrics. Configure auto-scaling on DocumentDB read replicas.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q8: No Backup Configuration</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No backup configuration in repository. No AWS Backup plans, snapshot policies, or retention settings.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Enable automated backups on DocumentDB (PITR), snapshot policies on OpenSearch Service, and define AWS Backup plan.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q9: No Multi-AZ Configuration</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No Multi-AZ configuration despite cluster architecture supporting HA in principle.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Configure pod anti-affinity on EKS across AZs. Use Multi-AZ DocumentDB. OpenSearch Service provides Multi-AZ by default.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q11: CI Without Deployment</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">GitHub Actions provides CI with 4 parallel jobs. No deployment automation — pipeline ends at build and test.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Extend with deploy stages: build container &rarr; push to ECR &rarr; deploy to EKS staging &rarr; smoke tests &rarr; promote to production.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">APP-Q2: Modular Monolith with Shared Database</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">40+ domain packages with plugin architecture. Modules share single MongoDB with cross-module access, in-process EventBus, and LMAX Disruptor.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Apply Strangler Fig pattern to extract high-value modules. Start with per-module schemas and external events (EventBridge).</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">APP-Q3: Primarily Synchronous Communication</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">ProxiedResource fans out HTTP requests synchronously. Cross-node events use MongoDB-polled ClusterEventBus. Guava EventBus is synchronous.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Replace synchronous cluster fan-out with async messaging via EventBridge or SQS for cross-node state changes.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">APP-Q6: Custom MongoDB-Based Service Discovery</span><span class="severity-badge severity-high">HIGH</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">Nodes register HTTP URIs in MongoDB. Peers discovered by querying MongoDB. No standard discovery mechanism.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">After migrating to EKS, leverage Kubernetes Service discovery (DNS-based). Use AWS Cloud Map for external integration.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">SEC-Q5: No External Secrets Manager</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No AWS Secrets Manager or Vault integration. Production credentials in environment variables without rotation.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Integrate AWS Secrets Manager for all production credentials. Configure automated rotation. Use EKS CSI Secrets Store driver.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">OPS-Q4: No Alerting for Self-Monitoring</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No operational alerts for Graylog&rsquo;s own health despite being an alerting platform for others.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Define Prometheus alerting rules for journal utilization, search latency, node health. Configure CloudWatch Anomaly Detection.</div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">OPS-Q7: No Incident Response Automation</span><span class="severity-badge severity-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section-label">Finding</div>
+<div class="finding-text">No runbooks, incident playbooks, or self-healing patterns. Incident response is entirely ad hoc.</div>
+<div class="finding-section-label">Recommendation</div>
+<div class="finding-text">Create operational runbooks for common incidents. Define SSM Automation for automated remediation.</div>
+</div>
+
+</div>
+
+<div class="recommendation-footer">
+<h2>Modernization Recommendations</h2>
+<div class="recommendation-item">Create IaC (Terraform/CDK) for EKS cluster, DocumentDB, OpenSearch Service, VPC networking, and operational resources.</div>
+<div class="recommendation-item">Containerize the application and deploy on Amazon EKS with production Dockerfile, StatefulSets, and health check endpoints.</div>
+<div class="recommendation-item">Implement CI/CD deployment pipeline with canary strategy using ArgoCD Rollouts on EKS.</div>
+</div>
+
+<footer>
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</footer>
+</div>
+</body>
+</html>

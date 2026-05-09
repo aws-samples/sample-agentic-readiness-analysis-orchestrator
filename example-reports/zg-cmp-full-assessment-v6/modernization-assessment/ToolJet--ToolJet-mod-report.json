@@ -1,0 +1,820 @@
+{
+  "assessment_type": "mod",
+  "version": "V6",
+  "metadata": {
+    "repository": "ToolJet--ToolJet",
+    "date": "2025-05-08",
+    "td_version": "modernization-assessment-v6",
+    "report_format_version": "V6",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application owns two PostgreSQL databases (primary + ToolJet DB), exposes CRUD operations on apps, users, organizations, data sources, workflows, and AI conversations, and manages entity lifecycle state. Multiple write endpoints exist alongside reads. Classified as stateful-crud.",
+    "priority": "P2",
+    "tags": ["javascript", "low-code", "frontend"],
+    "context": "Open-source low-code internal-tool builder.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": true
+    }
+  },
+  "overall_score": 2.31,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 2,
+    "medium_count": 19,
+    "low_count": 5,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 2.27,
+      "score_rating": "Needs Work",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.67,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 2.75,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 2.29,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.56,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "SEC-Q1",
+      "title": "Audit Logging",
+      "score": 1,
+      "gap": "No CloudTrail or audit logging configuration found in IaC",
+      "impact": "No audit trail for forensic analysis or compliance"
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q7",
+      "title": "Auto-Scaling",
+      "score": 1,
+      "gap": "No auto-scaling configured; ECS service uses static desired_count=2",
+      "impact": "Cannot respond to traffic spikes; over-provisioning during low demand"
+    },
+    {
+      "rank": 3,
+      "question_id": "INF-Q8",
+      "title": "Backup and Recovery",
+      "score": 1,
+      "gap": "RDS has no backup_retention_period configured; defaults to 0",
+      "impact": "Data loss risk with no recovery capability"
+    },
+    {
+      "rank": 4,
+      "question_id": "OPS-Q2",
+      "title": "SLO Definitions",
+      "score": 1,
+      "gap": "No SLO definitions found anywhere in the repository",
+      "impact": "Cannot measure service quality or drive prioritization"
+    },
+    {
+      "rank": 5,
+      "question_id": "OPS-Q3",
+      "title": "Business Metrics",
+      "score": 1,
+      "gap": "Only infrastructure metrics (OpenTelemetry); no business outcome metrics",
+      "impact": "No visibility into whether the system delivers business value"
+    }
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "DevOps Agent",
+      "prerequisite": "CI/CD pipeline exists (INF-Q11 = 3). 29 GitHub Actions workflows.",
+      "what_it_enables": "An agent that triggers deployments, checks build status, manages releases across 29 workflows.",
+      "additional_steps": "Expose GitHub Actions API access to the agent; create a workflow dispatch interface.",
+      "effort": "Low"
+    },
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "Documentation exists in the repo (Docusaurus docs site).",
+      "what_it_enables": "A knowledge agent that indexes documentation and provides natural-language answers.",
+      "additional_steps": "Index the docs/ directory content and OpenAPI spec into a vector store.",
+      "effort": "Medium"
+    },
+    {
+      "name": "Data Query Agent",
+      "prerequisite": "Database with clear schema (DATA-Q2 = 3). TypeORM with 80+ entity models.",
+      "what_it_enables": "Natural language to SQL agent for querying application data.",
+      "additional_steps": "Generate schema documentation from TypeORM entities; implement query guardrails.",
+      "effort": "Medium"
+    },
+    {
+      "name": "Observability Agent",
+      "prerequisite": "Structured logging and tracing in place (OPS-Q1 = 3). Full OpenTelemetry.",
+      "what_it_enables": "Agent that queries traces, correlates errors, and suggests root causes.",
+      "additional_steps": "Ensure OTLP exporter targets a queryable backend; expose trace query API.",
+      "effort": "Medium"
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Strangler Fig (Parallel Track)",
+    "rationale": "NestJS module structure provides natural extraction boundaries. Team can sustain parallel development. Identifiable modules with shared DB coupling (APP-Q2=2).",
+    "extraction_candidates": [
+      {"module": "Workflows", "coupling": "Low", "effort": "Medium", "value": "High"},
+      {"module": "AI", "coupling": "Low", "effort": "Low-Medium", "value": "Medium"},
+      {"module": "ToolJet Database", "coupling": "Low", "effort": "Low", "value": "High"},
+      {"module": "Auth/Session", "coupling": "Medium", "effort": "High", "value": "Medium"}
+    ],
+    "patterns": ["Anti-corruption Layer", "Saga Pattern", "Event Sourcing", "Hexagonal Architecture"]
+  },
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=2 (primary trigger: monolith with shared DB). Supporting: INF-Q1=3, APP-Q3=3, APP-Q4=3.",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2, "note": "Monolith with identifiable modules but shared database schemas"}
+      ],
+      "detail": {
+        "aws_services": ["EKS", "API Gateway", "EventBridge", "Step Functions", "Aurora PostgreSQL"],
+        "immediate_actions": ["Identify service boundaries from NestJS modules", "Extract Workflows service first", "Implement Anti-corruption Layer between monolith and new services"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/CMK2J48MVN", "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1=3 — compute already on ECS/Fargate and Kubernetes. 14 Dockerfiles and container definitions exist.",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 3, "note": "INF-Q1=3 meets threshold; workload already containerized on ECS Fargate and Kubernetes"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "Workload already runs on ECS Fargate and Kubernetes; container pathway does not apply."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=3 (minimal stored procedures). No commercial DB engines detected — PostgreSQL is already open source.",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 3, "note": "DATA-Q4=3 meets threshold; no commercial database engines detected"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "PostgreSQL is already open source. No Oracle, SQL Server, or other commercial database engines detected."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2=2 (Redis self-managed as sidecar, RDS single-AZ without Multi-AZ failover).",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": 2, "note": "Redis self-managed as sidecar container; RDS single-AZ without Multi-AZ"},
+        {"question_id": "DATA-Q3", "score": 3, "note": "Engine versions pinned but dev/prod mismatch"}
+      ],
+      "detail": {
+        "aws_services": ["Aurora PostgreSQL", "ElastiCache", "MemoryDB", "DMS"],
+        "immediate_actions": ["Enable Multi-AZ on RDS", "Migrate Redis sidecar to ElastiCache", "Consider Aurora PostgreSQL migration"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC", "https://skillbuilder.aws/learn/ND246G8Y3W"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No data processing workloads (ETL, streaming pipelines, analytics jobs) detected. BullMQ is a job queue, not analytics infrastructure.",
+      "triggering_questions": [
+        {"question_id": "INF-Q4", "score": 3, "note": "INF-Q4=3 meets threshold; no analytics workloads detected"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No data processing workloads exist. BullMQ handles job queuing, not data analytics or streaming."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=2 (partial IaC), OPS-Q5=2 (rolling only), OPS-Q6=2 (tests not consistently in CI).",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 2, "note": "Partial IaC — operational resources not covered"},
+        {"question_id": "OPS-Q5", "score": 2, "note": "Rolling deployments only, no canary/blue-green"},
+        {"question_id": "OPS-Q6", "score": 2, "note": "Integration tests exist but not run consistently in CI"}
+      ],
+      "detail": {
+        "aws_services": ["CodePipeline", "CodeBuild", "CloudFormation", "CDK", "X-Ray", "CloudWatch"],
+        "immediate_actions": ["Expand Terraform for monitoring/alarms", "Implement canary deployments", "Auto-trigger Cypress tests on every PR"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/1FGEQKGPQD", "https://skillbuilder.aws/learn/R4B13K95YQ"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "AI/agent frameworks already present: AWS Bedrock SDK, OpenAI, Anthropic, vector DBs (Pinecone, Qdrant, Weaviate), internal AI module with agents.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "AI/agent frameworks already present in the codebase. AWS Bedrock, OpenAI, Anthropic SDKs, vector databases (Pinecone, Qdrant, Weaviate), and an internal AI module with agent patterns are all integrated."
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q1", "score": 3, "status": "evaluated"},
+    {"question_id": "INF-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "INF-Q4", "score": 3, "status": "evaluated"},
+    {"question_id": "INF-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q6", "score": 3, "status": "evaluated"},
+    {"question_id": "INF-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q9", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q10", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q11", "score": 3, "status": "evaluated"},
+    {"question_id": "APP-Q1", "score": 3, "status": "evaluated"},
+    {"question_id": "APP-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "APP-Q4", "score": 3, "status": "evaluated"},
+    {"question_id": "APP-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q6", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q1", "score": 2, "status": "evaluated"},
+    {"question_id": "DATA-Q2", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q4", "score": 3, "status": "evaluated"},
+    {"question_id": "SEC-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "SEC-Q4", "score": 3, "status": "evaluated"},
+    {"question_id": "SEC-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q6", "score": 3, "status": "evaluated"},
+    {"question_id": "SEC-Q7", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q1", "score": 3, "status": "evaluated"},
+    {"question_id": "OPS-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q3", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q4", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q6", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q9", "score": 2, "status": "evaluated"}
+  ],
+  "findings": [
+    {
+      "question_id": "SEC-Q1",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No CloudTrail Audit Logging",
+      "description": "No CloudTrail configuration found in any Terraform module. Application-level audit logs exist but no AWS infrastructure audit trail.",
+      "gap": "No CloudTrail or equivalent infrastructure audit logging. AWS API actions are not captured. No immutable log storage.",
+      "recommendation": "Add aws_cloudtrail resource to Terraform with log file validation and S3 Object Lock for immutable storage. Enable for all management and data events on sensitive resources.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Auto-Scaling Configured",
+      "description": "No auto-scaling configured. ECS service uses static desired_count=2. Kubernetes HPA disabled (min=max=1). No scaling policies on any resource.",
+      "gap": "All capacity is statically provisioned with no ability to scale up during traffic spikes or scale down during low demand.",
+      "recommendation": "Configure ECS Application Auto Scaling with target tracking. For EKS, configure HPA with custom metrics. Consider Karpenter for node scaling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Backup and Recovery Configuration",
+      "description": "RDS has no backup_retention_period (defaults to 0). skip_final_snapshot=true. No AWS Backup plan. Redis data is ephemeral.",
+      "gap": "No backup configuration for any data store. RDS will not retain backups. No documented restore procedures.",
+      "recommendation": "Set backup_retention_period=7 on RDS with PITR. Remove skip_final_snapshot. Create AWS Backup plan. Migrate Redis to ElastiCache with backup.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No SLO Definitions",
+      "description": "No SLO definitions found. No error budget tracking. Custom metrics exist but not tied to SLO targets.",
+      "gap": "No formal definition of acceptable service levels. Cannot measure service quality or drive prioritization.",
+      "recommendation": "Define SLOs for critical user journeys: app builder load time, data query success rate, workflow execution success rate, API availability.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "server/src/otel/tracing.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Business Metrics",
+      "description": "Only infrastructure metrics (api.hits, api.duration, users.concurrent, sessions.active). No business outcome metrics.",
+      "gap": "No visibility into whether the system delivers business value. No metrics for apps created, queries executed, or workflow completions.",
+      "recommendation": "Add business outcome metrics: apps_created_total, data_queries_success/failure, workflows_completed/failed, user_onboarding_completed.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "server/src/otel/tracing.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Anomaly Detection or Alerting",
+      "description": "No CloudWatch alarms in Terraform. No alerting configuration beyond Sentry error reporting. No anomaly detection.",
+      "gap": "No proactive alerting on error rates, latency, or resource utilization. Sentry provides reactive error reporting only.",
+      "recommendation": "Add CloudWatch alarms for API error rate, p99 latency, ECS task failures, RDS connections. Enable anomaly detection on critical paths.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Incident Response Automation",
+      "description": "No runbooks, SSM Automation documents, or self-healing automation. Incident response is entirely ad hoc.",
+      "gap": "No documented procedures for common failure scenarios. No automated remediation.",
+      "recommendation": "Create runbooks for common incidents. Implement as SSM Automation documents. Consider self-healing patterns for auto-restart and circuit breakers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Self-Managed Redis and Single-AZ RDS",
+      "description": "RDS managed but single-AZ without Multi-AZ failover. Redis runs as self-managed sidecar container. Mixed managed/self-managed state.",
+      "gap": "Redis is self-managed. RDS lacks Multi-AZ failover. Production database infrastructure is partially managed.",
+      "recommendation": "Enable Multi-AZ on RDS. Migrate Redis to ElastiCache or MemoryDB with Multi-AZ. Consider Aurora PostgreSQL.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Public Subnets with Missing Segmentation",
+      "description": "VPC configured with public subnets only (map_public_ip_on_launch=true). No private subnets, NAT gateway, or VPC endpoints.",
+      "gap": "Services deployed in public subnets with public IPs. No private subnet tier for application and database workloads.",
+      "recommendation": "Restructure VPC with private subnets for ECS tasks and RDS. Add NAT gateway and VPC endpoints for AWS service access.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Database Single-AZ Deployment",
+      "description": "Compute spans 2 AZs but RDS is single-AZ. Redis as sidecar provides no independent HA. AZ failure would take down database.",
+      "gap": "Primary database is single-AZ. Single AZ failure would take down the database with no automatic recovery.",
+      "recommendation": "Enable multi_az=true on RDS. Migrate Redis to ElastiCache with Multi-AZ automatic failover.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Partial IaC Coverage",
+      "description": "Terraform covers compute, VPC, ALB, RDS, IAM but NOT monitoring, alerting, backup, auto-scaling, Route 53, or WAF.",
+      "gap": "Operational resources (monitoring, alerting, backup, scaling) are missing from IaC. Significant manual infrastructure likely exists.",
+      "recommendation": "Expand Terraform to cover CloudWatch alarms, AWS Backup plans, auto-scaling policies, Route 53 health checks, and WAF rules.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith with Shared Database",
+      "description": "Single NestJS server containing 50+ modules with shared PostgreSQL database via TypeORM. Modules have identifiable boundaries but share schemas.",
+      "gap": "Monolith with identifiable modules but shared database schemas, direct cross-module entity access, and single deployment unit.",
+      "recommendation": "Begin Strangler Fig decomposition starting with loosely-coupled modules: Workflows, AI, ToolJet Database.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "server/src/main.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "API Versioning Not Actively Used",
+      "description": "NestJS URI versioning framework configured but default is VERSION_NEUTRAL. No @Version decorators or /v1/ patterns in use.",
+      "gap": "Versioning framework configured but not actively used. Breaking changes would affect all consumers simultaneously.",
+      "recommendation": "Apply @Version decorators as APIs evolve. Version public API surface first (SCIM, external integrations).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "server/src/main.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unstructured Data Not in S3",
+      "description": "Files and assets stored on local filesystem or container volume. No S3 configuration for application storage.",
+      "gap": "Unstructured data in local/container filesystem rather than managed object storage. No parsing pipeline.",
+      "recommendation": "Migrate file storage to Amazon S3. Implement presigned URLs. Consider S3 lifecycle policies.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "server/src/main.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Infrastructure Encryption at Rest",
+      "description": "No KMS keys in Terraform. RDS has no explicit storage_encrypted. Application-level AES-256-GCM encryption exists but no infrastructure-level encryption.",
+      "gap": "Infrastructure-level encryption at rest (RDS storage, EBS) not explicitly configured. No customer-managed KMS keys.",
+      "recommendation": "Add storage_encrypted=true and customer-managed KMS key to RDS. Create KMS keys for all sensitive data stores.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Credentials in Terraform Variable Defaults",
+      "description": "Terraform variables.tf has default values for sensitive vars (PG_PASS='postgres'). No rotation configured. Mix of Secrets Manager and env vars.",
+      "gap": "Hardcoded default credentials in Terraform variables. No automated rotation. Production may use env vars without rotation.",
+      "recommendation": "Remove default credential values from Terraform variables. Implement Secrets Manager rotation. Add sensitive=true to credential variables.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/variables.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No SAST in CI Pipeline",
+      "description": "Dependency scanning active (npm audit + Dependabot + Grype) but no SAST tool for code-level vulnerabilities. No container image scanning.",
+      "gap": "No SAST for application code. No container image scanning in Docker release pipeline.",
+      "recommendation": "Add SAST scanning (CodeGuru Reviewer, Semgrep) to CI. Add container scanning to Docker release workflow.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/vulnerability-ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Rolling Deployments Only",
+      "description": "Kubernetes uses RollingUpdate with health checks. No canary, blue/green, or traffic-shifting configuration.",
+      "gap": "No progressive delivery. Bad deployments affect all users after rolling update completes.",
+      "recommendation": "Implement canary deployments with Argo Rollouts or AWS CodeDeploy blue/green. Add automated rollback on failure.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "deploy/kubernetes/deployment.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Tests Not Consistently in CI",
+      "description": "Cypress e2e tests exist but require manual label triggers. Not run automatically on every PR.",
+      "gap": "PRs can merge without integration test validation. Tests require explicit label triggering.",
+      "recommendation": "Auto-trigger Cypress tests on every PR. Run core smoke suite automatically; full suite on merge.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/cypress-appbuilder.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Observability Ownership",
+      "description": "CODEOWNERS covers only package.json and migrations. No per-service dashboards, no alarm ownership, no team attribution.",
+      "gap": "No observability ownership. Monitoring is reactive and fragmented. No dashboards or alarm ownership defined.",
+      "recommendation": "Extend CODEOWNERS for observability assets. Create per-module dashboards with named owners. Define on-call rotation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "CODEOWNERS", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Inconsistent Resource Tagging",
+      "description": "Minimal tagging on resources. No default_tags in Terraform provider. No cost allocation, ownership, or environment tags.",
+      "gap": "No consistent tagging standard. No cost allocation tags. No tag enforcement.",
+      "recommendation": "Add default_tags to Terraform AWS provider. Implement required-tags Config rules. Activate cost allocation tags.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Mix of Managed Compute with Sidecar Dependencies",
+      "description": "Primary workloads on ECS Fargate and Kubernetes. Redis runs as sidecar rather than managed service.",
+      "gap": "Redis bundled as sidecar container rather than using a managed service (ElastiCache/MemoryDB).",
+      "recommendation": "Migrate Redis from sidecar to Amazon ElastiCache. Standardize on EKS as primary orchestration platform.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Partial Workflow Orchestration Adoption",
+      "description": "Temporal.io integrated for EE workflows. CE uses BullMQ job queues. Partial orchestration adoption.",
+      "gap": "Temporal is EE-only. CE relies on BullMQ (job queue) rather than dedicated workflow orchestration.",
+      "recommendation": "Consider AWS Step Functions as managed alternative to self-hosted Temporal. Evaluate for CE workflows.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "server/src/modules/workflows/constants/queue-config.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Messaging on Self-Managed Redis",
+      "description": "BullMQ provides functional async messaging but relies on self-managed Redis sidecar rather than AWS managed messaging.",
+      "gap": "Messaging infrastructure uses self-managed Redis. Event-driven patterns exist but backed by infrastructure requiring operational management.",
+      "recommendation": "Migrate Redis backing store to ElastiCache at minimum. Consider EventBridge for cross-service events as services are extracted.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "server/src/modules/workflows/constants/queue-config.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Strong but Production Deployment Manual",
+      "description": "29 workflows provide comprehensive CI/CD. Production deployment requires manual workflow_dispatch. No IaC apply pipeline.",
+      "gap": "Production deployment manual. No Terraform plan/apply pipeline. No automated rollback.",
+      "recommendation": "Add automated production deployment with approval gates. Implement Terraform plan/apply pipeline.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/deploy-to-stage.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "ALB Without API Gateway Features",
+      "description": "ALB configured with health check but no API Gateway-level throttling, request validation, or edge auth.",
+      "gap": "No API Gateway features. Rate limiting handled at application level rather than edge.",
+      "recommendation": "Consider API Gateway in front of ALB for throttling and request validation. Implement WAF on ALB.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "terraform/ECS/main.tf", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ]
+}

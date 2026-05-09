@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iterative--dvc - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+header { background: #1a1a2e; color: white; padding: 32px; border-radius: 8px; margin-bottom: 24px; }
+header h1 { font-size: 24px; margin-bottom: 8px; }
+header .subtitle { color: #a0a0b0; font-size: 14px; }
+.executive-summary { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; border-left: 4px solid #f59e0b; }
+.executive-summary h2 { margin-bottom: 16px; }
+.tier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: 600; font-size: 14px; }
+.tier-remediation { background: #fef3c7; color: #92400e; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; border-radius: 8px; padding: 20px; text-align: center; }
+.stat-card .number { font-size: 32px; font-weight: 700; }
+.stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; }
+.stat-high .number { color: #dc2626; }
+.stat-medium .number { color: #f59e0b; }
+.stat-low .number { color: #3b82f6; }
+.stat-total .number { color: #1a1a2e; }
+section { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; }
+section h2 { margin-bottom: 16px; font-size: 20px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+th { background: #f8f9fa; font-weight: 600; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.badge-high { background: #fee2e2; color: #dc2626; }
+.badge-medium { background: #fef3c7; color: #92400e; }
+.badge-low { background: #dbeafe; color: #1d4ed8; }
+.badge-ready { background: #d1fae5; color: #065f46; }
+.badge-needs-work { background: #fef3c7; color: #92400e; }
+.badge-critical { background: #fee2e2; color: #dc2626; }
+.finding-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.finding-card h4 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.finding-section { margin-top: 12px; }
+.finding-section h5 { font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 4px; }
+.finding-section p { font-size: 14px; }
+footer { text-align: center; color: #666; font-size: 12px; padding: 24px; }
+.category-row .status { font-weight: 600; }
+.tech-table td:first-child { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+<h1>iterative--dvc - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2026-05-07 &middot; Python &middot; ~30K LOC &middot; Priority: P2</p>
+</header>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:12px"><strong>Key Findings:</strong> DVC is a Python CLI tool and library distributed via PyPI with no cloud infrastructure. The assessment identifies 11 High severity findings and 5 Medium severity findings, primarily because no deployed infrastructure exists. The application is a monolithic package with 298 source modules. CI/CD automation is strong (GitHub Actions with comprehensive test matrix and security scanning).</p>
+<p style="margin-top:12px"><strong>Remediation Plan:</strong> Modernization opportunities center on (1) extracting server-side components (experiment queue, Studio API) to cloud-native EKS services, (2) adopting IaC for any future infrastructure, and (3) adding AI capabilities leveraging Amazon Bedrock.</p>
+<p style="margin-top:12px"><strong>Recommended Actions:</strong></p>
+<ol style="margin-left:20px; margin-top:8px; font-size:14px;">
+<li>Extract Celery-based experiment queue as an independent EKS-deployed service</li>
+<li>Implement IaC (Terraform/CDK) for any new cloud infrastructure</li>
+<li>Evaluate Amazon Bedrock integration for intelligent experiment recommendations</li>
+</ol>
+</div>
+
+<div class="stats-row">
+<div class="stat-card stat-total"><div class="number">17</div><div class="label">Total Findings</div></div>
+<div class="stat-card stat-high"><div class="number">11</div><div class="label">High Severity</div></div>
+<div class="stat-card stat-medium"><div class="number">5</div><div class="label">Medium Severity</div></div>
+<div class="stat-card stat-low"><div class="number">1</div><div class="label">Low Severity</div></div>
+</div>
+
+<section>
+<h2>Technology Stack</h2>
+<table class="tech-table">
+<tr><td>Language</td><td>Python 3.9+</td></tr>
+<tr><td>Framework</td><td>CLI (argparse, rich, tqdm) + fsspec filesystem abstraction</td></tr>
+<tr><td>Build System</td><td>setuptools + setuptools_scm, uv for installs</td></tr>
+<tr><td>Distribution</td><td>PyPI package</td></tr>
+<tr><td>CI/CD</td><td>GitHub Actions (6 workflows)</td></tr>
+<tr><td>Security</td><td>CodeQL, Dependabot, ruff/Bandit</td></tr>
+</table>
+</section>
+
+<section>
+<h2>Category-by-Category Breakdown</h2>
+<table>
+<thead><tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.50 / 4.0</td><td>Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+<tr><td>Application Architecture (APP)</td><td>2.50 / 4.0</td><td>Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.67 / 4.0</td><td>Partial</td><td><span class="badge badge-needs-work">Needs Work</span></td></tr>
+<tr><td>Security Baseline (SEC)</td><td>2.25 / 4.0</td><td>Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.38 / 4.0</td><td>Not Ready</td><td><span class="badge badge-critical">Critical</span></td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> INF-Q1: No managed compute infrastructure</h4>
+<p style="font-size:13px;color:#666">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h5>Finding</h5><p>No managed compute infrastructure exists. DVC is distributed exclusively as a PyPI package and executes entirely on the user&#39;s local machine.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>If cloud-hosted DVC capabilities are desired, define compute infrastructure using EKS with Terraform or CDK.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> INF-Q5: No network security infrastructure</h4>
+<p style="font-size:13px;color:#666">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h5>Finding</h5><p>No VPC, subnet, security group, or network configuration exists. DVC has no deployed infrastructure.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>If cloud infrastructure is introduced, define VPC with private subnets, least-privilege security groups, and VPC endpoints.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> APP-Q2: Monolithic application with tight coupling</h4>
+<p style="font-size:13px;color:#666">Category: Application Architecture</p>
+<div class="finding-section"><h5>Finding</h5><p>DVC is a single deployable monolithic Python package with 298 source files. All functionality lives in a single artifact with tight internal coupling.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Apply Strangler Fig pattern to extract server-side capabilities. Extract experiment queue worker as independent EKS service.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> DATA-Q1: No managed object storage provisioned</h4>
+<p style="font-size:13px;color:#666">Category: Data Platform</p>
+<div class="finding-section"><h5>Finding</h5><p>DVC tracks unstructured data but stores it on user-configured remote backends. DVC itself does not provision S3 buckets or parsing pipelines.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>If cloud-hosted features are introduced, use S3 for unstructured data storage with Athena for experiment result analysis.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> SEC-Q1: No audit logging</h4>
+<p style="font-size:13px;color:#666">Category: Security Baseline</p>
+<div class="finding-section"><h5>Finding</h5><p>No CloudTrail, audit logging, or immutable log storage is configured. DVC has no deployed infrastructure.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>If cloud infrastructure is introduced, enable CloudTrail with log file validation and S3 Object Lock.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> OPS-Q3: No business metrics</h4>
+<p style="font-size:13px;color:#666">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h5>Finding</h5><p>No custom business metrics published to any monitoring system. Anonymous telemetry exists but not as operational metrics.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Publish custom metrics to CloudWatch or metrics backend if operational visibility is desired.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> OPS-Q4: No anomaly detection or alerting</h4>
+<p style="font-size:13px;color:#666">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h5>Finding</h5><p>No anomaly detection or alerting configured. Only CI failure Slack notifications exist.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Implement CloudWatch anomaly detection if cloud services are introduced.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> OPS-Q7: No incident response automation</h4>
+<p style="font-size:13px;color:#666">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h5>Finding</h5><p>No runbooks, no incident response automation, no self-healing patterns.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Create runbooks for common issues. Start with markdown runbooks, then automate with GitHub Actions.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> OPS-Q8: No observability ownership</h4>
+<p style="font-size:13px;color:#666">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h5>Finding</h5><p>No observability ownership defined. No CODEOWNERS for monitoring, no dashboards, no named alarm owners.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Define observability ownership. Create CODEOWNERS for workflows.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> OPS-Q9: No resource tagging governance</h4>
+<p style="font-size:13px;color:#666">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h5>Finding</h5><p>No AWS resource tagging because no AWS resources are provisioned.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Implement tagging governance from the start when AWS resources are introduced.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-high">HIGH</span> OPS-Q1: No distributed tracing</h4>
+<p style="font-size:13px;color:#666">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h5>Finding</h5><p>No OpenTelemetry, X-Ray, or distributed tracing instrumented.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Add OpenTelemetry SDK as optional dependency for trace propagation through consuming applications.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-medium">MEDIUM</span> INF-Q6: No API entry point</h4>
+<p style="font-size:13px;color:#666">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h5>Finding</h5><p>No API Gateway, ALB, or managed entry point. Python API consumed locally only.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Use API Gateway with throttling and authentication if a cloud-hosted API is created.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-medium">MEDIUM</span> INF-Q7: No auto-scaling configuration</h4>
+<p style="font-size:13px;color:#666">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h5>Finding</h5><p>No auto-scaling because no deployed infrastructure exists.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Configure auto-scaling for EKS node groups if cloud compute is introduced.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-medium">MEDIUM</span> INF-Q10: Partial IaC coverage</h4>
+<p style="font-size:13px;color:#666">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h5>Finding</h5><p>CI/CD defined as code via GitHub Actions. No infrastructure provisioning IaC (Terraform/CDK).</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Define all infrastructure in IaC using Terraform or CDK from the start.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-medium">MEDIUM</span> APP-Q5: Limited API versioning strategy</h4>
+<p style="font-size:13px;color:#666">Category: Application Architecture</p>
+<div class="finding-section"><h5>Finding</h5><p>Python API exposed with no formal versioning strategy beyond package-level semver.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Implement explicit deprecation decorators. Document API stability guarantees.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-medium">MEDIUM</span> SEC-Q6: Limited compute hardening</h4>
+<p style="font-size:13px;color:#666">Category: Security Baseline</p>
+<div class="finding-section"><h5>Finding</h5><p>CodeQL scanning and Dependabot present. No runtime vulnerability scanning or container scanning.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Add pip-audit to CI. Add container image scanning if containers are introduced.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-medium">MEDIUM</span> OPS-Q5: Basic deployment without canary</h4>
+<p style="font-size:13px;color:#666">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h5>Finding</h5><p>Two-stage PyPI publishing (Test PyPI → Production PyPI) with no canary or gradual rollout.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Implement staged release strategy with release candidates and post-publish smoke tests.</p></div>
+</div>
+
+<div class="finding-card">
+<h4><span class="badge badge-low">LOW</span> INF-Q11: CI/CD automation with minor gaps</h4>
+<p style="font-size:13px;color:#666">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h5>Finding</h5><p>Comprehensive CI/CD via GitHub Actions. Missing automated rollback for PyPI publishes.</p></div>
+<div class="finding-section"><h5>Recommendation</h5><p>Add automated validation gates between Test PyPI and Production PyPI. Add smoke tests.</p></div>
+</div>
+
+</section>
+
+<section>
+<h2>Modernization Pathways</h2>
+<table>
+<thead><tr><th>Pathway</th><th>Status</th><th>Priority</th><th>Effort</th></tr></thead>
+<tbody>
+<tr><td>Move to Cloud Native</td><td><span class="badge badge-high">Triggered</span></td><td>High</td><td>High</td></tr>
+<tr><td>Move to Containers</td><td><span class="badge badge-ready">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>Move to Open Source</td><td><span class="badge badge-ready">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>Move to Managed Databases</td><td><span class="badge badge-ready">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>Move to Managed Analytics</td><td><span class="badge badge-ready">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>Move to Modern DevOps</td><td><span class="badge badge-high">Triggered</span></td><td>High</td><td>Medium</td></tr>
+<tr><td>Move to AI</td><td><span class="badge badge-medium">Triggered</span></td><td>Medium</td><td>Medium</td></tr>
+</tbody>
+</table>
+</section>
+
+<footer>
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</footer>
+
+</div>
+</body>
+</html>

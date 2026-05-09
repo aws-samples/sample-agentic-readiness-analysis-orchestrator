@@ -1,0 +1,866 @@
+{
+  "assessment_type": "mod",
+  "version": "V6",
+  "metadata": {
+    "repository": "Alluxio--alluxio",
+    "date": "2026-05-07",
+    "td_version": "modernization-assessment",
+    "report_format_version": "V6",
+    "repo_type": "application",
+    "service_archetype": "data-gateway",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "This system is a distributed storage caching layer whose primary operations are read-heavy data access (file reads, block reads, metadata lookups) served via gRPC and REST APIs. It has an embedded metadata store (RocksDB) but its core role is as a data access gateway between compute frameworks and underlying storage systems.",
+    "priority": "P2",
+    "tags": ["java", "storage", "distributed"],
+    "context": "Data orchestration / virtual distributed file system. JVM, distributed storage caching layer.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": true
+    },
+    "preferences": {
+      "prefer": ["eks", "aurora", "dynamodb", "api-gateway", "eventbridge", "bedrock"],
+      "avoid": ["self-managed-kafka", "self-managed-kubernetes", "oracle", "lambda"]
+    }
+  },
+  "overall_score": 1.90,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 5,
+    "medium_count": 24,
+    "low_count": 3,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 2.00,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.25,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 2.75,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.29,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.22,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q1", "score": 3, "status": "evaluated"},
+    {"question_id": "INF-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q3", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "INF-Q4", "score": 4, "status": "pass"},
+    {"question_id": "INF-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q6", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q9", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q10", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q11", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q1", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q3", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "APP-Q4", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "APP-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q6", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q1", "score": 2, "status": "evaluated"},
+    {"question_id": "DATA-Q2", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q3", "score": 2, "status": "evaluated"},
+    {"question_id": "DATA-Q4", "score": 4, "status": "pass"},
+    {"question_id": "SEC-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q3", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q4", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q6", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q1", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q3", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q4", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q6", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q9", "score": 1, "status": "evaluated"}
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Compute: Mix of Kubernetes and Legacy VM Support",
+      "description": "Alluxio has comprehensive Kubernetes deployment support (Helm charts, K8s Operator, CSI driver) but also maintains legacy VM deployment via Vagrant/Ansible. Container orchestration is not targeting a specific managed service (EKS/ECS).",
+      "gap": "Helm chart does not target EKS specifically. Vagrant/Ansible VM deployment path still maintained. No Fargate or serverless options.",
+      "recommendation": "Standardize on EKS as primary deployment target. Add EKS-specific configs (IRSA, EBS CSI, ALB Ingress). Deprecate Vagrant/VM path.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/Chart.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Databases: Self-Managed Embedded RocksDB",
+      "description": "All persistent state uses embedded RocksDB within the Master process. ZooKeeper used for leader election. No managed database services.",
+      "gap": "Database is entirely self-managed (embedded RocksDB). No automated failover, no managed backups, no scaling. ZooKeeper may also be self-managed.",
+      "recommendation": "Evaluate Aurora or DynamoDB for journal durability. Migrate ZooKeeper to managed alternative. RocksDB for hot metadata may remain architecturally appropriate.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "core/server/master/src/main/java/alluxio/master/metastore/rocks/RocksStore.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Network Security: No Network Isolation Defined",
+      "description": "No VPC, security groups, NACLs, or NetworkPolicy resources defined in any IaC. OTEL collector uses insecure communication. No TLS between components.",
+      "gap": "Complete absence of network security infrastructure. Services have no network isolation. No TLS configured between Master/Worker/Proxy.",
+      "recommendation": "Add Kubernetes NetworkPolicy to Helm chart. Deploy on EKS in private subnets. Enable gRPC TLS. Add VPC endpoints for S3 access.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/templates/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "API Entry Point: No Managed Gateway",
+      "description": "Kubernetes Services provide internal load balancing. S3 proxy exposed without gateway-level protection. No API Gateway, ALB, or throttling.",
+      "gap": "No managed API entry point for REST APIs. S3 proxy directly exposed without gateway protection.",
+      "recommendation": "Add API Gateway in front of S3 REST proxy. Configure ALB Ingress Controller on EKS for WebUI and admin APIs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/templates/proxy/daemonset.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Auto-Scaling: No Scaling Configured",
+      "description": "No HPA, VPA, or Cluster Autoscaler. Master StatefulSet has fixed replicas. Worker DaemonSet is node-count-bound. All capacity statically provisioned.",
+      "gap": "No auto-scaling. Worker count fixed to node count. No scaling based on cache pressure or request rate.",
+      "recommendation": "Implement HPA for Proxy. Configure Karpenter on EKS for node scaling. Add KEDA with CloudWatch metrics for custom scaling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Backup and Recovery: No Backup Configuration",
+      "description": "No automated backup for RocksDB metadata or journal. PVCs have no snapshot lifecycle. No restore procedure documented in deployment configs.",
+      "gap": "No backup automation. Master PVC loss = total metadata loss. No PITR. No documented restore procedure.",
+      "recommendation": "Implement EBS snapshot lifecycle for Master PVCs. Configure UFS journal to S3 with versioning. Add backup CronJob. Document restore procedures.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "High Availability: Multi-Master Supported but Not Multi-AZ",
+      "description": "Raft consensus for Master HA supported. However, no AZ topology constraints, no pod anti-affinity, no explicit multi-AZ distribution in Helm chart.",
+      "gap": "HA supported architecturally but not configured for AZ fault isolation. Single AZ failure could take down all Masters.",
+      "recommendation": "Add topologySpreadConstraints for Master across AZs. Configure pod anti-affinity. Use WaitForFirstConsumer StorageClass.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "IaC Coverage: Partial - K8s Layer Only",
+      "description": "Helm charts and K8s operator cover container orchestration. No Terraform/CloudFormation/CDK for underlying cloud infrastructure (VPC, IAM, S3, EKS cluster).",
+      "gap": "0% cloud infrastructure in IaC. VPC, IAM, S3, EKS cluster provisioning presumably manual.",
+      "recommendation": "Create Terraform or CDK modules for EKS cluster, VPC, IAM (IRSA), S3 buckets, CloudWatch. Target 90%+ coverage.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation: CI Only, No Deployment",
+      "description": "GitHub Actions provides CI (unit tests, integration tests, checkstyle). No deployment automation. No artifact publishing. No infrastructure pipeline.",
+      "gap": "Build/test automated but deployment is entirely manual. No CD pipeline for environments.",
+      "recommendation": "Extend GitHub Actions with container build/push to ECR, Helm chart publishing, ArgoCD deployment trigger, and IaC pipeline.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/java8_unit_tests.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Programming Languages: Java 8 with Compound Legacy Dependencies",
+      "description": "Java 8 (source/target), AWS SDK v1 (1.11.815) + v2 (2.16.104), Jetty 9.4.46 (EOL), Jersey 2.34 (pre-Jakarta), Go 1.18 (EOL), Node.js 10.11.0 (EOL).",
+      "gap": "Compound legacy: Java 8 + Jetty EOL + Jersey pre-Jakarta + AWS SDK v1 + PowerMock (deprecated). All three axes (language, framework, SDK) regressed.",
+      "recommendation": "Migrate to Java 17+ with Jakarta EE. Complete AWS SDK v1→v2. Upgrade Go to 1.22+. Upgrade Node.js to 20+.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "pom.xml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith vs Microservices: Distributed Monolith",
+      "description": "Single codebase with identifiable modules (core, proxy, table, underfs) compiled into shared assemblies. Master/Worker share dependencies and versioning. S3 proxy and table catalog are logically separable.",
+      "gap": "Monolith with identifiable modules but shared assemblies and tight compile-time dependencies. Cannot independently version or deploy services.",
+      "recommendation": "Conditional/Adaptive approach: keep Master/Worker topology, extract S3 proxy and table catalog as independent services using existing gRPC contracts.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "pom.xml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "API Versioning: Basic /api/v1 Only",
+      "description": "REST APIs use /api/v1 path prefix. gRPC services use integer version constants. Only one version exists with no migration path or backward compatibility guarantees.",
+      "gap": "Basic versioning exists but is ad-hoc. No v2 migration path. gRPC uses informal integer versioning rather than proto package versioning.",
+      "recommendation": "Adopt proto package versioning for gRPC. Document versioning policy. Plan /api/v2 endpoints.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "core/common/src/main/java/alluxio/Constants.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Service Discovery: K8s DNS + Static Files",
+      "description": "Kubernetes DNS provides service discovery in K8s deployments. ZooKeeper provides Master discovery for HA. Non-K8s uses static conf/masters and conf/workers files.",
+      "gap": "Partial - K8s DNS works but non-K8s path relies on static host files. No dynamic discovery for VM deployments.",
+      "recommendation": "For EKS, current approach is appropriate. Add AWS Cloud Map for multi-cluster scenarios. Deprecate static host files.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "conf/masters", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unstructured Data: Operational Data on Local/PVC Storage",
+      "description": "Operational data (logs, journal snapshots) stored on PersistentVolumes rather than S3. The system provides S3 access to clients but doesn't use S3 for its own data.",
+      "gap": "Operational data not in managed object storage. No parsing pipeline for operational data.",
+      "recommendation": "Configure journal snapshots and logs to S3. Use S3 lifecycle policies for retention. Enable search/analytics on operational data.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Database Engine Version: Implicit RocksDB Version",
+      "description": "RocksDB version managed through Maven dependency resolution without explicit pinning or EOL tracking. ZooKeeper version similarly implicit.",
+      "gap": "Engine versions not explicitly pinned. No EOL tracking. No documented version-update procedure.",
+      "recommendation": "Pin RocksDB and ZooKeeper versions explicitly in POM. Document EOL dates and update procedures.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "pom.xml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Audit Logging: Not Present",
+      "description": "No CloudTrail or equivalent audit logging. No immutable log storage. Application logging exists (Log4j) but no security audit trail.",
+      "gap": "No audit logging infrastructure. No forensic capability after security incidents.",
+      "recommendation": "Enable CloudTrail. Configure S3 Object Lock for immutable logs. Add application-level audit logging for filesystem operations.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/metrics/otel-collector-config.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption at Rest: Not Present",
+      "description": "No encryption-at-rest for RocksDB metadata, journal data, or cached data. No KMS integration. PVCs do not reference encrypted StorageClasses.",
+      "gap": "All data at rest unencrypted. No KMS. No encrypted storage class.",
+      "recommendation": "Configure encrypted EBS StorageClasses. Enable S3 encryption for UFS. Add KMS key management via IaC.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Authentication: Custom SASL, No OAuth2/JWT",
+      "description": "Custom SASL-based authentication for gRPC. S3 signature validation for proxy. REST admin APIs and WebUI lack authentication. Auth defaults to SIMPLE mode.",
+      "gap": "Not token-based (no OAuth2/JWT). Admin REST APIs unauthenticated. Default auth provides no security guarantee.",
+      "recommendation": "Add OAuth2/JWT via API Gateway authorizers. Integrate with Cognito. Maintain S3 signature validation. Upgrade SASL to Kerberos or mTLS.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "core/common/src/main/java/alluxio/security/authentication/AuthType.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Centralized Identity: Standalone Auth Only",
+      "description": "Custom JAAS login module. Identity from OS-level user. No Cognito, Okta, LDAP, OIDC, or SAML integration. No SSO.",
+      "gap": "Completely standalone authentication. No external IdP. No centralized identity governance.",
+      "recommendation": "Integrate with Cognito for admin/API access. Implement OIDC federation. Enable SSO for WebUI. Use IRSA on EKS.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "core/common/src/main/java/alluxio/security/login/AlluxioLoginModule.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets Management: Environment Variables, No Rotation",
+      "description": "No Secrets Manager or Vault. AWS credentials in env vars. Vagrant script writes credentials to plaintext file. Helm chart secrets mount commented out.",
+      "gap": "No secrets management. Credentials in env vars without rotation. Development script writes plaintext credentials.",
+      "recommendation": "Integrate Secrets Manager. Use IRSA on EKS to eliminate static credentials. Configure rotation. Remove plaintext credential patterns.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/vagrant/bin/init_aws.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Compute Hardening: No Patching or Scanning",
+      "description": "No patching strategy. CentOS 7 (EOL) base image. Custom compiled libfuse. No vulnerability scanning. Go 1.18 (EOL). No hardened base images.",
+      "gap": "No patching automation. EOL base images. Custom binaries. No vulnerability scanning. No hardened images.",
+      "recommendation": "Use Amazon Linux 2023 or Bottlerocket. Enable ECR scanning. Integrate Trivy in CI. Upgrade Go to 1.22+. Remove CentOS 7.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/docker/Dockerfile", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Security Pipeline: No Security Scanning",
+      "description": "No Dependabot, Snyk, SonarQube, CodeQL, or container scanning. No security gates. 71 Maven POMs with hundreds of transitive dependencies go unscanned.",
+      "gap": "Complete absence of security scanning in pipeline. No dependency vulnerability detection. No SAST.",
+      "recommendation": "Add Dependabot for Maven/Go/npm. Integrate CodeQL for SAST. Add ECR scanning. Add OWASP dependency-check. Configure security gates.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Distributed Tracing: Infrastructure Only, No App Instrumentation",
+      "description": "OTEL collector and agents configured for trace collection. However, no OpenTelemetry SDK imports in Java source. Tracing is agent-based auto-instrumentation only.",
+      "gap": "Tracing infrastructure exists but no application-level instrumentation. No custom spans. No cross-service trace propagation in code.",
+      "recommendation": "Add OpenTelemetry SDK with custom spans for key operations. Ensure trace propagation across Master-Worker gRPC. Export to X-Ray.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "integration/metrics/otel-collector-config.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "SLO Definitions: Not Present",
+      "description": "No SLO/SLI definitions. No error budgets. Prometheus/Grafana deployed without SLO dashboards or alerting rules.",
+      "gap": "No SLOs. Cannot measure service quality or prioritize improvements.",
+      "recommendation": "Define SLOs for cache hit ratio (>95%), metadata p99 (<10ms), read throughput (>1GB/s). Implement error budget tracking.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/kubernetes/helm-chart/monitor/values.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Business Metrics: Infrastructure Metrics Only",
+      "description": "Extensive infrastructure metrics (JVM, RPC counts, cache sizes) via Prometheus. No business outcome metrics (workload patterns, cost-per-read, cache efficiency trends).",
+      "gap": "Only infrastructure metrics. No business-level metrics for informed decision-making.",
+      "recommendation": "Add CloudWatch metrics for cache hit ratio by workload, storage tier usage, cost-per-operation. Create combined dashboards.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "conf/metrics.properties.template", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Anomaly Detection: No Alerting Configured",
+      "description": "No alerting rules in Prometheus. No CloudWatch alarms. No anomaly detection. No PagerDuty/OpsGenie integration.",
+      "gap": "No alerting whatsoever. Failures undetected until user reports.",
+      "recommendation": "Configure AlertManager with rules for Master unreachable, Worker disconnected, RPC error rate. Enable CloudWatch anomaly detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/kubernetes/helm-chart/monitor/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Deployment Strategy: No Staged Rollout",
+      "description": "No canary, blue/green, or progressive delivery. Logserver uses Recreate strategy. No ArgoCD/Flux. Manual Helm upgrades only.",
+      "gap": "Direct-to-production with no staged rollout. No automated deployment. No rollback automation.",
+      "recommendation": "Implement ArgoCD for GitOps on EKS. Configure Argo Rollouts for canary on Proxy. Rolling updates with readiness gates for stateful components.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing: Functional Only, No Deployment Tests",
+      "description": "Integration tests exist in GitHub Actions for functional correctness (minicluster). No deployment-level tests, no API contract tests, no performance regression tests.",
+      "gap": "No tests verify Helm upgrades succeed. No API contract tests. No performance baselines.",
+      "recommendation": "Add Helm install/upgrade smoke tests. API contract tests against deployed proxy. Performance baselines in CI.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/java8_integration_tests.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Incident Response: No Runbooks or Automation",
+      "description": "No runbooks. No SSM Automation. No self-healing beyond K8s pod restarts. No incident response documentation.",
+      "gap": "Entirely ad hoc incident response. No documented procedures for common failures.",
+      "recommendation": "Create runbooks for Master failover, Worker recovery, journal restore, cache invalidation. Implement SSM Automation documents.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Ownership: No Ownership Defined",
+      "description": "No CODEOWNERS for monitoring. No team attribution on alarms or dashboards. Generic Prometheus/Grafana without organizational structure.",
+      "gap": "No observability ownership. No on-call mapping. Monitoring undifferentiated.",
+      "recommendation": "Define per-component ownership. Create per-component dashboards with owners. Add CODEOWNERS for monitoring configs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Resource Tagging: No Tagging Governance",
+      "description": "Empty defaults for all labels and annotations in Helm chart. No cost allocation tags. No environment labels. No ownership tags.",
+      "gap": "No tags for cost allocation, ownership, or environment. Cannot track costs or identify ownership.",
+      "recommendation": "Define tagging standard. Apply default labels in Helm chart. Use default_tags in Terraform when added. Enforce via Tag Policies.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "top_gaps": [
+    {"rank": 1, "question_id": "SEC-Q1", "title": "Audit Logging", "score": 1, "gap": "No CloudTrail or audit logging configured", "impact": "No forensic capability for security incidents"},
+    {"rank": 2, "question_id": "SEC-Q2", "title": "Encryption at Rest", "score": 1, "gap": "No encryption-at-rest for metadata or cached data", "impact": "Data-at-rest unprotected"},
+    {"rank": 3, "question_id": "OPS-Q2", "title": "SLO Definitions", "score": 1, "gap": "No SLO/SLI definitions or error budgets", "impact": "Cannot measure service quality"},
+    {"rank": 4, "question_id": "SEC-Q5", "title": "Secrets Management", "score": 2, "gap": "No secrets management; credentials in env vars", "impact": "Credential exposure risk"},
+    {"rank": 5, "question_id": "INF-Q5", "title": "Network Security", "score": 1, "gap": "No network isolation in any IaC", "impact": "Services exposed without network controls"}
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "DevOps Agent",
+      "prerequisite": "CI/CD pipeline exists (INF-Q11=2, GitHub Actions with unit/integration tests)",
+      "what_it_enables": "Agent triggers builds, checks test status, manages PR workflows via GitHub Actions API",
+      "additional_steps": "Deployment automation needs to be added before full release lifecycle management",
+      "effort": "Medium"
+    },
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "177 markdown documentation files, extensive docs/ directory with Jekyll site",
+      "what_it_enables": "RAG-based agent indexes Alluxio documentation for developer/operator questions",
+      "additional_steps": "Documentation needs vector store indexing; some docs may be outdated",
+      "effort": "Medium"
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Conditional / Adaptive",
+    "rationale": "Keep Master/Worker topology (architecturally sound for distributed cache). Extract S3 proxy and table catalog as independent services.",
+    "patterns": ["Anti-corruption Layer", "Hexagonal Architecture"],
+    "effort_estimate": "Low to Medium"
+  },
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=2 (distributed monolith with identifiable but coupled modules)",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2, "note": "Distributed monolith with shared assemblies and tight compile-time coupling"}
+      ],
+      "detail": {
+        "aws_services": ["EKS", "API Gateway", "EventBridge", "Step Functions"],
+        "immediate_actions": ["Extract S3 proxy as independent service", "Create EKS-specific Helm values", "Define service boundaries via proto contracts"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/CMK2J48MVN"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1=3, container definitions already exist (12 Dockerfiles, Helm charts, K8s operator, CSI driver)",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 3, "note": "INF-Q1=3 meets threshold; containerization already adopted"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "Workload already has extensive containerization: 12 Dockerfiles, Helm charts, Kubernetes operator with CRDs, CSI driver."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures), no commercial DB engines detected. System uses RocksDB (open source).",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "No stored procedures or proprietary SQL — already open source stack"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "All database technology is already open source (RocksDB, ZooKeeper). No commercial database engines detected."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q2=2 triggers technically, but embedded RocksDB is architecturally deliberate for a storage caching system requiring microsecond metadata lookups.",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": 2, "note": "Self-managed but architecturally deliberate — embedded RocksDB for latency-sensitive metadata"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "Embedded RocksDB is architecturally correct for this system. Migrating metadata to a network-attached managed database would degrade the core latency characteristics that define the product."
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q4=4 (sync is correct for data-gateway archetype). No data processing/ETL workloads detected in the system.",
+      "triggering_questions": [
+        {"question_id": "INF-Q4", "score": 4, "note": "Score 4 — synchronous is correct design for data-gateway archetype"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No data processing, ETL, or analytics workloads detected. System is a data access layer, not a data processing system."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=2 (partial IaC), INF-Q11=2 (no CD), OPS-Q5=1 (no deployment strategy), OPS-Q6=2 (functional tests only)",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 2, "note": "Only K8s layer in IaC; 0% cloud infrastructure"},
+        {"question_id": "INF-Q11", "score": 2, "note": "CI only, no deployment automation"},
+        {"question_id": "OPS-Q5", "score": 1, "note": "No canary/blue-green; manual Helm upgrades only"},
+        {"question_id": "OPS-Q6", "score": 2, "note": "Functional integration tests only; no deployment validation"}
+      ],
+      "detail": {
+        "aws_services": ["CodeBuild", "CodePipeline", "ECR", "EKS", "CDK", "CloudWatch", "X-Ray"],
+        "immediate_actions": ["Add Terraform/CDK for cloud infrastructure", "Extend CI with ECR push", "Implement ArgoCD for GitOps", "Add security scanning"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/1FGEQKGPQD"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. Context describes 'Data orchestration / virtual distributed file system' with no AI-related signal terms."
+    }
+  ]
+}

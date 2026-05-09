@@ -1,0 +1,131 @@
+# ============================================================================
+# zg-cmp Portfolio Assessment Configuration — MOD v6.1 Validation Batch
+# ============================================================================
+# Validates TD changes: surface gates (SEC-Q1, OPS-Q5), OPS-Q2 downgrade,
+# scoring limitation notes, and new has_iac_provisioning_aws_resources flag.
+#
+# 8 repos selected for spread:
+#   - 2 apps WITH IaC + API + DB (gates pass, should evaluate normally)
+#   - 3 apps WITHOUT deployed workload (OPS-Q5 gate → Not Evaluated)
+#   - 1 app with IaC but no API/DB (partial gates)
+#   - 1 library (N/A mappings)
+#   - 1 app with full surface but no-deploy (mixed gates)
+#
+# Expected validation outcomes:
+#   - ToolJet, umami, scality: SEC-Q1 evaluated (has AWS IaC), OPS-Q5 evaluated
+#   - Lidarr, Netflix, greenshot, Zappa: OPS-Q5 = Not Evaluated (no deployed workload)
+#   - greenshot, Zappa: SEC-Q1 = Not Evaluated (no AWS IaC)
+#   - Netflix: SEC-Q1 = Not Evaluated (no AWS IaC — only Gradle/WAR)
+#   - getsentry: Most INF/OPS = N/A (library repo_type)
+#   - OPS-Q2: Medium severity (not High) when scored 1
+# ============================================================================
+
+portfolio_name: "zg-cmp-mod-v6.1-validation"
+assessment_type: "modernization"
+
+context: "Validation batch (v6.1) for MOD TD changes: surface gates on SEC-Q1 and OPS-Q5, OPS-Q2 downgrade to non-core, new has_iac_provisioning_aws_resources flag. 8 repos selected for surface flag spread."
+
+transformation_definitions:
+  modernization: "modernization-assessment"
+  portfolio_modernization: "portfolio-modernization"
+
+preferences:
+  prefer:
+    - "eks"
+    - "aurora"
+    - "dynamodb"
+    - "api-gateway"
+    - "eventbridge"
+    - "bedrock"
+  avoid:
+    - "self-managed-kafka"
+    - "self-managed-kubernetes"
+    - "oracle"
+
+repositories:
+  # --- Apps WITH IaC + API + DB (all gates pass → full evaluation) ---
+
+  - name: "ToolJet--ToolJet"
+    path: "./services/ToolJet--ToolJet"
+    priority: "P1"
+    repository_url: "git@github.com:zg-cmp/ToolJet--ToolJet.git"
+    context: "Open-source low-code internal-tool builder."
+    tags:
+      - "javascript"
+      - "low-code"
+      - "frontend"
+
+  - name: "umami-software--umami"
+    path: "./services/umami-software--umami"
+    priority: "P1"
+    repository_url: "git@github.com:zg-cmp/umami-software--umami.git"
+    context: "Self-hosted privacy-focused web analytics."
+    tags:
+      - "typescript"
+      - "analytics"
+      - "web-app"
+
+  - name: "scality--cloudserver"
+    path: "./services/scality--cloudserver"
+    priority: "P2"
+    repository_url: "git@github.com:zg-cmp/scality--cloudserver.git"
+    context: "Scality open-source S3-compatible object-storage server."
+    tags:
+      - "javascript"
+      - "storage"
+      - "s3"
+
+  # --- Apps WITHOUT deployed workload (OPS-Q5 gate → Not Evaluated) ---
+
+  - name: "Lidarr--Lidarr"
+    path: "./services/Lidarr--Lidarr"
+    priority: "P2"
+    repository_url: "git@github.com:zg-cmp/Lidarr--Lidarr.git"
+    context: "Music collection manager (*arr suite)."
+    tags:
+      - "csharp"
+      - "media"
+      - "desktop"
+
+  - name: "Netflix--eureka"
+    path: "./services/Netflix--eureka"
+    priority: "P2"
+    repository_url: "git@github.com:zg-cmp/Netflix--eureka.git"
+    context: "Netflix service-discovery server and client."
+    tags:
+      - "java"
+      - "service-discovery"
+      - "microservices"
+
+  - name: "greenshot--greenshot"
+    path: "./services/greenshot--greenshot"
+    priority: "P2"
+    repository_url: "git@github.com:zg-cmp/greenshot--greenshot.git"
+    context: "Windows screenshot and annotation tool."
+    tags:
+      - "csharp"
+      - "desktop"
+      - "windows"
+
+  # --- Library (N/A mappings validation) ---
+
+  - name: "getsentry--sentry-python"
+    path: "./services/getsentry--sentry-python"
+    priority: "P2"
+    repository_url: "git@github.com:zg-cmp/getsentry--sentry-python.git"
+    context: "Official Sentry SDK for Python applications."
+    tags:
+      - "python"
+      - "observability"
+      - "sdk"
+
+  # --- App with no-deploy, no-api, no-db (many gates fire) ---
+
+  - name: "zappa--Zappa"
+    path: "./services/zappa--Zappa"
+    priority: "P2"
+    repository_url: "git@github.com:zg-cmp/zappa--Zappa.git"
+    context: "Python framework for deploying WSGI apps on AWS Lambda."
+    tags:
+      - "python"
+      - "serverless"

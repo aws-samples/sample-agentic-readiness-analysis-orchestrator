@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>zappa--Zappa - Modernization Readiness Analysis Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .header { background: #1a1a2e; color: white; padding: 32px; border-radius: 12px; margin-bottom: 24px; }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header .subtitle { color: #a0a0b0; font-size: 14px; }
+        .executive-summary { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .executive-summary h2 { font-size: 18px; margin-bottom: 16px; }
+        .tier-badge { display: inline-block; padding: 4px 12px; border-radius: 16px; font-weight: 600; font-size: 14px; }
+        .tier-remediation { background: #fff3e0; color: #e65100; }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .stat-card .number { font-size: 32px; font-weight: 700; }
+        .stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; margin-top: 4px; }
+        .stat-high .number { color: #d32f2f; }
+        .stat-medium .number { color: #f57c00; }
+        .stat-low .number { color: #fbc02d; }
+        .stat-total .number { color: #1565c0; }
+        .section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .section h2 { font-size: 18px; margin-bottom: 16px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+        th { background: #f9f9f9; font-weight: 600; }
+        .finding-card { border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .finding-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .finding-title { font-weight: 600; font-size: 15px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .badge-high { background: #ffebee; color: #c62828; }
+        .badge-medium { background: #fff3e0; color: #e65100; }
+        .badge-low { background: #fffde7; color: #f9a825; }
+        .finding-category { font-size: 12px; color: #666; margin-bottom: 8px; }
+        .finding-section { margin-top: 12px; }
+        .finding-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #666; margin-bottom: 4px; }
+        .finding-section-content { font-size: 14px; color: #444; }
+        .status-ready { color: #2e7d32; font-weight: 600; }
+        .status-needs-work { color: #f57c00; font-weight: 600; }
+        .status-critical { color: #c62828; font-weight: 600; }
+        .footer { text-align: center; color: #999; font-size: 12px; padding: 24px 0; }
+        .recommendation-block { background: #fff8e1; border-left: 4px solid #f57c00; padding: 16px; border-radius: 4px; margin-top: 16px; }
+        .recommendation-block h3 { font-size: 14px; margin-bottom: 8px; }
+        .recommendation-block li { font-size: 14px; margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>zappa--Zappa - Modernization Readiness Analysis Report</h1>
+            <div class="subtitle">2025-05-08 &middot; Python &middot; ~11,150 LOC &middot; Priority: P2</div>
+        </div>
+
+        <div class="executive-summary">
+            <h2>Executive Summary</h2>
+            <p><strong>Repository Status:</strong> <span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span></p>
+            <p style="margin-top: 12px;">This repo has 4 High findings, 15 Medium findings, 1 Low finding. Rule matched: 2-11 High &rarr; Remediation Required.</p>
+            <p style="margin-top: 12px;"><strong>Key Findings:</strong> Zappa is a Python CLI framework for deploying WSGI/ASGI apps to AWS Lambda. As a stateless utility tool (not a deployed service), many infrastructure and operations scores reflect structural absence rather than architectural deficiency. The highest-impact actionable gaps are: (1) no security scanning in the CI/CD pipeline, (2) monolithic code structure with no module boundaries, and (3) no IaC for the project's own operational infrastructure.</p>
+            <p style="margin-top: 12px;"><strong>Remediation Plan:</strong> Phase 1 focuses on security pipeline hardening (Dependabot, SAST) and code modularization. Phase 2 addresses API surface and versioning if the tool evolves toward a hosted service model.</p>
+            <p style="margin-top: 12px;"><strong>Recommended Actions:</strong></p>
+            <ol style="margin-top: 8px; padding-left: 24px; font-size: 14px;">
+                <li>Add dependency vulnerability scanning (Dependabot + pip-audit) and Python SAST (Bandit/Semgrep) to CI pipeline</li>
+                <li>Refactor core.py god class (3,866 LOC) into bounded service adapter modules</li>
+                <li>Extract Lambda handler runtime (handler.py + wsgi.py + asgi.py) as independent lightweight package</li>
+            </ol>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat-card stat-total">
+                <div class="number">20</div>
+                <div class="label">Total Findings</div>
+            </div>
+            <div class="stat-card stat-high">
+                <div class="number">4</div>
+                <div class="label">High Severity</div>
+            </div>
+            <div class="stat-card stat-medium">
+                <div class="number">15</div>
+                <div class="label">Medium Severity</div>
+            </div>
+            <div class="stat-card stat-low">
+                <div class="number">1</div>
+                <div class="label">Low Severity</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Technology Stack</h2>
+            <table>
+                <tr><th>Attribute</th><th>Value</th></tr>
+                <tr><td>Language</td><td>Python 3.9 - 3.14</td></tr>
+                <tr><td>Lines of Code</td><td>~11,150 (zappa/ package)</td></tr>
+                <tr><td>Framework</td><td>CLI (click-based), boto3, troposphere</td></tr>
+                <tr><td>Priority</td><td>P2</td></tr>
+                <tr><td>Archetype</td><td>stateless-utility (auto-detected)</td></tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Category-by-Category Breakdown</h2>
+            <table>
+                <tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+                <tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.50 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+                <tr><td>Application Architecture (APP)</td><td>2.00 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+                <tr><td>Data Platform (DATA)</td><td>3.75 / 4.0</td><td>Mature</td><td class="status-needs-work">Needs Work</td></tr>
+                <tr><td>Security Baseline (SEC)</td><td>1.20 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+                <tr><td>Operations &amp; Observability (OPS)</td><td>1.43 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Detailed Findings</h2>
+
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title">INF-Q1: No managed compute infrastructure</span>
+                    <span class="badge badge-high">HIGH</span>
+                </div>
+                <div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Finding</div>
+                    <div class="finding-section-content">Zappa is a CLI tool published to PyPI with no deployed compute infrastructure. No Lambda functions, ECS tasks, or EC2 instances run this tool as a service.</div>
+                </div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Recommendation</div>
+                    <div class="finding-section-content">If a hosted deployment service is desired, consider ECS/Fargate or Lambda. For the current CLI use case, this gap is structural.</div>
+                </div>
+            </div>
+
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title">INF-Q5: No network security configuration</span>
+                    <span class="badge badge-high">HIGH</span>
+                </div>
+                <div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Finding</div>
+                    <div class="finding-section-content">No VPC, subnet, security group, or network segmentation. CLI tool with no deployed network infrastructure.</div>
+                </div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Recommendation</div>
+                    <div class="finding-section-content">Not applicable for a CLI tool. If deployed as a hosted service, private subnets with least-privilege security groups would be required.</div>
+                </div>
+            </div>
+
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title">APP-Q2: Tightly-coupled monolith</span>
+                    <span class="badge badge-high">HIGH</span>
+                </div>
+                <div class="finding-category">Category: Application Architecture</div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Finding</div>
+                    <div class="finding-section-content">Single Python package with no module boundaries. core.py (3,866 LOC) is a god class. cli.py (3,655 LOC) directly instantiates and orchestrates core.py with pervasive coupling.</div>
+                </div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Recommendation</div>
+                    <div class="finding-section-content">Refactor into bounded modules: separate Lambda handler runtime as independent package, extract AWS service adapters from core.py, define clean interfaces between CLI and orchestration layers.</div>
+                </div>
+            </div>
+
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title">SEC-Q7: No application security pipeline</span>
+                    <span class="badge badge-medium">MEDIUM</span>
+                </div>
+                <div class="finding-category">Category: Security Baseline</div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Finding</div>
+                    <div class="finding-section-content">No SAST, DAST, or dependency vulnerability scanning in CI/CD. Pipeline has lint checks but no security-focused scanning. No Dependabot, pip-audit, safety, Bandit, or Semgrep.</div>
+                </div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Recommendation</div>
+                    <div class="finding-section-content">Add Dependabot for dependency updates. Integrate pip-audit for vulnerability detection. Add Bandit or Semgrep for Python SAST. Configure blocking gates on critical findings.</div>
+                </div>
+            </div>
+
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title">INF-Q10: No IaC for own infrastructure</span>
+                    <span class="badge badge-high">HIGH</span>
+                </div>
+                <div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Finding</div>
+                    <div class="finding-section-content">No IaC defines Zappa's own operational infrastructure. GitHub Actions workflows exist but no Terraform/CDK manages repository settings, secrets, or branch protections.</div>
+                </div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Recommendation</div>
+                    <div class="finding-section-content">Consider Terraform GitHub provider to codify repository settings, branch protection rules, and environment/secret management.</div>
+                </div>
+            </div>
+
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title">SEC-Q5: Credentials in environment variables without rotation</span>
+                    <span class="badge badge-medium">MEDIUM</span>
+                </div>
+                <div class="finding-category">Category: Security Baseline</div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Finding</div>
+                    <div class="finding-section-content">No plaintext credentials in source. AWS credentials via boto3 credential chain and OIDC for PyPI. However, no Secrets Manager integration and no rotation configured.</div>
+                </div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Recommendation</div>
+                    <div class="finding-section-content">Document credential rotation best practices. Consider supporting AWS Secrets Manager for secret retrieval. Encourage IAM roles and SSO over long-lived access keys.</div>
+                </div>
+            </div>
+
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title">APP-Q6: Environment variables for endpoints only</span>
+                    <span class="badge badge-medium">MEDIUM</span>
+                </div>
+                <div class="finding-category">Category: Application Architecture</div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Finding</div>
+                    <div class="finding-section-content">Uses environment variables for AWS endpoint configuration via boto3. No dynamic service discovery, but boto3 endpoint resolution is adequate for the use case.</div>
+                </div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Recommendation</div>
+                    <div class="finding-section-content">No action needed. boto3's endpoint resolution is the correct pattern for AWS SDK-based tools.</div>
+                </div>
+            </div>
+
+            <div class="finding-card">
+                <div class="finding-header">
+                    <span class="finding-title">DATA-Q1: S3 usage without parsing pipeline</span>
+                    <span class="badge badge-low">LOW</span>
+                </div>
+                <div class="finding-category">Category: Data Platform</div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Finding</div>
+                    <div class="finding-section-content">Zappa uses S3 for deployment package storage (ZIP uploads) but has no parsing or extraction pipeline for the stored data.</div>
+                </div>
+                <div class="finding-section">
+                    <div class="finding-section-title">Recommendation</div>
+                    <div class="finding-section-content">For deployment tool use case, no parsing pipeline is needed. If deployment analytics are desired, consider S3 event-driven processing.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="recommendation-block">
+            <h3>&#x1F7E0; Modernization Recommendations</h3>
+            <ol>
+                <li><strong>SEC-Q7 — Add security scanning pipeline:</strong> Integrate Dependabot + pip-audit + Bandit/Semgrep into CI. This is the highest-impact, lowest-effort improvement.</li>
+                <li><strong>APP-Q2 — Modularize the monolith:</strong> Extract handler runtime as independent package; refactor core.py god class into focused service adapter modules.</li>
+                <li><strong>INF-Q10 — Codify project infrastructure:</strong> Use Terraform GitHub provider for repository settings, branch protections, and secret management.</li>
+            </ol>
+        </div>
+
+        <div class="footer">
+            Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+        </div>
+    </div>
+</body>
+</html>

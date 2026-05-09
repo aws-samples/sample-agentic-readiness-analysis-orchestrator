@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>scality--cloudserver - Modernization Readiness Analysis Report</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; color: #333; }
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { color: #232f3e; margin-bottom: 4px; }
+.subtitle { color: #666; margin-bottom: 24px; font-size: 14px; }
+.executive-summary { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #fff; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.stat-card .number { font-size: 36px; font-weight: bold; }
+.stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; margin-top: 4px; }
+.stat-card.high .number { color: #d13212; }
+.stat-card.medium .number { color: #ff9900; }
+.stat-card.low .number { color: #1d8102; }
+.stat-card.total .number { color: #232f3e; }
+.section { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.section h2 { margin-top: 0; color: #232f3e; border-bottom: 2px solid #ff9900; padding-bottom: 8px; }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+th { background: #f9f9f9; font-weight: 600; color: #232f3e; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+.badge-high { background: #fce9e6; color: #d13212; }
+.badge-medium { background: #fff3e0; color: #ff9900; }
+.badge-low { background: #e6f4ea; color: #1d8102; }
+.badge-ready { background: #e6f4ea; color: #1d8102; }
+.badge-needs-work { background: #fff3e0; color: #ff9900; }
+.badge-critical { background: #fce9e6; color: #d13212; }
+.finding-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.finding-card h3 { margin: 0 0 8px 0; font-size: 16px; }
+.finding-card .category { color: #666; font-size: 12px; margin-bottom: 8px; }
+.finding-card .subsection { margin-top: 12px; }
+.finding-card .subsection-title { font-size: 11px; font-weight: bold; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+.tier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; }
+.tier-remediation { background: #fce9e6; color: #d13212; }
+.footer { text-align: center; color: #666; font-size: 12px; margin-top: 40px; padding: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>scality--cloudserver - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2026-05-08 &middot; JavaScript (Node.js 22) &middot; ~197 source files &middot; Priority: P2</p>
+
+<div class="executive-summary">
+<h2 style="margin-top:0">Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span></p>
+<p>This repository scores 2.34/4.0 overall, placing it in the "Needs Work" band. With 2 High-severity findings and 18 Medium-severity findings, it requires significant modernization effort before it can be considered cloud-native ready. The primary gaps are in infrastructure (no IaC, no network security definitions) and operations (no distributed tracing, no incident response automation).</p>
+
+<h3>Key Findings</h3>
+<ul>
+<li><strong>Infrastructure:</strong> No IaC, no network security, no auto-scaling, no backup/recovery, no HA configuration. All infrastructure managed externally.</li>
+<li><strong>Architecture:</strong> Monolith with identifiable modules but tight coupling. Already containerized and deployed to Kubernetes.</li>
+<li><strong>Data:</strong> Self-managed MongoDB and Redis. Well-structured data access layer via wrapper pattern.</li>
+<li><strong>Security:</strong> Strong encryption (5 KMS backends), SigV4 auth, CodeQL+dependency scanning. Gaps in secrets management and identity integration.</li>
+<li><strong>Operations:</strong> Mature Prometheus metrics and alerting. Critical gaps in distributed tracing and incident response.</li>
+</ul>
+
+<h3>Recommended Actions</h3>
+<ol>
+<li>Define Infrastructure as Code (CDK/Terraform) for EKS, databases, networking</li>
+<li>Migrate MongoDB to DocumentDB/DynamoDB and Redis to ElastiCache</li>
+<li>Instrument distributed tracing with OpenTelemetry + X-Ray</li>
+</ol>
+</div>
+
+<div class="stats-row">
+<div class="stat-card total"><div class="number">31</div><div class="label">Total Findings</div></div>
+<div class="stat-card high"><div class="number">2</div><div class="label">High Severity</div></div>
+<div class="stat-card medium"><div class="number">18</div><div class="label">Medium Severity</div></div>
+<div class="stat-card low"><div class="number">11</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="section">
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Language</td><td>JavaScript (Node.js &gt;= 22)</td></tr>
+<tr><td>Framework</td><td>Custom HTTP server (arsenal), Mocha, prom-client</td></tr>
+<tr><td>Database</td><td>MongoDB (metadata), Redis (caching/rate-limiting)</td></tr>
+<tr><td>Container</td><td>Docker (node:22.14.0-bookworm-slim), Kubernetes (external)</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Category Breakdown</h2>
+<table>
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.82 / 4.0</td><td>Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+<tr><td>Application Architecture (APP)</td><td>2.50 / 4.0</td><td>Partial</td><td><span class="badge badge-needs-work">Needs Work</span></td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.75 / 4.0</td><td>Partial</td><td><span class="badge badge-needs-work">Needs Work</span></td></tr>
+<tr><td>Security Baseline (SEC)</td><td>2.50 / 4.0</td><td>Partial</td><td><span class="badge badge-needs-work">Needs Work</span></td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>2.13 / 4.0</td><td>Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> INF-Q5: No Network Security Configuration</h3>
+<div class="category">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>No VPC, subnet, security group, or network segmentation definitions exist in this repository. Health checks are IP-allowlisted but no infrastructure-level network isolation is defined.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Define VPC with private subnets, least-privilege security groups, and network segmentation in IaC. Consider VPC endpoints for AWS service access.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> INF-Q10: No Infrastructure as Code</h3>
+<div class="category">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>No IaC exists in this repository. No Terraform, CloudFormation, CDK, Helm charts, or Kustomize manifests found. All infrastructure provisioning is managed externally.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Adopt CDK (TypeScript) or Terraform to define EKS cluster, DocumentDB/ElastiCache, VPC/networking, ALB, auto-scaling, and backup plans.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q2: Self-Managed Databases</h3>
+<div class="category">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>MongoDB replica set and Redis are self-managed. No managed database services (DocumentDB, ElastiCache) referenced. Operational burden includes manual patching, backup, and scaling.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Migrate MongoDB to DocumentDB or DynamoDB (preferred). Migrate Redis to ElastiCache or MemoryDB.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> APP-Q2: Monolithic Application</h3>
+<div class="category">Category: Application Architecture</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>Single deployable unit with identifiable modules (api, data, metadata, kms, auth) sharing a single process, config, and direct in-process function imports. Modules cannot be independently scaled or deployed.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Begin Strangler Fig decomposition. Extract metadata service first (already has wrapper interface).</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q5: No Dedicated Secrets Management</h3>
+<div class="category">Category: Security Baseline</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>Secrets managed via Docker secrets, GitHub Secrets, and environment variables. No AWS Secrets Manager or rotation configured. Config files contain placeholder credentials.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Adopt AWS Secrets Manager for all production credentials. Configure automatic rotation. Use IAM roles where possible.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q1: No Distributed Tracing</h3>
+<div class="category">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>No distributed tracing instrumented. No OpenTelemetry, X-Ray, or Jaeger. Debugging request flows across service boundaries requires manual log correlation.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Instrument with OpenTelemetry SDK for Node.js. Export traces to AWS X-Ray. Propagate W3C traceparent headers.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q7: No Incident Response Automation</h3>
+<div class="category">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>No runbooks, incident response automation, or self-healing patterns found. Alerting fires notifications but no automated response exists.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Create runbooks for each alert condition. Start with Markdown runbooks, then automate with Step Functions or SSM Automation.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q6: No API Entry Point</h3>
+<div class="category">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>No API Gateway, ALB, CloudFront, or load balancer configuration exists. The S3 server listens directly on port 8000.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Deploy behind an ALB or API Gateway. Configure throttling, health-check-based routing, and TLS termination.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q1: Container Orchestration Managed Externally</h3>
+<div class="category">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>Application is containerized and deployed to Kubernetes but manifests and EKS configuration are managed externally.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Adopt EKS (preferred). Co-locate Helm charts with application code for deployment transparency.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q11: CI Automated but No Deployment Pipeline</h3>
+<div class="category">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>GitHub Actions provides comprehensive CI. No deployment automation — deployment to Kubernetes handled externally.</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Extend CI/CD with ArgoCD for GitOps deployment on EKS. Add deployment verification.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> OPS-Q6: Extensive Tests Without Contract Testing</h3>
+<div class="category">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><p>224 functional test files covering multiple SDKs and backends. No contract tests for external dependencies (Vault, Backbeat, bucketd).</p></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><p>Add contract tests (Pact) for Vault, Backbeat, and bucketd interfaces.</p></div>
+</div>
+
+</div>
+
+<div class="section">
+<h2>Modernization Pathways</h2>
+<table>
+<tr><th>#</th><th>Pathway</th><th>Status</th><th>Priority</th><th>Effort</th></tr>
+<tr><td>1</td><td>Move to Cloud Native</td><td><span class="badge badge-critical">Triggered</span></td><td>High</td><td>High</td></tr>
+<tr><td>2</td><td>Move to Containers</td><td><span class="badge badge-ready">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>3</td><td>Move to Open Source</td><td><span class="badge badge-ready">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>4</td><td>Move to Managed Databases</td><td><span class="badge badge-critical">Triggered</span></td><td>High</td><td>Medium</td></tr>
+<tr><td>5</td><td>Move to Managed Analytics</td><td><span class="badge badge-ready">Not Triggered</span></td><td>—</td><td>—</td></tr>
+<tr><td>6</td><td>Move to Modern DevOps</td><td><span class="badge badge-critical">Triggered</span></td><td>High</td><td>Medium</td></tr>
+<tr><td>7</td><td>Move to AI</td><td><span class="badge badge-ready">Not Triggered</span></td><td>—</td><td>—</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Modernization Recommendations</h2>
+<p>&#x1F7E0; <strong>Define Infrastructure as Code</strong> — Adopt CDK (TypeScript) or Terraform to define all AWS resources (EKS, DocumentDB, ElastiCache, VPC, ALB). This is the foundational step that enables all other modernization pathways.</p>
+<p>&#x1F7E0; <strong>Migrate to Managed Databases</strong> — Move MongoDB to Amazon DocumentDB or DynamoDB and Redis to ElastiCache. Eliminates operational overhead of self-managed databases.</p>
+<p>&#x1F7E0; <strong>Instrument Distributed Tracing</strong> — Add OpenTelemetry SDK with X-Ray export. Critical for debugging cross-service request flows as the system evolves.</p>
+</div>
+
+<div class="footer">
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</div>
+</div>
+</body>
+</html>

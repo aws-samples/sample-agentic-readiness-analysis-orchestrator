@@ -8,25 +8,35 @@ Aggregate individual repository Modernization Assessment (MOD) reports into a po
 
 ## Summary
 
-This transformation consumes multiple individual MOD reports (`*-mod-report.md` files) from different repositories and produces a comprehensive portfolio-level modernization view. It performs intelligent discovery and parsing of MOD reports, calculates portfolio-wide score averages and category breakdowns, summarizes the technology stack across the portfolio, constructs a service dependency graph with coupling scores and blast radius analysis, identifies two-tier cross-cutting concerns (Foundational Blockers and Improvement Opportunities), generates a dependency-aware four-phase roadmap, aggregates pathway triggers across services, identifies integration opportunities, performs risk assessment with a likelihood-impact matrix, provides resource allocation recommendations, recommends AWS engagement programs, curates learning materials, and produces a service-by-service summary.
+This transformation consumes multiple individual MOD report JSON artifacts (`*-mod-report.json` files) from different repositories and produces a comprehensive portfolio-level modernization view. It performs intelligent discovery and parsing of MOD report JSONs, calculates portfolio-wide score averages and category breakdowns, summarizes the technology stack across the portfolio, constructs a service dependency graph with coupling scores and blast radius analysis, identifies two-tier cross-cutting concerns (Foundational Blockers and Improvement Opportunities), generates a dependency-aware four-phase roadmap, aggregates pathway triggers across services, identifies integration opportunities, performs risk assessment with a likelihood-impact matrix, provides resource allocation recommendations, recommends AWS engagement programs, curates learning materials, and produces a service-by-service summary.
 
-The transformation follows a 10-step pipeline:
-1. **Read Context**: Parse additionalPlanContext for portfolio framing, preferences, and dependency information
-2. **Discovery**: Locate all MOD report files in the directory structure
-3. **Parsing**: Extract scores, pathway data, findings, and technology stack from each report
-4. **Executive Dashboard**: Build portfolio score overview and category averages
-5. **Technology Stack Summary**: Consolidate technology usage across the portfolio
-6. **Service Dependency Map**: Construct dependency graph with coupling scores, fan-in/fan-out, blast radius, and circular dependency detection
-7. **Cross-Cutting Concerns**: Identify two-tier cross-cutting gaps (Foundational Blockers and Improvement Opportunities)
-8. **Dependency-Aware Phased Roadmap**: Generate 4-phase roadmap with dependency-based service ordering
-9. **Pathway Aggregation**: Aggregate pathway triggers across the portfolio
-10. **Synthesis**: Integration opportunities, risk assessment, resource allocation, AWS programs, learning materials
+The transformation follows these implementation steps:
+1. **Read Context** (Step 0): Parse additionalPlanContext for portfolio framing, preferences, and dependency information
+2. **Discovery** (Step 1): Locate all MOD report files in the directory structure
+3. **Parsing** (Step 2): Extract scores, pathway data, findings, and technology stack from each report
+4. **Executive Dashboard** (Step 3): Build portfolio score overview and category averages
+5. **Technology Stack Summary** (Step 3b): Consolidate technology usage across the portfolio
+6. **Service Dependency Map** (Step 4): Construct dependency graph with coupling scores, fan-in/fan-out, blast radius, and circular dependency detection
+7. **Cross-Cutting Concerns** (Step 5): Identify two-tier cross-cutting gaps (Foundational Blockers and Improvement Opportunities)
+8. **Infrastructure Cross-Referencing** (Step 5b): Cross-reference infra/deployment-config repo capabilities with application repo findings to identify false positives where capabilities exist in the portfolio but in separate repos
+9. **Dependency-Aware Phased Roadmap** (Step 6): Generate 4-phase roadmap with dependency-based service ordering
+10. **Pathway Aggregation** (Step 7): Aggregate pathway triggers across the portfolio
+11. **Synthesis** (Step 8): Integration opportunities, risk assessment, resource allocation
+12. **AWS Programs & Engagement Recommendations** (Step 9): Recommend MAP, MMP, WAMP, EBA, OLA, VMP, ISV WMP where triggered
+13. **Portfolio-Level Questions** (Step 10): Evaluate PORT-MOD-Q1 through PORT-MOD-Q5 — capabilities only visible across multiple repos
 
-The output is a detailed Markdown report saved as `portfolio-mod-report.md` containing:
+The output is a **four-artifact bundle** (per the Four-Artifact Output Contract below) containing:
+- `{portfolio_name}-portfolio-mod-report.md` — narrative prose report
+- `{portfolio_name}-portfolio-mod-report.json` — canonical machine-readable contract
+- `{portfolio_name}-portfolio-mod-report.html` — single self-contained HTML visualization
+- `{portfolio_name}-portfolio-mod-report.metadata.json` — version compatibility sidecar
+
+The MD report contains:
 - Executive dashboard with portfolio score overview and category averages
 - Technology stack summary
 - Service dependency map with coupling scores, fan-in/fan-out, blast radius, circular dependencies
 - Two-tier cross-cutting concerns (Foundational Blockers, Improvement Opportunities)
+- Infrastructure cross-references (when infra/deployment-config repos exist in portfolio)
 - Dependency-aware phased roadmap (4 fixed phases)
 - Pathway aggregation across the portfolio
 - Integration opportunities
@@ -36,12 +46,12 @@ The output is a detailed Markdown report saved as `portfolio-mod-report.md` cont
 - Learning materials mapped to portfolio skill gaps
 - Service-by-service summary
 
-This portfolio TD focuses on cross-cutting modernization concerns, dependency-aware roadmaps, and pathway aggregation. It does not include ARA readiness profiles, agent scope evaluation, or Quick Agent Wins aggregation.
+This portfolio TD focuses on cross-cutting modernization concerns, dependency-aware roadmaps, and pathway aggregation. It does not include ARA readiness profiles or agent scope evaluation.
 
 ## Entry Criteria
 
-- At least 2 individual MOD reports exist in repository directories
-- MOD reports follow the expected structure: overall and category scores, pathway summary table, detailed findings for 37 questions
+- At least 2 individual MOD report JSON artifacts exist in repository directories
+- MOD report JSONs follow the expected schema: `assessment_type == "mod"`, `overall_score` numeric, `categories[]`, `pathways[]` with all 7 pathways, `findings[]` array
 - Reports are accessible at specified paths or in a common directory structure
 - Write permissions exist to create the output directory and portfolio report file
 
@@ -126,28 +136,32 @@ Record the resolved values from Steps 0.1–0.2 in the assessment context. They 
 
 ### Step 1: Discovery — Locate MOD Reports
 
-Scan the target directory structure to find all individual MOD reports.
+Scan the target directory structure to find all individual MOD report JSON artifacts.
 
 #### 1.1 Discovery Process
 
-- Recursively search for files matching the pattern `*-mod-report.md` in the directory tree
-- For each report found, extract the project/service name from the filename (the prefix before `-mod-report.md`)
+- Recursively search for files matching the pattern `*-mod-report.json` in the directory tree
+- For each report found, extract the project/service name from the filename (the prefix before `-mod-report.json`)
 - Extract the repository path (parent directory or grandparent directory of the report file)
-- Create an inventory of all services assessed with their report file locations
+- Create an inventory of all services assessed with their JSON file locations
 - Validate minimum requirement: at least 2 reports must be discovered
 
 **Input Options:**
 - A parent directory containing multiple repository folders, each with a MOD report, OR
-- A list of explicit paths to MOD report files (from `service_inventory` paths)
+- A list of explicit paths to MOD report JSON files (from `service_inventory` paths)
 
 #### 1.2 Validation
 
 - Verify each discovered file exists and is readable
-- Verify each file follows the expected MOD report structure:
-  - Contains an overall score and category score table
-  - Contains a pathway summary table with all 7 pathways
-  - Contains detailed findings with question IDs (INF-Q1 through OPS-Q9)
-- Exclude files that don't match the expected MOD report structure — log a warning for each excluded file
+- Verify each file is a valid JSON document
+- Verify each file is the expected MOD report shape:
+  - Has `assessment_type == "mod"` at the root
+  - Has `overall_score` numeric between 1.0 and 4.0
+  - Has a `categories[]` array with entries for INF, APP, DATA, SEC, OPS
+  - Has a `pathways[]` array with all 7 pathways
+  - Has a `findings[]` array with question IDs (INF-Q1 through OPS-Q9) and the 12 per-finding fields
+  - Has a `metadata` object with `assessment_type` and `td_version`
+- Exclude files that don't match the expected shape — log a warning for each excluded file
 - Log warnings for inaccessible or malformed files
 - **Terminate with a clear error if fewer than 2 valid MOD reports are found**
 
@@ -157,81 +171,85 @@ After discovery, compile a structured inventory:
 
 | Field | Source |
 |-------|--------|
-| Service name | Extracted from filename prefix |
-| Report file path | Full path to the `*-mod-report.md` file |
+| Service name | Extracted from filename prefix (or `metadata.repo_name` if present) |
+| Report file path | Full path to the `*-mod-report.json` file |
 | Repository path | Parent directory of the report |
-| Priority | From `service_inventory` if available, otherwise not set |
-| Repo type | Extracted from report metadata header |
-| Tags | From `service_inventory` if available, otherwise not set |
+| Priority | From `service_inventory` if available, otherwise from `metadata.priority` in the JSON if present |
+| Repo type | From `metadata.repo_type` in the JSON |
+| Tags | From `service_inventory` if available, otherwise from `metadata.tags` in the JSON if present |
 
 Cross-reference discovered reports with `service_inventory` (if provided) to enrich metadata. If a service appears in `service_inventory` but no report is found, log a warning: "Service '{name}' listed in service_inventory but no MOD report found at expected path."
 
 ### Step 2: Parse Individual MOD Reports
 
-For each MOD report found, extract the data needed for portfolio-level analysis.
+For each MOD report JSON found, extract the data needed for portfolio-level analysis.
 
 #### 2.1 Service Metadata
 
-Extract from the report metadata header:
+Extract from the JSON `metadata` object at the root:
 
-- **Service/repository name** — from the report header or filename
-- **Assessment date** — from the report metadata (validate YYYY-MM-DD format)
-- **Repo type** — from the metadata line `**Repository Type**: <value>` (e.g., `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`). If absent, assume `application`.
-- **Overall score** — from the score table (validate 1.0–4.0 range)
-- **Category scores** — for all 5 categories: Infrastructure & DevOps (INF), Application Architecture (APP), Data Platform (DATA), Security Baseline (SEC), Operations & Observability (OPS). Each is a numeric value 1.0–4.0 or "N/A".
+- **Service/repository name** — from `metadata.repo_name` (or derive from the filename)
+- **Assessment date** — from `metadata.assessment_date` (validate YYYY-MM-DD format)
+- **Repo type** — from `metadata.repo_type` (one of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`). If absent, assume `application`.
+- **Service archetype** — from `metadata.service_archetype` when `repo_type` is `application`
+- **Overall score** — from `overall_score` at the root (validate 1.0–4.0 range)
+- **Category scores** — from `categories[]` entries. Each entry has `category_id` (INF/APP/DATA/SEC/OPS) and `numeric_score` (1.0–4.0 or null when all questions in the category resolved to N/A / Not Evaluated).
 
 #### 2.2 Detailed Findings (Per-Question)
 
-For each of the 37 questions (INF-Q1 through OPS-Q9), extract:
+From the JSON `findings[]` array, extract for each entry:
 
-- **Question ID** — e.g., INF-Q1, APP-Q2, DATA-Q3
-- **Score** — 1, 2, 3, 4, or N/A
-- **Finding** — What was observed
-- **Gap** — What is missing (or N/A)
-- **Recommendation** — What to do (or N/A)
+- **Question ID** — `findings[i].question_id` (e.g., INF-Q1, APP-Q2, DATA-Q3)
+- **Internal score** — `findings[i].mod_metadata.internal_score` (1, 2, or 3 — score 4 emits no finding)
+- **Unified severity** — `findings[i].severity` (High / Medium / Low)
+- **Score label** — `findings[i].mod_metadata.score_label` (Not Ready / Needs Work / Partial)
+- **Core question flag** — `findings[i].mod_metadata.core_question` (boolean)
+- **Archetype calibrated** — `findings[i].mod_metadata.archetype_calibrated` (boolean)
+- **Finding description** — `findings[i].description`
+- **Gap** — `findings[i].gap`
+- **Recommendation** — `findings[i].recommendation`
+- **Evidence** — `findings[i].evidence` ({file, lines} or null)
+
+From the JSON `evaluations[]` array (if present), extract entries for questions that resolved to N/A, Not Evaluated (archetype-N/A), Not Evaluated (surface-gated), or passing — these do NOT appear in `findings[]`.
 
 **N/A Handling During Parsing:**
 
-When a question has score N/A:
-- Record it as N/A in the parsed data
-- **Do NOT treat N/A as score 0 or score 1** — N/A means the question does not apply to the repo type
-- **Exclude N/A scores from portfolio-level category averages and overall score calculations** — they should not count in either the numerator or the denominator
+When a question is in `evaluations[]` with status `N/A` or `Not Evaluated`:
+- Record it as N/A for this service
+- **Do NOT treat N/A as score 0 or score 1** — N/A means the question does not apply to the repo type or surface
+- **Exclude N/A resolutions from portfolio-level category averages and overall score calculations** — they should not count in either the numerator or the denominator
 - Track which questions are N/A per service for use in cross-cutting analysis (Step 5)
 
 #### 2.3 Technology Stack
 
-Extract technology information from the report findings:
+Extract technology information from the JSON `metadata.tech_stack` object and per-finding evidence:
 
-- **Programming languages** — from APP-Q1 findings or metadata
-- **Database engines** — from INF-Q2 and DATA findings (identify managed vs self-managed)
-- **Compute patterns** — from INF-Q1 findings (EC2, Lambda, ECS, EKS, Fargate, containers)
-- **IaC tools** — from INF-Q5 findings (Terraform, CloudFormation, CDK, Helm, Kustomize)
-- **CI/CD tools** — from INF-Q6 findings (GitHub Actions, GitLab CI, Jenkins, CodeBuild, CodePipeline)
-- **Container orchestration** — from INF-Q1 and container-related findings (ECS, EKS, Docker Compose, Kubernetes)
-- **Messaging/streaming** — from INF-Q4 findings (SQS, SNS, EventBridge, Kafka, Kinesis, MSK)
+- **Programming languages** — from `metadata.tech_stack.language` and APP-Q1 finding
+- **Database engines** — from INF-Q2 and DATA finding evidence (identify managed vs self-managed)
+- **Compute patterns** — from INF-Q1 finding evidence (EC2, Lambda, ECS, EKS, Fargate, containers)
+- **IaC tools** — from INF-Q5 / INF-Q10 finding evidence (Terraform, CloudFormation, CDK, Helm, Kustomize)
+- **CI/CD tools** — from INF-Q11 finding evidence (GitHub Actions, GitLab CI, Jenkins, CodeBuild, CodePipeline)
+- **Container orchestration** — from INF-Q1 and container-related finding evidence (ECS, EKS, Docker Compose, Kubernetes)
+- **Messaging/streaming** — from INF-Q4 finding evidence (SQS, SNS, EventBridge, Kafka, Kinesis, MSK)
 
 #### 2.4 Pathway Data
 
-Extract pathway information from the individual report's pathway summary table:
+From the JSON `pathways[]` array, extract for each of the 7 entries:
 
-```
-| Pathway | Status | Priority | Key Trigger Criteria | Est. Effort |
-```
-
-For each pathway row, extract:
-- **Pathway name** — One of the 7 AWS Modernization Pathways
-- **Status** — One of: `Triggered`, `Not Triggered`, or `Not Applicable`
-- **Priority** — `High`, `Medium`, `Low`, or `—` (for Not Triggered / Not Applicable)
-- **Key Trigger Criteria** — Specific criteria scores that triggered the pathway, or "—", or the N/A reason
-- **Est. Effort** — `High`, `Medium`, `Low`, or `—`
+- **Pathway id** — `pathways[i].id` (one of `move-to-cloud-native`, `move-to-containers`, `move-to-open-source`, `move-to-managed-databases`, `move-to-managed-analytics`, `move-to-modern-devops`, `move-to-ai`)
+- **Pathway name** — `pathways[i].name`
+- **Status** — `pathways[i].status` (`Triggered` / `Not Triggered` / `Not Applicable`)
+- **Priority** — `pathways[i].priority` (High / Medium / Low, or null)
+- **Estimated effort** — `pathways[i].effort` (High / Medium / Low, or null)
+- **Key trigger criteria** — `pathways[i].key_trigger_criteria`
+- **Triggering questions** — `pathways[i].triggering_questions[]` with `(question_id, score, note, evidence)`
+- **Not-triggered reason** — `pathways[i].not_triggered_reason` (optional prose)
 
 #### 2.5 Error Handling
 
-- Log warnings for missing sections (use defaults where possible)
-- Log warnings for malformed scores (exclude from aggregations)
+- Log warnings for missing optional fields (use defaults where possible)
 - Handle duplicate service names with disambiguation using repository path
-- If a report is missing the score table, attempt to derive scores from detailed findings. If findings are also missing, exclude the report from portfolio analysis and log a warning.
-- If a pathway table uses an unrecognized format, log a warning and attempt best-effort parsing
+- If a report is missing required fields, exclude the report from portfolio analysis and log a warning.
 
 
 ### Step 3: Build Executive Dashboard
@@ -313,7 +331,7 @@ Fields:
 | `not_ready_services` | integer | Count with score < 1.5 |
 | `pathways_triggered` | integer | Count of distinct pathways triggered across portfolio |
 | `foundational_blockers` | integer | Count of criteria scoring < 2 in 2+ repos |
-| `improvement_opportunities` | integer | Count of criteria scoring < 3 in 3+ repos |
+| `improvement_opportunities` | integer | Count of criteria scoring < 3 at-or-above the scaling threshold (max(3, 33% of applicable repos); floor of 2 for portfolios with fewer than 4 applicable repos) |
 | `category_inf` | float or "N/A" | Infrastructure & DevOps portfolio average |
 | `category_app` | float or "N/A" | Application Architecture portfolio average |
 | `category_data` | float or "N/A" | Data Platform portfolio average |
@@ -365,6 +383,75 @@ Based on the technology diversity analysis:
 - Identify the dominant technology in each category (candidate for standardization)
 - Calculate a technology diversity score: number of distinct technologies / number of services
 - If `preferences` were provided, note alignment between current stack and preferred technologies
+
+#### 3b.6 Blueprint Candidates — Repos as Standardization Templates
+
+Identify specific repositories whose operational patterns (IaC, CI/CD, deployment, security pipeline) are strong enough to serve as blueprints for other repos in the portfolio. These are repos that "got it right" — their configurations can be copied, adapted, or extracted into shared templates.
+
+**Identification criteria** — A repo qualifies as a blueprint candidate when it scores **>= 3 on at least 3** of the following operational questions:
+
+| Question | What it demonstrates |
+|---|---|
+| INF-Q10 (IaC Coverage) | Well-structured IaC that can be templated |
+| INF-Q11 (CI/CD Automation) | Pipeline patterns that can be reused |
+| OPS-Q5 (Deployment Strategy) | Canary/blue-green configs that can be copied |
+| INF-Q5 (Network Security) | VPC/SG patterns that can be standardized |
+| SEC-Q7 (Security Pipeline) | SAST/scanning configs that can be shared |
+| INF-Q1 (Managed Compute) | EKS/ECS/Lambda patterns that can be templated |
+
+**Scoring algorithm:**
+
+```
+for each repo in portfolio:
+    if repo.repo_type in ('library'):
+        continue  # Libraries don't have infra patterns to blueprint
+    
+    blueprint_questions = [INF-Q10, INF-Q11, OPS-Q5, INF-Q5, SEC-Q7, INF-Q1]
+    high_scores = count(repo.score[q] >= 3 for q in blueprint_questions if q is not N/A)
+    
+    if high_scores >= 3:
+        classify as Blueprint Candidate
+        record: repo name, qualifying scores, specific patterns to extract
+```
+
+**Output for each blueprint candidate:**
+
+- **Repo name** and overall score
+- **Qualifying scores** — which operational questions scored >= 3 and what patterns they demonstrate
+- **Extractable patterns** — specific configurations, templates, or modules that other repos could adopt:
+  - IaC modules (Terraform modules, CDK constructs, Helm charts)
+  - CI/CD pipeline definitions (GitHub Actions workflows, buildspec files)
+  - Deployment configurations (CodeDeploy appspec, ArgoCD configs, Helm values)
+  - Security scanning configs (Dependabot, Snyk, SonarQube configs)
+  - Network security patterns (VPC modules, security group templates)
+- **Applicable to** — which other repos in the portfolio would benefit from adopting these patterns (repos scoring < 2 on the same questions)
+- **Adoption effort** — Low (copy config), Medium (adapt to different stack), High (requires refactoring)
+
+**Report section:**
+
+```markdown
+### 🏗️ Blueprint Candidates — Repos as Standardization Templates
+
+> These repos demonstrate strong operational patterns that can be extracted and 
+> applied across the portfolio. Use them as reference implementations when 
+> modernizing other services.
+
+| Blueprint Repo | Qualifying Scores | Extractable Patterns | Benefits For |
+|---|---|---|---|
+| <repo> | INF-Q10=4, INF-Q11=3, SEC-Q7=3 | Terraform modules, GitHub Actions workflows, Dependabot config | <N> repos scoring < 2 on these questions |
+```
+
+If no repos qualify as blueprint candidates, include a note:
+
+```markdown
+### 🏗️ Blueprint Candidates
+
+No repos currently qualify as blueprint candidates (scoring >= 3 on 3+ operational questions). 
+This indicates a portfolio-wide operational maturity gap — consider establishing reference 
+implementations as part of Phase 0 (Cross-Cutting Foundation) in the roadmap.
+```
+
+**Integration with roadmap (Step 6):** When blueprint candidates exist, Phase 1 activities for other repos should reference the blueprint: "Adopt [blueprint-repo]'s CI/CD pipeline pattern" rather than "Create CI/CD pipeline from scratch." This reduces effort estimates and provides concrete starting points.
 
 
 ### Step 4: Build Service Dependency Map
@@ -445,7 +532,7 @@ If `dependency_overrides` is not provided:
 
 > Dependencies were inferred from individual MOD report findings (not explicitly provided via `dependency_overrides`). Inferred dependencies may be incomplete — they reflect only what was observable in the assessed code and report context. For authoritative dependency data, add `dependency_overrides` to the portfolio config.
 
-If no dependencies can be inferred from the reports, fall back to the current behavior: display a note that no dependency information was available and produce the roadmap using priority-based ordering only (P0 → P1 → P2) without dependency-based phase assignment.
+If no dependencies can be inferred from the reports, display a note that no dependency information was available and produce the roadmap using priority-based ordering only (P0 → P1 → P2) without dependency-based phase assignment.
 
 ### Step 5: Identify Cross-Cutting Concerns
 
@@ -459,7 +546,8 @@ Identify modernization gaps that appear across multiple services. Cross-cutting 
 - Must be addressed before service-level modernization can proceed
 
 **Tier 2 — 💡 Improvement Opportunities:**
-- Criteria scoring **< 3** in **3 or more** repos (excluding N/A)
+- Criteria scoring **< 3** in **max(3, 33% of applicable repos)** (excluding N/A)
+- For portfolios with fewer than 4 applicable repos for a given question, the threshold is 2 repos (same as Tier 1 but at a higher score boundary)
 - These represent important gaps that are not blocking but warrant coordinated attention
 - Can be addressed in parallel with other modernization work
 
@@ -489,7 +577,10 @@ for each question_id in all_37_questions:
     
     # Check Tier 2: Improvement Opportunities
     gap_count = count(s < 3 for s in scores)
-    if gap_count >= 3:
+    tier2_threshold = max(3, ceil(len(applicable_services) * 0.33))
+    if len(applicable_services) < 4:
+        tier2_threshold = 2  # Small portfolio accommodation
+    if gap_count >= tier2_threshold:
         classify as Improvement Opportunity
         record: question_id, gap_count, applicable_services count
 ```
@@ -514,6 +605,111 @@ For each classified concern, record:
 - **Portfolio-level recommendation** — A coordinated recommendation addressing all affected services
 
 
+### Step 5b: Infrastructure Cross-Referencing
+
+When a portfolio contains `infrastructure-only` or `deployment-config` repos alongside `application` repos, the infra/deployment repos often provide capabilities (IaC, CI/CD, network security, deployment strategy, audit logging) that serve the application repos. Individual application repo assessments cannot see these external artifacts and may score 1 on questions whose answers live in a companion repo. This step identifies those cross-references and annotates findings accordingly.
+
+> **Important**: This step does NOT change individual repo scores. It produces contextual annotations that inform the portfolio-level view and reduce false-positive noise in cross-cutting concern analysis.
+
+#### 5b.1 Identify Infrastructure and Deployment Repos
+
+From the parsed report inventory (Step 2), identify repos with `repo_type` of:
+- `infrastructure-only` — Contains IaC (Terraform, CDK, CloudFormation, Helm) but no application code
+- `deployment-config` — Contains CI/CD pipelines, Kubernetes manifests, GitOps configs, Ansible playbooks
+
+If no repos of these types exist in the portfolio, skip this step entirely.
+
+#### 5b.2 Extract Infrastructure Capabilities
+
+For each `infrastructure-only` or `deployment-config` repo, extract the capabilities it provides by examining its scored questions:
+
+| Capability | Source Questions | What it covers |
+|---|---|---|
+| **IaC Coverage** | INF-Q10 score >= 3 | Terraform/CDK/CFN modules that provision infrastructure for other repos |
+| **Network Security** | INF-Q5 score >= 3 | VPC, subnets, security groups, NACLs defined in IaC |
+| **CI/CD Automation** | INF-Q11 score >= 3 | Shared pipelines, deployment automation |
+| **Deployment Strategy** | OPS-Q5 score >= 3 | Blue/green, canary, or rolling deployment configs |
+| **Audit Logging** | SEC-Q1 score >= 3 | CloudTrail, centralized logging configuration |
+| **Backup/Recovery** | INF-Q8 score >= 3 | Backup plans, retention policies, PITR |
+| **Auto-Scaling** | INF-Q7 score >= 3 | ASG, HPA, scaling policies |
+| **Managed Compute** | INF-Q1 score >= 3 | EKS/ECS/Fargate/Lambda provisioning |
+| **Managed Databases** | INF-Q2 score >= 3 | RDS/Aurora/DynamoDB provisioning |
+
+Record each capability with:
+- The infra/deployment repo name that provides it
+- The score achieved (3 or 4)
+- The evidence (from the finding's evidence field)
+
+#### 5b.3 Map Capabilities to Application Repos
+
+For each application repo that scored 1 on a question where an infra/deployment repo scored >= 3 on the same question:
+
+1. **Create a cross-reference annotation** on the application repo's finding:
+
+```
+Portfolio Context: [infra-repo-name] (infrastructure-only) scores [score] on [question_id] 
+and likely provides this capability for [app-repo-name]. The Score 1 on [app-repo-name] 
+may be a false positive — the capability exists in the portfolio but in a separate repo. 
+Verify that [infra-repo-name]'s IaC/config covers [app-repo-name]'s deployment.
+```
+
+2. **Questions eligible for cross-referencing** (these are the "external context" questions that commonly live outside application repos):
+
+| Application repo question | Cross-references with infra/deployment repo question |
+|---|---|
+| SEC-Q1 (Audit Logging) score = 1 | SEC-Q1 score >= 3 in any infra repo |
+| INF-Q5 (Network Security) score = 1 | INF-Q5 score >= 3 in any infra repo |
+| INF-Q10 (IaC Coverage) score = 1 | INF-Q10 score >= 3 in any infra repo |
+| OPS-Q5 (Deployment Strategy) score = 1 | OPS-Q5 score >= 3 in any deployment-config repo |
+| INF-Q1 (Managed Compute) score = 1 | INF-Q1 score >= 3 in any infra repo |
+| INF-Q2 (Managed Databases) score = 1 | INF-Q2 score >= 3 in any infra repo |
+| INF-Q7 (Auto-Scaling) score = 1 | INF-Q7 score >= 3 in any infra repo |
+| INF-Q8 (Backup/Recovery) score = 1 | INF-Q8 score >= 3 in any infra repo |
+| INF-Q11 (CI/CD Automation) score = 1 | INF-Q11 score >= 3 in any deployment-config repo |
+
+3. **Do NOT cross-reference** questions that are inherently per-repo (code-level concerns):
+   - APP-Q1 through APP-Q6 (application architecture is per-repo)
+   - DATA-Q1 through DATA-Q4 (data access patterns are per-repo)
+   - SEC-Q3 through SEC-Q7 (auth, secrets, scanning are per-repo)
+   - OPS-Q1 (tracing instrumentation is per-repo)
+   - OPS-Q6 (integration tests are per-repo)
+
+#### 5b.4 Adjust Cross-Cutting Concern Severity
+
+When Step 5 classifies a question as a Foundational Blocker or Improvement Opportunity, and Step 5b identifies that an infra/deployment repo provides the capability:
+
+- **Add a portfolio annotation** to the cross-cutting concern:
+
+```
+⚠️ Portfolio mitigation detected: [infra-repo-name] (infrastructure-only) scores [score] 
+on this question, indicating the capability exists in the portfolio. [N] of [M] affected 
+application repos may be covered by this shared infrastructure. Verify coverage before 
+treating this as a true portfolio-wide gap.
+```
+
+- **Do NOT remove the cross-cutting concern** — it remains classified at its tier. The annotation provides context for human reviewers to validate.
+- **Do NOT change individual scores** — per Step 10.2 rules.
+
+#### 5b.5 Output
+
+Record the cross-referencing results in the portfolio report under a dedicated subsection within Cross-Cutting Concerns:
+
+```markdown
+### 🔗 Infrastructure Cross-References
+
+> The following application repo findings may be mitigated by capabilities in 
+> infrastructure-only or deployment-config repos in this portfolio. Individual 
+> scores are unchanged — verify that the infra repo's configuration covers the 
+> application repo's deployment.
+
+| App Repo | Question | Score | Potentially Covered By | Infra Score | Status |
+|----------|----------|-------|------------------------|-------------|--------|
+| <app-repo> | <question_id> | 1 | <infra-repo> | <3 or 4> | Verify |
+```
+
+If no infrastructure-only or deployment-config repos exist in the portfolio, omit this subsection entirely.
+
+
 ### Step 6: Generate Dependency-Aware Phased Roadmap
 
 Create a four-phase roadmap with dependency-aware sequencing.
@@ -532,7 +728,7 @@ These phase names are fixed.
 #### 6.2 Phase Assignment Algorithm
 
 **Phase 0 — Cross-Cutting Foundation (Mo 0–1):**
-- Cross-cutting concerns affecting 3+ services (portfolio-level solutions from Step 5)
+- Cross-cutting concerns identified in Step 5 (Foundational Blockers and Improvement Opportunities)
 - Shared infrastructure improvements benefiting multiple services
 - Circular dependency breaking activities (must be resolved first — from Step 4.4)
 - Organizational enablers (training, tooling, standards)
@@ -592,6 +788,25 @@ If `dependency_overrides` was not provided:
   - Phase 3: P2 services and services with score >= 3.0
 - Phase 0 still contains cross-cutting concerns from Step 5
 - Note in the roadmap that dependency-based ordering is not available and recommend providing `dependency_overrides` for a more accurate roadmap
+
+#### 6.7 Target State Architecture
+
+After generating the phased roadmap, produce a brief "Target State" summary that describes what the portfolio looks like after roadmap completion. This gives architects the destination picture, not just the gap list.
+
+**Derive from:**
+- `preferences` (prefer/avoid arrays define the desired technology stack)
+- Triggered pathways (each pathway implies a target state — e.g., "Move to Containers" → "all compute on EKS/ECS")
+- Cross-cutting Foundational Blockers (each resolved blocker implies a capability — e.g., "IaC coverage" → "all infrastructure defined in Terraform")
+- Blueprint candidates (strongest repo patterns become the standard)
+
+**Output structure:**
+- **Compute:** Target compute platform (derived from Move to Containers pathway + preferences)
+- **Data:** Target database/storage platform (derived from Move to Managed Databases + Move to Open Source pathways)
+- **Observability:** Target observability stack (derived from PORT-MOD-Q2 + OPS category gaps)
+- **CI/CD:** Target pipeline pattern (derived from Move to Modern DevOps pathway + blueprint candidates)
+- **Security:** Target security posture (derived from SEC category + PORT-MOD-Q5)
+
+Each entry should be 1-2 sentences stating the target state, not the remediation steps (those are in the roadmap). Example: "Compute: All services containerized on EKS with Karpenter autoscaling. No EC2 instances in production." When `preferences` are not provided, derive targets from triggered pathways and AWS best practices only.
 
 ### Step 7: Aggregate Pathways Across Portfolio
 
@@ -672,6 +887,23 @@ Map pathway execution to the 4-phase roadmap:
 
 This mapping is indicative — actual phase assignment depends on the service-level dependency analysis in Step 6.
 
+#### 7.5 Pathway Overlap Density
+
+For each service, count the number of triggered pathways. Services triggering 4 or more pathways represent concentrated modernization debt requiring dedicated investment — they cannot be modernized incrementally alongside other work.
+
+**Algorithm:**
+```
+for each service in portfolio:
+    triggered_count = count(pathway.status == "Triggered" for pathway in service.pathways)
+    service.pathway_load = triggered_count
+
+heavy_modernization_candidates = [s for s in portfolio if s.pathway_load >= 4]
+```
+
+**Output:** Include a "Heavy Modernization Candidates" callout in the report when `heavy_modernization_candidates` is non-empty:
+- List each service with pathway_load ≥ 4, showing which pathways are triggered
+- Flag these as requiring dedicated sprint capacity or a focused modernization initiative
+- Cross-reference with the risk register (these services likely appear as high-risk dependencies)
 
 ### Step 8: Integration Opportunities, Risk Assessment, and Resource Allocation
 
@@ -815,7 +1047,7 @@ If no programs are triggered, include: "No specific AWS program recommendations 
 
 ### Step 10: Evaluate Portfolio-Level Questions
 
-Evaluate questions that can only be answered by looking across multiple repos. These are distinct from cross-cutting analysis (Step 4) which aggregates individual scores — portfolio-level questions assess capabilities that no individual repo assessment can see.
+Evaluate questions that can only be answered by looking across multiple repos. These are distinct from cross-cutting analysis (Step 5) which aggregates individual scores — portfolio-level questions assess capabilities that no individual repo assessment can see.
 
 Individual report scores are never overridden. Where a portfolio-level finding provides context for individual gaps, annotate with "potentially mitigated — verify" but do not change individual scores.
 
@@ -825,8 +1057,8 @@ Individual report scores are never overridden. Where a portfolio-level finding p
 |----|----------|-------------|-----------------|
 | PORT-MOD-Q1 | **IaC Standardization** — Are services using a consistent IaC tool across the portfolio? | 4: Single IaC tool across all services. 3: Primary tool covers 80%+, minor exceptions. 2: 2-3 different tools with no standard. 1: No IaC or completely fragmented. | Count distinct IaC tools across repos (Terraform, CDK, CloudFormation, Pulumi, none). Calculate the percentage covered by the most common tool. Factor in the portfolio's preferred IaC tool from preferences. |
 | PORT-MOD-Q2 | **Shared Observability Platform** — Is there a centralized observability stack (tracing, logging, metrics) spanning all services? | 4: Centralized tracing + logging + metrics with cross-service correlation. 3: Centralized logging and metrics but no cross-service tracing. 2: Some shared tooling but inconsistent adoption. 1: Each service has independent or no observability. | Check for: shared CloudWatch Log Groups, shared X-Ray/ADOT configuration, shared dashboards, consistent metric namespaces. Cross-reference with individual OPS-Q1 (tracing), OPS-Q2 (SLOs), OPS-Q3 (metrics) scores. |
-| PORT-MOD-Q3 | **Dependency Cycle Health** — Are there circular dependencies that block independent modernization? | 4: No circular dependencies. 3: Circular deps exist but are async-only (breakable). 2: Sync circular deps exist with known resolution path. 1: Sync circular deps with no resolution path, blocking modernization. | Using the dependency graph from Step 3, detect cycles. Classify each cycle by dependency type (sync vs async). Sync cycles are harder to break. Score based on severity and resolution feasibility. |
-| PORT-MOD-Q4 | **Technology Diversity** — How fragmented is the technology stack across the portfolio? | 4: Low diversity (1-2 languages, 1 IaC tool, 1 DB engine). 3: Moderate diversity (2-3 languages, 1-2 IaC tools). 2: High diversity (4+ languages, 3+ IaC tools, mixed DB engines). 1: Extreme fragmentation with no standardization effort. | Calculate technology diversity score: count distinct languages, IaC tools, DB engines, compute patterns, CI/CD tools. Divide by number of services. Higher ratio = more fragmentation. Factor in preference alignment. |
+| PORT-MOD-Q3 | **Dependency Cycle Health** — Are there circular dependencies that block independent modernization? | 4: No circular dependencies. 3: Circular deps exist but are async-only (breakable). 2: Sync circular deps exist with known resolution path. 1: Sync circular deps with no resolution path, blocking modernization. | Using the dependency graph from Step 4, detect cycles. Classify each cycle by dependency type (sync vs async). Sync cycles are harder to break. Score based on severity and resolution feasibility. |
+| PORT-MOD-Q4 | **Technology Diversity** — How fragmented is the technology stack across the portfolio, distinguishing intentional polyglot from accidental sprawl? | 4: Low diversity (1-2 languages, 1 IaC tool, 1 DB engine) OR intentional polyglot where each language maps consistently to a service archetype (e.g., Go for networking, Python for ML, TypeScript for frontends). 3: Moderate diversity (2-3 languages, 1-2 IaC tools) with mostly consistent patterns. 2: High diversity (4+ languages, 3+ IaC tools, mixed DB engines) with no consistent mapping to service roles — accidental sprawl. 1: Extreme fragmentation with no standardization effort and no archetype justification. | Calculate technology diversity score: count distinct languages, IaC tools, DB engines, compute patterns, CI/CD tools. Divide by number of services. **Intentional polyglot adjustment:** if each language maps consistently to a specific archetype or domain (verifiable from service_inventory tags and archetypes), do not penalize — score based on consistency rather than raw count. Factor in preference alignment. |
 | PORT-MOD-Q5 | **Shared Security Posture** — Is there a centralized security scanning pipeline, shared WAF, or unified vulnerability management across the portfolio? | 4: Centralized security scanning + shared WAF + unified vuln management. 3: Shared WAF or centralized scanning but not both. 2: Some shared security tooling but inconsistent. 1: Each service manages security independently or not at all. | Check for: shared WAF WebACL, centralized security scanning in CI/CD, shared Secrets Manager configuration, consistent IAM patterns. Cross-reference with individual SEC-Q1 through SEC-Q6 scores. |
 
 #### 10.2 Contextual Annotations
@@ -856,7 +1088,7 @@ Portfolio-level scores are included in the readiness snapshot but NOT in the por
 
 ## Report Template
 
-The portfolio MOD report is saved as `portfolio-mod-report.md`. The complete report structure is defined below.
+The portfolio MOD TD emits a **four-artifact bundle** per the Four-Artifact Output Contract: `{portfolio_name}-portfolio-mod-report.md` (narrative), `.json` (canonical), `.html` (self-contained), `.metadata.json` (sidecar). This section specifies the MD structure; the JSON and HTML render subsets of the same data per the contract.
 
 ---
 
@@ -983,6 +1215,23 @@ If preferences were provided, note alignment with preferred technologies.>
 
 - <opportunity 1>
 - <opportunity 2>
+
+### 🏗️ Blueprint Candidates — Repos as Standardization Templates
+
+> These repos demonstrate strong operational patterns that can be extracted and
+> applied across the portfolio. Use them as reference implementations when
+> modernizing other services.
+
+| Blueprint Repo | Overall Score | Qualifying Scores | Extractable Patterns | Benefits For |
+|---|---|---|---|---|
+| <repo> | X.X | INF-Q10=4, INF-Q11=3, SEC-Q7=3 | Terraform modules, GitHub Actions workflows, Dependabot config | <N> repos scoring < 2 on these questions |
+
+<For each blueprint candidate, include a brief narrative:>
+
+**<repo-name>** — <1-2 sentence description of what makes this repo a good blueprint>
+- **Extract**: <specific files/configs to copy>
+- **Apply to**: <list of repos that would benefit>
+- **Effort**: Low / Medium / High
 ```
 
 ---
@@ -1054,7 +1303,7 @@ If preferences were provided, note alignment with preferred technologies.>
 
 ### 💡 Improvement Opportunities
 
-> Criteria scoring < 3 in 3+ repos. Important but not blocking.
+> Criteria scoring < 3 in at least **max(3, 33% of applicable repos)** (floor of 2 for portfolios with fewer than 4 applicable repos). Important but not blocking.
 > Address as capacity allows or in parallel with other modernization work.
 > **Render this section only if at least one Improvement Opportunity is classified. Omit entirely if empty.**
 
@@ -1065,6 +1314,26 @@ If preferences were provided, note alignment with preferred technologies.>
    - **Portfolio-Level Recommendation**: <coordinated solution>
 
 <Repeat for each Improvement Opportunity.>
+
+### 🔗 Infrastructure Cross-References
+
+> **Render this section only if the portfolio contains `infrastructure-only` or `deployment-config` repos. Omit entirely if no such repos exist.**
+
+> The following application repo findings may be mitigated by capabilities in
+> infrastructure-only or deployment-config repos in this portfolio. Individual
+> scores are unchanged — verify that the infra repo's configuration covers the
+> application repo's deployment.
+
+| App Repo | Question | App Score | Potentially Covered By | Infra Repo Score | Status |
+|----------|----------|-----------|------------------------|------------------|--------|
+| <app-repo> | <question_id> | 1 | <infra-repo> (infrastructure-only) | <3 or 4> | Verify |
+
+**Summary**: <N> application repo findings across <M> questions may be mitigated by infrastructure capabilities in <K> infra/deployment repos. These represent potential false positives at the portfolio level — the capability exists but in a separate repository.
+
+> ⚠️ **Action Required**: For each "Verify" row, confirm that the infrastructure repo's
+> IaC/config actually covers the application repo's deployment environment. If confirmed,
+> the application repo's finding is a false positive at the portfolio level (though the
+> individual repo score remains unchanged for traceability).
 ```
 
 If no cross-cutting concerns are identified in either tier:
@@ -1214,6 +1483,16 @@ No cross-cutting concerns identified. All criteria meet the minimum thresholds a
 
 **Total Estimated Effort**: High / Medium / Low
 **Expected Timeline**: X months (with Y parallel tracks)
+
+### Target State Architecture
+
+> After roadmap completion, the portfolio looks like this. Derived from triggered pathways, `preferences`, resolved cross-cutting blockers, and blueprint candidates per Step 6.7.
+
+- **Compute:** <target compute platform — 1-2 sentences>
+- **Data:** <target database/storage platform — 1-2 sentences>
+- **Observability:** <target observability stack — 1-2 sentences>
+- **CI/CD:** <target pipeline pattern — 1-2 sentences>
+- **Security:** <target security posture — 1-2 sentences>
 ```
 
 
@@ -1316,6 +1595,16 @@ in exactly one column per pathway row.
 - **Estimated Effort**: High / Medium / Low across N services
 - **Roadmap Phase Alignment**: Phase 3
 - **Relevant Learning Materials**: Module 7 — Move to AI
+
+### Heavy Modernization Candidates
+
+> Render this subsection only when at least one service has pathway_load ≥ 4 (per Step 7.5). Omit entirely otherwise.
+
+> These services trigger 4+ modernization pathways and represent concentrated modernization debt. They require dedicated sprint capacity or a focused modernization initiative rather than incremental work alongside other services.
+
+| Service | Pathways Triggered | Pathway Load | Cross-Reference |
+|---------|---------------------|--------------|-----------------|
+| <service name> | <comma-separated pathway names> | N | Risk register entry (if present) |
 ```
 
 ---
@@ -1639,22 +1928,31 @@ The complete report structure, for reference:
    - Repo Type Distribution
    - Readiness Snapshot
 2. Technology Stack Summary
+   - Programming Languages
+   - Database Engines
+   - Compute Patterns
+   - IaC and CI/CD Tools
+   - Standardization Opportunities
+   - Blueprint Candidates
 3. Service Dependency Map
 4. Cross-Cutting Concerns
    - Foundational Blockers
    - Improvement Opportunities
+   - Infrastructure Cross-References (when infra/deployment-config repos exist)
    - Per-Category Analysis
 5. Portfolio Modernization Roadmap
    - Phase 0 — Cross-Cutting Foundation
    - Phase 1 — Quick Wins
    - Phase 2 — Foundation
    - Phase 3 — Advanced
+   - Target State Architecture
 6. AWS Modernization Pathways
    - Portfolio Pathway Summary
    - Portfolio Pathway Aggregation
    - Per-Service Pathway Assignment
    - Pathway Dependencies and Parallel Execution
    - Pathway Details
+   - Heavy Modernization Candidates (when at least one service has pathway_load ≥ 4)
 7. Integration Opportunities
 8. Risk Assessment
 9. Resource Allocation Recommendations
@@ -1672,10 +1970,412 @@ Strictly follow these rules at all times:
 - **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio report file.
 - **Minimum 2 reports**: The portfolio assessment requires at least 2 valid MOD reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Scores of N/A are excluded from portfolio-level category averages (both numerator and denominator), overall score calculations, and cross-cutting concern analysis. A question that is N/A for a service does not count as a gap for that service.
-- **Two-tier classification only**: Cross-cutting concerns use exactly two tiers — Foundational Blockers (score < 2 in 2+ repos) and Improvement Opportunities (score < 3 in 3+ repos).
+- **Two-tier classification only**: Cross-cutting concerns use exactly two tiers — Foundational Blockers (score < 2 in 2+ repos) and Improvement Opportunities (score < 3 at-or-above the scaling threshold, max(3, 33% of applicable repos) with a floor of 2 for portfolios with fewer than 4 applicable repos).
 - **Fixed phase names**: Roadmap phases are always named Cross-Cutting Foundation, Quick Wins, Foundation, and Advanced.
 - **Dependency-aware ordering**: When dependency information is available, services must not be assigned to a phase earlier than their dependencies. Foundation services (high fan-in) go in Phase 1 or earlier. Within phases, order by priority (P0 → P1 → P2).
 - **Preferences for framing only**: Technology preferences (prefer/avoid) influence recommendation language and technology suggestions. They do NOT change scores, N/A mappings, pathway trigger logic, or cross-cutting concern classification.
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
 - **All 7 pathways in aggregation**: The pathway aggregation table must include all 7 pathways, even if none are triggered. Every assessed repo must appear in exactly one column per pathway row.
 - **Report completeness**: The output report must contain all required sections: executive dashboard, technology stack summary, service dependency map, cross-cutting concerns, phased roadmap, pathway aggregation, integration opportunities, risk assessment, resource allocation, AWS programs, learning materials, service-by-service summary, and assessment inventory.
+
+
+---
+
+## Output Contract
+
+This section defines the portfolio MOD JSON contract, HTML visual contract, and error-handling behavior. The MD sections above remain the narrative artifact; the JSON is the canonical machine-readable contract consumed by the webapp; the HTML is a single self-contained visualization.
+
+---
+
+### Four-Artifact Output Contract (Portfolio MOD)
+
+Every portfolio MOD assessment emits four artifacts: three report artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
+
+| Artifact | Filename | Purpose |
+|---|---|---|
+| Markdown report | `{portfolio-name}-portfolio-mod-report.md` | Narrative-prose artifact. Contains every section defined above (Executive Dashboard, Technology Stack, Dependency Map, Cross-Cutting Concerns, Roadmap, Pathways, Integration Opportunities, Risk Assessment, Resource Allocation, AWS Programs, Learning Materials, Service-by-Service Summary). |
+| JSON report | `{portfolio-name}-portfolio-mod-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard. Every semantic field defined in the Top-Level JSON Keys section below MUST be present. |
+| HTML report | `{portfolio-name}-portfolio-mod-report.html` | **Single self-contained HTML file** (no external asset fetches at render time). Renders a subset of the JSON per the Portfolio MOD HTML Visual Contract below. MUST be emitted alongside the MD and JSON — it is NOT optional. |
+| Metadata sidecar | `{portfolio-name}-portfolio-mod-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
+
+The JSON artifact is the canonical contract. If any artifacts disagree on a field, JSON wins.
+
+#### Metadata Sidecar Fields
+
+```json
+{
+  "assessment_type": "portfolio-mod",
+  "assessment_date": "YYYY-MM-DD",
+  "td_version": "portfolio-modernization"
+}
+```
+
+---
+
+### Top-Level JSON Keys
+
+The Portfolio MOD JSON artifact MUST emit these top-level keys in the order shown:
+
+| Key | Description |
+|---|---|
+| `assessment_type` | Literal `"portfolio-mod"` |
+| `metadata` | Version, assessment date, portfolio name, TD version, services_assessed, consumed_per_repo_json_files, preferences (optional) |
+| `summary` | 5 KPI counts: repositories_analyzed, total_findings, high_severity_findings, medium_severity_findings, low_severity_findings |
+| `filter_vocab` | Filter-eligible enums actually present in the run |
+| `executive_dashboard` | Portfolio score overview + `score_band_distribution` + `tier_distribution` (counts that agree) + category_score_averages + repo_type_distribution |
+| `technology_stack_summary` | Technology stack section |
+| `repositories[]` | Per-repo roll-up |
+| `findings[]` | Lightweight portfolio finding index. See "Portfolio `findings[]` entry shape" below. |
+| `remediation_roadmap` | See §"Remediation Roadmap" — grouping `pathway` |
+| `recommended_actions[]` | Canonical AWS programs (MAP, MMP, WAMP, EBA, OLA, VMP, ISV WMP) |
+| `pathways[]` | All 7 AWS Modernization Pathways with JSON-pointer back-references; see §"Pathways Aggregation" |
+| `dependency_map` | Portfolio dependency map |
+| `roadmap_phases[]` | Optional, additive |
+| `parallel_execution_tracks[]` | Optional, additive |
+| `portfolio_risk_register[]` | Optional, additive |
+
+Canonical shape is fully defined by the Top-Level JSON Keys table above. All required keys, types, and nesting are specified inline in this TD.
+
+#### `filter_vocab`
+
+```json
+{
+  "severities": ["High", "Medium", "Low"],
+  "categories": ["Infrastructure & DevOps", "Application Architecture", "Data Platform", "Security Baseline", "Operations & Observability"],
+  "efforts": ["High", "Medium", "Low"],
+  "priorities": ["P0", "P1", "P2", "P3"],
+  "phases": [1, 2, 3, 4],
+  "classifications": ["Cloud-Native Ready", "Pilot-Ready", "Remediation Required", "Not Ready"]
+}
+```
+
+Display names only for categories.
+
+#### `executive_dashboard` dual-distribution
+
+`executive_dashboard` MUST carry both `score_band_distribution` (numeric-score bands) and `tier_distribution` (tier counts). The two must agree under the canonical equivalence table:
+- Mature (≥3.5) ≡ Cloud-Native Ready
+- Partial (2.5–3.4) ≡ Pilot-Ready
+- Needs Work (1.5–2.4) ≡ Remediation Required
+- Not Ready (<1.5) ≡ Not Ready
+
+```json
+"executive_dashboard": {
+  "portfolio_score_overview": { "portfolio_overall_score": 2.31, "score_range": { "min": 1.22, "max": 3.75 } },
+  "score_band_distribution": { "mature": 3, "partial": 8, "needs_work": 18, "not_ready": 5 },
+  "tier_distribution": { "cloud_native_ready": 3, "pilot_ready": 8, "remediation_required": 18, "not_ready": 5 },
+  "category_score_averages": [ { "category_id": "INF", "category": "Infrastructure & DevOps", "average": 1.45 } ],
+  "repo_type_distribution": { "application": 16, "monorepo": 18 }
+}
+```
+
+#### `repositories[]`
+
+Each entry carries:
+- `repo_name`
+- `overall_score` (numeric 1.00-4.00)
+- `classification.tier` + `classification.classification_consistency_check` ("consistent" OR a structured `{status: "divergent", score_band, count_tier, reason}` object)
+- `category_scores[]` — each entry with `numeric_score` + `score_rating` + `severity_status`
+- `surface_flags`, `repo_type`, `service_archetype`, `repository_priority`
+- `per_repo_md_path`, `per_repo_json_path`, `per_repo_html_path`
+- `pathways_triggered[]` — OBJECT list (not bare IDs) where each entry carries `{id, priority, effort, triggering_questions[]}` with inlined `(question_id, score, note, evidence)`.
+
+#### Portfolio `findings[]` entry shape
+
+Each entry is a **lightweight per-repo finding reference** (not a full copy). Rationale: the webapp Findings tab only needs enough to render a sortable, filterable table; full prose (`description`, `gap`, `recommendation`) is available in the per-repo JSON via click-through. Keeping the portfolio JSON lightweight prevents it from growing quadratically with portfolio size.
+
+Each entry carries these 11 fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | MOD rubric question identifier (e.g., `"INF-Q1"`). |
+| `repo_name` | string | Source repository name (matches `repositories[].repo_name`). |
+| `category` | string | Webapp-facing category display name (e.g., `"Infrastructure & DevOps"`). |
+| `category_id` | string | Rubric short code (e.g., `"INF"`). |
+| `title` | string | Short finding title from the per-repo report. |
+| `severity` | enum | `"High"` / `"Medium"` / `"Low"` — unified severity. |
+| `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority (static). |
+| `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
+| `phase` | integer | `1`–`4` — derived roadmap phase. |
+| `evidence` | object or null | `{file, lines}` reference or `null`. |
+| `mod_metadata` | object | `{internal_score, score_label, archetype_calibrated, core_question}` — per-finding metadata. |
+
+**Fields NOT present in the portfolio `findings[]` entry** (by design — available via per-repo JSON click-through):
+- `description`, `gap`, `recommendation` — these are full-prose fields in the per-repo MOD JSON. The portfolio aggregates but does not duplicate them. The webapp Findings tab uses `title` + severity + priority + evidence for its row summary, and links to the per-repo JSON for full detail.
+
+Findings are sourced by reading each consumed per-repo MOD JSON's `findings[]` and projecting the 11 fields above plus `repo_name`. Ordering: severity descending (High → Medium → Low), then repo_name, then category display order (INF → APP → DATA → SEC → OPS).
+
+Findings are NEVER emitted for questions that resolve to passing (score 4), N/A, Not Evaluated (archetype-N/A), or Not Evaluated (surface-gated) at the per-repo level — the portfolio `findings[]` array only contains rows for which the source per-repo MOD JSON emitted a finding.
+
+---
+
+### Pathways Aggregation
+
+`pathways[]` aggregates per-repo pathway information across all consumed repos. Every entry carries:
+
+```json
+{
+  "id": "move-to-cloud-native",
+  "name": "Move to Cloud Native",
+  "portfolio_status": "Triggered",
+  "triggered_in_repos_count": 18,
+  "applicable_repos_count": 32,
+  "priority": "High",
+  "effort": "High",
+  "description": "Decompose monoliths, adopt serverless patterns, implement event-driven architecture.",
+  "recommended_aws_programs": ["Migration Acceleration Program (MAP)", "EBA"],
+  "contributing_repos": [
+    {
+      "repo_name": "Lidarr--Lidarr",
+      "per_repo_pathway_source": "/pathways/0",
+      "per_repo_json_path": "services/Lidarr--Lidarr/modernization-assessment/Lidarr--Lidarr-mod-report.json",
+      "triggering_questions": [
+        { "question_id": "APP-Q2", "score": 2, "note": "Monolith", "evidence": { "file": "src/", "lines": null } },
+        { "question_id": "INF-Q1", "score": 1, "note": "No managed compute", "evidence": { "file": "azure-pipelines.yml", "lines": null } }
+      ]
+    }
+  ],
+  "per_repo_not_triggered_reasons": [
+    { "repo_name": "arrow-py--arrow", "consulted_questions": [ { "question_id": "APP-Q2", "score": 4, "note": "Primary trigger not met." } ] }
+  ],
+  "roadmap_phase_alignment": "Phase 2-3"
+}
+```
+
+#### JSON-pointer back-reference
+
+`contributing_repos[].per_repo_pathway_source` MUST be a JSON-pointer fragment (RFC 6901) of the form `/pathways/{index}` where `{index}` names the exact position in the per-repo MOD JSON's `pathways[]` array. ALTERNATIVELY, a URI reference form ending in `#/pathways/{index}` is accepted. The portfolio TD MUST NOT emit a best-effort match by name or id — the JSON-pointer is authoritative. Unresolvable pointers fail the assessment (see error-handling section below).
+
+#### Inlined evidence
+
+`triggering_questions[].evidence` is INLINED on the portfolio entry (copied from per-repo `findings[].evidence` for the triggering question id) so the webapp can render pathway evidence in the Pathways tab without a second per-repo JSON fetch.
+
+---
+
+### Remediation Roadmap
+
+The Portfolio MOD JSON emits `remediation_roadmap` with `grouping: "pathway"`:
+
+```json
+"remediation_roadmap": {
+  "grouping": "pathway",
+  "total_pathways": 4,
+  "total_items": 4,
+  "items": [
+    {
+      "pathway_id": "move-to-cloud-native",
+      "pathway": "Move to Cloud Native",
+      "description": "…",
+      "repos_count": 18,
+      "applicable_repos_count": 32,
+      "priority": "High",
+      "effort": "High"
+    }
+  ]
+}
+```
+
+`items[]` is a ONE-TO-ONE summary projection of `pathways[]` entries with `portfolio_status == "Triggered"`, sorted descending by `triggered_in_repos_count`. Consumers needing per-repo evidence dereference through `pathways[].contributing_repos[]`.
+
+MD rendering under an H2 heading **"## Remediation Roadmap"** matching the webapp tab label.
+
+---
+
+### Recommended Actions
+
+The Portfolio MOD JSON emits `recommended_actions[]` with minimum-set coverage:
+
+| `id` | `name` | `acronym` | `type` |
+|---|---|---|---|
+| `map` | Migration Acceleration Program | MAP | program |
+| `mmp` | Microsoft Modernization Program | MMP | program |
+| `wamp` | Windows App Modernization Program | WAMP | program |
+| `eba` | Experience-Based Acceleration | EBA | program |
+| `ola` | Optimization and Licensing Assessment | OLA | program |
+| `vmp` | VMware Migration Program | VMP | program |
+| `isv-wmp` | ISV Workload Migration Program | ISV WMP | program |
+
+Same entry envelope as Portfolio ARA. `status ∈ {Triggered, Applicable, Not Triggered}` with non-empty `trigger_reason`. Emitted under the H2 heading **"## Recommended Actions"**.
+
+---
+
+### MD-Retained Execution-Roadmap Content
+
+The Portfolio MOD MD artifact contains the following sections:
+
+- Sequencing Principles (numbered list)
+- Phase 0 Cross-Cutting Foundation
+- Phase 1 Quick Wins
+- Phase 2 Foundation
+- Phase 3 Advanced
+- Total Portfolio Effort
+- Per-service modernization plans with per-service Dependencies and Estimated Effort
+- Parallel Execution Tracks
+- Pathway Details subsections with Cross-Service Synergies / Roadmap Phase Alignment / Relevant Learning Materials per triggered pathway
+- Integration Opportunities
+- Risk Assessment (Portfolio Risk Register table)
+- Resource Allocation Recommendations
+- Recommended Self-Paced Learning Materials
+
+The JSON `remediation_roadmap.items[]` is a summary projection of these MD sections.
+
+#### Additive structured JSON fields
+
+Four execution-roadmap fields are also emitted as additive structured JSON alongside the MD content:
+
+1. **Top-level `roadmap_phases[]`**:
+   ```json
+   [{ "phase": 0, "name": "Cross-Cutting Foundation", "calendar_window": "Months 0-3", "objective": "…", "estimated_effort": "Medium" }]
+   ```
+
+2. **`pathways[].roadmap_phase_alignment`**: optional string per pathway (e.g., `"Phase 2-3"`) aligning the pathway with the roadmap phases.
+
+3. **Top-level `parallel_execution_tracks[]`**:
+   ```json
+   [{ "track_name": "Database Track", "pathways": ["move-to-managed-databases"], "repos_count": 14, "can_run_in_parallel": true, "dependencies": [] }]
+   ```
+
+4. **Top-level `portfolio_risk_register[]`**:
+   ```json
+   [{ "risk": "Lift-and-shift stalls modernization ROI", "likelihood": "Medium", "impact": "High", "priority": "P1", "mitigation": "Pair lift-and-shift with Move to Containers milestones", "phase": 2 }]
+   ```
+
+These additive JSON fields are optional and exist so consumers can reason about the roadmap structurally without parsing MD.
+
+---
+
+### Portfolio MOD HTML Visual Contract
+
+The portfolio MOD HTML artifact is a single self-contained file rendering a subset of the portfolio JSON. The full visual contract is inlined below — do NOT reference external files.
+
+#### HTML Structure and Layout
+
+**Header:**
+- Title: `Modernization Readiness - {portfolio_name}`
+- Subtitle line: `{date} · {N} repositories`
+
+**Executive Summary** (top section, above the tab bar):
+
+Prose intro: "This Modernization Readiness Analysis evaluates whether your {N} repositories are prepared for cloud-native transformation. The analysis examines five key dimensions: Infrastructure & DevOps, Application Architecture, Data Platform, Security Baseline, and Operations & Observability."
+
+Subsections:
+1. **Portfolio Status** — "Out of {N} repositories analyzed, {A} are cloud-native ready..., {B} are pilot-ready..., and {C} require remediation... The analysis identified {H} high severity findings (blockers) and {M} medium severity findings (risks)."
+2. **Key Findings** — Top 5 cross-cutting high severity areas as bullet list with repo counts
+3. **Remediation Plan** — 3-phase roll-up with finding counts and timelines
+4. **Recommended Actions** — Bullet list of triggered AWS programs with reasons
+
+**Stats Card Row** (4 cards):
+
+| Card | Value source | Subtitle |
+|---|---|---|
+| Total Findings | `summary.total_findings` | Across all {M} repositories |
+| High Severity | `summary.high_severity_findings` | Critical findings |
+| Medium Severity | `summary.medium_severity_findings` | Important findings |
+| Low Severity | `summary.low_severity_findings` | Minor findings |
+
+**Charts Row** (2 visualizations):
+- **Portfolio Distribution** — pie/donut chart from `executive_dashboard.tier_distribution`
+- **Severity by Repository** — stacked bar chart from per-repo `counts.{high, medium, low}` in `repositories[]`
+
+(MOD portfolio does NOT have a Section Heatmap — that's ARA-only.)
+
+**Tab bar order:** Repositories → Findings → Remediation → Pathways
+
+#### Repositories Tab
+
+Table columns: `Name`, `Language`, `LOC`, `Total`, `High`, `Medium`, `Low`, `Readiness`
+
+- Source: `repositories[]`
+- Readiness = `classification.tier`
+- Ordered by High count descending, then alphabetical
+- MOD includes the `Low` column (ARA omits it)
+
+#### Findings Tab
+
+Download CSV control in header.
+
+Table columns: `Category`, `Repository`, `Finding Description`, `Remediation`, `Severity`, `Effort`
+
+- Source: `findings[]`
+- Finding Description = title (bold) + one-liner description
+- Ordered by severity (High first), then repo name, then category
+
+#### Remediation Roadmap Tab
+
+4-phase table:
+
+| Phase | Focus Area | Findings | Timeline | Key Actions |
+|---|---|---|---|---|
+| Phase 1 | Infrastructure Foundation | N | 4-6 weeks | IaC Adoption, Container Platform, CI/CD Pipelines |
+| Phase 2 | Security & Data Platform | N | 3-4 weeks | Secrets Management, Database Migration, IAM Hardening |
+| Phase 3 | Application Architecture | N | 4-8 weeks | API Modernization, Service Decomposition, Event-Driven |
+| Phase 4 | Operations & Observability | N | 2-3 weeks | Distributed Tracing, Structured Logging, SLOs & Alerting |
+
+Source: `remediation_roadmap.items[]` grouped by phase + `roadmap_phases[]`
+
+#### AWS Programs & Engagement Recommendations
+
+Table columns: `Program`, `Relevance`, `What You Get`, `Suggested Timing`
+
+- Source: `recommended_actions[]`
+- Relevance values: `Triggered`, `Applicable`, `Not Triggered`
+- Show ALL programs (not just triggered)
+
+#### Pathways Tab (MOD-only — ARA does not have this)
+
+Renders `pathways[]` with:
+- `portfolio_status` (Triggered / Not Triggered / Not Applicable)
+- `triggered_in_repos_count`
+- `contributing_repos[].triggering_questions[]` evidence inlined
+
+#### Footer
+
+- `Generated by AWS Transform · Portfolio Modernization Assessment Report`
+- `© {year} Amazon Web Services, Inc. All rights reserved.`
+
+#### Data Sourcing (JSON → HTML mapping)
+
+| Visual location | JSON source |
+|---|---|
+| Header | `metadata.{portfolio_name, assessment_date, services_assessed}` |
+| Executive Summary | `executive_dashboard.tier_distribution` + `summary.*` |
+| Stats cards | `summary.{total_findings, high_severity_findings, medium_severity_findings, low_severity_findings}` |
+| Portfolio Distribution chart | `executive_dashboard.tier_distribution` |
+| Severity by Repository chart | Per-repo counts from `repositories[]` |
+| Repositories table | `repositories[]` |
+| Findings table | `findings[]` |
+| Remediation Roadmap | `remediation_roadmap.items[]` grouped by phase |
+| AWS Programs table | `recommended_actions[]` |
+| Pathways tab | `pathways[]` |
+
+**Content NOT in HTML** (MD-only): Sequencing Principles, per-service modernization steps, Parallel Execution Tracks, Cross-Service Synergies, Learning Materials, Portfolio Risk Register, Scoring Notes arithmetic.
+
+**HTML-escaping discipline** applies to every attacker-controlled string.
+
+---
+
+## Error Handling
+
+The portfolio TD consumes ONLY per-repo JSON. Failure modes are explicit, loud, and actionable.
+
+### Missing Per-Repo JSON
+
+IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
+
+Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/modernization-assessment/foo--bar-mod-report.json, services/baz--qux/modernization-assessment/baz--qux-mod-report.json, services/wat--wub/modernization-assessment/wat--wub-mod-report.json."`
+
+### Dangling Cross-Reference
+
+IF a `question_id` or `repo_name` referenced in portfolio JSON does not resolve into at least one consumed per-repo JSON of the matching `assessment_type`, THEN the portfolio assessment SHALL fail naming the dangling reference.
+
+Example: `"Portfolio assessment failed: findings[3].question_id='INF-Q99' does not match any rubric question in consumed MOD per-repo JSONs."`
+
+### Unresolvable JSON-Pointer
+
+IF a `pathways[].contributing_repos[].per_repo_pathway_source` JSON-pointer does NOT resolve to a valid index in the target per-repo MOD JSON's `pathways[]` array, THEN the portfolio assessment SHALL fail naming the pointer and the source file.
+
+Example: `"Portfolio MOD assessment failed: pathways[1].contributing_repos[2].per_repo_pathway_source='/pathways/9' exceeds the per-repo pathways[] cardinality (7) in services/Lidarr--Lidarr/modernization-assessment/Lidarr--Lidarr-mod-report.json."`
+
+### No Silent Fallback
+
+The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. The portfolio TD consumes JSON-only.

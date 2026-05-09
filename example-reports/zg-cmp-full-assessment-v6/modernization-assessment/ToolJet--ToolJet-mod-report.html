@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToolJet--ToolJet - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #1a1a1a; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+header { background: #232f3e; color: white; padding: 32px; border-radius: 8px; margin-bottom: 24px; }
+header h1 { font-size: 24px; margin-bottom: 8px; }
+header .subtitle { color: #adb5bd; font-size: 14px; }
+.executive-summary { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; border-left: 4px solid #f0ad4e; }
+.executive-summary h2 { font-size: 18px; margin-bottom: 16px; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; border-radius: 8px; padding: 20px; text-align: center; }
+.stat-card .number { font-size: 32px; font-weight: bold; }
+.stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; }
+.stat-card.high .number { color: #dc3545; }
+.stat-card.medium .number { color: #f0ad4e; }
+.stat-card.low .number { color: #5bc0de; }
+.section { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; }
+.section h2 { font-size: 18px; margin-bottom: 16px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+th { background: #f8f9fa; font-weight: 600; font-size: 13px; }
+td { font-size: 14px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+.badge-high { background: #fde8e8; color: #dc3545; }
+.badge-medium { background: #fff3e0; color: #e65100; }
+.badge-low { background: #e3f2fd; color: #1565c0; }
+.status-ready { color: #28a745; }
+.status-needs-work { color: #f0ad4e; }
+.status-critical { color: #dc3545; }
+.finding-card { border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.finding-card h3 { font-size: 15px; margin-bottom: 8px; }
+.finding-card .category-line { font-size: 12px; color: #666; margin-bottom: 8px; }
+.finding-card .subsection { margin-top: 12px; }
+.finding-card .subsection-title { font-size: 11px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 4px; }
+.finding-card .subsection-content { font-size: 14px; }
+.tier-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: bold; }
+.tier-remediation { background: #fff3e0; color: #e65100; }
+footer { text-align: center; padding: 24px; color: #666; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>ToolJet--ToolJet - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2025-05-08 &middot; TypeScript/JavaScript &middot; Application &middot; Priority: P2</p>
+</header>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:12px"><strong>Key Findings:</strong> This open-source low-code internal-tool builder runs on ECS Fargate with containerized infrastructure but has significant gaps in operational maturity, security baseline, and database management. The application is a monolith with 50+ NestJS modules sharing a PostgreSQL database, ready for incremental decomposition.</p>
+<p style="margin-top:12px"><strong>Classification:</strong> 2 High findings, 19 Medium findings, 5 Low findings. Rule: 2-11 High &rarr; Remediation Required.</p>
+<p style="margin-top:12px"><strong>Recommended Actions:</strong></p>
+<ol style="margin-top:8px;padding-left:20px;">
+<li>Enable RDS backups, Multi-AZ, and configure CloudTrail audit logging (Phase 1)</li>
+<li>Add auto-scaling, CloudWatch alarms, and define SLOs (Phase 1-2)</li>
+<li>Migrate Redis to ElastiCache and implement canary deployments (Phase 2)</li>
+</ol>
+</div>
+
+<div class="stats-row">
+<div class="stat-card"><div class="number">26</div><div class="label">Total Findings</div></div>
+<div class="stat-card high"><div class="number">2</div><div class="label">High Severity</div></div>
+<div class="stat-card medium"><div class="number">19</div><div class="label">Medium Severity</div></div>
+<div class="stat-card low"><div class="number">5</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="section">
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Language</td><td>TypeScript (Backend) / JavaScript (Frontend)</td></tr>
+<tr><td>Framework</td><td>NestJS 11.1.3 / React</td></tr>
+<tr><td>Database</td><td>PostgreSQL 16 (RDS) + Redis 6.2 (sidecar)</td></tr>
+<tr><td>Compute</td><td>ECS Fargate / Kubernetes</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Category-by-Category Breakdown</h2>
+<table>
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>2.27 / 4.0</td><td>Needs Work</td><td class="status-needs-work">Needs Work</td></tr>
+<tr><td>Application Architecture (APP)</td><td>2.67 / 4.0</td><td>Partial</td><td class="status-needs-work">Needs Work</td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.75 / 4.0</td><td>Partial</td><td class="status-needs-work">Needs Work</td></tr>
+<tr><td>Security Baseline (SEC)</td><td>2.29 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.56 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> SEC-Q1: No CloudTrail Audit Logging</h3>
+<div class="category-line">Category: Security Baseline</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">No CloudTrail configuration found in any Terraform module. Application-level audit logs exist but no AWS infrastructure audit trail.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Add aws_cloudtrail resource to Terraform with log file validation and S3 Object Lock for immutable storage.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> OPS-Q2: No SLO Definitions</h3>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">No SLO definitions found. Custom metrics exist but not tied to SLO targets. No error budget tracking.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Define SLOs for critical user journeys: app builder load time, data query success rate, workflow execution success rate.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q7: No Auto-Scaling Configured</h3>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">No auto-scaling configured. ECS uses static desired_count=2. Kubernetes HPA disabled. No scaling policies on any resource.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Configure ECS Application Auto Scaling with target tracking. For EKS, configure HPA with custom metrics.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q8: No Backup and Recovery</h3>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">RDS has no backup_retention_period (defaults to 0). skip_final_snapshot=true. No AWS Backup plan. Redis data is ephemeral.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Set backup_retention_period=7 on RDS with PITR. Create AWS Backup plan. Migrate Redis to ElastiCache with backup.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q3: No Business Metrics</h3>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Only infrastructure metrics (api.hits, api.duration, users.concurrent). No business outcome metrics tracked.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Add business metrics: apps_created_total, data_queries_success/failure, workflows_completed/failed.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q4: No Anomaly Detection or Alerting</h3>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">No CloudWatch alarms in Terraform. No alerting beyond Sentry error reporting. No anomaly detection.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Add CloudWatch alarms for API error rate, p99 latency, ECS task failures. Enable anomaly detection on critical paths.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q7: No Incident Response Automation</h3>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">No runbooks, SSM Automation documents, or self-healing automation. Incident response is entirely ad hoc.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Create runbooks for common incidents. Implement as SSM Automation documents. Add self-healing patterns.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q2: Self-Managed Redis and Single-AZ RDS</h3>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">RDS managed but single-AZ. Redis runs as self-managed sidecar container.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Enable Multi-AZ on RDS. Migrate Redis to ElastiCache or MemoryDB with Multi-AZ.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q5: Public Subnets with Missing Segmentation</h3>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">VPC with public subnets only. No private subnets for ECS tasks and RDS. Missing VPC endpoints.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Restructure VPC with private subnets. Add NAT gateway and VPC endpoints for AWS services.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q9: Database Single-AZ Deployment</h3>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Compute spans 2 AZs but RDS is single-AZ. AZ failure would take down database.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Enable multi_az=true on RDS. Migrate Redis to ElastiCache with Multi-AZ failover.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q10: Partial IaC Coverage</h3>
+<div class="category-line">Category: Infrastructure &amp; DevOps</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Terraform covers compute/VPC/ALB/RDS but NOT monitoring, alerting, backup, auto-scaling, or WAF.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Expand Terraform to cover CloudWatch alarms, AWS Backup plans, auto-scaling policies, WAF rules.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> APP-Q2: Monolith with Shared Database</h3>
+<div class="category-line">Category: Application Architecture</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Single NestJS server with 50+ modules sharing PostgreSQL via TypeORM. Identifiable module boundaries but shared schemas.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Begin Strangler Fig decomposition starting with Workflows, AI, and ToolJet Database modules.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> APP-Q5: API Versioning Not Used</h3>
+<div class="category-line">Category: Application Architecture</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">NestJS versioning framework configured but defaults to VERSION_NEUTRAL. No active version paths.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Apply @Version decorators as APIs evolve. Version public API surface first.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> DATA-Q1: Unstructured Data Not in S3</h3>
+<div class="category-line">Category: Data Platform</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Files stored on local filesystem/container volume. No S3 for application storage.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Migrate file storage to Amazon S3 with presigned URLs and lifecycle policies.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q2: No Infrastructure Encryption at Rest</h3>
+<div class="category-line">Category: Security Baseline</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">No KMS keys in Terraform. RDS lacks explicit storage_encrypted. App-level AES-256-GCM exists but no infra-level encryption.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Add storage_encrypted=true and customer-managed KMS key to RDS and all data stores.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q5: Credentials in Terraform Defaults</h3>
+<div class="category-line">Category: Security Baseline</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Terraform variables have default credentials (PG_PASS=&quot;postgres&quot;). No rotation configured.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Remove defaults from sensitive variables. Implement Secrets Manager rotation.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q7: No SAST in CI Pipeline</h3>
+<div class="category-line">Category: Security Baseline</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Dependency scanning active but no SAST for code vulnerabilities. No container image scanning.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Add SAST scanning and container scanning to CI/CD pipeline.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q5: Rolling Deployments Only</h3>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Kubernetes RollingUpdate with health checks. No canary or blue/green deployment.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Implement canary deployments with Argo Rollouts or CodeDeploy blue/green.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q6: Integration Tests Not in CI</h3>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Cypress tests exist but require manual label triggers. Not run on every PR.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Auto-trigger Cypress tests on every PR. Run core smoke suite automatically.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q8: No Observability Ownership</h3>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">CODEOWNERS covers only package.json and migrations. No dashboards, alarm ownership, or team attribution.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Extend CODEOWNERS for observability. Create per-module dashboards with named owners.</div></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q9: Inconsistent Resource Tagging</h3>
+<div class="category-line">Category: Operations &amp; Observability</div>
+<div class="subsection"><div class="subsection-title">Finding</div><div class="subsection-content">Minimal tagging. No default_tags in Terraform. No cost allocation or environment tags.</div></div>
+<div class="subsection"><div class="subsection-title">Recommendation</div><div class="subsection-content">Add default_tags to Terraform AWS provider. Implement required-tags Config rules.</div></div>
+</div>
+
+</div>
+
+<div class="section">
+<h2>Modernization Pathways</h2>
+<table>
+<tr><th>#</th><th>Pathway</th><th>Status</th><th>Priority</th><th>Effort</th></tr>
+<tr><td>1</td><td>Move to Cloud Native</td><td><strong>Triggered</strong></td><td>High</td><td>High</td></tr>
+<tr><td>2</td><td>Move to Containers</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+<tr><td>3</td><td>Move to Open Source</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+<tr><td>4</td><td>Move to Managed Databases</td><td><strong>Triggered</strong></td><td>High</td><td>Medium</td></tr>
+<tr><td>5</td><td>Move to Managed Analytics</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+<tr><td>6</td><td>Move to Modern DevOps</td><td><strong>Triggered</strong></td><td>High</td><td>Medium</td></tr>
+<tr><td>7</td><td>Move to AI</td><td>Not Triggered</td><td>—</td><td>—</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Modernization Recommendations</h2>
+<p><strong>&#x1F534; Phase 1 (Immediate):</strong></p>
+<ul style="padding-left:20px;margin-top:8px;">
+<li>Enable RDS backup retention and Multi-AZ failover</li>
+<li>Add CloudTrail audit logging with immutable storage</li>
+<li>Configure auto-scaling for ECS/EKS workloads</li>
+</ul>
+<p style="margin-top:12px"><strong>&#x1F7E0; Phase 2 (Near-term):</strong></p>
+<ul style="padding-left:20px;margin-top:8px;">
+<li>Migrate Redis from sidecar to Amazon ElastiCache</li>
+<li>Implement canary deployments and CloudWatch alerting</li>
+<li>Define SLOs and add business outcome metrics</li>
+</ul>
+<p style="margin-top:12px"><strong>&#x1F7E1; Phase 3 (Medium-term):</strong></p>
+<ul style="padding-left:20px;margin-top:8px;">
+<li>Begin Strangler Fig decomposition (Workflows service first)</li>
+<li>Migrate to Aurora PostgreSQL and EKS</li>
+<li>Implement API Gateway with throttling and request validation</li>
+</ul>
+</div>
+
+<footer>
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</footer>
+</div>
+</body>
+</html>

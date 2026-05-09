@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>druid - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+header { background: #1a1a2e; color: white; padding: 32px; border-radius: 8px; margin-bottom: 24px; }
+header h1 { font-size: 24px; margin-bottom: 8px; }
+header .subtitle { color: #aaa; font-size: 14px; }
+.executive-summary { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.executive-summary h2 { font-size: 18px; margin-bottom: 16px; color: #1a1a2e; }
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: 600; font-size: 13px; }
+.status-remediation { background: #fff3e0; color: #e65100; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.stat-card .number { font-size: 32px; font-weight: 700; }
+.stat-card .label { font-size: 13px; color: #666; margin-top: 4px; }
+.stat-high .number { color: #d32f2f; }
+.stat-medium .number { color: #f57c00; }
+.stat-low .number { color: #fbc02d; }
+.stat-total .number { color: #1a1a2e; }
+.section { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.section h2 { font-size: 18px; margin-bottom: 16px; color: #1a1a2e; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+th { background: #f8f9fa; font-weight: 600; color: #555; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.badge-high { background: #ffebee; color: #d32f2f; }
+.badge-medium { background: #fff3e0; color: #f57c00; }
+.badge-low { background: #fffde7; color: #f9a825; }
+.badge-ready { background: #e8f5e9; color: #2e7d32; }
+.badge-needs-work { background: #fff3e0; color: #f57c00; }
+.badge-critical { background: #ffebee; color: #d32f2f; }
+.finding-card { border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.finding-card h3 { font-size: 15px; margin-bottom: 8px; }
+.finding-card .category-line { font-size: 12px; color: #666; margin-bottom: 8px; }
+.finding-card .finding-section { margin-top: 12px; }
+.finding-card .finding-section h4 { font-size: 12px; text-transform: uppercase; color: #888; margin-bottom: 4px; }
+.finding-card .finding-section p { font-size: 14px; }
+.recommendation-footer { background: #1a1a2e; color: white; border-radius: 8px; padding: 24px; margin-top: 24px; }
+.recommendation-footer h2 { margin-bottom: 16px; }
+.recommendation-footer li { margin-bottom: 8px; margin-left: 20px; font-size: 14px; }
+footer { text-align: center; padding: 24px; color: #999; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>druid - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2026-05-07 &middot; Java 17 &middot; monorepo &middot; Priority: P2</p>
+</header>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="status-badge status-remediation">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:12px"><strong>Overall Score:</strong> 2.48 / 4.0 (Needs Work)</p>
+<p style="margin-top:12px">This repo has 6 High findings, 8 Medium findings, 5 Low findings. Rule matched: 2-11 High &rarr; Remediation Required. MOD classification differs from ARA: ARA&rsquo;s &ldquo;1 High&rdquo; is an agent-deployment gate; MOD&rsquo;s &ldquo;1 High&rdquo; is typically a single modernization gap and maps to Pilot-Ready instead of Remediation Required.</p>
+<p style="margin-top:12px"><strong>Key Findings:</strong> Apache Druid has strong application architecture (Java 17, modular distributed system, managed streaming integrations) but lacks infrastructure-as-code, security baseline, and operational maturity within its codebase. Infrastructure is provisioned externally.</p>
+<p style="margin-top:12px"><strong>Recommended Actions:</strong> Adopt IaC for production deployment (EKS, Aurora, S3), establish security baseline (audit logging, encryption, secrets management), and implement operational practices (SLOs, alerting, deployment strategy).</p>
+</div>
+
+<div class="stats-row">
+<div class="stat-card stat-total"><div class="number">19</div><div class="label">Total Findings</div></div>
+<div class="stat-card stat-high"><div class="number">6</div><div class="label">High Severity</div></div>
+<div class="stat-card stat-medium"><div class="number">8</div><div class="label">Medium Severity</div></div>
+<div class="stat-card stat-low"><div class="number">5</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="section">
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Attribute</th><th>Value</th></tr>
+<tr><td>Language</td><td>Java 17, TypeScript</td></tr>
+<tr><td>Framework</td><td>Jetty 12, Jackson 2.19, Guice 6.0, Calcite 1.37, React</td></tr>
+<tr><td>Build</td><td>Maven (74 modules)</td></tr>
+<tr><td>AWS SDK</td><td>AWS SDK v2 2.40.0</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Category-by-Category Breakdown</h2>
+<table>
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>2.00 / 4.0</td><td>Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+<tr><td>Application Architecture (APP)</td><td>3.25 / 4.0</td><td>Partial</td><td><span class="badge badge-needs-work">Needs Work</span></td></tr>
+<tr><td>Data Platform (DATA)</td><td>3.00 / 4.0</td><td>Partial</td><td><span class="badge badge-needs-work">Needs Work</span></td></tr>
+<tr><td>Security Baseline (SEC)</td><td>2.14 / 4.0</td><td>Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>2.00 / 4.0</td><td>Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> INF-Q5: No network security configuration defined</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No VPC, subnet, security group, NACL, or network segmentation configuration exists within this repository. Infrastructure deployment (including network topology) is handled entirely externally. The Docker Compose exposes all services on host ports without network isolation.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define VPC architecture as IaC: private subnets for Druid data nodes, restricted subnets for coordination, and public-facing Router/Broker behind an ALB or API Gateway. Implement security groups with least-privilege rules between service tiers.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> SEC-Q1: No audit logging infrastructure</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No CloudTrail, audit trail, or immutable logging infrastructure is defined within this repository. Druid has application-level request logging but no audit-grade logging with immutability guarantees.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define CloudTrail for API-level audit logging. Configure the request logger with log shipping to S3 with Object Lock enabled. Integrate CloudWatch Logs with retention policies.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> SEC-Q2: No encryption at rest configured</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No encryption-at-rest configuration exists. The default deep storage (local filesystem) and metadata store have no KMS encryption configured. S3 extension supports server-side encryption but no default enforces it.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Configure S3 deep storage with SSE-KMS using customer-managed keys. Define Aurora PostgreSQL with KMS encryption enabled. Add KMS key resources to IaC.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> OPS-Q2: No SLO definitions</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No SLO definitions, error budgets, or formal service-level targets found. No CloudWatch alarm definitions for latency. Metrics framework exists but no SLOs are defined on top of them.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define SLOs for: query p99 latency (&lt;500ms), ingestion lag (&lt;30s), metadata store availability (99.9%), and segment availability (99.99%). Implement as CloudWatch composite alarms with error budget dashboards.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> OPS-Q7: No incident response automation</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No runbooks, SSM Automation documents, Lambda-based remediation, or self-healing patterns exist. The /docs/operations/ directory has human-readable guides only.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create runbooks for common incidents: segment unavailability, ingestion lag, metadata store connection failure, ZooKeeper loss. Implement as SSM Automation or Step Functions.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-high">HIGH</span> OPS-Q9: No resource tagging governance</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No resource tagging configuration, tag policies, or tagging standards exist. No IaC exists to apply tags to. Docker images have a maintainer label but no AWS resource tags.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define a tagging standard (environment, service-tier, team, cost-center) and enforce via IaC default_tags. Implement AWS Tag Policies via Organizations.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q6: No managed API entry point</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Druid exposes HTTP APIs directly on each service. The Router acts as an internal routing layer but lacks throttling, authentication enforcement, and rate limiting.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Place API Gateway (preferred) in front of the Router service. Configure throttling, request validation, and WAF integration.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q7: No auto-scaling configuration</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No auto-scaling configuration exists. Docker Compose defines static container counts. No HPA or KEDA configuration present.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define Kubernetes HPA for Broker and Router services. Define cluster autoscaler for Historical nodes. Consider KEDA for MiddleManager scaling.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q8: No backup and recovery configuration</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No backup configuration, retention policies, or disaster recovery plans exist. Metadata store and deep storage have no backup strategy defined.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define Aurora PostgreSQL with automated backups and PITR. Configure S3 deep storage with versioning and cross-region replication. Define AWS Backup plans.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q9: No high availability or multi-AZ configuration</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>No multi-AZ deployment configuration exists. Docker Compose defines single instances of each service.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define EKS node groups spanning 2+ AZs. Configure segment replication across AZ-aware Historicals. Deploy Aurora in Multi-AZ mode.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> INF-Q10: Low infrastructure as code coverage</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Docker/container definitions exist but no production IaC (Terraform, CDK, CloudFormation, or Helm charts for production).</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create infrastructure/ directory with Terraform/CDK modules defining EKS cluster, Aurora PostgreSQL, S3 deep storage, CloudWatch alarms, and AWS Backup plans.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> DATA-Q1: Deep storage defaults to local filesystem</h3>
+<p class="category-line">Category: Data Platform</p>
+<div class="finding-section"><h4>Finding</h4><p>Druid&rsquo;s deep storage supports S3, HDFS, Azure Blob, and GCS but defaults to local filesystem. S3 is available but requires explicit configuration.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Configure S3 as the default deep storage for all production deployments.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q5: Plaintext passwords in development files</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>Docker Compose environment file contains plaintext password (FoolishPassword). No Secrets Manager or Vault integration present. The druid-aws-rds-extensions module provides IAM-based authentication.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Integrate AWS Secrets Manager. Leverage druid-aws-rds-extensions for IAM authentication to Aurora PostgreSQL (eliminates static passwords).</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q6: Hardened base image but no automated scanning</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>Production Docker image uses distroless/java17-debian12 (hardened). OWASP suppressions exist but no automated vulnerability scanning pipeline is configured.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Enable ECR image scanning. Add OWASP dependency-check or Snyk as a CI pipeline step. Consider AWS Inspector for runtime scanning.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q4: No alerting or anomaly detection defined</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Metrics infrastructure supports alerting but no alert definitions, CloudWatch alarms, or anomaly detection configurations exist.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define CloudWatch alarms for query error rate, p99 latency, ingestion lag, and segment unavailability. Enable anomaly detection.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q5: No canary or blue/green deployment strategy</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Docker image builds exist with basic health checks. No canary, blue/green, or rolling deployment strategy configured.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Implement rolling deployments via druid-operator on EKS. For critical deployments, implement canary traffic shifting.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q8: No observability ownership model</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Metrics monitors exist per service type but no CODEOWNERS for observability, no named alarm owners, no team-specific dashboards.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define CODEOWNERS for observability configurations. Create per-service-tier dashboards with named team ownership.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q1: Managed compute partially adopted</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Druid provides containerization artifacts (Dockerfile, K8s extensions) but orchestration platform (EKS) IaC is external.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Co-locate EKS cluster IaC or reference druid-operator Helm chart as a Git submodule. Prefer EKS.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q2: Managed databases partially adopted</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Metadata storage supports MySQL/PostgreSQL with RDS IAM auth extension. No IaC defines managed database resources.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define Aurora PostgreSQL (preferred) as IaC. Leverage druid-aws-rds-extensions for IAM-based authentication.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q11: CI automation exists but no CD pipeline</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>13 GitHub Actions workflows cover testing, SAST, and Docker builds. No deployment automation exists.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add deployment stages: push to ECR, trigger ArgoCD sync, include smoke tests post-deployment.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> APP-Q2: Modular monorepo with shared build</h3>
+<p class="category-line">Category: Application Architecture</p>
+<div class="finding-section"><h4>Finding</h4><p>74 Maven modules with independently deployable services sharing a single build. Well-defined module boundaries.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Current structure is appropriate. Consider extracting web-console into independent pipeline.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> APP-Q5: API versioning applied but incomplete</h3>
+<p class="category-line">Category: Application Architecture</p>
+<div class="finding-section"><h4>Finding</h4><p>URL-path versioning (/druid/v2/, /druid/coordinator/v1/) applied consistently. No OpenAPI spec or formal deprecation policy.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Generate OpenAPI specifications from JAX-RS annotations. Establish formal API deprecation policy.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> APP-Q6: Service discovery uses legacy ZooKeeper</h3>
+<p class="category-line">Category: Application Architecture</p>
+<div class="finding-section"><h4>Finding</h4><p>ZooKeeper for discovery with K8s-native alternative available. No hard-coded endpoints.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>For EKS deployments, migrate to kubernetes-extensions module for discovery, eliminating ZooKeeper dependency.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> DATA-Q2: Data access mostly centralized</h3>
+<p class="category-line">Category: Data Platform</p>
+<div class="finding-section"><h4>Finding</h4><p>Centralized query architecture via SQL layer and native API. Metadata access centralized through connector abstraction.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Continue consolidating data access through the SQL layer as the primary interface.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> DATA-Q3: Database versions pinned but no update procedure</h3>
+<p class="category-line">Category: Data Platform</p>
+<div class="finding-section"><h4>Finding</h4><p>MySQL 8.2.0, PostgreSQL 42.7.2 pinned. PostgreSQL 17.6 in Docker Compose. None at EOL.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Document version-update procedure. Add CI check for versions approaching EOL.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> SEC-Q3: Authentication available but not default</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>Comprehensive auth extensions (basic, Kerberos, OAuth2/OIDC/SAML) exist but authentication is disabled by default.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Enable druid-pac4j (OAuth2/OIDC) by default in production. Consider API Gateway with Cognito authorizer.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> SEC-Q4: Centralized identity available but optional</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>druid-pac4j provides OAuth2/OIDC/SAML; druid-basic-security supports LDAP. Both optional.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Configure Cognito User Pool or corporate IdP integration for production deployments.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> SEC-Q7: SAST present but no container scanning</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>CodeQL SAST runs in CI. No container scanning or blocking security gate.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add container scanning (Trivy). Configure CodeQL to block on critical findings. Add dependency-check step.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> OPS-Q1: Distributed tracing available but older SDK</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>OpenTelemetry emitter extension available (SDK 1.7.0). Internal request ID propagation exists. Emitter defaults to noop.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Upgrade OpenTelemetry to current SDK. Promote to core extension. Integrate with AWS X-Ray.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> OPS-Q3: Business metrics available but not published</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Custom operational metrics exist (query/time, segment/count, task metrics) but default emitter is noop.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create CloudWatch dashboard templates. Enable Prometheus or CloudWatch emitter by default.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> OPS-Q6: Integration testing exists with some gaps</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Comprehensive integration testing via Testcontainers and Docker. Covers query correctness but not all operational workflows.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add integration tests for failover, replication recovery, and rolling upgrade scenarios.</p></div>
+</div>
+
+</div>
+
+<div class="recommendation-footer">
+<h2>&#x1F7E0; Modernization Recommendations</h2>
+<p style="margin-bottom:12px">Top 3 priorities based on High-severity findings:</p>
+<ol>
+<li><strong>Establish Security Baseline:</strong> Define CloudTrail audit logging with immutable storage and configure KMS encryption at rest for all data stores (SEC-Q1, SEC-Q2).</li>
+<li><strong>Define SLOs and Operational Practices:</strong> Implement SLO definitions with error budgets, automated runbooks, and resource tagging governance (OPS-Q2, OPS-Q7, OPS-Q9).</li>
+<li><strong>Codify Network Security:</strong> Define VPC architecture with private subnets, security groups, and managed networking services as infrastructure-as-code (INF-Q5).</li>
+</ol>
+</div>
+
+<footer>
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1
+</footer>
+</div>
+</body>
+</html>

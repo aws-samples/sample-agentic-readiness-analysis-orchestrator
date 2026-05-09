@@ -1,0 +1,761 @@
+{
+  "metadata": {
+    "version": "V6",
+    "assessment_type": "ara",
+    "assessment_date": "2025-05-08",
+    "td_version": "agentic-readiness-assessment-v6.0.1",
+    "report_format_version": "V6",
+    "target": "motdotla--node-lambda",
+    "repository_type": "application",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "CLI tool for deploying Lambda functions via imperative AWS SDK calls. No HTTP server, no persistent data store, no auth surface, no write API.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["javascript", "serverless", "cli"],
+    "context": "Node.js CLI for deploying AWS Lambda functions.",
+    "dev_library_application_override": true,
+    "override_rationale": "Service archetype is stateless-utility and all 5 surface flags are false. Library N/A mapping applied per Step 1.5.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_http_rpc_surface": false,
+      "has_auth_surface": false,
+      "has_write_operations": false,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Agent-Ready",
+    "sub_qualifier": null,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 38,
+    "safety_impact_medium_count": 0,
+    "rule_matched": "0 High, ≤1 Medium → Agent-Ready"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 0,
+    "risk_quality_count": 0,
+    "info_count": 38,
+    "na_count": 5,
+    "not_evaluated_count": 0,
+    "total": 43,
+    "core_questions_evaluated": 24,
+    "extended_questions_triggered": 14,
+    "extended_questions_not_triggered": 0
+  },
+  "findings": [
+    {
+      "question_id": "API-Q1",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "CLI tool with no REST/GraphQL/AsyncAPI interface",
+      "description": "This CLI tool exposes 4 commands (setup, run, package, deploy) via the commander library. There is no REST, GraphQL, or AsyncAPI interface. The CLI is invoked via shell execution, not HTTP calls.",
+      "gap": "No network API surface exists — this is by design for a CLI tool.",
+      "recommendation": "If agent invocation is planned, document CLI arguments in a machine-readable format (e.g., JSON schema of CLI options).",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No HTTP/RPC surface — machine-readable spec not applicable",
+      "description": "No HTTP/RPC surface — machine-readable spec is not applicable. The CLI interface is defined via commander option declarations.",
+      "gap": "N/A for a CLI tool",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "package.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No HTTP/RPC surface — structured error responses not applicable",
+      "description": "No HTTP/RPC surface — structured error responses are not applicable. The CLI uses process.exitCode (0, 1, 254, 255) and console output.",
+      "gap": "N/A for a CLI tool",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Write operations largely idempotent via AWS SDK patterns",
+      "description": "The CLI performs write operations against AWS (Lambda create/update, S3 putObject) which are largely idempotent by nature. Agent_scope is read-only so this is informational.",
+      "gap": "N/A for read-only scope",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, so idempotency is informational only."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Unstructured console.log output",
+      "description": "CLI output is unstructured console.log text mixed with JSON-stringified AWS responses. No consistent machine-parseable output envelope.",
+      "gap": "No consistent machine-parseable output envelope",
+      "recommendation": "Consider adding a --json output flag for machine consumption if agent invocation is planned.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q6",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Internal async polling for deploy completion",
+      "description": "The deploy command polls for Lambda LastUpdateStatus completion internally (up to 10 iterations with 3s delays). The CLI blocks until done.",
+      "gap": "No external async pattern needed for CLI invocation",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q7",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No event emission — results logged to stdout",
+      "description": "The CLI does not emit events or webhooks. It logs results to stdout upon completion.",
+      "gap": "N/A for a CLI tool",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No API surface to rate-limit",
+      "description": "No API surface to rate-limit. The CLI is subject to AWS API throttling on the AWS side, handled by SDK retry logic.",
+      "gap": "N/A for a CLI tool",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Authentication delegated to AWS IAM credential chain",
+      "description": "The CLI consumes AWS credentials (access key/secret, profile, session token) from the caller. It does not issue or validate identities itself — authentication is delegated entirely to the AWS SDK.",
+      "gap": "No gap — architecturally correct for a CLI tool.",
+      "recommendation": "No action required. Agents would authenticate via IAM roles/profiles passed as CLI arguments or environment variables.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/aws.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Permission scoping delegated to IAM policies",
+      "description": "The CLI operates under whatever IAM permissions the caller provides. It does not enforce permission scoping — that responsibility belongs to IAM policy attached to the caller's credentials.",
+      "gap": "No minimum IAM policy documented for each CLI command",
+      "recommendation": "Document minimum IAM policy required for each CLI command.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/aws.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Action-level authorization via IAM",
+      "description": "The CLI does not enforce action-level authorization. Separate CLI commands naturally map to different IAM permission sets. Authorization is delegated to AWS IAM.",
+      "gap": "No gap — IAM provides adequate action-level authorization.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Identity propagation not applicable for stateless-utility",
+      "description": "No HTTP/RPC surface and stateless-utility archetype — identity propagation is not applicable. The CLI uses provided credentials directly against AWS APIs.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/aws.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credentials managed via AWS credential provider chain",
+      "description": "Credentials sourced from environment variables, AWS profiles, or CLI arguments. Supports AWS credential provider chain. No hardcoded production credentials. Example files contain placeholders only.",
+      "gap": "No gap — appropriate for a CLI tool",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/aws.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Audit logging at AWS CloudTrail layer",
+      "description": "System does not execute agent-invoked write operations — audit logging is a consumer responsibility. AWS CloudTrail audits all API calls made by this CLI.",
+      "gap": "N/A — audit exists at the AWS platform layer",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND surface-flag downgrade (has_auth_surface=false, has_write_operations=false)",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "System does not execute agent-invoked write operations. Audit logging is a consumer responsibility. The CLI's AWS API calls are audited by CloudTrail on the AWS account side."
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Agent identity suspension via IAM credential revocation",
+      "description": "System does not issue or enforce agent identities — suspension is a consumer responsibility. Managed via IAM credential revocation.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/aws.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No write operations — compensation not applicable",
+      "description": "System exposes no write operations of its own. Lambda versioning/aliases provide rollback at the AWS layer.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND surface-flag downgrade (has_write_operations=false, has_http_rpc_surface=false)",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "System exposes no write operations — compensation logic is not applicable. The CLI deploys to AWS Lambda which supports versioning and aliases for rollback at the AWS service layer."
+      }
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No queryable state — AWS APIs provide function state",
+      "description": "CLI does not expose queryable state. AWS APIs provide current state for deployed functions.",
+      "gap": "N/A for a CLI tool",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Concurrency controls via AWS Lambda update serialization",
+      "description": "No internal concurrency controls. AWS Lambda's update serialization provides adequate protection.",
+      "gap": "N/A for read-only scope",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "AWS SDK built-in retry provides adequate resilience",
+      "description": "Uses AWS SDK built-in retry logic. No explicit circuit breaker library — appropriate for a CLI tool that exits after each invocation.",
+      "gap": "N/A — SDK retry is adequate",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No HTTP/RPC surface — rate limiting not applicable",
+      "description": "System exposes no HTTP/RPC surface — API-layer rate limiting is not applicable. AWS API throttling applies on the AWS side.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No transaction limits — read-only scope",
+      "description": "No configurable transaction limits. Multi-region deploy controlled by comma-separated region parameter.",
+      "gap": "N/A for read-only scope",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "CLI tool — no infrastructure to size",
+      "description": "CLI tool, not a running service. No infrastructure to size. Capacity concerns apply to the AWS APIs being called.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No draft/pending state — package command provides natural staging",
+      "description": "No draft/pending state concept. The package command creates a local zip file (staging) before deploy provides a natural approval gate.",
+      "gap": "N/A for read-only scope",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No approval gates — CLI executes immediately",
+      "description": "No approval gates configured. CLI executes immediately upon invocation. Approval gates would be at the orchestration layer.",
+      "gap": "N/A for read-only scope",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Environment separation via --environment flag",
+      "description": "Library/utility — does not own staging environments. Supports --environment flag for environment separation via function naming convention.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Not a data-handling target",
+      "description": "Not a data-handling target — no PII/PHI/financial/credential data is stored, processed, or logged by this tool.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: dev-library-application override applied",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "CLI tool classified as dev-library-application. Does not store, process, or log PII/PHI/financial/credential data.",
+        "data_q1_subchecks": {
+          "b1": {"fired": false, "severity": null, "reasoning": "Stage A = No. Not a data-handling target."},
+          "b2": {"fired": false, "severity": null, "reasoning": "Skipped — Stage A = No."},
+          "b3": {"fired": false, "severity": null, "reasoning": "Skipped — Stage A = No."}
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No persistent data store — residency not applicable",
+      "description": "No persistent data store and no user-data logging — residency requirements do not apply. The CLI deploys to user-specified AWS regions but holds no data itself.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/s3_deploy.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND surface-flag downgrade (has_persistent_data_store=false, has_logging_of_user_data=false)",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "No persistent data store and no user-data logging — residency requirements do not apply to this CLI tool."
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No data query surface",
+      "description": "No data query surface. The CLI performs deployment operations, not data retrieval.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Not a system of record",
+      "description": "Not a system of record for any data. AWS Lambda service is the SoR for function configurations.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No persistent data store — temporal metadata not applicable",
+      "description": "No persistent data store — temporal metadata is not applicable. The CLI operates on current configuration files at invocation time.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No user data logged — PII risk not applicable",
+      "description": "System does not log user data and holds no user data — PII-in-logs risk is not applicable.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No data sets managed — quality metrics not applicable",
+      "description": "No data sets managed by this tool. Quality metrics are not applicable.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semver versioning with no breaking change detection in CI",
+      "description": "Uses semver versioning (1.3.0). CLI options defined via commander. No formal breaking change detection in CI for CLI arguments.",
+      "gap": "No automated CLI argument stability testing",
+      "recommendation": "Consider adding CLI argument stability tests to CI to detect breaking changes in the command interface.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "package.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Clear, self-documenting CLI option names",
+      "description": "CLI options use clear, self-documenting names (--functionName, --memorySize, --timeout, --region). No legacy codes or abbreviations.",
+      "gap": "No gap",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "lib/.env.example", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No data catalog — not applicable for CLI tool",
+      "description": "No data catalog or metadata layer. Not applicable for a CLI deployment tool.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "X-Ray SDK integrated for local Lambda execution tracing",
+      "description": "Library/utility — tracing and correlation are consumer concerns. The CLI integrates AWS X-Ray SDK for local Lambda handler execution tracing.",
+      "gap": "N/A — library obligation is trace propagation which X-Ray integration satisfies",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Alerting is a consumer concern for CLI tools",
+      "description": "Library/utility — alerting on error rates and latency is a consumer concern. CLI provides exit codes for orchestration-layer monitoring.",
+      "gap": "N/A",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No custom business metrics — success/failure to stdout",
+      "description": "No custom business metrics published. Success/failure reported to stdout.",
+      "gap": "N/A for a CLI tool",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "lib/main.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "ENG-Q1", "status": "N/A", "reason": "Application repository with library N/A mapping applied (dev-library-application override). This question does not apply."},
+    {"question_id": "ENG-Q2", "status": "N/A", "reason": "Application repository with library N/A mapping applied (dev-library-application override). This question does not apply."},
+    {"question_id": "ENG-Q3", "status": "N/A", "reason": "Application repository with library N/A mapping applied (dev-library-application override). This question does not apply."},
+    {"question_id": "ENG-Q4", "status": "N/A", "reason": "Application repository with library N/A mapping applied (dev-library-application override). This question does not apply."},
+    {"question_id": "ENG-Q5", "status": "N/A", "reason": "Application repository with library N/A mapping applied (dev-library-application override). This question does not apply."}
+  ]
+}
