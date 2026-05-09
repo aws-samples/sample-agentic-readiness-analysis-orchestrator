@@ -331,7 +331,7 @@ Fields:
 | `not_ready_services` | integer | Count with score < 1.5 |
 | `pathways_triggered` | integer | Count of distinct pathways triggered across portfolio |
 | `foundational_blockers` | integer | Count of criteria scoring < 2 in 2+ repos |
-| `improvement_opportunities` | integer | Count of criteria scoring < 3 in 3+ repos |
+| `improvement_opportunities` | integer | Count of criteria scoring < 3 at-or-above the scaling threshold (max(3, 33% of applicable repos); floor of 2 for portfolios with fewer than 4 applicable repos) |
 | `category_inf` | float or "N/A" | Infrastructure & DevOps portfolio average |
 | `category_app` | float or "N/A" | Application Architecture portfolio average |
 | `category_data` | float or "N/A" | Data Platform portfolio average |
@@ -546,7 +546,8 @@ Identify modernization gaps that appear across multiple services. Cross-cutting 
 - Must be addressed before service-level modernization can proceed
 
 **Tier 2 — 💡 Improvement Opportunities:**
-- Criteria scoring **< 3** in **3 or more** repos (excluding N/A)
+- Criteria scoring **< 3** in **max(3, 33% of applicable repos)** (excluding N/A)
+- For portfolios with fewer than 4 applicable repos for a given question, the threshold is 2 repos (same as Tier 1 but at a higher score boundary)
 - These represent important gaps that are not blocking but warrant coordinated attention
 - Can be addressed in parallel with other modernization work
 
@@ -576,7 +577,10 @@ for each question_id in all_37_questions:
     
     # Check Tier 2: Improvement Opportunities
     gap_count = count(s < 3 for s in scores)
-    if gap_count >= 3:
+    tier2_threshold = max(3, ceil(len(applicable_services) * 0.33))
+    if len(applicable_services) < 4:
+        tier2_threshold = 2  # Small portfolio accommodation
+    if gap_count >= tier2_threshold:
         classify as Improvement Opportunity
         record: question_id, gap_count, applicable_services count
 ```
@@ -724,7 +728,7 @@ These phase names are fixed.
 #### 6.2 Phase Assignment Algorithm
 
 **Phase 0 — Cross-Cutting Foundation (Mo 0–1):**
-- Cross-cutting concerns affecting 3+ services (portfolio-level solutions from Step 5)
+- Cross-cutting concerns identified in Step 5 (Foundational Blockers and Improvement Opportunities)
 - Shared infrastructure improvements benefiting multiple services
 - Circular dependency breaking activities (must be resolved first — from Step 4.4)
 - Organizational enablers (training, tooling, standards)
@@ -784,6 +788,25 @@ If `dependency_overrides` was not provided:
   - Phase 3: P2 services and services with score >= 3.0
 - Phase 0 still contains cross-cutting concerns from Step 5
 - Note in the roadmap that dependency-based ordering is not available and recommend providing `dependency_overrides` for a more accurate roadmap
+
+#### 6.7 Target State Architecture
+
+After generating the phased roadmap, produce a brief "Target State" summary that describes what the portfolio looks like after roadmap completion. This gives architects the destination picture, not just the gap list.
+
+**Derive from:**
+- `preferences` (prefer/avoid arrays define the desired technology stack)
+- Triggered pathways (each pathway implies a target state — e.g., "Move to Containers" → "all compute on EKS/ECS")
+- Cross-cutting Foundational Blockers (each resolved blocker implies a capability — e.g., "IaC coverage" → "all infrastructure defined in Terraform")
+- Blueprint candidates (strongest repo patterns become the standard)
+
+**Output structure:**
+- **Compute:** Target compute platform (derived from Move to Containers pathway + preferences)
+- **Data:** Target database/storage platform (derived from Move to Managed Databases + Move to Open Source pathways)
+- **Observability:** Target observability stack (derived from PORT-MOD-Q2 + OPS category gaps)
+- **CI/CD:** Target pipeline pattern (derived from Move to Modern DevOps pathway + blueprint candidates)
+- **Security:** Target security posture (derived from SEC category + PORT-MOD-Q5)
+
+Each entry should be 1-2 sentences stating the target state, not the remediation steps (those are in the roadmap). Example: "Compute: All services containerized on EKS with Karpenter autoscaling. No EC2 instances in production." When `preferences` are not provided, derive targets from triggered pathways and AWS best practices only.
 
 ### Step 7: Aggregate Pathways Across Portfolio
 
@@ -864,6 +887,23 @@ Map pathway execution to the 4-phase roadmap:
 
 This mapping is indicative — actual phase assignment depends on the service-level dependency analysis in Step 6.
 
+#### 7.5 Pathway Overlap Density
+
+For each service, count the number of triggered pathways. Services triggering 4 or more pathways represent concentrated modernization debt requiring dedicated investment — they cannot be modernized incrementally alongside other work.
+
+**Algorithm:**
+```
+for each service in portfolio:
+    triggered_count = count(pathway.status == "Triggered" for pathway in service.pathways)
+    service.pathway_load = triggered_count
+
+heavy_modernization_candidates = [s for s in portfolio if s.pathway_load >= 4]
+```
+
+**Output:** Include a "Heavy Modernization Candidates" callout in the report when `heavy_modernization_candidates` is non-empty:
+- List each service with pathway_load ≥ 4, showing which pathways are triggered
+- Flag these as requiring dedicated sprint capacity or a focused modernization initiative
+- Cross-reference with the risk register (these services likely appear as high-risk dependencies)
 
 ### Step 8: Integration Opportunities, Risk Assessment, and Resource Allocation
 
@@ -1018,7 +1058,7 @@ Individual report scores are never overridden. Where a portfolio-level finding p
 | PORT-MOD-Q1 | **IaC Standardization** — Are services using a consistent IaC tool across the portfolio? | 4: Single IaC tool across all services. 3: Primary tool covers 80%+, minor exceptions. 2: 2-3 different tools with no standard. 1: No IaC or completely fragmented. | Count distinct IaC tools across repos (Terraform, CDK, CloudFormation, Pulumi, none). Calculate the percentage covered by the most common tool. Factor in the portfolio's preferred IaC tool from preferences. |
 | PORT-MOD-Q2 | **Shared Observability Platform** — Is there a centralized observability stack (tracing, logging, metrics) spanning all services? | 4: Centralized tracing + logging + metrics with cross-service correlation. 3: Centralized logging and metrics but no cross-service tracing. 2: Some shared tooling but inconsistent adoption. 1: Each service has independent or no observability. | Check for: shared CloudWatch Log Groups, shared X-Ray/ADOT configuration, shared dashboards, consistent metric namespaces. Cross-reference with individual OPS-Q1 (tracing), OPS-Q2 (SLOs), OPS-Q3 (metrics) scores. |
 | PORT-MOD-Q3 | **Dependency Cycle Health** — Are there circular dependencies that block independent modernization? | 4: No circular dependencies. 3: Circular deps exist but are async-only (breakable). 2: Sync circular deps exist with known resolution path. 1: Sync circular deps with no resolution path, blocking modernization. | Using the dependency graph from Step 4, detect cycles. Classify each cycle by dependency type (sync vs async). Sync cycles are harder to break. Score based on severity and resolution feasibility. |
-| PORT-MOD-Q4 | **Technology Diversity** — How fragmented is the technology stack across the portfolio? | 4: Low diversity (1-2 languages, 1 IaC tool, 1 DB engine). 3: Moderate diversity (2-3 languages, 1-2 IaC tools). 2: High diversity (4+ languages, 3+ IaC tools, mixed DB engines). 1: Extreme fragmentation with no standardization effort. | Calculate technology diversity score: count distinct languages, IaC tools, DB engines, compute patterns, CI/CD tools. Divide by number of services. Higher ratio = more fragmentation. Factor in preference alignment. |
+| PORT-MOD-Q4 | **Technology Diversity** — How fragmented is the technology stack across the portfolio, distinguishing intentional polyglot from accidental sprawl? | 4: Low diversity (1-2 languages, 1 IaC tool, 1 DB engine) OR intentional polyglot where each language maps consistently to a service archetype (e.g., Go for networking, Python for ML, TypeScript for frontends). 3: Moderate diversity (2-3 languages, 1-2 IaC tools) with mostly consistent patterns. 2: High diversity (4+ languages, 3+ IaC tools, mixed DB engines) with no consistent mapping to service roles — accidental sprawl. 1: Extreme fragmentation with no standardization effort and no archetype justification. | Calculate technology diversity score: count distinct languages, IaC tools, DB engines, compute patterns, CI/CD tools. Divide by number of services. **Intentional polyglot adjustment:** if each language maps consistently to a specific archetype or domain (verifiable from service_inventory tags and archetypes), do not penalize — score based on consistency rather than raw count. Factor in preference alignment. |
 | PORT-MOD-Q5 | **Shared Security Posture** — Is there a centralized security scanning pipeline, shared WAF, or unified vulnerability management across the portfolio? | 4: Centralized security scanning + shared WAF + unified vuln management. 3: Shared WAF or centralized scanning but not both. 2: Some shared security tooling but inconsistent. 1: Each service manages security independently or not at all. | Check for: shared WAF WebACL, centralized security scanning in CI/CD, shared Secrets Manager configuration, consistent IAM patterns. Cross-reference with individual SEC-Q1 through SEC-Q6 scores. |
 
 #### 10.2 Contextual Annotations
@@ -1263,7 +1303,7 @@ If preferences were provided, note alignment with preferred technologies.>
 
 ### 💡 Improvement Opportunities
 
-> Criteria scoring < 3 in 3+ repos. Important but not blocking.
+> Criteria scoring < 3 in at least **max(3, 33% of applicable repos)** (floor of 2 for portfolios with fewer than 4 applicable repos). Important but not blocking.
 > Address as capacity allows or in parallel with other modernization work.
 > **Render this section only if at least one Improvement Opportunity is classified. Omit entirely if empty.**
 
@@ -1443,6 +1483,16 @@ No cross-cutting concerns identified. All criteria meet the minimum thresholds a
 
 **Total Estimated Effort**: High / Medium / Low
 **Expected Timeline**: X months (with Y parallel tracks)
+
+### Target State Architecture
+
+> After roadmap completion, the portfolio looks like this. Derived from triggered pathways, `preferences`, resolved cross-cutting blockers, and blueprint candidates per Step 6.7.
+
+- **Compute:** <target compute platform — 1-2 sentences>
+- **Data:** <target database/storage platform — 1-2 sentences>
+- **Observability:** <target observability stack — 1-2 sentences>
+- **CI/CD:** <target pipeline pattern — 1-2 sentences>
+- **Security:** <target security posture — 1-2 sentences>
 ```
 
 
@@ -1545,6 +1595,16 @@ in exactly one column per pathway row.
 - **Estimated Effort**: High / Medium / Low across N services
 - **Roadmap Phase Alignment**: Phase 3
 - **Relevant Learning Materials**: Module 7 — Move to AI
+
+### Heavy Modernization Candidates
+
+> Render this subsection only when at least one service has pathway_load ≥ 4 (per Step 7.5). Omit entirely otherwise.
+
+> These services trigger 4+ modernization pathways and represent concentrated modernization debt. They require dedicated sprint capacity or a focused modernization initiative rather than incremental work alongside other services.
+
+| Service | Pathways Triggered | Pathway Load | Cross-Reference |
+|---------|---------------------|--------------|-----------------|
+| <service name> | <comma-separated pathway names> | N | Risk register entry (if present) |
 ```
 
 ---
@@ -1885,12 +1945,14 @@ The complete report structure, for reference:
    - Phase 1 — Quick Wins
    - Phase 2 — Foundation
    - Phase 3 — Advanced
+   - Target State Architecture
 6. AWS Modernization Pathways
    - Portfolio Pathway Summary
    - Portfolio Pathway Aggregation
    - Per-Service Pathway Assignment
    - Pathway Dependencies and Parallel Execution
    - Pathway Details
+   - Heavy Modernization Candidates (when at least one service has pathway_load ≥ 4)
 7. Integration Opportunities
 8. Risk Assessment
 9. Resource Allocation Recommendations
@@ -1908,7 +1970,7 @@ Strictly follow these rules at all times:
 - **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio report file.
 - **Minimum 2 reports**: The portfolio assessment requires at least 2 valid MOD reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Scores of N/A are excluded from portfolio-level category averages (both numerator and denominator), overall score calculations, and cross-cutting concern analysis. A question that is N/A for a service does not count as a gap for that service.
-- **Two-tier classification only**: Cross-cutting concerns use exactly two tiers — Foundational Blockers (score < 2 in 2+ repos) and Improvement Opportunities (score < 3 in 3+ repos).
+- **Two-tier classification only**: Cross-cutting concerns use exactly two tiers — Foundational Blockers (score < 2 in 2+ repos) and Improvement Opportunities (score < 3 at-or-above the scaling threshold, max(3, 33% of applicable repos) with a floor of 2 for portfolios with fewer than 4 applicable repos).
 - **Fixed phase names**: Roadmap phases are always named Cross-Cutting Foundation, Quick Wins, Foundation, and Advanced.
 - **Dependency-aware ordering**: When dependency information is available, services must not be assigned to a phase earlier than their dependencies. Foundation services (high fan-in) go in Phase 1 or earlier. Within phases, order by priority (P0 → P1 → P2).
 - **Preferences for framing only**: Technology preferences (prefer/avoid) influence recommendation language and technology suggestions. They do NOT change scores, N/A mappings, pathway trigger logic, or cross-cutting concern classification.

@@ -27,15 +27,17 @@ Each question is scored on a 1–4 scale:
 
 Category scores are calculated as the arithmetic mean of all non-N/A, non-Not-Evaluated question scores in that category. The overall score is the average of the 5 category scores (each category weighted equally regardless of question count). If all questions in a category are N/A or Not Evaluated for the detected repo_type and archetype, the category score is "N/A" and is excluded from the overall score average.
 
+> **Design note — equal category weighting:** Categories have different question counts (INF: 11, OPS: 9, SEC: 7, APP: 6, DATA: 4). Equal category weighting is intentional: each modernization dimension contributes equally to the overall score regardless of how many questions probe it. This means individual DATA questions have ~2.5x the per-question impact on the overall score compared to individual OPS questions. This is acceptable because data platform modernization (fewer questions, each high-signal) is as important as operational maturity (more questions, individually lower-signal). Portfolio consumers comparing services should use category scores directly rather than relying on overall score alone.
+
 **Not Evaluated (archetype-N/A)** — Questions that are archetype-calibrated (currently INF-Q3, INF-Q4, APP-Q3, APP-Q4) may resolve to "not applicable by design" for a specific archetype. When the archetype column indicates the question does not apply (e.g., "No multi-step workflows exist — not applicable by design" for `stateless-utility` on INF-Q3), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from both category and overall score averaging — same exclusion as N/A. This prevents artificial score inflation from archetype-correct-but-uninformative "Score 4 by default" entries. The rubric columns still describe what evaluation would look like; the Not-Evaluated status means no evaluation was performed for this repo.
 
-The assessment evaluates 7 AWS Modernization Pathways, each with defined trigger conditions mapped to specific question IDs and contextual guards to prevent false positives. Each pathway uses a **Primary + Supporting** trigger model — a pathway fires only when its Primary condition is met; Supporting conditions strengthen the case and inform the detail section but do not on their own trigger the pathway:
+The assessment evaluates 7 AWS Modernization Pathways, each with defined trigger conditions mapped to specific question IDs and contextual guards to prevent false positives. Most pathways use a **Primary + Supporting** trigger model — a pathway fires when its Primary condition is met; Supporting conditions strengthen the case and inform the detail section. Two pathways use **compound triggers** where multiple conditions must be true simultaneously (Move to Cloud Native requires primary AND at least one supporting; Move to Open Source requires primary AND commercial DB evidence). The Summary Table below captures each pathway's full trigger logic — Step 7 is authoritative on implementation details:
 
 | Pathway | Primary Trigger | Supporting Triggers | Contextual Guard |
 |---------|----------------|---------------------|------------------|
-| **Move to Cloud Native** | APP-Q2 < 3 | At least one of INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3 must also be true | — |
+| **Move to Cloud Native** | APP-Q2 < 3 AND at least one of: INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3 | (compound — primary required AND ≥1 supporting required) | — |
 | **Move to Containers** | INF-Q1 < 3 AND no container definitions found | — | Must be EC2/VM-based; SHALL NOT trigger if compute is already Lambda/Fargate/ECS |
-| **Move to Open Source** | DATA-Q4 < 3 | Commercial DB engines detected in INF-Q2 finding | — |
+| **Move to Open Source** | DATA-Q4 < 3 AND commercial DB engines detected in INF-Q2 finding | (compound — both conditions required) | — |
 | **Move to Managed Databases** | INF-Q2 < 3 | DATA-Q3 < 3 (strengthens, not required) | — |
 | **Move to Managed Analytics** | INF-Q4 < 3 | Data source sprawl with no unified access layer (DATA-Q2 finding) | Evidence of data processing workloads must exist |
 | **Move to Modern DevOps** | INF-Q10 < 3 OR INF-Q11 < 3 | OPS-Q5 < 3, OPS-Q6 < 3 (strengthen, not required) | — |
@@ -45,7 +47,7 @@ Full trigger logic including severity interpretation, archetype calibration, and
 
 All 7 pathways appear in the pathway summary table with status: **Triggered**, **Not Triggered**, or **Not Applicable** (for repo_types where the pathway does not apply).
 
-When APP-Q2 (Monolith vs Microservices) scores less than 3, the report includes a **Decomposition Strategy** section with concrete approach options (Strangler Fig parallel track, conditional/adaptive, and big-bang with recommendation against), pattern recommendations linked to AWS prescriptive guidance (Anti-corruption Layer, Saga, Event Sourcing, Hexagonal Architecture), and level-of-effort estimates per approach.
+When APP-Q2 (Monolith vs Microservices) scores less than 3, the report includes a **Decomposition Strategy** section with concrete approach options (strengthen as modular monolith, Strangler Fig parallel track, conditional/adaptive, and big-bang with recommendation against), pattern recommendations linked to AWS prescriptive guidance (Anti-corruption Layer, Saga, Event Sourcing, Hexagonal Architecture), and level-of-effort estimates per approach.
 
 The output is a **four-artifact bundle** (per the Four-Artifact Output Contract below) containing:
 - `{repo-name}-mod-report.md` — richest narrative report
@@ -313,10 +315,11 @@ Apply these checks in order. The first check that matches determines the archety
    - SQS/Kafka/SNS handlers, EventBridge rules, Lambda triggers on queue events
    - No HTTP routes, or only health-check routes
 
-2. **Calls 3+ downstream services (high fan-out) with minimal or no persistent state of its own?** → `orchestrator`
-   - HTTP/gRPC clients to 3+ other services
-   - Service addresses in env vars pointing to multiple peers
-   - Workflow or saga coordination patterns
+2. **Orchestrates multi-service workflows (calls 3+ downstream services AND coordinates multi-step sequences)?** → `orchestrator`
+   - HTTP/gRPC clients to 3+ other services with sequential/conditional coordination logic
+   - Saga patterns, compensating actions, or workflow state machines
+   - Step Functions, Temporal, or equivalent orchestration frameworks
+   - Important: simple fan-out (calling 3 services independently without coordination) is NOT sufficient — the service must coordinate a workflow. A CRUD service calling auth + DB + notifications independently is `stateful-crud`, not `orchestrator`.
 
 3. **Has persistent state?** → go to 3a
    **No persistent state?** → go to 3b
@@ -564,7 +567,7 @@ These questions evaluate the compute, networking, platform services, and deploym
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
-| **4** | No multi-step workflows exist — not applicable by design. Score defaults to 4 as the "correct" outcome. | No multi-step workflows exist in the read path; any background maintenance jobs use managed orchestration. | Dedicated workflow orchestration service in use for business-critical multi-step operations. | Step Functions, Temporal, or equivalent coordinates all multi-service workflows with error handling and retries. | Event pipeline uses managed orchestration (Step Functions, EventBridge Pipes) for multi-step processing. |
+| **4** | No multi-step workflows exist — not applicable by design → **Not Evaluated (archetype-N/A)**. | No multi-step workflows exist in the read path; any background maintenance jobs use managed orchestration. | Dedicated workflow orchestration service in use for business-critical multi-step operations. | Step Functions, Temporal, or equivalent coordinates all multi-service workflows with error handling and retries. | Event pipeline uses managed orchestration (Step Functions, EventBridge Pipes) for multi-step processing. |
 | **3** | — | Some background jobs orchestrated, others in code; minimal impact on read path. | Partial adoption — some workflows orchestrated, others still in code. | Partial adoption — primary workflow orchestrated, auxiliary flows still in code. | Primary pipeline orchestrated; some event chains still handled inline. |
 | **2** | — | Background jobs are hardcoded state machines. | Simple state machines in code with some structure, but no dedicated service. | Fan-out coordination is in code with basic structure but no dedicated orchestrator. | Multi-step event processing is ad hoc in handler code. |
 | **1** | Multi-step processes exist despite the utility framing and are entirely hardcoded (indicates archetype may be misclassified). | Multi-step orchestration buried in application code with no structure. | No orchestration — all workflow logic hardcoded in application code. | No orchestration despite fan-out — tight coupling and no retry/error strategy. This is an anti-pattern for this archetype. | Event chains are fully hardcoded with no orchestration primitives. |
@@ -688,6 +691,8 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 > **⚠️ Scoring limitation — external context dependency:** Infrastructure as Code is sometimes maintained in a dedicated infrastructure repository (e.g., a Terraform monorepo or a platform team's CDK project) rather than alongside application source code. The absence of IaC files in the scanned repository does not always confirm that infrastructure is manually provisioned — it may be managed in a separate repo. A Score of 1 has a moderate false-positive rate for application repos in organizations that separate IaC from application code. When `additionalPlanContext` provides IaC evidence (e.g., referencing a companion infra repo), use that to override the code-scan result.
 
+> **Scoring guidance for percentages:** The denominator is "infrastructure resources this service depends on" — compute, networking, databases, messaging, monitoring, DNS, and secrets. Count resource categories with IaC definitions vs those without. If only the repo's own resources are visible (no evidence of external infra), score based on what IS present: if all visible infrastructure has IaC definitions, score 3 (not 4, since unobservable resources may be manual) unless `additionalPlanContext` confirms full coverage.
+
 #### INF-Q11: CI/CD Automation
 
 **Question:** Are CI/CD pipelines automated with build, test, and deploy stages for both application code and infrastructure as code, or are deployments manual?
@@ -740,6 +745,8 @@ These questions evaluate the application's structural maturity, decomposition re
 
 > **Look for:** Single deployable vs multiple service directories; Helm charts for multiple services; Docker Compose with multiple services; IaC for multiple ECS tasks or Lambda functions. For monoliths: package/module structure, dependency graphs, circular dependencies, shared mutable state, database coupling.
 
+> **Scoring guidance for Score 2 vs 3 boundary:** The key differentiator is *database schema isolation*. Score 3 requires that modules/services own their data — either separate databases or separate schemas within the same instance where cross-schema access is via API, not direct table joins. Score 2 applies when modules share tables, use cross-module foreign keys, or access each other's data via direct SQL rather than through defined interfaces. If the evidence is ambiguous (single database but you cannot determine whether cross-module queries exist), default to Score 2.
+
 #### APP-Q3: Async vs Sync Communication
 
 **Question:** What percentage of inter-service communication is asynchronous vs synchronous HTTP?
@@ -754,7 +761,7 @@ These questions evaluate the application's structural maturity, decomposition re
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
-| **4** | Sync request/response is the correct design; async not needed. Score defaults to 4. | Sync reads are correct; any write-back, cache invalidation, or indexing uses async. | 50%+ async for cross-service state propagation, or async available for all long-running operations. | Async dominates for fan-out; sync reserved for reads and fast-returning calls. | Primary input is async (event/queue); any outbound calls are async where appropriate. |
+| **4** | Sync request/response is the correct design; async not needed → **Not Evaluated (archetype-N/A)**. | Sync reads are correct; any write-back, cache invalidation, or indexing uses async. | 50%+ async for cross-service state propagation, or async available for all long-running operations. | Async dominates for fan-out; sync reserved for reads and fast-returning calls. | Primary input is async (event/queue); any outbound calls are async where appropriate. |
 | **3** | — | Sync-dominant with async available for auxiliary flows that need it. | Mix of async and sync with async for key workflows. | Mix of async and sync; primary workflows async, some fan-out still sync. | Async input; some sync outbound calls that could be async. |
 | **2** | — | Sync-only with no async path for flows that would benefit (e.g., reindexing blocks read traffic). | Primarily synchronous with some async for background jobs. | Primarily synchronous fan-out with limited async. | Mixed input model with significant sync coupling. |
 | **1** | Sync with no ability to add async where rare outbound signals would genuinely benefit. | Sync-only across all paths with visible queueing or timeout issues. | All communication synchronous HTTP with no async patterns. | Synchronous-only fan-out across 3+ services — cascading failure risk. Anti-pattern for this archetype. | Entirely synchronous (polling loops, sync RPCs) — archetype mismatch. |
@@ -777,7 +784,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 | Score | stateless-utility | data-gateway | stateful-crud | orchestrator | event-processor |
 |-------|------------------|--------------|---------------|--------------|-----------------|
-| **4** | No operations exceed 30 seconds — not applicable by design. Score defaults to 4. | No user-facing operations exceed 30 seconds; any heavy reindexing or export jobs are async with status polling. | All operations over 30 seconds implemented as async jobs with status polling or callbacks. | All long-running coordination uses Step Functions, polling, or callback patterns. | Event handlers are async by design; long-running processing within a handler uses checkpointing or sub-workflows. |
+| **4** | No operations exceed 30 seconds — not applicable by design → **Not Evaluated (archetype-N/A)**. | No user-facing operations exceed 30 seconds; any heavy reindexing or export jobs are async with status polling. | All operations over 30 seconds implemented as async jobs with status polling or callbacks. | All long-running coordination uses Step Functions, polling, or callback patterns. | Event handlers are async by design; long-running processing within a handler uses checkpointing or sub-workflows. |
 | **3** | — | Most heavy operations are async; a rarely-hit export path may still block. | Most long-running operations async; some blocking calls remain. | Most long-running coordination async; edge cases still block. | Most handlers safely bounded; a few may exceed timeout without checkpointing. |
 | **2** | — | Some heavy reads are synchronous and risk timeout. | Some background job processing but inconsistent patterns. | Some long-running coordination still blocks with risk of timeout. | Handlers occasionally exceed timeout; retries cause duplicate side effects. |
 | **1** | A synchronous operation exceeding 30 seconds exists, contradicting the utility framing (archetype likely misclassified). | Unbounded synchronous queries blocking the read path. | All operations synchronous regardless of duration. | All long-running coordination synchronous — caller must hold connection open. | Handlers routinely exceed timeout with no checkpointing — processing lost on retry. |
@@ -1035,6 +1042,8 @@ These questions evaluate the operational maturity and observability practices th
 > **Look for:** SLO definitions in code or config; CloudWatch alarms on p99/p95 latency; error budget tracking; SLO dashboards.
 
 > **⚠️ Scoring limitation — external context dependency:** SLO definitions typically reside in external monitoring platforms (CloudWatch, Datadog, Grafana, PagerDuty) rather than in source code or IaC. A Score of 1 on this question indicates that no SLO evidence was found *in the repository being scanned* — it does not confirm that SLOs are absent from the operational environment. This question has a high false-positive rate for code-only assessments. When `additionalPlanContext` provides SLO evidence (e.g., via a future `external_observability` field), use that to override the code-scan result. This question is classified as **non-core (P2)** because the absence of in-repo SLO artifacts is not a reliable signal of operational immaturity.
+
+> **Scoring guidance for code-only assessments:** Score 2 (not 1) when CloudWatch alarms on latency/error-rate exist in IaC even without formal SLO naming — the presence of threshold-based alarms implies implicit SLOs. Score 1 only when NO monitoring artifacts exist at all. This prevents systematic Score-1 inflation across portfolios where SLO tooling lives externally.
 
 #### OPS-Q3: Business Metrics
 
@@ -1357,15 +1366,17 @@ The guard prevents recommending managed analytics infrastructure to applications
 
 **Contextual Guard:** Requires explicit AI/agent/LLM intent in the portfolio or service context. Before evaluating primary trigger conditions, scan both the portfolio-level `context` and the service-level `context` (from `additionalPlanContext`) for AI-related signal terms.
 
-**AI-Related Signal Terms (case-insensitive):**
-"AI", "agent", "agentic", "LLM", "machine learning", "ML", "Bedrock", "generative", "GenAI", "RAG", "vector", "embedding", "copilot", "assistant", "chatbot", "autonomous"
+**AI-Related Signal Terms (case-insensitive, whole-word match):**
+"agentic", "LLM", "machine learning", "Bedrock", "generative AI", "GenAI", "RAG", "vector database", "vector store", "embedding", "copilot", "chatbot", "AI agent", "AI-powered", "large language model"
+
+> **Note:** Generic terms like "AI", "agent", "ML", "assistant", and "autonomous" are excluded because they produce false matches in non-AI contexts (e.g., "autonomous scaling", "ML pipeline for fraud detection", "agent identity", "virtual assistant" for IVR). The retained terms are specific enough to indicate LLM/GenAI intent.
 
 **Guard Logic:**
 
 ```
-ai_signals = ["AI", "agent", "agentic", "LLM", "machine learning", "ML", 
-              "Bedrock", "generative", "GenAI", "RAG", "vector", "embedding",
-              "copilot", "assistant", "chatbot", "autonomous"]
+ai_signals = ["agentic", "LLM", "machine learning", "Bedrock", "generative AI", 
+              "GenAI", "RAG", "vector database", "vector store", "embedding",
+              "copilot", "chatbot", "AI agent", "AI-powered", "large language model"]
 
 portfolio_context = additionalPlanContext.context  # portfolio-level
 service_context = additionalPlanContext.context     # service-level (from repo config)
@@ -1384,7 +1395,7 @@ else:
     evaluate_primary_triggers()
 ```
 
-If neither the portfolio-level context nor the service-level context contains any of the 17 AI-related signal terms, the pathway status is set to **Not Triggered** with reason: "No AI/agent intent detected in portfolio or service context." The primary trigger conditions are not evaluated. When at least one context string contains an AI-related signal and the primary trigger conditions are met, the pathway status is set to **Triggered**.
+If neither the portfolio-level context nor the service-level context contains any of the AI-related signal terms, the pathway status is set to **Not Triggered** with reason: "No AI/agent intent detected in portfolio or service context." The primary trigger conditions are not evaluated. When at least one context string contains an AI-related signal and the primary trigger conditions are met, the pathway status is set to **Triggered**.
 
 **Priority:** Medium — AI adoption is increasingly important but depends on the application's domain and use cases.
 **Est. Effort:** Medium — initial AI integration (e.g., adding Bedrock for a single use case) is moderate effort, but building comprehensive AI infrastructure (vector DBs, RAG, eval frameworks) requires more investment.
@@ -1434,7 +1445,8 @@ Evaluate the monolith's characteristics (from APP-Q2 finding, DATA-Q2 finding, a
 
 | Approach | Description | When to Use | Level of Effort | Recommendation |
 |----------|-------------|-------------|-----------------|----------------|
-| **Strangler Fig (Parallel Track)** | Incrementally extract services from the monolith while keeping the monolith running. New features are built as services; existing features are migrated over time. The monolith shrinks as services grow. | APP-Q2 = 2 (identifiable modules with coupling). The monolith has recognizable boundaries that can be extracted one at a time. Team can sustain parallel development. | **Medium to High** — 6-18 months depending on monolith size. Each extraction is a bounded effort. | ✅ **Recommended for most monoliths.** Lowest risk, incremental value delivery, no big-bang cutover. |
+| **Strengthen as Modular Monolith** | Keep the application as a single deployable unit but enforce strict module boundaries: separate schemas per module, explicit inter-module APIs (no direct cross-module database access), clear ownership per module. | APP-Q2 = 2 and the team is < 3-4 squads, deployment cadence is acceptable, and the primary driver is code quality rather than independent scaling or team autonomy. | **Low** — 2-6 months of internal refactoring. No new infrastructure or deployment topology changes. | ✅ **Recommended when decomposition drivers are weak.** Not every monolith needs microservices. If the team is small, deployment frequency is adequate, and the primary issue is code coupling rather than operational independence, strengthening module boundaries is the correct outcome — not a stepping stone. |
+| **Strangler Fig (Parallel Track)** | Incrementally extract services from the monolith while keeping the monolith running. New features are built as services; existing features are migrated over time. The monolith shrinks as services grow. | APP-Q2 = 2 (identifiable modules with coupling). The monolith has recognizable boundaries that can be extracted one at a time. Team can sustain parallel development. Strong drivers for decomposition exist (independent scaling, team autonomy, deployment independence). | **Medium to High** — 6-18 months depending on monolith size. Each extraction is a bounded effort. | ✅ **Recommended for most monoliths where decomposition is warranted.** Lowest risk, incremental value delivery, no big-bang cutover. |
 | **Conditional / Adaptive** | Start with containerizing the monolith as-is (lift-and-containerize), then selectively extract high-value services based on business priority. Not all modules need to become services — some may remain in the monolith permanently. | APP-Q2 = 2 and the team has limited capacity for full decomposition. Business pressure requires quick wins before full architectural change. | **Low to Medium** — containerization in 2-4 weeks, selective extraction over 3-12 months. | ✅ **Recommended when capacity is constrained** or when only specific modules need independent scaling/deployment. |
 | **Big-Bang Rewrite** | Rewrite the entire application as microservices from scratch, replacing the monolith in a single cutover. | Almost never. Only when the monolith is so degraded (APP-Q2 = 1, no identifiable modules, pervasive shared state) that incremental extraction is impossible. | **Very High** — 12-24+ months. High risk of scope creep, feature parity gaps, and failed cutover. | ⚠️ **Recommended against.** High risk of failure. If the monolith is functional, Strangler Fig or Conditional approaches are safer. Only consider if the monolith is truly unmaintainable. |
 
@@ -1882,6 +1894,19 @@ Every MOD question has a static `core_question` value that does NOT change per-r
 
 `mod_metadata` preserves scoring detail. The Score Summary table, Scoring Notes arithmetic, pathway trigger logic, and archetype-calibration prose all remain authoritative and unchanged — `mod_metadata` just surfaces the per-finding scoring reasoning in structured JSON so the webapp and the portfolio aggregator can consume it without re-parsing MD.
 
+#### Evaluations Array (`evaluations[]`)
+
+Questions that do NOT produce a finding (score 4 = pass, N/A, Not Evaluated) are recorded in `evaluations[]`. Every one of the 37 question IDs appears in EITHER `findings[]` OR `evaluations[]` — never both, never neither.
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | e.g., `"INF-Q1"` |
+| `category_id` | string | e.g., `"INF"` |
+| `title` | string | Question title (e.g., "Managed Compute") |
+| `status` | enum | `"pass"` / `"na"` / `"not_evaluated_archetype"` / `"not_evaluated_surface_flag"` |
+| `score` | integer or null | The internal 1-4 score (4 for pass, null for N/A/Not Evaluated) |
+| `reason` | string | Why this status was assigned (e.g., "Score 4 — fully managed compute on EKS with Karpenter", "Library repo — INF questions are N/A") |
+
 #### Explicit Forbid: No `pathway_triggers` Field on Findings
 
 MOD findings MUST NOT carry a `pathway_triggers` field (or any equivalent pathway-trigger evidence field) under `mod_metadata` or at any other level of the finding. Pathway trigger evidence lives ONLY on `pathways[]` entries via the `triggering_questions[]` array — see the Per-Repo `pathways[]` Emission section below. This keeps the finding shape aligned with ARA and ensures that the portfolio MOD TD can consume pathway-trigger "why" evidence from a single authoritative location (`pathways[].contributing_repos[].triggering_questions[]`).
@@ -2097,7 +2122,7 @@ The following content MUST be retained in every per-repo MOD MD report:
 - **Score Summary table** — per-category numeric scores with the ✅ Mature / 🟡 Partial / 🟠 Needs Work / ❌ Not Ready emoji rating (the `score_rating` label). Rendered unchanged.
 - **Scoring Notes** arithmetic breakdown (e.g., `"INF: (3+1+2+2+1+2+1+2+2+2+2) / 11 = 20/11 = 1.82"`) — preserved in MD. JSON does NOT need to carry Scoring Notes because the final numeric scores are already in `categories[].numeric_score`.
 - **Top 5 Gaps** table — rendered in MD with columns `#`, `Question`, `Score`, `Gap`, `Impact`. JSON carries the same data under `top_gaps[]`.
-- **Decomposition Strategy** conditional section (fires when APP-Q2 < 3) — rendered in MD including the three approach options (Strangler Fig parallel track, conditional/adaptive, big-bang with recommendation against), pattern recommendations (Anti-corruption Layer, Saga, Event Sourcing, Hexagonal Architecture), and level-of-effort estimates. JSON carries a structured `decomposition_strategy` object when the condition fires, `null` otherwise.
+- **Decomposition Strategy** conditional section (fires when APP-Q2 < 3) — rendered in MD including the four approach options (strengthen as modular monolith, Strangler Fig parallel track, conditional/adaptive, big-bang with recommendation against), pattern recommendations (Anti-corruption Layer, Saga, Event Sourcing, Hexagonal Architecture), and level-of-effort estimates. JSON carries a structured `decomposition_strategy` object when the condition fires, `null` otherwise.
 - **Archetype Justification** prose — rendered in the MD metadata block. For the four archetype-calibrated questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4), MD prose MUST explain how the detected or supplied archetype shaped the score whenever `mod_metadata.archetype_calibrated == true`.
 - **AWS Modernization Pathways** Summary Table with status/priority/effort/Key Trigger Criteria columns, AND Pathway Detail subsections for each Triggered pathway. See the Per-Repo `pathways[]` Emission section for the JSON surface.
 - **Aggregate Evidence Index** at the end of the report. JSON consumers can re-derive this section from the union of `findings[].evidence` across all findings.

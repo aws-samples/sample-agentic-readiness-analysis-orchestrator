@@ -18,7 +18,7 @@ This transformation performs a dedicated Agentic Readiness Assessment on a codeb
 - **AUTH** — Authentication, Authorization, and Identity (7 questions: all core)
 - **STATE** — State Management and Transactional Integrity (7 questions: 3 core + 4 extended)
 - **HITL** — Human-in-the-Loop and Approval Workflows (3 questions: 1 core + 2 extended)
-- **DATA** — Data Accessibility and Quality (7 questions: 3 core + 4 extended)
+- **DATA** — Data Accessibility and Quality (7 questions: 4 core + 3 extended)
 - **DISC** — Discoverability and Semantic Readiness (3 questions: 1 core + 2 extended)
 - **OBS** — Observability of Target Systems (3 questions: 2 core + 1 extended)
 - **ENG** — Engineering and Deployment Maturity (5 questions: 3 core + 2 extended)
@@ -27,20 +27,20 @@ This transformation performs a dedicated Agentic Readiness Assessment on a codeb
 
 Not all 43 questions are evaluated for every service. Questions are organized into two tiers:
 
-**Core (24 questions)** — Always evaluated for applicable repo types. These directly determine whether an agent can safely call this service:
+**Core (25 questions)** — Always evaluated for applicable repo types. These directly determine whether an agent can safely call this service:
 
 | Section | Core Questions | Why Core |
 |---------|---------------|----------|
 | AUTH | Q1, Q2, Q3, Q4, Q5, Q6, Q7 (all 7) | Identity is always critical for agent safety |
 | API | Q1, Q2, Q3, Q4 | Minimum viable integration surface |
 | STATE | Q1, Q5, Q6 | Write safety and rate protection |
-| DATA | Q1, Q2, Q6 | Data classification, residency, PII protection |
+| DATA | Q1, Q2, Q4, Q6 | Data classification, residency, input validation, PII protection |
 | OBS | Q1, Q2 | Debuggability of agent-initiated requests |
 | ENG | Q1, Q2, Q3 | Infrastructure governance and deployment safety |
 | HITL | Q3 | Agent testing environment |
 | DISC | Q1 | Schema stability for agent tool bindings |
 
-**Extended (19 questions)** — Evaluated only when triggered by service characteristics (archetype, scope, or detected patterns). When not triggered, recorded as "Not Evaluated (extended)" and excluded from scoring.
+**Extended (18 questions)** — Evaluated only when triggered by service characteristics (archetype, scope, or detected patterns). When not triggered, recorded as "Not Evaluated (extended)" and excluded from scoring.
 
 | Question | Trigger Condition |
 |----------|------------------|
@@ -55,7 +55,6 @@ Not all 43 questions are evaluated for every service. Questions are organized in
 | HITL-Q1 | agent_scope is write-enabled |
 | HITL-Q2 | agent_scope is write-enabled |
 | DATA-Q3 | Service has list/query endpoints with potentially unbounded results |
-| DATA-Q4 | Service has persistent state (stateful-crud, data-gateway) |
 | DATA-Q5 | Service has persistent state (stateful-crud, data-gateway, orchestrator) |
 | DATA-Q7 | Always evaluated as INFO |
 | DISC-Q2 | Always evaluated as INFO |
@@ -68,17 +67,17 @@ Not all 43 questions are evaluated for every service. Questions are organized in
 
 | Configuration | N/A | Core | Extended Triggered | Total Evaluated |
 |--------------|-----|------|--------------------|-----------------|
-| application / stateless-utility / read-only | 0 | 24 | ~3 (INFOs only) | ~27 |
-| application / stateless-utility / write-enabled | 0 | 24 | ~5 | ~29 |
-| application / stateful-crud / read-only | 0 | 24 | ~11 | ~35 |
-| application / stateful-crud / write-enabled | 0 | 24 | ~15 | ~39 |
-| application / orchestrator / read-only | 0 | 24 | ~8 | ~32 |
-| application / orchestrator / write-enabled | 0 | 24 | ~11 | ~35 |
-| application / data-gateway / read-only | 0 | 24 | ~8 | ~32 |
-| application / event-processor / read-only | 0 | 24 | ~4 | ~28 |
+| application / stateless-utility / read-only | 0 | 25 | ~3 (INFOs only) | ~28 |
+| application / stateless-utility / write-enabled | 0 | 25 | ~5 | ~30 |
+| application / stateful-crud / read-only | 0 | 25 | ~10 | ~35 |
+| application / stateful-crud / write-enabled | 0 | 25 | ~14 | ~39 |
+| application / orchestrator / read-only | 0 | 25 | ~8 | ~33 |
+| application / orchestrator / write-enabled | 0 | 25 | ~11 | ~36 |
+| application / data-gateway / read-only | 0 | 25 | ~7 | ~32 |
+| application / event-processor / read-only | 0 | 25 | ~4 | ~29 |
 | infrastructure-only | 29 | 14 | 0 | 14 |
 | deployment-config | 35 | 8 | 0 | 8 |
-| library | 5 | 24 | ~9 | ~33 |
+| library | 5 | 25 | ~8 | ~33 |
 | monorepo | per-service | per-service | per-service | per-service |
 
 Each question is scored using a severity model:
@@ -158,7 +157,7 @@ Each RISK-severity question is assigned to exactly one tier. The assignment is s
 | HITL-Q1 | Draft/pending state | No draft state for reversible agent-proposed writes |
 | HITL-Q2 | Approval gates | No human approval option for high-risk agent actions |
 
-**RISK-QUALITY (18 questions):**
+**RISK-QUALITY (17 questions):**
 
 | Question ID | Topic | Quality Rationale |
 |-------------|-------|-------------------|
@@ -166,14 +165,13 @@ Each RISK-severity question is assigned to exactly one tier. The assignment is s
 | API-Q3 | Structured errors | Agent cannot distinguish retriable vs terminal errors |
 | API-Q6 | Async operation support | Long-running ops fail against agent timeouts |
 | STATE-Q2 | Queryable current state | Agent cannot inspect state before action |
-| STATE-Q7 | Infrastructure capacity | Agent exploratory traffic starves unrelated consumers |
+| STATE-Q7 | Degradation signaling | Agent reasons on stale/degraded data without awareness |
 | DATA-Q3 | Pagination | Agent gets unbounded result sets |
-| DATA-Q4 | System of record | Agent reads stale data |
+| DATA-Q4 | Input validation | Agent sends malformed payloads without rejection |
 | DATA-Q5 | Temporal metadata | Agent cannot reason about data freshness |
 | DISC-Q1 | Schema versioning | Agent tool bindings break silently |
 | OBS-Q1 | Tracing | Cannot debug agent-initiated requests |
 | OBS-Q2 | Alerting | No alerts for agent anomalies |
-| OBS-Q3 | Agent metrics | No visibility into agent behavior |
 | ENG-Q1 | Infra governance | No IaC = manual, error-prone changes |
 | ENG-Q2 | CI/CD + contracts | Agent tool breakage not caught in pipeline |
 | ENG-Q3 | Rollback | Cannot roll back agent-breaking deployments |
@@ -399,7 +397,7 @@ Record each surface flag as `true`, `false`, or `unknown`. When `unknown`, the q
 
 - `true` signals: database connections (SQL/NoSQL/ORM imports), DynamoDB/RDS/DocumentDB/Neptune/Timestream clients with CRUD operations, S3 buckets used for user content (not build artifacts), Redis with writes, Elasticsearch with indexing, stateful caches with user data
 - `false` signals: library publishes no storage dependency, build tools only read source files, CLI/SDK wraps remote APIs without owning a data store, in-memory-only computations, reference/static data only (exchange rates, feature flags)
-- Used by: DATA-Q1, DATA-Q2, DATA-Q4, DATA-Q5, DATA-Q6
+- Used by: DATA-Q1, DATA-Q2, DATA-Q5, DATA-Q6
 
 **`has_http_rpc_surface`** — The system exposes an HTTP, gRPC, or GraphQL server that accepts inbound requests.
 
@@ -476,15 +474,20 @@ If `service_archetype` was provided in `additionalPlanContext`, use that value d
 └─────────┬───────────────────────┘
           │
           ▼
-┌─────────────────────────────────┐
-│ Calls 3+ downstream services?    │
-│ (HTTP/gRPC clients to other      │
-│  services, service addresses     │
-│  in env vars, fan-out pattern)   │
-│                                  │
-│  YES → orchestrator              │
-│  NO  → Continue ▼                │
-└─────────┬───────────────────────┘
+┌──────────────────────────────────────┐
+│ Orchestrates multi-service           │
+│ workflows?                           │
+│ (Calls 3+ downstream services        │
+│  AND coordinates multi-step          │
+│  sequences: saga patterns,           │
+│  compensating actions, workflow      │
+│  state machines, Step Functions,     │
+│  or sequential service calls         │
+│  with error/rollback handling)       │
+│                                      │
+│  YES → orchestrator                  │
+│  NO  → Continue ▼                    │
+└─────────┬────────────────────────────┘
           │
           ▼
 ┌─────────────────────────────────┐
@@ -696,6 +699,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Consistent error response format across endpoints
 - Minimum: error code, error message, and a retryable boolean or category
 
+**Cross-reference — input validation:** Input validation and schema enforcement is evaluated as a dedicated question in DATA-Q4. When evaluating API-Q3, note whether validation *error responses* are structured (field name, constraint violated, accepted format) — that evidence feeds both API-Q3 (error structure quality) and DATA-Q4 (whether validation exists at all). See DATA-Q4 for the full evaluation criteria.
+
 ---
 
 #### API-Q4: Idempotent Write Operations — BLOCKER ⚡ (Conditional)
@@ -813,6 +818,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Role-per-service vs shared roles
 - API Gateway resource policies
 - Condition keys in IAM policies
+
+**Evaluation threshold:** The system passes if it supports creating scoped permissions for a caller identity — i.e., the authorization model allows differentiating access levels (not all callers get the same permissions). It does NOT require that every policy in the repo is perfectly scoped. Evidence of wildcard policies on non-production or internal-only roles does not fail this question if production-facing roles demonstrate scope differentiation. Fail if ALL authorization is coarse-grained (single shared role, no mechanism to scope down).
 
 ---
 
@@ -1015,19 +1022,24 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Examples: `max_refunds_per_hour=50`, `max_records_per_bulk_operation=500`, `max_spend_per_session=$1000`
 - Configurable per agent identity, not just per API endpoint
 
+**Evaluation threshold:** This question evaluates whether the system can limit the *business impact* of agent operations beyond API-layer rate limiting (STATE-Q5). Pass if ANY of the following exist: (a) configurable per-caller business transaction limits, (b) bulk operation size caps (e.g., batch delete limited to N records), (c) spend/cost thresholds per session or caller identity. These need not be agent-specific — general per-caller business limits satisfy this question. Fail if the only protection is API-level throttling (requests/second) with no business-domain caps on operation scope.
+
 ---
 
-#### STATE-Q7: Infrastructure Capacity for Agent Traffic — RISK-QUALITY
+#### STATE-Q7: Graceful Degradation Signaling — RISK-QUALITY
 
-**Question:** Is the backend infrastructure sized and tested for the unpredictable, exploratory traffic patterns that agents generate?
+**Question:** Does the system signal degraded mode to callers via machine-readable indicators — so an agent can detect when it is receiving stale, partial, or fallback responses rather than authoritative data?
 
-**Why it matters:** APIs designed for human-paced interaction are load-tested for known traffic profiles. Agents don't respect those assumptions — they explore, retry, and fan out. Agent-induced load can starve unrelated systems sharing the backend.
+**Why it matters:** Agents making autonomous decisions on degraded data produce incorrect outcomes at machine speed. If the system fails over to a stale cache, returns partial results from a degraded dependency, or operates in read-only mode, agents need a machine-readable signal to adjust behavior (e.g., defer decisions, request human review, retry later). Without this, agents treat degraded responses as authoritative.
 
 **Look for:**
-- Load test results or configurations
-- Auto-scaling policies
-- Capacity planning documentation
-- Circuit breakers isolating agent traffic from other consumers
+- Health endpoints returning granular states (healthy / degraded / read-only / partial)
+- `X-Degraded: true` or `X-Data-Freshness: stale` response headers
+- `Retry-After` headers on 503 responses
+- Circuit breaker configs with fallback responses that include degradation metadata
+- `Cache-Control` headers with `stale-while-revalidate` or `must-revalidate`
+- Response envelope fields like `{ "data_status": "cached", "cached_at": "..." }`
+- Feature flag states exposed in response metadata
 
 
 ### Step 5: Human-in-the-Loop and Approval Workflows (3 questions)
@@ -1055,6 +1067,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Approval workflow endpoints
 - Two-step commit patterns (create-then-confirm)
 - Status-based state machines
+
+**Evaluation threshold:** Pass if the system has ANY mechanism where a state change can be proposed without being immediately committed — allowing a human (or supervisory process) to review before finalization. This includes: status enums with PENDING/DRAFT/PROPOSED states, two-step APIs (create-then-confirm), or explicit approval workflow endpoints. Pre-existing business workflow states count IF they can be repurposed for agent-initiated proposals (e.g., an order with status=PENDING_REVIEW). Fail only if all write operations are immediately committed with no reviewable intermediate state.
 
 ---
 
@@ -1225,18 +1239,23 @@ Severity logic for B3:
 
 ---
 
-#### DATA-Q4: System of Record Designations — RISK-QUALITY
+#### DATA-Q4: Input Validation and Schema Enforcement — RISK-QUALITY
 
-**Question:** Are there authoritative system-of-record designations for key entities, and is there a master data management process that resolves conflicts across systems?
+**Question:** Does the system validate and reject malformed inputs at the API boundary with structured error responses that identify which field failed and why?
 
-**Why it matters:** Agents reasoning across multiple systems will encounter conflicting records. Without a golden record, decisions will be inconsistent.
+**Why it matters:** LLMs constructing API calls produce malformed payloads — partial JSON, special characters, oversized strings, out-of-range values, or injection-like fragments. Target systems that accept garbage inputs silently corrupt state. Systems that crash on unexpected input create cascading failures. Systems that return generic 400 errors without field-level detail force agents into blind retry loops. The target system must validate inputs and return structured rejection signals that enable agents to self-correct.
 
 **Look for:**
-- Master data management references
-- System-of-record designations in documentation
-- Data ownership definitions
-- Conflict resolution logic
-- Golden record patterns
+- Request validation libraries (joi, zod, yup, pydantic, javax.validation, class-validator, marshmallow)
+- OpenAPI request body schema validation middleware
+- API Gateway request validators
+- Parameterized queries (protection against injection)
+- Input sanitization middleware
+- Request size limits (`max_body_size`, payload limits)
+- Type-safe request parsing (TypeScript interfaces, Rust serde, Go struct tags)
+- Structured validation error responses with field-level detail (e.g., `{ "errors": [{ "field": "email", "constraint": "format", "message": "..." }] }`)
+
+**Evaluation threshold:** Pass if the system has ANY systematic input validation at the API boundary — either framework-level (validation annotations, middleware) or explicit (manual checks with structured error responses). Presence of parameterized queries alone is insufficient (that prevents injection but doesn't validate business rules). Fail if endpoints accept arbitrary input shapes without validation, or if validation errors return unstructured 400/500 responses with no field identification.
 
 ---
 
@@ -1392,7 +1411,7 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### OBS-Q3: Business Outcome Metrics — RISK-QUALITY
+#### OBS-Q3: Business Outcome Metrics — INFO
 
 **Question:** Are custom metrics published for business outcomes, not just infrastructure metrics?
 
@@ -1577,7 +1596,7 @@ Display the severity distribution for all non-N/A questions. N/A questions are e
 | Not Evaluated (extended) | <count> |
 | **Total** | **43** |
 
-**Core Questions Evaluated**: 24 (or fewer if repo_type N/A applies)
+**Core Questions Evaluated**: 25 (or fewer if repo_type N/A applies)
 **Extended Questions Triggered**: <count>
 **Extended Questions Not Triggered**: <count>
 **Questions N/A (repo_type: <repo_type>)**: <N/A count>
@@ -1876,6 +1895,7 @@ Strictly follow these rules at all times:
 - **Read-only assessment**: Do not modify any source code, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
 - **Be specific — cite evidence**: Always reference actual file names, resource names, and patterns found. Never write "there may be..." — state what was found or what was not found.
 - **Absence is evidence**: If a search for a specific artifact finds nothing (e.g., no OpenAPI spec, no IaC files, no audit logging configuration), that absence is itself a finding. State it clearly and score accordingly.
+- **Search completeness for absence claims**: Before declaring an artifact absent, search using ALL detection patterns listed in the question's "Look for" section. At minimum: (1) scan file names matching common conventions (e.g., `openapi.*`, `swagger.*`, `*.tf`, `*.smithy`), (2) grep source files for framework-specific imports or annotations listed in "Look for", (3) check the dependency manifest (package.json, pom.xml, requirements.txt, go.mod) for relevant libraries. If the repo has >500 files, focus on directories most likely to contain the artifact (e.g., `/api`, `/docs`, `/infra`, `/config`, root-level config files). Declare absence only after all detection patterns return zero results. State which patterns were searched in the evidence field.
 - **Read before judging**: Do not score a question without actually reading relevant files. If relevant files have not been found yet, keep searching.
 - **IaC is ground truth**: Trust IaC definitions over README descriptions. What is deployed is what is defined in the IaC.
 - **Do not skip questions**: All 43 questions must appear in the report. Questions that are N/A for the detected `repo_type` use the N/A display format. Extended questions that are not triggered use the "Not Evaluated (extended)" display format. Both are listed, not omitted.
@@ -1909,7 +1929,7 @@ Every ARA finding MUST carry these 12 fields:
 | `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority. See table below. |
 | `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
 | `phase` | integer | `1`–`4` — derived roadmap phase. |
-| `evidence` | object or null | `{file, lines}` reference to the gap location, or `null` when not applicable. |
+| `evidence` | object or null | `{file: string, lines: string}` reference to the gap location (e.g., `{"file": "src/auth.ts", "lines": "42-58"}`), or `null` when no specific file location applies. `lines` is a string range like `"12-15"` or single line like `"42"`. |
 
 All 12 fields are REQUIRED on every emitted finding — missing any one fails the assessment and names the offending `question_id`. Findings are never emitted for questions that resolve to pass, N/A, Not Evaluated (extended), or any other non-finding outcome; those questions appear only under `evaluations[]`.
 
@@ -1933,9 +1953,42 @@ The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA
 
 `ara_metadata` preserves rubric detail. The classification tier and count rules in the Summary and Report Template sections remain authoritative. `native_severity` is the join key back to BLOCKER / RISK-SAFETY / RISK-QUALITY / INFO counts.
 
+### Evaluations Array (`evaluations[]`)
+
+Questions that do NOT produce a finding (pass, N/A, Not Evaluated) are recorded in `evaluations[]`. Every one of the 43 question IDs appears in EITHER `findings[]` OR `evaluations[]` — never both, never neither.
+
+| Field | Type | Description |
+|---|---|---|
+| `question_id` | string | e.g., `"AUTH-Q1"` |
+| `category_id` | string | e.g., `"AUTH"` |
+| `title` | string | Question title (e.g., "Machine Identity Authentication") |
+| `status` | enum | `"pass"` / `"na"` / `"not_evaluated_extended"` / `"not_evaluated_archetype"` |
+| `reason` | string | Why this status was assigned (e.g., "Infrastructure-only repo — API questions are N/A", "Extended question not triggered — no persistent state") |
+
+### Remediation Roadmap (`remediation_roadmap`)
+
+| Field | Type | Description |
+|---|---|---|
+| `phases` | integer[] | `[1, 2, 3]` — the phases used in this report |
+| `items[]` | object[] | Per-phase remediation items |
+| `items[].phase` | integer | 1, 2, or 3 |
+| `items[].phase_name` | string | "Blockers", "Safety", or "Quality" |
+| `items[].findings` | string[] | Array of `question_id` values in this phase |
+| `items[].summary` | string | 1-2 sentence description of the phase focus |
+
+### Recommended Actions (`recommended_actions[]`)
+
+| Field | Type | Description |
+|---|---|---|
+| `action` | string | Short action title (e.g., "Deploy centralized identity provider") |
+| `question_ids` | string[] | Related finding question IDs |
+| `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` |
+| `effort` | enum | `"High"` / `"Medium"` / `"Low"` |
+| `rationale` | string | Why this action is recommended |
+
 ### Per-Question Priority Table
 
-The `priority` field on every finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`. Priority is derived mechanically from the native tier:
+The `priority` field on every finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`. The native severity tier provides a baseline, but individual question priorities are hand-tuned to reflect operational impact (e.g., scope-calibrated questions that resolve to INFO under read-only scope receive lower priority than their tier baseline; questions with high remediation dependency on other findings may be elevated). The concrete per-question table below is authoritative — use it directly rather than deriving from severity tier:
 
 | ARA native severity tier | Default per-question priority |
 |---|---|
@@ -1970,7 +2023,7 @@ Concrete per-question assignments for all 43 ARA questions:
 | STATE-Q4 | P1 | HITL-Q1 | P1 |
 | STATE-Q5 | P1 | HITL-Q2 | P1 |
 | STATE-Q6 | P2 | HITL-Q3 | P2 |
-| STATE-Q7 | P1 | | |
+| STATE-Q7 | P2 | | |
 
 The conditional BLOCKERs are distributed across P0 and P1 in the table above (DATA-Q1 and STATE-Q1 at P0; API-Q4, AUTH-Q6, DATA-Q2 at P1). Per-finding `priority` is static per `question_id` — the ARA native tier still drives classification counts through `ara_metadata.native_severity`; `priority` is a separate, static-per-question field that does not change with `agent_scope` or per-repo resolution.
 
