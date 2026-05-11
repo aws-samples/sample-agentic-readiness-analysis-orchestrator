@@ -369,7 +369,7 @@ The two ARA report folders enable delta tracking — comparing assessment result
 
 The `dashboard/` directory contains interactive HTML dashboards deployed to CloudFront:
 
-- **ARA Dashboard** -- Assessment run selector, readiness profiles, cross-cutting analysis, pilot candidate ranking, agentic program recommendations (AgentStorming, AXE, EBA), delta comparison between runs
+- **ARA Dashboard** -- Assessment run selector, readiness profiles, cross-cutting analysis, pilot candidate ranking, agentic program recommendations (AI DLC, AXE, EBA), delta comparison between runs
 - **MOD Dashboard** -- Category scores, pathway summary, 4-phase roadmap, technology stack, radar chart
 - **Bridge Dashboard** -- Shared remediation mapping, agentic readiness delta, MOD readiness gates, unified remediation sequence
 - **BAO Dashboard** -- Agent opportunity classification (build-now / data-first / automate / platform), dependency discovery by vendor, implementation waves, Bedrock consumption forecast
