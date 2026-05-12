@@ -76,8 +76,9 @@ This assessment does NOT cover:
 
 - The repository is accessible and readable at the specified path
 - The repository contains files relevant to assessment (source code, IaC, API specs, CI/CD configs, dependency manifests, container definitions, Kubernetes manifests, Helm charts, or configuration files)
-- Write permissions exist to create the output report file
+- Write permissions exist to create the output artifact bundle (MD, JSON, HTML, and metadata.json)
 - The assessment operates in **read-only mode** — it will not modify any source code or configuration in the repository
+- Stay on the current branch — this is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out.
 
 ## Implementation Steps
 
@@ -1727,10 +1728,11 @@ The following constraints govern the assessment execution and report generation.
 
 This assessment operates in **read-only mode**. The evaluating agent SHALL NOT:
 - Modify any source code, configuration files, or infrastructure definitions in the repository.
-- Create, delete, or rename any files in the repository (except the output report file).
+- Create, delete, or rename any files in the repository (except the output artifact bundle).
 - Execute any commands that change repository state (no `git commit`, no `terraform apply`, no `npm install`).
+- Create, switch, or checkout any git branches. Remain on whatever branch is currently checked out. This is an analysis-only task — do not create branches for runs.
 
-The only write operation permitted is creating the output report file (`{repo-name}-mod-report.md`).
+The only write operations permitted are creating the output artifact bundle: `{repo-name}-mod-report.md`, `{repo-name}-mod-report.json`, `{repo-name}-mod-report.html`, and `{repo-name}-mod-report.metadata.json`.
 
 ### C2: All 37 Questions Must Appear in Report
 

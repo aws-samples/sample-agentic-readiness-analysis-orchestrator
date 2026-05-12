@@ -31,6 +31,7 @@ This bridge TD only runs when `assessment_type: full` — it requires both portf
 - Both the portfolio ARA report and the portfolio MOD report exist and are readable at the paths specified in `additionalPlanContext`
 - Reports follow the expected structure: readiness profiles, severity counts, category averages, cross-cutting findings, and phased roadmaps
 - Write permissions exist to create the bridge report file at the portfolio root directory
+- Stay on the current branch — this is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 
 ## Implementation Steps
 

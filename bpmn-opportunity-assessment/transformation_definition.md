@@ -30,6 +30,7 @@ The output is saved as `{process-name}-bpmn-opportunity-report.md`.
 - The JSON analysis report is available at the path specified in `additionalPlanContext` (field: `analysis_report_path`)
 - Write permissions exist to create the output report file
 - This assessment operates in read-only mode and will not modify any files in the repository
+- Stay on the current branch — this is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 
 ## Implementation Steps
 

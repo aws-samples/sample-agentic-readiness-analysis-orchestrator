@@ -46,7 +46,7 @@ This portfolio TD focuses exclusively on cross-cutting BLOCKER/RISK identificati
 - At least 2 individual ARA report JSON artifacts exist in repository directories
 - ARA report JSONs follow the expected schema: `assessment_type == "ara"`, `classification` object, `findings[]` array with per-finding 12-field shape
 - Reports are accessible at specified paths or in a common directory structure
-- Write permissions exist to create the output directory and portfolio report file
+- Write permissions exist to create the output directory and portfolio artifact bundle (MD, JSON, HTML, and metadata.json)
 
 ## Implementation Steps
 
@@ -1035,7 +1035,8 @@ The complete report structure, for reference:
 
 Strictly follow these rules at all times:
 
-- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio report file.
+- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio artifact bundle (MD, JSON, HTML, and metadata.json).
+- **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 - **Minimum 2 reports**: The portfolio assessment requires at least 2 valid ARA reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Questions scored as N/A for a service do NOT count as gaps for that service in cross-cutting analysis. A question that is N/A for a service is excluded from BLOCKER and RISK counts for cross-cutting identification.
 - **Cross-cutting thresholds**: BLOCKERs require 2+ repos. RISKs require max(3, 33% of applicable repos) with a floor of 2 for portfolios with fewer than 4 applicable repos. Do not lower these thresholds.

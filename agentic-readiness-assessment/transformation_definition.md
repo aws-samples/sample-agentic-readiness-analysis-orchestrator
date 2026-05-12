@@ -230,8 +230,9 @@ This assessment does NOT cover agent architecture (orchestration design, prompt 
 
 - The repository is accessible and readable at the specified path
 - The repository contains files relevant to assessment (source code, IaC, API specs, CI/CD configs, dependency manifests, container definitions, or configuration files)
-- Write permissions exist to create the output report file
+- Write permissions exist to create the output artifact bundle (MD, JSON, HTML, and metadata.json)
 - The assessment operates in **read-only mode** — it will not modify any source code or configuration in the repository
+- Stay on the current branch — this is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out.
 
 ## Implementation Steps
 
@@ -1893,6 +1894,7 @@ The complete report structure, for reference:
 Strictly follow these rules at all times:
 
 - **Read-only assessment**: Do not modify any source code, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
+- **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 - **Be specific — cite evidence**: Always reference actual file names, resource names, and patterns found. Never write "there may be..." — state what was found or what was not found.
 - **Absence is evidence**: If a search for a specific artifact finds nothing (e.g., no OpenAPI spec, no IaC files, no audit logging configuration), that absence is itself a finding. State it clearly and score accordingly.
 - **Search completeness for absence claims**: Before declaring an artifact absent, search using ALL detection patterns listed in the question's "Look for" section. At minimum: (1) scan file names matching common conventions (e.g., `openapi.*`, `swagger.*`, `*.tf`, `*.smithy`), (2) grep source files for framework-specific imports or annotations listed in "Look for", (3) check the dependency manifest (package.json, pom.xml, requirements.txt, go.mod) for relevant libraries. If the repo has >500 files, focus on directories most likely to contain the artifact (e.g., `/api`, `/docs`, `/infra`, `/config`, root-level config files). Declare absence only after all detection patterns return zero results. State which patterns were searched in the evidence field.

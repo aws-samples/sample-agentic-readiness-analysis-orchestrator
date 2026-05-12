@@ -233,5 +233,6 @@ Tasks classified as "Agent Data-First" or "Data Platform":
 ## Constraints
 
 - **Read-only assessment**: Do not modify any source code or individual BAO reports
+- **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 - **No ARA/MOD cross-referencing**: This TD aggregates BAO data only. Cross-referencing with ARA and MOD findings is the Bridge TD's responsibility.
 - **Minimum 1 report**: At least 1 BAO report must exist. Terminate with error if none found.

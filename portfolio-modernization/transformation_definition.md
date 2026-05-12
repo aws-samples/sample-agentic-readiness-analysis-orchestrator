@@ -53,7 +53,7 @@ This portfolio TD focuses on cross-cutting modernization concerns, dependency-aw
 - At least 2 individual MOD report JSON artifacts exist in repository directories
 - MOD report JSONs follow the expected schema: `assessment_type == "mod"`, `overall_score` numeric, `categories[]`, `pathways[]` with all 7 pathways, `findings[]` array
 - Reports are accessible at specified paths or in a common directory structure
-- Write permissions exist to create the output directory and portfolio report file
+- Write permissions exist to create the output directory and portfolio artifact bundle (MD, JSON, HTML, and metadata.json)
 
 ## Implementation Steps
 
@@ -1967,7 +1967,8 @@ The complete report structure, for reference:
 
 Strictly follow these rules at all times:
 
-- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio report file.
+- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio artifact bundle (MD, JSON, HTML, and metadata.json).
+- **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 - **Minimum 2 reports**: The portfolio assessment requires at least 2 valid MOD reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Scores of N/A are excluded from portfolio-level category averages (both numerator and denominator), overall score calculations, and cross-cutting concern analysis. A question that is N/A for a service does not count as a gap for that service.
 - **Two-tier classification only**: Cross-cutting concerns use exactly two tiers — Foundational Blockers (score < 2 in 2+ repos) and Improvement Opportunities (score < 3 at-or-above the scaling threshold, max(3, 33% of applicable repos) with a floor of 2 for portfolios with fewer than 4 applicable repos).
