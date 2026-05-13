@@ -60,6 +60,7 @@ Extract the following fields from `additionalPlanContext`:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
+| `portfolio_name` | string | Yes | — | Identifier for the portfolio. Used to name the output bundle (`{portfolio_name}-portfolio-ara-report.{md,json,html,metadata.json}`) and to populate report headers and metadata. If absent, terminate with `"Portfolio assessment failed: portfolio_name is required in additionalPlanContext."` |
 | `context` | string | No | — | Free-text description of the portfolio (e.g., "E-commerce platform with 5 microservices migrating to agentic integration"). Used to frame portfolio-level remediation guidance and recommendations. |
 | `service_inventory` | object[] | No | — | List of services in the portfolio with metadata (name, path, priority, repo_type, agent_scope, tags). Used to enrich the service-by-service summary and cross-reference with discovered reports. |
 | `dependency_overrides` | object[] | No | — | Explicit service dependency declarations. Each entry has: `source` (service name), `target` (service name), `type` (sync, async, shared_db, shared_infra), and `description`. Used to build the service dependency map in Step 5. |
@@ -1058,6 +1059,21 @@ Every portfolio ARA assessment emits four artifacts: three report artifacts plus
 | Metadata sidecar | `{portfolio-name}-portfolio-ara-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
 
 The JSON artifact is the canonical contract. If any artifacts disagree on a field, JSON wins.
+
+#### Artifact Layout
+
+The four-artifact bundle is emitted at the **portfolio root** under the `agentic-readiness-assessment/` directory:
+
+```
+{portfolio-root}/
+└── agentic-readiness-assessment/
+    ├── {portfolio-name}-portfolio-ara-report.md
+    ├── {portfolio-name}-portfolio-ara-report.json
+    ├── {portfolio-name}-portfolio-ara-report.html
+    └── {portfolio-name}-portfolio-ara-report.metadata.json
+```
+
+The directory `agentic-readiness-assessment/` is the same canonical location used for per-repo ARA reports (which live one level deeper, under `services/{repo-name}/agentic-readiness-assessment/`). Per-repo and portfolio reports are distinguished by the filename prefix: per-repo uses `{repo-name}`, portfolio uses `{portfolio-name}-portfolio`.
 
 #### Metadata Sidecar Fields
 
