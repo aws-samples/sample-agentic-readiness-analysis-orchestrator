@@ -2186,6 +2186,17 @@ The full visual contract is defined inline below — do NOT reference external f
 
 **HTML-escaping discipline.** Every data value rendered in HTML originates from the JSON artifact (MD prose is NOT part of the HTML round-trip contract). All attacker-controlled strings MUST be HTML-escaped before embedding: repo names, evidence file paths, finding titles, finding descriptions, recommendation text, pathway names, and any other string that originates from repository content or from free-text fields in `additionalPlanContext`. Escape `<`, `>`, `&`, `"`, `'` at render time. This is the same escaping discipline applied to the ARA HTML artifact.
 
+#### Slug Derivation
+
+The `{repo-name}` placeholder in artifact filenames refers to the **slug**, not the filesystem basename. The slug is derived as follows:
+
+```
+slug = lowercase(repo.name)
+       with any character not in [a-z0-9_-] replaced by '-'
+```
+
+When this TD is invoked via the orchestrator, the slug source is the `name` field of the repository entry in `portfolio-config.yaml`. When invoked manually, the slug source is provided implicitly via the working directory's `additionalPlanContext` or, in absence, the repository's directory name normalized by the rule above. **Always derive from the configured name, not the on-disk basename** — they can mismatch (e.g., a `MonoToMicroLegacy` directory configured as `unishop-monolith`).
+
 #### Artifact Layout
 
 ```

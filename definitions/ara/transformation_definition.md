@@ -2232,6 +2232,17 @@ Focus on the High severity findings above.
 
 **Content NOT in HTML** (MD-only): Rubric quotes, compensating-control discussion, BLOCKER Remediation blocks, conditional-resolution reasoning, DATA-Q1 sub-checks.
 
+### Slug Derivation
+
+The `{repo-name}` placeholder in artifact filenames refers to the **slug**, not the filesystem basename. The slug is derived as follows:
+
+```
+slug = lowercase(repo.name)
+       with any character not in [a-z0-9_-] replaced by '-'
+```
+
+When this TD is invoked via the orchestrator, the slug source is the `name` field of the repository entry in `portfolio-config.yaml`. When invoked manually, the slug source is provided implicitly via the working directory's `additionalPlanContext` or, in absence, the repository's directory name normalized by the rule above. **Always derive from the configured name, not the on-disk basename** — they can mismatch (e.g., a `MonoToMicroLegacy` directory configured as `unishop-monolith`).
+
 ### Artifact Layout
 
 ```

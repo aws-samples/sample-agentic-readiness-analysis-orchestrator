@@ -67,6 +67,7 @@ Extract the following fields from `additionalPlanContext`:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
+| `portfolio_name` | string | Yes | — | Identifier for the portfolio. Used to name the output bundle (`{portfolio_name}-portfolio-mod-report.{md,json,html,metadata.json}`) and to populate report headers and metadata. If absent, terminate with `"Portfolio assessment failed: portfolio_name is required in additionalPlanContext."` |
 | `context` | string | No | — | Free-text description of the portfolio (e.g., "E-commerce platform with 5 microservices planning cloud-native modernization"). Used to frame portfolio-level recommendations and roadmap guidance. |
 | `preferences` | object | No | — | Technology steering preferences with two arrays: `prefer` (technologies to favor in recommendations) and `avoid` (technologies to steer away from). Applied to portfolio-level technology recommendations, roadmap activities, and integration opportunity proposals. |
 | `service_inventory` | object[] | No | — | List of services in the portfolio with metadata (name, path, priority, repo_type, tags, service_archetype). Used to enrich the service-by-service summary and cross-reference with discovered reports. `service_archetype` (optional, applies only to `application` repos) is passed through to each per-service MOD TD invocation to calibrate architecture-sensitive questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4); if omitted, the service MOD TD auto-detects it. |
@@ -2000,6 +2001,21 @@ Every portfolio MOD assessment emits four artifacts: three report artifacts plus
 | Metadata sidecar | `{portfolio-name}-portfolio-mod-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
 
 The JSON artifact is the canonical contract. If any artifacts disagree on a field, JSON wins.
+
+#### Artifact Layout
+
+The four-artifact bundle is emitted at the **portfolio root** under the `modernization-assessment/` directory:
+
+```
+{portfolio-root}/
+└── modernization-assessment/
+    ├── {portfolio-name}-portfolio-mod-report.md
+    ├── {portfolio-name}-portfolio-mod-report.json
+    ├── {portfolio-name}-portfolio-mod-report.html
+    └── {portfolio-name}-portfolio-mod-report.metadata.json
+```
+
+The directory `modernization-assessment/` is the same canonical location used for per-repo MOD reports (which live one level deeper, under `services/{repo-name}/modernization-assessment/`). Per-repo and portfolio reports are distinguished by the filename prefix: per-repo uses `{repo-name}`, portfolio uses `{portfolio-name}-portfolio`.
 
 #### Metadata Sidecar Fields
 
