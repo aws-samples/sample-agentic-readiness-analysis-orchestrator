@@ -61,7 +61,7 @@ additionalPlanContext: |
 ```bash
 cd ./processes/loan-origination
 # Step 1: Run the deterministic BPMN analyzer first
-python3 <repo_root>/bpmn-analyzer/run_analysis.py \
+python3 <repo_root>/tools/bpmn-analyzer/run_analysis.py \
     --bpmn-dir . \
     --output ./bpmn-analysis.json
 

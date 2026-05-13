@@ -146,7 +146,7 @@ atx custom def exec -n <mod_td> -p ./services/checkout -g file://atx-config-chec
 ### Per-repo BAO (after running the BPMN analyzer first)
 
 ```bash
-python3 ./bpmn-analyzer/run_analysis.py --bpmn-dir ./processes/loan-origination --output ./processes/loan-origination/bpmn-analysis.json
+python3 ./tools/bpmn-analyzer/run_analysis.py --bpmn-dir ./processes/loan-origination --output ./processes/loan-origination/bpmn-analysis.json
 atx custom def exec -n <bao_td> -p ./processes/loan-origination -g file://atx-config-loan-bao.yaml -x -t
 ```
 
