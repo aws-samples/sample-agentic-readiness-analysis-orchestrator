@@ -36,7 +36,7 @@ The transformation definition names are configurable in `portfolio-config.yaml` 
 - Routes by `assessment_type`:
   - `agentic-readiness` → generates ARA ATX configs per repo, spawns ARA subagents, then runs Portfolio ARA TD
   - `modernization` → generates MOD ATX configs per repo, spawns MOD subagents, then runs Portfolio MOD TD
-  - `bpmn-opportunity` -> for each repo containing `.bpmn` files: runs the BPMN analyzer in directory mode (`bpmn-analyzer/run_analysis.py --bpmn-dir <repo_path>`) to produce a combined JSON analysis report covering all BPMN files in the repo. If the repo has `downstream_dependencies`, runs ARA on each dependency in parallel and passes results to the BPMN Opportunity TD for cross-referencing. Then generates BPMN Opportunity ATX configs with the `analysis_report_path` and dependency ARA results, spawns BPMN Opportunity subagents. Repos without `.bpmn` files are skipped with a warning.
+  - `bpmn-opportunity` -> for each repo containing `.bpmn` files: runs the BPMN analyzer in directory mode (`tools/bpmn-analyzer/run_analysis.py --bpmn-dir <repo_path>`) to produce a combined JSON analysis report covering all BPMN files in the repo. If the repo has `downstream_dependencies`, runs ARA on each dependency in parallel and passes results to the BPMN Opportunity TD for cross-referencing. Then generates BPMN Opportunity ATX configs with the `analysis_report_path` and dependency ARA results, spawns BPMN Opportunity subagents. Repos without `.bpmn` files are skipped with a warning.
   - `full` → generates ARA, MOD, and (when `.bpmn` files are present) BPMN Opportunity ATX configs per repo. Runs all paths in parallel. After completion, runs portfolio TDs and Bridge TD. BPMN Opportunity reports are consolidated into `bpmn-opportunity-assessment/` folder.
 - ARA ATX configs contain: `repo_type`, `service_archetype` (if provided or auto-detected), `agent_scope`, `context`, `priority`, `tags` — NO preferences
 - MOD ATX configs contain: `repo_type`, `context`, `priority`, `tags`, merged `preferences` (global + per-repo with conflict resolution) — NO agent_scope
@@ -210,8 +210,8 @@ Kiro will:
    - **`modernization`**: For each repo, generate a MOD ATX config (repo_type, context, priority, tags, merged preferences — NO agent_scope). Spawn parallel subagents running the MOD TD. After completion, generate Portfolio MOD ATX config (context, preferences, service inventory, dependency_overrides) and run Portfolio MOD TD.
    - **`full`**: Generate ARA, MOD, and BPMN Opportunity configs per repo. Run all paths in parallel. After completion, run both portfolio TDs. Then, if `portfolio_bridge` is configured, run the Bridge TD (see step 7.5 below). BPMN Opportunity runs only for repos containing `.bpmn` files.
    - **`bpmn-opportunity`**: For each repo, scan for `.bpmn` files. If found:
-     1. Run the BPMN analyzer in directory mode: `python3 bpmn-analyzer/run_analysis.py --bpmn-dir <repo_path> --output <repo_path>/bpmn-analysis.json`
-        The `bpmn-analyzer/` directory is at the root of this repository (sibling to `bpmn-opportunity-assessment/`).
+     1. Run the BPMN analyzer in directory mode: `python3 tools/bpmn-analyzer/run_analysis.py --bpmn-dir <repo_path> --output <repo_path>/bpmn-analysis.json`
+        The `tools/bpmn-analyzer/` directory contains the deterministic Python analyzer.
         The analyzer recursively finds all `.bpmn` files in the repo, analyzes each one (deterministic Python, no LLM), and produces a combined JSON report with per-process results and a portfolio summary.
      2. If the repo has `downstream_dependencies` in the config, run ARA on each dependency:
         - Clone the dependency repo if `repository_url` is provided and `path` doesn't exist
