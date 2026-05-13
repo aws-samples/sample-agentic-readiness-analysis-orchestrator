@@ -92,31 +92,41 @@ slug = lowercase(repo.name)
 
 For each repo and each TD that ran on it:
 
-1. Compute the expected canonical path from the slug rule above
-2. **If the canonical `.md` exists** → record SUCCESS for that TD on that repo
-3. **If the canonical `.md` does not exist**, search the repo for stray artifacts:
+1. Compute the expected canonical path from the slug rule above.
+2. **If the canonical `.md` exists at the expected path** → record SUCCESS for that TD on that repo.
+3. **If the canonical `.md` is missing**, search the repo for stray artifacts produced by this TD type:
    ```bash
-   find {repo_path} -maxdepth 4 -type f \
-       -name '*-ara-report.md' \
-       -o -name '*-mod-report.md' \
-       -o -name '*-bpmn-opportunity-report.md'
+   # ARA example — substitute -ara-report / -mod-report / -bpmn-opportunity-report as appropriate
+   find {repo_path} -maxdepth 4 -type f -name '*-ara-report.md' 2>/dev/null
    ```
-   For each stray artifact, compare its slug to the expected slug:
-   - **Slug matches** → MOVE the full four-file bundle (md, json, html, metadata.json) into the canonical directory
-   - **Slug mismatches** → ABORT with the manual-classification error (no auto-rename)
+   The Per-Repo Serialization Rule (Contract 2) guarantees exactly one subagent per repo, so any `*-{type}-report.md` found inside a single repo's tree is unambiguously attributable to that repo's run regardless of the filename slug. The reconciliation logic exploits this:
 
-   ```
-   Reconciliation failed: stray artifact at {found_path} does not match any configured repo slug. Manual classification required.
-   ```
-4. After move, re-verify the canonical `.md` exists. If still missing, mark this TD's run as FAILED — no portfolio aggregation will include it.
+   | Strays found in repo's tree | Action |
+   |---|---|
+   | **Zero**         | Mark this TD's run as FAILED — no artifact was produced. |
+   | **Exactly one**  | Auto-reconcile: rename the `.md` and the three companion artifacts (`.json`, `.html`, `.metadata.json`) to use the canonical slug from the portfolio config, then move the full four-file bundle into the canonical `{td-folder}/` subdirectory. Slug mismatch is expected and handled — TDs commonly use the on-disk basename or a normalized variant of it. Log the rename: `Reconciled {observed_path} -> {canonical_path}` |
+   | **Two or more**  | ABORT — this is a genuinely ambiguous state that violates Contract 2. Cite all stray paths and instruct the operator to investigate (likely a parallel-execution race or a leftover report from a previous run that was never cleaned up). |
 
-### Common Stray Patterns (auto-resolved when slug matches)
+4. After auto-reconcile, re-verify the canonical `.md` exists. If still missing despite the rename succeeding, mark this TD's run as FAILED.
 
-| Observed location | Cause |
-|---|---|
-| `{repo}/{slug}-mod-report.md` | Report landed at repo root instead of `modernization-assessment/` subfolder |
-| `{repo}/services/{slug}/{slug}-ara-report.md` | Working-directory confusion produced extra nesting |
-| `{repo}/agentic-readiness-assessment/{wrong-slug}-ara-report.md` | Slug mismatch — ABORT, do not auto-rename |
+### Why Auto-Reconcile (and Not Abort) on a Single Stray
+
+The original gate aborted on slug mismatch. We changed it to auto-reconcile because:
+
+- **Contract 2 guarantees attribution.** One subagent per repo, sequenced ARA → MOD → BAO. There is no way for a stray report inside `{repo}/` to belong to a different repo.
+- **TDs frequently emit the on-disk basename as the slug.** When `repo.name` and the directory basename diverge (e.g., `unishop-monolith` configured against a `MonoToMicroLegacy/` directory), the TD-emitted slug differs from the orchestrator-expected slug. This is a routine documentation gap, not data loss.
+- **Aborting on a mismatch breaks every portfolio run that includes a renamed-on-disk repo**, forcing operators to either edit `portfolio-config.yaml` to match basenames (defeating the point of `name`) or hand-rename files (defeating the point of the orchestrator).
+
+The two-or-more case remains ABORT because it indicates a real correctness problem (concurrent runs or stale artifacts) that auto-reconcile would mask.
+
+### Common Stray Patterns (all auto-resolved on first occurrence)
+
+| Observed location | Cause | Auto-reconcile action |
+|---|---|---|
+| `{repo}/{slug}-mod-report.md` | Report landed at repo root instead of `modernization-assessment/` subfolder | Move bundle into canonical subfolder |
+| `{repo}/services/{slug}/{slug}-ara-report.md` | Working-directory confusion produced extra nesting | Move bundle up to canonical subfolder |
+| `{repo}/agentic-readiness-assessment/{basename}-ara-report.md` (basename ≠ config slug) | TD emitted the on-disk basename as slug | Rename bundle to canonical slug, keep in same folder |
+| `{repo}/{basename}-mod-report.md` (basename ≠ config slug, no subfolder) | Both wrong slug and wrong location | Rename + move |
 
 ---
 

@@ -35,7 +35,8 @@ Common errors and fixes. Read this when an assessment fails, when reports go mis
 1. Per-repo `.json` artifact missing (only `.md` was emitted) — portfolio TDs require `.json`
 2. Reports landed at non-canonical paths (e.g., repo root instead of `modernization-assessment/`)
 3. Reports stranded on ATX staging branches that were never merged into the working branch
-4. Slug mismatch — the report's filename slug doesn't match the configured `repo.name`
+4. Slug mismatch — the report's filename slug doesn't match the configured `repo.name` (the reconciliation gate auto-renames in this case; only an issue if the gate did not run)
+5. Two or more strays for the same TD inside a single repo's tree (this is a real correctness failure — the reconciliation gate aborts here and asks the operator to investigate)
 
 **Fix:**
 1. Run the Reconciliation Gate manually (see `steering/reconciliation-gate.md`)
