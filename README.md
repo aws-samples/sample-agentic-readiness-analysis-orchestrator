@@ -2,13 +2,13 @@
 
 > Automated assessment of your service portfolio for agentic AI readiness, cloud-native modernization, and agentic opportunity identification from BPMN process models -- three dedicated assessments (ARA + MOD + BAO) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, a unified bridge report, and consolidated reports.
 
-This project provides six [AWS Transform](https://docs.aws.amazon.com/transform/) (ATX) custom transformation definitions and a [Kiro](https://kiro.dev) Power that orchestrates them across multiple repositories.
+This project provides seven [AWS Transform](https://docs.aws.amazon.com/transform/) (ATX) custom transformation definitions and a [Kiro](https://kiro.dev) Power that orchestrates them across multiple repositories.
 
 ## Architecture
 
 There are two layers:
 
-1. **ATX Custom Transformation Definitions** — the assessment logic published to your AWS Transform registry (6 TDs)
+1. **ATX Custom Transformation Definitions** — the assessment logic published to your AWS Transform registry (7 TDs)
 2. **Kiro Power** — an orchestrator that reads `portfolio-config.yaml`, classifies repos, generates ATX configs, spawns parallel subagents, and consolidates reports
 
 ### Three-Assessment Architecture (+ Bridge)
@@ -28,6 +28,8 @@ Zero question overlap between ARA and MOD. The `assessment_type` field routes wh
 
 ### Assessment Flow
 
+> **Per-repo execution model.** Subagents run **in parallel across repositories** but TDs are sequenced **within each repository** in `full` mode (ARA → MOD → BAO). Concurrent ATX runs against the same repo path fork divergent staging branches and lose artifacts. Portfolio TDs (Portfolio ARA → Portfolio MOD → Portfolio BAO → Bridge) run **strictly serially** with a Reconciliation Gate between each. See `orchestrator/POWER.md` for the full safety contracts.
+
 ```mermaid
 flowchart TB
     CONFIG[📄 portfolio-config.yaml] --> POWER[⚙️ Power]
@@ -43,13 +45,19 @@ flowchart TB
     ALL --> M_GEN
     ALL --> B_GEN
 
-    A_GEN --> A_RUN[🟢 ARA TD per repo — parallel]
-    M_GEN --> M_RUN[🔵 MOD TD per repo — parallel]
-    B_GEN --> B_RUN[🟠 BPMN Opportunity TD per repo]
+    A_GEN --> A_RUN[🟢 ARA TD per repo<br/>parallel across repos]
+    M_GEN --> M_RUN[🔵 MOD TD per repo<br/>parallel across repos<br/>after ARA in full mode]
+    B_GEN --> B_RUN[🟠 BPMN Opportunity TD per repo<br/>after MOD in full mode]
 
-    A_RUN --> A_PORT[🟢 Portfolio ARA TD]
-    M_RUN --> M_PORT[🔵 Portfolio MOD TD]
-    B_RUN --> B_PORT[🟠 Portfolio BAO TD]
+    A_RUN --> GATE1[🚪 Reconciliation Gate]
+    M_RUN --> GATE1
+    B_RUN --> GATE1
+
+    GATE1 --> A_PORT[🟢 Portfolio ARA TD]
+    A_PORT --> GATE2[🚪 Reconciliation Gate]
+    GATE2 --> M_PORT[🔵 Portfolio MOD TD]
+    M_PORT --> GATE3[🚪 Reconciliation Gate]
+    GATE3 --> B_PORT[🟠 Portfolio BAO TD]
 
     A_PORT --> A_OUT[📋 ARA Portfolio Report]
     M_PORT --> M_OUT[📋 MOD Portfolio Report]
@@ -119,18 +127,20 @@ flowchart TB
 
 ### Report Output
 
+Every per-repo and portfolio assessment emits a **four-artifact bundle**: `.md` (richest narrative), `.json` (canonical machine-readable contract for the dashboard and downstream TDs), `.html` (single self-contained visualization), and `.metadata.json` (version compatibility sidecar). The `.json` artifact is authoritative if the four ever disagree.
+
 ```mermaid
 flowchart LR
     subgraph ARA [📁 agentic-readiness-assessment/]
-        AR1[repo-a-ara-report.md]
-        AR2[repo-b-ara-report.md]
-        AR3[portfolio-ara-report.md]
+        AR1[repo-a-ara-report<br/>md · json · html · metadata.json]
+        AR2[repo-b-ara-report<br/>md · json · html · metadata.json]
+        AR3[portfolio-ara-report<br/>md · json · html · metadata.json]
     end
 
     subgraph MOD [📁 modernization-assessment/]
-        MR1[repo-a-mod-report.md]
-        MR2[repo-b-mod-report.md]
-        MR3[portfolio-mod-report.md]
+        MR1[repo-a-mod-report<br/>md · json · html · metadata.json]
+        MR2[repo-b-mod-report<br/>md · json · html · metadata.json]
+        MR3[portfolio-mod-report<br/>md · json · html · metadata.json]
     end
 
     subgraph BPMN [📁 bpmn-opportunity-assessment/]
@@ -153,6 +163,8 @@ flowchart LR
 - [Kiro IDE](https://kiro.dev) with the Agentic Assessment Orchestrator power installed
 
 ### Step 1: Publish the ATX Transformation Definitions
+
+> **Publish serially, not in parallel.** The atx CLI uses a shared tar staging path (`~/tmp/transformation.tar`). Concurrent `atx custom def publish` commands overwrite each other and produce ENOENT or 400 upload errors. Run the seven publish commands one at a time.
 
 ```bash
 # Individual assessments
@@ -202,6 +214,7 @@ transformation_definitions:
   bpmn_opportunity: "bpmn-opportunity-assessment"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  portfolio_bpmn_opportunity: "portfolio-bpmn-opportunity"
   portfolio_bridge: "portfolio-bridge"  # optional — for full assessments
 
 preferences:
@@ -235,6 +248,8 @@ Run the agentic assessment orchestrator on portfolio-config.yaml
 ```
 
 Kiro handles cloning, classification, config generation, parallel execution, and report consolidation.
+
+**What Kiro does for you, beyond the obvious.** The orchestrator enforces three safety contracts that prevent silent data loss in long-running ATX runs: a no-polling contract for subagents, per-repo serialization within `full` mode, and strictly serial portfolio TDs gated by a reconciliation step. Read [`orchestrator/POWER.md`](orchestrator/POWER.md) for the full contracts and the seven steering files for runbook-level depth.
 
 ![Kiro Power conversation end](static/end-kiro-conversation-after-using-power.png)
 
@@ -320,24 +335,26 @@ The `examples/reports/` directory contains complete sets of reports:
 
 ### Full Assessment (5 repos)
 
+Per-repo and portfolio reports each ship as a four-file bundle (`.md` + `.json` + `.html` + `.metadata.json`). The tree below shows the canonical filename stem for each report; every stem has all four extensions on disk.
+
 ```
 examples/reports/v2-full-assessment/
 ├── portfolio-config.yaml
-├── ecommerce-platform-v2-bridge-report.md
+├── ecommerce-platform-v2-bridge-report.{md,json,html,metadata.json}
 ├── agentic-readiness-assessment/
-│   ├── MonoToMicroLegacy-ara-report.md
-│   ├── aws-microservices-ara-report.md
-│   ├── books-api-ara-report.md
-│   ├── eks-saas-gitops-ara-report.md
-│   ├── monolith-ara-report.md
-│   └── ecommerce-platform-v2-portfolio-ara-report.md
+│   ├── MonoToMicroLegacy-ara-report.{md,json,html,metadata.json}
+│   ├── aws-microservices-ara-report.{md,json,html,metadata.json}
+│   ├── books-api-ara-report.{md,json,html,metadata.json}
+│   ├── eks-saas-gitops-ara-report.{md,json,html,metadata.json}
+│   ├── monolith-ara-report.{md,json,html,metadata.json}
+│   └── ecommerce-platform-v2-portfolio-ara-report.{md,json,html,metadata.json}
 └── modernization-assessment/
-    ├── MonoToMicroLegacy-mod-report.md
-    ├── aws-microservices-mod-report.md
-    ├── books-api-mod-report.md
-    ├── eks-saas-gitops-mod-report.md
-    ├── monolith-mod-report.md
-    └── ecommerce-platform-v2-portfolio-mod-report.md
+    ├── MonoToMicroLegacy-mod-report.{md,json,html,metadata.json}
+    ├── aws-microservices-mod-report.{md,json,html,metadata.json}
+    ├── books-api-mod-report.{md,json,html,metadata.json}
+    ├── eks-saas-gitops-mod-report.{md,json,html,metadata.json}
+    ├── monolith-mod-report.{md,json,html,metadata.json}
+    └── ecommerce-platform-v2-portfolio-mod-report.{md,json,html,metadata.json}
 ```
 
 ### Online Boutique (11 microservices)
@@ -348,15 +365,15 @@ examples/reports/online-boutique/
 ├── agentic-readiness.html              # Interactive dashboard (also deployed to CloudFront)
 ├── modernization.html                  # MOD dashboard
 ├── agentic-readiness-assessment/       # ARA reports (original code — 43 questions, archetypes)
-│   ├── frontend-ara-report.md
-│   ├── cartservice-ara-report.md
+│   ├── frontend-ara-report.{md,json,html,metadata.json}
+│   ├── cartservice-ara-report.{md,json,html,metadata.json}
 │   ├── ... (11 individual + 1 portfolio)
-│   └── online-boutique-portfolio-ara-report.md
+│   └── online-boutique-portfolio-ara-report.{md,json,html,metadata.json}
 ├── agentic-readiness-assessment-v2/    # ARA reports (after remediation — Istio, OTel, etc.)
-│   ├── frontend-ara-report.md
-│   ├── cartservice-ara-report.md
+│   ├── frontend-ara-report.{md,json,html,metadata.json}
+│   ├── cartservice-ara-report.{md,json,html,metadata.json}
 │   ├── ... (11 individual + 1 portfolio)
-│   └── online-boutique-portfolio-ara-report.md
+│   └── online-boutique-portfolio-ara-report.{md,json,html,metadata.json}
 └── modernization-assessment/           # MOD reports
     └── ... (11 individual + 1 portfolio)
 ```
