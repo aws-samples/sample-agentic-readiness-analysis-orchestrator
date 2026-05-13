@@ -37,6 +37,31 @@ For orchestrator-driven runs, always use **`-x -t`** together:
 
 Without these, subagent runs hang indefinitely waiting for user input.
 
+### Always Use Absolute Paths
+
+`-p` and `-g` arguments MUST be absolute paths in subagent flows. Each `executeBash` call starts a fresh shell — `cd` inside one call does not persist to the next call, so relative paths silently resolve against the workspace root rather than the intended directory. Symptoms range from ENOENT errors to artifacts landing at unexpected paths.
+
+```bash
+# ❌ Bad — relies on terminal CWD that may have drifted between calls:
+atx custom def exec -n <td> -p . -g file://atx-config.yaml -x -t
+
+# ✅ Good — absolute paths resolve identically regardless of CWD:
+atx custom def exec -n <td> \
+    -p /abs/path/to/repo \
+    -g file:///abs/path/to/.atx-config.yaml \
+    -x -t
+```
+
+**Pattern for subagents:** compute the absolute paths once in the same shell that issues the ATX command, then interpolate:
+
+```bash
+repo_abs=$(cd <repo_path> && pwd)
+config_abs="$(pwd)/.atx-config-<slug>-<type>.yaml"
+atx custom def exec -n <td> -p "$repo_abs" -g "file://$config_abs" -x -t
+```
+
+**Pattern for the orchestrator:** when generating per-repo ATX configs, emit absolute paths for both `-p` and `-g` in the per-repo subagent prompts. The workspace root path is known at orchestration time and absolute paths can be constructed deterministically. See troubleshooting.md ("ATX Fails with No such file or Wrong Working Directory") for the full failure-mode rationale.
+
 ---
 
 ## Configuration File Format

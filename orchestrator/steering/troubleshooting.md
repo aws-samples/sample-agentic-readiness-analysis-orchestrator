@@ -245,3 +245,59 @@ Do not parallelize publish commands.
 3. Then re-run the TD
 
 Do NOT use `git reset --hard` or `git clean -fd` — these can destroy uncommitted work.
+
+## ATX Fails with "No such file" or Wrong Working Directory
+
+**Symptoms:** Any of:
+- `Error: ENOENT: no such file or directory, open '<some-path>'`
+- ATX runs but reads/writes files at unexpected paths
+- The same `atx custom def exec` command works in one terminal session and fails in another
+- Reports land at the wrong path even though Reconciliation Gate Check B should have caught it
+
+**Cause:** Terminal working-directory state drifts across `executeBash` calls in subagent flows. A subagent issues `cd <repo_path>`, then a later `executeBash` runs in an unrelated CWD because each call is launched in the workspace root by default. Relative paths like `-p .`, `file://atx-config.yaml`, or `--output ./bpmn-analysis.json` then resolve against an unexpected directory. Symptoms can be subtle — ATX may produce reports in the wrong location, read a stale config file, or fail outright with ENOENT.
+
+**Fix — always use absolute paths in `atx custom def exec` arguments:**
+
+```bash
+# Bad — relies on terminal CWD that may have drifted:
+atx custom def exec -n <td_name> -p . -g file://atx-config-ara.yaml -x -t
+
+# Good — absolute paths resolve identically regardless of CWD:
+atx custom def exec -n <td_name> \
+    -p /Users/lucasdu/projects/my-portfolio/services/checkout \
+    -g file:///Users/lucasdu/projects/my-portfolio/.atx-config-checkout-ara.yaml \
+    -x -t
+```
+
+This applies to:
+
+| Argument | Behavior with absolute path |
+|---|---|
+| `-p` (code repository path) | ATX runs against the exact directory regardless of the calling shell's CWD |
+| `-g file://...` (config path) | ATX reads the exact config regardless of CWD; the `file://` scheme requires absolute paths anyway, but make sure the path itself is absolute |
+| `--output` on `bpmn-analyzer/run_analysis.py` | The JSON lands at the exact location, not relative to wherever the subagent happens to be |
+
+**Recommended pattern for subagents:**
+
+1. Compute the absolute repo path once: `repo_abs=$(cd <repo_path> && pwd)` (in the same `executeBash` call).
+2. Compute the absolute config path once: `config_abs=$(pwd)/.atx-config-<slug>-<type>.yaml` (still in the same call).
+3. Issue the ATX command with both absolutes:
+   ```bash
+   atx custom def exec -n <td> -p "$repo_abs" -g "file://$config_abs" -x -t
+   ```
+
+**Recommended pattern for the orchestrator:**
+
+When generating per-repo ATX configs and the per-repo subagent prompt, always emit absolute paths for both `-p` and `-g`. The workspace root path is known at orchestration time (via `pwd` in the Power's first `executeBash` call), so absolute paths can be constructed deterministically.
+
+**Why not `cd` first?**
+
+Each `executeBash` call starts a fresh shell. `cd` inside one call does not persist to the next call. Subagents that try to `cd <repo>; atx ...` either need to chain both into a single call (fragile if the chain has multiple steps) or accept that any subsequent inspection executeBash will be back at the workspace root (the source of the silent path drift).
+
+**Recovery if this already happened:**
+
+1. Inspect where the artifacts actually landed:
+   ```bash
+   find / -maxdepth 6 -name "<slug>-<type>-report.md" 2>/dev/null
+   ```
+2. If found at a non-canonical path, the Reconciliation Gate's auto-reconcile (single-stray case) will move them to the canonical path on the next gate run. If two-or-more strays exist, manual cleanup is required first (see Reports Land on a Staging Branch above for branch-level recovery).

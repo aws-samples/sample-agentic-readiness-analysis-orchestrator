@@ -130,7 +130,7 @@ Detailed step-by-step flow lives in `steering/orchestration-workflow.md`. Summar
 8. **Portfolio TDs (Contract 3):** Strictly serial — Portfolio ARA → Portfolio MOD → Portfolio BAO → Bridge — with a Reconciliation Gate between each.
 9. **Consolidate reports:** Copy per-repo reports into top-level `agentic-readiness-assessment/`, `modernization-assessment/`, `bpmn-opportunity-assessment/` folders. Bridge report stays at workspace root. Clean up `.atx-config-*.yaml` and `bpmn-analysis.json`.
 
-> All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) — assessments run at scale without human intervention. See `steering/atx-cli-reference.md` for full flag details.
+> All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) — assessments run at scale without human intervention. Always pass **absolute paths** to `-p` and `-g`; relative paths silently break across `executeBash` boundaries because each call starts a fresh shell. See `steering/atx-cli-reference.md` for full flag details and `steering/troubleshooting.md` for the path-corruption failure mode.
 
 ---
 
