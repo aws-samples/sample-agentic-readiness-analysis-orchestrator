@@ -1,12 +1,12 @@
 ---
 name: "orchestrator"
-displayName: "Agentic Assessment Orchestrator"
-description: "Orchestrate agentic readiness, modernization, and BPMN opportunity assessments across a service portfolio with reconciliation gates and dependency-aware roadmaps."
-keywords: ["agentic-readiness", "modernization-assessment", "portfolio-assessment", "bpmn-opportunity", "ara", "mod", "aws-transform"]
+displayName: "Portfolio Analysis Orchestrator"
+description: "Orchestrate agentic readiness, modernization, and BPMN opportunity analyses across a service portfolio with reconciliation gates and dependency-aware roadmaps."
+keywords: ["agentic-readiness", "modernization-analysis", "portfolio-analysis", "bpmn-opportunity", "ara", "mod", "aws-transform"]
 author: "AWS"
 ---
 
-# Agentic Assessment Orchestrator
+# Portfolio Analysis Orchestrator
 
 ## Overview
 
@@ -182,7 +182,7 @@ ATX staging branches fork from this isolation branch. Cleanup is then a single m
 ### 3. Ask Kiro to Run the Orchestrator
 
 ```
-"Run the agentic assessment orchestrator on portfolio-config.yaml"
+"Run the portfolio analysis orchestrator on portfolio-config.yaml"
 ```
 
 Kiro will work through the orchestration workflow in `steering/orchestration-workflow.md`, enforcing all three safety contracts above.

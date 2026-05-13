@@ -1,4 +1,4 @@
-# Agentic Assessment Orchestrator
+# Portfolio Analysis Orchestrator
 
 > Automated assessment of your service portfolio for agentic AI readiness, cloud-native modernization, and agentic opportunity identification from BPMN process models -- three dedicated assessments (ARA + MOD + BAO) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, a unified bridge report, and consolidated reports.
 
@@ -160,7 +160,7 @@ flowchart LR
 
 - Valid AWS credentials (`aws sts get-caller-identity` -- the orchestrator checks this first and fails fast if expired)
 - [AWS Transform CLI](https://docs.aws.amazon.com/transform/) installed (`atx --version`)
-- [Kiro IDE](https://kiro.dev) with the Agentic Assessment Orchestrator power installed
+- [Kiro IDE](https://kiro.dev) with the Portfolio Analysis Orchestrator power installed
 
 ### Step 1: Publish the ATX Transformation Definitions
 
@@ -196,7 +196,7 @@ Verify: `atx custom def list`
 
 ### Step 2: Install the Kiro Power
 
-The Kiro Power lives at [`orchestrator/POWER.md`](orchestrator/POWER.md) and registers in Kiro as the `orchestrator` power (display name: **Agentic Assessment Orchestrator**).
+The Kiro Power lives at [`orchestrator/POWER.md`](orchestrator/POWER.md) and registers in Kiro as the `orchestrator` power (display name: **Portfolio Analysis Orchestrator**).
 
 To install:
 
@@ -248,7 +248,7 @@ See `portfolio-config.yaml` for a complete example and `portfolio-config.schema.
 In Kiro chat:
 
 ```
-Run the agentic assessment orchestrator on portfolio-config.yaml
+Run the portfolio analysis orchestrator on portfolio-config.yaml
 ```
 
 Kiro handles cloning, classification, config generation, parallel execution, and report consolidation.
