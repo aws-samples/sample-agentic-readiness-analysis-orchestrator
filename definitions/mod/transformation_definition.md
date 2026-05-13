@@ -2175,7 +2175,7 @@ The per-repo MOD HTML artifact is a single self-contained HTML file. The tab ord
 
 The full visual contract is defined inline below — do NOT reference external files. The HTML renders a subset of the JSON artifact.
 
-- Header title (`{repo_name} - Modernization Readiness Assessment Report`) and subtitle line (`{date} · {language} · {loc} LOC · Portfolio: {portfolio_name}`).
+- Header title (`{repo_name} - Modernization Analysis Report`) and subtitle line (`{date} · {language} · {loc} LOC · Portfolio: {portfolio_name}`).
 - Executive Summary prose block with four subsections (Repository Status, Key Findings, Remediation Plan, Recommended Actions) and the emoji + tier mapping: 🟢 Cloud-Native Ready / 🟡 Pilot-Ready / 🟠 Remediation Required (rendered with the "Significant Modernization Required" prose label) / 🔴 Not Ready.
 - Stats card row (4 cards): Total Findings, High Severity, Medium Severity, Low Severity. MOD KEEPS the Low Severity card (ARA omits Low per ARA convention).
 - Technology Stack table with Language / Lines of Code / Framework / Priority rows.
