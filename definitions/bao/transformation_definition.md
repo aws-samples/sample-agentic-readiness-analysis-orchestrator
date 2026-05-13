@@ -26,7 +26,7 @@ The output is saved as `{process-name}-bpmn-opportunity-report.md`.
 ## Entry Criteria
 
 - The repository contains at least one BPMN 2.0 file (`.bpmn`, `.bpmn2`, or `.bpmn20.xml`)
-- The BPMN analyzer has been run as a pre-processing step, producing a JSON analysis report (see `bpmn-analyzer/run_analysis.py`)
+- The BPMN analyzer has been run as a pre-processing step, producing a JSON analysis report (see `tools/bpmn-analyzer/run_analysis.py`)
 - The JSON analysis report is available at the path specified in `additionalPlanContext` (field: `analysis_report_path`)
 - Write permissions exist to create the output report file
 - This assessment operates in read-only mode and will not modify any files in the repository
@@ -40,7 +40,7 @@ Extract the following fields from `additionalPlanContext`:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `analysis_report_path` | string | **Yes** | -- | Path to the JSON analysis report produced by `bpmn-analyzer/run_analysis.py`. Contains task inventory, constraint profile, task scores, and classification. |
+| `analysis_report_path` | string | **Yes** | -- | Path to the JSON analysis report produced by `tools/bpmn-analyzer/run_analysis.py`. Contains task inventory, constraint profile, task scores, and classification. |
 | `context` | string | No | -- | Free-text description of the business process. Used to frame findings. |
 | `daily_volume` | integer | No | 100 | Estimated daily invocations per task. Used for cost projection. |
 | `priority` | enum | No | -- | P0, P1, P2. Recorded in report metadata. |
@@ -49,7 +49,7 @@ Extract the following fields from `additionalPlanContext`:
 
 ### Step 1: Read the Analysis Report
 
-Read the JSON file at `analysis_report_path`. The file is produced by `bpmn-analyzer/run_analysis.py` and contains deterministic, pre-computed analysis:
+Read the JSON file at `analysis_report_path`. The file is produced by `tools/bpmn-analyzer/run_analysis.py` and contains deterministic, pre-computed analysis:
 
 - `process`: name, ID, element count, flow count
 - `constraints`: total count, density, gateway depth, counts by type (ordering, exclusion, coexistence)
@@ -220,8 +220,203 @@ Save the report as `{process-name}-bpmn-opportunity-report.md` in the `bpmn-oppo
 
 ## Exit Criteria
 
-- Report file exists at `bpmn-opportunity-assessment/{process-name}-bpmn-opportunity-report.md`
+- Four-artifact bundle exists at `bpmn-opportunity-assessment/`:
+  - `{process-name}-bpmn-opportunity-report.md`
+  - `{process-name}-bpmn-opportunity-report.json`
+  - `{process-name}-bpmn-opportunity-report.html`
+  - `{process-name}-bpmn-opportunity-report.metadata.json`
 - All tasks in the BPMN process are classified (no task left unclassified)
 - Each agent task has a cost estimate
-- If ARA report was provided, cross-reference section is populated
+- JSON artifact passes schema validation (all required fields present)
 - Report is valid Markdown with no broken tables
+
+## Constraints and Guardrails
+
+Strictly follow these rules at all times:
+
+- **Read-only assessment**: Do not modify any source code, BPMN files, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
+- **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
+- **Deterministic extraction is ground truth**: The JSON analysis report produced by `tools/bpmn-analyzer/run_analysis.py` contains pre-computed scores and classifications. Do not override the migration_type or composite scores. The opportunity classification layer (Step 2) adds category and autonomy on top of the analyzer's output.
+- **Be specific, cite BPMN elements**: Always reference actual task IDs, element types, and BPMN file paths. Never write "there may be..." -- state what was found in the process model.
+- **ARA cross-referencing is the Bridge TD's responsibility**: Do not attempt to cross-reference BAO findings with ARA or MOD findings. Note in the report: "ARA cross-referencing is performed by the Bridge TD when running a full assessment."
+- **No LLM involvement in extraction**: The BPMN analyzer's constraint extraction, dependency discovery, and task scoring are deterministic Python. The TD adds the opportunity classification layer (category + autonomy) which uses LLM reasoning. Keep these layers distinct.
+- **Report completeness**: The output report must contain all required sections: metadata header, summary, opportunity classification table, agent opportunities (ranked), automatable tasks, human-required tasks, data readiness gaps, dependencies, implementation roadmap, process structure summary, and cost summary.
+
+## Four-Artifact Output Contract
+
+Every per-repo BAO assessment emits four artifacts: three report artifacts plus a metadata sidecar.
+
+### Artifacts
+
+| Artifact | Filename | Purpose |
+|---|---|---|
+| Markdown report | `{process}-bpmn-opportunity-report.md` | Richest-prose artifact. Carries opportunity narratives, dependency analysis, implementation roadmap, and cost projections. |
+| JSON report | `{process}-bpmn-opportunity-report.json` | **Canonical machine-readable contract.** Consumed by webapp and Portfolio BAO TD. Every task classification, dependency, and cost field is present. |
+| HTML report | `{process}-bpmn-opportunity-report.html` | Single self-contained HTML file. Renders opportunity breakdown, dependency graph, implementation waves, and cost forecast. |
+| Metadata sidecar | `{process}-bpmn-opportunity-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
+
+The JSON artifact is the canonical contract. If any artifacts disagree on a field, JSON wins.
+
+### Metadata Sidecar
+
+```json
+{
+  "assessment_type": "bao",
+  "assessment_date": "2026-05-12",
+  "td_version": "bpmn-opportunity-assessment",
+  "bpmn_analyzer_version": "1.0.0",
+  "process_name": "{process_name}",
+  "bpmn_file": "{bpmn_file_path}"
+}
+```
+
+### JSON Schema
+
+The canonical JSON report follows this structure:
+
+```json
+{
+  "metadata": {
+    "assessment_type": "bao",
+    "assessment_date": "2026-05-12",
+    "td_version": "bpmn-opportunity-assessment",
+    "process_name": "Invoice Receipt",
+    "bpmn_file": "src/main/resources/invoice.v2.bpmn",
+    "repository": "./services/invoice-process",
+    "daily_volume": 200,
+    "context": "Camunda 7 invoice receipt process"
+  },
+  "summary": {
+    "total_tasks": 12,
+    "agent_tasks": 3,
+    "service_tasks": 7,
+    "human_required_tasks": 2,
+    "categories": {
+      "agent_build_now": 1,
+      "agent_data_first": 2,
+      "automate": 5,
+      "data_platform": 2,
+      "human_required": 2
+    },
+    "estimated_monthly_cost_usd": 558.90,
+    "daily_volume": 200
+  },
+  "tasks": [
+    {
+      "task_id": "serviceTask_12",
+      "task_name": "Review Credit Score",
+      "bpmn_element_type": "userTask",
+      "migration_type": "agent",
+      "category": "agent_build_now",
+      "autonomy_level": "prepared",
+      "scores": {
+        "ai_benefit": 0.75,
+        "complexity": 0.45,
+        "risk": 0.35,
+        "effort": 0.30,
+        "composite": 0.72
+      },
+      "cost_estimate": {
+        "tokens_per_invocation": 2400,
+        "model": "claude-3-haiku",
+        "cost_per_1k_invocations_usd": 2.40,
+        "monthly_cost_usd": 14.40
+      },
+      "data_readiness": "ready",
+      "data_readiness_reasoning": "Task references dataStoreReference with structured API access",
+      "structural_position": "After XOR gateway, parallel branch with timer boundary",
+      "dependencies": [
+        {
+          "target_type": "service_endpoint",
+          "target_ref": "com.example.CreditScoreDelegate",
+          "confidence": "high",
+          "vendor": "camunda-c7"
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "inferred": [
+      {
+        "source_task_id": "serviceTask_12",
+        "source_task_name": "Review Credit Score",
+        "target_type": "service_endpoint",
+        "target_ref": "com.example.CreditScoreDelegate",
+        "confidence": "high",
+        "vendor": "camunda-c7"
+      }
+    ],
+    "declared": [],
+    "unknown": [
+      {
+        "source_task_id": "userTask_5",
+        "source_task_name": "Manual Underwriter Review",
+        "reason": "User task with no system references"
+      }
+    ]
+  },
+  "implementation_waves": {
+    "wave_1_build_now": ["serviceTask_12"],
+    "wave_2_data_first": ["userTask_3", "userTask_7"],
+    "wave_3_system_remediation": []
+  },
+  "process_structure": {
+    "total_elements": 45,
+    "tasks": 12,
+    "gateways": 5,
+    "events": 8,
+    "xor_branches": 3,
+    "parallel_branches": 1,
+    "linear_chains": 4
+  },
+  "warnings": []
+}
+```
+
+### Per-Task Required Fields
+
+Every task in the `tasks` array MUST carry these fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `task_id` | string | BPMN element ID |
+| `task_name` | string | Human-readable task name from BPMN |
+| `bpmn_element_type` | string | BPMN element type (serviceTask, userTask, businessRuleTask, etc.) |
+| `migration_type` | enum | `agent`, `service`, `human_required` (from analyzer) |
+| `category` | enum | `agent_build_now`, `agent_data_first`, `automate`, `data_platform`, `human_required` |
+| `autonomy_level` | enum or null | `autonomous`, `prepared`, `exploration`, `guardrail`, or null (non-agent tasks) |
+| `scores` | object | `ai_benefit`, `complexity`, `risk`, `effort`, `composite` (all 0.0-1.0) |
+| `cost_estimate` | object or null | `tokens_per_invocation`, `model`, `cost_per_1k_invocations_usd`, `monthly_cost_usd` (null for non-agent) |
+| `data_readiness` | enum | `ready`, `not_ready`, `unknown` |
+| `data_readiness_reasoning` | string | Why this classification was assigned |
+| `structural_position` | string | Position in the process flow (ordering, branching context) |
+| `dependencies` | array | Dependencies inferred for this specific task |
+
+### HTML Visual Contract
+
+The per-repo BAO HTML artifact is a single self-contained HTML file (no external asset fetches). Tab order: **summary → opportunities → dependencies → roadmap → costs**.
+
+**Header:**
+- Title: `{process_name} - BPMN Agentic Opportunity Report`
+- Subtitle: `{date} · {total_tasks} tasks · {agent_tasks} agent opportunities · ${monthly_cost}/mo`
+
+**Summary Tab:**
+- Donut chart: task classification breakdown (agent build-now, agent data-first, automate, data platform, human required)
+- Stats cards: total tasks, agent opportunities, estimated monthly cost, daily volume
+
+**Opportunities Tab:**
+- Table: ranked agent opportunities with task name, category, autonomy level, composite score, cost/1K
+- Expandable rows with scores breakdown, data readiness, structural position
+
+**Dependencies Tab:**
+- Table: all dependencies with source task, target, type, confidence, vendor
+- Summary cards: by type count, by vendor count, unknown count
+
+**Roadmap Tab:**
+- Three-wave visualization: Wave 1 (build now), Wave 2 (data first), Wave 3 (system remediation)
+- Each wave shows tasks with their category and estimated cost
+
+**Costs Tab:**
+- Bar chart: cost by task
+- Summary: total monthly cost, model mix, tokens per invocation
+
