@@ -29,6 +29,15 @@ Three assessments are supported. The `assessment_type` field in `portfolio-confi
 
 Per-repo subagents run **in parallel across repos**. In `full` mode, each subagent runs its assigned TDs **sequentially within its repo** (ARA → MOD → BAO). After per-repo execution, a Reconciliation Gate verifies workspace state, then portfolio TDs run **strictly serially** with a gate between each.
 
+### When to Use
+
+- Planning agentic AI adoption across microservices
+- Identifying which business process steps should become agent-powered (BPMN opportunity)
+- Identifying shared infrastructure gaps
+- Prioritizing modernization based on dependencies
+- Tracking portfolio-wide readiness progress
+- Generating executive-level portfolio reports
+
 ---
 
 ## Available Steering Files
@@ -227,11 +236,14 @@ The Reconciliation Gate (Check C) treats `.json` as mandatory — portfolio TDs 
 4. **Use `preferences` to steer MOD** — Global `prefer`/`avoid` arrays plus per-repo overrides. See `steering/portfolio-config.md` for merge rules.
 5. **Specify `repo_type` when obvious** — Skip auto-detection for clearly-infrastructure repos (`infrastructure-only`) or libraries (`library`).
 6. **Document dependencies** — Use `dependency_overrides[]` for implicit dependencies the orchestrator cannot infer from code analysis.
-7. **Create a portfolio-run branch first** — Prevents ATX staging branches from polluting `main`. Cleanup is one merge instead of many.
-8. **Run the Reconciliation Gate manually if running TDs by hand** — Same Checks A/B/C apply. See `steering/reconciliation-gate.md`.
-9. **Address cross-cutting concerns first** — Portfolio reports surface gaps that affect multiple services. Fix those before per-service work.
-10. **Follow dependency order in modernization** — Modernize upstream services before their downstream dependents.
-11. **Validate config against the JSON schema** — `ajv validate -s portfolio-config.schema.json -d portfolio-config.yaml` before running.
+7. **Set priorities where helpful** — `P0` for critical services, `P1` for high priority, `P2` for medium. Optional but improves portfolio roadmap sequencing.
+8. **Run individual assessments first** — Portfolio assessments require completed individual reports. The reconciliation gate enforces this, but configuring `assessment_type: full` is the simplest path.
+9. **Create a portfolio-run branch first** — Prevents ATX staging branches from polluting `main`. Cleanup is one merge instead of many.
+10. **Run the Reconciliation Gate manually if running TDs by hand** — Same Checks A/B/C apply. See `steering/reconciliation-gate.md`.
+11. **Leverage cross-repo parallelism** — Kiro spawns one subagent per repository so larger portfolios scale near-linearly. Per-repo serialization within `full` mode is mandatory but adds at most one TD's runtime per repo.
+12. **Address cross-cutting concerns first** — Portfolio reports surface gaps that affect multiple services. Fix those before per-service work.
+13. **Follow dependency order in modernization** — Modernize upstream services before their downstream dependents.
+14. **Validate config against the JSON schema** — `ajv validate -s portfolio-config.schema.json -d portfolio-config.yaml` before running.
 
 ---
 
