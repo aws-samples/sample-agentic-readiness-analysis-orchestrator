@@ -196,9 +196,13 @@ Verify: `atx custom def list`
 
 ### Step 2: Install the Kiro Power
 
+The Kiro Power lives at [`orchestrator/POWER.md`](orchestrator/POWER.md) and registers in Kiro as the `orchestrator` power (display name: **Agentic Assessment Orchestrator**).
+
+To install:
+
 1. Open Kiro IDE
 2. Open the Powers panel
-3. Add the `agentic-assessment-orchestrator` power from this repository
+3. Add a custom power from local directory and point Kiro at the `orchestrator/` directory of this repository
 
 ### Step 3: Create Your Portfolio Configuration
 

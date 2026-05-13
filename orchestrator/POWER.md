@@ -1,5 +1,5 @@
 ---
-name: "agentic-assessment-orchestrator"
+name: "orchestrator"
 displayName: "Agentic Assessment Orchestrator"
 description: "Orchestrate agentic readiness, modernization, and BPMN opportunity assessments across a service portfolio with reconciliation gates and dependency-aware roadmaps."
 keywords: ["agentic-readiness", "modernization-assessment", "portfolio-assessment", "bpmn-opportunity", "ara", "mod", "aws-transform"]
@@ -54,7 +54,7 @@ Read on demand based on what the user is asking. **Do not load all of these proa
 | `troubleshooting.md` | Errors, missing reports, timeouts, subagent panic recovery, configuration validation issues |
 | `atx-cli-reference.md` | Quick reference for `atx` flags, configuration file format, common invocation patterns, recommended timeouts |
 
-To load a steering file: `Call action "readSteering" with powerName="agentic-assessment-orchestrator", steeringFile="<filename>"`
+To load a steering file: `Call action "readSteering" with powerName="orchestrator", steeringFile="<filename>"`
 
 ---
 
