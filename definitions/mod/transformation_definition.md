@@ -1,6 +1,6 @@
 ## Name
 
-Modernization Assessment
+Modernization Analysis
 
 ## Objective
 
@@ -8,7 +8,7 @@ Evaluate the cloud architecture maturity, operational readiness, and modernizati
 
 ## Summary
 
-This transformation performs a dedicated Modernization Assessment on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, container definitions, Kubernetes manifests, and Helm charts. It then evaluates what it finds against 37 questions across 5 sections — Infrastructure (INF), Application Architecture (APP), Data Platform (DATA), Security (SEC), and Operations (OPS):
+This transformation performs a dedicated Modernization Analysis on a codebase. It scans all files in the repository to discover infrastructure-as-code, application source code, CI/CD definitions, API specifications, dependency manifests, configuration files, container definitions, Kubernetes manifests, and Helm charts. It then evaluates what it finds against 37 questions across 5 sections — Infrastructure (INF), Application Architecture (APP), Data Platform (DATA), Security (SEC), and Operations (OPS):
 
 - **INF** — Infrastructure, Platform, and DevOps (11 questions)
 - **APP** — Application Architecture (6 questions)
@@ -69,7 +69,7 @@ The MD report contains:
 This assessment targets workloads running on AWS. On-premises and multi-cloud workloads are out of scope unless actively migrating to AWS.
 
 This assessment does NOT cover:
-- **Agentic Readiness** — Whether systems can serve as agent tools (API surface quality, agent identity and authorization, transactional integrity, human-in-the-loop controls, agent observability, discoverability). Those concerns use BLOCKER/RISK/INFO severity scoring, readiness profiles, conditional BLOCKERs based on agent_scope, and are covered in the Agentic Readiness Assessment.
+- **Agentic Readiness** — Whether systems can serve as agent tools (API surface quality, agent identity and authorization, transactional integrity, human-in-the-loop controls, agent observability, discoverability). Those concerns use BLOCKER/RISK/INFO severity scoring, readiness profiles, conditional BLOCKERs based on agent_scope, and are covered in the Agentic Readiness Analysis.
 - **Agent design** — Prompt engineering, model selection, agent behavioral testing.
 
 ## Entry Criteria
@@ -1505,7 +1505,7 @@ The AI/agent discovery signals recorded in Step 1 are consumed by Step 7.7:
 
 The discovery scan (Step 1) is the single source of truth for what AI/agent artifacts exist. The Move to AI pathway (Step 7.7) consumes those findings through its trigger evaluation logic.
 
-**Scope note:** The modernization assessment does NOT recommend specific agent use cases for the target system. That concern — where agents can add value to this system, given its foundations — belongs to the Agentic Readiness Assessment (ARA) and its downstream agentic-program recommendations. MOD's role is to identify modernization gaps; ARA's role is to identify agent integration opportunities.
+**Scope note:** The modernization analysis does NOT recommend specific agent use cases for the target system. That concern — where agents can add value to this system, given its foundations — belongs to the Agentic Readiness Analysis (ARA) and its downstream agentic-program recommendations. MOD's role is to identify modernization gaps; ARA's role is to identify agent integration opportunities.
 
 
 
@@ -1530,7 +1530,7 @@ The assessment emits a **four-artifact bundle** per the Four-Artifact Output Con
 ### Section 1: Metadata Header
 
 ```markdown
-# Modernization Assessment Report
+# Modernization Analysis Report
 
 | Field | Value |
 |-------|-------|
@@ -1813,7 +1813,7 @@ Both `category_id` and `category` are REQUIRED fields on every MOD finding. MD a
 
 #### DATA-Q* Namespace Collision Note
 
-The short code `DATA` is shared between MOD and the Agentic Readiness Assessment (ARA). MOD `DATA-Q1`..`DATA-Q4` and ARA `DATA-Q1`..`DATA-Q7` are DIFFERENT questions and MUST NOT be conflated. The unique join key across the two assessment types is `(assessment_type, question_id)` — never `question_id` alone. MOD `DATA` disambiguates to display name **"Data Platform"**; ARA `DATA` disambiguates to **"Data Accessibility"**. Every JSON artifact emits `assessment_type` at the root (values `"mod"`, `"ara"`, `"portfolio-mod"`, `"portfolio-ara"`) so the join key is always present.
+The short code `DATA` is shared between MOD and the Agentic Readiness Analysis (ARA). MOD `DATA-Q1`..`DATA-Q4` and ARA `DATA-Q1`..`DATA-Q7` are DIFFERENT questions and MUST NOT be conflated. The unique join key across the two assessment types is `(assessment_type, question_id)` — never `question_id` alone. MOD `DATA` disambiguates to display name **"Data Platform"**; ARA `DATA` disambiguates to **"Data Accessibility"**. Every JSON artifact emits `assessment_type` at the root (values `"mod"`, `"ara"`, `"portfolio-mod"`, `"portfolio-ara"`) so the join key is always present.
 
 ---
 
@@ -2182,7 +2182,7 @@ The full visual contract is defined inline below — do NOT reference external f
 - **Category-by-Category Breakdown table** with status values `Ready` (green), `Needs Work` (yellow/orange), `Critical` (red). This is the MOD convention — ARA uses `Ready` / `Needs Work` / `Blocked` instead.
 - **Detailed Findings cards** — simpler than ARA. Each card has `{question_id}: {title}` with a severity badge (uppercase `HIGH` / `MEDIUM` / `LOW`), a `Category:` line, a `FINDING` subsection with the finding description, and a `RECOMMENDATION` subsection. There is NO `GAP` subsection on MOD cards (ARA has one; MOD's gap description is absorbed into the finding description). Findings are ordered severity-descending (High → Medium → Low) then by category order (INF → APP → DATA → SEC → OPS).
 - Modernization Recommendation footer block (emoji-headlined with top-3 High-severity recommendations).
-- Footer line (`Generated by AWS Transform · Modernization Assessment Report`).
+- Footer line (`Generated by AWS Transform · Modernization Analysis Report`).
 
 **HTML-escaping discipline.** Every data value rendered in HTML originates from the JSON artifact (MD prose is NOT part of the HTML round-trip contract). All attacker-controlled strings MUST be HTML-escaped before embedding: repo names, evidence file paths, finding titles, finding descriptions, recommendation text, pathway names, and any other string that originates from repository content or from free-text fields in `additionalPlanContext`. Escape `<`, `>`, `&`, `"`, `'` at render time. This is the same escaping discipline applied to the ARA HTML artifact.
 

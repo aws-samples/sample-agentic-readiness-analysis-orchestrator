@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides security guidance for using the Agentic Readiness Assessment framework. While the framework itself consists of transformation definitions and orchestration documentation, proper security practices are essential when executing assessments.
+This document provides security guidance for using the Agentic Readiness Analysis framework. While the framework itself consists of transformation definitions and orchestration documentation, proper security practices are essential when executing assessments.
 
 ---
 
