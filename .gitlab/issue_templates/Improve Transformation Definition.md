@@ -2,8 +2,8 @@
 
 ## Which Transformation Definition?
 <!-- Select one: -->
-- [ ] Individual Assessment (individual-aws-agentic-assessment)
-- [ ] Portfolio Assessment (portfolio-agentic-assessment)
+- [ ] Individual Analysis (individual-aws-agentic-analysis)
+- [ ] Portfolio Analysis (portfolio-agentic-analysis)
 
 ## Type of Improvement
 <!-- Select one: -->

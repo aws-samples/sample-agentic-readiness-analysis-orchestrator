@@ -1,0 +1,874 @@
+{
+  "analysis_type": "mod",
+  "version": "V6",
+  "metadata": {
+    "repository": "Lidarr--Lidarr",
+    "analysis_date": "2026-05-08",
+    "td_version": "modernization-analysis-v6.0.1",
+    "report_format_version": "V6",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application owns persistent state (SQLite/PostgreSQL databases for music library, configuration, and logs), exposes CRUD operations on business entities (artists, albums, tracks, quality profiles), and manages entity lifecycle (monitored/unmonitored status, import/delete). Classified as stateful-crud.",
+    "priority": "P2",
+    "tags": ["csharp", "media", "desktop"],
+    "context": "Music collection manager (*arr suite).",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": false,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": false
+    }
+  },
+  "overall_score": 1.92,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 9,
+    "medium_count": 8,
+    "low_count": 3,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.22,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.33,
+      "score_rating": "Needs Work",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 3.0,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.6,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.43,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
+      "score": 1,
+      "gap": "No managed compute — application distributed as bare-metal packages with no cloud deployment model",
+      "impact": "Blocks containerization, auto-scaling, and cloud-native modernization"
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "No IaC exists — all infrastructure is manually provisioned",
+      "impact": "Prevents automated, reproducible deployments and environment consistency"
+    },
+    {
+      "rank": 3,
+      "question_id": "SEC-Q4",
+      "title": "Centralized Identity Integration",
+      "score": 1,
+      "gap": "Single static API key with no external IdP integration",
+      "impact": "No SSO, no RBAC, no federated identity — limits multi-user and enterprise adoption"
+    },
+    {
+      "rank": 4,
+      "question_id": "INF-Q5",
+      "title": "Network Security",
+      "score": 1,
+      "gap": "No VPC, security groups, or network segmentation defined",
+      "impact": "Application has no cloud networking layer; relies on host-level network config"
+    },
+    {
+      "rank": 5,
+      "question_id": "OPS-Q1",
+      "title": "Distributed Tracing",
+      "score": 1,
+      "gap": "No distributed tracing — only NLog file-based logging and Sentry error tracking",
+      "impact": "Cannot trace requests across service boundaries; debugging limited to log correlation"
+    }
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "API-aware Agent",
+      "prerequisite": "API docs exist (APP-Q5 >= 2) and structured JSON responses detected. OpenAPI 3.0 spec at src/Lidarr.Api.V1/openapi.json.",
+      "what_it_enables": "An agent that discovers and invokes Lidarr's existing REST API endpoints as tools — managing music libraries, triggering searches, monitoring downloads, and configuring profiles through natural language.",
+      "additional_steps": "Generate a production-accessible OpenAPI spec for agent tool discovery (currently debug-only).",
+      "effort": "Low"
+    },
+    {
+      "name": "Data Query Agent",
+      "prerequisite": "Database with clear schema (DATA-Q2 >= 2). Centralized data access layer via BasicRepository pattern with well-defined entity mappings.",
+      "what_it_enables": "A natural language to SQL agent for querying the music library database — finding artists by criteria, generating collection statistics, identifying missing albums.",
+      "additional_steps": "Document the database schema (entity relationships from TableMapping.cs) for agent consumption.",
+      "effort": "Medium"
+    },
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "Documentation exists in the repository (README, wiki content, API documentation).",
+      "what_it_enables": "A knowledge agent that answers user questions about Lidarr configuration, troubleshooting, and usage by indexing existing documentation.",
+      "additional_steps": "Index the OpenAPI spec, health check documentation, and configuration reference as the knowledge corpus.",
+      "effort": "Medium"
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Conditional / Adaptive",
+    "rationale": "Containerize the monolith first, then selectively extract high-value services. Limited capacity recommended due to desktop application heritage.",
+    "extraction_candidates": [
+      "Notification dispatch (25+ integrations)",
+      "Download client management",
+      "Metadata indexing (Spotify, MusicBrainz)"
+    ],
+    "patterns": ["Anti-corruption Layer", "Saga Pattern", "Event Sourcing", "Hexagonal Architecture"]
+  },
+  "evaluations": [
+    {"question_id": "INF-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q2", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q3", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "INF-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "INF-Q5", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q6", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q9", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "INF-Q10", "score": 1, "status": "evaluated"},
+    {"question_id": "INF-Q11", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q1", "score": 4, "status": "evaluated"},
+    {"question_id": "APP-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q3", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q4", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "APP-Q6", "score": 2, "status": "evaluated"},
+    {"question_id": "DATA-Q1", "score": 2, "status": "evaluated"},
+    {"question_id": "DATA-Q2", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q3", "score": 3, "status": "evaluated"},
+    {"question_id": "DATA-Q4", "score": 4, "status": "evaluated"},
+    {"question_id": "SEC-Q1", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "SEC-Q2", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "SEC-Q3", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q4", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q5", "score": 2, "status": "evaluated"},
+    {"question_id": "SEC-Q6", "score": 1, "status": "evaluated"},
+    {"question_id": "SEC-Q7", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q1", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q2", "score": 2, "status": "evaluated"},
+    {"question_id": "OPS-Q3", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q4", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q5", "score": null, "status": "not_evaluated_archetype_na"},
+    {"question_id": "OPS-Q6", "score": 3, "status": "evaluated"},
+    {"question_id": "OPS-Q7", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q8", "score": 1, "status": "evaluated"},
+    {"question_id": "OPS-Q9", "score": null, "status": "not_evaluated_archetype_na"}
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Managed Compute",
+      "description": "All compute is bare-metal/VM-based. Lidarr is distributed as self-contained executables and OS-specific packages with no managed compute services (ECS, EKS, Lambda, Fargate).",
+      "gap": "No managed compute — no ECS, EKS, Lambda, or Fargate usage. No cloud deployment model exists.",
+      "recommendation": "Containerize the application using .NET 8.0's native container support and deploy to Amazon EKS (per preferences). The application's environment variable configuration pattern and configurable port binding make it container-ready.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "distribution/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Self-Managed Databases",
+      "description": "Databases are entirely self-managed. SQLite is the default embedded database; PostgreSQL is supported as an optional alternative. Both run on the same host or user-managed infrastructure.",
+      "gap": "All databases self-managed with no automated failover, no managed backups, and no scaling capability.",
+      "recommendation": "When moving to cloud deployment, migrate PostgreSQL workloads to Amazon Aurora PostgreSQL (per preferences). Aurora provides automated backups, Multi-AZ failover, and read replica auto-scaling.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/NzbDrone.Core/Datastore/ConnectionStringFactory.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No External Messaging Infrastructure",
+      "description": "The application uses an internal event aggregator for in-process pub/sub but no external messaging infrastructure (SQS, SNS, EventBridge, Kafka, RabbitMQ). All event-driven patterns are in-process only.",
+      "gap": "No external messaging for cross-service state changes. In-process events are lost on restart.",
+      "recommendation": "When decomposing the monolith, externalize the internal event aggregator to Amazon EventBridge (per preferences). Existing event patterns map directly to EventBridge event types.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Core/Messaging/Events/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Network Security Configuration",
+      "description": "No VPC, security groups, NACLs, or network segmentation defined. The application binds to a configurable address/port with no cloud networking layer.",
+      "gap": "No cloud network security — no private subnets, no security groups, no network segmentation.",
+      "recommendation": "When deploying to AWS, provision within a VPC with private subnets. Place the application behind an ALB or API Gateway in public subnets, with application and database in private subnets.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/NzbDrone.Common/Options/ServerOptions.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No API Entry Point",
+      "description": "Services are exposed directly via Kestrel with no gateway, load balancer, or CDN. The application serves both API and frontend SPA on port 8686 with no throttling or WAF.",
+      "gap": "No API Gateway, ALB, or CloudFront. Direct service exposure with no throttling, no WAF, and no managed TLS termination.",
+      "recommendation": "Deploy behind Amazon API Gateway for the REST API (with throttling, request validation, and auth) and CloudFront for frontend static assets.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Host/Startup.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Auto-Scaling",
+      "description": "No auto-scaling mechanisms configured. The application runs as a single-instance process with no scaling capability.",
+      "gap": "All capacity is statically provisioned — single instance with no horizontal scaling.",
+      "recommendation": "When containerized and deployed to EKS, configure Horizontal Pod Autoscaler (HPA) based on CPU/memory and request rate.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Host/Bootstrap.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Automated Backups",
+      "description": "No automated backup configuration. SQLite files on local filesystem with no backup automation. Manual backup feature exists but is not scheduled.",
+      "gap": "No automated backups, no retention policy, no tested restore procedures.",
+      "recommendation": "When migrated to Aurora PostgreSQL, leverage automated backups with configurable retention and PITR. Configure AWS Backup for cross-region replication.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Core/Backup/BackupService.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Infrastructure as Code",
+      "description": "No IaC exists in the repository. No Terraform, CloudFormation, CDK, Helm charts, or Kubernetes manifests.",
+      "gap": "0% IaC coverage — all infrastructure would be manually created.",
+      "recommendation": "Create IaC using Terraform or CDK to define the AWS infrastructure: EKS cluster, Aurora PostgreSQL, ECR repository, VPC networking, ALB/API Gateway, and monitoring resources.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Without Deployment Automation",
+      "description": "Azure Pipelines provides comprehensive build and test automation (multi-platform, integration tests, SonarCloud) but no deployment stage. Artifacts are produced but not deployed.",
+      "gap": "Build is automated but deployment is entirely manual. No continuous delivery, no environment promotion.",
+      "recommendation": "Extend CI/CD with deployment stages: build container → push to ECR → deploy to EKS staging → smoke tests → promote to production.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "azure-pipelines.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith with Identifiable Modules",
+      "description": "Single deployable unit with 15 projects but shared database access and cross-module coupling. Internal event aggregator provides some decoupling.",
+      "gap": "Single deployable unit with shared database access across all modules. No independent deployment capability.",
+      "recommendation": "Begin with Conditional/Adaptive approach: containerize as-is, then extract high-value services (notification dispatch, download management, metadata indexing).",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "src/Lidarr.sln", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Primarily Synchronous Communication",
+      "description": "Communication is primarily synchronous within the monolith. Internal event aggregator provides fire-and-forget but is in-process only. External service calls are all sync HTTP.",
+      "gap": "Primarily synchronous with some async for background jobs. No durable async messaging for cross-service state propagation.",
+      "recommendation": "When decomposing, adopt EventBridge for cross-service state changes. Convert internal event patterns to external events. Use SQS for durable work queues.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Core/Messaging/Events/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-Running Processes Without Async Infrastructure",
+      "description": "Long-running operations (library scanning, metadata refresh) run as synchronous background tasks with SignalR progress updates. Command queue provides ordering but blocks until complete.",
+      "gap": "Some background job processing but inconsistent patterns. No async job infrastructure with status polling.",
+      "recommendation": "Implement async job processing with Step Functions for complex workflows or SQS + Lambda workers for simple tasks.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Core/Messaging/Commands/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Limited API Versioning",
+      "description": "API namespaced under /api/v1/ but only one version exists with no backward compatibility policy or version negotiation.",
+      "gap": "Versioning applied but only v1 with no policy for v2 introduction or deprecation.",
+      "recommendation": "Document a versioning strategy: define when breaking changes warrant a new version, implement Accept-Version header support.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/Lidarr.Api.V1/openapi.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Static Service Endpoints",
+      "description": "Service endpoints configured through environment variables and XML config. No dynamic service discovery, no service registry.",
+      "gap": "Environment variables for endpoints but no dynamic discovery.",
+      "recommendation": "When deploying to EKS, leverage Kubernetes DNS-based service discovery. Consider AWS Cloud Map for service registration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/NzbDrone.Core/Datastore/ConnectionStringFactory.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Local Filesystem Storage",
+      "description": "Music files, cover art, and metadata stored on local filesystems. No S3 or cloud object storage.",
+      "gap": "Data in local filesystem with limited accessibility. No cloud object storage, no CDN.",
+      "recommendation": "Store cover art and metadata in S3 with CloudFront for CDN delivery. Consider S3 File Gateway for media files.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Common/Disk/DiskProviderBase.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Mostly Centralized Data Access",
+      "description": "Data access mostly centralized through BasicRepository pattern wrapping Dapper. Some direct Dapper access for complex queries.",
+      "gap": "Mostly centralized with some direct access in auxiliary code paths.",
+      "recommendation": "Maintain existing repository pattern. When migrating to Aurora, connection strings update with minimal code changes.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/NzbDrone.Core/Datastore/BasicRepository.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Database Versions Partially Managed",
+      "description": "CI/CD tests against PostgreSQL 14 and 15. Npgsql 9.0.3 supports PostgreSQL 13-17. No explicit version pin in deployment config.",
+      "gap": "Versions not explicitly pinned in deployment. No documented version-update procedure.",
+      "recommendation": "When deploying to Aurora, pin engine version in IaC. Document upgrade procedure. Plan migration from PG 14 (EOL Nov 2026).",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "azure-pipelines.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Key Authentication Without Token-Based Auth",
+      "description": "API authentication uses a single static API key without OAuth2/JWT. Simple string comparison with no expiry, no rate limiting, no per-user identity.",
+      "gap": "API key authentication without token-based auth. Single shared key grants full access.",
+      "recommendation": "Implement OAuth2/JWT authentication using Amazon Cognito. Replace static API key with short-lived JWT tokens carrying user identity and scopes.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/Lidarr.Http/Authentication/ApiKeyAuthenticationHandler.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Centralized Identity Integration",
+      "description": "Application manages its own authentication entirely with no external IdP. Users stored locally. No OIDC, SAML, or federated identity.",
+      "gap": "No external IdP integration. No SSO, no federated identity, no centralized user management.",
+      "recommendation": "Integrate with Amazon Cognito as the identity provider. Implement OIDC authentication flow for the web UI and token-based auth for the API.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Core/Authentication/UserService.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Secrets Management Service",
+      "description": "No plaintext credentials in source but production credentials in environment variables or application config without rotation or centralized management.",
+      "gap": "Credentials in env vars/config without rotation, encryption, or audit trails. No Secrets Manager or Vault.",
+      "recommendation": "Store all credentials in AWS Secrets Manager with automated rotation. Use IAM roles for service-to-service auth. Configure RDS integration for automatic password rotation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/NzbDrone.Core/Datastore/ConnectionStringFactory.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Compute Hardening or Patching",
+      "description": "No compute hardening or patching strategy beyond application self-update. No vulnerability scanning, no hardened images, no OS-level patching.",
+      "gap": "No patching strategy beyond app self-update. No vulnerability scanning, no hardened images.",
+      "recommendation": "Use hardened base images (Bottlerocket for EKS, distroless for containers). Enable ECR scanning. Deploy SSM Patch Manager. Integrate vulnerability scanning in CI/CD.",
+      "severity": "High",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Update/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Limited Security Pipeline",
+      "description": "SonarCloud for code quality but no dedicated SAST, no dependency scanning, no container scanning, no security gates.",
+      "gap": "No dedicated SAST, no dependency scanning (Dependabot/npm audit), no container scanning.",
+      "recommendation": "Add dependency scanning (Dependabot, npm audit), dedicated SAST (Semgrep/CodeGuru), and container scanning (ECR). Configure blocking gates on critical findings.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "azure-pipelines.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Distributed Tracing",
+      "description": "No distributed tracing instrumented. NLog for logging and Sentry for errors only. No trace ID propagation, no OpenTelemetry, no X-Ray.",
+      "gap": "No distributed tracing — no trace IDs, no request correlation across boundaries.",
+      "recommendation": "Integrate OpenTelemetry .NET SDK for distributed tracing. Export to AWS X-Ray. Add W3C TraceContext headers for downstream calls.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Common/Instrumentation/NzbDroneLogger.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Formal SLO Definitions",
+      "description": "Health checks monitor system state but no formal SLOs defined. No availability targets, latency percentiles, or error budgets.",
+      "gap": "Basic health checks but no formal SLO definitions or error budget tracking.",
+      "recommendation": "Define SLOs for critical user journeys: API latency p95 < 500ms, search availability 99.9%, import success rate > 99%.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/NzbDrone.Core/HealthCheck/HealthCheckService.cs", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Business Metrics",
+      "description": "No custom business metrics published. No metrics framework — no CloudWatch, Prometheus, or StatsD. Only log entries for operational data.",
+      "gap": "No custom metrics — no business outcome tracking, no operational dashboards.",
+      "recommendation": "Instrument business metrics using CloudWatch EMF: albums imported/hour, search success rate, download completion rate.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Anomaly Detection or Alerting",
+      "description": "No anomaly detection or alerting configured. Health checks are binary pass/fail with no threshold-based alerting or escalation.",
+      "gap": "No alerting — no anomaly detection, no threshold alarms, no escalation policies.",
+      "recommendation": "Configure CloudWatch Alarms for error rate spikes, latency degradation. Enable Anomaly Detection. Integrate with SNS for escalation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Core/HealthCheck/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Tests With Minor Gaps",
+      "description": "Integration tests exist in CI against PostgreSQL 14/15 in Docker. Automation tests provide E2E coverage. Tests run on multiple platforms.",
+      "gap": "Integration tests for primary workflows; some gaps in comprehensive coverage.",
+      "recommendation": "Expand integration test coverage to all critical API workflows. Add contract tests for third-party consumers.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/NzbDrone.Integration.Test/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Incident Response Automation",
+      "description": "No runbooks, no incident response automation, no self-healing patterns. Incident handling entirely ad hoc.",
+      "gap": "No runbooks — no automation, no documented procedures, no self-healing.",
+      "recommendation": "Create runbooks for common incidents as SSM Automation documents. Implement self-healing for recoverable failures.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Observability Ownership",
+      "description": "No observability ownership defined. No CODEOWNERS for monitoring, no dashboards, no named alarm owners, no team attribution.",
+      "gap": "No observability ownership — no dashboards, no named owners, no team attribution.",
+      "recommendation": "Establish observability ownership: CODEOWNERS for dashboards/alarms, named owners, per-service dashboards with team tags.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=2 (primary), INF-Q1=1, APP-Q3=2, APP-Q4=2 (supporting)",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2},
+        {"question_id": "INF-Q1", "score": 1},
+        {"question_id": "APP-Q3", "score": 2},
+        {"question_id": "APP-Q4", "score": 2}
+      ],
+      "detail": {
+        "current_state": "Tightly-coupled monolith with identifiable module boundaries but shared database and single deployment unit",
+        "recommended_services": ["EKS", "API Gateway", "EventBridge", "Step Functions", "Aurora PostgreSQL"],
+        "patterns": ["Strangler Fig", "Anti-corruption Layer", "Event Sourcing", "Saga"],
+        "immediate_actions": ["Containerize monolith", "Extract notification service", "Externalize events to EventBridge"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q1=1, no container definitions found (no Dockerfile in repository)",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 1}
+      ],
+      "detail": {
+        "current_state": "Self-contained .NET 8.0 executables for 12+ platforms, no Dockerfile",
+        "recommended_services": ["EKS", "ECR", "App Runner"],
+        "immediate_actions": ["Create Dockerfile from .NET 8.0 runtime image", "Configure ECR repository", "Deploy to EKS with Helm chart"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures). No commercial DB engines detected — SQLite and PostgreSQL are both open source.",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "No stored procedures or proprietary SQL; threshold not met"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "All database engines (SQLite, PostgreSQL) are already open source. No commercial engine licensing costs to eliminate."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q2=1 meets threshold, but contextual analysis shows databases (SQLite embedded, user-managed PostgreSQL) are self-managed by design for a desktop/self-hosted application. Moving to managed databases requires cloud deployment first (addressed by Move to Containers and Move to Modern DevOps pathways).",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": 1, "note": "Self-managed by design for desktop app; cloud deployment prerequisite not met"},
+        {"question_id": "DATA-Q3", "score": 3, "note": "Versions approaching EOL but partially managed"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "While INF-Q2=1 meets the score threshold, the database is self-managed by design for a self-hosted desktop application. Cloud deployment (Move to Containers pathway) is a prerequisite before managed database migration is actionable. Once containerized and deployed to AWS, Aurora PostgreSQL migration becomes the natural next step."
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No data processing workloads, streaming, ETL, or analytics pipelines detected. Contextual guard prevents trigger.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No evidence of data processing workloads exists — no streaming, no ETL, no analytics pipelines. The application is a music collection manager, not a data processing system."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=1 (no IaC), INF-Q11=2 (build automated but no deployment)",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 1},
+        {"question_id": "INF-Q11", "score": 2}
+      ],
+      "detail": {
+        "current_state": "Azure Pipelines for build/test; no IaC; no deployment automation",
+        "recommended_services": ["CodeBuild", "CodePipeline", "CodeDeploy", "CDK", "CloudWatch", "X-Ray"],
+        "immediate_actions": ["Create CDK IaC for AWS infrastructure", "Add deployment stages to pipeline", "Configure CloudWatch dashboards"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context. Context is 'Music collection manager (*arr suite)' with no AI-related signal terms.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context."
+    }
+  ]
+}

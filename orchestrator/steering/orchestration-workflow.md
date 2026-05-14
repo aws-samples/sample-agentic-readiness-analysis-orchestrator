@@ -1,6 +1,6 @@
 # Orchestration Workflow
 
-The complete end-to-end workflow Kiro follows when running a portfolio assessment. Read this when actually executing an assessment, generating ATX configs, or spawning subagents.
+The complete end-to-end workflow Kiro follows when running a portfolio analysis. Read this when actually executing an analysis, generating ATX configs, or spawning subagents.
 
 > **Three safety contracts apply throughout** — they are stated in `POWER.md` and MUST be followed:
 > 1. **No-Polling Contract** — Subagents call executeBash exactly once per ATX command and check the report file exactly once after it returns. No mid-run filesystem inspection.
@@ -22,13 +22,13 @@ portfolio-config.yaml
           │
           ▼
 ┌─────────────────────┐
-│  1. Parse YAML       │  Read assessment_type, context, preferences,
+│  1. Parse YAML       │  Read analysis_type, context, preferences,
 │     config file      │  repos, dependencies, TD names
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
-│  2. Validate         │  assessment_type ∈ {agentic-readiness, modernization,
+│  2. Validate         │  analysis_type ∈ {agentic-readiness, modernization,
 │     config           │   bpmn-opportunity, full}. Error if invalid.
 └─────────┬───────────┘
           │
@@ -101,9 +101,9 @@ portfolio-config.yaml
           │
           ▼
 ┌─────────────────────┐
-│  9. Consolidate      │  ARA → agentic-readiness-assessment/
-│     reports          │  MOD → modernization-assessment/
-│                      │  BAO → bpmn-opportunity-assessment/
+│  9. Consolidate      │  ARA → agentic-readiness-analysis/
+│     reports          │  MOD → modernization-analysis/
+│                      │  BAO → bpmn-opportunity-analysis/
 │                      │  Bridge → portfolio root
 │                      │  Clean up temp .atx-config-*.yaml files
 └─────────────────────┘
@@ -117,7 +117,7 @@ See `steering/getting-started.md` for the full pre-flight sequence (AWS credenti
 
 ---
 
-## Step 1: Run Individual Assessments
+## Step 1: Run Individual Analyses
 
 Kiro spawns **one subagent per repository**. The subagent count equals the repository count — never scales with TD count.
 
@@ -127,7 +127,7 @@ For each repository, Kiro:
 2. Generates the temporary ATX configuration files for each TD that will run on this repo
 3. Spawns one subagent that runs all assigned TDs sequentially in this fixed order:
 
-| `assessment_type` | TDs the subagent runs | Order |
+| `analysis_type` | TDs the subagent runs | Order |
 |---|---|---|
 | `agentic-readiness` | ARA only | (single TD) |
 | `modernization` | MOD only | (single TD) |
@@ -186,24 +186,24 @@ additionalPlanContext: |
   priority: "<from repo config>"
   downstream_dependency_reports:
     - name: "credit-scoring-service"
-      ara_report_path: "<dep_path>/agentic-readiness-assessment/<dep_name>-ara-report.md"
+      ara_report_path: "<dep_path>/agentic-readiness-analysis/<dep_name>-ara-report.md"
     - name: "customer-db"
-      ara_report_path: "<dep_path>/agentic-readiness-assessment/<dep_name>-ara-report.md"
+      ara_report_path: "<dep_path>/agentic-readiness-analysis/<dep_name>-ara-report.md"
 ```
 
 For BAO, the orchestrator first runs the deterministic BPMN analyzer to produce `bpmn-analysis.json`, then optionally runs ARA on each `downstream_dependencies[]` entry to produce dependency ARA reports the BAO TD cross-references.
 
 ### Per-Repo Subagent Contract
 
-Each per-repo subagent runs the assessment transformations assigned to its repo. **Across different repos, subagents execute fully in parallel. Within a single repo, the subagent runs its TDs sequentially (never two ATX sessions on the same repo concurrently).**
+Each per-repo subagent runs the analysis transformations assigned to its repo. **Across different repos, subagents execute fully in parallel. Within a single repo, the subagent runs its TDs sequentially (never two ATX sessions on the same repo concurrently).**
 
-**Single-TD repo (assessment_type ∈ {agentic-readiness, modernization, bpmn-opportunity}):**
+**Single-TD repo (analysis_type ∈ {agentic-readiness, modernization, bpmn-opportunity}):**
 
 ```bash
 atx custom def exec -n <td_name> -p <repo-path> -g file://.atx-config-<slug>-<suffix>.yaml -x -t
 ```
 
-**Multi-TD repo (assessment_type == full):** The subagent runs each ATX command in sequence on its repo, waiting for each to fully complete (artifact present on disk) before launching the next:
+**Multi-TD repo (analysis_type == full):** The subagent runs each ATX command in sequence on its repo, waiting for each to fully complete (artifact present on disk) before launching the next:
 
 ```bash
 # Step 1 — ARA on this repo (run, wait for *-ara-report.md to exist)
@@ -216,15 +216,15 @@ atx custom def exec -n <modernization> -p <repo-path> -g file://.atx-config-<slu
 atx custom def exec -n <bpmn_opportunity> -p <repo-path> -g file://.atx-config-<slug>-bao.yaml -x -t
 ```
 
-> **🌿 Per-Portfolio Branch Isolation (recommended).** For repos under your direct control, create a dedicated branch per portfolio run BEFORE invoking the orchestrator (e.g., `git checkout -b portfolio-assessment-<date>`). All ATX staging branches will fork from this branch. At the end you have a single isolated branch you can merge or delete as a unit. The orchestrator does not create this branch automatically — it is the operator's responsibility.
+> **🌿 Per-Portfolio Branch Isolation (recommended).** For repos under your direct control, create a dedicated branch per portfolio run BEFORE invoking the orchestrator (e.g., `git checkout -b portfolio-analysis-<date>`). All ATX staging branches will fork from this branch. At the end you have a single isolated branch you can merge or delete as a unit. The orchestrator does not create this branch automatically — it is the operator's responsibility.
 
 ### Per-repo report locations
 
 | TD | Output path (relative to repo root) |
 |---|---|
-| ARA | `{repo}/agentic-readiness-assessment/{slug}-ara-report.{md,json,html,metadata.json}` |
-| MOD | `{repo}/modernization-assessment/{slug}-mod-report.{md,json,html,metadata.json}` |
-| BAO | `{repo}/bpmn-opportunity-assessment/{slug}-bpmn-opportunity-report.{md,json,html,metadata.json}` |
+| ARA | `{repo}/agentic-readiness-analysis/{slug}-ara-report.{md,json,html,metadata.json}` |
+| MOD | `{repo}/modernization-analysis/{slug}-mod-report.{md,json,html,metadata.json}` |
+| BAO | `{repo}/bpmn-opportunity-analysis/{slug}-bpmn-opportunity-report.{md,json,html,metadata.json}` |
 
 `slug = lowercase(repo.name)` with any character not in `[a-z0-9_-]` replaced by `-`. Always derived from the portfolio config — never from the filesystem basename.
 
@@ -242,7 +242,7 @@ If any check fails, abort with an actionable error. **Do not invoke a portfolio 
 
 ---
 
-## Step 2: Run Portfolio Assessments
+## Step 2: Run Portfolio Analyses
 
 After Step 1.5 reconciliation passes, generate portfolio-level ATX configs and run portfolio TDs.
 
@@ -323,7 +323,7 @@ additionalPlanContext: |
 
 ### Portfolio BAO config (`.atx-config-portfolio-bao.yaml`)
 
-When `assessment_type` is `bpmn-opportunity` or `full` AND at least one repo produced a BAO report:
+When `analysis_type` is `bpmn-opportunity` or `full` AND at least one repo produced a BAO report:
 
 ```yaml
 additionalPlanContext: |
@@ -368,37 +368,37 @@ The Reconciliation Gate between portfolio TDs runs Checks A and B (branch consol
 
 | TD | Output path |
 |---|---|
-| Portfolio ARA | `agentic-readiness-assessment/{portfolio-name}-portfolio-ara-report.{md,json,html,metadata.json}` |
-| Portfolio MOD | `modernization-assessment/{portfolio-name}-portfolio-mod-report.{md,json,html,metadata.json}` |
-| Portfolio BAO | `bpmn-opportunity-assessment/{portfolio-name}-portfolio-bao-report.{md,json,html,metadata.json}` |
+| Portfolio ARA | `agentic-readiness-analysis/{portfolio-name}-portfolio-ara-report.{md,json,html,metadata.json}` |
+| Portfolio MOD | `modernization-analysis/{portfolio-name}-portfolio-mod-report.{md,json,html,metadata.json}` |
+| Portfolio BAO | `bpmn-opportunity-analysis/{portfolio-name}-portfolio-bao-report.{md,json,html,metadata.json}` |
 | Bridge | `{portfolio-name}-bridge-report.{md,json,html,metadata.json}` (workspace root) |
 
 ---
 
-## Step 2.5: Bridge TD (Full Assessment Only)
+## Step 2.5: Bridge TD (Full Analysis Only)
 
-When `assessment_type: full` and `portfolio_bridge` is configured, the Bridge TD runs after all portfolio TDs complete and cross-references their reports.
+When `analysis_type: full` and `portfolio_bridge` is configured, the Bridge TD runs after all portfolio TDs complete and cross-references their reports.
 
 ### Bridge config (`.atx-config-bridge.yaml`)
 
 ```yaml
 additionalPlanContext: |
-  portfolio_ara_report_path: "agentic-readiness-assessment/ecommerce-platform-portfolio-ara-report.md"
-  portfolio_mod_report_path: "modernization-assessment/ecommerce-platform-portfolio-mod-report.md"
+  portfolio_ara_report_path: "agentic-readiness-analysis/ecommerce-platform-portfolio-ara-report.md"
+  portfolio_mod_report_path: "modernization-analysis/ecommerce-platform-portfolio-mod-report.md"
   portfolio_name: "ecommerce-platform"
-  portfolio_bao_report_path: "bpmn-opportunity-assessment/ecommerce-platform-portfolio-bao-report.md"
+  portfolio_bao_report_path: "bpmn-opportunity-analysis/ecommerce-platform-portfolio-bao-report.md"
 ```
 
 **Bridge generation rules:**
-1. `portfolio_ara_report_path` → `agentic-readiness-assessment/{portfolio_name}-portfolio-ara-report.md`
-2. `portfolio_mod_report_path` → `modernization-assessment/{portfolio_name}-portfolio-mod-report.md`
+1. `portfolio_ara_report_path` → `agentic-readiness-analysis/{portfolio_name}-portfolio-ara-report.md`
+2. `portfolio_mod_report_path` → `modernization-analysis/{portfolio_name}-portfolio-mod-report.md`
 3. `portfolio_name` from portfolio config
-4. If a portfolio BAO report exists at `bpmn-opportunity-assessment/{portfolio_name}-portfolio-bao-report.md`, set `portfolio_bao_report_path` to that path. Otherwise omit.
+4. If a portfolio BAO report exists at `bpmn-opportunity-analysis/{portfolio_name}-portfolio-bao-report.md`, set `portfolio_bao_report_path` to that path. Otherwise omit.
 5. **Do NOT** use the deprecated `bpmn_opportunity_report_paths[]` field — Bridge consumes a single aggregated portfolio BAO report.
 
 ### When the Bridge Step Is Skipped
 
-- `assessment_type` is not `full` → bridge not applicable
+- `analysis_type` is not `full` → bridge not applicable
 - `portfolio_bridge` not configured → skip with warning: `"portfolio_bridge not configured — bridge report will not be generated"`
 
 ### Failure Isolation
@@ -407,7 +407,7 @@ If the Bridge TD fails:
 1. Log the failure with the error message
 2. Report to the user: `"Bridge TD failed: {error}. The ARA and MOD portfolio reports are unaffected."`
 3. The completed ARA and MOD portfolio reports are NOT affected
-4. The overall assessment is considered successful — the bridge is supplementary
+4. The overall analysis is considered successful — the bridge is supplementary
 
 If one of the upstream portfolio TDs failed (so only one portfolio report exists), Bridge will detect the missing report and terminate with a clear error identifying which is missing. This is expected behavior.
 
@@ -417,13 +417,13 @@ If one of the upstream portfolio TDs failed (so only one portfolio report exists
 
 After all portfolio TDs (and bridge, if applicable) complete, consolidate reports into organized directories at the portfolio root.
 
-For each `assessment_type`:
+For each `analysis_type`:
 
-| `assessment_type` | Consolidation actions |
+| `analysis_type` | Consolidation actions |
 |---|---|
-| `agentic-readiness` | Create/use `agentic-readiness-assessment/` at portfolio root. Copy each per-repo ARA report from `{repo}/agentic-readiness-assessment/` into the root folder. Portfolio ARA report already lives there. |
-| `modernization` | Same pattern with `modernization-assessment/` |
-| `bpmn-opportunity` | Same pattern with `bpmn-opportunity-assessment/` |
+| `agentic-readiness` | Create/use `agentic-readiness-analysis/` at portfolio root. Copy each per-repo ARA report from `{repo}/agentic-readiness-analysis/` into the root folder. Portfolio ARA report already lives there. |
+| `modernization` | Same pattern with `modernization-analysis/` |
+| `bpmn-opportunity` | Same pattern with `bpmn-opportunity-analysis/` |
 | `full` | All three folders + bridge report at portfolio root |
 
 After all consolidation:
@@ -433,19 +433,19 @@ After all consolidation:
 ### Resulting Structure (full mode)
 
 ```
-agentic-readiness-assessment/
+agentic-readiness-analysis/
 ├── service-a-ara-report.{md,json,html,metadata.json}
 ├── service-b-ara-report.{md,json,html,metadata.json}
 ├── service-c-ara-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-ara-report.{md,json,html,metadata.json}
 
-modernization-assessment/
+modernization-analysis/
 ├── service-a-mod-report.{md,json,html,metadata.json}
 ├── service-b-mod-report.{md,json,html,metadata.json}
 ├── service-c-mod-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-mod-report.{md,json,html,metadata.json}
 
-bpmn-opportunity-assessment/                                                  ← only when BAO ran
+bpmn-opportunity-analysis/                                                  ← only when BAO ran
 ├── process-a-bpmn-opportunity-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-bao-report.{md,json,html,metadata.json}
 
@@ -469,13 +469,13 @@ Reports are generated by the TDs — their content is defined by the TD specific
 
 ## Artifact Format
 
-Every per-repo and portfolio assessment emits a four-file bundle:
+Every per-repo and portfolio analysis emits a four-file bundle:
 
 | Artifact | Purpose |
 |---|---|
 | `{name}-report.md` | Richest-prose narrative artifact — rubric quotes, BLOCKER remediation blocks, score tables, top gaps, decomposition strategy, pathway details, execution roadmap, risk register |
 | `{name}-report.json` | **Canonical machine-readable contract.** Consumed by the webapp and by portfolio TDs. JSON wins on any conflict. |
 | `{name}-report.html` | Single self-contained HTML file. No external asset fetches at render time. Every data value originates from the JSON. |
-| `{name}-report.metadata.json` | Tiny sidecar carrying `{assessment_type, assessment_date, td_version}`. Same fields are also at the root of the main JSON under `metadata`. |
+| `{name}-report.metadata.json` | Tiny sidecar carrying `{analysis_type, analysis_date, td_version}`. Same fields are also at the root of the main JSON under `metadata`. |
 
 The `.md` presence check is the authoritative success signal in the No-Polling Contract — all four artifacts are produced together or none are.

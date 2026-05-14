@@ -1,0 +1,173 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2026-05-07",
+    "td_version": "agentic-readiness-analysis",
+    "report_format_version": "V6",
+    "target": "apache--flink-connector-aws",
+    "repo_type": "monorepo",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "All modules are connector libraries with no deployable entry points, no persistent data stores, no HTTP/RPC surface, no authentication enforcement.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["java", "streaming", "flink", "aws"],
+    "context": "Apache Flink connectors for AWS services (Kinesis, DynamoDB, SQS, etc.)",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_http_rpc_surface": false,
+      "has_auth_surface": false,
+      "has_write_operations": false,
+      "has_logging_of_user_data": false
+    },
+    "dev_library_application_override": true
+  },
+  "classification": {
+    "tier": "Agent-Ready",
+    "sub_qualifier": null,
+    "high_count": 0,
+    "medium_count": 3,
+    "low_count": 23,
+    "safety_impact_medium_count": 0,
+    "rule_matched": "0 High, ≤1 Medium → Agent-Ready"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 0,
+    "risk_quality_count": 3,
+    "info_count": 23,
+    "na_count": 5,
+    "not_evaluated_count": 12,
+    "total": 43,
+    "core_questions_evaluated": 19,
+    "extended_questions_triggered": 4,
+    "extended_questions_not_triggered": 12
+  },
+  "findings": [
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No automated API contract breaking-change detection in CI",
+      "description": "The repository uses semantic versioning (v6.0-SNAPSHOT) and maintains comprehensive documentation. However, there is no automated breaking-change detection in CI (no japicmp, revapi, buf breaking, or consumer-driven contract tests). The CI pipeline validates compilation and tests but does not detect API-breaking changes to public connector interfaces before merge.",
+      "gap": "No API compatibility checking tools (japicmp, revapi) or consumer-driven contract tests in CI pipeline. Public API surface changes could break downstream Flink applications without early detection.",
+      "recommendation": "Add japicmp-maven-plugin or revapi-maven-plugin to CI for binary compatibility checks on public API classes.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/common.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "ArchUnit architecture tests enforce structural rules in each module",
+          "Maven shade plugin with relocation prevents classpath conflicts",
+          "Flink connector parent POM enforces dependency convergence"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No structured logging or distributed tracing hooks",
+      "description": "The library uses SLF4J with plain-text PatternLayout logging. Root logger is OFF in production JARs (correct for library). No structured JSON logging, no MDC/NDC context enrichment, and no OpenTelemetry/X-Ray instrumentation hooks are provided. The library does not propagate or enrich trace context.",
+      "gap": "No trace context propagation or structured logging support for consuming applications. Consuming applications cannot correlate connector-internal log events with their own trace context without additional instrumentation work.",
+      "recommendation": "Add MDC context propagation for trace IDs in key connector operations (source reads, sink writes) to allow consuming Flink applications to correlate connector activity with their distributed traces.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "flink-connector-aws-base/src/main/resources/log4j2.properties",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "90–120 days",
+        "compensating_controls": [
+          "SLF4J abstraction allows consuming applications to configure any logging backend including JSON formatters",
+          "Flink's built-in metrics system provides operational visibility"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No recommended alerting thresholds documented",
+      "description": "The library emits Flink metrics (records sent, bytes, latency, errors) but does not provide pre-configured alerting thresholds or documentation of recommended alert configurations for consuming applications.",
+      "gap": "No monitoring/alerting guidance in documentation. Consumers must independently determine appropriate error rate and latency thresholds for connector operations.",
+      "recommendation": "Add a Monitoring & Alerting section to connector documentation recommending specific Flink metrics to alert on (e.g., numRecordsSendErrors, currentSendTime) with suggested thresholds.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "docs/content/docs/connectors/datastream/kinesis.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Flink's metric system exposes connector metrics that consumers can alert on",
+          "Fatal exception classification provides clear signal separation between retryable and terminal failures"
+        ]
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "status": "INFO", "category_id": "API", "category": "API Surface"},
+    {"question_id": "API-Q2", "status": "INFO", "category_id": "API", "category": "API Surface"},
+    {"question_id": "API-Q3", "status": "INFO", "category_id": "API", "category": "API Surface"},
+    {"question_id": "API-Q4", "status": "INFO", "category_id": "API", "category": "API Surface"},
+    {"question_id": "API-Q5", "status": "INFO", "category_id": "API", "category": "API Surface"},
+    {"question_id": "API-Q6", "status": "Not Evaluated (extended)", "category_id": "API", "category": "API Surface"},
+    {"question_id": "API-Q7", "status": "Not Evaluated (extended)", "category_id": "API", "category": "API Surface"},
+    {"question_id": "API-Q8", "status": "INFO", "category_id": "API", "category": "API Surface"},
+    {"question_id": "AUTH-Q1", "status": "INFO", "category_id": "AUTH", "category": "Authentication & Authorization"},
+    {"question_id": "AUTH-Q2", "status": "INFO", "category_id": "AUTH", "category": "Authentication & Authorization"},
+    {"question_id": "AUTH-Q3", "status": "INFO", "category_id": "AUTH", "category": "Authentication & Authorization"},
+    {"question_id": "AUTH-Q4", "status": "INFO", "category_id": "AUTH", "category": "Authentication & Authorization"},
+    {"question_id": "AUTH-Q5", "status": "INFO", "category_id": "AUTH", "category": "Authentication & Authorization"},
+    {"question_id": "AUTH-Q6", "status": "INFO", "category_id": "AUTH", "category": "Authentication & Authorization"},
+    {"question_id": "AUTH-Q7", "status": "INFO", "category_id": "AUTH", "category": "Authentication & Authorization"},
+    {"question_id": "STATE-Q1", "status": "INFO", "category_id": "STATE", "category": "State Management"},
+    {"question_id": "STATE-Q2", "status": "Not Evaluated (extended)", "category_id": "STATE", "category": "State Management"},
+    {"question_id": "STATE-Q3", "status": "INFO", "category_id": "STATE", "category": "State Management"},
+    {"question_id": "STATE-Q4", "status": "INFO", "category_id": "STATE", "category": "State Management"},
+    {"question_id": "STATE-Q5", "status": "INFO", "category_id": "STATE", "category": "State Management"},
+    {"question_id": "STATE-Q6", "status": "INFO", "category_id": "STATE", "category": "State Management"},
+    {"question_id": "STATE-Q7", "status": "Not Evaluated (extended)", "category_id": "STATE", "category": "State Management"},
+    {"question_id": "HITL-Q1", "status": "Not Evaluated (extended)", "category_id": "HITL", "category": "Human-in-the-Loop"},
+    {"question_id": "HITL-Q2", "status": "Not Evaluated (extended)", "category_id": "HITL", "category": "Human-in-the-Loop"},
+    {"question_id": "HITL-Q3", "status": "INFO", "category_id": "HITL", "category": "Human-in-the-Loop"},
+    {"question_id": "DATA-Q1", "status": "INFO", "category_id": "DATA", "category": "Data Accessibility"},
+    {"question_id": "DATA-Q2", "status": "INFO", "category_id": "DATA", "category": "Data Accessibility"},
+    {"question_id": "DATA-Q3", "status": "Not Evaluated (extended)", "category_id": "DATA", "category": "Data Accessibility"},
+    {"question_id": "DATA-Q4", "status": "Not Evaluated (extended)", "category_id": "DATA", "category": "Data Accessibility"},
+    {"question_id": "DATA-Q5", "status": "Not Evaluated (extended)", "category_id": "DATA", "category": "Data Accessibility"},
+    {"question_id": "DATA-Q6", "status": "INFO", "category_id": "DATA", "category": "Data Accessibility"},
+    {"question_id": "DATA-Q7", "status": "INFO", "category_id": "DATA", "category": "Data Accessibility"},
+    {"question_id": "DISC-Q1", "status": "RISK-QUALITY", "category_id": "DISC", "category": "Discovery & Documentation"},
+    {"question_id": "DISC-Q2", "status": "INFO", "category_id": "DISC", "category": "Discovery & Documentation"},
+    {"question_id": "DISC-Q3", "status": "INFO", "category_id": "DISC", "category": "Discovery & Documentation"},
+    {"question_id": "OBS-Q1", "status": "RISK-QUALITY", "category_id": "OBS", "category": "Observability"},
+    {"question_id": "OBS-Q2", "status": "RISK-QUALITY", "category_id": "OBS", "category": "Observability"},
+    {"question_id": "OBS-Q3", "status": "INFO", "category_id": "OBS", "category": "Observability"},
+    {"question_id": "ENG-Q1", "status": "N/A", "category_id": "ENG", "category": "Engineering Maturity"},
+    {"question_id": "ENG-Q2", "status": "N/A", "category_id": "ENG", "category": "Engineering Maturity"},
+    {"question_id": "ENG-Q3", "status": "N/A", "category_id": "ENG", "category": "Engineering Maturity"},
+    {"question_id": "ENG-Q4", "status": "N/A", "category_id": "ENG", "category": "Engineering Maturity"},
+    {"question_id": "ENG-Q5", "status": "N/A", "category_id": "ENG", "category": "Engineering Maturity"}
+  ]
+}

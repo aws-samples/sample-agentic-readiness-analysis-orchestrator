@@ -10,17 +10,17 @@ author: "AWS"
 
 ## Overview
 
-This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive assessments across your service portfolio. Kiro reads `portfolio-config.yaml`, classifies repositories, spawns one subagent per repo, runs the appropriate AWS Transform transformations, and aggregates results into portfolio-level reports.
+This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive analyses across your service portfolio. Kiro reads `portfolio-config.yaml`, classifies repositories, spawns one subagent per repo, runs the appropriate AWS Transform transformations, and aggregates results into portfolio-level reports.
 
-Three assessments are supported. The `assessment_type` field in `portfolio-config.yaml` controls which run:
+Three analyses are supported. The `analysis_type` field in `portfolio-config.yaml` controls which run:
 
-| Assessment | What it evaluates |
+| Analysis | What it evaluates |
 |---|---|
 | **Agentic Readiness Analysis (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are safe for autonomous AI agent integration. |
 | **Modernization Analysis (MOD)** | 37 questions, 5 sections, 1-4 scale. Evaluates cloud architecture maturity and identifies modernization pathways. |
 | **BPMN Agentic Opportunity (BAO)** | Analyzes BPMN 2.0 process models to identify agentic candidates by reasoning complexity and data readiness. |
 
-| `assessment_type` | What runs |
+| `analysis_type` | What runs |
 |---|---|
 | `agentic-readiness` | Per-repo ARA + Portfolio ARA |
 | `modernization` | Per-repo MOD + Portfolio MOD |
@@ -48,7 +48,7 @@ Read on demand based on what the user is asking. **Do not load all of these proa
 |---|---|
 | `getting-started.md` | First-time setup, AWS credentials, ATX CLI installation, prerequisite checks |
 | `portfolio-config.md` | Building or editing `portfolio-config.yaml`, understanding the schema, repo classification, preferences merging |
-| `orchestration-workflow.md` | Actually running an assessment — Step 0 through Step 3, ATX config generation, subagent contract |
+| `orchestration-workflow.md` | Actually running an analysis — Step 0 through Step 3, ATX config generation, subagent contract |
 | `reconciliation-gate.md` | The mandatory gate between per-repo and portfolio TDs — Checks A (branch consolidation), B (path standardization), C (bundle completeness) |
 | `manual-execution.md` | Running individual TDs by hand without the orchestrator (single-repo runs, debugging, partial reruns) |
 | `troubleshooting.md` | Errors, missing reports, timeouts, subagent panic recovery, configuration validation issues |
@@ -69,15 +69,15 @@ To load a steering file: `Call action "readSteering" with powerName="orchestrato
 **The contract:**
 
 1. **Issue exactly one `executeBash` call** for the ATX command, with the configured timeout (1200000 ms per-repo, 1800000 ms portfolio). Do not pre-launch, do not background, do not split.
-2. **Do NOT call `ls`, `find`, `cat`, `grep`, or any filesystem inspection tool against the repo's assessment folders while ATX is running.** The agent's executeBash call IS the wait. There is no work to do until it returns.
+2. **Do NOT call `ls`, `find`, `cat`, `grep`, or any filesystem inspection tool against the repo's analysis folders while ATX is running.** The agent's executeBash call IS the wait. There is no work to do until it returns.
 3. **Do NOT read ATX log files or `~/.aws/atx/custom/...` paths during the run.** ATX writes incrementally; partial reads produce misleading state.
 4. **Do NOT spawn a second subagent or a parallel executeBash to "check on" the first one.**
 5. **Do NOT interpret stdout buffering pauses, "Thinking..." spinners, or quiet periods as failure.** ATX runs with no stdout output for minutes at a time; this is normal.
 6. **Do exactly one filesystem check after executeBash returns** (success, error, or timeout). The `.md` presence is the authoritative success signal — all four artifacts are produced together or none are:
    ```bash
-   ls {repo}/agentic-readiness-assessment/{slug}-ara-report.md 2>/dev/null     # ARA
-   ls {repo}/modernization-assessment/{slug}-mod-report.md 2>/dev/null         # MOD
-   ls {repo}/bpmn-opportunity-assessment/{slug}-bpmn-opportunity-report.md 2>/dev/null  # BAO
+   ls {repo}/agentic-readiness-analysis/{slug}-ara-report.md 2>/dev/null     # ARA
+   ls {repo}/modernization-analysis/{slug}-mod-report.md 2>/dev/null         # MOD
+   ls {repo}/bpmn-opportunity-analysis/{slug}-bpmn-opportunity-report.md 2>/dev/null  # BAO
    ```
 7. If the `.md` file exists → **SUCCESS**, regardless of executeBash exit code or timeout status.
 8. If the `.md` file is missing AND executeBash returned a clear error → **FAILURE** with the error.
@@ -92,7 +92,7 @@ Each ATX execution forks a per-execution staging branch (`atx-result-staging-<ti
 
 **The contract:**
 
-- Within a single repository, assessments MUST run sequentially: ARA → MOD → BAO
+- Within a single repository, analyses MUST run sequentially: ARA → MOD → BAO
 - Across repositories, run subagents fully in parallel (one subagent per repo)
 - **One subagent per repo, never more.** The subagent sequences its assigned TDs.
 
@@ -110,7 +110,7 @@ All portfolio TDs (Portfolio ARA, Portfolio MOD, Portfolio BAO, Bridge) execute 
 - A **Reconciliation Gate** runs between each invocation (see `steering/reconciliation-gate.md` for Checks A/B/C)
 - Abort the chain if any gate fails — do not proceed to the next portfolio TD with a corrupted workspace
 
-The portfolio phase typically takes ~1 hour for a full assessment with all four portfolio TDs. This is the cost of correctness; do not optimize it away by parallelizing.
+The portfolio phase typically takes ~1 hour for a full analysis with all four portfolio TDs. This is the cost of correctness; do not optimize it away by parallelizing.
 
 **Cross-repo per-repo subagents remain parallel** — only the portfolio aggregation step is serialized.
 
@@ -121,16 +121,16 @@ The portfolio phase typically takes ~1 hour for a full assessment with all four 
 Detailed step-by-step flow lives in `steering/orchestration-workflow.md`. Summary:
 
 1. **Pre-flight (Step 0):** Verify AWS credentials, ATX CLI, TD existence in registry. Fail fast on any failure.
-2. **Parse and validate `portfolio-config.yaml`:** assessment_type, repos, preferences, dependency_overrides, TD names.
+2. **Parse and validate `portfolio-config.yaml`:** analysis_type, repos, preferences, dependency_overrides, TD names.
 3. **Classify each repo:** Apply the decision tree (or honor user-provided `repo_type` override).
 4. **Clone missing repos:** For entries with `repository_url` and a non-existent `path`.
 5. **Generate ATX configs:** Per-repo ARA (no preferences), per-repo MOD (no agent_scope, merged preferences). Portfolio configs include structured `service_inventory[]` and `dependency_overrides[]`.
 6. **Per-repo execution (Contract 2):** One subagent per repo. Subagent runs its assigned TDs sequentially within the repo. All subagents in parallel across repos.
 7. **Reconciliation Gate (Step 1.5):** Check A (branch consolidation), Check B (canonical paths — auto-rename and auto-move strays since Contract 2 makes their attribution unambiguous, ABORT only when ≥2 strays exist for the same TD in one repo), Check C (four-artifact bundle completeness, `.json` mandatory). Abort before any portfolio TD if any check fails.
 8. **Portfolio TDs (Contract 3):** Strictly serial — Portfolio ARA → Portfolio MOD → Portfolio BAO → Bridge — with a Reconciliation Gate between each.
-9. **Consolidate reports:** Copy per-repo reports into top-level `agentic-readiness-assessment/`, `modernization-assessment/`, `bpmn-opportunity-assessment/` folders. Bridge report stays at workspace root. Clean up `.atx-config-*.yaml` and `bpmn-analysis.json`.
+9. **Consolidate reports:** Copy per-repo reports into top-level `agentic-readiness-analysis/`, `modernization-analysis/`, `bpmn-opportunity-analysis/` folders. Bridge report stays at workspace root. Clean up `.atx-config-*.yaml` and `bpmn-analysis.json`.
 
-> All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) — assessments run at scale without human intervention. Always pass **absolute paths** to `-p` and `-g`; relative paths silently break across `executeBash` boundaries because each call starts a fresh shell. See `steering/atx-cli-reference.md` for full flag details and `steering/troubleshooting.md` for the path-corruption failure mode.
+> All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) — analyses run at scale without human intervention. Always pass **absolute paths** to `-p` and `-g`; relative paths silently break across `executeBash` boundaries because each call starts a fresh shell. See `steering/atx-cli-reference.md` for full flag details and `steering/troubleshooting.md` for the path-corruption failure mode.
 
 ---
 
@@ -142,13 +142,13 @@ Minimum config to validate the toolchain:
 
 ```yaml
 portfolio_name: "my-platform"
-assessment_type: "full"
+analysis_type: "full"
 context: "Building customer-facing AI agents while modernizing legacy services"
 agent_scope: "read-only"
 
 transformation_definitions:
-  agentic_readiness: "agentic-readiness-assessment"
-  modernization: "modernization-assessment"
+  agentic_readiness: "agentic-readiness-analysis"
+  modernization: "modernization-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
   portfolio_bridge: "portfolio-bridge"
@@ -196,17 +196,17 @@ For manual execution without the orchestrator, read `steering/manual-execution.m
 After a `full` run, the workspace contains:
 
 ```
-agentic-readiness-assessment/
+agentic-readiness-analysis/
 ├── service-a-ara-report.{md,json,html,metadata.json}
 ├── service-b-ara-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-ara-report.{md,json,html,metadata.json}
 
-modernization-assessment/
+modernization-analysis/
 ├── service-a-mod-report.{md,json,html,metadata.json}
 ├── service-b-mod-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-mod-report.{md,json,html,metadata.json}
 
-bpmn-opportunity-assessment/                                     ← only when BAO ran
+bpmn-opportunity-analysis/                                     ← only when BAO ran
 ├── process-a-bpmn-opportunity-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-bao-report.{md,json,html,metadata.json}
 
@@ -215,14 +215,14 @@ my-platform-bridge-report.{md,json,html,metadata.json}           ← full + port
 
 ### Four-Artifact Bundle
 
-Every per-repo and portfolio assessment emits four files. JSON is authoritative on conflict.
+Every per-repo and portfolio analysis emits four files. JSON is authoritative on conflict.
 
 | Artifact | Purpose |
 |---|---|
 | `{name}-report.md` | Richest-prose narrative (rubric quotes, BLOCKER remediation blocks, score tables, top gaps, decomposition strategy, pathway details, execution roadmap, risk register) |
 | `{name}-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard and by portfolio TDs. |
 | `{name}-report.html` | Single self-contained HTML — no external asset fetches at render time. Every value originates from the JSON. |
-| `{name}-report.metadata.json` | Tiny sidecar carrying `{assessment_type, assessment_date, td_version}`. Same fields are also at the root of the main JSON under `metadata`. |
+| `{name}-report.metadata.json` | Tiny sidecar carrying `{analysis_type, analysis_date, td_version}`. Same fields are also at the root of the main JSON under `metadata`. |
 
 The Reconciliation Gate (Check C) treats `.json` as mandatory — portfolio TDs cannot aggregate without it.
 
@@ -230,14 +230,14 @@ The Reconciliation Gate (Check C) treats `.json` as mandatory — portfolio TDs 
 
 ## Best Practices
 
-1. **Choose the right `assessment_type`** — ARA for agent safety, MOD for cloud maturity, BAO for BPMN process analysis, `full` for all three with the Bridge cross-cutting view.
+1. **Choose the right `analysis_type`** — ARA for agent safety, MOD for cloud maturity, BAO for BPMN process analysis, `full` for all three with the Bridge cross-cutting view.
 2. **Provide `context`** — Free-text portfolio context frames recommendations far better than letting the TD reason from code alone.
 3. **Set `agent_scope` for ARA** — `write-enabled` for agents that modify data, `read-only` for observation-only. Affects conditional BLOCKER severity.
 4. **Use `preferences` to steer MOD** — Global `prefer`/`avoid` arrays plus per-repo overrides. See `steering/portfolio-config.md` for merge rules.
 5. **Specify `repo_type` when obvious** — Skip auto-detection for clearly-infrastructure repos (`infrastructure-only`) or libraries (`library`).
 6. **Document dependencies** — Use `dependency_overrides[]` for implicit dependencies the orchestrator cannot infer from code analysis.
 7. **Set priorities where helpful** — `P0` for critical services, `P1` for high priority, `P2` for medium. Optional but improves portfolio roadmap sequencing.
-8. **Run individual assessments first** — Portfolio assessments require completed individual reports. The reconciliation gate enforces this, but configuring `assessment_type: full` is the simplest path.
+8. **Run individual analyses first** — Portfolio analyses require completed individual reports. The reconciliation gate enforces this, but configuring `analysis_type: full` is the simplest path.
 9. **Create a portfolio-run branch first** — Prevents ATX staging branches from polluting `main`. Cleanup is one merge instead of many.
 10. **Run the Reconciliation Gate manually if running TDs by hand** — Same Checks A/B/C apply. See `steering/reconciliation-gate.md`.
 11. **Leverage cross-repo parallelism** — Kiro spawns one subagent per repository so larger portfolios scale near-linearly. Per-repo serialization within `full` mode is mandatory but adds at most one TD's runtime per repo.
@@ -262,12 +262,12 @@ Most common issues:
 
 ## Limitations
 
-- Minimum 2 services for portfolio assessment
-- Per-repo assessments must succeed before portfolio aggregation
+- Minimum 2 services for portfolio analysis
+- Per-repo analyses must succeed before portfolio aggregation
 - Dependency detection is code-analysis-based — declare implicit dependencies via `dependency_overrides[]`
 - Preferences are guidance, not guarantees
 - Preferences are MOD-only (silently ignored by ARA)
-- Assessment quality depends on code completeness and documentation availability
+- Analysis quality depends on code completeness and documentation availability
 
 ---
 

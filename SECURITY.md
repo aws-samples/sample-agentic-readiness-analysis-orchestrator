@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides security guidance for using the Agentic Readiness Analysis framework. While the framework itself consists of transformation definitions and orchestration documentation, proper security practices are essential when executing assessments.
+This document provides security guidance for using the Agentic Readiness Analysis framework. While the framework itself consists of transformation definitions and orchestration documentation, proper security practices are essential when executing analyses.
 
 ---
 
@@ -13,13 +13,13 @@ This document provides security guidance for using the Agentic Readiness Analysi
 - **Repository Access Control**: Only assess repositories you have authorization to analyze
 - **Credential Management**: Use Git credential managers (not hardcoded credentials)
 - **AWS Credentials**: Configure AWS CLI with IAM roles/profiles (never hardcode)
-- **Report Handling**: Treat assessment reports as confidential - they contain architecture details
-- **Environment Security**: Run assessments in trusted development/analysis environments only
+- **Report Handling**: Treat analysis reports as confidential - they contain architecture details
+- **Environment Security**: Run analyses in trusted development/analysis environments only
 
 ### AWS Transform CLI Responsibilities
 
 - Sandboxed execution environment for code analysis
-- No code execution during assessment (read-only analysis)
+- No code execution during analysis (read-only analysis)
 - TLS encryption for all AWS API communications
 - CloudTrail logging of all Transform API calls
 
@@ -77,8 +77,8 @@ repository_url: "https://<username>:<token>@github.com/repo.git"  # NEVER DO THI
 **AWS Credentials:**
 ```bash
 # ✅ GOOD - Use AWS CLI profiles
-aws configure --profile assessment-user
-export AWS_PROFILE=assessment-user
+aws configure --profile analysis-user
+export AWS_PROFILE=analysis-user
 
 # ✅ GOOD - Use IAM roles (EC2, ECS, Lambda)
 # No explicit credentials needed
@@ -118,20 +118,20 @@ echo "portfolio-config.yaml" >> .gitignore  # If it contains sensitive data
 
 ### 4. Report Security
 
-Assessment reports contain sensitive architecture and security findings. Protect them appropriately:
+Analysis reports contain sensitive architecture and security findings. Protect them appropriately:
 
 ```bash
 # Set restrictive permissions on report directories
-chmod 700 agentic-readiness-assessment/
+chmod 700 agentic-readiness-analysis/
 
 # Encrypt reports at rest (optional but recommended)
-gpg --encrypt --recipient your-key agentic-readiness-assessment/*.md
+gpg --encrypt --recipient your-key agentic-readiness-analysis/*.md
 
 # Use AWS KMS for encryption (if storing in S3)
-aws s3 cp agentic-readiness-assessment/ s3://bucket/reports/ \
+aws s3 cp agentic-readiness-analysis/ s3://bucket/reports/ \
   --recursive \
   --sse aws:kms \
-  --sse-kms-key-id alias/assessment-reports
+  --sse-kms-key-id alias/analysis-reports
 ```
 
 **Report handling guidelines:**
@@ -232,20 +232,20 @@ aws cloudtrail lookup-events \
 
 **Local execution logs:**
 ```bash
-# Kiro IDE logs assessment executions
+# Kiro IDE logs analysis executions
 # Review logs for anomalous patterns:
 # - Unexpected repository access
 # - Failed authentication attempts
-# - Unusual assessment durations
+# - Unusual analysis durations
 # - Error patterns indicating attacks
 ```
 
-### 8. Secure Assessment Execution
+### 8. Secure Analysis Execution
 
 **Environment isolation:**
 ```bash
-# Run assessments in isolated environments
-# ✅ GOOD - Dedicated assessment workstation
+# Run analyses in isolated environments
+# ✅ GOOD - Dedicated analysis workstation
 # ✅ GOOD - Ephemeral EC2 instance with IAM role
 # ✅ GOOD - Container with mounted credentials
 
@@ -270,22 +270,22 @@ git config --global url."git@github.com:".insteadOf "https://github.com/"
 
 ### Scenario 1: Malicious Repository Content
 
-**Threat**: Assessed repository contains malicious file names or content designed to exploit the assessment process.
+**Threat**: Analyzed repository contains malicious file names or content designed to exploit the analysis process.
 
 **Mitigations:**
 - AWS Transform uses sandboxed execution (no code execution)
-- Read-only repository access during assessment
+- Read-only repository access during analysis
 - Path validation prevents directory traversal
 - File system access restrictions limit blast radius
 
 **User actions:**
 - Only assess repositories from trusted sources
-- Review repository contents before assessment
-- Use separate assessment environment (not production)
+- Review repository contents before analysis
+- Use separate analysis environment (not production)
 
 ### Scenario 2: Credential Exposure in Reports
 
-**Threat**: Assessment reports inadvertently include hardcoded credentials found in source code.
+**Threat**: Analysis reports inadvertently include hardcoded credentials found in source code.
 
 **Mitigations:**
 - Review reports before sharing
@@ -296,8 +296,8 @@ git config --global url."git@github.com:".insteadOf "https://github.com/"
 **User actions:**
 ```bash
 # Scan reports for potential secrets before sharing
-git-secrets --scan agentic-readiness-assessment/*.md
-trufflehog filesystem agentic-readiness-assessment/
+git-secrets --scan agentic-readiness-analysis/*.md
+trufflehog filesystem agentic-readiness-analysis/
 
 # Redact sensitive findings manually if needed
 ```
@@ -333,17 +333,17 @@ ssh-add -t 3600 ~/.ssh/id_ed25519  # 1 hour timeout
 - Prompt engineering best practices in transformation definitions
 
 **User actions:**
-- Review assessment findings for anomalies
+- Review analysis findings for anomalies
 - Cross-validate AI-generated recommendations
-- Report suspicious assessment behavior to AWS
+- Report suspicious analysis behavior to AWS
 
 ---
 
 ## Incident Response
 
-If you suspect a security incident during assessment execution:
+If you suspect a security incident during analysis execution:
 
-1. **Stop immediately**: Halt any running assessments
+1. **Stop immediately**: Halt any running analyses
 2. **Isolate**: Disconnect from network if credential compromise suspected
 3. **Preserve evidence**: Save logs, configs, and error messages
 4. **Rotate credentials**: Change Git and AWS credentials immediately
@@ -360,7 +360,7 @@ If you suspect a security incident during assessment execution:
 
 ### Data Classification
 
-Assessment reports typically contain:
+Analysis reports typically contain:
 - **Confidential**: Architecture diagrams, service dependencies
 - **Internal**: Technology stack details, modernization recommendations
 - **Potentially Sensitive**: Security gaps, vulnerability findings
@@ -370,38 +370,38 @@ Handle according to your organization's data classification policy.
 ### Regulatory Requirements
 
 If assessing applications subject to regulatory requirements:
-- **GDPR**: Ensure no PII in assessment reports
+- **GDPR**: Ensure no PII in analysis reports
 - **HIPAA**: Use encrypted storage for reports
 - **PCI DSS**: Restrict access to reports about payment systems
-- **SOC 2**: Maintain audit logs of all assessment activities
+- **SOC 2**: Maintain audit logs of all analysis activities
 
-### Third-Party Assessments
+### Third-Party Analyses
 
-If using external consultants to run assessments:
+If using external consultants to run analyses:
 - Require NDAs before sharing reports
 - Provide read-only repository access only
 - Use separate AWS accounts with limited permissions
 - Review all generated reports before handoff
-- Ensure secure deletion of cloned repositories after assessment
+- Ensure secure deletion of cloned repositories after analysis
 
 ---
 
 ## Security Checklist
 
-Before running portfolio assessments:
+Before running portfolio analyses:
 
 - [ ] AWS Transform CLI installed with least privilege IAM permissions
 - [ ] Git credentials configured with credential manager (not hardcoded)
 - [ ] Repository URLs validated as trusted sources
 - [ ] Portfolio configuration contains no sensitive data
-- [ ] Assessment environment isolated from production
+- [ ] Analysis environment isolated from production
 - [ ] CloudTrail enabled for AWS API logging
 - [ ] File system encryption enabled
 - [ ] Report storage location secured with access controls
 - [ ] Incident response procedures documented
-- [ ] Team trained on secure assessment practices
+- [ ] Team trained on secure analysis practices
 
-After completing assessments:
+After completing analyses:
 
 - [ ] Reports reviewed for credential exposure
 - [ ] Sensitive findings redacted before sharing

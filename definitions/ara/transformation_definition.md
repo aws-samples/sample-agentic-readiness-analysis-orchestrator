@@ -4,9 +4,9 @@ Agentic Readiness Analysis
 
 ## Objective
 
-Evaluate whether a repository's systems — infrastructure, applications, data, security controls, and operational practices — are safe, operable, and integrable for autonomous AI agent integration. This assessment targets the environment that agents will call or consume, not the agent itself. It answers the question: are the systems agents will interact with ready to be called safely?
+Evaluate whether a repository's systems — infrastructure, applications, data, security controls, and operational practices — are safe, operable, and integrable for autonomous AI agent integration. This analysis targets the environment that agents will call or consume, not the agent itself. It answers the question: are the systems agents will interact with ready to be called safely?
 
-The assessment serves two purposes: (1) portfolio-level telemetry — a snapshot of which systems are agent-ready, which need remediation, and where systemic gaps exist; and (2) use-case-level dependency checking — given a specific agent workflow, which target systems are blockers?
+The analysis serves two purposes: (1) portfolio-level telemetry — a snapshot of which systems are agent-ready, which need remediation, and where systemic gaps exist; and (2) use-case-level dependency checking — given a specific agent workflow, which target systems are blockers?
 
 ARA is a design-time architecture review — it evaluates whether controls exist in code and configuration, not whether they are effective at runtime. It is not a penetration test or runtime security scan.
 
@@ -130,7 +130,7 @@ Both `category_id` and `category` are REQUIRED fields on every finding. Consumer
 
 #### DATA-Q* Namespace Collision
 
-The short code `DATA` is shared between ARA and the Modernization analysis (MOD). ARA `DATA-Q1`..`DATA-Q7` and MOD `DATA-Q1`..`DATA-Q4` are DIFFERENT questions and MUST NOT be conflated. The unique join key across assessment types is `(assessment_type, question_id)`, never `question_id` alone. ARA `DATA` disambiguates to display name "Data Accessibility"; MOD `DATA` disambiguates to "Data Platform".
+The short code `DATA` is shared between ARA and the Modernization analysis (MOD). ARA `DATA-Q1`..`DATA-Q7` and MOD `DATA-Q1`..`DATA-Q4` are DIFFERENT questions and MUST NOT be conflated. The unique join key across analysis types is `(analysis_type, question_id)`, never `question_id` alone. ARA `DATA` disambiguates to display name "Data Accessibility"; MOD `DATA` disambiguates to "Data Platform".
 
 ### RISK Tier Assignment
 
@@ -183,7 +183,7 @@ Note: The 5 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, D
 
 ### Service Archetype Classification
 
-Beyond `repo_type` (which determines N/A questions for non-application repos), this assessment classifies application repositories by **service archetype** — a characterization of runtime behavior that determines which extended questions are triggered.
+Beyond `repo_type` (which determines N/A questions for non-application repos), this analysis classifies application repositories by **service archetype** — a characterization of runtime behavior that determines which extended questions are triggered.
 
 | Archetype | Description | Detection Signals |
 |-----------|-------------|-------------------|
@@ -224,23 +224,23 @@ The readiness profile is determined by BLOCKER count and RISK-SAFETY count only.
 | **Remediation Required** | 1–2 | Any | Any | Remediate BLOCKERs first |
 | **Not Agent-Integrable** | 3+ | Any | Any | Deferred or descoped |
 
-This assessment does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers), agent-level AI governance (model policy, prompt-injection defense, safety evaluation), or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Analysis or agent-side governance reviews.
+This analysis does NOT cover agent architecture (orchestration design, prompt engineering, model selection, RAG pipelines, MCP servers), agent-level AI governance (model policy, prompt-injection defense, safety evaluation), or general cloud modernization (managed compute, monolith decomposition, deployment strategies, DevOps maturity). Those concerns belong in the Modernization Analysis or agent-side governance reviews.
 
 ## Entry Criteria
 
 - The repository is accessible and readable at the specified path
-- The repository contains files relevant to assessment (source code, IaC, API specs, CI/CD configs, dependency manifests, container definitions, or configuration files)
+- The repository contains files relevant to analysis (source code, IaC, API specs, CI/CD configs, dependency manifests, container definitions, or configuration files)
 - Write permissions exist to create the output artifact bundle (MD, JSON, HTML, and metadata.json)
-- The assessment operates in **read-only mode** — it will not modify any source code or configuration in the repository
+- The analysis operates in **read-only mode** — it will not modify any source code or configuration in the repository
 - Stay on the current branch — this is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out.
 
 ## Implementation Steps
 
 ### Step 0: Read additionalPlanContext
 
-Before beginning the discovery scan, read the assessment context from `additionalPlanContext` to determine the repo classification, agent scope, and framing context that will shape the entire assessment.
+Before beginning the discovery scan, read the analysis context from `additionalPlanContext` to determine the repo classification, agent scope, and framing context that will shape the entire analysis.
 
-#### 0.1 Read Assessment Context
+#### 0.1 Read Analysis Context
 
 Extract the following fields from `additionalPlanContext`:
 
@@ -268,7 +268,7 @@ additionalPlanContext: |
 
 If a field is absent from `additionalPlanContext`, apply these defaults:
 
-- **`repo_type`** → `"application"` — This is the most comprehensive assessment (no questions skipped). Defaulting to `application` ensures nothing is missed when classification is unknown.
+- **`repo_type`** → `"application"` — This is the most comprehensive analysis (no questions skipped). Defaulting to `application` ensures nothing is missed when classification is unknown.
 - **`agent_scope`** → `"read-only"` — This is the safer default. Conditional BLOCKER questions (⚡) are evaluated as INFO or RISK-SAFETY rather than BLOCKER, avoiding false escalation when the agent use case has not been scoped.
 - **`service_archetype`** → Auto-detected in Step 1.6 based on repository analysis. If auto-detection is inconclusive, defaults to `"stateful-crud"` (the most conservative archetype — no severity downgrades beyond standard scope calibration). Only applies when `repo_type` is `application`.
 - **`context`** → No default. If absent, findings and recommendations are written without additional framing.
@@ -279,7 +279,7 @@ If `repo_type` is present but not one of the 5 recognized values (`application`,
 
 #### 0.3 How Context Fields Are Used
 
-Record the resolved values from Steps 0.1–0.2 in the assessment context. They will be used in subsequent steps as follows:
+Record the resolved values from Steps 0.1–0.2 in the analysis context. They will be used in subsequent steps as follows:
 
 - **`repo_type`** → Used in the N/A Mapping (Step 1) to determine which questions are scored as N/A for the detected repo type. Included in the report metadata header.
 - **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK-SAFETY. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
@@ -346,7 +346,7 @@ Get the full directory tree and identify all file types present. For each catego
 
 #### 1.2 Directories to Ignore
 
-Skip the following directories during scanning — they contain installed dependencies, build artifacts, or version control internals that are not relevant to the assessment:
+Skip the following directories during scanning — they contain installed dependencies, build artifacts, or version control internals that are not relevant to the analysis:
 
 - `node_modules/` — Installed Node.js dependencies
 - `target/` — Java/Maven build output
@@ -374,7 +374,7 @@ After scanning, compile a structured inventory of what was found. This inventory
 
 #### 1.4 Read Discovered Files
 
-Read all discovered files that are relevant to the assessment. Prioritize reading in this order:
+Read all discovered files that are relevant to the analysis. Prioritize reading in this order:
 
 1. **IaC files** — These reveal infrastructure architecture, security configuration, and deployment topology
 2. **API specification files** — These reveal the integration surface agents will consume
@@ -562,7 +562,7 @@ STATELESS       STATEFUL
 
 #### Archetype Recording
 
-Record the detected archetype in the assessment context. Include it in the report metadata:
+Record the detected archetype in the analysis context. Include it in the report metadata:
 
 ```markdown
 **Service Archetype**: <archetype> (auto-detected | user-provided)
@@ -1522,8 +1522,8 @@ Create the report file with exactly this structure. Every section is required. A
 # Agentic Readiness Analysis Report
 **Target**: <repository path>
 **Date**: <date>
-**Assessed by**: AWS Transform Custom — Agentic Readiness Analysis
-**TD Version**: <resolved from `atx custom def get -n agentic-readiness-assessment` — the version ID of the published TD that produced this report, e.g., "3g1ef0edkgh173d9yafo0lio">
+**Analyzed by**: AWS Transform Custom — Agentic Readiness Analysis
+**TD Version**: <resolved from `atx custom def get -n agentic-readiness-analysis` — the version ID of the published TD that produced this report, e.g., "3g1ef0edkgh173d9yafo0lio">
 **Repository Type**: <resolved repo_type>
 **Service Archetype**: <resolved service_archetype> (auto-detected | user-provided)
 **Agent Scope**: <resolved agent_scope>
@@ -1714,7 +1714,7 @@ If there are no INFOs, display: "No INFOs identified."
 
 ### Detailed Findings — All 43 Questions
 
-List every question from all 8 sections in order (API-Q1 through ENG-Q5). This section is the complete record of the assessment. All 43 questions must appear — including N/A questions.
+List every question from all 8 sections in order (API-Q1 through ENG-Q5). This section is the complete record of the analysis. All 43 questions must appear — including N/A questions.
 
 ```markdown
 ## Detailed Findings
@@ -1812,7 +1812,7 @@ List every question from all 8 sections in order (API-Q1 through ENG-Q5). This s
 
 ### Evidence Index
 
-Compile a complete index of all files cited as evidence across the assessment. Group by file type for easy reference.
+Compile a complete index of all files cited as evidence across the analysis. Group by file type for easy reference.
 
 ```markdown
 ## Evidence Index
@@ -1893,7 +1893,7 @@ The complete report structure, for reference:
 
 Strictly follow these rules at all times:
 
-- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
+- **Read-only analysis**: Do not modify any source code, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
 - **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 - **Be specific — cite evidence**: Always reference actual file names, resource names, and patterns found. Never write "there may be..." — state what was found or what was not found.
 - **Absence is evidence**: If a search for a specific artifact finds nothing (e.g., no OpenAPI spec, no IaC files, no audit logging configuration), that absence is itself a finding. State it clearly and score accordingly.
@@ -1933,7 +1933,7 @@ Every ARA finding MUST carry these 12 fields:
 | `phase` | integer | `1`–`4` — derived roadmap phase. |
 | `evidence` | object or null | `{file: string, lines: string}` reference to the gap location (e.g., `{"file": "src/auth.ts", "lines": "42-58"}`), or `null` when no specific file location applies. `lines` is a string range like `"12-15"` or single line like `"42"`. |
 
-All 12 fields are REQUIRED on every emitted finding — missing any one fails the assessment and names the offending `question_id`. Findings are never emitted for questions that resolve to pass, N/A, Not Evaluated (extended), or any other non-finding outcome; those questions appear only under `evaluations[]`.
+All 12 fields are REQUIRED on every emitted finding — missing any one fails the analysis and names the offending `question_id`. Findings are never emitted for questions that resolve to pass, N/A, Not Evaluated (extended), or any other non-finding outcome; those questions appear only under `evaluations[]`.
 
 ### ARA Metadata Subobject (`ara_metadata`)
 
@@ -1990,7 +1990,7 @@ Questions that do NOT produce a finding (pass, N/A, Not Evaluated) are recorded 
 
 ### Per-Question Priority Table
 
-The `priority` field on every finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`. The native severity tier provides a baseline, but individual question priorities are hand-tuned to reflect operational impact (e.g., scope-calibrated questions that resolve to INFO under read-only scope receive lower priority than their tier baseline; questions with high remediation dependency on other findings may be elevated). The concrete per-question table below is authoritative — use it directly rather than deriving from severity tier:
+The `priority` field on every finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(analysis_type, question_id)` pair always yields the same `priority`. The native severity tier provides a baseline, but individual question priorities are hand-tuned to reflect operational impact (e.g., scope-calibrated questions that resolve to INFO under read-only scope receive lower priority than their tier baseline; questions with high remediation dependency on other findings may be elevated). The concrete per-question table below is authoritative — use it directly rather than deriving from severity tier:
 
 | ARA native severity tier | Default per-question priority |
 |---|---|
@@ -2081,11 +2081,11 @@ The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA
 - `agent_scope`: The `read-only` or `write-enabled` value that drove the resolution (sourced from `additionalPlanContext.agent_scope`).
 - `resolution_reasoning`: Free-text prose explaining WHY the resolution was applied to this repo (e.g., "DATA-Q1 B1 fired because agent-facing APIs return credentials unmasked in HostConfigResource.cs").
 
-The conditional-BLOCKER resolution logic is defined in Steps 2–9 of the assessment process; the JSON fields above surface that reasoning in a structured form.
+The conditional-BLOCKER resolution logic is defined in Steps 2–9 of the analysis process; the JSON fields above surface that reasoning in a structured form.
 
 ## Four-Artifact Output Contract
 
-Every per-repo ARA assessment emits four artifacts: three report artifacts plus a metadata sidecar.
+Every per-repo ARA analysis emits four artifacts: three report artifacts plus a metadata sidecar.
 
 ### Artifacts
 
@@ -2104,9 +2104,9 @@ The sidecar carries minimum fields for version compatibility checks:
 
 ```json
 {
-  "assessment_type": "ara",
-  "assessment_date": "2026-04-30",
-  "td_version": "agentic-readiness-assessment"
+  "analysis_type": "ara",
+  "analysis_date": "2026-04-30",
+  "td_version": "agentic-readiness-analysis"
 }
 ```
 
@@ -2220,7 +2220,7 @@ Focus on the High severity findings above.
 
 | Visual location | JSON source |
 |---|---|
-| Header | `metadata.{portfolio_name, assessment_date, language, loc}` + `repo_name` |
+| Header | `metadata.{portfolio_name, analysis_date, language, loc}` + `repo_name` |
 | Overall Analysis | `classification.tier` + `classification.sub_qualifier` |
 | Stats cards | `counts.{high, medium, low, total}` |
 | Technology Stack | `metadata.tech_stack.*` |
@@ -2249,7 +2249,7 @@ When this TD is invoked via the orchestrator, the slug source is the `name` fiel
 {portfolio-or-repo}/
 └── services/
     └── {repo-name}/
-        └── agentic-readiness-assessment/
+        └── agentic-readiness-analysis/
             ├── {repo-name}-ara-report.md
             ├── {repo-name}-ara-report.json
             ├── {repo-name}-ara-report.html
@@ -2265,14 +2265,14 @@ The TD is explicit about failure modes — no defensive inference, no silent ski
 
 ### Required-Field Failure
 
-IF any of the 12 required per-finding fields is absent from an emitted finding, THEN the assessment SHALL fail, naming:
+IF any of the 12 required per-finding fields is absent from an emitted finding, THEN the analysis SHALL fail, naming:
 - The `question_id` of the offending finding
 - The specific missing field
 
-Example failure message: `"Assessment failed: finding for AUTH-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED."`
+Example failure message: `"Analysis failed: finding for AUTH-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED."`
 
 ### N/A / Not Evaluated Leak
 
-IF a finding is emitted for a question whose resolution was N/A or Not Evaluated, THEN the assessment SHALL fail, naming the `question_id` and the resolution status that should have been recorded in `evaluations[]` instead.
+IF a finding is emitted for a question whose resolution was N/A or Not Evaluated, THEN the analysis SHALL fail, naming the `question_id` and the resolution status that should have been recorded in `evaluations[]` instead.
 
-Example: `"Assessment failed: finding emitted for DATA-Q5 but the question resolved to N/A (no persistent data store). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only."`
+Example: `"Analysis failed: finding emitted for DATA-Q5 but the question resolved to N/A (no persistent data store). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only."`

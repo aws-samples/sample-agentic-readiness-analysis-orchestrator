@@ -1,0 +1,461 @@
+{
+  "analysis_type": "mod",
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "mod",
+    "analysis_date": "2026-05-08",
+    "report_format_version": "V6",
+    "repository": "tqdm--tqdm",
+    "repo_type": "library",
+    "priority": "P2",
+    "tags": ["python", "library"],
+    "context": "Python progress-bar library.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_at_rest_data_surface": false,
+      "has_deployed_workload": false,
+      "has_api_surface": false,
+      "has_multi_instance_deployment": false
+    }
+  },
+  "overall_score": 2.60,
+  "classification": {
+    "tier": "Pilot-Ready",
+    "high_count": 0,
+    "medium_count": 7,
+    "low_count": 5,
+    "rule_matched": "0 High, ≥2 Medium → Pilot-Ready",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": null,
+      "score_rating": null,
+      "severity_status": "Ready"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 3.17,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 2.75,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 2.50,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 2.00,
+      "score_rating": "Needs Work",
+      "severity_status": "Needs Work"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Python 3.7 EOL support persists",
+      "description": "The library supports Python 3.7 (EOL June 2023), requiring maintenance of the importlib_metadata backport and version-specific workarounds in CI. The build system is modern (PEP 517/518 setuptools-scm).",
+      "gap": "Python 3.7 EOL support forces maintenance of backport dependencies and prevents adoption of newer language features.",
+      "recommendation": "Drop Python 3.7 (and consider 3.8) support to align with actively maintained Python versions, simplify the codebase, and remove the importlib_metadata dependency.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "pyproject.toml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No formal API versioning strategy or in-repo changelog",
+      "description": "Deprecation warnings exist for v5.0.0 removal of symbols, but no formal versioning policy document or in-repo CHANGELOG. Breaking changes communicated only via runtime warnings and TODO comments.",
+      "gap": "No in-repo changelog or formal API compatibility policy. Consuming libraries have no structured way to anticipate API changes.",
+      "recommendation": "Add a CHANGELOG.md following Keep a Changelog format. Document the semver policy and planned v5.0.0 breaking changes in a migration guide.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "tqdm/__init__.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Hardcoded external service endpoints in contrib modules",
+      "description": "The Telegram contrib module hardcodes the API base URL. Discord and Slack integrations use constructor parameters but no dynamic discovery.",
+      "gap": "External service endpoints configured via constructor parameters with no dynamic discovery. Telegram hardcodes the API base URL.",
+      "recommendation": "Make all external service base URLs configurable via constructor parameters. This is a minor improvement for a library's optional notification integrations.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "tqdm/contrib/telegram.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "No cloud storage integration for file processing utilities",
+      "description": "The library operates on local file handles and streams via its CLI mode. No managed object storage integration exists, which is expected for a utility library that operates on abstract file-like objects.",
+      "gap": "No S3 or cloud storage integration in file processing utilities. The library correctly operates on abstract IO handles; cloud integration is the consuming application's responsibility.",
+      "recommendation": "N/A for the library itself — cloud storage integration is the responsibility of the consuming application. Documentation could reference S3 streaming patterns for users processing large cloud-stored files.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "tqdm/cli.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Deprecated modules create redundant access paths",
+      "description": "Legacy deprecated modules (_tqdm.py, _tqdm_gui.py, etc.) create parallel access paths to the same internal state alongside the active modules.",
+      "gap": "Deprecation debt means two parallel interfaces exist for the same functionality.",
+      "recommendation": "Complete the v5.0.0 migration plan — remove deprecated modules to consolidate to a single access pattern through std.tqdm and its subclasses.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "tqdm/_tqdm.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "EOL Python version support and no dependency update policy",
+      "description": "Python 3.7 (EOL) is still supported requiring backport dependencies. No explicit dependency version pinning strategy for reproducible builds. No automated dependency update tooling.",
+      "gap": "Python 3.7 EOL support persists, requiring maintenance of backport dependencies and version-specific workarounds.",
+      "recommendation": "Drop Python 3.7 and 3.8 support. Remove the importlib_metadata dependency. Add a dependency update policy and consider Renovate or Dependabot for automated updates.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "pyproject.toml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No SBOM generation or formal release audit trail",
+      "description": "No formal audit trail for package releases beyond Git history and GPG signatures. No SBOM generation in the release pipeline.",
+      "gap": "No SBOM generation or provenance attestation for published packages.",
+      "recommendation": "Add SBOM generation (syft or cyclonedx-bom) to the release pipeline. Consider Sigstore signing for provenance attestation on PyPI.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/test.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Minimal token validation in contrib integrations",
+      "description": "Authentication tokens for Discord, Slack, Telegram integrations are passed through without format validation. Errors surface as HTTP errors from external services.",
+      "gap": "No pre-flight token format validation before making external API calls.",
+      "recommendation": "Add basic token format validation (non-empty, expected prefix for Telegram bot tokens) to provide better error messages.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "tqdm/contrib/telegram.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No security best-practices documentation for contrib integrations",
+      "description": "Library delegates authentication to consuming applications. No documentation on recommended patterns for securely managing webhook URLs and bot tokens.",
+      "gap": "No security best-practices documentation for contrib module credential handling.",
+      "recommendation": "Add security best-practices documentation recommending tokens be passed via environment variables or secrets managers rather than hardcoded in scripts.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "tqdm/contrib/slack.py", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No documented secrets rotation policy for CI/CD credentials",
+      "description": "CI/CD pipeline uses GitHub Secrets properly for all sensitive values. No plaintext credentials in source. However, no rotation policy is documented for the multiple external service credentials.",
+      "gap": "No rotation policy documented for CI/CD secrets (Docker Hub, Snap Store, Codacy, Codecov).",
+      "recommendation": "Document a secrets rotation policy. Migrate remaining credential-based auth to OIDC where possible (PyPI already partially uses id-token).",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/test.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No dependency vulnerability scanning configured",
+      "description": "No Dependabot, Snyk, pip-audit, or safety configured. Pre-commit flake8 plugins catch code issues but not dependency vulnerabilities. CI uses GitHub-managed runners with auto-patching.",
+      "gap": "No automated dependency vulnerability scanning. Dependencies not checked for known CVEs.",
+      "recommendation": "Enable GitHub Dependabot for automated dependency update PRs. Add pip-audit to the CI pipeline to scan for known vulnerabilities.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No SAST tool in CI pipeline",
+      "description": "CI includes flake8 with bugbear/debugger plugins for partial code quality, but no dedicated SAST (Bandit, Semgrep, CodeQL) and no dependency scanning (pip-audit, safety).",
+      "gap": "No SAST tool and no dependency vulnerability scanning in pipeline.",
+      "recommendation": "Add bandit or CodeQL for Python SAST. Add pip-audit for dependency vulnerability scanning. Both can be added as pre-commit hooks or CI steps.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".pre-commit-config.yaml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No distributed tracing instrumentation",
+      "description": "No OpenTelemetry SDK, X-Ray integration, or trace context propagation. The library provides local monitoring via _monitor.py but no distributed tracing. Consuming applications cannot propagate traces through tqdm-wrapped iterators.",
+      "gap": "No OpenTelemetry or X-Ray instrumentation. Trace context cannot propagate through tqdm-wrapped operations in distributed systems.",
+      "recommendation": "Consider adding optional OpenTelemetry span creation around tqdm iteration as tqdm/contrib/otel.py. This would provide visibility into tqdm-wrapped operations in distributed traces.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q1", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q2", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q3", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q4", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q5", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q6", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q7", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q8", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q9", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q10", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "INF-Q11", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "APP-Q1", "status": "scored", "score": 3},
+    {"question_id": "APP-Q2", "status": "scored", "score": 4},
+    {"question_id": "APP-Q3", "status": "scored", "score": 4},
+    {"question_id": "APP-Q4", "status": "scored", "score": 4},
+    {"question_id": "APP-Q5", "status": "scored", "score": 2},
+    {"question_id": "APP-Q6", "status": "scored", "score": 2},
+    {"question_id": "DATA-Q1", "status": "scored", "score": 3},
+    {"question_id": "DATA-Q2", "status": "scored", "score": 2},
+    {"question_id": "DATA-Q3", "status": "scored", "score": 2},
+    {"question_id": "DATA-Q4", "status": "scored", "score": 4},
+    {"question_id": "SEC-Q1", "status": "scored", "score": 2},
+    {"question_id": "SEC-Q2", "status": "Not Evaluated", "reason": "surface-gated: has_at_rest_data_surface=false"},
+    {"question_id": "SEC-Q3", "status": "scored", "score": 3},
+    {"question_id": "SEC-Q4", "status": "scored", "score": 3},
+    {"question_id": "SEC-Q5", "status": "scored", "score": 3},
+    {"question_id": "SEC-Q6", "status": "scored", "score": 2},
+    {"question_id": "SEC-Q7", "status": "scored", "score": 2},
+    {"question_id": "OPS-Q1", "status": "scored", "score": 2},
+    {"question_id": "OPS-Q2", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q3", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q4", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q5", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q6", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q7", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q8", "status": "N/A", "reason": "library repo_type"},
+    {"question_id": "OPS-Q9", "status": "N/A", "reason": "library repo_type"}
+  ],
+  "top_gaps": [
+    {"rank": 1, "question_id": "OPS-Q1", "score": 2, "gap": "No distributed tracing instrumentation in the library", "impact": "Consuming applications cannot propagate traces through tqdm-wrapped iterators"},
+    {"rank": 2, "question_id": "SEC-Q1", "score": 2, "gap": "No SBOM generation or formal release audit trail", "impact": "Supply chain transparency gaps for downstream consumers"},
+    {"rank": 3, "question_id": "SEC-Q6", "score": 2, "gap": "No dependency vulnerability scanning configured", "impact": "Dependency vulnerabilities may go undetected"},
+    {"rank": 4, "question_id": "SEC-Q7", "score": 2, "gap": "No SAST or dependency scanning in CI/CD pipeline", "impact": "Security issues in code or dependencies not automatically caught"},
+    {"rank": 5, "question_id": "APP-Q5", "score": 2, "gap": "No formal versioning strategy or in-repo changelog", "impact": "Breaking changes may surprise downstream consumers"}
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "Documentation exists — README.rst, CONTRIBUTING.md, docstrings, man pages, wiki, examples directory",
+      "what_it_enables": "A knowledge agent that can answer developer questions about tqdm API, usage patterns, configuration options, and contribution workflow",
+      "additional_steps": "Convert README.rst to Markdown or index RST directly; index wiki content and code examples for richer retrieval",
+      "effort": "Low"
+    }
+  ],
+  "decomposition_strategy": null,
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and the pathway requires a deployable workload.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and the pathway requires a deployable workload.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4 = 4 — no stored procedures or proprietary SQL. No commercial database engines detected.",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "DATA-Q4 = 4 meets threshold; no proprietary SQL detected"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No commercial database engines or proprietary SQL constructs detected. The library has no database dependencies."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and the pathway requires database infrastructure.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library' and the pathway requires data processing workloads.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Not applicable — repo_type is 'library'. Libraries use build/publish pipelines, not deployment pipelines.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. The context describes 'Python progress-bar library' with no AI-related signal terms."
+    }
+  ]
+}

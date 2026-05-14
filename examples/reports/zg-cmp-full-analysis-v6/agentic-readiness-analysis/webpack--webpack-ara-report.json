@@ -1,0 +1,759 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2025-01-08",
+    "td_version": "agentic-readiness-analysis-v6.0.1",
+    "report_format_version": "V6",
+    "target": "/Users/lucasdu/Documents/AWS-MAC/2026-projects/sample-agentic-readiness-analysis/services/webpack--webpack",
+    "repository_type": "library",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Webpack is a build-time CLI tool and library that processes source files into bundles. No persistent data store, no HTTP/RPC server, no auth surface, no write operations.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["javascript", "build-tool"],
+    "context": "JavaScript module bundler.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_http_rpc_surface": false,
+      "has_auth_surface": false,
+      "has_write_operations": false,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Agent-Ready",
+    "sub_qualifier": null,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 38,
+    "safety_impact_medium_count": 0,
+    "rule_matched": "0 High, ≤1 Medium → Agent-Ready"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 0,
+    "risk_quality_count": 0,
+    "info_count": 38,
+    "na_count": 5,
+    "not_evaluated_count": 0,
+    "total": 43,
+    "core_questions_evaluated": 19,
+    "extended_questions_triggered": 19,
+    "extended_questions_not_triggered": 0
+  },
+  "findings": [
+    {
+      "question_id": "API-Q1",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Programmatic Node.js API — no HTTP/RPC surface",
+      "description": "Webpack exposes a programmatic Node.js API (lib/index.js) and a CLI binary (bin/webpack.js). The interface is a JavaScript module API consumed via require('webpack') or import, not an HTTP/REST/GraphQL endpoint. The API is documented via TypeScript declarations (types.d.ts) and JSON configuration schemas (schemas/WebpackOptions.json).",
+      "gap": "No HTTP/RPC API exists — expected for a build tool library. For agentic integration, a service wrapper is needed.",
+      "recommendation": "For agentic integration, wrap webpack in an HTTP service or invoke via subprocess. The typed programmatic API provides a stable integration surface.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/index.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "TypeScript declarations and JSON Schema serve as machine-readable spec",
+      "description": "No HTTP/RPC surface — machine-readable spec is not applicable. However, webpack provides equivalent machine-readable contracts via TypeScript declarations (types.d.ts, module.d.ts) and JSON Schema for configuration validation (schemas/WebpackOptions.json).",
+      "gap": "No HTTP/RPC surface exists — surface-flag calibration applied.",
+      "recommendation": "The existing TypeScript declarations and JSON schemas are sufficient for agent tool definition.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "types.d.ts", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Errors communicated via exceptions and Stats objects",
+      "description": "No HTTP/RPC surface — structured error responses are not applicable. Webpack communicates errors via JavaScript exceptions, structured Stats objects with categorized warnings and errors, and typed error classes in lib/errors/.",
+      "gap": "No HTTP/RPC surface — surface-flag calibration applied.",
+      "recommendation": "Consumers wrapping webpack in a service layer should map webpack's Stats errors/warnings to structured HTTP error responses.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/errors/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Deterministic builds — no persistent write API",
+      "description": "Webpack build operations are deterministic given the same inputs. Re-running a build with identical inputs produces identical outputs. Read-only analysis scope and webpack has no persistent write operations.",
+      "gap": "No write API endpoints exist — read-only scope.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND no write API endpoints exist",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "API-Q4 evaluates as INFO because agent_scope is read-only. Additionally, webpack has no persistent write operations — it produces output files to a configured directory as a build tool."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "JSON and JavaScript object output formats",
+      "description": "Webpack's programmatic API returns JavaScript objects (Stats, Compilation). The CLI produces text output configurable via --json flag for structured JSON stats output. All interfaces are text-based and LLM-consumable.",
+      "gap": "None — output formats are already agent-friendly.",
+      "recommendation": "Use webpack --json for machine-readable build output when integrating with agents.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/stats/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q6",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Async build API with callback/Promise patterns",
+      "description": "Webpack builds are inherently asynchronous (callback/Promise-based API). Watch mode provides continuous async operation. No HTTP polling/webhook pattern exists — this is a library, not a service.",
+      "gap": "No HTTP-based async patterns — expected for a library.",
+      "recommendation": "Wrap long-running webpack operations in a job queue pattern if exposing via HTTP.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q7",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Rich in-process event hooks via tapable",
+      "description": "Webpack has a rich plugin hook system (tapable) that emits events for compilation lifecycle. These are in-process events, not distributed events.",
+      "gap": "No distributed event emission — expected for a library.",
+      "recommendation": "If building an agent-facing build service, expose webpack hooks as webhooks or event stream.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No HTTP surface — rate limiting not applicable",
+      "description": "No HTTP/RPC surface — rate limiting is not applicable. Webpack is invoked as a local process. Resource consumption is bounded by system memory and CPU.",
+      "gap": "No HTTP surface — expected for a library.",
+      "recommendation": "If wrapping webpack in a service, implement rate limiting at the service layer.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "package.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No authentication surface — local build tool",
+      "description": "No authentication surface exists. Webpack is a local build tool invoked by the user or CI system that installed it. The npm publish process uses NPM_TOKEN via GitHub Actions secrets for package publishing, but that is a release concern.",
+      "gap": "No auth surface — expected for a build tool library.",
+      "recommendation": "If webpack is wrapped in a service for agent consumption, implement machine identity auth at the service layer.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/release.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No authorization model — operates with invoking process permissions",
+      "description": "No authorization model exists within webpack. Webpack operates with the file system permissions of the invoking process. It does not enforce access control on which files can be read or where output can be written.",
+      "gap": "No auth surface — expected for a build tool.",
+      "recommendation": "When wrapping webpack for agent use, scope the agent's file system access via IAM, container sandboxing, or chroot.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No action-level authorization",
+      "description": "No action-level authorization exists. Webpack does not distinguish between compile, watch, emit as separately authorized actions.",
+      "gap": "No auth surface — expected for a library.",
+      "recommendation": "Service wrappers should implement action-level authorization.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/index.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No identity propagation surface",
+      "description": "No identity propagation surface exists. Webpack does not handle caller identity — it is a build tool, not a multi-tenant service.",
+      "gap": "No auth surface — expected for a library.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/index.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credentials managed via GitHub Actions secrets",
+      "description": "Webpack itself does not manage credentials. CI/CD workflows use GitHub Actions secrets (GITHUB_TOKEN, CODECOV_TOKEN, NPM_TOKEN) managed via GitHub's secrets infrastructure. No credentials embedded in source code. The .env files are all test fixtures.",
+      "gap": "No credential management concern for the library itself.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/release.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No agent-invoked operations to audit",
+      "description": "System does not execute agent-invoked write operations — audit logging is a consumer responsibility. The library is called by applications that own the audit context.",
+      "gap": "No auth or write surface — expected for a build tool library.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/logging/Logger.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: surface-flag calibration — has_auth_surface=false AND has_write_operations=false",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "AUTH-Q6 evaluates as INFO because the system has no auth surface and no write operations. Libraries are called by applications that own the audit context."
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No agent identities to suspend",
+      "description": "System does not issue or enforce agent identities — suspension is a consumer responsibility. Libraries are invoked by applications that own identity lifecycle.",
+      "gap": "No auth surface — expected for a library.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/index.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No write operations — compensation not applicable",
+      "description": "System exposes no write operations — compensation logic is not applicable. Webpack builds produce output files but do not perform transactional state mutations.",
+      "gap": "No write operations in the agentic sense.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND has_write_operations=false",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "STATE-Q1 evaluates as INFO because agent_scope is read-only and the system has no persistent write operations. Webpack produces output files as a build tool — no transactional state to compensate."
+      }
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Build state queryable via Stats API",
+      "description": "Webpack exposes build state via the Stats API. Watch mode tracks file system state. However, this is build-time internal state, not persistent application state.",
+      "gap": "No persistent application state to query — expected for a build tool.",
+      "recommendation": "If wrapping webpack for agents, expose Stats API as a queryable endpoint.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/stats/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Internal parallelism — no multi-tenant concurrency concern",
+      "description": "Webpack handles build-level concurrency internally (parallelism option). No application-level concurrency controls because webpack is not a multi-tenant data service.",
+      "gap": "No multi-tenant concurrent write scenario — expected for a build tool.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No external service dependencies — circuit breakers not applicable",
+      "description": "Webpack does not call external HTTP services at runtime. Its dependencies are all local: file system reads, module resolution, and code parsing.",
+      "gap": "No external service dependencies — circuit breakers not applicable.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "package.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No HTTP/RPC surface — rate limiting not applicable",
+      "description": "System exposes no HTTP/RPC surface — API-layer rate limiting is not applicable. Webpack is a local process; resource consumption is bounded by system memory/CPU.",
+      "gap": "No HTTP/RPC surface — expected for a library.",
+      "recommendation": "If wrapping webpack in a service, implement rate limiting at the service layer.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "schemas/WebpackOptions.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No write operations — transaction limits not applicable",
+      "description": "Read-only agents cannot modify records, trigger spend, or delete data. Webpack's blast radius is limited to the output directory it writes to.",
+      "gap": "No write operations in the agentic sense.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Local process — infrastructure capacity is memory/CPU bounded",
+      "description": "Webpack is a local process, not a networked service. Builds are bounded by local CPU, memory, and disk I/O. Benchmark tests exist measuring performance characteristics.",
+      "gap": "No networked infrastructure to capacity-plan — expected for a library.",
+      "recommendation": "For service wrappers, limit concurrent builds based on available memory (webpack builds can consume 1-4GB each).",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "test/benchmarkCases/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No write operations — draft state not applicable",
+      "description": "Read-only agents do not make state changes. Webpack has no concept of draft/pending builds. The Changesets workflow provides a draft/review mechanism for version releases, but that is a development workflow.",
+      "gap": "No write operations in the agentic sense.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".changeset/config.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No write operations — approval gates not applicable",
+      "description": "Read-only agents do not execute write operations. The release workflow requires PR approval before publishing (via Changesets + GitHub PR review), but this is a development workflow concern.",
+      "gap": "No write operations in the agentic sense.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/release.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Excellent local testing infrastructure",
+      "description": "Library/utility — does not own staging environments. However, webpack has comprehensive local testing infrastructure: Jest test suite, examples directory, and PR-based preview packages via publish-to-pkg-pr-new workflow.",
+      "gap": "No owned staging environment — expected for a library. Consumers own staging.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "jest.config.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Not a data-handling target — no sensitive data",
+      "description": "Not a data-handling target — no PII/PHI/financial/credential data is stored, processed, or logged. Webpack is a build tool that reads source code files and produces bundled output.",
+      "gap": "N/A — build tool processes source files, not sensitive data.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "package.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: Stage A = No — not a data-handling target",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q1 Stage A = No. Webpack is a build tool that processes source files — it never stores, processes, or logs PII/PHI/financial/credential data.",
+        "data_q1_subchecks": {
+          "b1": {"fired": false, "severity": null, "reasoning": "Stage A = No — B1 not evaluated"},
+          "b2": {"fired": false, "severity": null, "reasoning": "Stage A = No — B2 not evaluated"},
+          "b3": {"fired": false, "severity": null, "reasoning": "Stage A = No — B3 not evaluated"}
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No persistent data — residency not applicable",
+      "description": "No persistent data store and no user-data logging — residency requirements do not apply. Webpack processes source files locally and outputs bundles to the local file system.",
+      "gap": "No data residency concern — build tool with local-only processing.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: surface-flag calibration — has_persistent_data_store=false AND has_logging_of_user_data=false",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q2 evaluates as INFO because the system holds no persistent data and logs no user data. Webpack processes source files locally."
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Stats API supports selective output via configuration",
+      "description": "Webpack's Stats API supports selective output via configuration (stats option). The JSON output can be filtered. However, this is build-time diagnostic data, not a queryable data API.",
+      "gap": "No persistent data API — expected for a build tool.",
+      "recommendation": "Use stats: { preset: 'errors-warnings' } for focused agent output.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "schemas/WebpackOptions.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No persistent records — system of record not applicable",
+      "description": "Webpack does not hold business entities or persistent records. Source files are the system of record owned by the developer. Webpack output is a derived artifact.",
+      "gap": "Not applicable — no persistent data ownership.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/Compiler.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "File timestamps tracked for watch mode and caching",
+      "description": "Webpack tracks file modification timestamps for watch mode and caching via watchpack. Build output does not carry temporal metadata headers. Expected for a build tool.",
+      "gap": "No temporal metadata concern — expected for a build tool.",
+      "recommendation": "No action required for the library.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/Watching.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No user data in logs — PII risk not applicable",
+      "description": "System does not log user data and holds no user data — PII-in-logs risk is not applicable. Webpack's logging emits build diagnostics only: module paths, compilation warnings, timing information.",
+      "gap": "Not applicable — no user data in logs.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/logging/Logger.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Code coverage as quality metric — no business data quality concern",
+      "description": "Webpack's data quality concern is source code quality, addressed via type checking, linting, and build error reporting. Codecov enforces 90% patch coverage target. No data quality dashboards for business data needed.",
+      "gap": "Not applicable — no business data.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "codecov.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Strong schema versioning via Changesets and TypeScript declarations",
+      "description": "Webpack maintains strong schema versioning: JSON Schemas for configuration (schemas/WebpackOptions.json), TypeScript declarations (types.d.ts) validated in CI, Changesets for semantic versioning with breaking change tracking. CI validates types against old TypeScript versions.",
+      "gap": "No automated breaking-change detection tool explicitly configured — breaking changes managed via Changesets review process.",
+      "recommendation": "The existing Changesets + TypeScript validation workflow provides adequate contract stability for agent tool bindings.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "schemas/WebpackOptions.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically meaningful field names throughout",
+      "description": "Webpack uses descriptive, semantically meaningful names: entry, output, module, resolve, plugins, optimization, devServer, devtool, externals. No legacy abbreviated codes.",
+      "gap": "None — naming is already agent-friendly.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "schemas/WebpackOptions.json", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "JSON Schema and TypeScript types serve as metadata layer",
+      "description": "Webpack provides rich self-describing metadata: JSON Schema for configuration, TypeScript declarations, JSDoc annotations, and 60+ example directories. No external data catalog needed.",
+      "gap": "None — existing metadata is comprehensive.",
+      "recommendation": "Use schemas/WebpackOptions.json as the canonical schema for generating agent tool definitions.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "schemas/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Built-in logging with profiling — no distributed tracing",
+      "description": "Library/utility — tracing and correlation are consumer concerns. Webpack has built-in logging (lib/logging/Logger.js) with structured log levels and ProfilingPlugin for Chrome trace output. No OpenTelemetry or distributed tracing — expected for a local build tool.",
+      "gap": "No distributed tracing — expected for a library. Consumer responsibility.",
+      "recommendation": "Service wrappers should add OpenTelemetry instrumentation around webpack invocations.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/logging/Logger.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No service-level alerting — consumer concern",
+      "description": "Library/utility — alerting on error rates and latency is a consumer concern. Build failures communicated via exit codes and Stats API. CI failures alerted via GitHub Actions notifications.",
+      "gap": "No service-level alerting — expected for a library.",
+      "recommendation": "Service wrappers should implement alerting on build failure rates and duration.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/test.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "ProfilingPlugin and Codecov as quality metrics",
+      "description": "Webpack publishes internal performance metrics via ProfilingPlugin. Codecov tracks code coverage. No business outcome metrics — expected for a build tool.",
+      "gap": "No business outcome metrics — expected for a library.",
+      "recommendation": "For agent-facing build services, track builds-per-hour, average-build-time, cache-hit-rate.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "codecov.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "ENG-Q1", "status": "N/A", "reason": "This is a library repository. This question does not apply."},
+    {"question_id": "ENG-Q2", "status": "N/A", "reason": "This is a library repository. This question does not apply."},
+    {"question_id": "ENG-Q3", "status": "N/A", "reason": "This is a library repository. This question does not apply."},
+    {"question_id": "ENG-Q4", "status": "N/A", "reason": "This is a library repository. This question does not apply."},
+    {"question_id": "ENG-Q5", "status": "N/A", "reason": "This is a library repository. This question does not apply."}
+  ]
+}

@@ -8,7 +8,7 @@ Aggregate individual repository Modernization Analysis (MOD) reports into a port
 
 ## Summary
 
-This transformation consumes multiple individual MOD report JSON artifacts (`*-mod-report.json` files) from different repositories and produces a comprehensive portfolio-level modernization view. It performs intelligent discovery and parsing of MOD report JSONs, calculates portfolio-wide score averages and category breakdowns, summarizes the technology stack across the portfolio, constructs a service dependency graph with coupling scores and blast radius analysis, identifies two-tier cross-cutting concerns (Foundational Blockers and Improvement Opportunities), generates a dependency-aware four-phase roadmap, aggregates pathway triggers across services, identifies integration opportunities, performs risk assessment with a likelihood-impact matrix, provides resource allocation recommendations, recommends AWS engagement programs, curates learning materials, and produces a service-by-service summary.
+This transformation consumes multiple individual MOD report JSON artifacts (`*-mod-report.json` files) from different repositories and produces a comprehensive portfolio-level modernization view. It performs intelligent discovery and parsing of MOD report JSONs, calculates portfolio-wide score averages and category breakdowns, summarizes the technology stack across the portfolio, constructs a service dependency graph with coupling scores and blast radius analysis, identifies two-tier cross-cutting concerns (Foundational Blockers and Improvement Opportunities), generates a dependency-aware four-phase roadmap, aggregates pathway triggers across services, identifies integration opportunities, performs risk analysis with a likelihood-impact matrix, provides resource allocation recommendations, recommends AWS engagement programs, curates learning materials, and produces a service-by-service summary.
 
 The transformation follows these implementation steps:
 1. **Read Context** (Step 0): Parse additionalPlanContext for portfolio framing, preferences, and dependency information
@@ -21,7 +21,7 @@ The transformation follows these implementation steps:
 8. **Infrastructure Cross-Referencing** (Step 5b): Cross-reference infra/deployment-config repo capabilities with application repo findings to identify false positives where capabilities exist in the portfolio but in separate repos
 9. **Dependency-Aware Phased Roadmap** (Step 6): Generate 4-phase roadmap with dependency-based service ordering
 10. **Pathway Aggregation** (Step 7): Aggregate pathway triggers across the portfolio
-11. **Synthesis** (Step 8): Integration opportunities, risk assessment, resource allocation
+11. **Synthesis** (Step 8): Integration opportunities, risk analysis, resource allocation
 12. **AWS Programs & Engagement Recommendations** (Step 9): Recommend MAP, MMP, WAMP, EBA, OLA, VMP, ISV WMP where triggered
 13. **Portfolio-Level Questions** (Step 10): Evaluate PORT-MOD-Q1 through PORT-MOD-Q5 — capabilities only visible across multiple repos
 
@@ -40,7 +40,7 @@ The MD report contains:
 - Dependency-aware phased roadmap (4 fixed phases)
 - Pathway aggregation across the portfolio
 - Integration opportunities
-- Risk assessment with likelihood-impact matrix
+- Risk analysis with likelihood-impact matrix
 - Resource allocation recommendations
 - AWS Programs & Engagement Recommendations (MAP, OLA, MMP, VMP, WAMP, EBA, ISV WMP)
 - Learning materials mapped to portfolio skill gaps
@@ -51,7 +51,7 @@ This portfolio TD focuses on cross-cutting modernization concerns, dependency-aw
 ## Entry Criteria
 
 - At least 2 individual MOD report JSON artifacts exist in repository directories
-- MOD report JSONs follow the expected schema: `assessment_type == "mod"`, `overall_score` numeric, `categories[]`, `pathways[]` with all 7 pathways, `findings[]` array
+- MOD report JSONs follow the expected schema: `analysis_type == "mod"`, `overall_score` numeric, `categories[]`, `pathways[]` with all 7 pathways, `findings[]` array
 - Reports are accessible at specified paths or in a common directory structure
 - Write permissions exist to create the output directory and portfolio artifact bundle (MD, JSON, HTML, and metadata.json)
 
@@ -59,7 +59,7 @@ This portfolio TD focuses on cross-cutting modernization concerns, dependency-aw
 
 ### Step 0: Read additionalPlanContext
 
-Before beginning discovery, read the portfolio assessment context from `additionalPlanContext` to extract framing information, technology preferences, and service configuration.
+Before beginning discovery, read the portfolio analysis context from `additionalPlanContext` to extract framing information, technology preferences, and service configuration.
 
 #### 0.1 Read Portfolio Context
 
@@ -67,7 +67,7 @@ Extract the following fields from `additionalPlanContext`:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `portfolio_name` | string | Yes | — | Identifier for the portfolio. Used to name the output bundle (`{portfolio_name}-portfolio-mod-report.{md,json,html,metadata.json}`) and to populate report headers and metadata. If absent, terminate with `"Portfolio assessment failed: portfolio_name is required in additionalPlanContext."` |
+| `portfolio_name` | string | Yes | — | Identifier for the portfolio. Used to name the output bundle (`{portfolio_name}-portfolio-mod-report.{md,json,html,metadata.json}`) and to populate report headers and metadata. If absent, terminate with `"Portfolio analysis failed: portfolio_name is required in additionalPlanContext."` |
 | `context` | string | No | — | Free-text description of the portfolio (e.g., "E-commerce platform with 5 microservices planning cloud-native modernization"). Used to frame portfolio-level recommendations and roadmap guidance. |
 | `preferences` | object | No | — | Technology steering preferences with two arrays: `prefer` (technologies to favor in recommendations) and `avoid` (technologies to steer away from). Applied to portfolio-level technology recommendations, roadmap activities, and integration opportunity proposals. |
 | `service_inventory` | object[] | No | — | List of services in the portfolio with metadata (name, path, priority, repo_type, tags, service_archetype). Used to enrich the service-by-service summary and cross-reference with discovered reports. `service_archetype` (optional, applies only to `application` repos) is passed through to each per-service MOD TD invocation to calibrate architecture-sensitive questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4); if omitted, the service MOD TD auto-detects it. |
@@ -127,7 +127,7 @@ The Portfolio MOD TD does **not** read, validate, or apply the following fields 
 
 #### 0.4 How Context Fields Are Used
 
-Record the resolved values from Steps 0.1–0.2 in the assessment context. They will be used in subsequent steps as follows:
+Record the resolved values from Steps 0.1–0.2 in the analysis context. They will be used in subsequent steps as follows:
 
 - **`context`** → Used throughout the report to frame findings, recommendations, and roadmap guidance with portfolio-specific context. For example, if context mentions "legacy PHP e-commerce", recommendations reference the specific technology stack and business domain.
 - **`preferences`** → Used throughout the report to steer technology recommendations. When `prefer` contains values, recommendations favor those technologies where applicable (e.g., if `prefer: ["eks"]`, container recommendations reference EKS over ECS). When `avoid` contains values, recommendations steer away from those technologies (e.g., if `avoid: ["serverless"]`, recommendations do not suggest Lambda-based approaches). Preferences influence recommendation framing only — they do not change scores, N/A mappings, or pathway trigger logic.
@@ -156,12 +156,12 @@ Scan the target directory structure to find all individual MOD report JSON artif
 - Verify each discovered file exists and is readable
 - Verify each file is a valid JSON document
 - Verify each file is the expected MOD report shape:
-  - Has `assessment_type == "mod"` at the root
+  - Has `analysis_type == "mod"` at the root
   - Has `overall_score` numeric between 1.0 and 4.0
   - Has a `categories[]` array with entries for INF, APP, DATA, SEC, OPS
   - Has a `pathways[]` array with all 7 pathways
   - Has a `findings[]` array with question IDs (INF-Q1 through OPS-Q9) and the 12 per-finding fields
-  - Has a `metadata` object with `assessment_type` and `td_version`
+  - Has a `metadata` object with `analysis_type` and `td_version`
 - Exclude files that don't match the expected shape — log a warning for each excluded file
 - Log warnings for inaccessible or malformed files
 - **Terminate with a clear error if fewer than 2 valid MOD reports are found**
@@ -190,7 +190,7 @@ For each MOD report JSON found, extract the data needed for portfolio-level anal
 Extract from the JSON `metadata` object at the root:
 
 - **Service/repository name** — from `metadata.repo_name` (or derive from the filename)
-- **Assessment date** — from `metadata.assessment_date` (validate YYYY-MM-DD format)
+- **Analysis date** — from `metadata.analysis_date` (validate YYYY-MM-DD format)
 - **Repo type** — from `metadata.repo_type` (one of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`). If absent, assume `application`.
 - **Service archetype** — from `metadata.service_archetype` when `repo_type` is `application`
 - **Overall score** — from `overall_score` at the root (validate 1.0–4.0 range)
@@ -313,15 +313,15 @@ If all services have N/A for a category, the portfolio category average is "N/A"
 
 #### 3.5 Readiness Snapshot
 
-Produce a structured, machine-parseable summary block containing the key portfolio metrics. This block is designed for consumption by dashboard and tracking systems that build time-series views across multiple assessment runs.
+Produce a structured, machine-parseable summary block containing the key portfolio metrics. This block is designed for consumption by dashboard and tracking systems that build time-series views across multiple analysis runs.
 
-The snapshot captures the state of the portfolio at assessment time. Delta calculations (score improvements, pathway resolutions, velocity) are the responsibility of the consuming system, not this TD.
+The snapshot captures the state of the portfolio at analysis time. Delta calculations (score improvements, pathway resolutions, velocity) are the responsibility of the consuming system, not this TD.
 
 Fields:
 
 | Field | Type | Source |
 |-------|------|--------|
-| `assessment_date` | string (YYYY-MM-DD) | Report date |
+| `analysis_date` | string (YYYY-MM-DD) | Report date |
 | `total_services` | integer | Count of assessed services |
 | `portfolio_score` | float | Overall portfolio score average |
 | `score_range_min` | float | Lowest individual service score |
@@ -608,7 +608,7 @@ For each classified concern, record:
 
 ### Step 5b: Infrastructure Cross-Referencing
 
-When a portfolio contains `infrastructure-only` or `deployment-config` repos alongside `application` repos, the infra/deployment repos often provide capabilities (IaC, CI/CD, network security, deployment strategy, audit logging) that serve the application repos. Individual application repo assessments cannot see these external artifacts and may score 1 on questions whose answers live in a companion repo. This step identifies those cross-references and annotates findings accordingly.
+When a portfolio contains `infrastructure-only` or `deployment-config` repos alongside `application` repos, the infra/deployment repos often provide capabilities (IaC, CI/CD, network security, deployment strategy, audit logging) that serve the application repos. Individual application repo analyses cannot see these external artifacts and may score 1 on questions whose answers live in a companion repo. This step identifies those cross-references and annotates findings accordingly.
 
 > **Important**: This step does NOT change individual repo scores. It produces contextual annotations that inform the portfolio-level view and reduce false-positive noise in cross-cutting concern analysis.
 
@@ -906,7 +906,7 @@ heavy_modernization_candidates = [s for s in portfolio if s.pathway_load >= 4]
 - Flag these as requiring dedicated sprint capacity or a focused modernization initiative
 - Cross-reference with the risk register (these services likely appear as high-risk dependencies)
 
-### Step 8: Integration Opportunities, Risk Assessment, and Resource Allocation
+### Step 8: Integration Opportunities, Risk Analysis, and Resource Allocation
 
 #### 8.1 Integration Opportunities
 
@@ -942,7 +942,7 @@ Identify specific opportunities for cross-service improvements:
 - Propose unified observability platform
 - Benefits: end-to-end tracing, consistent metrics, reduced tool sprawl
 
-#### 8.2 Risk Assessment
+#### 8.2 Risk Analysis
 
 Perform comprehensive risk analysis across the portfolio:
 
@@ -1001,7 +1001,7 @@ For each identified risk:
 
 **Skill Gap Analysis:**
 - Extract required skills from roadmap activities (e.g., "containerize application" requires Docker/ECS/EKS skills)
-- Extract current skills from assessment findings (e.g., "team has experience with Lambda")
+- Extract current skills from analysis findings (e.g., "team has experience with Lambda")
 - Compare required vs current to identify gaps
 - Common gaps: IaC (Terraform/CDK), containers (Docker/ECS/EKS), observability (X-Ray/CloudWatch), database migration (DMS)
 
@@ -1019,14 +1019,14 @@ For each identified risk:
 
 > **This section appears ONLY in portfolio reports, NEVER in individual reports.** AWS programs are engagement-level decisions scoped to the customer's overall estate, not per-repo. The portfolio view has the right scope to make these recommendations.
 
-Based on the portfolio-wide assessment findings from previous steps, evaluate each of the 8 AWS engagement programs below against its trigger condition. Include a program in the recommendations only if its trigger condition is met. If no programs are triggered, include a brief note instead.
+Based on the portfolio-wide analysis findings from previous steps, evaluate each of the 8 AWS engagement programs below against its trigger condition. Include a program in the recommendations only if its trigger condition is met. If no programs are triggered, include a brief note instead.
 
 #### 9.1 Programs Catalog and Trigger Logic
 
 | Program | Acronym | Trigger Condition | How to Evaluate |
 |---------|---------|-------------------|-----------------|
 | Migration Acceleration Program | MAP | Portfolio has 3+ repos with workloads NOT yet on AWS (on-premises or another cloud provider) | Check individual report findings for non-AWS hosting signals: (1) no AWS IaC detected (no CDK, CloudFormation, or Terraform with AWS provider), (2) no AWS SDK references in application code, (3) deployment targets referencing non-AWS infrastructure (Azure, GCP, bare-metal, VMware, on-prem data centers, physical server configs), (4) self-hosted CI/CD with no cloud provider integration (Jenkins on-prem, GitLab self-hosted without cloud runners). If 3+ repos show these signals, recommend MAP. MAP is ONLY for net-new workloads migrating to AWS — it does NOT apply to workloads already running on AWS in any form, including EC2-hosted legacy applications. A PHP monolith on EC2 is already on AWS and does not qualify for MAP regardless of how unmodernized it is. |
-| Optimization and Licensing Assessment | OLA | Any repo has Oracle, SQL Server, VMware, or commercial license findings | Check individual report findings for DATA-Q4 (stored procedures / commercial SQL) and INF-Q2 (managed DB) scores. If any repo's findings mention Oracle, SQL Server, VMware, or other commercial database/license references, recommend OLA. |
+| Optimization and Licensing Analysis | OLA | Any repo has Oracle, SQL Server, VMware, or commercial license findings | Check individual report findings for DATA-Q4 (stored procedures / commercial SQL) and INF-Q2 (managed DB) scores. If any repo's findings mention Oracle, SQL Server, VMware, or other commercial database/license references, recommend OLA. |
 | Microsoft Modernization Program | MMP | Any repo has .NET or Windows workloads detected | Check APP-Q1 (Programming Languages) findings. If any repo uses C#, .NET, ASP.NET, or VB.NET, recommend MMP. |
 | VMware Modernization Program | VMP | Any repo has VMware references in IaC or deployment configs | Check individual report findings for VMware, vSphere, ESXi, or vCenter references. If found, recommend VMP. |
 | Windows App Modernization Program | WAMP | Any repo has Windows-based deployment targets | Check individual report findings for Windows Server, IIS, or Windows-specific deployment references. If found, recommend WAMP. |
@@ -1048,7 +1048,7 @@ If no programs are triggered, include: "No specific AWS program recommendations 
 
 ### Step 10: Evaluate Portfolio-Level Questions
 
-Evaluate questions that can only be answered by looking across multiple repos. These are distinct from cross-cutting analysis (Step 5) which aggregates individual scores — portfolio-level questions assess capabilities that no individual repo assessment can see.
+Evaluate questions that can only be answered by looking across multiple repos. These are distinct from cross-cutting analysis (Step 5) which aggregates individual scores — portfolio-level questions assess capabilities that no individual repo analysis can see.
 
 Individual report scores are never overridden. Where a portfolio-level finding provides context for individual gaps, annotate with "potentially mitigated — verify" but do not change individual scores.
 
@@ -1099,7 +1099,7 @@ The portfolio MOD TD emits a **four-artifact bundle** per the Four-Artifact Outp
 # Portfolio Modernization Analysis Report
 
 **Date**: <YYYY-MM-DD>
-**Services Assessed**: <count>
+**Services Analyzed**: <count>
 **Portfolio Context**: <context from additionalPlanContext, or "Not provided">
 **Technology Preferences**: Prefer: <prefer list or "None">; Avoid: <avoid list or "None">
 ```
@@ -1156,7 +1156,7 @@ The portfolio MOD TD emits a **four-artifact bundle** per the Four-Artifact Outp
 
 | Metric | Value |
 |--------|-------|
-| assessment_date | <YYYY-MM-DD> |
+| analysis_date | <YYYY-MM-DD> |
 | total_services | <N> |
 | portfolio_score | <X.X> |
 | score_range_min | <X.X> |
@@ -1647,10 +1647,10 @@ in exactly one column per pathway row.
 
 ---
 
-### Risk Assessment
+### Risk Analysis
 
 ```markdown
-## Risk Assessment
+## Risk Analysis
 
 ### Risk Matrix
 
@@ -1834,7 +1834,7 @@ in exactly one column per pathway row.
 - Creating an AWS DevOps AI Agent with the Strands Agents SDK (Lab) — https://skillbuilder.aws/learn/AH1GD8AJY3/lab--creating-an-aws-devops-ai-agent-with-the-strands-agents-sdk/A9SKJNMPJ2
 - AWS PartnerCast: Deep Dive: Building Observable AI Agents with Strands, Amazon Bedrock Agent Core & SageMaker MLflow — https://skillbuilder.aws/learn/1EN76TZBB6/aws-partnercast--deep-dive-building-observable-ai-agents-with-strands-amazon-bedrock-agent-core--sagemaker-mlflow--technical/CX2K6XAT84
 
-Only include links from categories that are relevant to the portfolio-wide gaps and triggered pathways found in this assessment.
+Only include links from categories that are relevant to the portfolio-wide gaps and triggered pathways found in this analysis.
 
 
 ---
@@ -1877,7 +1877,7 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 - **Overall Score**: X.X / 4.0
 - **Repository Type**: <repo_type>
 - **Priority**: <P0/P1/P2 or "Not set">
-- **Assessment Date**: <YYYY-MM-DD>
+- **Analysis Date**: <YYYY-MM-DD>
 - **Category Scores**:
   - Infrastructure & DevOps: X.X
   - Application Architecture: X.X
@@ -1903,12 +1903,12 @@ Only include links from categories that are relevant to the portfolio-wide gaps 
 
 ---
 
-### Assessment Inventory
+### Analysis Inventory
 
 ```markdown
-## Assessment Inventory
+## Analysis Inventory
 
-| # | Service | Report File | Assessment Date | Repo Type | Overall Score |
+| # | Service | Report File | Analysis Date | Repo Type | Overall Score |
 |---|---------|-------------|-----------------|-----------|---------------|
 | 1 | <service name> | <file path> | <date> | <repo_type> | X.X |
 ```
@@ -1955,22 +1955,22 @@ The complete report structure, for reference:
    - Pathway Details
    - Heavy Modernization Candidates (when at least one service has pathway_load ≥ 4)
 7. Integration Opportunities
-8. Risk Assessment
+8. Risk Analysis
 9. Resource Allocation Recommendations
 10. AWS Programs & Engagement Recommendations
 11. Recommended Self-Paced Learning Materials
 12. Portfolio-Level Findings
 13. Service-by-Service Summary
-14. Assessment Inventory
+14. Analysis Inventory
 ```
 
 ## Constraints and Guardrails
 
 Strictly follow these rules at all times:
 
-- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio artifact bundle (MD, JSON, HTML, and metadata.json).
+- **Read-only analysis**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio artifact bundle (MD, JSON, HTML, and metadata.json).
 - **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
-- **Minimum 2 reports**: The portfolio assessment requires at least 2 valid MOD reports. Terminate with a clear error if fewer than 2 are found.
+- **Minimum 2 reports**: The portfolio analysis requires at least 2 valid MOD reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Scores of N/A are excluded from portfolio-level category averages (both numerator and denominator), overall score calculations, and cross-cutting concern analysis. A question that is N/A for a service does not count as a gap for that service.
 - **Two-tier classification only**: Cross-cutting concerns use exactly two tiers — Foundational Blockers (score < 2 in 2+ repos) and Improvement Opportunities (score < 3 at-or-above the scaling threshold, max(3, 33% of applicable repos) with a floor of 2 for portfolios with fewer than 4 applicable repos).
 - **Fixed phase names**: Roadmap phases are always named Cross-Cutting Foundation, Quick Wins, Foundation, and Advanced.
@@ -1978,7 +1978,7 @@ Strictly follow these rules at all times:
 - **Preferences for framing only**: Technology preferences (prefer/avoid) influence recommendation language and technology suggestions. They do NOT change scores, N/A mappings, pathway trigger logic, or cross-cutting concern classification.
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
 - **All 7 pathways in aggregation**: The pathway aggregation table must include all 7 pathways, even if none are triggered. Every assessed repo must appear in exactly one column per pathway row.
-- **Report completeness**: The output report must contain all required sections: executive dashboard, technology stack summary, service dependency map, cross-cutting concerns, phased roadmap, pathway aggregation, integration opportunities, risk assessment, resource allocation, AWS programs, learning materials, service-by-service summary, and assessment inventory.
+- **Report completeness**: The output report must contain all required sections: executive dashboard, technology stack summary, service dependency map, cross-cutting concerns, phased roadmap, pathway aggregation, integration opportunities, risk analysis, resource allocation, AWS programs, learning materials, service-by-service summary, and analysis inventory.
 
 
 ---
@@ -1991,11 +1991,11 @@ This section defines the portfolio MOD JSON contract, HTML visual contract, and 
 
 ### Four-Artifact Output Contract (Portfolio MOD)
 
-Every portfolio MOD assessment emits four artifacts: three report artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
+Every portfolio MOD analysis emits four artifacts: three report artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
 
 | Artifact | Filename | Purpose |
 |---|---|---|
-| Markdown report | `{portfolio-name}-portfolio-mod-report.md` | Narrative-prose artifact. Contains every section defined above (Executive Dashboard, Technology Stack, Dependency Map, Cross-Cutting Concerns, Roadmap, Pathways, Integration Opportunities, Risk Assessment, Resource Allocation, AWS Programs, Learning Materials, Service-by-Service Summary). |
+| Markdown report | `{portfolio-name}-portfolio-mod-report.md` | Narrative-prose artifact. Contains every section defined above (Executive Dashboard, Technology Stack, Dependency Map, Cross-Cutting Concerns, Roadmap, Pathways, Integration Opportunities, Risk Analysis, Resource Allocation, AWS Programs, Learning Materials, Service-by-Service Summary). |
 | JSON report | `{portfolio-name}-portfolio-mod-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard. Every semantic field defined in the Top-Level JSON Keys section below MUST be present. |
 | HTML report | `{portfolio-name}-portfolio-mod-report.html` | **Single self-contained HTML file** (no external asset fetches at render time). Renders a subset of the JSON per the Portfolio MOD HTML Visual Contract below. MUST be emitted alongside the MD and JSON — it is NOT optional. |
 | Metadata sidecar | `{portfolio-name}-portfolio-mod-report.metadata.json` | Tiny JSON file carrying version compatibility data. |
@@ -2004,25 +2004,25 @@ The JSON artifact is the canonical contract. If any artifacts disagree on a fiel
 
 #### Artifact Layout
 
-The four-artifact bundle is emitted at the **portfolio root** under the `modernization-assessment/` directory:
+The four-artifact bundle is emitted at the **portfolio root** under the `modernization-analysis/` directory:
 
 ```
 {portfolio-root}/
-└── modernization-assessment/
+└── modernization-analysis/
     ├── {portfolio-name}-portfolio-mod-report.md
     ├── {portfolio-name}-portfolio-mod-report.json
     ├── {portfolio-name}-portfolio-mod-report.html
     └── {portfolio-name}-portfolio-mod-report.metadata.json
 ```
 
-The directory `modernization-assessment/` is the same canonical location used for per-repo MOD reports (which live one level deeper, under `services/{repo-name}/modernization-assessment/`). Per-repo and portfolio reports are distinguished by the filename prefix: per-repo uses `{repo-name}`, portfolio uses `{portfolio-name}-portfolio`.
+The directory `modernization-analysis/` is the same canonical location used for per-repo MOD reports (which live one level deeper, under `services/{repo-name}/modernization-analysis/`). Per-repo and portfolio reports are distinguished by the filename prefix: per-repo uses `{repo-name}`, portfolio uses `{portfolio-name}-portfolio`.
 
 #### Metadata Sidecar Fields
 
 ```json
 {
-  "assessment_type": "portfolio-mod",
-  "assessment_date": "YYYY-MM-DD",
+  "analysis_type": "portfolio-mod",
+  "analysis_date": "YYYY-MM-DD",
   "td_version": "portfolio-modernization"
 }
 ```
@@ -2035,8 +2035,8 @@ The Portfolio MOD JSON artifact MUST emit these top-level keys in the order show
 
 | Key | Description |
 |---|---|
-| `assessment_type` | Literal `"portfolio-mod"` |
-| `metadata` | Version, assessment date, portfolio name, TD version, services_assessed, consumed_per_repo_json_files, preferences (optional) |
+| `analysis_type` | Literal `"portfolio-mod"` |
+| `metadata` | Version, analysis date, portfolio name, TD version, services_analyzed, consumed_per_repo_json_files, preferences (optional) |
 | `summary` | 5 KPI counts: repositories_analyzed, total_findings, high_severity_findings, medium_severity_findings, low_severity_findings |
 | `filter_vocab` | Filter-eligible enums actually present in the run |
 | `executive_dashboard` | Portfolio score overview + `score_band_distribution` + `tier_distribution` (counts that agree) + category_score_averages + repo_type_distribution |
@@ -2145,7 +2145,7 @@ Findings are NEVER emitted for questions that resolve to passing (score 4), N/A,
     {
       "repo_name": "Lidarr--Lidarr",
       "per_repo_pathway_source": "/pathways/0",
-      "per_repo_json_path": "services/Lidarr--Lidarr/modernization-assessment/Lidarr--Lidarr-mod-report.json",
+      "per_repo_json_path": "services/Lidarr--Lidarr/modernization-analysis/Lidarr--Lidarr-mod-report.json",
       "triggering_questions": [
         { "question_id": "APP-Q2", "score": 2, "note": "Monolith", "evidence": { "file": "src/", "lines": null } },
         { "question_id": "INF-Q1", "score": 1, "note": "No managed compute", "evidence": { "file": "azure-pipelines.yml", "lines": null } }
@@ -2161,7 +2161,7 @@ Findings are NEVER emitted for questions that resolve to passing (score 4), N/A,
 
 #### JSON-pointer back-reference
 
-`contributing_repos[].per_repo_pathway_source` MUST be a JSON-pointer fragment (RFC 6901) of the form `/pathways/{index}` where `{index}` names the exact position in the per-repo MOD JSON's `pathways[]` array. ALTERNATIVELY, a URI reference form ending in `#/pathways/{index}` is accepted. The portfolio TD MUST NOT emit a best-effort match by name or id — the JSON-pointer is authoritative. Unresolvable pointers fail the assessment (see error-handling section below).
+`contributing_repos[].per_repo_pathway_source` MUST be a JSON-pointer fragment (RFC 6901) of the form `/pathways/{index}` where `{index}` names the exact position in the per-repo MOD JSON's `pathways[]` array. ALTERNATIVELY, a URI reference form ending in `#/pathways/{index}` is accepted. The portfolio TD MUST NOT emit a best-effort match by name or id — the JSON-pointer is authoritative. Unresolvable pointers fail the analysis (see error-handling section below).
 
 #### Inlined evidence
 
@@ -2208,7 +2208,7 @@ The Portfolio MOD JSON emits `recommended_actions[]` with minimum-set coverage:
 | `mmp` | Microsoft Modernization Program | MMP | program |
 | `wamp` | Windows App Modernization Program | WAMP | program |
 | `eba` | Experience-Based Acceleration | EBA | program |
-| `ola` | Optimization and Licensing Assessment | OLA | program |
+| `ola` | Optimization and Licensing Analysis | OLA | program |
 | `vmp` | VMware Migration Program | VMP | program |
 | `isv-wmp` | ISV Workload Migration Program | ISV WMP | program |
 
@@ -2230,7 +2230,7 @@ The Portfolio MOD MD artifact contains the following sections:
 - Parallel Execution Tracks
 - Pathway Details subsections with Cross-Service Synergies / Roadmap Phase Alignment / Relevant Learning Materials per triggered pathway
 - Integration Opportunities
-- Risk Assessment (Portfolio Risk Register table)
+- Risk Analysis (Portfolio Risk Register table)
 - Resource Allocation Recommendations
 - Recommended Self-Paced Learning Materials
 
@@ -2354,7 +2354,7 @@ Renders `pathways[]` with:
 
 | Visual location | JSON source |
 |---|---|
-| Header | `metadata.{portfolio_name, assessment_date, services_assessed}` |
+| Header | `metadata.{portfolio_name, analysis_date, services_analyzed}` |
 | Executive Summary | `executive_dashboard.tier_distribution` + `summary.*` |
 | Stats cards | `summary.{total_findings, high_severity_findings, medium_severity_findings, low_severity_findings}` |
 | Portfolio Distribution chart | `executive_dashboard.tier_distribution` |
@@ -2377,22 +2377,22 @@ The portfolio TD consumes ONLY per-repo JSON. Failure modes are explicit, loud, 
 
 ### Missing Per-Repo JSON
 
-IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
+IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio analysis SHALL fail with a message listing ALL missing files at once (not one at a time).
 
-Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/modernization-assessment/foo--bar-mod-report.json, services/baz--qux/modernization-assessment/baz--qux-mod-report.json, services/wat--wub/modernization-assessment/wat--wub-mod-report.json."`
+Example: `"Portfolio analysis failed: 3 per-repo JSON artifacts missing: services/foo--bar/modernization-analysis/foo--bar-mod-report.json, services/baz--qux/modernization-analysis/baz--qux-mod-report.json, services/wat--wub/modernization-analysis/wat--wub-mod-report.json."`
 
 ### Dangling Cross-Reference
 
-IF a `question_id` or `repo_name` referenced in portfolio JSON does not resolve into at least one consumed per-repo JSON of the matching `assessment_type`, THEN the portfolio assessment SHALL fail naming the dangling reference.
+IF a `question_id` or `repo_name` referenced in portfolio JSON does not resolve into at least one consumed per-repo JSON of the matching `analysis_type`, THEN the portfolio analysis SHALL fail naming the dangling reference.
 
-Example: `"Portfolio assessment failed: findings[3].question_id='INF-Q99' does not match any rubric question in consumed MOD per-repo JSONs."`
+Example: `"Portfolio analysis failed: findings[3].question_id='INF-Q99' does not match any rubric question in consumed MOD per-repo JSONs."`
 
 ### Unresolvable JSON-Pointer
 
-IF a `pathways[].contributing_repos[].per_repo_pathway_source` JSON-pointer does NOT resolve to a valid index in the target per-repo MOD JSON's `pathways[]` array, THEN the portfolio assessment SHALL fail naming the pointer and the source file.
+IF a `pathways[].contributing_repos[].per_repo_pathway_source` JSON-pointer does NOT resolve to a valid index in the target per-repo MOD JSON's `pathways[]` array, THEN the portfolio analysis SHALL fail naming the pointer and the source file.
 
-Example: `"Portfolio MOD assessment failed: pathways[1].contributing_repos[2].per_repo_pathway_source='/pathways/9' exceeds the per-repo pathways[] cardinality (7) in services/Lidarr--Lidarr/modernization-assessment/Lidarr--Lidarr-mod-report.json."`
+Example: `"Portfolio MOD analysis failed: pathways[1].contributing_repos[2].per_repo_pathway_source='/pathways/9' exceeds the per-repo pathways[] cardinality (7) in services/Lidarr--Lidarr/modernization-analysis/Lidarr--Lidarr-mod-report.json."`
 
 ### No Silent Fallback
 
-The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. The portfolio TD consumes JSON-only.
+The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the analysis fails. The portfolio TD consumes JSON-only.

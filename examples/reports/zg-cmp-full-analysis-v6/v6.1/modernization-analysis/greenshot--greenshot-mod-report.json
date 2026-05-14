@@ -1,0 +1,696 @@
+{
+  "analysis_type": "mod",
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "mod",
+    "analysis_date": "2026-05-08",
+    "td_version": "modernization-analysis",
+    "report_format_version": "V6",
+    "repository": "greenshot--greenshot",
+    "repo_type": "application",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "This is a Windows desktop application with no persistent data store, no API surface, no database connections, and no downstream service calls. All operations are local computation (screenshot capture, image processing, annotation). Classified as stateless-utility.",
+    "priority": "P2",
+    "tags": ["csharp", "desktop", "windows"],
+    "context": "Windows screenshot and annotation tool.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_at_rest_data_surface": false,
+      "has_deployed_workload": false,
+      "has_api_surface": false,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": false
+    }
+  },
+  "overall_score": 1.72,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 4,
+    "medium_count": 16,
+    "low_count": 1,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.17,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 1.75,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 3.00,
+      "score_rating": "Partial",
+      "severity_status": "Ready"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.67,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.00,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
+      "score": 1,
+      "gap": "No cloud compute — application is a Windows desktop binary with no managed services",
+      "impact": "Cannot scale, patch, or manage compute through cloud services"
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "No IaC of any kind — all infrastructure managed manually",
+      "impact": "No reproducibility, no environment consistency, no DR capability"
+    },
+    {
+      "rank": 3,
+      "question_id": "OPS-Q6",
+      "title": "Integration Testing",
+      "score": 1,
+      "gap": "No automated tests of any kind exist in the repository",
+      "impact": "No regression safety net for any code changes"
+    },
+    {
+      "rank": 4,
+      "question_id": "SEC-Q6",
+      "title": "Compute Hardening and Patching",
+      "score": 1,
+      "gap": "No vulnerability scanning or patching strategy for dependencies",
+      "impact": "Known vulnerabilities in dependencies may reach production undetected"
+    },
+    {
+      "rank": 5,
+      "question_id": "SEC-Q7",
+      "title": "Application Security Pipeline",
+      "score": 1,
+      "gap": "No SAST, DAST, or dependency scanning in CI/CD pipeline",
+      "impact": "Security vulnerabilities in code and dependencies are never automatically detected"
+    }
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "DevOps Agent",
+      "prerequisite": "CI/CD pipeline exists (INF-Q11 = 2). GitHub Actions workflows are configured with build and deploy stages.",
+      "what_it_enables": "An agent that triggers deployments, checks build status, manages release notes, and coordinates the release process.",
+      "additional_steps": "GitHub Actions API access is already available via GITHUB_TOKEN.",
+      "effort": "Low"
+    },
+    {
+      "name": "RAG-based Knowledge Agent",
+      "prerequisite": "Documentation exists in repository. README.md, CONTRIBUTING.md, copilot-instructions.md, docs/ directory with release management and changelog documentation.",
+      "what_it_enables": "A knowledge agent that answers developer questions about the Greenshot build process, architecture, contribution guidelines, and release procedures.",
+      "additional_steps": "Index existing documentation files. The .github/copilot-instructions.md file is particularly comprehensive.",
+      "effort": "Low"
+    }
+  ],
+  "decomposition_strategy": {
+    "trigger": "APP-Q2 = 2",
+    "recommended_approach": "Conditional / Adaptive",
+    "approaches": [
+      {
+        "name": "Strangler Fig (Parallel Track)",
+        "recommendation": "Recommended",
+        "effort": "Medium to High",
+        "description": "Extract cloud upload plugins into independent backend services while keeping the desktop app as the primary interface."
+      },
+      {
+        "name": "Conditional / Adaptive",
+        "recommendation": "Recommended for initial phase",
+        "effort": "Low to Medium",
+        "description": "Keep the desktop app as-is but add a cloud backend for new features (cross-device sync, web-based annotation)."
+      },
+      {
+        "name": "Big-Bang Rewrite",
+        "recommendation": "Recommended against",
+        "effort": "Very High",
+        "description": "Rewrite Greenshot as a cloud-native web application replacing the desktop client entirely."
+      }
+    ],
+    "patterns": ["Anti-corruption Layer", "Event Sourcing"]
+  },
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No managed compute — desktop application with no cloud services",
+      "description": "Greenshot is a Windows desktop application compiled as a WinExe binary targeting .NET Framework 4.8.0. There is no cloud compute of any kind — no EC2, no ECS/EKS, no Lambda, no Fargate.",
+      "gap": "No managed compute — the application has no server-side component. All processing occurs on the user's local machine.",
+      "recommendation": "If cloud features are desired (e.g., cross-device screenshot sync, cloud-based annotation), consider building backend services using Lambda or ECS with EKS as preferred by organizational preferences.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "src/Greenshot/Greenshot.csproj", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No network security infrastructure",
+      "description": "No VPC, security groups, subnets, or network segmentation exists. This is a desktop application with no cloud infrastructure.",
+      "gap": "No cloud network security infrastructure exists. The application communicates directly from user machines to external cloud services over the public internet.",
+      "recommendation": "If backend services are built in the future, deploy them in a VPC with private subnets, least-privilege security groups, and VPC endpoints for AWS service access.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No API entry point",
+      "description": "No API Gateway, ALB, CloudFront, or any managed entry point exists. The application does not expose APIs — it is a desktop tool that consumes external APIs.",
+      "gap": "No API entry point exists because no APIs are exposed.",
+      "recommendation": "If cloud backend services are built, use API Gateway with throttling and authentication as the entry point.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No auto-scaling",
+      "description": "No auto-scaling exists. There are no scalable cloud resources — no ASGs, no ECS services, no Lambda functions.",
+      "gap": "No cloud resources exist that could benefit from auto-scaling.",
+      "recommendation": "If cloud services are built in the future, configure auto-scaling on all compute and data resources from day one.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Infrastructure as Code",
+      "description": "No infrastructure as code of any kind exists in this repository. No Terraform, CloudFormation, CDK, Helm, or other IaC tools are present.",
+      "gap": "0% IaC coverage — all infrastructure (GitHub Pages, CloudFlare cache, Chocolatey publishing) is configured manually outside the repository.",
+      "recommendation": "Define any cloud infrastructure as code. If migrating to AWS, use CDK or Terraform to define all resources.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Partial CI/CD automation — build automated but no testing or security stages",
+      "description": "GitHub Actions provides automated build and release artifact creation but lacks test stages, security scanning, and staged deployment.",
+      "gap": "Build is automated but there is no test stage, no security scanning stage, and no staged deployment.",
+      "recommendation": "Add test stages to the pipeline. Integrate Dependabot for NuGet vulnerability scanning. Add a SAST tool as a required pipeline step before artifact creation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/release.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Legacy .NET Framework 4.8 — compound framework regression",
+      "description": "The application is written in C# targeting .NET Framework 4.8.0 (legacy, maintenance mode). This is NOT modern .NET (6/7/8/9/10).",
+      "gap": ".NET Framework 4.8 lacks modern .NET features: cross-platform support, performance improvements, container-optimized builds, native AOT. The broader cloud-native .NET ecosystem targets modern .NET only.",
+      "recommendation": "Migrate from .NET Framework 4.8 to modern .NET (8 or 9 LTS). WinForms and WPF are supported on modern .NET for Windows-only applications.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "src/Directory.Build.props", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith with identifiable plugin boundaries",
+      "description": "Greenshot is a monolithic desktop application with 12 projects including 7 plugins. Plugins are compiled as separate DLLs but loaded at runtime into the same process.",
+      "gap": "Single deployable unit. All components share the same process, memory space, and lifecycle. Cloud upload functionality is tightly coupled to the desktop app's runtime.",
+      "recommendation": "The plugin architecture provides natural decomposition boundaries. Each cloud upload plugin could be extracted into an independent backend service if cloud-native features are planned.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "src/Greenshot.sln", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No API versioning — no APIs exposed",
+      "description": "No API versioning exists because no APIs are exposed. Greenshot is a consumer of external APIs but does not expose any API surface of its own.",
+      "gap": "No API versioning strategy. If cloud backend services are built, a versioning strategy needs to be established.",
+      "recommendation": "If backend services are introduced, adopt URL-path versioning (e.g., /v1/) from day one with backward-compatibility guarantees.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Hardcoded external service endpoints",
+      "description": "Service endpoints for cloud integrations are hardcoded in plugin source code. OAuth credentials injected via build-time environment variables.",
+      "gap": "All external service endpoints are hardcoded in application code. Endpoint changes require code changes and recompilation.",
+      "recommendation": "Externalize service endpoint URLs into configuration. If cloud backend services are added, adopt environment-variable-based discovery.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/Directory.Build.props", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Screenshots stored on local filesystem only",
+      "description": "Screenshots and images are stored on the local file system of the user's machine. No cloud object storage integration. No S3, no parsing pipeline.",
+      "gap": "Unstructured data stored on local file systems with no cloud-based managed storage. No centralized, accessible storage.",
+      "recommendation": "If cross-device access or centralized screenshot management is desired, integrate S3 for screenshot storage with optional Textract/Rekognition for content extraction.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets managed via GitHub Secrets but no rotation",
+      "description": "OAuth client IDs and secrets are managed through GitHub Secrets and injected at build time via token replacement. No plaintext credentials in source. However, no rotation mechanism exists.",
+      "gap": "Secrets managed via GitHub Secrets (good) but no rotation mechanism. OAuth client secrets are static and embedded into the compiled binary at build time.",
+      "recommendation": "Consider using short-lived OAuth tokens with refresh flows. Evaluate whether OAuth public client (PKCE) flows could eliminate the need for client secrets in the distributed binary.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/release.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No vulnerability scanning or patching strategy",
+      "description": "No vulnerability scanning or patching strategy exists. No Dependabot, no dotnet audit, no Snyk. NuGet package versions are pinned but not checked for CVEs.",
+      "gap": "No vulnerability scanning for NuGet dependencies. No automated patching strategy.",
+      "recommendation": "Enable GitHub Dependabot for NuGet vulnerability scanning. Add dotnet list package --vulnerable to the CI pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No security scanning in CI/CD pipeline",
+      "description": "No SAST, DAST, or dependency vulnerability scanning is integrated into the CI/CD pipeline. No security validation occurs before artifacts are published.",
+      "gap": "Complete absence of security scanning. No Dependabot, no SAST tool, no code quality gates.",
+      "recommendation": "Add GitHub Dependabot for NuGet alerts, GitHub CodeQL for SAST (supports C#), and consider CodeGuru Reviewer if migrating to AWS CI/CD.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/release.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No distributed tracing",
+      "description": "No distributed tracing is instrumented. log4net provides local file-based logging only with no structured trace correlation.",
+      "gap": "No tracing of any kind. No OpenTelemetry, no X-Ray, no trace ID propagation.",
+      "recommendation": "If cloud backend services are added, instrument with OpenTelemetry from day one. For the current app, consider adding correlation IDs to cloud upload requests.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/Greenshot.Base/Greenshot.Base.csproj", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No business metrics",
+      "description": "No custom business metrics are published. No telemetry, no analytics, no metric collection of any kind.",
+      "gap": "No business or usage metrics. No understanding of feature usage patterns.",
+      "recommendation": "Consider adding opt-in telemetry for desktop usage patterns. If cloud services are added, publish business metrics to CloudWatch.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No anomaly detection or alerting",
+      "description": "No anomaly detection or alerting is configured. No CloudWatch alarms, no error rate monitoring, no latency tracking.",
+      "gap": "No alerting of any kind.",
+      "recommendation": "If cloud backend services are added, configure CloudWatch anomaly detection on error rates and latency from day one.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No automated tests of any kind",
+      "description": "No automated tests exist in this repository. The copilot-instructions.md explicitly states there are no automated test projects.",
+      "gap": "Complete absence of automated testing. No regression safety net for code changes.",
+      "recommendation": "Introduce automated testing: unit tests for core image processing, integration tests for plugin OAuth flows, UI automation tests for critical workflows.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": ".github/copilot-instructions.md", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No incident response automation or runbooks",
+      "description": "No incident response automation or runbooks exist. SECURITY.md is minimal with no documented response process.",
+      "gap": "No incident response procedures documented.",
+      "recommendation": "Document incident response procedures for security vulnerabilities, broken releases, and OAuth credential rotation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "SECURITY.md", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No observability ownership",
+      "description": "No observability ownership exists. No dashboards, no alarms with owners, no SLO definitions with team attribution.",
+      "gap": "No observability assets exist to have ownership over.",
+      "recommendation": "If cloud services are added, establish observability ownership from day one with per-service dashboards and named alarm owners.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No resource tagging governance",
+      "description": "No AWS resources exist to tag. No tagging standard, no tag enforcement, no cost allocation tags.",
+      "gap": "No resources to tag and no tagging governance.",
+      "recommendation": "When cloud resources are introduced, establish a mandatory tagging standard enforced via IaC and AWS Config rules.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q2", "status": "Not Evaluated", "reason": "archetype-N/A: no persistent data store"},
+    {"question_id": "INF-Q3", "status": "Not Evaluated", "reason": "archetype-N/A: stateless-utility, no multi-step workflows"},
+    {"question_id": "INF-Q4", "status": "Not Evaluated", "reason": "archetype-N/A: stateless-utility, sync is correct design"},
+    {"question_id": "INF-Q8", "status": "Not Evaluated", "reason": "archetype-N/A: no persistent state to back up"},
+    {"question_id": "INF-Q9", "status": "Not Evaluated", "reason": "archetype-N/A: no deployed workload requiring HA"},
+    {"question_id": "APP-Q3", "status": "Not Evaluated", "reason": "archetype-N/A: stateless-utility, sync is correct design"},
+    {"question_id": "APP-Q4", "status": "Not Evaluated", "reason": "archetype-N/A: stateless-utility, no long-running operations"},
+    {"question_id": "DATA-Q3", "status": "Not Evaluated", "reason": "archetype-N/A: no database to version"},
+    {"question_id": "DATA-Q4", "status": "pass", "score": 4},
+    {"question_id": "SEC-Q1", "status": "Not Evaluated", "reason": "archetype-N/A: no IaC provisioning AWS resources"},
+    {"question_id": "SEC-Q2", "status": "Not Evaluated", "reason": "archetype-N/A: no data-at-rest surface"},
+    {"question_id": "SEC-Q3", "status": "Not Evaluated", "reason": "archetype-N/A: no API surface"},
+    {"question_id": "SEC-Q4", "status": "Not Evaluated", "reason": "archetype-N/A: no API surface, no user auth system"},
+    {"question_id": "OPS-Q2", "status": "Not Evaluated", "reason": "archetype-N/A: no user-facing surface for SLOs"},
+    {"question_id": "OPS-Q5", "status": "Not Evaluated", "reason": "archetype-N/A: no deployed workload"}
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=2 (monolith), INF-Q1=1 (no managed compute), APP-Q5=1 (no API versioning)",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2, "note": "Monolith with identifiable modules but single deployable unit"},
+        {"question_id": "INF-Q1", "score": 1, "note": "No cloud compute of any kind"}
+      ],
+      "detail": {
+        "aws_services": ["Lambda", "API Gateway", "S3", "CloudFront", "Cognito", "DynamoDB", "EKS"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/CMK2J48MVN"],
+        "immediate_actions": ["Identify cloud upload features for extraction", "Design backend API for screenshot storage"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1=1 but contextual guard blocks: this is a desktop application, not an EC2/VM server workload. No server-side compute exists to containerize.",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 1, "note": "Score below threshold but contextual guard applies — desktop app, not server workload"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "Contextual guard: this is a Windows desktop application, not a server-side workload running on EC2/VM. There is no server-side compute to containerize."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures). No commercial database engines detected.",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "Score meets threshold — no stored procedures or proprietary SQL"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No commercial database engines detected. No stored procedures or proprietary SQL. DATA-Q4=4 does not meet trigger threshold."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q2 Not Evaluated (no persistent data store). No database exists to migrate.",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": null, "note": "Not Evaluated — no persistent data store exists"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No database exists in this system. INF-Q2 was Not Evaluated due to has_persistent_data_store=false."
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q4 Not Evaluated. No data processing workloads exist.",
+      "triggering_questions": [
+        {"question_id": "INF-Q4", "score": null, "note": "Not Evaluated — stateless-utility archetype, no streaming/analytics workloads"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found. Desktop application has no data processing responsibilities."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=1 (no IaC), INF-Q11=2 (partial CI/CD), OPS-Q6=1 (no tests)",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 1, "note": "No IaC of any kind"},
+        {"question_id": "INF-Q11", "score": 2, "note": "Build automated but no testing or security stages"},
+        {"question_id": "OPS-Q6", "score": 1, "note": "No automated tests exist"}
+      ],
+      "detail": {
+        "aws_services": ["CodeBuild", "CodePipeline", "CloudFormation", "CDK"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/1FGEQKGPQD"],
+        "immediate_actions": ["Add Dependabot for NuGet scanning", "Add CodeQL SAST to pipeline", "Create initial unit test project"]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. The context describes a 'Windows screenshot and annotation tool' with no AI/agent/LLM signal terms."
+    }
+  ]
+}

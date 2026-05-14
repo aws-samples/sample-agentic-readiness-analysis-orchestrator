@@ -1,0 +1,942 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2025-05-07",
+    "td_version": "agentic-readiness-analysis-v6.0.1",
+    "report_format_version": "V6",
+    "target": "apache--druid",
+    "repo_type": "monorepo",
+    "service_archetype": "data-gateway",
+    "archetype_detection": "auto-detected",
+    "archetype_justification": "Apache Druid is a read-heavy analytics database. Its primary surface is a query engine accepting SQL and native JSON queries, returning analytics results. Query execution dominates traffic (>90% reads), fitting the data-gateway archetype.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": [
+      "java",
+      "analytics",
+      "database"
+    ],
+    "context": "Apache Druid: high-performance real-time analytics database.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 1,
+    "medium_count": 14,
+    "low_count": 14,
+    "safety_impact_medium_count": 5,
+    "rule_matched": "1-2 High → Remediation Required"
+  },
+  "evaluations": [
+    {
+      "question_id": "API-Q1",
+      "category_id": "API",
+      "category": "API Surface",
+      "status": "pass",
+      "severity_resolved": null
+    },
+    {
+      "question_id": "API-Q6",
+      "category_id": "API",
+      "category": "API Surface",
+      "status": "not_evaluated_extended",
+      "trigger": "Service has operations >30s OR long-running workflows"
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category_id": "AUTH",
+      "category": "Authentication & Authorization",
+      "status": "pass",
+      "severity_resolved": null
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category_id": "STATE",
+      "category": "State Management",
+      "status": "not_evaluated_extended",
+      "trigger": "Service has persistent state (stateful-crud, data-gateway, orchestrator)"
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category_id": "STATE",
+      "category": "State Management",
+      "status": "not_evaluated_extended",
+      "trigger": "Service has external dependencies (calls other services or external APIs)"
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category_id": "STATE",
+      "category": "State Management",
+      "status": "not_evaluated_extended",
+      "trigger": "Service is P0 priority OR is on the critical path"
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category_id": "DATA",
+      "category": "Data Accessibility",
+      "status": "not_evaluated_extended",
+      "trigger": "Service has persistent state (stateful-crud, data-gateway)"
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category_id": "ENG",
+      "category": "Engineering Maturity",
+      "status": "not_evaluated_extended",
+      "trigger": "Always evaluated (but INFO for stateless-utility)"
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category_id": "ENG",
+      "category": "Engineering Maturity",
+      "status": "not_evaluated_extended",
+      "trigger": "Service has persistent data stores"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Machine Identity Authentication for Agent Principals",
+      "description": "Druid's authentication framework is pluggable (Authenticator interface chain) and supports HTTP Basic, Kerberos, LDAP, and PAC4J/OIDC. However, there is no native support for service account or machine identity authentication with principal attribution for autonomous agents.",
+      "gap": "No OAuth2 client credentials flow, no API key with principal attribution, no mTLS-based service account mechanism designed for agent identities. Existing auth mechanisms target human users or inter-node communication.",
+      "recommendation": "Implement an Authenticator extension supporting OAuth2 client_credentials or API key-based machine identity with per-agent principal attribution. Alternatively, deploy an API Gateway that handles machine identity and passes authenticated principal headers.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/security/Authenticator.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Deploy an API Gateway (AWS API Gateway, Kong) in front of Druid that handles machine identity via OAuth2 client_credentials and passes authenticated principal headers.",
+          "target_state": "Agent identities are individually authenticated, attributed in audit logs, and distinguishable from human users.",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "AUTH-Q6"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Coarse-Grained Permission Scoping",
+      "description": "Druid's authorization model supports resource-type + regex scoping with READ/WRITE actions but operates at a coarse granularity without endpoint-level scoping for agent identities.",
+      "gap": "No fine-grained endpoint-level permission scoping. An agent granted READ on datasources gets READ on all matching datasources.",
+      "recommendation": "Create dedicated authorization roles for agent identities with minimal resource-regex patterns. Consider extending the Authorizer to support endpoint-level scoping.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/security/Authorizer.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Deploy an API Gateway with fine-grained route-level policies restricting agent access to specific endpoints",
+          "Create dedicated Druid users with narrow resource-regex patterns limiting to specific datasources"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Audit Logs Not Tamper-Evident",
+      "description": "Druid has an AuditManager framework (SQL and Logging implementations). Audit logs are append-only but not immutable — removeAuditLogsOlderThan() allows deletion, and there is no cryptographic hash chaining or tamper-evidence mechanism.",
+      "gap": "Audit logs are not tamper-evident. Database administrators with metadata store access can modify or delete entries without detection. No CloudTrail integration.",
+      "recommendation": "Implement an AuditManager extension that writes to an immutable store (S3 with Object Lock) or integrate with AWS CloudTrail via an API Gateway proxy.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "processing/src/main/java/org/apache/druid/audit/AuditManager.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, downgraded from BLOCKER",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, so immutable audit logging for writes is not a deployment blocker. However, audit logging for read access patterns is still a safety concern.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Stream audit events to an immutable external store (S3 with Object Lock, CloudWatch Logs with retention lock)",
+          "Deploy a LoggingAuditManager that writes to a tamper-evident log aggregation system"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Immediate Agent Identity Suspension",
+      "description": "User disablement is available via coordinator API but depends on authentication cache refresh interval. There is no instant propagation mechanism for agent identity lockout across all Druid nodes.",
+      "gap": "No immediate, propagated suspension mechanism. Cache-based auth means a non-zero window between disabling and actual lockout.",
+      "recommendation": "Deploy an API Gateway with instant API key revocation capability for agent identities, independent of Druid's internal auth cache refresh.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "extensions-core/druid-basic-security/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Set BasicHTTPAuthenticator cache duration to minimum value for near-immediate propagation",
+          "Deploy an API Gateway with API key revocation capability for instant agent lockout"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No HTTP-Level Rate Limiting",
+      "description": "Druid has no HTTP-level rate limiting for REST APIs. Only internal query scheduling via QueryScheduler with resilience4j bulkheads for query lane isolation. No API Gateway, WAF, or application-level rate-limiting middleware.",
+      "gap": "Unlimited API requests possible from any client. No request-level rate limiting.",
+      "recommendation": "Deploy an API Gateway with usage plans and throttling in front of all Druid API endpoints. Configure per-agent rate limits.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/QueryScheduler.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Deploy an API Gateway (AWS API Gateway, Kong, Envoy) with throttling policies",
+          "Configure query lane isolation to limit agent queries to a dedicated lane with bounded concurrency"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII Redaction in Logs",
+      "description": "Druid uses Log4j2 and emits query text, user identity, and request context in logs without PII scrubbing. The AuditManager stores full payloads without redaction.",
+      "gap": "No PII redaction in logs. User-submitted query text, identifiers, and configuration payloads logged verbatim.",
+      "recommendation": "Implement a custom Log4j2 filter that redacts PII patterns. For query logs, redact literal values from SQL/native query text before logging.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/audit/SQLAuditManager.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Configure Log4j2 pattern layouts to exclude sensitive fields",
+          "Deploy a log aggregation layer with field-level masking"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Machine-Readable API Specification",
+      "description": "No OpenAPI, Swagger, or machine-readable API specification exists. APIs are defined through JAX-RS annotations only.",
+      "gap": "No machine-readable spec for the full REST API. Agent tool generation requires manual work.",
+      "recommendation": "Integrate swagger-jaxrs2 to auto-generate OpenAPI specs from existing JAX-RS annotations.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/http/DataSourcesResource.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use JAX-RS annotation scanning tools to auto-generate OpenAPI specs",
+          "Maintain a manually curated tool definition for the subset of APIs agents will use"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Inconsistent Structured Error Responses",
+      "description": "DruidException provides structured errors with error codes and HTTP status categories. However, not all endpoints use it consistently, and no retryable field exists.",
+      "gap": "Inconsistent error format across endpoints. No explicit retryability signal.",
+      "recommendation": "Add a retryable boolean field to error responses. Standardize all endpoints through DruidException.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "processing/src/main/java/org/apache/druid/error/DruidException.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Document which HTTP status codes are retriable in agent tool definitions",
+          "Build agent-side logic to interpret DruidException error codes"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Management APIs Lack Pagination",
+      "description": "Query APIs support LIMIT/OFFSET. Management REST APIs (datasources, tasks, segments) have inconsistent pagination — many list endpoints return unbounded result sets.",
+      "gap": "Management API endpoints return unbounded collections.",
+      "recommendation": "Add pagination parameters (limit, offset/cursor) to management REST API endpoints.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/http/DataSourcesResource.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Agent tool definitions can enforce client-side result-size limits",
+          "Restrict management API calls to specific named resources"
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Automated API Breaking Change Detection",
+      "description": "Path-based versioning exists (/v1/, /v2/). No automated breaking change detection in CI, no contract testing, no deprecation mechanism.",
+      "gap": "No automated API contract stability validation in CI.",
+      "recommendation": "Integrate OpenAPI diff tooling into CI to detect breaking changes after spec generation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/http/DataSourcesResource.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Pin agent tool definitions to specific Druid versions",
+          "Monitor Druid release notes for breaking API changes manually"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Shallow Distributed Tracing",
+      "description": "Contrib OpenTelemetry emitter covers query metrics only. No native distributed tracing across Druid service nodes. Text-based logging default. Query IDs exist but no request-level correlation propagated.",
+      "gap": "No full distributed tracing. No structured JSON logging by default.",
+      "recommendation": "Promote OpenTelemetry to core. Implement full request tracing with trace ID propagation. Configure structured JSON logging.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "extensions-contrib/opentelemetry-emitter/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Deploy the OpenTelemetry contrib extension and configure Log4j2 JSON layout",
+          "Use query IDs for manual request correlation in log aggregation"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Alerting Configuration in Repository",
+      "description": "Metric emission framework exists via ServiceEmitter. No alerting thresholds or alarm configurations defined in the codebase.",
+      "gap": "No pre-defined alerting thresholds for agent-relevant error rates.",
+      "recommendation": "Provide reference alerting configurations (CloudWatch alarm templates or Prometheus recording rules).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "extensions-contrib/opentelemetry-emitter/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Configure alerting externally using Druid's emitted metrics",
+          "Define SLO-based alerts in deployment platform"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Infrastructure-as-Code for Production Deployment",
+      "description": "No Terraform, CloudFormation, CDK, Helm, or Kustomize in the repository. Only a Docker Compose for local dev and a Dockerfile.",
+      "gap": "No IaC for production deployment, drift detection, or peer-reviewed infrastructure changes.",
+      "recommendation": "Provide reference IaC (Helm chart or Terraform module) for production deployment with security best practices.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "distribution/docker/Dockerfile",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "90+ days",
+        "compensating_controls": [
+          "Operators deploy using external IaC (community Helm charts, Terraform modules)",
+          "Docker image provides a reproducible runtime base"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API Contract Testing in CI",
+      "description": "Comprehensive CI/CD with 13 workflows. No API contract testing — no Pact, OpenAPI validation, or schema comparison.",
+      "gap": "No automated detection of API-breaking changes in CI.",
+      "recommendation": "Integrate OpenAPI diff tool into CI after generating specs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/ci.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Extensive integration test suite catches behavioral regressions",
+          "Human PR review of API changes"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Rollback Configuration",
+      "description": "No blue-green, canary, or rollback strategy defined in the repository. Rollback is entirely an operator responsibility.",
+      "gap": "No rollback mechanism defined in the codebase.",
+      "recommendation": "Provide reference deployment configurations with rollback capabilities (Helm rollback, blue-green patterns).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": ".github/workflows/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Operators implement rollback in their own deployment pipelines",
+          "Druid's rolling upgrade support enables node-by-node rollback"
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Staging Environment with Realistic Data",
+      "description": "Docker Compose provides local development only. No dedicated staging environment configuration with production-equivalent data shape or synthetic data generators.",
+      "gap": "Docker Compose is for development, not a staging environment with realistic data volumes.",
+      "recommendation": "Provide reference configurations for a staging environment with synthetic data generation scripts.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "distribution/docker/docker-compose.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use Docker Compose with custom data ingestion scripts for testing",
+          "Operators maintain their own staging environments externally"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Data Residency Enforcement",
+      "description": "Druid stores data in configurable deep storage (S3, HDFS, Azure, GCS). No built-in data residency enforcement — location depends on deployment configuration.",
+      "gap": "No data residency enforcement or awareness at the application layer. No region-tagging of data.",
+      "recommendation": "Document data residency requirements per datasource. Enforce at the deployment layer. Consider datasource-level metadata tags for regulatory classification.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "extensions-core/s3-extensions/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, downgraded from BLOCKER",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents query data without modifying it, but may still transmit results to LLM endpoints in different regions. Risk profile is lower than write-enabled but residency compliance remains a safety concern.",
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Deploy Druid and LLM endpoints in the same AWS region",
+          "Restrict agent queries to non-regulated datasources via authorization"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No HTTP-Level Idempotency Keys (Read-Only INFO)",
+      "description": "No HTTP-level idempotency keys on write endpoints. Internal operation-level idempotency exists. Read-only scope means this is informational.",
+      "gap": "No idempotency key support on write endpoints.",
+      "recommendation": "Plan idempotency if expanding to write-enabled scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/http/DataSourcesResource.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, so idempotency is informational only."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Structured JSON Response Format",
+      "description": "All Druid API responses use structured JSON consistently.",
+      "gap": "None.",
+      "recommendation": "No action needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/http/DataSourcesResource.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q7",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No External Event Emission",
+      "description": "No webhooks or external event notification for state changes. Internal ServiceEmitter for metrics only.",
+      "gap": "No event-driven notification for agents.",
+      "recommendation": "Consider webhook/EventBridge integration for key state transitions.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/metrics/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Rate Limit Headers",
+      "description": "No rate limit headers returned. No rate limiting documentation.",
+      "gap": "No self-throttling signal for agents.",
+      "recommendation": "Add rate limit headers when rate limiting is implemented.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/http/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Identity Delegation (Data-Gateway INFO)",
+      "description": "Internal identity propagation via AuthenticationResult. No OAuth2 token exchange. Downgraded to INFO for data-gateway archetype.",
+      "gap": "No identity delegation for multi-tenant agent scenarios.",
+      "recommendation": "Revisit if multi-tenant agent scenarios arise.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 3,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/security/AuthenticationResult.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Environment-Variable Credential Management",
+      "description": "Extensible DynamicConfigProvider interface. Default is environment variables. No native Vault/Secrets Manager integration.",
+      "gap": "No integrated secrets management with rotation.",
+      "recommendation": "Implement DynamicConfigProvider for AWS Secrets Manager.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "distribution/docker/docker-compose.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Multi-Step Rollback (Read-Only INFO)",
+      "description": "No explicit compensation or rollback for multi-step operations. Read-only scope and data-gateway archetype — queries are stateless.",
+      "gap": "No multi-step rollback.",
+      "recommendation": "No action for read-only scope.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "indexing-service/src/main/java/org/apache/druid/indexing/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND data-gateway archetype calibration",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents on a data-gateway do not execute multi-step write workflows. Queries are stateless operations."
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No API-Level Concurrency Controls (Read-Only INFO)",
+      "description": "Internal optimistic concurrency exists. No ETags on REST API. Read-only scope — not relevant.",
+      "gap": "No API-level concurrency controls exposed.",
+      "recommendation": "No action for read-only scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/http/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Per-Agent Transaction Limits (Read-Only INFO)",
+      "description": "System-wide query limits exist. No per-agent configurable transaction limits. Read-only scope — informational.",
+      "gap": "No per-identity blast radius controls.",
+      "recommendation": "No action for read-only scope.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/QueryScheduler.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Draft/Pending State (Read-Only INFO)",
+      "description": "No user-facing draft/pending state. Operations execute immediately. Read-only scope — not relevant.",
+      "gap": "No draft state for agent-proposed changes.",
+      "recommendation": "No action for read-only scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/metadata/PendingSegmentRecord.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Approval Gates (Read-Only INFO)",
+      "description": "No approval gate mechanism exists. Read-only scope — not relevant.",
+      "gap": "No human-in-the-loop gates.",
+      "recommendation": "No action for read-only scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Data Classification Depends on Deployment (INFO)",
+      "description": "Druid stores whatever users ingest. Data sensitivity depends on deployment. Authorization scopes to datasource level. Data-gateway archetype calibration applies.",
+      "gap": "No field-level access control in query responses.",
+      "recommendation": "Restrict agent identities to non-sensitive datasources via resource authorization.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/java/org/apache/druid/server/security/Authorizer.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: data-gateway archetype calibration — Druid is a generic analytics engine, data sensitivity is a deployment concern",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Data-gateway archetype with read-only scope. Druid does not define data sensitivity — it stores whatever is ingested. Authorization scopes to datasource level, allowing agents to be restricted to non-sensitive datasources.",
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Read-only scope and data-gateway archetype — B1 applies to write-enabled scope"
+          },
+          "b2": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Datasource-level authorization provides differentiation. Agents can be restricted to specific datasources."
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No formal classification metadata exists — but this is expected for a generic analytics engine where data classification is a deployment concern."
+          }
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Rich Temporal Metadata, No Freshness Headers",
+      "description": "Time-series data with __time column. No API response freshness headers (Cache-Control, X-Data-Age). Data-gateway archetype — INFO.",
+      "gap": "No freshness signal in API responses.",
+      "recommendation": "Consider adding response headers for data freshness.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "processing/src/main/java/org/apache/druid/query/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Data Quality Metrics",
+      "description": "No formal data quality scoring or completeness metrics within Druid.",
+      "gap": "No data quality signals for agents.",
+      "recommendation": "Consider exposing metadata about ingestion completeness.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 4,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "description": "Druid uses clear, semantically meaningful field names (dataSource, intervals, dimensions, aggregations, granularity). No legacy codes.",
+      "gap": "None.",
+      "recommendation": "No action needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {
+        "file": "processing/src/main/java/org/apache/druid/query/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "System Tables Provide Discovery",
+      "description": "INFORMATION_SCHEMA queryable via SQL. Metadata API endpoints provide datasource and column discovery.",
+      "gap": "No external data catalog integration.",
+      "recommendation": "Consider registering in a centralized catalog.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {
+        "file": "sql/src/main/java/org/apache/druid/sql/calcite/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Operational Metrics Only",
+      "description": "Druid emits query/time, query/bytes metrics. No business outcome metrics.",
+      "gap": "No agent-specific business metrics.",
+      "recommendation": "Define agent-specific business metrics.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "processing/src/main/java/org/apache/druid/query/DefaultQueryMetrics.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "summary": {
+    "blocker_count": 1,
+    "risk_safety_count": 5,
+    "risk_quality_count": 9,
+    "info_count": 14,
+    "na_count": 0,
+    "not_evaluated_count": 0,
+    "total": 43
+  }
+}

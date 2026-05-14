@@ -560,7 +560,7 @@ STRUCTURAL CONSTRAINTS (formal facts from BPMN topology):
     heuristic_text = ""
     if heuristic_eval:
         heuristic_text = f"""
-HEURISTIC EVALUATION (our algorithm's initial assessment — validate or override):
+HEURISTIC EVALUATION (our algorithm's initial analysis — validate or override):
   Complexity: {heuristic_eval.complexity_score:.2f}/1.00
   Primary pattern: {heuristic_eval.primary_pattern}
   Hybrid needed: {heuristic_eval.is_hybrid}

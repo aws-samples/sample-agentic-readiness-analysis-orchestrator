@@ -8,11 +8,11 @@ How to build, validate, and edit `portfolio-config.yaml`. Read this when the use
 
 ```yaml
 portfolio_name: "my-platform"
-assessment_type: "agentic-readiness"
+analysis_type: "agentic-readiness"
 
 transformation_definitions:
-  agentic_readiness: "agentic-readiness-assessment"
-  modernization: "modernization-assessment"
+  agentic_readiness: "agentic-readiness-analysis"
+  modernization: "modernization-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
 
@@ -32,7 +32,7 @@ The full schema is in `portfolio-config.schema.json` at the repo root. Key field
 | Field | Required | Type | Notes |
 |---|---|---|---|
 | `portfolio_name` | yes | string | Identifier for the portfolio |
-| `assessment_type` | yes | enum | One of `agentic-readiness`, `modernization`, `bpmn-opportunity`, `full` |
+| `analysis_type` | yes | enum | One of `agentic-readiness`, `modernization`, `bpmn-opportunity`, `full` |
 | `context` | no | string | Free-text context that frames recommendations |
 | `agent_scope` | no | enum | `read-only` or `write-enabled`. ARA-only — controls conditional BLOCKER severity. |
 | `transformation_definitions` | yes | object | Names of the TDs in your AWS Transform registry |
@@ -48,7 +48,7 @@ The full schema is in `portfolio-config.schema.json` at the repo root. Key field
 | `modernization` | yes | Per-repo MOD TD name |
 | `portfolio_agentic_readiness` | yes | Portfolio ARA aggregator |
 | `portfolio_modernization` | yes | Portfolio MOD aggregator |
-| `portfolio_bridge` | no | Bridge TD — only used in `full` mode. When unset and `assessment_type` is `full`, the bridge step is skipped with a warning. |
+| `portfolio_bridge` | no | Bridge TD — only used in `full` mode. When unset and `analysis_type` is `full`, the bridge step is skipped with a warning. |
 | `bpmn_opportunity` | no | Per-repo BAO TD — required for `bpmn-opportunity` and `full` modes if BPMN files are present |
 | `portfolio_bpmn_opportunity` | no | Portfolio BAO aggregator — required to generate the portfolio BAO report |
 
@@ -80,9 +80,9 @@ The full schema is in `portfolio-config.schema.json` at the repo root. Key field
 
 ---
 
-## Assessment Type Choice
+## Analysis Type Choice
 
-| `assessment_type` | When to use |
+| `analysis_type` | When to use |
 |---|---|
 | `agentic-readiness` | Evaluating agent-deployment readiness. 43 questions, BLOCKER/RISK/INFO scoring. |
 | `modernization` | Evaluating cloud architecture maturity. 37 questions, 1-4 scale. 7 modernization pathways. |
@@ -226,11 +226,11 @@ SOURCE PATH    NO-SOURCE PATH
 Before running the orchestrator, verify:
 
 - [ ] `portfolio_name` is a non-empty string
-- [ ] `assessment_type` is one of the four valid values
-- [ ] `transformation_definitions` has all required TD names for the chosen `assessment_type`
+- [ ] `analysis_type` is one of the four valid values
+- [ ] `transformation_definitions` has all required TD names for the chosen `analysis_type`
 - [ ] Each `repositories[]` entry has `name` and `path`
 - [ ] All `path` values are relative to the portfolio root
-- [ ] If `assessment_type: bpmn-opportunity` or `full`: at least one repo contains `.bpmn` files (otherwise BAO is skipped with a warning)
+- [ ] If `analysis_type: bpmn-opportunity` or `full`: at least one repo contains `.bpmn` files (otherwise BAO is skipped with a warning)
 - [ ] If `agent_scope` is set, value is `read-only` or `write-enabled`
 - [ ] If `repo_type` is set on a repo, value is one of the five valid values
 - [ ] If `priority` is set, value is `P0`, `P1`, or `P2`
@@ -250,13 +250,13 @@ ajv validate -s portfolio-config.schema.json -d portfolio-config.yaml
 
 ```yaml
 portfolio_name: "payment-platform"
-assessment_type: "agentic-readiness"
+analysis_type: "agentic-readiness"
 agent_scope: "write-enabled"
 context: "Evaluating payment services for autonomous agent integration"
 
 transformation_definitions:
-  agentic_readiness: "agentic-readiness-assessment"
-  modernization: "modernization-assessment"
+  agentic_readiness: "agentic-readiness-analysis"
+  modernization: "modernization-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
 
@@ -276,12 +276,12 @@ repositories:
 
 ```yaml
 portfolio_name: "ecommerce-platform"
-assessment_type: "modernization"
+analysis_type: "modernization"
 context: "Modernizing legacy e-commerce platform for cloud-native architecture"
 
 transformation_definitions:
-  agentic_readiness: "agentic-readiness-assessment"
-  modernization: "modernization-assessment"
+  agentic_readiness: "agentic-readiness-analysis"
+  modernization: "modernization-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
 
@@ -323,17 +323,17 @@ dependency_overrides:
     description: "Validates inventory availability before order placement"
 ```
 
-### Full Assessment
+### Full Analysis
 
 ```yaml
 portfolio_name: "fintech-platform"
-assessment_type: "full"
+analysis_type: "full"
 context: "Building AI-powered financial advisory agents while modernizing infrastructure"
 agent_scope: "read-only"
 
 transformation_definitions:
-  agentic_readiness: "agentic-readiness-assessment"
-  modernization: "modernization-assessment"
+  agentic_readiness: "agentic-readiness-analysis"
+  modernization: "modernization-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
   portfolio_bridge: "portfolio-bridge"
@@ -361,15 +361,15 @@ repositories:
 
 ```yaml
 portfolio_name: "loan-platform"
-assessment_type: "bpmn-opportunity"
+analysis_type: "bpmn-opportunity"
 context: "Identifying agentic opportunities in loan origination workflows"
 
 transformation_definitions:
-  agentic_readiness: "agentic-readiness-assessment"
-  modernization: "modernization-assessment"
+  agentic_readiness: "agentic-readiness-analysis"
+  modernization: "modernization-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
-  bpmn_opportunity: "bpmn-opportunity-assessment"
+  bpmn_opportunity: "bpmn-opportunity-analysis"
 
 repositories:
   - name: "loan-origination-process"
@@ -393,9 +393,9 @@ repositories:
 
 ## Limitations
 
-- Minimum 2 services required for portfolio assessment
-- Individual assessments must complete successfully before portfolio aggregation
+- Minimum 2 services required for portfolio analysis
+- Individual analyses must complete successfully before portfolio aggregation
 - Dependency detection is based on code analysis and may miss implicit dependencies — declare them via `dependency_overrides`
 - Preferences guide MOD recommendations but do not guarantee specific solutions
-- Preferences are MOD-only — not passed to ARA assessments
-- Assessment quality depends on code completeness and documentation availability
+- Preferences are MOD-only — not passed to ARA analyses
+- Analysis quality depends on code completeness and documentation availability

@@ -186,9 +186,9 @@ python -m pytest tests/ -v
 
 ## Contributing
 
-This module is part of the [Agentic Assessment Orchestrator](../../README.md). When modifying:
+This module is part of the [Agentic Analysis Orchestrator](../../README.md). When modifying:
 
-1. **Do not change the JSON output schema** without updating the BPMN Opportunity Transformation Definition (`../bpmn-opportunity-assessment/transformation_definition.md`) which consumes it
+1. **Do not change the JSON output schema** without updating the BPMN Opportunity Transformation Definition (`../bpmn-opportunity-analysis/transformation_definition.md`) which consumes it
 2. **Scoring model changes** should be validated against the AgentStorming worked examples (order fulfillment, KYC, loan origination, insurance claims, demand planning, prior authorization)
 3. **New constraint types** should be added to `constraint_extractor.py` with corresponding test cases
 4. **New vendor extractors** go in `analyzer/vendors/` -- subclass `VendorExtractor`, set `NAMESPACES`, implement `extract()`, call `register_vendor()`

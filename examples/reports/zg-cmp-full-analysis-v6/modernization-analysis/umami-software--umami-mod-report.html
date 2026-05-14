@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>umami-software--umami - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+header { background: linear-gradient(135deg, #232f3e 0%, #37475a 100%); color: white; padding: 32px; border-radius: 12px; margin-bottom: 24px; }
+header h1 { font-size: 1.8rem; margin-bottom: 8px; }
+header .subtitle { opacity: 0.85; font-size: 0.95rem; }
+.executive-summary { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.executive-summary h2 { font-size: 1.3rem; margin-bottom: 16px; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; }
+.tier-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 0.9rem; }
+.tier-remediation { background: #fff3e0; color: #e65100; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.stat-card .number { font-size: 2.2rem; font-weight: 700; }
+.stat-card .label { font-size: 0.85rem; color: #666; margin-top: 4px; }
+.stat-high .number { color: #d32f2f; }
+.stat-medium .number { color: #f57c00; }
+.stat-low .number { color: #fbc02d; }
+.stat-total .number { color: #1565c0; }
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; background: white; padding: 6px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tab { padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; border: none; background: transparent; color: #666; transition: all 0.2s; }
+.tab.active { background: #232f3e; color: white; }
+.tab:hover:not(.active) { background: #f0f0f0; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.section h3 { font-size: 1.1rem; margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem; }
+th { font-weight: 600; background: #fafbfc; }
+.finding-card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 4px solid #ccc; }
+.finding-card.high { border-left-color: #d32f2f; }
+.finding-card.medium { border-left-color: #f57c00; }
+.finding-card.low { border-left-color: #fbc02d; }
+.finding-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.finding-title { font-weight: 600; font-size: 1rem; }
+.severity-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+.severity-badge.high { background: #ffebee; color: #d32f2f; }
+.severity-badge.medium { background: #fff3e0; color: #f57c00; }
+.severity-badge.low { background: #fffde7; color: #f9a825; }
+.finding-category { font-size: 0.8rem; color: #888; margin-bottom: 8px; }
+.finding-section { margin-top: 12px; }
+.finding-section-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #888; letter-spacing: 0.5px; margin-bottom: 4px; }
+.finding-section p { font-size: 0.9rem; color: #444; }
+.category-table .status-ready { color: #2e7d32; font-weight: 600; }
+.category-table .status-needs-work { color: #f57c00; font-weight: 600; }
+.category-table .status-critical { color: #d32f2f; font-weight: 600; }
+.tech-table td:first-child { font-weight: 600; width: 30%; }
+.pathway-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.pathway-card h4 { margin-bottom: 8px; }
+.pathway-status { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; }
+.pathway-triggered { background: #e3f2fd; color: #1565c0; }
+.pathway-not-triggered { background: #f5f5f5; color: #757575; }
+.recommendation-block { background: #fff8e1; border-radius: 12px; padding: 20px; margin-top: 24px; }
+.recommendation-block h3 { color: #e65100; margin-bottom: 12px; }
+.recommendation-block ol { padding-left: 20px; }
+.recommendation-block li { margin-bottom: 8px; font-size: 0.9rem; }
+footer { text-align: center; padding: 24px; color: #999; font-size: 0.8rem; }
+@media (max-width: 768px) { .stats-row { grid-template-columns: repeat(2, 1fr); } .tabs { flex-wrap: wrap; } }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>umami-software--umami - Modernization Readiness Analysis Report</h1>
+<div class="subtitle">2026-05-08 &middot; TypeScript &middot; Next.js 15 &middot; Priority: P2</div>
+</header>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:12px"><strong>Classification:</strong> This repo has 9 High findings, 23 Medium findings, 3 Low findings. Rule matched: 2-11 High &rarr; Remediation Required. Unlike the Agentic Readiness Analysis where 1 High finding is an agent-deployment gate, MOD&#39;s 1 High threshold maps to Pilot-Ready instead &mdash; MOD measures modernization maturity rather than deployment safety.</p>
+<p style="margin-top:12px"><strong>Key Findings:</strong> The application is a self-hosted privacy-focused web analytics platform built on a modern TypeScript/Next.js stack but with significant infrastructure and operational gaps. No IaC, no managed compute, self-managed databases, no observability, and no deployment automation.</p>
+<p style="margin-top:12px"><strong>Remediation Plan:</strong> 4 modernization pathways triggered (Move to Cloud Native, Move to Managed Databases, Move to Managed Analytics, Move to Modern DevOps). Priority actions: adopt IaC, migrate to managed databases (Aurora PostgreSQL), deploy on EKS, and establish CI/CD deployment pipeline.</p>
+<p style="margin-top:12px"><strong>Overall Score:</strong> 1.71 / 4.0 (Needs Work)</p>
+</div>
+
+<div class="stats-row">
+<div class="stat-card stat-total"><div class="number">35</div><div class="label">Total Findings</div></div>
+<div class="stat-card stat-high"><div class="number">9</div><div class="label">High Severity</div></div>
+<div class="stat-card stat-medium"><div class="number">23</div><div class="label">Medium Severity</div></div>
+<div class="stat-card stat-low"><div class="number">3</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="tabs">
+<button class="tab active" onclick="showTab('stats')">Stats</button>
+<button class="tab" onclick="showTab('techstack')">Tech Stack</button>
+<button class="tab" onclick="showTab('findings')">Findings</button>
+<button class="tab" onclick="showTab('roadmap')">Roadmap</button>
+<button class="tab" onclick="showTab('programs')">Programs</button>
+</div>
+
+<div id="stats" class="tab-content active">
+<div class="section">
+<h3>Category-by-Category Breakdown</h3>
+<table class="category-table">
+<thead><tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.27 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr><td>Application Architecture (APP)</td><td>2.00 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.75 / 4.0</td><td>Partial</td><td class="status-needs-work">Needs Work</td></tr>
+<tr><td>Security Baseline (SEC)</td><td>1.43 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.11 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section">
+<h3>Top 5 Gaps</h3>
+<table>
+<thead><tr><th>#</th><th>Question</th><th>Score</th><th>Gap</th><th>Impact</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>INF-Q10: Infrastructure as Code</td><td>1</td><td>No IaC &mdash; all infrastructure manually created</td><td>Cannot reproduce environments, blocks all modernization</td></tr>
+<tr><td>2</td><td>INF-Q1: Managed Compute</td><td>1</td><td>No managed compute &mdash; Docker Compose only</td><td>No auto-scaling, manual capacity management</td></tr>
+<tr><td>3</td><td>SEC-Q1: Audit Logging</td><td>1</td><td>No CloudTrail or audit logging</td><td>No forensic capability, compliance risk</td></tr>
+<tr><td>4</td><td>OPS-Q1: Distributed Tracing</td><td>1</td><td>No tracing &mdash; only debug-level logging</td><td>Cannot diagnose performance issues</td></tr>
+<tr><td>5</td><td>INF-Q2: Managed Databases</td><td>1</td><td>Self-managed PostgreSQL in Docker</td><td>No failover, no PITR, single point of failure</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="techstack" class="tab-content">
+<div class="section">
+<h3>Technology Stack</h3>
+<table class="tech-table">
+<tbody>
+<tr><td>Language</td><td>TypeScript 5.9+</td></tr>
+<tr><td>Runtime</td><td>Node.js 22 (Alpine)</td></tr>
+<tr><td>Framework</td><td>Next.js 15, React 19</td></tr>
+<tr><td>ORM</td><td>Prisma 6</td></tr>
+<tr><td>Databases</td><td>PostgreSQL 15, ClickHouse (optional), Redis (optional)</td></tr>
+<tr><td>Messaging</td><td>Kafka via KafkaJS (optional, self-managed)</td></tr>
+<tr><td>Package Manager</td><td>pnpm</td></tr>
+<tr><td>Build Tools</td><td>Rollup, tsup, Biome</td></tr>
+<tr><td>Testing</td><td>Jest (unit), Cypress (E2E)</td></tr>
+<tr><td>CI/CD</td><td>GitHub Actions (build + push only)</td></tr>
+<tr><td>Container</td><td>Docker (multi-stage, node:22-alpine)</td></tr>
+<tr><td>Priority</td><td>P2</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="findings" class="tab-content">
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">INF-Q1: No managed compute</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>All compute is defined as self-managed Docker containers via docker-compose.yml. No AWS managed compute (ECS, EKS, Lambda, Fargate) is configured.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Deploy on Amazon EKS (preferred) with Fargate profiles for the application workload. Define Kubernetes Deployment manifests with health checks, resource limits, and HPA for auto-scaling.</p></div>
+</div>
+
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">INF-Q2: All databases self-managed</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>PostgreSQL 15 is self-managed in Docker. ClickHouse, Redis, and Kafka are all configured via environment variables pointing to self-managed instances.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Migrate PostgreSQL to Aurora PostgreSQL (preferred). Migrate Redis to Amazon ElastiCache. Consider Amazon MSK for Kafka replacement.</p></div>
+</div>
+
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">INF-Q5: No network security</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No VPC, subnet, security group, or network segmentation configuration exists. Services exposed directly with no isolation.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Deploy within a VPC with private subnets for application and database tiers. Define security groups with least-privilege rules.</p></div>
+</div>
+
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">INF-Q10: No Infrastructure as Code</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No Terraform, CloudFormation, CDK, Helm charts, or Kustomize files exist. All infrastructure would be manually created.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Adopt Terraform or CDK (preferred approach for TypeScript teams) to define EKS cluster, Aurora PostgreSQL, ElastiCache, networking, and security configuration.</p></div>
+</div>
+
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">DATA-Q1: No managed object storage</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Data Platform</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No S3 or managed object storage. GeoIP data, tracker scripts, and locale files stored on local filesystem bundled into Docker image.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Store GeoIP databases, tracker script bundles, and static assets in S3 with CloudFront distribution.</p></div>
+</div>
+
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">SEC-Q1: No audit logging</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No CloudTrail or equivalent audit logging configured. Only development-level debug logging via the debug npm package.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Enable CloudTrail for AWS API audit logging. Implement application-level audit logging writing to CloudWatch Logs or S3 with immutable storage.</p></div>
+</div>
+
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">SEC-Q2: No encryption at rest</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No encryption at rest configured. PostgreSQL data stored in unencrypted Docker volume. Analytics data potentially containing PII stored unencrypted.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Aurora PostgreSQL provides encryption at rest by default. Configure customer-managed KMS keys for sensitive data.</p></div>
+</div>
+
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">OPS-Q2: No SLO definitions</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No SLOs defined. No error budget tracking. Only a binary health check endpoint exists.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Define SLOs for critical user journeys: event ingestion latency (&lt;1s p99), dashboard query response time (&lt;3s p95), tracker availability (&gt;99.9%).</p></div>
+</div>
+
+<div class="finding-card high">
+<div class="finding-header"><span class="finding-title">OPS-Q5: No deployment strategy</span><span class="severity-badge high">HIGH</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No deployment strategy defined. The CD pipeline builds and pushes images but does not deploy. Direct-to-production with no staged rollout.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Implement canary deployments on EKS using Argo Rollouts or Flagger with automated rollback on error rate increase.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">INF-Q3: No workflow orchestration</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Multi-step operations (event ingestion, report generation) implemented as sequential application code with no dedicated orchestration service.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Consider AWS Step Functions to manage retry logic, error handling, and state transitions for event ingestion and report generation workflows.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">INF-Q4: Self-managed Kafka</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Kafka via KafkaJS is self-managed with application-level connection management. No managed messaging services configured.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Migrate to Amazon MSK Serverless or EventBridge (preferred) for event-driven patterns without broker management.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">INF-Q6: No API entry point</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No API Gateway, ALB, or CloudFront configured. Application serves directly on port 3000 with no infrastructure-level protection.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Deploy behind ALB or API Gateway (preferred) for throttling, authentication offloading, and request validation.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">INF-Q7: No auto-scaling</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No auto-scaling configuration. Single instance with no scaling mechanism. Cannot respond to traffic spikes.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Implement Kubernetes HPA on EKS based on request rate and CPU/memory. Configure Aurora auto-scaling for read replicas.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">INF-Q8: No automated backups</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No backup configuration. PostgreSQL uses a Docker volume with no backup automation, retention, or restore procedures.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Aurora PostgreSQL provides automated backups with 35-day retention and PITR by default.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">INF-Q9: No high availability</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Single instances of application and PostgreSQL with no redundancy. A single failure takes down the entire analytics platform.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Deploy on EKS across 2+ AZs with Aurora PostgreSQL Multi-AZ for automated failover.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">INF-Q11: Partial CI/CD automation</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>GitHub Actions CI pipeline exists for build and test. CD pushes images but does not deploy. No deployment automation or rollback.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Extend with deployment stages to EKS via ArgoCD or Helm. Add staging environment with smoke tests.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">APP-Q2: Monolith with shared database</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Single deployable unit serving frontend UI and 77 backend API routes. Identifiable modules share the same PostgreSQL database schema.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Begin Strangler Fig decomposition: extract event ingestion as first independent service, followed by analytics query engine.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">APP-Q3: Primarily synchronous communication</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>All 77 API routes handle requests synchronously. Kafka available as optional async path but not default.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Adopt EventBridge (preferred) for state change events. Move event ingestion to fully async path via managed streaming.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">APP-Q4: Long-running queries handled synchronously</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Analytics queries (funnel, journey, retention, attribution) executed synchronously within request handlers with no timeout protection.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Implement async report generation: accept request &rarr; return job ID &rarr; process in background &rarr; poll for status.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">APP-Q5: No API versioning</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No API versioning strategy. All routes at /api/{resource} with no version prefix. Breaking changes affect all consumers.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Implement URL-based versioning (/api/v1/) for the management API. Implement version negotiation for the tracker script.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">APP-Q6: No service discovery</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>All service endpoints configured via hard-coded environment variables. No dynamic discovery or service mesh.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Leverage Kubernetes DNS-based service discovery on EKS. Use AWS Cloud Map for cross-service communication after decomposition.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">SEC-Q4: No centralized identity</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Application manages its own authentication entirely with local username/password in PostgreSQL. No external IdP integration.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Integrate with Amazon Cognito for centralized identity management enabling SSO, MFA, and SAML/OIDC federation.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">SEC-Q5: Secrets in environment variables</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Secrets managed via environment variables with no rotation. Docker-compose contains placeholder credentials.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Store all secrets in AWS Secrets Manager with automated rotation. Reference from EKS via External Secrets Operator.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">SEC-Q6: No compute hardening</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Dockerfile uses node:22-alpine (minimal surface) but no vulnerability scanning, no patching strategy, no hardened base images.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Add container image scanning (ECR or Trivy in CI). Implement automated base image updates. Consider Bottlerocket for EKS nodes.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">SEC-Q7: No security pipeline</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No SAST, DAST, or dependency vulnerability scanning in CI/CD. Pipeline runs only test and build with no security gates.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Add Dependabot for dependency scanning. Add SAST (Semgrep or CodeGuru) to CI pipeline. Configure security gates.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">OPS-Q1: No distributed tracing</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No OpenTelemetry, X-Ray, or Jaeger. Only unstructured debug logging via the debug npm package.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Instrument with OpenTelemetry SDK for Node.js (auto-instrumentation for Next.js, Prisma, Redis, Kafka). Send traces to X-Ray.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">OPS-Q3: No business metrics</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No custom business metrics published. No CloudWatch metrics, no Prometheus endpoint. Cannot measure operational health in business terms.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Publish CloudWatch metrics: events/second, active sessions, query latency by type, cache hit rate.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">OPS-Q4: No alerting or anomaly detection</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No alerting configured. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie. Degradation goes undetected.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Configure CloudWatch alarms for error rates, latency, and Kafka lag. Enable anomaly detection. Integrate with alerting platform.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">OPS-Q6: Integration tests not in CI</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Cypress E2E tests exist (6 files) but only Jest unit tests (3 files) run in CI. E2E tests require running application and database.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Add CI job that spins up Dockerized test environment and runs Cypress E2E tests on every PR.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">OPS-Q7: No incident response automation</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No runbooks, no SSM Automation, no self-healing patterns. Only Docker restart on crash as automated recovery.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Create structured runbooks. Implement SSM Automation for common remediation. Configure EKS liveness/readiness probes.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">OPS-Q8: No observability ownership</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No CODEOWNERS for observability assets. No per-service dashboards. No monitoring configuration exists.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Establish CODEOWNERS for monitoring configuration. Define per-service dashboards with named owners.</p></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header"><span class="finding-title">OPS-Q9: No resource tagging</span><span class="severity-badge medium">MEDIUM</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>No AWS resource tagging. No IaC exists to tag resources. No tagging standard defined.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Define tagging standard (Environment, Service, Owner, CostCenter) and enforce via default_tags in Terraform or CDK Aspects.</p></div>
+</div>
+
+<div class="finding-card low">
+<div class="finding-header"><span class="finding-title">DATA-Q2: Dual-database abstraction complexity</span><span class="severity-badge low">LOW</span></div>
+<div class="finding-category">Category: Data Platform</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>Well-structured data access layer but dual-database abstraction (PostgreSQL vs ClickHouse) adds complexity with some engine-coupled query logic.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Maintain existing centralized pattern. Ensure each decomposed service owns its data access layer with clear API boundaries.</p></div>
+</div>
+
+<div class="finding-card low">
+<div class="finding-header"><span class="finding-title">DATA-Q3: Database version approaching EOL window</span><span class="severity-badge low">LOW</span></div>
+<div class="finding-category">Category: Data Platform</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>PostgreSQL 15 pinned (supported until Nov 2027). ClickHouse version not pinned. No documented version-update procedure.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Document version update procedure. Plan upgrade to PostgreSQL 16+ when migrating to Aurora.</p></div>
+</div>
+
+<div class="finding-card low">
+<div class="finding-header"><span class="finding-title">SEC-Q3: Custom JWT auth (not OAuth2/OIDC)</span><span class="severity-badge low">LOW</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-label">Finding</div><p>JWT-based auth with AES-256-GCM encryption and RBAC with 7 roles. Custom implementation rather than standards-based OAuth2.</p></div>
+<div class="finding-section"><div class="finding-section-label">Recommendation</div><p>Consider offloading to API Gateway with Cognito authorizer. Add API Gateway throttling for the public tracker endpoint.</p></div>
+</div>
+</div>
+
+<div id="roadmap" class="tab-content">
+<div class="section">
+<h3>Modernization Roadmap</h3>
+<table>
+<thead><tr><th>Phase</th><th>Focus Area</th><th>Key Actions</th></tr></thead>
+<tbody>
+<tr><td><strong>Phase 1</strong></td><td>Foundation</td><td>Adopt IaC (CDK/Terraform), migrate to Aurora PostgreSQL, deploy on EKS, establish secrets management, enable audit logging, define SLOs, implement deployment strategy</td></tr>
+<tr><td><strong>Phase 2</strong></td><td>Modernization</td><td>Migrate Kafka to EventBridge/MSK, implement observability (OpenTelemetry), add security scanning, configure auto-scaling and HA, implement API versioning, add service discovery</td></tr>
+<tr><td><strong>Phase 3</strong></td><td>Optimization</td><td>Establish observability ownership, resource tagging governance, decompose monolith services, optimize data access patterns</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="programs" class="tab-content">
+<div class="section">
+<h3>AWS Modernization Pathways</h3>
+
+<div class="pathway-card">
+<h4>Move to Cloud Native <span class="pathway-status pathway-triggered">Triggered</span></h4>
+<p><strong>Priority:</strong> High | <strong>Effort:</strong> High</p>
+<p style="margin-top:8px">Decompose monolith application into loosely coupled distributed architecture. Extract event ingestion and analytics query services from the monolith.</p>
+<p style="margin-top:8px"><strong>AWS Services:</strong> EKS, API Gateway, EventBridge, Aurora PostgreSQL, Amazon Managed Service for Apache Flink</p>
+</div>
+
+<div class="pathway-card">
+<h4>Move to Managed Databases <span class="pathway-status pathway-triggered">Triggered</span></h4>
+<p><strong>Priority:</strong> High | <strong>Effort:</strong> Medium</p>
+<p style="margin-top:8px">Migrate self-managed PostgreSQL, Redis, and Kafka to fully managed cloud-native services.</p>
+<p style="margin-top:8px"><strong>AWS Services:</strong> Aurora PostgreSQL, ElastiCache for Redis, Amazon MSK</p>
+</div>
+
+<div class="pathway-card">
+<h4>Move to Managed Analytics <span class="pathway-status pathway-triggered">Triggered</span></h4>
+<p><strong>Priority:</strong> Medium | <strong>Effort:</strong> Medium</p>
+<p style="margin-top:8px">Migrate self-managed Kafka and ClickHouse analytics to managed streaming and analytics services.</p>
+<p style="margin-top:8px"><strong>AWS Services:</strong> MSK Serverless, EventBridge, Kinesis Data Streams, Redshift Serverless, Athena</p>
+</div>
+
+<div class="pathway-card">
+<h4>Move to Modern DevOps <span class="pathway-status pathway-triggered">Triggered</span></h4>
+<p><strong>Priority:</strong> High | <strong>Effort:</strong> Medium</p>
+<p style="margin-top:8px">Adopt IaC, extend CI/CD with deployment automation, implement canary deployments, integrate E2E tests in pipeline.</p>
+<p style="margin-top:8px"><strong>AWS Services:</strong> CodePipeline, CodeBuild, CDK, EKS + ArgoCD</p>
+</div>
+
+<div class="pathway-card">
+<h4>Move to Containers <span class="pathway-status pathway-not-triggered">Not Triggered</span></h4>
+<p>Application is already containerized (Dockerfile and docker-compose.yml exist).</p>
+</div>
+
+<div class="pathway-card">
+<h4>Move to Open Source <span class="pathway-status pathway-not-triggered">Not Triggered</span></h4>
+<p>No commercial database engines detected. PostgreSQL and ClickHouse are both open source.</p>
+</div>
+
+<div class="pathway-card">
+<h4>Move to AI <span class="pathway-status pathway-not-triggered">Not Triggered</span></h4>
+<p>No AI/agent intent detected in portfolio or service context.</p>
+</div>
+</div>
+</div>
+
+<div class="recommendation-block">
+<h3>&#x1F7E0; Modernization Recommendation</h3>
+<ol>
+<li><strong>INF-Q10:</strong> Adopt Infrastructure as Code (CDK or Terraform) immediately &mdash; this is the foundation for all other modernization pathways.</li>
+<li><strong>INF-Q1 + INF-Q2:</strong> Deploy on EKS and migrate databases to Aurora PostgreSQL to establish managed compute and data layers.</li>
+<li><strong>SEC-Q1 + SEC-Q2:</strong> Enable audit logging (CloudTrail) and encryption at rest (KMS) to establish baseline security posture.</li>
+</ol>
+</div>
+
+<footer>Generated by AWS Transform &middot; Modernization Readiness Analysis Report v2.1</footer>
+</div>
+
+<script>
+function showTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById(tabId).classList.add('active');
+  document.querySelectorAll('.tab').forEach(function(el) {
+    if (el.getAttribute('onclick').indexOf(tabId) !== -1) el.classList.add('active');
+  });
+}
+</script>
+</body>
+</html>

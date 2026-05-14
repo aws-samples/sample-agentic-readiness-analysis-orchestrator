@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARA Report - apache--druid</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+header { background: #1a1a2e; color: white; padding: 32px; border-radius: 12px; margin-bottom: 24px; }
+header h1 { font-size: 1.8rem; margin-bottom: 8px; }
+header .meta { opacity: 0.8; font-size: 0.9rem; }
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; }
+.tab { padding: 12px 24px; cursor: pointer; border: none; background: none; font-size: 0.95rem; color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.tab.active { color: #1a1a2e; border-bottom-color: #3b82f6; font-weight: 600; }
+.tab:hover { color: #1a1a2e; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.stat-card .value { font-size: 2rem; font-weight: 700; }
+.stat-card .label { font-size: 0.85rem; color: #64748b; margin-top: 4px; }
+.profile-badge { display: inline-block; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 0.9rem; }
+.profile-remediation { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.severity-high { color: #dc2626; }
+.severity-medium { color: #d97706; }
+.severity-low { color: #2563eb; }
+.finding-card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #e2e8f0; }
+.finding-card.high { border-left-color: #dc2626; }
+.finding-card.medium { border-left-color: #d97706; }
+.finding-card.low { border-left-color: #2563eb; }
+.finding-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.finding-title { font-weight: 600; font-size: 1rem; }
+.badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+.badge-high { background: #fef2f2; color: #dc2626; }
+.badge-medium { background: #fffbeb; color: #d97706; }
+.badge-low { background: #eff6ff; color: #2563eb; }
+.badge-p0 { background: #fef2f2; color: #991b1b; }
+.badge-p1 { background: #fff7ed; color: #9a3412; }
+.badge-p2 { background: #fffbeb; color: #92400e; }
+.badge-p3 { background: #f0fdf4; color: #166534; }
+.finding-desc { color: #475569; font-size: 0.9rem; margin-bottom: 8px; }
+.finding-meta { display: flex; gap: 12px; font-size: 0.8rem; color: #64748b; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+th { background: #f8fafc; font-weight: 600; font-size: 0.85rem; color: #475569; }
+td { font-size: 0.9rem; }
+.phase-badge { display: inline-block; width: 28px; height: 28px; line-height: 28px; text-align: center; border-radius: 50%; background: #e2e8f0; font-weight: 600; font-size: 0.8rem; }
+.phase-1 { background: #fef2f2; color: #991b1b; }
+.phase-2 { background: #fffbeb; color: #92400e; }
+.phase-3 { background: #eff6ff; color: #1e40af; }
+.phase-4 { background: #f0fdf4; color: #166534; }
+.tech-stack { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tech-tag { background: #e2e8f0; padding: 4px 12px; border-radius: 16px; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Agentic Readiness Analysis</h1>
+<div class="meta">
+<strong>Target:</strong> apache--druid &nbsp;|&nbsp;
+<strong>Date:</strong> 2025-05-07 &nbsp;|&nbsp;
+<strong>Archetype:</strong> data-gateway &nbsp;|&nbsp;
+<strong>Scope:</strong> read-only &nbsp;|&nbsp;
+<strong>Priority:</strong> P2
+</div>
+</header>
+
+<div class="tabs">
+<button class="tab active" onclick="showTab('stats')">Stats</button>
+<button class="tab" onclick="showTab('techstack')">Tech Stack</button>
+<button class="tab" onclick="showTab('findings')">Findings</button>
+<button class="tab" onclick="showTab('roadmap')">Roadmap</button>
+</div>
+
+<div id="stats" class="tab-content active">
+<div class="stats-grid">
+<div class="stat-card">
+<div class="value severity-high">Remediation Required</div>
+<div class="label">Readiness Profile</div>
+</div>
+<div class="stat-card">
+<div class="value severity-high">1</div>
+<div class="label">High (BLOCKERs)</div>
+</div>
+<div class="stat-card">
+<div class="value severity-medium">14</div>
+<div class="label">Medium (5 safety, 9 quality)</div>
+</div>
+<div class="stat-card">
+<div class="value severity-low">14</div>
+<div class="label">Low (INFOs)</div>
+</div>
+</div>
+<div class="stat-card" style="margin-bottom:16px">
+<span class="profile-badge profile-remediation">Remediation Required</span>
+<p style="margin-top:12px;color:#475569">Resolve all blockers before any agent deployment — including pilots. The critical gap is machine identity authentication support for agent principals. Rule matched: 1-2 High → Remediation Required.</p>
+</div>
+<h3 style="margin:16px 0 8px">Surface Flags</h3>
+<table>
+<tr><th>Surface</th><th>Status</th></tr>
+<tr><td>Persistent Data Store</td><td>&#x2705; true</td></tr>
+<tr><td>HTTP/RPC Surface</td><td>&#x2705; true</td></tr>
+<tr><td>Auth Surface</td><td>&#x2705; true</td></tr>
+<tr><td>Write Operations</td><td>&#x2705; true</td></tr>
+<tr><td>Logging of User Data</td><td>&#x2705; true</td></tr>
+</table>
+</div>
+
+<div id="techstack" class="tab-content">
+<h3>Technology Stack</h3>
+<div class="tech-stack">
+<span class="tech-tag">Java 17</span>
+<span class="tech-tag">Maven</span>
+<span class="tech-tag">Jetty 12</span>
+<span class="tech-tag">JAX-RS (Jersey)</span>
+<span class="tech-tag">Jackson 2.19</span>
+<span class="tech-tag">Guice 6</span>
+<span class="tech-tag">Log4j2</span>
+<span class="tech-tag">Resilience4j</span>
+<span class="tech-tag">React 18</span>
+<span class="tech-tag">TypeScript 5.5</span>
+<span class="tech-tag">Docker (distroless)</span>
+<span class="tech-tag">PostgreSQL (metadata)</span>
+<span class="tech-tag">ZooKeeper</span>
+<span class="tech-tag">AWS SDK v2</span>
+<span class="tech-tag">Netty 4.2</span>
+<span class="tech-tag">Apache Calcite (SQL)</span>
+<span class="tech-tag">Protobuf (gRPC contrib)</span>
+<span class="tech-tag">GitHub Actions CI</span>
+</div>
+<h3 style="margin-top:24px">Architecture</h3>
+<table>
+<tr><th>Component</th><th>Role</th></tr>
+<tr><td>Broker</td><td>Query routing and result merging</td></tr>
+<tr><td>Coordinator</td><td>Segment management and data lifecycle</td></tr>
+<tr><td>Historical</td><td>Immutable segment storage and query execution</td></tr>
+<tr><td>MiddleManager/Indexer</td><td>Real-time ingestion and task execution</td></tr>
+<tr><td>Overlord</td><td>Task scheduling and management</td></tr>
+<tr><td>Router</td><td>API gateway and web console hosting</td></tr>
+</table>
+</div>
+
+<div id="findings" class="tab-content">
+<h3>All Findings (29 total)</h3>
+
+<div class="finding-card high">
+<div class="finding-header">
+<span class="finding-title">AUTH-Q1: No Machine Identity Authentication</span>
+<span><span class="badge badge-high">High</span> <span class="badge badge-p0">P0</span></span>
+</div>
+<div class="finding-desc">No native OAuth2 client credentials, API key with principal attribution, or mTLS for autonomous agent identities. Existing auth targets human users.</div>
+<div class="finding-meta"><span>Category: Authentication &amp; Authorization</span><span>Effort: Medium</span><span>Phase: 1</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">AUTH-Q2: Coarse-Grained Permission Scoping</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p1">P1</span></span>
+</div>
+<div class="finding-desc">Authorization operates at resource-type + regex granularity. No endpoint-level scoping for agent identities.</div>
+<div class="finding-meta"><span>Category: Authentication &amp; Authorization</span><span>Safety Impact</span><span>Phase: 1</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">AUTH-Q6: Audit Logs Not Tamper-Evident</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p1">P1</span></span>
+</div>
+<div class="finding-desc">AuditManager allows deletion of records. No cryptographic hash chaining or immutable storage.</div>
+<div class="finding-meta"><span>Category: Authentication &amp; Authorization</span><span>Safety Impact</span><span>Phase: 1</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">AUTH-Q7: No Immediate Agent Suspension</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p1">P1</span></span>
+</div>
+<div class="finding-desc">User disablement depends on auth cache refresh interval. No instant propagation across all nodes.</div>
+<div class="finding-meta"><span>Category: Authentication &amp; Authorization</span><span>Safety Impact</span><span>Phase: 1</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">STATE-Q5: No HTTP Rate Limiting</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p1">P1</span></span>
+</div>
+<div class="finding-desc">No request-level rate limiting. Only internal query scheduling via resilience4j bulkheads.</div>
+<div class="finding-meta"><span>Category: State Management</span><span>Safety Impact</span><span>Phase: 1</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">DATA-Q6: No PII Redaction in Logs</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p1">P1</span></span>
+</div>
+<div class="finding-desc">Query text and configuration payloads logged verbatim without PII scrubbing.</div>
+<div class="finding-meta"><span>Category: Data Accessibility</span><span>Safety Impact</span><span>Phase: 1</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">DATA-Q2: No Data Residency Enforcement</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p1">P1</span></span>
+</div>
+<div class="finding-desc">No application-layer residency enforcement. Data location depends entirely on deployment configuration.</div>
+<div class="finding-meta"><span>Category: Data Accessibility</span><span>Safety Impact</span><span>Phase: 1</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">API-Q2: No Machine-Readable API Spec</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">No OpenAPI or Swagger specification. APIs defined through JAX-RS annotations only.</div>
+<div class="finding-meta"><span>Category: API Surface</span><span>Phase: 2</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">API-Q3: Inconsistent Error Responses</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">DruidException framework exists but not all endpoints use it. No retryable field.</div>
+<div class="finding-meta"><span>Category: API Surface</span><span>Phase: 2</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">DATA-Q3: Management APIs Lack Pagination</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">Query APIs support LIMIT/OFFSET but management APIs return unbounded collections.</div>
+<div class="finding-meta"><span>Category: Data Accessibility</span><span>Phase: 2</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">DISC-Q1: No API Breaking Change Detection</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">Path versioning exists but no automated contract testing or breaking change detection in CI.</div>
+<div class="finding-meta"><span>Category: Discovery &amp; Documentation</span><span>Phase: 2</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">OBS-Q1: Shallow Distributed Tracing</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">Contrib OpenTelemetry covers metrics only. No native distributed tracing or structured JSON logging.</div>
+<div class="finding-meta"><span>Category: Observability</span><span>Phase: 2</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">OBS-Q2: No Alerting Configuration</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">Metric emission exists but no alerting thresholds defined in repository.</div>
+<div class="finding-meta"><span>Category: Observability</span><span>Phase: 2</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">ENG-Q1: No IaC for Production</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">No Terraform, CloudFormation, Helm, or CDK. Only Docker Compose for local dev.</div>
+<div class="finding-meta"><span>Category: Engineering Maturity</span><span>Phase: 2</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">ENG-Q2: No API Contract Testing</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">13 CI workflows but no Pact, OpenAPI validation, or schema comparison tooling.</div>
+<div class="finding-meta"><span>Category: Engineering Maturity</span><span>Phase: 2</span></div>
+</div>
+
+<div class="finding-card medium">
+<div class="finding-header">
+<span class="finding-title">ENG-Q3: No Rollback Configuration</span>
+<span><span class="badge badge-medium">Medium</span> <span class="badge badge-p2">P2</span></span>
+</div>
+<div class="finding-desc">No blue-green, canary, or rollback strategy defined.</div>
+<div class="finding-meta"><span>Category: Engineering Maturity</span><span>Phase: 3</span></div>
+</div>
+
+</div>
+
+<div id="roadmap" class="tab-content">
+<h3>Remediation Roadmap</h3>
+<table>
+<tr><th>Phase</th><th>Question</th><th>Title</th><th>Priority</th><th>Effort</th></tr>
+<tr><td><span class="phase-badge phase-1">1</span></td><td>AUTH-Q1</td><td>Machine Identity Authentication</td><td><span class="badge badge-p0">P0</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-1">1</span></td><td>AUTH-Q2</td><td>Scoped Permissions</td><td><span class="badge badge-p1">P1</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-1">1</span></td><td>AUTH-Q6</td><td>Immutable Audit Logging</td><td><span class="badge badge-p1">P1</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-1">1</span></td><td>AUTH-Q7</td><td>Agent Identity Suspension</td><td><span class="badge badge-p1">P1</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-1">1</span></td><td>STATE-Q5</td><td>Rate Limiting</td><td><span class="badge badge-p1">P1</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-1">1</span></td><td>DATA-Q6</td><td>PII Redaction in Logs</td><td><span class="badge badge-p1">P1</span></td><td>High</td></tr>
+<tr><td><span class="phase-badge phase-1">1</span></td><td>DATA-Q2</td><td>Data Residency</td><td><span class="badge badge-p1">P1</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-2">2</span></td><td>API-Q2</td><td>Machine-Readable API Spec</td><td><span class="badge badge-p2">P2</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-2">2</span></td><td>API-Q3</td><td>Structured Error Responses</td><td><span class="badge badge-p2">P2</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-2">2</span></td><td>DATA-Q3</td><td>Pagination for Management APIs</td><td><span class="badge badge-p2">P2</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-2">2</span></td><td>DISC-Q1</td><td>API Contract Testing</td><td><span class="badge badge-p2">P2</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-2">2</span></td><td>OBS-Q1</td><td>Distributed Tracing</td><td><span class="badge badge-p2">P2</span></td><td>High</td></tr>
+<tr><td><span class="phase-badge phase-2">2</span></td><td>OBS-Q2</td><td>Alerting Configuration</td><td><span class="badge badge-p2">P2</span></td><td>Low</td></tr>
+<tr><td><span class="phase-badge phase-2">2</span></td><td>ENG-Q1</td><td>Infrastructure as Code</td><td><span class="badge badge-p2">P2</span></td><td>High</td></tr>
+<tr><td><span class="phase-badge phase-2">2</span></td><td>ENG-Q2</td><td>CI/CD Contract Testing</td><td><span class="badge badge-p2">P2</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-3">3</span></td><td>ENG-Q3</td><td>Rollback Capability</td><td><span class="badge badge-p2">P2</span></td><td>Medium</td></tr>
+<tr><td><span class="phase-badge phase-3">3</span></td><td>HITL-Q3</td><td>Staging Environment</td><td><span class="badge badge-p2">P2</span></td><td>Medium</td></tr>
+</table>
+</div>
+
+</div>
+
+<script>
+function showTab(id) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

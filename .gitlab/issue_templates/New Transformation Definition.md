@@ -5,14 +5,14 @@
 
 
 
-## Assessment Type
+## Analysis Type
 <!-- Select one: -->
-- [ ] Individual repository assessment
-- [ ] Portfolio/aggregation assessment
+- [ ] Individual repository analysis
+- [ ] Portfolio/aggregation analysis
 - [ ] Both (individual + portfolio pair)
 
 ## Proposed Categories and Criteria
-<!-- Outline the assessment categories and key criteria. Example:
+<!-- Outline the analysis categories and key criteria. Example:
 - Cost Efficiency (8 criteria)
   - COST-Q1: Right-sizing — Are compute resources matched to workload requirements?
   - COST-Q2: Reserved capacity — Are long-running workloads using reserved pricing?
@@ -26,7 +26,7 @@
 
 
 ## Goals and Pathways (if applicable)
-<!-- Does this TD support goal-driven assessment? List any predefined goals and modernization pathways. -->
+<!-- Does this TD support goal-driven analysis? List any predefined goals and modernization pathways. -->
 
 
 

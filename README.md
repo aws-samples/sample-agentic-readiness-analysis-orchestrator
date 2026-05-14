@@ -1,6 +1,6 @@
 # Portfolio Analysis Orchestrator
 
-> Automated assessment of your service portfolio for agentic AI readiness, cloud-native modernization, and agentic opportunity identification from BPMN process models -- three dedicated assessments (ARA + MOD + BAO) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, a unified bridge report, and consolidated reports.
+> Automated analysis of your service portfolio for agentic AI readiness, cloud-native modernization, and agentic opportunity identification from BPMN process models -- three dedicated analyses (ARA + MOD + BAO) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, a unified bridge report, and consolidated reports.
 
 This project provides seven [AWS Transform](https://docs.aws.amazon.com/transform/) (ATX) custom transformation definitions and a [Kiro](https://kiro.dev) Power that orchestrates them across multiple repositories.
 
@@ -8,25 +8,25 @@ This project provides seven [AWS Transform](https://docs.aws.amazon.com/transfor
 
 There are two layers:
 
-1. **ATX Custom Transformation Definitions** — the assessment logic published to your AWS Transform registry (7 TDs)
+1. **ATX Custom Transformation Definitions** — the analysis logic published to your AWS Transform registry (7 TDs)
 2. **Kiro Power** — an orchestrator that reads `portfolio-config.yaml`, classifies repos, generates ATX configs, spawns parallel subagents, and consolidates reports
 
-### Three-Assessment Architecture (+ Bridge)
+### Three-Analysis Architecture (+ Bridge)
 
-| Assessment | Questions | Scoring | Focus |
+| Analysis | Questions | Scoring | Focus |
 |---|---|---|---|
 | **ARA** (Agentic Readiness) | 43 across 8 sections | BLOCKER / RISK / INFO | Is this system safe for autonomous AI agents? |
 | **MOD** (Modernization) | 37 across 5 sections | 1-4 scale | How mature is the cloud architecture? |
 | **BAO** (BPMN Agentic Opportunity) | Per-task scoring | 4 categories + autonomy levels | Which process steps should become agents? |
 | **Bridge** | — | Cross-reference | What work is shared? What's the modernization dividend for agentic readiness? |
 
-Zero question overlap between ARA and MOD. The `assessment_type` field routes which assessments run:
+Zero question overlap between ARA and MOD. The `analysis_type` field routes which analyses run:
 - `agentic-readiness` -> ARA only
 - `modernization` -> MOD only
 - `bpmn-opportunity` -> BAO only (requires `.bpmn` files)
-- `full` -> all assessments in parallel
+- `full` -> all analyses in parallel
 
-### Assessment Flow
+### Analysis Flow
 
 > **Per-repo execution model.** Subagents run **in parallel across repositories** but TDs are sequenced **within each repository** in `full` mode (ARA → MOD → BAO). Concurrent ATX runs against the same repo path fork divergent staging branches and lose artifacts. Portfolio TDs (Portfolio ARA → Portfolio MOD → Portfolio BAO → Bridge) run **strictly serially** with a Reconciliation Gate between each. See `orchestrator/POWER.md` for the full safety contracts.
 
@@ -35,7 +35,7 @@ flowchart TB
     CONFIG[📄 portfolio-config.yaml] --> POWER[⚙️ Power]
     
     POWER --> CLASSIFY[🔍 Classify Repos]
-    CLASSIFY --> ROUTE{assessment_type?}
+    CLASSIFY --> ROUTE{analysis_type?}
     
     ROUTE -->|agentic-readiness| A_GEN[📝 Generate ARA configs]
     ROUTE -->|modernization| M_GEN[📝 Generate MOD configs]
@@ -127,23 +127,23 @@ flowchart TB
 
 ### Report Output
 
-Every per-repo and portfolio assessment emits a **four-artifact bundle**: `.md` (richest narrative), `.json` (canonical machine-readable contract for the dashboard and downstream TDs), `.html` (single self-contained visualization), and `.metadata.json` (version compatibility sidecar). The `.json` artifact is authoritative if the four ever disagree.
+Every per-repo and portfolio analysis emits a **four-artifact bundle**: `.md` (richest narrative), `.json` (canonical machine-readable contract for the dashboard and downstream TDs), `.html` (single self-contained visualization), and `.metadata.json` (version compatibility sidecar). The `.json` artifact is authoritative if the four ever disagree.
 
 ```mermaid
 flowchart LR
-    subgraph ARA [📁 agentic-readiness-assessment/]
+    subgraph ARA [📁 agentic-readiness-analysis/]
         AR1[repo-a-ara-report<br/>md · json · html · metadata.json]
         AR2[repo-b-ara-report<br/>md · json · html · metadata.json]
         AR3[portfolio-ara-report<br/>md · json · html · metadata.json]
     end
 
-    subgraph MOD [📁 modernization-assessment/]
+    subgraph MOD [📁 modernization-analysis/]
         MR1[repo-a-mod-report<br/>md · json · html · metadata.json]
         MR2[repo-b-mod-report<br/>md · json · html · metadata.json]
         MR3[portfolio-mod-report<br/>md · json · html · metadata.json]
     end
 
-    subgraph BPMN [📁 bpmn-opportunity-assessment/]
+    subgraph BPMN [📁 bpmn-opportunity-analysis/]
         BR1[process-a-bpmn-opportunity-report.md]
         BR2[process-b-bpmn-opportunity-report.md]
         BR3[portfolio-bao-report.md]
@@ -152,7 +152,7 @@ flowchart LR
     BRIDGE[📋 portfolio-bridge-report.md]
 ```
 
-> The bridge report is generated at the portfolio root when `assessment_type: full` and `portfolio_bridge` is configured. It cross-references the ARA, MOD, and (when available) BPMN portfolio reports to produce shared remediation mappings, agentic readiness delta, deduplicated findings, and a BPMN opportunity + ARA readiness matrix.
+> The bridge report is generated at the portfolio root when `analysis_type: full` and `portfolio_bridge` is configured. It cross-references the ARA, MOD, and (when available) BPMN portfolio reports to produce shared remediation mappings, agentic readiness delta, deduplicated findings, and a BPMN opportunity + ARA readiness matrix.
 
 ## Getting Started
 
@@ -167,14 +167,14 @@ flowchart LR
 > **Publish serially, not in parallel.** The atx CLI uses a shared tar staging path (`~/tmp/transformation.tar`). Concurrent `atx custom def publish` commands overwrite each other and produce ENOENT or 400 upload errors. Run the seven publish commands one at a time.
 
 ```bash
-# Individual assessments
-atx custom def publish -n agentic-readiness-assessment --sd definitions/ara \
+# Individual analyses
+atx custom def publish -n agentic-readiness-analysis --sd definitions/ara \
   --description "Evaluate a repository against 43 agentic readiness criteria (BLOCKER/RISK/INFO)"
 
-atx custom def publish -n modernization-assessment --sd definitions/mod \
+atx custom def publish -n modernization-analysis --sd definitions/mod \
   --description "Evaluate a repository against 37 modernization criteria (1-4 scale)"
 
-atx custom def publish -n bpmn-opportunity-assessment --sd definitions/bao \
+atx custom def publish -n bpmn-opportunity-analysis --sd definitions/bao \
   --description "Analyze BPMN 2.0 process models to identify agentic AI opportunities with cost estimates"
 
 # Portfolio aggregations
@@ -187,7 +187,7 @@ atx custom def publish -n portfolio-modernization --sd definitions/portfolio-mod
 atx custom def publish -n portfolio-bpmn-opportunity --sd definitions/portfolio-bao \
   --description "Aggregate BAO reports into portfolio-level opportunity analysis"
 
-# Bridge (optional — for full assessments)
+# Bridge (optional — for full analyses)
 atx custom def publish -n portfolio-bridge --sd definitions/bridge \
   --description "Cross-reference portfolio ARA and MOD reports into a unified bridge report"
 ```
@@ -208,18 +208,18 @@ To install:
 
 ```yaml
 portfolio_name: "my-platform"
-assessment_type: "full"
+analysis_type: "full"
 context: "Building customer-facing AI agents while modernizing infrastructure"
 agent_scope: "write-enabled"
 
 transformation_definitions:
-  agentic_readiness: "agentic-readiness-assessment"
-  modernization: "modernization-assessment"
-  bpmn_opportunity: "bpmn-opportunity-assessment"
+  agentic_readiness: "agentic-readiness-analysis"
+  modernization: "modernization-analysis"
+  bpmn_opportunity: "bpmn-opportunity-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
   portfolio_bpmn_opportunity: "portfolio-bpmn-opportunity"
-  portfolio_bridge: "portfolio-bridge"  # optional — for full assessments
+  portfolio_bridge: "portfolio-bridge"  # optional — for full analyses
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
@@ -243,7 +243,7 @@ dependency_overrides:
 
 See `portfolio-config.yaml` for a complete example and `portfolio-config.schema.json` for the full schema.
 
-### Step 4: Run the Assessment
+### Step 4: Run the Analysis
 
 In Kiro chat:
 
@@ -261,23 +261,23 @@ Kiro handles cloning, classification, config generation, parallel execution, and
 
 ```bash
 # Individual ARA (per repo)
-atx custom def exec -n agentic-readiness-assessment -p ./services/my-service -g file://atx-config-ara.yaml -x -t
+atx custom def exec -n agentic-readiness-analysis -p ./services/my-service -g file://atx-config-ara.yaml -x -t
 
 # Individual MOD (per repo)
-atx custom def exec -n modernization-assessment -p ./services/my-service -g file://atx-config-mod.yaml -x -t
+atx custom def exec -n modernization-analysis -p ./services/my-service -g file://atx-config-mod.yaml -x -t
 
 # BPMN Opportunity (per repo with .bpmn files — run analyzer first)
 cd ./services/my-service
 python tools/bpmn-analyzer/run_analysis.py --bpmn process.bpmn --output analysis.json
-atx custom def exec -n bpmn-opportunity-assessment -p . -g file://atx-config-bpmn.yaml -x -t
+atx custom def exec -n bpmn-opportunity-analysis -p . -g file://atx-config-bpmn.yaml -x -t
 
-# Portfolio ARA (after all individual ARA assessments)
+# Portfolio ARA (after all individual ARA analyses)
 atx custom def exec -n portfolio-agentic-readiness -p . -g file://atx-portfolio-ara-config.yaml -x -t
 
-# Portfolio MOD (after all individual MOD assessments)
+# Portfolio MOD (after all individual MOD analyses)
 atx custom def exec -n portfolio-modernization -p . -g file://atx-portfolio-mod-config.yaml -x -t
 
-# Bridge (after both portfolio assessments — full assessment only)
+# Bridge (after both portfolio analyses — full analysis only)
 atx custom def exec -n portfolio-bridge -p . -g file://atx-config-bridge.yaml -x -t
 ```
 
@@ -327,7 +327,7 @@ Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution
 │   └── reports/                        # Generated example reports
 │       ├── online-boutique/            # 11 microservices with delta tracking
 │       ├── bao-demo/                   # BAO POC (5 BPMN repos)
-│       └── v3-full-assessment/         # Full assessment across 5 repos
+│       └── v3-full-analysis/         # Full analysis across 5 repos
 ├── portfolio-config.schema.json        # Input contract (JSON schema)
 ├── static/                             # Static assets
 └── README.md
@@ -337,22 +337,22 @@ Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution
 
 The `examples/reports/` directory contains complete sets of reports:
 
-### Full Assessment (5 repos)
+### Full Analysis (5 repos)
 
 Per-repo and portfolio reports each ship as a four-file bundle (`.md` + `.json` + `.html` + `.metadata.json`). The tree below shows the canonical filename stem for each report; every stem has all four extensions on disk.
 
 ```
-examples/reports/v2-full-assessment/
+examples/reports/v2-full-analysis/
 ├── portfolio-config.yaml
 ├── ecommerce-platform-v2-bridge-report.{md,json,html,metadata.json}
-├── agentic-readiness-assessment/
+├── agentic-readiness-analysis/
 │   ├── MonoToMicroLegacy-ara-report.{md,json,html,metadata.json}
 │   ├── aws-microservices-ara-report.{md,json,html,metadata.json}
 │   ├── books-api-ara-report.{md,json,html,metadata.json}
 │   ├── eks-saas-gitops-ara-report.{md,json,html,metadata.json}
 │   ├── monolith-ara-report.{md,json,html,metadata.json}
 │   └── ecommerce-platform-v2-portfolio-ara-report.{md,json,html,metadata.json}
-└── modernization-assessment/
+└── modernization-analysis/
     ├── MonoToMicroLegacy-mod-report.{md,json,html,metadata.json}
     ├── aws-microservices-mod-report.{md,json,html,metadata.json}
     ├── books-api-mod-report.{md,json,html,metadata.json}
@@ -368,27 +368,27 @@ examples/reports/online-boutique/
 ├── portfolio-config.yaml
 ├── agentic-readiness.html              # Interactive dashboard (also deployed to CloudFront)
 ├── modernization.html                  # MOD dashboard
-├── agentic-readiness-assessment/       # ARA reports (original code — 43 questions, archetypes)
+├── agentic-readiness-analysis/       # ARA reports (original code — 43 questions, archetypes)
 │   ├── frontend-ara-report.{md,json,html,metadata.json}
 │   ├── cartservice-ara-report.{md,json,html,metadata.json}
 │   ├── ... (11 individual + 1 portfolio)
 │   └── online-boutique-portfolio-ara-report.{md,json,html,metadata.json}
-├── agentic-readiness-assessment-v2/    # ARA reports (after remediation — Istio, OTel, etc.)
+├── agentic-readiness-analysis-v2/    # ARA reports (after remediation — Istio, OTel, etc.)
 │   ├── frontend-ara-report.{md,json,html,metadata.json}
 │   ├── cartservice-ara-report.{md,json,html,metadata.json}
 │   ├── ... (11 individual + 1 portfolio)
 │   └── online-boutique-portfolio-ara-report.{md,json,html,metadata.json}
-└── modernization-assessment/           # MOD reports
+└── modernization-analysis/           # MOD reports
     └── ... (11 individual + 1 portfolio)
 ```
 
-The two ARA report folders enable delta tracking — comparing assessment results before and after remediation changes (Istio mTLS, OTel, proto versioning, data classification, HPAs, monitoring alerts).
+The two ARA report folders enable delta tracking — comparing analysis results before and after remediation changes (Istio mTLS, OTel, proto versioning, data classification, HPAs, monitoring alerts).
 
 ## Dashboard
 
 The `examples/dashboard/` directory contains interactive HTML dashboards deployed to CloudFront:
 
-- **ARA Dashboard** -- Assessment run selector, readiness profiles, cross-cutting analysis, pilot candidate ranking, agentic program recommendations (AgentStorming, AXE, EBA), delta comparison between runs
+- **ARA Dashboard** -- Analysis run selector, readiness profiles, cross-cutting analysis, pilot candidate ranking, agentic program recommendations (AgentStorming, AXE, EBA), delta comparison between runs
 - **MOD Dashboard** -- Category scores, pathway summary, 4-phase roadmap, technology stack, radar chart
 - **Bridge Dashboard** -- Shared remediation mapping, agentic readiness delta, MOD readiness gates, unified remediation sequence
 - **BAO Dashboard** -- Agent opportunity classification (build-now / data-first / automate / platform), dependency discovery by vendor, implementation waves, Bedrock consumption forecast
@@ -403,7 +403,7 @@ aws cloudfront create-invalidation --distribution-id E36HDAABDBBG66 --paths "/*"
 
 ## Local Monolith (Test Fixture)
 
-The `examples/fixtures/monolith/` directory contains a simple PHP application used as a test fixture so you can run assessments out of the box without cloning external repos.
+The `examples/fixtures/monolith/` directory contains a simple PHP application used as a test fixture so you can run analyses out of the box without cloning external repos.
 
 ## Managing Transformation Definitions
 
@@ -412,8 +412,8 @@ The `examples/fixtures/monolith/` directory contains a simple PHP application us
 atx custom def list
 
 # Update (delete + re-publish)
-atx custom def delete -n agentic-readiness-assessment
-atx custom def publish -n agentic-readiness-assessment --sd definitions/ara \
+atx custom def delete -n agentic-readiness-analysis
+atx custom def publish -n agentic-readiness-analysis --sd definitions/ara \
   --description "Evaluate a repository against 43 agentic readiness criteria (BLOCKER/RISK/INFO)"
 
 # Update bridge TD
@@ -422,7 +422,7 @@ atx custom def publish -n portfolio-bridge --sd definitions/bridge \
   --description "Cross-reference portfolio ARA and MOD reports into a unified bridge report"
 
 # Get details
-atx custom def get -n agentic-readiness-assessment
+atx custom def get -n agentic-readiness-analysis
 ```
 
 ## Contributing
@@ -436,7 +436,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for general guidelines.
 
 ## Security
 
-See [SECURITY.md](SECURITY.md) for security guidelines and [THREAT_MODEL.docx](THREAT_MODEL.docx) for the threat analysis. Treat assessment reports as confidential — they contain architecture details.
+See [SECURITY.md](SECURITY.md) for security guidelines and [THREAT_MODEL.docx](THREAT_MODEL.docx) for the threat analysis. Treat analysis reports as confidential — they contain architecture details.
 
 ## Related Resources
 

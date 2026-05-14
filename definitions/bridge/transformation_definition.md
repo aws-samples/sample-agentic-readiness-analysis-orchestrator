@@ -1,17 +1,17 @@
 ## Name
 
-Portfolio Agentic Readiness — Modernization Bridge Assessment
+Portfolio Agentic Readiness — Modernization Bridge Analysis
 
 ## Objective
 
-Cross-reference the portfolio-level Agentic Readiness Assessment (ARA) report and the portfolio-level Modernization Assessment (MOD) report to produce a unified bridge report that maps shared findings, quantifies the agentic readiness impact of modernization work, identifies foundational gaps that block ARA remediation, and deduplicates overlapping remediation items — enabling coordinated planning across both assessments.
+Cross-reference the portfolio-level Agentic Readiness Analysis (ARA) report and the portfolio-level Modernization Analysis (MOD) report to produce a unified bridge report that maps shared findings, quantifies the agentic readiness impact of modernization work, identifies foundational gaps that block ARA remediation, and deduplicates overlapping remediation items — enabling coordinated planning across both analyses.
 
 ## Summary
 
-This transformation consumes two portfolio-level reports — the portfolio ARA report (`*-portfolio-ara-report.md`) and the portfolio MOD report (`*-portfolio-mod-report.md`) — and produces a single bridge report that unifies findings from both assessments. It uses a built-in cross-reference mapping (see Step 0.4) to connect ARA findings with their MOD co-requisites.
+This transformation consumes two portfolio-level reports — the portfolio ARA report (`*-portfolio-ara-report.md`) and the portfolio MOD report (`*-portfolio-mod-report.md`) — and produces a single bridge report that unifies findings from both analyses. It uses a built-in cross-reference mapping (see Step 0.4) to connect ARA findings with their MOD co-requisites.
 
 The bridge report answers three critical planning questions:
-1. **What work is shared?** Which remediation items resolve findings in both assessments simultaneously?
+1. **What work is shared?** Which remediation items resolve findings in both analyses simultaneously?
 2. **What is the modernization dividend?** How many ARA BLOCKERs would be resolved as a side effect of completing MOD Phase 0?
 3. **What blocks what?** Where do MOD foundational gaps prevent ARA remediation from even starting?
 
@@ -24,7 +24,7 @@ The transformation follows a 5-section pipeline:
 
 The output is a Markdown report saved as `{portfolio_name}-bridge-report.md` at the portfolio root directory.
 
-This bridge TD only runs when `assessment_type: full` — it requires both portfolio reports to exist. It is supplementary: if it fails, the already-completed ARA and MOD portfolio reports are unaffected.
+This bridge TD only runs when `analysis_type: full` — it requires both portfolio reports to exist. It is supplementary: if it fails, the already-completed ARA and MOD portfolio reports are unaffected.
 
 ## Entry Criteria
 
@@ -37,7 +37,7 @@ This bridge TD only runs when `assessment_type: full` — it requires both portf
 
 ### Step 0: Read additionalPlanContext and Validate Inputs
 
-Before beginning analysis, read the bridge assessment context from `additionalPlanContext` and validate that both required portfolio reports exist.
+Before beginning analysis, read the bridge analysis context from `additionalPlanContext` and validate that both required portfolio reports exist.
 
 #### 0.1 Read Bridge Context
 
@@ -45,20 +45,20 @@ Extract the following fields from `additionalPlanContext`:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `portfolio_ara_report_path` | string | **Yes** | — | File path to the portfolio ARA report (e.g., `agentic-readiness-assessment/ecommerce-platform-v2-portfolio-ara-report.md`). |
-| `portfolio_mod_report_path` | string | **Yes** | — | File path to the portfolio MOD report (e.g., `modernization-assessment/ecommerce-platform-v2-portfolio-mod-report.md`). |
+| `portfolio_ara_report_path` | string | **Yes** | — | File path to the portfolio ARA report (e.g., `agentic-readiness-analysis/ecommerce-platform-v2-portfolio-ara-report.md`). |
+| `portfolio_mod_report_path` | string | **Yes** | — | File path to the portfolio MOD report (e.g., `modernization-analysis/ecommerce-platform-v2-portfolio-mod-report.md`). |
 | `portfolio_name` | string | **Yes** | — | Name of the portfolio (e.g., `ecommerce-platform-v2`). Used in the output filename and report title. |
 | `bpmn_opportunity_report_paths` | string[] | No | — | **Deprecated.** Use `portfolio_bao_report_path` instead. If individual report paths are provided, the Bridge TD will still attempt to read them but the preferred input is the portfolio-level BAO report. |
-| `portfolio_bao_report_path` | string | No | -- | File path to the Portfolio BAO report (e.g., `bpmn-opportunity-assessment/my-platform-portfolio-bao-report.md`). When present, the bridge report includes a BAO + ARA Readiness Matrix (Section 6). When absent, Section 6 is omitted and the bridge report works as before (ARA + MOD only). |
+| `portfolio_bao_report_path` | string | No | -- | File path to the Portfolio BAO report (e.g., `bpmn-opportunity-analysis/my-platform-portfolio-bao-report.md`). When present, the bridge report includes a BAO + ARA Readiness Matrix (Section 6). When absent, Section 6 is omitted and the bridge report works as before (ARA + MOD only). |
 
 **Example `additionalPlanContext`:**
 
 ```yaml
 additionalPlanContext: |
-  portfolio_ara_report_path: "agentic-readiness-assessment/ecommerce-platform-v2-portfolio-ara-report.md"
-  portfolio_mod_report_path: "modernization-assessment/ecommerce-platform-v2-portfolio-mod-report.md"
+  portfolio_ara_report_path: "agentic-readiness-analysis/ecommerce-platform-v2-portfolio-ara-report.md"
+  portfolio_mod_report_path: "modernization-analysis/ecommerce-platform-v2-portfolio-mod-report.md"
   portfolio_name: "ecommerce-platform-v2"
-  portfolio_bao_report_path: "bpmn-opportunity-assessment/ecommerce-platform-v2-portfolio-bao-report.md"
+  portfolio_bao_report_path: "bpmn-opportunity-analysis/ecommerce-platform-v2-portfolio-bao-report.md"
 ```
 
 #### 0.2 Validate Required Inputs
@@ -70,11 +70,11 @@ ERROR: Cannot generate bridge report. Missing required input:
 - Portfolio ARA report: {portfolio_ara_report_path} — {found/NOT FOUND}
 - Portfolio MOD report: {portfolio_mod_report_path} — {found/NOT FOUND}
 
-The bridge report requires both portfolio reports. Run the full assessment 
-(assessment_type: full) to generate both reports before running the bridge TD.
+The bridge report requires both portfolio reports. Run the full analysis 
+(analysis_type: full) to generate both reports before running the bridge TD.
 ```
 
-Do not proceed to any subsequent steps if either report is missing. The bridge report cannot be generated from a single assessment.
+Do not proceed to any subsequent steps if either report is missing. The bridge report cannot be generated from a single analysis.
 
 #### 0.3 Parse Portfolio Reports
 
@@ -98,7 +98,7 @@ Once both reports are validated as present and readable, parse the following dat
 
 #### 0.4 MOD-ARA Cross-Reference Mapping
 
-Use the following built-in mapping table to connect ARA findings with their MOD co-requisites. This mapping defines the relationships between the two assessment frameworks — MOD evaluates whether infrastructure is modern enough to support cloud-native patterns, while ARA evaluates whether that infrastructure is safe enough for autonomous AI agents. The relationship is directional: MOD foundation → ARA safety layer → agent deployment.
+Use the following built-in mapping table to connect ARA findings with their MOD co-requisites. This mapping defines the relationships between the two analysis frameworks — MOD evaluates whether infrastructure is modern enough to support cloud-native patterns, while ARA evaluates whether that infrastructure is safe enough for autonomous AI agents. The relationship is directional: MOD foundation → ARA safety layer → agent deployment.
 
 **Mapping Table:**
 
@@ -133,7 +133,7 @@ Store this mapping table for use in Sections 1–5.
 
 ### Step 1: Shared Remediation Mapping
 
-Map ARA findings to their MOD co-requisites using the built-in cross-reference mapping. This section shows teams which remediation actions resolve findings in both assessments.
+Map ARA findings to their MOD co-requisites using the built-in cross-reference mapping. This section shows teams which remediation actions resolve findings in both analyses.
 
 #### 1.1 Build the Mapping Table
 
@@ -177,7 +177,7 @@ For each mapping entry, include a brief narrative explaining the relationship:
 
 If no mapping matches are found between the portfolio reports, output:
 ```
-No shared findings identified between ARA and MOD reports. The two assessments did not flag overlapping concerns for this portfolio.
+No shared findings identified between ARA and MOD reports. The two analyses did not flag overlapping concerns for this portfolio.
 ```
 
 ---
@@ -303,7 +303,7 @@ Verify that the portfolio MOD report contains category score averages.
 
 ### Step 4: Unified Remediation Sequence
 
-Merge the ARA remediation guidance and MOD Phase 0 roadmap into a single sequence that shows which items resolve findings in both assessments simultaneously. This prevents teams from planning the same work twice under different labels.
+Merge the ARA remediation guidance and MOD Phase 0 roadmap into a single sequence that shows which items resolve findings in both analyses simultaneously. This prevents teams from planning the same work twice under different labels.
 
 #### 4.1 Build the Unified Sequence
 
@@ -324,7 +324,7 @@ Using the MOD-ARA mapping and the data parsed from both portfolio reports:
 ## Section 4: Unified Remediation Sequence
 
 This section merges the ARA remediation guidance and MOD Phase 0 roadmap into a single sequence. 
-Items that resolve findings in both assessments are marked as **dual-resolution** — completing them 
+Items that resolve findings in both analyses are marked as **dual-resolution** — completing them 
 delivers value for both modernization and agentic readiness simultaneously.
 
 ### Phase 0: Cross-Cutting Foundation (MOD + ARA)
@@ -384,7 +384,7 @@ Also check `MOD → ARA` relationships where both the ARA finding and MOD co-req
 ## Section 5: Shared Findings Deduplication
 
 These findings appear in both the portfolio ARA report and the portfolio MOD report. 
-They represent the same underlying gap viewed through different assessment lenses. 
+They represent the same underlying gap viewed through different analysis lenses. 
 **Plan remediation once, not twice.**
 
 | # | ARA Finding | ARA Severity | MOD Finding | MOD Avg Score | Relationship | Deduplicated Remediation |
@@ -395,7 +395,7 @@ They represent the same underlying gap viewed through different assessment lense
 
 ### Deduplication Summary
 
-- **{N} findings** appear in both assessments
+- **{N} findings** appear in both analyses
 - **{M} remediation items** can be consolidated (planned once instead of twice)
 - **Estimated effort savings:** Teams avoid duplicating planning and execution for shared infrastructure gaps
 ```
@@ -403,7 +403,7 @@ They represent the same underlying gap viewed through different assessment lense
 If no overlapping findings are found:
 ```markdown
 No overlapping findings identified between the ARA and MOD portfolio reports. 
-All findings are unique to their respective assessments and should be planned independently.
+All findings are unique to their respective analyses and should be planned independently.
 ```
 
 ---
@@ -431,7 +431,7 @@ For each agent-classified task in the BPMN reports:
 3. Classify the agent opportunity:
    - **Ready**: target system is Agent-Ready or Pilot-Ready (0 BLOCKERs)
    - **Blocked**: target system has 1+ ARA BLOCKERs
-   - **Unassessed**: target system has no ARA assessment
+   - **Unassessed**: target system has no ARA analysis
 
 #### 6.3 Output Format
 
@@ -440,7 +440,7 @@ For each agent-classified task in the BPMN reports:
 
 > This section cross-references BAO-identified agent opportunities with ARA readiness
 > findings for their target systems. It answers: "Which agent opportunities can we build
-> today, which are blocked by ARA findings, and which need ARA assessment first?"
+> today, which are blocked by ARA findings, and which need ARA analysis first?"
 
 ### Readiness Matrix
 
@@ -527,6 +527,6 @@ Compile all sections into the final bridge report and save it.
 
 #### 6.2 Save the Report
 
-Save the bridge report as `{portfolio_name}-bridge-report.md` at the portfolio root directory (the same level as the `agentic-readiness-assessment/` and `modernization-assessment/` directories, not inside either one).
+Save the bridge report as `{portfolio_name}-bridge-report.md` at the portfolio root directory (the same level as the `agentic-readiness-analysis/` and `modernization-analysis/` directories, not inside either one).
 
 **Output path:** `{portfolio_name}-bridge-report.md`

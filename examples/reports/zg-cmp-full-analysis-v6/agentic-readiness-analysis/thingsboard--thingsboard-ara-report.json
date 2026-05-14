@@ -1,0 +1,568 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2025-05-08",
+    "td_version": "agentic-readiness-analysis-v6.0.1",
+    "report_format_version": "V6",
+    "target": "/Users/lucasdu/Documents/AWS-MAC/2026-projects/sample-agentic-readiness-analysis/services/thingsboard--thingsboard",
+    "repository_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The platform owns persistent state in PostgreSQL/Cassandra, exposes CRUD operations on business entities (devices, assets, customers, dashboards, alarms), manages entity lifecycle, and stores user-specific multi-tenant data.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["java", "iot", "platform"],
+    "context": "Open-source IoT platform for device management, data collection, and visualization.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 1,
+    "medium_count": 15,
+    "low_count": 11,
+    "safety_impact_medium_count": 5,
+    "rule_matched": "1-2 High → Remediation Required"
+  },
+  "summary": {
+    "blocker_count": 1,
+    "risk_safety_count": 5,
+    "risk_quality_count": 10,
+    "info_count": 11,
+    "na_count": 0,
+    "not_evaluated_count": 16,
+    "total": 43,
+    "core_questions_evaluated": 24,
+    "extended_questions_triggered": 3,
+    "extended_questions_not_triggered": 16
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No dedicated machine identity authentication mechanism",
+      "description": "ThingsBoard supports JWT-based authentication and Personal Access Tokens (PATs) but these are tied to human user accounts. No distinct machine identity or service account mechanism exists that distinguishes agent callers from human users in audit logs.",
+      "gap": "No dedicated machine identity mechanism distinguishable from human users in audit logs. PATs inherit the human user's identity and permissions.",
+      "recommendation": "Create a dedicated service account user type with a machine-identity flag that appears in audit log entries. Extend the PAT mechanism to include an agent_name or client_id field persisted in audit logs.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "application/src/main/java/org/thingsboard/server/service/security/model/token/JwtTokenFactory.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Create a dedicated service account user type with a machine-identity flag in audit log entries",
+          "target_state": "Agent callers authenticate with a distinct identity that is separately attributable in audit logs, separately revocable, and can have independent permission scopes",
+          "estimated_effort": "Medium",
+          "dependencies": ["AUTH-Q6", "AUTH-Q7"]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Coarse-grained permission model lacks per-identity scoping",
+      "description": "Three-tier RBAC model (SYS_ADMIN/TENANT_ADMIN/CUSTOMER_USER) with resource-level and operation-level checks. However, permissions are fixed per role tier — a TENANT_ADMIN has full CRUD on all tenant resources with no mechanism to restrict an agent to specific resource types.",
+      "gap": "No fine-grained permission scoping below the three fixed authority levels. An agent operating as TENANT_ADMIN inherits full CRUD on all tenant resources.",
+      "recommendation": "Introduce a custom permission system or API key scope mechanism that allows per-resource-type and per-operation permission grants for agent identities.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "application/src/main/java/org/thingsboard/server/service/security/permission/DefaultAccessControlService.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Create a dedicated CUSTOMER_USER account for the agent with only specific entities assigned",
+          "Implement an API gateway layer that restricts which endpoints the agent can call"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Action-level authorization exists but is not configurable per identity",
+      "description": "Permission model supports Operation enum (CREATE, READ, UPDATE, DELETE, etc.) checked per Resource type. However, these permissions are hardcoded per authority level — not configurable per user or agent identity.",
+      "gap": "Action-level authorization is not configurable per identity. A TENANT_ADMIN can always read AND delete within the same resource type.",
+      "recommendation": "Make the permission matrix configurable per user/service account, allowing per-identity (Resource, Operation) overrides beyond fixed role-based defaults.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "application/src/main/java/org/thingsboard/server/service/security/permission/DefaultAccessControlService.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use CUSTOMER_USER role for agents which has a more restrictive permission set by default",
+          "Implement API gateway path-based restrictions to block DELETE methods for agent traffic"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Audit logs not stored in immutable/tamper-evident storage",
+      "description": "Audit logging captures userId/userName for all logged actions (37 action types). Stored in PostgreSQL with weekly partitioning. External Elasticsearch sink available. However, logs are NOT immutable — standard PostgreSQL table without write-once guarantees.",
+      "gap": "Audit logs are mutable — can be modified or deleted by database admin. No tamper-evident mechanism.",
+      "recommendation": "Configure immutable storage for audit logs (Elasticsearch with write-once ILM, or replicate to S3 with Object Lock).",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "dao/src/main/java/org/thingsboard/server/dao/audit/AuditLogServiceImpl.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only. Audit logging exists but lacks immutability guarantees.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents still require audit attribution. The audit system captures principal but storage is mutable — RISK-SAFETY rather than BLOCKER under read-only scope.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Configure Elasticsearch audit sink with write-once index lifecycle policies",
+          "Replicate audit logs to immutable storage (S3 with Object Lock)"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No independent agent identity suspension mechanism",
+      "description": "User accounts can be disabled and sessions invalidated. No rapid, API-driven mechanism to suspend a single agent identity (PAT) independently without disabling the entire user account.",
+      "gap": "No independent, rapid agent identity suspension mechanism. Revoking agent access requires disabling the underlying user account.",
+      "recommendation": "Expose a first-class API endpoint for immediate PAT revocation that takes effect within seconds, independently of user account lifecycle.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "common/data/src/main/java/org/thingsboard/server/common/data/security/UserCredentials.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Create a dedicated user account per agent so disabling the user effectively suspends only that agent",
+          "Implement short JWT token expiry to limit exposure window"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Rate limiting has SYS_ADMIN exemption and no per-identity limits",
+      "description": "Per-tenant rate limiting exists via RateLimitProcessingFilter with configurable limits in Tenant Profiles. System administrators are explicitly exempt. No per-agent-identity rate limiting exists.",
+      "gap": "SYS_ADMIN exemption from rate limiting creates risk if agent operates at admin level. No per-identity rate limiting — runaway agent shares tenant pool.",
+      "recommendation": "Add per-identity rate limiting configuration. Remove or limit the SYS_ADMIN exemption.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "application/src/main/java/org/thingsboard/server/config/RateLimitProcessingFilter.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Never grant agents SYS_ADMIN authority — always use TENANT_ADMIN or CUSTOMER_USER",
+          "Implement external API gateway with per-agent rate limits"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Sensitive data handling relies on service-layer discipline without serialization protection",
+      "description": "System stores user emails, hashed passwords, device credentials, access tokens. Password is separated into UserCredentials entity but lacks @JsonIgnore protection. No formal data classification or field-level access control differentiation exists.",
+      "gap": "No field-level sensitivity annotations; UserCredentials.password relies on service-layer discipline; no differentiation of API scopes by data sensitivity.",
+      "recommendation": "Add @JsonIgnore to UserCredentials.password. Implement OAuth scopes that separate access to sensitive operations from general entity operations.",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "common/data/src/main/java/org/thingsboard/server/common/data/security/UserCredentials.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only. B1 fires as RISK-SAFETY (sensitive fields not serialization-protected, but under read-only scope). B2 fires as RISK-SAFETY (no access differentiation by sensitivity).",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Under read-only scope, the risk is reduced but not eliminated — agent could still receive sensitive fields if the service layer fails to filter them.",
+        "data_q1_subchecks": {
+          "b1": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "UserCredentials.password has no @JsonIgnore; relies on service layer not exposing the entity. Under read-only scope this is RISK-SAFETY."},
+          "b2": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "Three-tier RBAC exists but no differentiation between sensitive and non-sensitive data access within a tier."},
+          "b3": {"fired": true, "severity": "INFO", "reasoning": "No formal data classification metadata, no PII tagging, no Macie integration."}
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII redaction in application logs",
+      "description": "Logback configuration uses plain-text format with no PII scrubbing or masking. User emails, device names, and tenant identifiers may appear in application logs without redaction.",
+      "gap": "No log scrubbing or PII masking middleware in the logging pipeline.",
+      "recommendation": "Add a custom logback encoder that masks known PII patterns. Consider switching to structured JSON logging with an explicit field allowlist.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "docker/tb-node/conf/logback.xml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Restrict access to log files at OS/infrastructure level",
+          "Implement log aggregation pipeline with PII scrubbing"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No static OpenAPI specification in repository",
+      "description": "OpenAPI 3.1 specification generated programmatically via SpringDoc but no static spec file committed to the repository. Spec only available from running instance.",
+      "gap": "No static, version-controlled OpenAPI specification file.",
+      "recommendation": "Add a CI step that generates and commits the OpenAPI spec as a static file.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "application/src/main/java/org/thingsboard/server/config/SwaggerConfiguration.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Generate the spec during CI/CD and publish as build artifact",
+          "Use the thingsboard-openapi.properties profile to generate during development"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Structured error responses lack retryable indicator",
+      "description": "Consistent ThingsboardErrorResponse with message, errorCode, status, timestamp. Missing explicit retryable boolean — agents must infer retryability from error code or HTTP status.",
+      "gap": "No retryable field or retry-category in error responses.",
+      "recommendation": "Add a retryable boolean field to ThingsboardErrorResponse.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "application/src/main/java/org/thingsboard/server/exception/ThingsboardErrorResponse.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days",
+        "compensating_controls": [
+          "Document retry semantics per error code in API specification",
+          "Implement retry logic in agent tool layer based on HTTP status codes"
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Management API unversioned with no breaking change detection",
+      "description": "Management API uses unversioned /api/ prefix. Only device transport API versioned at /api/v1/. No breaking change detection in CI, no contract tests.",
+      "gap": "No API versioning strategy or breaking change detection.",
+      "recommendation": "Introduce API version prefixes and add OpenAPI diff checks in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "application/src/main/java/org/thingsboard/server/controller/BaseController.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Pin agent deployments to specific ThingsBoard versions",
+          "Monitor ThingsBoard changelog for breaking changes before upgrading"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No distributed tracing or structured logging",
+      "description": "No OpenTelemetry, no distributed tracing library, no correlation ID propagation. Plain-text logging without MDC tenant/user context.",
+      "gap": "Cannot trace agent-initiated requests across services. No request-level correlation.",
+      "recommendation": "Integrate OpenTelemetry Java agent/SDK. Add MDC context to logback pattern.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/tb-node/conf/logback.xml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use audit log system as partial substitute for request-level tracing",
+          "Implement request correlation at API gateway/load balancer level"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Metrics collected but no automated alerting rules",
+      "description": "Prometheus metrics collected via Spring Actuator with Grafana dashboards. No alerting rules defined for error rates or latency SLO violations.",
+      "gap": "No automated alerting. Degradation affecting agent consumers would not trigger proactive notifications.",
+      "recommendation": "Define Prometheus alerting rules for API error rates and latency thresholds.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.prometheus-grafana.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Configure Prometheus AlertManager rules",
+          "Use monitoring service Slack webhook as basic alerting"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Infrastructure as Code — deployment via Docker Compose only",
+      "description": "No Terraform, CloudFormation, CDK, Helm, or Kustomize. Deployment defined via Docker Compose files and OS packages. No drift detection or IaC governance.",
+      "gap": "Entire infrastructure surface defined imperatively. No IaC governance or drift detection.",
+      "recommendation": "Define deployment infrastructure in declarative IaC with CI-enforced plan review and drift detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "90–180 days",
+        "compensating_controls": [
+          "Manage Docker Compose files in version control with required PR reviews",
+          "Implement wrapper IaC layer around Docker Compose definitions"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "CI/CD lacks automated testing and API contract verification",
+      "description": "GitHub Actions workflows exist for config validation and license formatting only. 867 test files exist but are never run in CI. No contract testing.",
+      "gap": "No automated test execution or API contract testing in CI.",
+      "recommendation": "Add CI workflow running mvn verify with API controller tests and OpenAPI spec diff detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/atx-transform.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Run tests locally before releases",
+          "Implement basic CI workflow for compilation and unit tests"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No automated rollback mechanism",
+      "description": "No rollback mechanism defined. Docker Compose relies on manual image tag management. Database migrations are forward-only.",
+      "gap": "No automated rollback procedure. Broken deployments require manual intervention.",
+      "recommendation": "Implement deployment strategy with automated rollback. Add reversible migration support.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Pin Docker image tags and maintain rollback runbook",
+          "Take database snapshots before upgrades"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No encryption at rest configuration",
+      "description": "No encryption at rest defined for PostgreSQL, Cassandra, or Redis. No KMS key references or TDE configuration in Docker Compose or application config.",
+      "gap": "Data at rest (device credentials, user data, telemetry) not encrypted at application/infra layer.",
+      "recommendation": "Enable encryption at rest on all data stores in production deployments.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "application/src/main/resources/thingsboard.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Enable encryption at rest at infrastructure layer (encrypted EBS, RDS encryption)",
+          "Use encrypted Docker volumes or encrypted file systems"
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No dedicated sandbox/staging environment for agent testing",
+      "description": "Docker Compose provides local development environment. Black-box tests use DockerComposeExecutor. No named staging environment or seed data for agent testing.",
+      "gap": "No dedicated sandbox/staging for agent testing.",
+      "recommendation": "Create a named staging configuration with representative seed data for agent testing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use existing Docker Compose setup as local sandbox for agent testing",
+          "Create separate Docker Compose profile with seed data"
+        ]
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "status": "pass", "severity": null},
+    {"question_id": "API-Q2", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "API-Q3", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "API-Q4", "status": "info", "severity": "INFO"},
+    {"question_id": "API-Q5", "status": "info", "severity": "INFO"},
+    {"question_id": "API-Q6", "status": "not_evaluated", "severity": null},
+    {"question_id": "API-Q7", "status": "info", "severity": "INFO"},
+    {"question_id": "API-Q8", "status": "info", "severity": "INFO"},
+    {"question_id": "AUTH-Q1", "status": "finding", "severity": "BLOCKER"},
+    {"question_id": "AUTH-Q2", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "AUTH-Q3", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "AUTH-Q4", "status": "info", "severity": "INFO"},
+    {"question_id": "AUTH-Q5", "status": "info", "severity": "INFO"},
+    {"question_id": "AUTH-Q6", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "AUTH-Q7", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "STATE-Q1", "status": "info", "severity": "INFO"},
+    {"question_id": "STATE-Q2", "status": "not_evaluated", "severity": null},
+    {"question_id": "STATE-Q3", "status": "info", "severity": "INFO"},
+    {"question_id": "STATE-Q4", "status": "not_evaluated", "severity": null},
+    {"question_id": "STATE-Q5", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "STATE-Q6", "status": "info", "severity": "INFO"},
+    {"question_id": "STATE-Q7", "status": "not_evaluated", "severity": null},
+    {"question_id": "HITL-Q1", "status": "not_evaluated", "severity": null},
+    {"question_id": "HITL-Q2", "status": "not_evaluated", "severity": null},
+    {"question_id": "HITL-Q3", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "DATA-Q1", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "DATA-Q2", "status": "info", "severity": "INFO"},
+    {"question_id": "DATA-Q3", "status": "not_evaluated", "severity": null},
+    {"question_id": "DATA-Q4", "status": "not_evaluated", "severity": null},
+    {"question_id": "DATA-Q5", "status": "not_evaluated", "severity": null},
+    {"question_id": "DATA-Q6", "status": "finding", "severity": "RISK-SAFETY"},
+    {"question_id": "DATA-Q7", "status": "info", "severity": "INFO"},
+    {"question_id": "DISC-Q1", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "DISC-Q2", "status": "info", "severity": "INFO"},
+    {"question_id": "DISC-Q3", "status": "info", "severity": "INFO"},
+    {"question_id": "OBS-Q1", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "OBS-Q2", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "OBS-Q3", "status": "info", "severity": "INFO"},
+    {"question_id": "ENG-Q1", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "ENG-Q2", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "ENG-Q3", "status": "finding", "severity": "RISK-QUALITY"},
+    {"question_id": "ENG-Q4", "status": "not_evaluated", "severity": null},
+    {"question_id": "ENG-Q5", "status": "finding", "severity": "RISK-QUALITY"}
+  ]
+}

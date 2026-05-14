@@ -1,19 +1,19 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Portfolio Assessment Configuration Schema (V2)",
-  "description": "Configuration schema for the V2 two-assessment architecture. Supports agentic-readiness (ARA), modernization (MOD), or full (both) assessment types. Breaking change from V1 — old configs require migration (goal → assessment_type, goal_context → context, deployment-cicd → deployment-config).",
+  "title": "Portfolio Analysis Configuration Schema (V2)",
+  "description": "Configuration schema for the V2 two-analysis architecture. Supports agentic-readiness (ARA), modernization (MOD), or full (both) analysis types. Breaking change from V1 — old configs require migration (goal → analysis_type, goal_context → context, deployment-cicd → deployment-config).",
   "type": "object",
-  "required": ["portfolio_name", "assessment_type", "transformation_definitions", "repositories"],
+  "required": ["portfolio_name", "analysis_type", "transformation_definitions", "repositories"],
   "additionalProperties": false,
   "properties": {
     "portfolio_name": {
       "type": "string",
-      "description": "Name of the portfolio being assessed",
+      "description": "Name of the portfolio being analyzed",
       "examples": ["ecommerce-platform", "payment-services", "customer-portal"]
     },
-    "assessment_type": {
+    "analysis_type": {
       "type": "string",
-      "description": "Determines which assessment TDs to run. 'agentic-readiness' runs ARA only, 'modernization' runs MOD only, 'bpmn-opportunity' runs BPMN opportunity analysis only (requires .bpmn files), 'full' runs all assessments in parallel.",
+      "description": "Determines which analysis TDs to run. 'agentic-readiness' runs ARA only, 'modernization' runs MOD only, 'bpmn-opportunity' runs BPMN opportunity analysis only (requires .bpmn files), 'full' runs all analyses in parallel.",
       "enum": [
         "agentic-readiness",
         "modernization",
@@ -40,18 +40,18 @@
     },
     "transformation_definitions": {
       "type": "object",
-      "description": "Names of the AWS Transform custom transformation definitions. The four core TDs (agentic_readiness, modernization, portfolio_agentic_readiness, portfolio_modernization) are required. The optional portfolio_bridge TD cross-references ARA and MOD portfolio reports when assessment_type is 'full'.",
+      "description": "Names of the AWS Transform custom transformation definitions. The four core TDs (agentic_readiness, modernization, portfolio_agentic_readiness, portfolio_modernization) are required. The optional portfolio_bridge TD cross-references ARA and MOD portfolio reports when analysis_type is 'full'.",
       "required": ["agentic_readiness", "modernization", "portfolio_agentic_readiness", "portfolio_modernization"],
       "properties": {
         "agentic_readiness": {
           "type": "string",
           "description": "Transformation definition name for individual ARA (Agentic Readiness Analysis) per repo",
-          "examples": ["agentic-readiness-assessment", "my-team-ara"]
+          "examples": ["agentic-readiness-analysis", "my-team-ara"]
         },
         "modernization": {
           "type": "string",
           "description": "Transformation definition name for individual MOD (Modernization Analysis) per repo",
-          "examples": ["modernization-assessment", "my-team-mod"]
+          "examples": ["modernization-analysis", "my-team-mod"]
         },
         "portfolio_agentic_readiness": {
           "type": "string",
@@ -65,13 +65,13 @@
         },
         "portfolio_bridge": {
           "type": "string",
-          "description": "Transformation definition name for the bridge TD that cross-references ARA and MOD portfolio reports. Only used when assessment_type is 'full'.",
+          "description": "Transformation definition name for the bridge TD that cross-references ARA and MOD portfolio reports. Only used when analysis_type is 'full'.",
           "examples": ["portfolio-bridge"]
         },
         "bpmn_opportunity": {
           "type": "string",
           "description": "Transformation definition name for BPMN agentic opportunity analysis per repo. Requires .bpmn files in the repository.",
-          "examples": ["bpmn-opportunity-assessment"]
+          "examples": ["bpmn-opportunity-analysis"]
         },
         "portfolio_bpmn_opportunity": {
           "type": "string",
@@ -104,7 +104,7 @@
     },
     "repositories": {
       "type": "array",
-      "description": "List of repositories to include in the portfolio assessment",
+      "description": "List of repositories to include in the portfolio analysis",
       "minItems": 2,
       "items": {
         "type": "object",
@@ -176,7 +176,7 @@
           },
           "report_path": {
             "type": "string",
-            "description": "Optional explicit path to the assessment report (if not in standard location)"
+            "description": "Optional explicit path to the analysis report (if not in standard location)"
           },
           "agent_scope": {
             "type": "string",
@@ -185,7 +185,7 @@
           },
           "downstream_dependencies": {
             "type": "array",
-            "description": "Optional list of downstream systems that this repository's BPMN processes depend on. When provided and assessment_type includes bpmn-opportunity, the orchestrator runs ARA on each dependency and passes the results to the BPMN Opportunity TD for cross-referencing (populates the 'declared' section of the dependency report). Each entry maps a BPMN-inferred dependency to the code repository where that system lives.",
+            "description": "Optional list of downstream systems that this repository's BPMN processes depend on. When provided and analysis_type includes bpmn-opportunity, the orchestrator runs ARA on each dependency and passes the results to the BPMN Opportunity TD for cross-referencing (populates the 'declared' section of the dependency report). Each entry maps a BPMN-inferred dependency to the code repository where that system lives.",
             "items": {
               "type": "object",
               "required": ["name", "path"],

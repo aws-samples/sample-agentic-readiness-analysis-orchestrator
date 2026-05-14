@@ -101,7 +101,7 @@ Please provide:
 
 3. DOMAIN CLUSTERS: Group the elements into logical business domains.
    For each domain, provide:
-   - Name (e.g., "Credit Assessment", "Risk Evaluation")
+   - Name (e.g., "Credit Analysis", "Risk Evaluation")
    - Description of what this domain handles
    - Which BPMN elements belong to it (use element IDs)
    - What capabilities/tools this domain needs

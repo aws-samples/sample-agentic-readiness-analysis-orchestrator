@@ -1,0 +1,804 @@
+{
+  "analysis_type": "mod",
+  "version": "V6",
+  "metadata": {
+    "repository": "Netflix--eureka",
+    "analysis_date": "2026-05-07",
+    "report_format_version": "V6",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Eureka maintains in-memory instance registry state with CRUD operations (register, renew, cancel, status update) exposed via REST endpoints. It owns mutable state (the registry) and exposes read/write operations on business entities (service instances).",
+    "priority": "P2",
+    "tags": ["java", "service-discovery", "microservices"],
+    "context": "Netflix service-discovery server and client.",
+    "preferences": {
+      "prefer": ["eks", "aurora", "dynamodb", "api-gateway", "eventbridge", "bedrock"],
+      "avoid": ["self-managed-kafka", "self-managed-kubernetes", "oracle", "lambda"]
+    },
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_at_rest_data_surface": false,
+      "has_deployed_workload": false,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": false
+    }
+  },
+  "overall_score": 1.50,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 10,
+    "medium_count": 7,
+    "low_count": 0,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.29,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 1.83,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 3.00,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.40,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.33,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
+      "score": 1,
+      "gap": "No managed compute — no IaC, no containers, no serverless. WAR deployment only.",
+      "impact": "Cannot scale elastically, no container orchestration, high operational overhead."
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "Zero IaC — all infrastructure is undefined in repository.",
+      "impact": "No reproducible infrastructure, no automated provisioning, no disaster recovery capability."
+    },
+    {
+      "rank": 3,
+      "question_id": "SEC-Q5",
+      "title": "Secrets Management",
+      "score": 2,
+      "gap": "No application-level secrets management. CI/CD secrets not rotated.",
+      "impact": "No rotation, no audit trail, no centralized secrets governance."
+    },
+    {
+      "rank": 4,
+      "question_id": "OPS-Q5",
+      "title": "Deployment Strategy",
+      "score": 1,
+      "gap": "No deployment strategy — only library publishing to Maven Central.",
+      "impact": "No safe rollout mechanism, no canary/blue-green capability, high-risk releases."
+    },
+    {
+      "rank": 5,
+      "question_id": "APP-Q1",
+      "title": "Programming Languages",
+      "score": 2,
+      "gap": "Java 8 with Jersey 1.x, AWS SDK v1, Servlet 2.5 — compound legacy.",
+      "impact": "Blocked from modern AWS features, security patches, and cloud-native frameworks."
+    }
+  ],
+  "quick_agent_wins": [],
+  "decomposition_strategy": {
+    "recommended_approach": "Conditional / Adaptive",
+    "rationale": "Eureka has well-defined module boundaries but shared in-memory state. Full decomposition may not be architecturally appropriate for an in-memory registry. Containerize first, then evaluate whether AWS Cloud Map replaces the need for self-hosted Eureka.",
+    "phases": [
+      "Containerize monolith as-is (embedded server + Docker)",
+      "Selective extraction of eureka-client as standalone library",
+      "Evaluate migration to AWS Cloud Map (managed service discovery)"
+    ],
+    "patterns": ["Anti-corruption Layer", "Hexagonal Architecture"],
+    "effort_factors": {
+      "module_boundaries": "Clear (10 Gradle modules) — Low effort",
+      "data_coupling": "Shared in-memory registry state — Medium effort",
+      "stored_procedures": "None (no database) — N/A",
+      "communication_patterns": "All synchronous HTTP — Medium effort",
+      "cicd_maturity": "Build/publish only — High effort for deployment pipeline",
+      "test_coverage": "~110 test files, some integration — Medium safety net"
+    }
+  },
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No managed compute — WAR deployment with no containerization or serverless",
+      "description": "All compute is undefined in the repository. Application packaged as WAR for external servlet container. No ECS, EKS, Lambda, Fargate, or EC2 resource definitions exist.",
+      "gap": "No managed compute infrastructure. No containerization, no serverless, no IaC-defined compute resources.",
+      "recommendation": "Containerize: convert WAR to embedded server, create Dockerfile, deploy to EKS. Define EKS cluster and service resources in Terraform or CDK.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "build.gradle", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Multi-step operations hardcoded with no orchestration service",
+      "description": "Peer replication batching, registry sync, and self-preservation are implemented as hardcoded application logic with custom batching frameworks.",
+      "gap": "No dedicated workflow orchestration service. Custom batching framework handles multi-step replication but with no managed orchestration or observability.",
+      "recommendation": "Evaluate Step Functions or EventBridge for peer replication workflow observability. The current in-process approach may be architecturally appropriate for latency-sensitive service discovery.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "eureka-core/src/main/java/com/netflix/eureka/util/batcher/", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No messaging infrastructure — peer replication via synchronous HTTP only",
+      "description": "No messaging infrastructure exists. All peer replication and client communication is synchronous HTTP. State changes propagated via synchronous HTTP batch requests.",
+      "gap": "State changes between Eureka server peers are propagated via synchronous HTTP. No async decoupling for cross-instance state propagation.",
+      "recommendation": "Evaluate EventBridge or SQS for peer state propagation. Alternatively, migrating to AWS Cloud Map eliminates the peer replication concern entirely.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "eureka-core/src/main/java/com/netflix/eureka/cluster/PeerEurekaNode.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No network security infrastructure defined",
+      "description": "No VPC, subnet, security group, or network policy definitions exist. No IaC-defined network topology.",
+      "gap": "Zero network security configuration. No VPC isolation, no private subnets, no security groups.",
+      "recommendation": "Define VPC with private subnets for Eureka servers, security groups restricting access to port 8080 from known CIDRs, and VPC endpoints for AWS service access.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No API entry point — services exposed directly",
+      "description": "No API Gateway, ALB, CloudFront, or managed entry point defined. REST API exposed directly by servlet container.",
+      "gap": "Services exposed directly with no gateway, load balancer, throttling, or centralized authentication.",
+      "recommendation": "Deploy behind ALB (minimum) or API Gateway with throttling and authentication. For EKS, use AWS Load Balancer Controller.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "eureka-server/src/main/webapp/WEB-INF/web.xml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No auto-scaling configuration",
+      "description": "No auto-scaling configuration exists. AWS Auto Scaling SDK dependency is used for querying ASG membership, not for self-scaling.",
+      "gap": "No auto-scaling for the Eureka service. All capacity statically provisioned.",
+      "recommendation": "When deployed to EKS, configure HPA based on request rate or registry size.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "eureka-core/build.gradle", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Zero Infrastructure as Code",
+      "description": "No Terraform, CloudFormation, CDK, Helm charts, or Kustomize files exist. All infrastructure must be manually created.",
+      "gap": "0% IaC coverage. No infrastructure defined in code.",
+      "recommendation": "Add Terraform or CDK for EKS cluster, VPC, ALB, ECR, IAM, CloudWatch alarms, and Route 53 records.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD limited to artifact publication — no deployment automation",
+      "description": "GitHub Actions workflows automate build and publish to Maven Central, but no deployment pipeline exists for production workloads.",
+      "gap": "Build automated but deployment entirely absent. No container build, no image push, no deployment step.",
+      "recommendation": "Extend GitHub Actions with Docker build, ECR push, Helm chart packaging, and EKS deployment. Add IaC pipeline for Terraform/CDK changes.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/nebula-ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Compound legacy — Java 8, Jersey 1.x, AWS SDK v1, Servlet 2.5",
+      "description": "Java 8 with Jersey 1.x (1.19.1), AWS SDK v1 (1.11.277), Servlet API 2.5. Compound regression across language version, framework, and SDK.",
+      "gap": "Language version AND framework AND SDK all regressed. Requires upgrades across all three axes.",
+      "recommendation": "Migrate to Java 17+ with Spring Boot 3.x and AWS SDK v2. Sequence: Java 17 → Spring Boot 3.x → AWS SDK v2 → Micrometer.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "build.gradle", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith with identifiable modules but shared in-memory state",
+      "description": "10 Gradle submodules with clear boundaries, but deployed as single WAR. Modules share in-memory registry state.",
+      "gap": "Single deployable unit. Shared in-memory state couples all server-side modules. Cannot independently scale or deploy modules.",
+      "recommendation": "Containerize as single service first. Evaluate AWS Cloud Map as replacement. Monolithic architecture may be correct for in-memory registry.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "settings.gradle", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "All communication synchronous HTTP — no async patterns for state propagation",
+      "description": "All peer replication and client communication is synchronous HTTP. No async patterns exist for cross-service state changes.",
+      "gap": "Primarily synchronous with no async for peer state propagation where async would decouple peers.",
+      "recommendation": "Add EventBridge or SQS for peer state propagation. Keep client heartbeats synchronous. Alternatively, migrating to Cloud Map eliminates this.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "eureka-core/src/main/java/com/netflix/eureka/cluster/PeerEurekaNode.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Background processing uses custom batching framework",
+      "description": "Peer replication batching uses homegrown async job processor (TaskExecutors, AcceptorExecutor). No managed service for background processing.",
+      "gap": "Background processing exists but uses untested custom framework rather than managed services.",
+      "recommendation": "Current internal batching likely adequate for service discovery. Ensure thread pool config is tunable via environment variables when containerizing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "eureka-core/src/main/java/com/netflix/eureka/util/batcher/TaskExecutors.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No versioning strategy — single /v2/ with no evolution plan",
+      "description": "REST API uses /v2/apps paths but this is a single version with no versioning strategy for evolution.",
+      "gap": "Single version with no versioning strategy. No backward compatibility guarantees or version negotiation.",
+      "recommendation": "Document V2 API contract. Add OpenAPI specification generation. Define versioning strategy and backward compatibility guarantees.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "eureka-core/src/main/java/com/netflix/eureka/resources/ApplicationsResource.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Peer discovery uses static configuration — no dynamic service discovery for Eureka itself",
+      "description": "Peer Eureka servers discovered via static URL lists in properties files. DNS-based lookup supported but not default.",
+      "gap": "Peer discovery uses properties/environment variables rather than dynamic discovery. No service mesh or dynamic routing.",
+      "recommendation": "Use Kubernetes service DNS for peer discovery in EKS (headless Service). Or configure DNS-based discovery with Route 53.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "eureka-server/src/main/resources/eureka-client.properties", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No CloudTrail or audit logging — only Log4j 1.x console output",
+      "description": "No CloudTrail configured. Application logging via Log4j 1.x (EOL) with console appender only. No structured logs, no retention.",
+      "gap": "No CloudTrail. No immutable audit logs. Log4j 1.x with console-only output.",
+      "recommendation": "Configure CloudTrail for API-level auditing. Replace Log4j 1.x with Logback + JSON encoder. Ship to CloudWatch Logs with retention.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "eureka-server/src/main/resources/log4j.properties", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No API authentication — all endpoints open",
+      "description": "ServerRequestAuthFilter logs identity headers but does NOT enforce authentication. All endpoints open and unauthenticated.",
+      "gap": "All API endpoints completely open. Any client can register/deregister without credentials.",
+      "recommendation": "Add mTLS for peer replication. Add API Gateway with OAuth2/JWT for external access. Consider Istio service mesh for zero-trust.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "eureka-core/src/main/java/com/netflix/eureka/ServerRequestAuthFilter.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No centralized identity integration",
+      "description": "No Cognito, Okta, SAML, OIDC, or centralized identity system. Application has no concept of user identity.",
+      "gap": "No centralized identity integration. No SSO, no federation, no external IdP.",
+      "recommendation": "Integrate with centralized IdP (Cognito for AWS-native). Use IRSA for EKS pod-level AWS credentials.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No application-level secrets management — CI/CD secrets not rotated",
+      "description": "CI/CD uses GitHub Secrets (not plaintext). No application-level Secrets Manager or Vault. No rotation configured.",
+      "gap": "No rotation configured for CI/CD secrets. No Secrets Manager integration for application runtime.",
+      "recommendation": "Adopt AWS Secrets Manager for runtime secrets. Configure automated rotation for signing keys. Add IRSA for EKS pod credentials.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/nebula-publish.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No compute hardening or patching — vulnerable dependencies detected",
+      "description": "No patching strategy. No vulnerability scanning. Known-vulnerable dependencies: Log4j 1.x, XStream 1.4.19, Jetty 7.2.0.",
+      "gap": "No patching strategy. No vulnerability scanning. Known CVE-affected libraries in use.",
+      "recommendation": "Add Dependabot immediately. Use Bottlerocket/hardened images for EKS. Add ECR scanning. Upgrade Log4j 1.x to Logback.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "eureka-server/build.gradle", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No security scanning in CI/CD pipeline",
+      "description": "No SAST, no dependency scanning, no container scanning. CI only runs gradlew build with no security validation.",
+      "gap": "Pipeline has no security validation. No Dependabot, no SAST, no container scanning.",
+      "recommendation": "Add Dependabot for dependency alerts. Add OWASP dependency-check Gradle plugin. Add Semgrep as CI step.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/nebula-ci.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No distributed tracing instrumented",
+      "description": "No OpenTelemetry, X-Ray, Zipkin, or Jaeger. No trace ID propagation between clients and servers or between peers.",
+      "gap": "No distributed tracing. Debugging request flows requires manual log correlation.",
+      "recommendation": "Add OpenTelemetry Java agent for auto-instrumentation. Configure X-Ray or OTEL collector for trace aggregation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Metrics exist internally (Servo) but not published externally",
+      "description": "Netflix Servo metrics (EurekaMonitors) track operations but are not published to any external monitoring system.",
+      "gap": "Comprehensive metrics defined in code but invisible outside JVM. No dashboards, no alerting, no trending.",
+      "recommendation": "Replace Servo with Micrometer. Publish to CloudWatch. Create operational dashboards.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "eureka-core/src/main/java/com/netflix/eureka/util/EurekaMonitors.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No alerting or anomaly detection configured",
+      "description": "No CloudWatch alarms, no PagerDuty/OpsGenie. Self-preservation is application-level only, not external alerting.",
+      "gap": "No external alerting. No anomaly detection. Only in-process self-preservation heuristic exists.",
+      "recommendation": "Configure CloudWatch alarms for registration rate drops, peer sync failures, error rates. Add anomaly detection on heartbeat rates.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No deployment strategy — only artifact publication",
+      "description": "Repository publishes JARs/WARs to Maven Central. No production deployment pipeline, no canary, no blue/green.",
+      "gap": "No deployment strategy. No staged rollout. No deployment pipeline exists.",
+      "recommendation": "Implement rolling updates with health probes in EKS. For higher safety, add canary via Argo Rollouts.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/nebula-publish.yml", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Minimal integration testing — one test among ~110",
+      "description": "Single integration test (EurekaClientServerRestIntegrationTest) among ~110 primarily unit test files. No peer replication or cluster tests.",
+      "gap": "One integration test. No peer replication tests, no multi-instance tests, no contract tests.",
+      "recommendation": "Add Testcontainers-based integration suite for multi-instance peer replication, client failover, and registry lifecycle.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "eureka-server/src/test/java/com/netflix/eureka/resources/EurekaClientServerRestIntegrationTest.java", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No incident response automation or runbooks",
+      "description": "No runbooks, no SSM Automation, no Lambda remediation, no self-healing beyond built-in self-preservation.",
+      "gap": "No runbooks. No automated incident response. Entirely ad hoc.",
+      "recommendation": "Create operational runbooks for peer sync failure, mass deregistration, self-preservation activation. Add pod restart automation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No observability ownership defined",
+      "description": "No CODEOWNERS for monitoring, no named alarm owners, no team dashboards, no SLO definitions with attribution.",
+      "gap": "No observability ownership. No assets exist to own.",
+      "recommendation": "Define ownership in CODEOWNERS when implementing observability. Assign alarm owners to on-call team.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No resource tagging — no IaC-defined resources exist",
+      "description": "No resource tagging because no IaC-defined resources exist. Zero tags on zero resources.",
+      "gap": "No tagging governance. No resources to tag. Standards must be established when IaC is added.",
+      "recommendation": "Define mandatory tags from day one in IaC: Service, Environment, Team, CostCenter. Use default_tags in Terraform provider.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": null, "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q2", "status": "Not Evaluated (archetype-N/A)", "reason": "No persistent data store (has_persistent_data_store=false)."},
+    {"question_id": "INF-Q8", "status": "Not Evaluated (archetype-N/A)", "reason": "No persistent state to back up (has_persistent_data_store=false, has_at_rest_data_surface=false)."},
+    {"question_id": "INF-Q9", "status": "Not Evaluated (archetype-N/A)", "reason": "No deployed workload (has_deployed_workload=false)."},
+    {"question_id": "DATA-Q1", "status": "scored", "score": 3},
+    {"question_id": "DATA-Q2", "status": "scored", "score": 3},
+    {"question_id": "DATA-Q3", "status": "Not Evaluated (archetype-N/A)", "reason": "No database engine deployed."},
+    {"question_id": "DATA-Q4", "status": "Not Evaluated (archetype-N/A)", "reason": "No database — no stored procedures possible."},
+    {"question_id": "SEC-Q2", "status": "Not Evaluated (archetype-N/A)", "reason": "No data-at-rest surface (has_at_rest_data_surface=false)."},
+    {"question_id": "OPS-Q2", "status": "Not Evaluated (archetype-N/A)", "reason": "No deployed workload for SLO definition (has_deployed_workload=false)."}
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=2 (primary trigger met) AND INF-Q1=1, APP-Q3=2 (supporting triggers met)",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2, "note": "Monolith with identifiable modules — below threshold of 3"},
+        {"question_id": "INF-Q1", "score": 1, "note": "No managed compute — below threshold of 3"},
+        {"question_id": "APP-Q3", "score": 2, "note": "All synchronous — below threshold of 3"}
+      ],
+      "detail": {
+        "aws_services": ["EKS", "API Gateway", "EventBridge", "ECS/Fargate"],
+        "patterns": ["Strangler Fig", "Anti-corruption Layer", "Hexagonal Architecture"],
+        "immediate_actions": ["Containerize monolith", "Add EKS infrastructure", "Evaluate AWS Cloud Map replacement"]
+      }
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q1=1 AND no container definitions found in repository",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 1, "note": "No managed compute, no containers — below threshold of 3"}
+      ],
+      "detail": {
+        "aws_services": ["EKS", "ECR", "Fargate", "App Runner"],
+        "immediate_actions": ["Convert WAR to embedded server", "Create Dockerfile", "Deploy to EKS with Helm"]
+      }
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No commercial database engines detected. System uses no database (in-memory registry only).",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No commercial database engines detected. DATA-Q4 Not Evaluated — no database exists."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No database deployed (has_persistent_data_store=false). INF-Q2 Not Evaluated.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "System has no persistent data store. INF-Q2 was Not Evaluated due to surface flag."
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No data processing workloads exist. No streaming/ETL/analytics artifacts found.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No evidence of data processing workloads. No streaming, ETL, or analytics artifacts in repository."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=1 (primary), INF-Q11=2 (primary), OPS-Q5=1 (supporting), OPS-Q6=1 (supporting)",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 1, "note": "Zero IaC — below threshold of 3"},
+        {"question_id": "INF-Q11", "score": 2, "note": "CI/CD for build only, no deployment — below threshold of 3"},
+        {"question_id": "OPS-Q5", "score": 1, "note": "No deployment strategy — below threshold of 3"},
+        {"question_id": "OPS-Q6", "score": 1, "note": "Minimal integration testing — below threshold of 3"}
+      ],
+      "detail": {
+        "aws_services": ["CodeBuild", "CodePipeline", "CodeDeploy", "CDK", "CloudWatch"],
+        "immediate_actions": ["Add Terraform/CDK for infrastructure", "Extend CI/CD with deployment stages", "Add integration test suite", "Implement canary deployments"]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. Context is 'Netflix service-discovery server and client' — no AI-related signal terms found."
+    }
+  ]
+}

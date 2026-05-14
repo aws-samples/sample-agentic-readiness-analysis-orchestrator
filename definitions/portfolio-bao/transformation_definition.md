@@ -1,6 +1,6 @@
 ## Name
 
-Portfolio BPMN Agentic Opportunity (BAO) Assessment
+Portfolio BPMN Agentic Opportunity (BAO) Analysis
 
 ## Objective
 
@@ -17,7 +17,7 @@ The transformation follows a 5-step pipeline:
 4. **Aggregation**: Combine findings across all repos into portfolio-level metrics
 5. **Report Generation**: Produce the portfolio BAO report
 
-The output is a Markdown report saved as `{portfolio_name}-portfolio-bao-report.md` at the portfolio root in the `bpmn-opportunity-assessment/` directory.
+The output is a Markdown report saved as `{portfolio_name}-portfolio-bao-report.md` at the portfolio root in the `bpmn-opportunity-analysis/` directory.
 
 ## Entry Criteria
 
@@ -38,9 +38,9 @@ Extract the following fields from `additionalPlanContext`:
 
 ### Step 1: Discovery
 
-Scan the directory structure to find all individual BAO reports. Look for files matching `*-bpmn-opportunity-report.md` in `bpmn-opportunity-assessment/` directories within each repository path.
+Scan the directory structure to find all individual BAO reports. Look for files matching `*-bpmn-opportunity-report.md` in `bpmn-opportunity-analysis/` directories within each repository path.
 
-If fewer than 1 report is found, terminate with an error: "No BAO reports found. Run the BPMN Agentic Opportunity assessment on individual repositories first."
+If fewer than 1 report is found, terminate with an error: "No BAO reports found. Run the BPMN Agentic Opportunity analysis on individual repositories first."
 
 ### Step 2: Parse Reports
 
@@ -100,15 +100,15 @@ Combine implementation waves across repos:
 
 ### Step 4: Generate Report
 
-Save as `bpmn-opportunity-assessment/{portfolio_name}-portfolio-bao-report.md`.
+Save as `bpmn-opportunity-analysis/{portfolio_name}-portfolio-bao-report.md`.
 
 #### Report Structure
 
 ```markdown
 # Portfolio BAO Report: {portfolio_name}
 
-**Date**: {assessment date}
-**Repositories Assessed**: {count}
+**Date**: {analysis date}
+**Repositories Analyzed**: {count}
 **Total Processes**: {count}
 
 ---
@@ -197,7 +197,7 @@ Tasks classified as "Agent Data-First" or "Data Platform":
 ### Wave 3: After System Remediation
 
 > This wave is populated by the Bridge TD after cross-referencing with ARA findings.
-> Run a full assessment (assessment_type: full) to identify which agent opportunities
+> Run a full analysis (analysis_type: full) to identify which agent opportunities
 > are blocked by ARA findings on target systems.
 
 ## Warnings
@@ -225,14 +225,14 @@ Tasks classified as "Agent Data-First" or "Data Platform":
 
 ## Exit Criteria
 
-- Report file exists at `bpmn-opportunity-assessment/{portfolio_name}-portfolio-bao-report.md`
+- Report file exists at `bpmn-opportunity-analysis/{portfolio_name}-portfolio-bao-report.md`
 - All discovered BAO reports are included in the aggregation
 - Portfolio summary metrics are consistent (totals match sum of per-repo values)
 - Report is valid Markdown with no broken tables
 
 ## Constraints
 
-- **Read-only assessment**: Do not modify any source code or individual BAO reports
+- **Read-only analysis**: Do not modify any source code or individual BAO reports
 - **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 - **No ARA/MOD cross-referencing**: This TD aggregates BAO data only. Cross-referencing with ARA and MOD findings is the Bridge TD's responsibility.
 - **Minimum 1 report**: At least 1 BAO report must exist. Terminate with error if none found.

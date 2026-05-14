@@ -1,18 +1,18 @@
 ## Name
 
-BPMN Agentic Opportunity Assessment
+BPMN Agentic Opportunity Analysis
 
 ## Objective
 
 Analyze BPMN 2.0 process models in a repository to identify which process steps are candidates for agentic AI, classify each opportunity by reasoning complexity and data readiness, assign an autonomy level, estimate implementation costs, and produce a prioritized opportunity map with dependency discovery.
 
-This assessment answers the question: given this business process, where should we deploy AI agents, what are the system dependencies, and what does the implementation roadmap look like?
+This analysis answers the question: given this business process, where should we deploy AI agents, what are the system dependencies, and what does the implementation roadmap look like?
 
 ## Summary
 
 This transformation scans a repository for BPMN 2.0 files (`.bpmn`, `.bpmn2`, `.bpmn20.xml`), reads each process model, and evaluates every task element against a classification model that determines whether the task is best handled by an AI agent, a deterministic service, or a human. Each task is scored on four dimensions (AI benefit, complexity, risk, integration effort) and classified into one of four opportunity categories based on reasoning complexity and data readiness.
 
-The assessment produces a structured Markdown report containing:
+The analysis produces a structured Markdown report containing:
 - Process overview with task inventory
 - Per-task classification (agent / service / human-required)
 - Opportunity categorization (automate / data platform / agent build-now / agent data-first)
@@ -29,7 +29,7 @@ The output is saved as `{process-name}-bpmn-opportunity-report.md`.
 - The BPMN analyzer has been run as a pre-processing step, producing a JSON analysis report (see `tools/bpmn-analyzer/run_analysis.py`)
 - The JSON analysis report is available at the path specified in `additionalPlanContext` (field: `analysis_report_path`)
 - Write permissions exist to create the output report file
-- This assessment operates in read-only mode and will not modify any files in the repository
+- This analysis operates in read-only mode and will not modify any files in the repository
 - Stay on the current branch — this is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 
 ## Implementation Steps
@@ -45,7 +45,7 @@ Extract the following fields from `additionalPlanContext`:
 | `daily_volume` | integer | No | 100 | Estimated daily invocations per task. Used for cost projection. |
 | `priority` | enum | No | -- | P0, P1, P2. Recorded in report metadata. |
 | `tags` | string[] | No | -- | User-defined tags for categorization. |
-| `ara_report_path` | string | No | -- | **Deprecated.** ARA cross-referencing is handled by the Bridge TD, not the BAO TD. This field is accepted but ignored. If present, the report notes: "ARA cross-referencing is performed by the Bridge TD when running a full assessment." |
+| `ara_report_path` | string | No | -- | **Deprecated.** ARA cross-referencing is handled by the Bridge TD, not the BAO TD. This field is accepted but ignored. If present, the report notes: "ARA cross-referencing is performed by the Bridge TD when running a full analysis." |
 
 ### Step 1: Read the Analysis Report
 
@@ -114,16 +114,16 @@ Include any warnings from the dependency extraction (unsupported vendor namespac
 
 ### Step 4: Generate Report
 
-Save the report as `{process-name}-bpmn-opportunity-report.md` in the `bpmn-opportunity-assessment/` directory.
+Save the report as `{process-name}-bpmn-opportunity-report.md` in the `bpmn-opportunity-analysis/` directory.
 
 #### Report Structure
 
 ```markdown
-# BPMN Agentic Opportunity Assessment: {Process Name}
+# BPMN Agentic Opportunity Analysis: {Process Name}
 
 **Repository**: {repo path}
 **BPMN File**: {file path}
-**Date**: {assessment date}
+**Date**: {analysis date}
 **Context**: {from additionalPlanContext, if provided}
 **Daily Volume**: {daily_volume}
 
@@ -186,7 +186,7 @@ Save the report as `{process-name}-bpmn-opportunity-report.md` in the `bpmn-oppo
 |------|--------|
 | {task} | {reason} |
 
-*ARA cross-referencing is performed by the Bridge TD when running a full assessment (assessment_type: full). Run the full assessment to see which agent opportunities are blocked by ARA findings.*
+*ARA cross-referencing is performed by the Bridge TD when running a full analysis (analysis_type: full). Run the full analysis to see which agent opportunities are blocked by ARA findings.*
 
 ## Implementation Roadmap
 
@@ -220,7 +220,7 @@ Save the report as `{process-name}-bpmn-opportunity-report.md` in the `bpmn-oppo
 
 ## Exit Criteria
 
-- Four-artifact bundle exists at `bpmn-opportunity-assessment/`:
+- Four-artifact bundle exists at `bpmn-opportunity-analysis/`:
   - `{process-name}-bpmn-opportunity-report.md`
   - `{process-name}-bpmn-opportunity-report.json`
   - `{process-name}-bpmn-opportunity-report.html`
@@ -234,17 +234,17 @@ Save the report as `{process-name}-bpmn-opportunity-report.md` in the `bpmn-oppo
 
 Strictly follow these rules at all times:
 
-- **Read-only assessment**: Do not modify any source code, BPMN files, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
+- **Read-only analysis**: Do not modify any source code, BPMN files, configuration, or infrastructure in the repository. Only create the output artifact bundle (md + json + html + metadata.json).
 - **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
 - **Deterministic extraction is ground truth**: The JSON analysis report produced by `tools/bpmn-analyzer/run_analysis.py` contains pre-computed scores and classifications. Do not override the migration_type or composite scores. The opportunity classification layer (Step 2) adds category and autonomy on top of the analyzer's output.
 - **Be specific, cite BPMN elements**: Always reference actual task IDs, element types, and BPMN file paths. Never write "there may be..." -- state what was found in the process model.
-- **ARA cross-referencing is the Bridge TD's responsibility**: Do not attempt to cross-reference BAO findings with ARA or MOD findings. Note in the report: "ARA cross-referencing is performed by the Bridge TD when running a full assessment."
+- **ARA cross-referencing is the Bridge TD's responsibility**: Do not attempt to cross-reference BAO findings with ARA or MOD findings. Note in the report: "ARA cross-referencing is performed by the Bridge TD when running a full analysis."
 - **No LLM involvement in extraction**: The BPMN analyzer's constraint extraction, dependency discovery, and task scoring are deterministic Python. The TD adds the opportunity classification layer (category + autonomy) which uses LLM reasoning. Keep these layers distinct.
 - **Report completeness**: The output report must contain all required sections: metadata header, summary, opportunity classification table, agent opportunities (ranked), automatable tasks, human-required tasks, data readiness gaps, dependencies, implementation roadmap, process structure summary, and cost summary.
 
 ## Four-Artifact Output Contract
 
-Every per-repo BAO assessment emits four artifacts: three report artifacts plus a metadata sidecar.
+Every per-repo BAO analysis emits four artifacts: three report artifacts plus a metadata sidecar.
 
 ### Artifacts
 
@@ -261,9 +261,9 @@ The JSON artifact is the canonical contract. If any artifacts disagree on a fiel
 
 ```json
 {
-  "assessment_type": "bao",
-  "assessment_date": "2026-05-12",
-  "td_version": "bpmn-opportunity-assessment",
+  "analysis_type": "bao",
+  "analysis_date": "2026-05-12",
+  "td_version": "bpmn-opportunity-analysis",
   "bpmn_analyzer_version": "1.0.0",
   "process_name": "{process_name}",
   "bpmn_file": "{bpmn_file_path}"
@@ -277,9 +277,9 @@ The canonical JSON report follows this structure:
 ```json
 {
   "metadata": {
-    "assessment_type": "bao",
-    "assessment_date": "2026-05-12",
-    "td_version": "bpmn-opportunity-assessment",
+    "analysis_type": "bao",
+    "analysis_date": "2026-05-12",
+    "td_version": "bpmn-opportunity-analysis",
     "process_name": "Invoice Receipt",
     "bpmn_file": "src/main/resources/invoice.v2.bpmn",
     "repository": "./services/invoice-process",

@@ -1,6 +1,6 @@
 # Manual Execution
 
-How to run individual TDs directly via `atx custom def exec` without the Kiro orchestrator. Read this when the user wants to run a single repository's assessment, reproduce a failed run, or skip orchestration entirely.
+How to run individual TDs directly via `atx custom def exec` without the Kiro orchestrator. Read this when the user wants to run a single repository's analysis, reproduce a failed run, or skip orchestration entirely.
 
 > The Kiro orchestrator is the recommended path because it enforces the per-repo serialization rule, runs the reconciliation gate, and serializes portfolio TDs. Manual execution skips all of that — you own the safety contracts yourself.
 
@@ -8,10 +8,10 @@ How to run individual TDs directly via `atx custom def exec` without the Kiro or
 
 ## When to Use Manual Execution
 
-- Single-repo assessment (orchestrator requires ≥2 repos)
+- Single-repo analysis (orchestrator requires ≥2 repos)
 - Reproducing a specific TD failure for debugging
 - Re-running just the portfolio TD after fixing a per-repo report
-- Running an assessment against a repo that isn't part of any portfolio config
+- Running an analysis against a repo that isn't part of any portfolio config
 
 ---
 
@@ -80,14 +80,14 @@ additionalPlanContext: |
   # Optional — cross-references downstream service ARA findings
   downstream_dependency_reports:
     - name: "credit-scoring-service"
-      ara_report_path: "../credit-scoring/agentic-readiness-assessment/credit-scoring-ara-report.md"
+      ara_report_path: "../credit-scoring/agentic-readiness-analysis/credit-scoring-ara-report.md"
 ```
 
 ---
 
 ## Portfolio TDs
 
-### Portfolio ARA (after all individual ARA assessments)
+### Portfolio ARA (after all individual ARA analyses)
 
 ```bash
 atx custom def exec -n <your-portfolio-ara-td-name> -p . -g file://atx-portfolio-ara-config.yaml -x -t
@@ -119,7 +119,7 @@ additionalPlanContext: |
       description: "REST API calls for inventory checks"
 ```
 
-### Portfolio MOD (after all individual MOD assessments)
+### Portfolio MOD (after all individual MOD analyses)
 
 ```bash
 atx custom def exec -n <your-portfolio-mod-td-name> -p . -g file://atx-portfolio-mod-config.yaml -x -t
@@ -179,7 +179,7 @@ additionalPlanContext: |
       tags: ["camunda", "kyc"]
 ```
 
-### Bridge TD (full assessment only)
+### Bridge TD (full analysis only)
 
 Run after all relevant portfolio reports are generated:
 
@@ -191,20 +191,20 @@ atx custom def exec -n <your-bridge-td-name> -p . -g file://atx-config-bridge.ya
 
 ```yaml
 additionalPlanContext: |
-  portfolio_ara_report_path: "agentic-readiness-assessment/my-platform-portfolio-ara-report.md"
-  portfolio_mod_report_path: "modernization-assessment/my-platform-portfolio-mod-report.md"
+  portfolio_ara_report_path: "agentic-readiness-analysis/my-platform-portfolio-ara-report.md"
+  portfolio_mod_report_path: "modernization-analysis/my-platform-portfolio-mod-report.md"
   portfolio_name: "my-platform"
   # Optional: include if a portfolio BAO report exists
-  # portfolio_bao_report_path: "bpmn-opportunity-assessment/my-platform-portfolio-bao-report.md"
+  # portfolio_bao_report_path: "bpmn-opportunity-analysis/my-platform-portfolio-bao-report.md"
 ```
 
 The bridge report lands at the workspace root as `{portfolio_name}-bridge-report.md` and companion artifacts.
 
 ---
 
-## Manual Execution Order (full assessment)
+## Manual Execution Order (full analysis)
 
-If you are running a full assessment manually from scratch, follow this order strictly:
+If you are running a full analysis manually from scratch, follow this order strictly:
 
 ```bash
 # Per-repo phase — for EACH repo, run these in sequence on that repo:
@@ -257,8 +257,8 @@ If you are running portfolio TDs manually, also run the equivalent of Check B an
 ```bash
 # Verify each per-repo report is at the canonical path
 for repo in service-a service-b service-c; do
-  ls services/$repo/agentic-readiness-assessment/$repo-ara-report.md
-  ls services/$repo/modernization-assessment/$repo-mod-report.md
+  ls services/$repo/agentic-readiness-analysis/$repo-ara-report.md
+  ls services/$repo/modernization-analysis/$repo-mod-report.md
 done
 ```
 

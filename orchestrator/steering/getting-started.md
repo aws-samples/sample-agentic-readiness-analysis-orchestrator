@@ -1,12 +1,12 @@
 # Getting Started
 
-First-time setup for running portfolio assessments. Read this when a user is setting up the orchestrator for the first time, or when prerequisites need to be verified.
+First-time setup for running portfolio analyses. Read this when a user is setting up the orchestrator for the first time, or when prerequisites need to be verified.
 
 ---
 
 ## Prerequisites
 
-Kiro orchestrates the assessment workflow, but relies on **AWS Transform CLI** to execute the actual transformations. You need:
+Kiro orchestrates the analysis workflow, but relies on **AWS Transform CLI** to execute the actual transformations. You need:
 
 1. **Valid AWS credentials** — The orchestrator checks credentials before doing anything else. If credentials are expired or missing, it fails immediately with an actionable error.
    ```bash
@@ -26,11 +26,11 @@ Kiro orchestrates the assessment workflow, but relies on **AWS Transform CLI** t
      modernization: "your-mod-td-name"
      portfolio_agentic_readiness: "your-portfolio-ara-td-name"
      portfolio_modernization: "your-portfolio-mod-td-name"
-     portfolio_bridge: "your-bridge-td-name"  # optional — only used when assessment_type is "full"
+     portfolio_bridge: "your-bridge-td-name"  # optional — only used when analysis_type is "full"
    ```
    Verify they exist:
    ```bash
-   atx custom def list | grep your-assessment-name
+   atx custom def list | grep your-analysis-name
    ```
 
 4. **Repository access** — Repositories can be:
@@ -52,7 +52,7 @@ aws sts get-caller-identity
 If this fails, terminate immediately with:
 
 ```
-ERROR: AWS credentials are not valid. Cannot proceed with assessment.
+ERROR: AWS credentials are not valid. Cannot proceed with analysis.
 Run 'aws sts get-caller-identity' to diagnose. Common fixes:
 - Run 'ada credentials update' to refresh Midway credentials
 - Run 'aws sso login' if using SSO
@@ -101,11 +101,11 @@ For users running the orchestrator for the first time, recommend this minimal co
 
 ```yaml
 portfolio_name: "smoke-test"
-assessment_type: "agentic-readiness"  # Single TD path = simplest
+analysis_type: "agentic-readiness"  # Single TD path = simplest
 
 transformation_definitions:
-  agentic_readiness: "agentic-readiness-assessment"
-  modernization: "modernization-assessment"
+  agentic_readiness: "agentic-readiness-analysis"
+  modernization: "modernization-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
 
@@ -116,7 +116,7 @@ repositories:
     path: "./services/service-b"
 ```
 
-Two repos is the minimum for a portfolio assessment. Single-repo assessments should run a per-repo TD directly via `atx custom def exec` (see `manual-execution.md`).
+Two repos is the minimum for a portfolio analysis. Single-repo analyses should run a per-repo TD directly via `atx custom def exec` (see `manual-execution.md`).
 
 ---
 
@@ -127,6 +127,6 @@ Two repos is the minimum for a portfolio assessment. Single-repo assessments sho
 | Workflow orchestration | This power | Subagent spawning, sequencing, reconciliation |
 | Per-repo evaluation | ARA / MOD / BAO TDs (in AWS Transform registry) | Question scoring, finding generation, report rendering |
 | Portfolio aggregation | Portfolio ARA / MOD / BAO TDs | Cross-cutting analysis, dependency-aware roadmap |
-| Cross-assessment view | Bridge TD | Unified remediation mapping |
+| Cross-analysis view | Bridge TD | Unified remediation mapping |
 
 The Power is a thin orchestrator. All evaluation logic lives in the TDs, which are versioned independently in your AWS Transform registry.

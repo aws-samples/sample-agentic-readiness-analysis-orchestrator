@@ -4,7 +4,7 @@ Modernization Analysis
 
 ## Objective
 
-Evaluate the cloud architecture maturity, operational readiness, and modernization potential of a repository's infrastructure, application architecture, data platforms, security posture, and operational practices. This assessment identifies concrete modernization pathways and produces a scored gap analysis with actionable recommendations. It answers the question: how ready is this system for iterative modernization — whether that means containerizing workloads, decomposing monoliths, migrating to managed services, eliminating license costs, or adopting modern DevOps practices?
+Evaluate the cloud architecture maturity, operational readiness, and modernization potential of a repository's infrastructure, application architecture, data platforms, security posture, and operational practices. This analysis identifies concrete modernization pathways and produces a scored gap analysis with actionable recommendations. It answers the question: how ready is this system for iterative modernization — whether that means containerizing workloads, decomposing monoliths, migrating to managed services, eliminating license costs, or adopting modern DevOps practices?
 
 ## Summary
 
@@ -31,7 +31,7 @@ Category scores are calculated as the arithmetic mean of all non-N/A, non-Not-Ev
 
 **Not Evaluated (archetype-N/A)** — Questions that are archetype-calibrated (currently INF-Q3, INF-Q4, APP-Q3, APP-Q4) may resolve to "not applicable by design" for a specific archetype. When the archetype column indicates the question does not apply (e.g., "No multi-step workflows exist — not applicable by design" for `stateless-utility` on INF-Q3), record the question as **"Not Evaluated (archetype-N/A)"** and exclude it from both category and overall score averaging — same exclusion as N/A. This prevents artificial score inflation from archetype-correct-but-uninformative "Score 4 by default" entries. The rubric columns still describe what evaluation would look like; the Not-Evaluated status means no evaluation was performed for this repo.
 
-The assessment evaluates 7 AWS Modernization Pathways, each with defined trigger conditions mapped to specific question IDs and contextual guards to prevent false positives. Most pathways use a **Primary + Supporting** trigger model — a pathway fires when its Primary condition is met; Supporting conditions strengthen the case and inform the detail section. Two pathways use **compound triggers** where multiple conditions must be true simultaneously (Move to Cloud Native requires primary AND at least one supporting; Move to Open Source requires primary AND commercial DB evidence). The Summary Table below captures each pathway's full trigger logic — Step 7 is authoritative on implementation details:
+The analysis evaluates 7 AWS Modernization Pathways, each with defined trigger conditions mapped to specific question IDs and contextual guards to prevent false positives. Most pathways use a **Primary + Supporting** trigger model — a pathway fires when its Primary condition is met; Supporting conditions strengthen the case and inform the detail section. Two pathways use **compound triggers** where multiple conditions must be true simultaneously (Move to Cloud Native requires primary AND at least one supporting; Move to Open Source requires primary AND commercial DB evidence). The Summary Table below captures each pathway's full trigger logic — Step 7 is authoritative on implementation details:
 
 | Pathway | Primary Trigger | Supporting Triggers | Contextual Guard |
 |---------|----------------|---------------------|------------------|
@@ -66,27 +66,27 @@ The MD report contains:
 - Learning materials mapped to triggered pathways
 - Evidence index with file references
 
-This assessment targets workloads running on AWS. On-premises and multi-cloud workloads are out of scope unless actively migrating to AWS.
+This analysis targets workloads running on AWS. On-premises and multi-cloud workloads are out of scope unless actively migrating to AWS.
 
-This assessment does NOT cover:
+This analysis does NOT cover:
 - **Agentic Readiness** — Whether systems can serve as agent tools (API surface quality, agent identity and authorization, transactional integrity, human-in-the-loop controls, agent observability, discoverability). Those concerns use BLOCKER/RISK/INFO severity scoring, readiness profiles, conditional BLOCKERs based on agent_scope, and are covered in the Agentic Readiness Analysis.
 - **Agent design** — Prompt engineering, model selection, agent behavioral testing.
 
 ## Entry Criteria
 
 - The repository is accessible and readable at the specified path
-- The repository contains files relevant to assessment (source code, IaC, API specs, CI/CD configs, dependency manifests, container definitions, Kubernetes manifests, Helm charts, or configuration files)
+- The repository contains files relevant to analysis (source code, IaC, API specs, CI/CD configs, dependency manifests, container definitions, Kubernetes manifests, Helm charts, or configuration files)
 - Write permissions exist to create the output artifact bundle (MD, JSON, HTML, and metadata.json)
-- The assessment operates in **read-only mode** — it will not modify any source code or configuration in the repository
+- The analysis operates in **read-only mode** — it will not modify any source code or configuration in the repository
 - Stay on the current branch — this is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out.
 
 ## Implementation Steps
 
 ### Step 0: Read additionalPlanContext
 
-Before beginning the discovery scan, read the assessment context from `additionalPlanContext` to determine the repo classification, framing context, and technology preferences that will shape the entire assessment.
+Before beginning the discovery scan, read the analysis context from `additionalPlanContext` to determine the repo classification, framing context, and technology preferences that will shape the entire analysis.
 
-#### 0.1 Read Assessment Context
+#### 0.1 Read Analysis Context
 
 Extract the following fields from `additionalPlanContext`:
 
@@ -117,7 +117,7 @@ additionalPlanContext: |
 
 If a field is absent from `additionalPlanContext`, apply these defaults:
 
-- **`repo_type`** → `"application"` — This is the most comprehensive assessment (no questions skipped, all pathways applicable). Defaulting to `application` ensures nothing is missed when classification is unknown.
+- **`repo_type`** → `"application"` — This is the most comprehensive analysis (no questions skipped, all pathways applicable). Defaulting to `application` ensures nothing is missed when classification is unknown.
 - **`context`** → No default. If absent, findings and recommendations are written without additional framing.
 - **`priority`** → No default. If absent, omitted from report metadata.
 - **`tags`** → No default. If absent, omitted from report metadata.
@@ -134,7 +134,7 @@ The MOD TD does **not** read, validate, or apply the following fields from `addi
 
 #### 0.4 How Context Fields Are Used
 
-Record the resolved values from Steps 0.1–0.2 in the assessment context. They will be used in subsequent steps as follows:
+Record the resolved values from Steps 0.1–0.2 in the analysis context. They will be used in subsequent steps as follows:
 
 - **`repo_type`** → Used in the N/A Mapping to determine which questions are scored as N/A and which pathways are marked Not Applicable for the detected repo type. Included in the report metadata header.
 - **`context`** → Used throughout the report to frame findings and recommendations with repository-specific context. For example, if context mentions "legacy PHP e-commerce", recommendations reference the specific technology stack and business domain. Also used by the Move to AI pathway (Step 7.7) as a contextual guard. The pathway only triggers when the context explicitly mentions AI/agent/LLM use cases. This prevents false-positive triggers on services where AI adoption is not a goal.
@@ -244,7 +244,7 @@ AI artifacts inform the Move to AI pathway trigger.
 
 #### 1.2 Directories to Ignore
 
-Skip the following directories during scanning — they contain installed dependencies, build artifacts, or version control internals that are not relevant to the assessment:
+Skip the following directories during scanning — they contain installed dependencies, build artifacts, or version control internals that are not relevant to the analysis:
 
 - `node_modules/` — Installed Node.js dependencies
 - `target/` — Java/Maven build output
@@ -277,7 +277,7 @@ After scanning, compile a structured inventory of what was found. This inventory
 
 #### 1.4 Read Discovered Files
 
-Read all discovered files that are relevant to the assessment. Prioritize reading in this order:
+Read all discovered files that are relevant to the analysis. Prioritize reading in this order:
 
 1. **IaC files** — Reveal infrastructure architecture, compute model, database choices, network topology, and security configuration
 2. **Kubernetes manifests and Helm charts** — Reveal container orchestration maturity, service mesh usage, deployment strategies, and scaling configuration
@@ -337,7 +337,7 @@ Apply these checks in order. The first check that matches determines the archety
 
 #### Archetype Recording
 
-Record the detected archetype in the assessment context. Include it in the report metadata header:
+Record the detected archetype in the analysis context. Include it in the report metadata header:
 
 ```markdown
 **Service Archetype**: <archetype> (auto-detected | user-provided)
@@ -428,7 +428,7 @@ The MOD N/A Mapping has two dimensions:
 
 **Rationale by repo type:**
 
-- **`application`** — Full-stack repositories with source code, infrastructure, and deployment configuration. All 37 questions are relevant because the assessment evaluates the complete modernization surface: infrastructure maturity, application architecture, data platform, security baseline, and operational practices.
+- **`application`** — Full-stack repositories with source code, infrastructure, and deployment configuration. All 37 questions are relevant because the analysis evaluates the complete modernization surface: infrastructure maturity, application architecture, data platform, security baseline, and operational practices.
 - **`infrastructure-only`** — Repositories containing only IaC provisioning (Terraform modules, CDK stacks, CloudFormation templates) with no application source code. Application Architecture questions (APP-Q1 through APP-Q6) do not apply because there is no application runtime to evaluate for language choice, monolith decomposition, communication patterns, or service discovery. Data questions DATA-Q1 (unstructured data storage) and DATA-Q2 (unified data access layer) do not apply because there is no application data access layer. DATA-Q4 (stored procedures) does not apply because there is no application-layer business logic to evaluate for database coupling. DATA-Q3 (database engine version) still applies because IaC defines database resources with engine versions. All INF, SEC, and OPS questions still apply because infrastructure repos define compute, networking, security, and operational configuration.
 - **`deployment-config`** — Repositories containing only CI/CD pipelines, Kubernetes manifests, Helm charts, GitOps configs, or Ansible playbooks — no application source code. Application Architecture questions (APP-Q1 through APP-Q6) do not apply because there is no application to evaluate. All Data Platform questions (DATA-Q1 through DATA-Q4) do not apply because deployment config repos do not define data storage or access patterns. Infrastructure questions INF-Q1 through INF-Q4 (managed compute, managed databases, workflow orchestration, async messaging) do not apply because deployment config repos do not provision these resources — they configure how existing resources are deployed. INF-Q6 through INF-Q9 (API entry point, auto-scaling, backup/recovery, high availability) do not apply for the same reason. INF-Q5 (network security) still applies because deployment manifests may define network policies, security groups, or service mesh rules. INF-Q10 (IaC coverage) and INF-Q11 (CI/CD automation) still apply because they evaluate the deployment config repo's own governance. All SEC and OPS questions still apply because deployment repos define security scanning, secrets management, deployment strategies, and observability configuration.
 - **`library`** — Package repositories with source code but no deployable entry point (no Dockerfile, no IaC, no main()). All INF questions (INF-Q1 through INF-Q11) are N/A because libraries have no infrastructure to provision, no compute to manage, no databases to configure, no networking to secure, no auto-scaling to tune, and no CI/CD deployment pipeline (they have build/publish pipelines, not deployment pipelines). OPS-Q2 through OPS-Q9 are N/A because libraries do not define SLOs, publish business metrics, configure anomaly detection, implement deployment strategies, run integration tests against live services, automate incident response, own observability dashboards, or manage resource tagging. OPS-Q1 (distributed tracing) still applies because libraries can instrument tracing that propagates through dependent applications. All APP, DATA, and SEC questions still apply because libraries contain application code, data access patterns, and security practices that affect consuming applications.
@@ -1042,9 +1042,9 @@ These questions evaluate the operational maturity and observability practices th
 
 > **Look for:** SLO definitions in code or config; CloudWatch alarms on p99/p95 latency; error budget tracking; SLO dashboards.
 
-> **⚠️ Scoring limitation — external context dependency:** SLO definitions typically reside in external monitoring platforms (CloudWatch, Datadog, Grafana, PagerDuty) rather than in source code or IaC. A Score of 1 on this question indicates that no SLO evidence was found *in the repository being scanned* — it does not confirm that SLOs are absent from the operational environment. This question has a high false-positive rate for code-only assessments. When `additionalPlanContext` provides SLO evidence (e.g., via a future `external_observability` field), use that to override the code-scan result. This question is classified as **non-core (P2)** because the absence of in-repo SLO artifacts is not a reliable signal of operational immaturity.
+> **⚠️ Scoring limitation — external context dependency:** SLO definitions typically reside in external monitoring platforms (CloudWatch, Datadog, Grafana, PagerDuty) rather than in source code or IaC. A Score of 1 on this question indicates that no SLO evidence was found *in the repository being scanned* — it does not confirm that SLOs are absent from the operational environment. This question has a high false-positive rate for code-only analyses. When `additionalPlanContext` provides SLO evidence (e.g., via a future `external_observability` field), use that to override the code-scan result. This question is classified as **non-core (P2)** because the absence of in-repo SLO artifacts is not a reliable signal of operational immaturity.
 
-> **Scoring guidance for code-only assessments:** Score 2 (not 1) when CloudWatch alarms on latency/error-rate exist in IaC even without formal SLO naming — the presence of threshold-based alarms implies implicit SLOs. Score 1 only when NO monitoring artifacts exist at all. This prevents systematic Score-1 inflation across portfolios where SLO tooling lives externally.
+> **Scoring guidance for code-only analyses:** Score 2 (not 1) when CloudWatch alarms on latency/error-rate exist in IaC even without formal SLO naming — the presence of threshold-based alarms implies implicit SLOs. Score 1 only when NO monitoring artifacts exist at all. This prevents systematic Score-1 inflation across portfolios where SLO tooling lives externally.
 
 #### OPS-Q3: Business Metrics
 
@@ -1403,7 +1403,7 @@ If neither the portfolio-level context nor the service-level context contains an
 
 **When Triggered, Include in Pathway Detail Section:**
 - Current AI/agent infrastructure state (from discovery — what was and was not found)
-- Application domain and potential AI use cases based on assessment findings
+- Application domain and potential AI use cases based on analysis findings
 - Recommended AI services (respect `preferences`)
 - Representative AWS services: Amazon Bedrock, Amazon Bedrock AgentCore, Amazon Q, SageMaker, OpenSearch Service (vector engine), Amazon Kendra
 - Foundation requirements: what needs to be in place before AI integration (API surface, data access, observability)
@@ -1464,7 +1464,7 @@ When decomposing a monolith, apply these architectural patterns to manage the tr
 
 #### 8.3 Effort Estimation Factors
 
-The actual decomposition effort depends on these factors discovered during the assessment:
+The actual decomposition effort depends on these factors discovered during the analysis:
 
 | Factor | Low Effort Signal | High Effort Signal | Source |
 |--------|-------------------|-------------------|--------|
@@ -1480,7 +1480,7 @@ Use these factors to calibrate the effort estimate for the recommended approach.
 
 ### Step 9: AI/Agent Infrastructure Evaluation Logic
 
-This section documents the evaluation logic that connects AI/agent discovery findings (from Step 1) to the Move to AI pathway (Step 7.7). The actual discovery scanning is performed in Step 1, and the Move to AI pathway evaluation is in Step 7.7. This section serves as a cross-reference explaining how AI/agent infrastructure signals flow through the assessment.
+This section documents the evaluation logic that connects AI/agent discovery findings (from Step 1) to the Move to AI pathway (Step 7.7). The actual discovery scanning is performed in Step 1, and the Move to AI pathway evaluation is in Step 7.7. This section serves as a cross-reference explaining how AI/agent infrastructure signals flow through the analysis.
 
 #### 9.1 AI/Agent Discovery Signals
 
@@ -1511,7 +1511,7 @@ The discovery scan (Step 1) is the single source of truth for what AI/agent arti
 
 ## Report Template
 
-The assessment emits a **four-artifact bundle** per the Four-Artifact Output Contract below: `{repo-name}-mod-report.md` (narrative), `{repo-name}-mod-report.json` (canonical JSON), `{repo-name}-mod-report.html` (self-contained HTML), and `{repo-name}-mod-report.metadata.json` (version sidecar). This section specifies the MD structure. The MD MUST contain all sections listed below in the specified order. Every section is required unless explicitly marked as conditional.
+The analysis emits a **four-artifact bundle** per the Four-Artifact Output Contract below: `{repo-name}-mod-report.md` (narrative), `{repo-name}-mod-report.json` (canonical JSON), `{repo-name}-mod-report.html` (self-contained HTML), and `{repo-name}-mod-report.metadata.json` (version sidecar). This section specifies the MD structure. The MD MUST contain all sections listed below in the specified order. Every section is required unless explicitly marked as conditional.
 
 ### Report Section Order
 
@@ -1535,8 +1535,8 @@ The assessment emits a **four-artifact bundle** per the Four-Artifact Output Con
 | Field | Value |
 |-------|-------|
 | **Repository** | {repo-name} |
-| **Date** | {assessment-date} |
-| **TD Version** | {version ID of the published TD that produced this report — resolve via `atx custom def get -n modernization-assessment`} |
+| **Date** | {analysis-date} |
+| **TD Version** | {version ID of the published TD that produced this report — resolve via `atx custom def get -n modernization-analysis`} |
 | **Repo Type** | {repo_type} |
 | **Service Archetype** | {archetype} ({auto-detected or user-provided}) — omit row if repo_type is not `application` |
 | **Priority** | {priority or "—" if not provided} |
@@ -1545,7 +1545,7 @@ The assessment emits a **four-artifact bundle** per the Four-Artifact Output Con
 | **Overall Score** | {overall-score} / 4.0 |
 ```
 
-If `repo_type` was not provided and defaulted to `application`, include a note: "Repo type defaulted to `application` (not specified in assessment context)."
+If `repo_type` was not provided and defaulted to `application`, include a note: "Repo type defaulted to `application` (not specified in analysis context)."
 
 If `repo_type` was provided but unrecognized, include a warning: "Unrecognized repo_type '{value}', defaulted to `application`."
 
@@ -1722,11 +1722,11 @@ Include every file path that appears in any finding's evidence field. Group by d
 
 ## Constraints and Guardrails
 
-The following constraints govern the assessment execution and report generation. These are non-negotiable rules that the evaluating agent MUST follow.
+The following constraints govern the analysis execution and report generation. These are non-negotiable rules that the evaluating agent MUST follow.
 
-### C1: Read-Only Assessment
+### C1: Read-Only Analysis
 
-This assessment operates in **read-only mode**. The evaluating agent SHALL NOT:
+This analysis operates in **read-only mode**. The evaluating agent SHALL NOT:
 - Modify any source code, configuration files, or infrastructure definitions in the repository.
 - Create, delete, or rename any files in the repository (except the output artifact bundle).
 - Execute any commands that change repository state (no `git commit`, no `terraform apply`, no `npm install`).
@@ -1753,7 +1753,7 @@ Do not make findings based on assumptions or general knowledge. Every score must
 
 ### C5: Honest Calibration
 
-Scores MUST reflect genuine assessment of the repository evidence:
+Scores MUST reflect genuine analysis of the repository evidence:
 - **A score of 4 means genuinely mature** — the criterion is fully met with no gaps and best-practice implementation. Do not award a 4 for partial compliance or "good enough."
 - **A score of 3 means partial** — the criterion is mostly met with minor gaps. This is the appropriate score when the capability exists but has room for improvement.
 - **A score of 2 means needs work** — the capability exists but has significant gaps requiring moderate effort to address.
@@ -1813,13 +1813,13 @@ Both `category_id` and `category` are REQUIRED fields on every MOD finding. MD a
 
 #### DATA-Q* Namespace Collision Note
 
-The short code `DATA` is shared between MOD and the Agentic Readiness Analysis (ARA). MOD `DATA-Q1`..`DATA-Q4` and ARA `DATA-Q1`..`DATA-Q7` are DIFFERENT questions and MUST NOT be conflated. The unique join key across the two assessment types is `(assessment_type, question_id)` — never `question_id` alone. MOD `DATA` disambiguates to display name **"Data Platform"**; ARA `DATA` disambiguates to **"Data Accessibility"**. Every JSON artifact emits `assessment_type` at the root (values `"mod"`, `"ara"`, `"portfolio-mod"`, `"portfolio-ara"`) so the join key is always present.
+The short code `DATA` is shared between MOD and the Agentic Readiness Analysis (ARA). MOD `DATA-Q1`..`DATA-Q4` and ARA `DATA-Q1`..`DATA-Q7` are DIFFERENT questions and MUST NOT be conflated. The unique join key across the two analysis types is `(analysis_type, question_id)` — never `question_id` alone. MOD `DATA` disambiguates to display name **"Data Platform"**; ARA `DATA` disambiguates to **"Data Accessibility"**. Every JSON artifact emits `analysis_type` at the root (values `"mod"`, `"ara"`, `"portfolio-mod"`, `"portfolio-ara"`) so the join key is always present.
 
 ---
 
 ### Unified Per-Finding Field Set and `mod_metadata` Subobject
 
-This section defines the per-finding JSON shape for MOD. It mirrors the ARA TD's per-finding field set — the 12 base fields are identical across ARA and MOD so a single webapp can render both without per-assessment branching — with a MOD-specific `mod_metadata` subobject replacing ARA's `ara_metadata`.
+This section defines the per-finding JSON shape for MOD. It mirrors the ARA TD's per-finding field set — the 12 base fields are identical across ARA and MOD so a single webapp can render both without per-analysis branching — with a MOD-specific `mod_metadata` subobject replacing ARA's `ara_metadata`.
 
 #### Per-Finding Required Fields
 
@@ -1840,7 +1840,7 @@ Every MOD finding MUST carry these 12 fields:
 | `phase` | integer | `1`–`4` — derived roadmap phase, default. |
 | `evidence` | object or null | `{file, lines}` reference to the gap location in the repo, or `null` when no file-and-line reference applies. |
 
-All 12 fields are REQUIRED on every emitted finding — missing any one fails the assessment and names the offending `question_id`. Findings are NEVER emitted for questions that resolve to pass (score 4), N/A, Not Evaluated (archetype-N/A), or Not Evaluated (extended-not-triggered); those questions appear only under `evaluations[]`.
+All 12 fields are REQUIRED on every emitted finding — missing any one fails the analysis and names the offending `question_id`. Findings are NEVER emitted for questions that resolve to pass (score 4), N/A, Not Evaluated (archetype-N/A), or Not Evaluated (extended-not-triggered); those questions appear only under `evaluations[]`.
 
 #### MOD Metadata Subobject (`mod_metadata`)
 
@@ -1886,7 +1886,7 @@ Every MOD question has a static `core_question` value that does NOT change per-r
 - All questions with `priority: P1` (the 14 P1 questions) are core.
 - All questions with `priority: P2` are non-core.
 - Core questions govern whether a score 1 creates a High-severity finding. Non-core questions at score 1 are Medium-severity.
-- This table is static — it does NOT depend on per-repo context. The same `(assessment_type, question_id)` pair always yields the same `core_question` value.
+- This table is static — it does NOT depend on per-repo context. The same `(analysis_type, question_id)` pair always yields the same `core_question` value.
 
 **Worked severity mapping examples:**
 - `INF-Q1` with score 1 → core=true → **High** finding
@@ -1915,7 +1915,7 @@ MOD findings MUST NOT carry a `pathway_triggers` field (or any equivalent pathwa
 
 #### Per-Question Priority Table
 
-The `priority` field on every MOD finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(assessment_type, question_id)` pair always yields the same `priority`.
+The `priority` field on every MOD finding is STATIC per rubric question — it does not depend on per-repo context. Portfolio aggregation relies on this stability: the same `(analysis_type, question_id)` pair always yields the same `priority`.
 
 **Authoritative source.** When `modernization-readiness-findings.csv` is present in the workspace, its per-question priority column is the authoritative source and overrides the defaults below. When the CSV is absent (current state of the workspace), the defaults in the table below are used.
 
@@ -2142,7 +2142,7 @@ The MD artifact renders the following inline annotations alongside the content a
 
 ### Four-Artifact Output Contract (MOD)
 
-Every per-repo MOD assessment emits four artifacts: three report artifacts plus a metadata sidecar. This mirrors the ARA four-artifact contract with MOD-specific filenames and a MOD-specific HTML visual contract.
+Every per-repo MOD analysis emits four artifacts: three report artifacts plus a metadata sidecar. This mirrors the ARA four-artifact contract with MOD-specific filenames and a MOD-specific HTML visual contract.
 
 #### Artifacts
 
@@ -2161,9 +2161,9 @@ The sidecar carries the minimum fields required for version compatibility checks
 
 ```json
 {
-  "assessment_type": "mod",
-  "assessment_date": "2026-04-30",
-  "td_version": "modernization-assessment"
+  "analysis_type": "mod",
+  "analysis_date": "2026-04-30",
+  "td_version": "modernization-analysis"
 }
 ```
 
@@ -2203,7 +2203,7 @@ When this TD is invoked via the orchestrator, the slug source is the `name` fiel
 {portfolio-or-repo}/
 └── services/
     └── {repo-name}/
-        └── modernization-assessment/
+        └── modernization-analysis/
             ├── {repo-name}-mod-report.md
             ├── {repo-name}-mod-report.json
             ├── {repo-name}-mod-report.html
@@ -2218,21 +2218,21 @@ The TD is explicit about failure modes — no defensive inference, no silent ski
 
 ### Required-Field Failure
 
-IF any of the 12 required per-finding fields is absent from an emitted finding, THEN the assessment SHALL fail, naming:
+IF any of the 12 required per-finding fields is absent from an emitted finding, THEN the analysis SHALL fail, naming:
 - The `question_id` of the offending finding
 - The specific missing field
 
-Example failure message: `"Assessment failed: finding for INF-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED."`
+Example failure message: `"Analysis failed: finding for INF-Q1 is missing required field 'recommendation'. All 12 per-finding fields are REQUIRED."`
 
 ### N/A / Not Evaluated Leak
 
-IF a finding is emitted for a question whose resolution was N/A or Not Evaluated, THEN the assessment SHALL fail, naming the `question_id` and the resolution status that should have been recorded in `evaluations[]` instead.
+IF a finding is emitted for a question whose resolution was N/A or Not Evaluated, THEN the analysis SHALL fail, naming the `question_id` and the resolution status that should have been recorded in `evaluations[]` instead.
 
-Example: `"Assessment failed: finding emitted for INF-Q2 but the question resolved to Not Evaluated (no persistent data store, has_persistent_data_store=false). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only."`
+Example: `"Analysis failed: finding emitted for INF-Q2 but the question resolved to Not Evaluated (no persistent data store, has_persistent_data_store=false). N/A / Not Evaluated resolutions MUST be recorded in evaluations[] only."`
 
 ### MOD Archetype Calibration Without Justification
 
-IF a MOD finding carries `mod_metadata.archetype_calibrated: true` but the MD artifact does NOT contain prose explaining how the archetype shaped the score, THEN the assessment SHALL fail naming the `question_id`.
+IF a MOD finding carries `mod_metadata.archetype_calibrated: true` but the MD artifact does NOT contain prose explaining how the archetype shaped the score, THEN the analysis SHALL fail naming the `question_id`.
 
 ### MOD Classification Divergence
 

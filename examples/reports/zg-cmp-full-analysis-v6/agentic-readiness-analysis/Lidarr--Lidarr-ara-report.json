@@ -1,0 +1,733 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2025-05-08",
+    "td_version": "agentic-readiness-analysis-v6.0.1",
+    "report_format_version": "V6",
+    "target": "Lidarr--Lidarr",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application owns persistent state (SQLite/PostgreSQL databases) and exposes full CRUD operations via 75+ REST API controllers with entity lifecycle management.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": [
+      "csharp",
+      "media",
+      "desktop"
+    ],
+    "context": "Music collection manager (*arr suite).",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 1,
+    "medium_count": 18,
+    "low_count": 13,
+    "safety_impact_medium_count": 7,
+    "rule_matched": "1-2 High \u2192 Remediation Required"
+  },
+  "summary": {
+    "blocker_count": 1,
+    "risk_safety_count": 7,
+    "risk_quality_count": 10,
+    "info_count": 12,
+    "na_count": 0,
+    "not_evaluated_count": 13,
+    "total": 43,
+    "core_questions_evaluated": 24,
+    "extended_questions_triggered": 6,
+    "extended_questions_not_triggered": 13
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Machine Identity Authentication",
+      "description": "Lidarr uses a single, static API key for all API access. The API key is a GUID stored in plaintext XML configuration. All authenticated requests share the same identity with no mechanism to distinguish between different callers.",
+      "gap": "No support for individual machine identity. All API consumers share a single identity. No principal attribution in audit logs.",
+      "recommendation": "Introduce per-agent API key generation with unique principal identifiers. Add a ClientId field to the authentication ticket for audit logging.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Lidarr.Http/Authentication/ApiKeyAuthenticationHandler.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Introduce per-agent API key generation with unique principal identifiers.",
+          "target_state": "Each agent identity has a unique credential that is attributed in all audit/history records and can be individually revoked.",
+          "estimated_effort": "High",
+          "dependencies": [
+            "AUTH-Q6",
+            "AUTH-Q7"
+          ]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Scoped Permissions",
+      "description": "The authorization model is binary \u2014 either you have the API key (full access to all endpoints) or you don't. No IAM policies, role definitions, or scope-based permissions exist.",
+      "gap": "No mechanism to grant an agent read-only access to specific resources. Every authenticated caller has identical full-admin privileges.",
+      "recommendation": "Implement role-based access control with at minimum a read-only role that excludes POST/PUT/DELETE operations. Support scoped API keys per consumer.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Lidarr.Http/Authentication/ApiKeyAuthenticationHandler.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Deploy an API gateway or reverse proxy that restricts agent access to specific HTTP methods and URL paths",
+          "Use a read-only database replica for agent queries"
+        ],
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Action-Level Authorization",
+      "description": "No action-level authorization exists. Once authenticated via API key, all 75+ endpoints (read, create, update, delete) are accessible with no additional permission checks.",
+      "gap": "Cannot enforce that an agent may read albums but not delete them within the same resource type.",
+      "recommendation": "Introduce action-level authorization attributes on controllers with granular permissions.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Lidarr.Http/Authentication/UiAuthorizationHandler.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "External reverse proxy with path and method-based ACLs",
+          "Network segmentation restricting agent access to specific endpoints"
+        ],
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Immutable Audit Logging",
+      "description": "Lidarr logs auth events and records entity history in the database, but logs are stored locally with no immutability guarantees and no per-caller attribution.",
+      "gap": "No immutable, tamper-evident audit trail. No per-caller attribution in logs or history.",
+      "recommendation": "Add caller identity to all EntityHistory records. Ship logs to an immutable store.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/NzbDrone.Core/History/EntityHistoryRepository.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, audit logging still important for observability.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, so immutable audit is not a deployment blocker but remains a safety concern for traceability.",
+        "compensating_controls": [
+          "Forward Lidarr logs to a centralized append-only log aggregation service",
+          "Implement log shipping with integrity verification"
+        ],
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Agent Identity Suspension Mechanism",
+      "description": "There is no mechanism to suspend an individual agent identity. The single shared API key cannot be selectively revoked \u2014 resetting it disconnects ALL consumers.",
+      "gap": "Cannot isolate a misbehaving agent without disrupting all API consumers.",
+      "recommendation": "Support multiple API keys with individual revocation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/NzbDrone.Core/Configuration/ConfigFileProvider.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Revoke agent access at an external proxy/gateway layer",
+          "IP-based blocking at the network level"
+        ],
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Inbound Rate Limiting",
+      "description": "No inbound rate limiting exists on any API endpoint. The RateLimitService only throttles outbound HTTP requests to external services.",
+      "gap": "A runaway agent loop can overwhelm the application at machine speed with no protection.",
+      "recommendation": "Add rate limiting middleware (e.g., AspNetCoreRateLimit) with per-key throttling.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/NzbDrone.Common/TPL/RateLimitService.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Deploy a reverse proxy with rate limiting in front of Lidarr",
+          "Use OS-level iptables/nftables rate limiting"
+        ],
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Data Residency Controls",
+      "description": "No data residency enforcement. Data location depends entirely on deployment. No controls preventing cross-boundary data flow to LLM endpoints.",
+      "gap": "No data residency configuration, no region enforcement.",
+      "recommendation": "Document data residency characteristics. Ensure agent architecture keeps data in-region.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/NzbDrone.Core/Datastore/ConnectionStringFactory.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, data residency is still relevant but lower risk.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents may still transmit user library data to LLM endpoints in different regions, creating residency risk.",
+        "compensating_controls": [
+          "Use Amazon Bedrock in the same region as the Lidarr deployment",
+          "Restrict agent-LLM communication to in-region endpoints via network policy"
+        ],
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII Redaction in Logs",
+      "description": "No PII scrubbing middleware or log filtering exists. Stack traces in error responses may expose internal paths. HostConfigResource returns sensitive credentials in JSON responses.",
+      "gap": "No log scrubbing for sensitive data. Stack traces in error responses.",
+      "recommendation": "Add PII redaction to logging middleware. Remove stack traces from production error responses.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Lidarr.Http/Middleware/LoggingMiddleware.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Configure NLog logging level to Warning in production",
+          "Deploy a log scrubbing pipeline between Lidarr and log aggregation"
+        ],
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Machine-Readable Error Codes",
+      "description": "Error responses include Message and Description fields with correct HTTP status codes, but no machine-readable error code or retryable indicator.",
+      "gap": "An agent cannot programmatically distinguish retriable from terminal errors without parsing message text.",
+      "recommendation": "Add an errorCode field and a retryable boolean to the error response model.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/Lidarr.Http/ErrorManagement/LidarrErrorPipeline.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Breaking Change Detection in CI",
+      "description": "API versioned via URL path with auto-generated OpenAPI spec. Database schema versioned via FluentMigrator. No breaking change detection, no consumer-driven contract testing in CI.",
+      "gap": "No automated breaking change detection. Agents can be broken silently by new releases.",
+      "recommendation": "Add OpenAPI spec diff to Azure Pipelines CI. Fail build on breaking changes.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/Lidarr.Api.V1/openapi.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Distributed Tracing",
+      "description": "NLog with file logging and optional CLEF structured output. No OpenTelemetry, X-Ray, or traceparent header support. No correlation IDs.",
+      "gap": "Cannot trace agent-initiated requests through the system.",
+      "recommendation": "Add OpenTelemetry instrumentation with trace ID propagation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/NzbDrone.Common/Instrumentation/NzbDroneLogger.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Alerting Configuration",
+      "description": "No alerting configuration exists. Sentry captures errors but no threshold alerts configured for API error rates or latency.",
+      "gap": "No proactive alerting when the API degrades.",
+      "recommendation": "Configure alerting on API error rates and response latency.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/NzbDrone.Common/Instrumentation/NzbDroneLogger.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Infrastructure as Code",
+      "description": "No IaC exists. Lidarr is deployed via platform-specific installers. No Terraform, CloudFormation, or CDK defining infrastructure.",
+      "gap": "No codified infrastructure for the agent-facing surface.",
+      "recommendation": "Create IaC for the deployment environment if Lidarr will be exposed to agents.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "distribution/debian/install.sh",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API Contract Testing in CI",
+      "description": "Comprehensive Azure Pipelines CI/CD with unit and integration testing, but no API contract testing or breaking change detection.",
+      "gap": "API changes not validated against consumer contracts.",
+      "recommendation": "Add OpenAPI spec validation and consumer-driven contract tests to CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "azure-pipelines.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Automated Rollback",
+      "description": "Built-in self-update mechanism but no automated rollback capability. Rolling back requires manual re-installation of previous version.",
+      "gap": "No automated deployment rollback.",
+      "recommendation": "Use container-based deployment with image version pinning for instant rollback.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/NzbDrone.Update/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Encryption at Rest",
+      "description": "SQLite databases stored unencrypted. PostgreSQL connections lack TLS enforcement. No KMS or encrypted storage configuration.",
+      "gap": "Data at rest is unencrypted.",
+      "recommendation": "Enable encrypted storage at the infrastructure layer. Enforce TLS for PostgreSQL.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/NzbDrone.Core/Datastore/DbFactory.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Plaintext Credential Storage",
+      "description": "All credentials stored as plaintext in XML configuration file. API key, PostgreSQL password, SSL certificate password stored without encryption.",
+      "gap": "No secrets management system. No rotation mechanism.",
+      "recommendation": "Support external secrets providers for credential injection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/NzbDrone.Core/Configuration/ConfigFileProvider.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Staging Environment with Production Data Shape",
+      "description": "A devcontainer exists for development. CI uses ephemeral test environments. No documented staging environment with production-equivalent data shape for agent testing.",
+      "gap": "No staging environment with production-like data for agent behavior validation.",
+      "recommendation": "Create a Docker-based staging setup with seed data for agent testing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".devcontainer/devcontainer.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "API Test Coverage Lacks Contract Testing",
+      "description": "Integration tests exist in src/NzbDrone.Integration.Test/ApiTests/ covering major API resources (Artist, Album, Track, DownloadClient, Indexer, Notification, Release, Command, Calendar, History, Blocklist, RootFolder, etc.) with typed REST clients. Azure Pipelines CI runs tests in a dedicated Unit_Test stage. However, there is no consumer-driven contract testing (Pact), no OpenAPI schema validation in CI, and no automated breaking-change detection for API responses.",
+      "gap": "No API contract testing or schema-breaking-change detection in CI. Tests validate functional behavior but do not guard against schema drift that would break agent tool bindings.",
+      "recommendation": "Add OpenAPI spec diff validation to the CI pipeline. Consider consumer-driven contract tests (Pact) for agent-facing endpoints.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "src/NzbDrone.Integration.Test/ApiTests/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "compensating_controls": [
+          "Existing integration tests catch functional regressions in API behavior",
+          "Manual review of API response changes during PR review"
+        ],
+        "remediation_timeline": "30-60 days"
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "API-Q1",
+      "status": "pass",
+      "severity": null
+    },
+    {
+      "question_id": "API-Q2",
+      "status": "pass",
+      "severity": null
+    },
+    {
+      "question_id": "API-Q3",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "API-Q4",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "API-Q5",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "API-Q6",
+      "status": "not_evaluated_extended",
+      "severity": null
+    },
+    {
+      "question_id": "API-Q7",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "API-Q8",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "status": "finding",
+      "severity": "High"
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "STATE-Q1",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "STATE-Q2",
+      "status": "not_evaluated_extended",
+      "severity": null
+    },
+    {
+      "question_id": "STATE-Q3",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "STATE-Q4",
+      "status": "not_evaluated_extended",
+      "severity": null
+    },
+    {
+      "question_id": "STATE-Q5",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "STATE-Q6",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "STATE-Q7",
+      "status": "not_evaluated_extended",
+      "severity": null
+    },
+    {
+      "question_id": "HITL-Q1",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "HITL-Q2",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "HITL-Q3",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "DATA-Q1",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "DATA-Q2",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "DATA-Q3",
+      "status": "not_evaluated_extended",
+      "severity": null
+    },
+    {
+      "question_id": "DATA-Q4",
+      "status": "not_evaluated_extended",
+      "severity": null
+    },
+    {
+      "question_id": "DATA-Q5",
+      "status": "not_evaluated_extended",
+      "severity": null
+    },
+    {
+      "question_id": "DATA-Q6",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "DATA-Q7",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "DISC-Q1",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "DISC-Q2",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "DISC-Q3",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "OBS-Q1",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "OBS-Q2",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "OBS-Q3",
+      "status": "info",
+      "severity": "Low"
+    },
+    {
+      "question_id": "ENG-Q1",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "ENG-Q2",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "ENG-Q3",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "ENG-Q4",
+      "status": "finding",
+      "severity": "Medium"
+    },
+    {
+      "question_id": "ENG-Q5",
+      "status": "finding",
+      "severity": "Medium"
+    }
+  ]
+}

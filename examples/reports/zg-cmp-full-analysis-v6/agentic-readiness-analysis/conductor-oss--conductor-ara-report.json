@@ -1,0 +1,525 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2026-05-08",
+    "td_version": "agentic-readiness-analysis-v6.0.1",
+    "report_format_version": "V6",
+    "target": "conductor-oss--conductor",
+    "repository_type": "application",
+    "service_archetype": "orchestrator",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Conductor coordinates multi-step workflows by scheduling tasks across worker services and managing workflow state machines — classic orchestrator characteristics.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["java", "workflow", "orchestration"],
+    "context": "Workflow orchestration engine originally from Netflix.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": false,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 1,
+    "medium_count": 17,
+    "low_count": 11,
+    "safety_impact_medium_count": 7,
+    "rule_matched": "1-2 High → Remediation Required"
+  },
+  "summary": {
+    "blocker_count": 1,
+    "risk_safety_count": 7,
+    "risk_quality_count": 10,
+    "info_count": 11,
+    "na_count": 0,
+    "not_evaluated_count": 14,
+    "total": 43,
+    "core_questions_evaluated": 24,
+    "extended_questions_triggered": 5,
+    "extended_questions_not_triggered": 14
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Machine Identity Authentication",
+      "description": "The Conductor OSS codebase has no authentication mechanism. No spring-boot-starter-security dependency, no SecurityFilterChain, no OAuth2/JWT enforcement, no API key authentication. All REST and gRPC API endpoints are completely open and unauthenticated.",
+      "gap": "No machine identity authentication exists. Any caller can invoke any API operation without identification.",
+      "recommendation": "Add spring-boot-starter-security and configure a SecurityFilterChain with OAuth2 resource server (JWT) or API key authentication for machine identities.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "rest/build.gradle",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Add spring-boot-starter-security and configure OAuth2 resource server or API key authentication.",
+          "target_state": "Every API request authenticated with verifiable machine identity. Audit logs include authenticated principal.",
+          "estimated_effort": "Medium",
+          "dependencies": ["AUTH-Q6"]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Scoped Permissions",
+      "description": "Without any authentication mechanism, there is no authorization model. Every caller has full access to all operations including workflow start, terminate, delete, metadata management, and admin operations.",
+      "gap": "No permission scoping exists. An agent identity cannot be restricted to read-only access or limited to specific resources.",
+      "recommendation": "After implementing AUTH-Q1, define scoped permissions per agent identity (e.g., workflow:read, workflow:execute, metadata:read, admin:*).",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "rest/src/main/java/com/netflix/conductor/rest/controllers/WorkflowResource.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "API Gateway with route-level authorization policies",
+          "Network-level segmentation to limit which services can reach Conductor"
+        ],
+        "remediation_timeline": "60–90 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Action-Level Authorization",
+      "description": "No action-level authorization exists. All endpoints are equally accessible. No mechanism to allow read but deny delete on the same resource type.",
+      "gap": "Cannot enforce action-level granularity (read vs write vs delete).",
+      "recommendation": "Implement method-level authorization using Spring Security @PreAuthorize with fine-grained roles.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "rest/src/main/java/com/netflix/conductor/rest/controllers/AdminResource.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "API Gateway method-level policies (allow GET but deny DELETE)",
+          "Proxy layer that intercepts and blocks specific HTTP methods per caller"
+        ],
+        "remediation_timeline": "60–90 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Immutable Audit Logging",
+      "description": "The @Audit annotation exists on service classes but has no AOP aspect processing it. No audit log writing mechanism. No CloudTrail integration.",
+      "gap": "No immutable audit logging for any API operation.",
+      "recommendation": "Implement the @Audit AOP aspect to write structured audit events to an append-only log store.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "common/src/main/java/com/netflix/conductor/common/metadata/Auditable.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, audit logging important but not deployment blocker for read-only agents.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, so audit logging is RISK-SAFETY rather than BLOCKER.",
+        "compensating_controls": [
+          "Deploy API Gateway with access logging enabled",
+          "Enable CloudTrail for API Gateway invocations"
+        ],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Agent Identity Suspension Capability",
+      "description": "No authentication mechanism means no concept of agent identity that could be suspended or revoked. Only option for misbehaving agent is network-level blocking.",
+      "gap": "No mechanism to suspend or revoke individual agent identities.",
+      "recommendation": "Implement identity management with revocation capability after AUTH-Q1.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "rest/build.gradle",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "API Gateway with API key management — keys can be individually disabled",
+          "Network security groups to block specific caller IPs"
+        ],
+        "remediation_timeline": "60–90 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Circuit Breakers on External Calls",
+      "description": "Retry logic and distributed locking exist, but no circuit breaker pattern for external dependency calls. HTTP task module connects to external URLs without circuit breakers.",
+      "gap": "No circuit breaker (Resilience4j, Hystrix) on external calls. Failing downstream service could cascade through task execution.",
+      "recommendation": "Add Resilience4j circuit breakers on HTTP task executor and external service calls.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "http-task/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Task-level timeouts (150ms read, 100ms connect) provide partial protection",
+          "Distributed lock with configurable lease time prevents runaway decide loops"
+        ],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No API-Level Rate Limiting",
+      "description": "Task-level rate limiting exists via RateLimitingDAO but no HTTP/API-level rate limiting. No request throttling middleware.",
+      "gap": "No API-level rate limiting to prevent runaway agent loops from overwhelming the application.",
+      "recommendation": "Add API-level rate limiting (Bucket4j) or deploy behind API Gateway with usage plan throttles.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "redis-concurrency-limit/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Task-level rate limiting partially constrains execution pipeline",
+          "API Gateway with usage plans and throttling can be deployed in front"
+        ],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII Redaction in Logs",
+      "description": "Conductor logs request URIs and full exception details. Workflow/task data (arbitrary user JSON) may leak into logs without redaction. No PII masking library or log scrubbing.",
+      "gap": "No PII redaction in logs. Workflow input/output data may leak into log files without filtering.",
+      "recommendation": "Add a log filter that redacts sensitive fields from workflow input/output before logging.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "rest/src/main/java/com/netflix/conductor/rest/controllers/ApplicationExceptionMapper.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Configure log levels to minimize data exposure in production",
+          "Deploy log aggregation pipeline with PII detection/scrubbing"
+        ],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Static Machine-Readable API Specification",
+      "description": "Runtime-generated OpenAPI via springdoc-openapi-starter-webmvc-ui. No static spec file committed. Proto files provide static gRPC contracts.",
+      "gap": "No version-controlled static OpenAPI specification file. Agent tool generation requires a running server.",
+      "recommendation": "Add Gradle task (springdoc-openapi-gradle-plugin) to export OpenAPI spec at build time.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "rest/build.gradle",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days"
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Missing Explicit Error Codes in Structured Responses",
+      "description": "ErrorResponse includes status, message, instance, retryable boolean. Custom exceptions classify errors. Missing explicit error code field.",
+      "gap": "No machine-readable error code field — relies on HTTP status and message text.",
+      "recommendation": "Add an explicit errorCode string field to ErrorResponse.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "rest/src/main/java/com/netflix/conductor/rest/controllers/ApplicationExceptionMapper.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Formal Staging Environment",
+      "description": "Docker Compose provides 10 local dev environments. Testcontainers for integration tests. No dedicated staging with production-equivalent data shape.",
+      "gap": "No formally defined staging environment with production-equivalent data for agent testing.",
+      "recommendation": "Define staging environment with seed data scripts for realistic workflow/task definitions.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No API Versioning or Breaking Change Detection",
+      "description": "JSON Schema files and Proto files exist for core entities. No API versioning (/v1/, /v2/) and no breaking change detection in CI.",
+      "gap": "No API versioning strategy. No breaking change detection in pipeline.",
+      "recommendation": "Introduce API version prefixes and add OpenAPI diff checking in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "schemas/Workflow.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Distributed Tracing or Structured Logging",
+      "description": "SLF4J/Log4j logging without JSON structure. Rich Micrometer metrics. No OpenTelemetry/X-Ray. Correlation ID in model but not in log MDC.",
+      "gap": "No distributed tracing. No structured JSON logging. Cannot trace agent-initiated requests.",
+      "recommendation": "Add OpenTelemetry instrumentation and configure Log4j JSON layout.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/resources/application.properties",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Alerting Thresholds Configured",
+      "description": "Prometheus metrics with percentiles exposed. No alerting thresholds or alarm rules configured in the repository.",
+      "gap": "No alert rules for error rate spikes or latency degradation.",
+      "recommendation": "Add Prometheus alert rules or CloudWatch alarms for API error rates and latency.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/resources/application.properties",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Infrastructure as Code",
+      "description": "No IaC in repository. Only Docker Compose for local development. Integration surface infrastructure not defined.",
+      "gap": "No IaC governance for the agent-facing integration surface.",
+      "recommendation": "Define deployment infrastructure as IaC (Terraform or CDK).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API Contract Testing in CI",
+      "description": "Comprehensive CI with build/test/coverage/SonarCloud. No API contract tests (Pact, Spring Cloud Contract) or breaking change detection.",
+      "gap": "No contract testing or breaking change detection for APIs.",
+      "recommendation": "Add OpenAPI spec validation and consumer-driven contract tests in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/ci.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Deployment Rollback Capability",
+      "description": "Versioned Docker images published to Docker Hub. No deployment rollback mechanism defined (no blue/green, no canary, no CodeDeploy).",
+      "gap": "No automated rollback capability defined.",
+      "recommendation": "Define deployment with rollback capability (blue/green, Kubernetes rollback, or traffic shifting).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/publish.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Encryption at Rest Configuration",
+      "description": "No encryption at rest for data stores. SSL/TLS for transport only. No KMS references.",
+      "gap": "Workflow/task data stored unencrypted at rest.",
+      "recommendation": "Enable database-level encryption at the infrastructure layer (RDS encryption, encrypted EBS).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "server/src/main/resources/application.properties",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days"
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "status": "pass"},
+    {"question_id": "API-Q2", "status": "finding"},
+    {"question_id": "API-Q3", "status": "finding"},
+    {"question_id": "API-Q4", "status": "info", "note": "Conditional BLOCKER resolved to INFO (read-only scope)"},
+    {"question_id": "API-Q5", "status": "info"},
+    {"question_id": "API-Q6", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "API-Q7", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "API-Q8", "status": "info"},
+    {"question_id": "AUTH-Q1", "status": "finding"},
+    {"question_id": "AUTH-Q2", "status": "finding"},
+    {"question_id": "AUTH-Q3", "status": "finding"},
+    {"question_id": "AUTH-Q4", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "AUTH-Q5", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "AUTH-Q6", "status": "finding"},
+    {"question_id": "AUTH-Q7", "status": "finding"},
+    {"question_id": "STATE-Q1", "status": "info", "note": "Conditional BLOCKER resolved to INFO (read-only scope)"},
+    {"question_id": "STATE-Q2", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "STATE-Q3", "status": "info", "note": "Scope-calibrated to INFO (read-only scope)"},
+    {"question_id": "STATE-Q4", "status": "finding"},
+    {"question_id": "STATE-Q5", "status": "finding"},
+    {"question_id": "STATE-Q6", "status": "info", "note": "Scope-calibrated to INFO (read-only scope)"},
+    {"question_id": "STATE-Q7", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "HITL-Q1", "status": "info", "note": "Scope-calibrated to INFO (read-only scope)"},
+    {"question_id": "HITL-Q2", "status": "info", "note": "Scope-calibrated to INFO (read-only scope)"},
+    {"question_id": "HITL-Q3", "status": "finding"},
+    {"question_id": "DATA-Q1", "status": "info", "note": "Conductor stores arbitrary user-defined workflow data; sensitivity is user-determined"},
+    {"question_id": "DATA-Q2", "status": "info", "note": "Self-hosted application; residency is infrastructure decision"},
+    {"question_id": "DATA-Q3", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "DATA-Q4", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "DATA-Q5", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "DATA-Q6", "status": "finding"},
+    {"question_id": "DATA-Q7", "status": "info"},
+    {"question_id": "DISC-Q1", "status": "finding"},
+    {"question_id": "DISC-Q2", "status": "info"},
+    {"question_id": "DISC-Q3", "status": "info"},
+    {"question_id": "OBS-Q1", "status": "finding"},
+    {"question_id": "OBS-Q2", "status": "finding"},
+    {"question_id": "OBS-Q3", "status": "info"},
+    {"question_id": "ENG-Q1", "status": "finding"},
+    {"question_id": "ENG-Q2", "status": "finding"},
+    {"question_id": "ENG-Q3", "status": "finding"},
+    {"question_id": "ENG-Q4", "status": "not_evaluated", "reason": "Extended question not triggered"},
+    {"question_id": "ENG-Q5", "status": "finding"}
+  ]
+}

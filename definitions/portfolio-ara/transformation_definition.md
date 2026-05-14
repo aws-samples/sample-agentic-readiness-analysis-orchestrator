@@ -44,7 +44,7 @@ This portfolio TD focuses exclusively on cross-cutting BLOCKER/RISK identificati
 ## Entry Criteria
 
 - At least 2 individual ARA report JSON artifacts exist in repository directories
-- ARA report JSONs follow the expected schema: `assessment_type == "ara"`, `classification` object, `findings[]` array with per-finding 12-field shape
+- ARA report JSONs follow the expected schema: `analysis_type == "ara"`, `classification` object, `findings[]` array with per-finding 12-field shape
 - Reports are accessible at specified paths or in a common directory structure
 - Write permissions exist to create the output directory and portfolio artifact bundle (MD, JSON, HTML, and metadata.json)
 
@@ -52,7 +52,7 @@ This portfolio TD focuses exclusively on cross-cutting BLOCKER/RISK identificati
 
 ### Step 0: Read additionalPlanContext
 
-Before beginning discovery, read the portfolio assessment context from `additionalPlanContext` to extract framing information and service configuration.
+Before beginning discovery, read the portfolio analysis context from `additionalPlanContext` to extract framing information and service configuration.
 
 #### 0.1 Read Portfolio Context
 
@@ -60,7 +60,7 @@ Extract the following fields from `additionalPlanContext`:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `portfolio_name` | string | Yes | — | Identifier for the portfolio. Used to name the output bundle (`{portfolio_name}-portfolio-ara-report.{md,json,html,metadata.json}`) and to populate report headers and metadata. If absent, terminate with `"Portfolio assessment failed: portfolio_name is required in additionalPlanContext."` |
+| `portfolio_name` | string | Yes | — | Identifier for the portfolio. Used to name the output bundle (`{portfolio_name}-portfolio-ara-report.{md,json,html,metadata.json}`) and to populate report headers and metadata. If absent, terminate with `"Portfolio analysis failed: portfolio_name is required in additionalPlanContext."` |
 | `context` | string | No | — | Free-text description of the portfolio (e.g., "E-commerce platform with 5 microservices migrating to agentic integration"). Used to frame portfolio-level remediation guidance and recommendations. |
 | `service_inventory` | object[] | No | — | List of services in the portfolio with metadata (name, path, priority, repo_type, agent_scope, tags). Used to enrich the service-by-service summary and cross-reference with discovered reports. |
 | `dependency_overrides` | object[] | No | — | Explicit service dependency declarations. Each entry has: `source` (service name), `target` (service name), `type` (sync, async, shared_db, shared_infra), and `description`. Used to build the service dependency map in Step 5. |
@@ -124,10 +124,10 @@ Scan the target directory structure to find all individual ARA report JSON artif
 - Verify each discovered file exists and is readable
 - Verify each file is a valid JSON document
 - Verify each file is the expected ARA report shape:
-  - Has `assessment_type == "ara"` at the root
+  - Has `analysis_type == "ara"` at the root
   - Has a `classification` object with `tier`, `blocker_count`, `risk_safety_count`
   - Has a `findings[]` array with question IDs (API-Q1 through ENG-Q5) and the 12 per-finding fields
-  - Has a `metadata` object with `assessment_type` and `td_version`
+  - Has a `metadata` object with `analysis_type` and `td_version`
 - Exclude files that don't match the expected shape — log a warning for each excluded file
 - Log warnings for inaccessible or malformed files
 - **Terminate with a clear error if fewer than 2 valid ARA reports are found**
@@ -156,7 +156,7 @@ For each ARA report JSON found, extract the data needed for portfolio-level anal
 Extract from the JSON `metadata` object at the root:
 
 - **Service/repository name** — from `metadata.repo_name` (or derive from the filename)
-- **Assessment date** — from `metadata.assessment_date` (validate YYYY-MM-DD format)
+- **Analysis date** — from `metadata.analysis_date` (validate YYYY-MM-DD format)
 - **Repo type** — from `metadata.repo_type` (one of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`). If absent, assume `application`.
 - **Agent scope** — from `metadata.agent_scope` (one of: `read-only`, `write-enabled`). If absent, assume `read-only`.
 
@@ -298,15 +298,15 @@ Order sections by repos_blocked descending — the section blocking the most rep
 
 #### 3.5 Readiness Snapshot
 
-Produce a structured, machine-parseable summary block containing the key portfolio metrics. This block is designed for consumption by dashboard and tracking systems that build time-series views across multiple assessment runs.
+Produce a structured, machine-parseable summary block containing the key portfolio metrics. This block is designed for consumption by dashboard and tracking systems that build time-series views across multiple analysis runs.
 
-The snapshot captures the state of the portfolio at assessment time. Delta calculations (blockers resolved, profile changes, velocity) are the responsibility of the consuming system, not this TD.
+The snapshot captures the state of the portfolio at analysis time. Delta calculations (blockers resolved, profile changes, velocity) are the responsibility of the consuming system, not this TD.
 
 Fields:
 
 | Field | Type | Source |
 |-------|------|--------|
-| `assessment_date` | string (YYYY-MM-DD) | Report date |
+| `analysis_date` | string (YYYY-MM-DD) | Report date |
 | `total_services` | integer | Count of assessed services |
 | `agent_ready` | integer | Count with Agent-Ready profile |
 | `pilot_ready` | integer | Count with Pilot-Ready profile |
@@ -547,7 +547,7 @@ If `context` was provided in additionalPlanContext, use it to tailor the remedia
 
 ### Step 7: Recommend Agentic Programs
 
-Based on the portfolio-wide assessment findings, recommend relevant agentic enablement programs and engagement workshops.
+Based on the portfolio-wide analysis findings, recommend relevant agentic enablement programs and engagement workshops.
 
 #### 7.1 Program Catalog and Trigger Logic
 
@@ -577,7 +577,7 @@ For each triggered program:
 - **Relevance** — Why this program is recommended based on portfolio findings
 - **Trigger findings** — Specific portfolio metrics that triggered the recommendation
 - **What it provides** — Brief description of the program's value
-- **Suggested timing** — When to run relative to other programs or assessment phases
+- **Suggested timing** — When to run relative to other programs or analysis phases
 - **Next step** — Recommended action (e.g., "Request engagement via AWS Solutions Architect")
 
 If no programs are triggered, include a brief note: "No specific agentic program recommendations based on current findings. As the portfolio's agentic readiness improves, re-assess to identify program eligibility."
@@ -585,7 +585,7 @@ If no programs are triggered, include a brief note: "No specific agentic program
 
 ### Step 8: Evaluate Portfolio-Level Questions
 
-Evaluate questions that can only be answered by looking across multiple repos. These are distinct from cross-cutting analysis (Step 4) which aggregates individual findings — portfolio-level questions assess capabilities that no individual repo assessment can see.
+Evaluate questions that can only be answered by looking across multiple repos. These are distinct from cross-cutting analysis (Step 4) which aggregates individual findings — portfolio-level questions assess capabilities that no individual repo analysis can see.
 
 Individual report findings are never overridden. Where a portfolio-level finding provides context for an individual blocker, annotate it with "potentially mitigated — verify" but do not change individual counts.
 
@@ -642,7 +642,7 @@ The portfolio ARA TD emits a **four-artifact bundle**: `{portfolio_name}-portfol
 # Portfolio Agentic Readiness Analysis Report
 
 **Date**: <YYYY-MM-DD>
-**Services Assessed**: <count>
+**Services Analyzed**: <count>
 **Portfolio Context**: <context from additionalPlanContext, or "Not provided">
 ```
 
@@ -667,7 +667,7 @@ The portfolio ARA TD emits a **four-artifact bundle**: `{portfolio_name}-portfol
 
 | Metric | Value |
 |--------|-------|
-| Total Services Assessed | N |
+| Total Services Analyzed | N |
 | Services Ready for Agents (Agent-Ready + Pilot-Ready) | N (X%) |
 | Services Requiring Remediation | N (X%) |
 | Cross-Cutting BLOCKERs (same blocker in 2+ repos) | N |
@@ -696,7 +696,7 @@ The portfolio ARA TD emits a **four-artifact bundle**: `{portfolio_name}-portfol
 
 | Metric | Value |
 |--------|-------|
-| assessment_date | <YYYY-MM-DD> |
+| analysis_date | <YYYY-MM-DD> |
 | total_services | <N> |
 | agent_ready | <N> |
 | pilot_ready | <N> |
@@ -994,12 +994,12 @@ Group related BLOCKERs that can be addressed together.>
 
 ---
 
-### Assessment Inventory
+### Analysis Inventory
 
 ```markdown
-## Assessment Inventory
+## Analysis Inventory
 
-| # | Service | Report File | Assessment Date | Repo Type | Agent Scope |
+| # | Service | Report File | Analysis Date | Repo Type | Agent Scope |
 |---|---------|-------------|-----------------|-----------|-------------|
 | 1 | <service name> | <file path> | <date> | <repo_type> | <agent_scope> |
 | <repeat for each service> |
@@ -1029,27 +1029,27 @@ The complete report structure, for reference:
 6. Recommended Actions (Agentic Program Recommendations)
 7. Portfolio-Level Findings
 8. Service-by-Service Summary
-9. Assessment Inventory
+9. Analysis Inventory
 ```
 
 ## Constraints and Guardrails
 
 Strictly follow these rules at all times:
 
-- **Read-only assessment**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio artifact bundle (MD, JSON, HTML, and metadata.json).
+- **Read-only analysis**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio artifact bundle (MD, JSON, HTML, and metadata.json).
 - **Stay on the current branch**: This is an analysis-only task. Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out and perform all work there.
-- **Minimum 2 reports**: The portfolio assessment requires at least 2 valid ARA reports. Terminate with a clear error if fewer than 2 are found.
+- **Minimum 2 reports**: The portfolio analysis requires at least 2 valid ARA reports. Terminate with a clear error if fewer than 2 are found.
 - **N/A exclusion**: Questions scored as N/A for a service do NOT count as gaps for that service in cross-cutting analysis. A question that is N/A for a service is excluded from BLOCKER and RISK counts for cross-cutting identification.
 - **Cross-cutting thresholds**: BLOCKERs require 2+ repos. RISKs require max(3, 33% of applicable repos) with a floor of 2 for portfolios with fewer than 4 applicable repos. Do not lower these thresholds.
 - **Evidence-based**: All cross-cutting findings must reference specific question IDs and service names. Do not make vague claims — state which services are affected and which questions triggered the finding.
 - **Conditional BLOCKER accuracy**: When counting cross-cutting BLOCKERs for conditional questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2), only count services where the conditional resolved to BLOCKER (write-enabled scope, or for DATA-Q1 when B1 fires under write-enabled scope). Do not count services where it resolved to INFO/RISK (read-only scope, or for DATA-Q1 when only B2/B3 fired).
-- **Report completeness**: The output report must contain all required sections: executive dashboard, cross-cutting BLOCKERs, cross-cutting RISKs, service dependency map, remediation guidance, agentic program recommendations, portfolio-level findings (PORT-ARA-Q1 through PORT-ARA-Q5), service-by-service summary, and assessment inventory.
+- **Report completeness**: The output report must contain all required sections: executive dashboard, cross-cutting BLOCKERs, cross-cutting RISKs, service dependency map, remediation guidance, agentic program recommendations, portfolio-level findings (PORT-ARA-Q1 through PORT-ARA-Q5), service-by-service summary, and analysis inventory.
 
 ---
 
 ### Four-Artifact Output Contract (Portfolio ARA)
 
-Every portfolio ARA assessment emits four artifacts: three report artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
+Every portfolio ARA analysis emits four artifacts: three report artifacts plus a metadata sidecar. All four files use the same base name derived from the portfolio name.
 
 | Artifact | Filename | Purpose |
 |---|---|---|
@@ -1062,25 +1062,25 @@ The JSON artifact is the canonical contract. If any artifacts disagree on a fiel
 
 #### Artifact Layout
 
-The four-artifact bundle is emitted at the **portfolio root** under the `agentic-readiness-assessment/` directory:
+The four-artifact bundle is emitted at the **portfolio root** under the `agentic-readiness-analysis/` directory:
 
 ```
 {portfolio-root}/
-└── agentic-readiness-assessment/
+└── agentic-readiness-analysis/
     ├── {portfolio-name}-portfolio-ara-report.md
     ├── {portfolio-name}-portfolio-ara-report.json
     ├── {portfolio-name}-portfolio-ara-report.html
     └── {portfolio-name}-portfolio-ara-report.metadata.json
 ```
 
-The directory `agentic-readiness-assessment/` is the same canonical location used for per-repo ARA reports (which live one level deeper, under `services/{repo-name}/agentic-readiness-assessment/`). Per-repo and portfolio reports are distinguished by the filename prefix: per-repo uses `{repo-name}`, portfolio uses `{portfolio-name}-portfolio`.
+The directory `agentic-readiness-analysis/` is the same canonical location used for per-repo ARA reports (which live one level deeper, under `services/{repo-name}/agentic-readiness-analysis/`). Per-repo and portfolio reports are distinguished by the filename prefix: per-repo uses `{repo-name}`, portfolio uses `{portfolio-name}-portfolio`.
 
 #### Metadata Sidecar Fields
 
 ```json
 {
-  "assessment_type": "portfolio-ara",
-  "assessment_date": "YYYY-MM-DD",
+  "analysis_type": "portfolio-ara",
+  "analysis_date": "YYYY-MM-DD",
   "td_version": "portfolio-agentic-readiness"
 }
 ```
@@ -1093,8 +1093,8 @@ The Portfolio ARA JSON artifact MUST emit these top-level keys in the order show
 
 | Key | Description |
 |---|---|
-| `assessment_type` | Literal `"portfolio-ara"` |
-| `metadata` | Version, assessment date, portfolio name, TD version, services_assessed, consumed_per_repo_json_files count |
+| `analysis_type` | Literal `"portfolio-ara"` |
+| `metadata` | Version, analysis date, portfolio name, TD version, services_analyzed, consumed_per_repo_json_files count |
 | `summary` | 5 KPI counts: repositories_analyzed, total_findings, high_severity_findings, medium_severity_findings, low_severity_findings |
 | `filter_vocab` | Filter-eligible values for webapp UI chips |
 | `executive_dashboard` | Readiness distribution, portfolio summary, repo-type distribution, blocker heatmap |
@@ -1361,7 +1361,7 @@ Table columns: `Program`, `Description`, `Why Recommended`, `Duration`
 
 | Visual location | JSON source |
 |---|---|
-| Header | `metadata.{portfolio_name, assessment_date, services_assessed}` + agent_scope |
+| Header | `metadata.{portfolio_name, analysis_date, services_analyzed}` + agent_scope |
 | Executive Summary | `summary.*` + `executive_dashboard.*` + `recommended_actions[]` |
 | Stats cards | `summary.*` + `executive_dashboard.readiness_distribution.agent_ready.count` |
 | Portfolio Distribution chart | `executive_dashboard.readiness_distribution` |
@@ -1384,16 +1384,16 @@ The portfolio TD consumes ONLY per-repo JSON. Failure modes are explicit, loud, 
 
 ### Missing Per-Repo JSON
 
-IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio assessment SHALL fail with a message listing ALL missing files at once (not one at a time).
+IF any per-repo JSON listed in the portfolio configuration is missing from the consumed corpus, THEN the portfolio analysis SHALL fail with a message listing ALL missing files at once (not one at a time).
 
-Example: `"Portfolio assessment failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-assessment/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-assessment/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-assessment/wat--wub-ara-report.json."`
+Example: `"Portfolio analysis failed: 3 per-repo JSON artifacts missing: services/foo--bar/agentic-readiness-analysis/foo--bar-ara-report.json, services/baz--qux/agentic-readiness-analysis/baz--qux-ara-report.json, services/wat--wub/agentic-readiness-analysis/wat--wub-ara-report.json."`
 
 ### Dangling Cross-Reference
 
-IF a `question_id` or `repo_name` referenced in portfolio JSON does not resolve into at least one consumed per-repo JSON of the matching `assessment_type`, THEN the portfolio assessment SHALL fail naming the dangling reference.
+IF a `question_id` or `repo_name` referenced in portfolio JSON does not resolve into at least one consumed per-repo JSON of the matching `analysis_type`, THEN the portfolio analysis SHALL fail naming the dangling reference.
 
-Example: `"Portfolio assessment failed: findings[3].question_id='AUTH-Q9' does not match any rubric question in consumed ARA per-repo JSONs."`
+Example: `"Portfolio analysis failed: findings[3].question_id='AUTH-Q9' does not match any rubric question in consumed ARA per-repo JSONs."`
 
 ### No Silent Fallback
 
-The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the assessment fails. The TD consumes JSON-only.
+The portfolio TD SHALL NOT fall back to parsing per-repo MD or HTML. If per-repo JSON is unavailable, unreadable, or invalid, the analysis fails. The TD consumes JSON-only.

@@ -1,0 +1,1297 @@
+{
+  "analysis_type": "mod",
+  "version": "V6",
+  "metadata": {
+    "repository": "FlowiseAI--Flowise",
+    "analysis_date": "2025-05-07",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application owns persistent state via TypeORM entities (20 entities with CRUD operations), exposes a full REST API surface with create/update/delete endpoints, and manages user-specific data (API keys, credentials, workspaces).",
+    "priority": "P2",
+    "tags": [
+      "typescript",
+      "ai",
+      "llm"
+    ],
+    "context": "Low-code UI for building LLM flows and agents.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": true
+    },
+    "report_format_version": "V6"
+  },
+  "overall_score": 2.14,
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.45,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.33,
+      "score_rating": "Needs Work",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 3.25,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 2.0,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.67,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    }
+  ],
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 7,
+    "medium_count": 22,
+    "low_count": 5,
+    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
+      "score": 1,
+      "gap": "No managed compute \u2014 Docker Compose only, no ECS/EKS/Lambda",
+      "impact": "Blocks container orchestration, auto-scaling, and HA"
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "No IaC \u2014 zero Terraform, CDK, or CloudFormation",
+      "impact": "Cannot reproduce environments, no disaster recovery"
+    },
+    {
+      "rank": 3,
+      "question_id": "SEC-Q1",
+      "title": "Audit Logging",
+      "score": 1,
+      "gap": "No CloudTrail or equivalent audit logging in IaC",
+      "impact": "No forensic analysis capability, compliance gap"
+    },
+    {
+      "rank": 4,
+      "question_id": "OPS-Q5",
+      "title": "Deployment Strategy",
+      "score": 1,
+      "gap": "No blue/green or canary \u2014 direct-to-production via manual dispatch",
+      "impact": "Regressions affect all users immediately"
+    },
+    {
+      "rank": 5,
+      "question_id": "INF-Q5",
+      "title": "Network Security",
+      "score": 1,
+      "gap": "No VPC, security groups, or network segmentation defined",
+      "impact": "Services potentially exposed without isolation"
+    }
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "API-Aware Agent",
+      "prerequisite": "API docs exist (APP-Q5 = 2) and structured JSON responses detected via Swagger/OpenAPI spec",
+      "what_it_enables": "An agent that discovers and invokes Flowise API endpoints as tools for natural language orchestration",
+      "additional_steps": "The Swagger spec needs to be fully populated; all 56 route modules should have OpenAPI annotations",
+      "effort": "Medium"
+    },
+    {
+      "name": "RAG-Based Knowledge Agent",
+      "prerequisite": "Documentation exists in repository \u2014 README, i18n docs, SECURITY.md, extensive .env.example documentation",
+      "what_it_enables": "A knowledge agent that indexes Flowise documentation and provides developer assistance",
+      "additional_steps": "Consolidate documentation into a structured corpus",
+      "effort": "Low"
+    },
+    {
+      "name": "Observability Agent",
+      "prerequisite": "Structured logging and tracing in place (OPS-Q1 = 3) with Winston JSON logging and OpenTelemetry traces",
+      "what_it_enables": "An agent that queries logs, traces incidents, and suggests root causes for failed predictions",
+      "additional_steps": "Ensure OTel trace propagation covers BullMQ worker flows",
+      "effort": "Medium"
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Strangler Fig (Parallel Track)",
+    "alternate_approach": "Conditional / Adaptive",
+    "services_to_extract": [
+      "Prediction/execution engine",
+      "Document store service",
+      "Credential vault"
+    ],
+    "patterns": [
+      "Anti-corruption Layer",
+      "Saga Pattern",
+      "Event Sourcing",
+      "Hexagonal Architecture"
+    ]
+  },
+  "evaluations": [
+    {
+      "question_id": "INF-Q1",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q2",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q3",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q4",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q5",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q6",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q7",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q8",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q9",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q10",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "INF-Q11",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "APP-Q1",
+      "score": 4,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "APP-Q2",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "APP-Q3",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "APP-Q4",
+      "score": 3,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "APP-Q5",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "APP-Q6",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "DATA-Q1",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "DATA-Q2",
+      "score": 3,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "DATA-Q3",
+      "score": 4,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "DATA-Q4",
+      "score": 4,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "SEC-Q1",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "SEC-Q2",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "SEC-Q3",
+      "score": 3,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "SEC-Q4",
+      "score": 3,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "SEC-Q5",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "SEC-Q6",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "SEC-Q7",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q1",
+      "score": 3,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q2",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q3",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q4",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q5",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q6",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q7",
+      "score": 1,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q8",
+      "score": 2,
+      "status": "evaluated"
+    },
+    {
+      "question_id": "OPS-Q9",
+      "score": 1,
+      "status": "evaluated"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Managed Compute",
+      "description": "All compute runs as Docker containers orchestrated by Docker Compose. No ECS, EKS, Lambda, or Fargate resources are defined.",
+      "gap": "No managed container orchestration or serverless compute. Docker Compose provides no auto-scaling, no self-healing, and no managed deployment lifecycle.",
+      "recommendation": "Deploy on EKS with separate Deployments for the main server and BullMQ worker. Use Fargate for burstable worker pods. Define Helm charts for both workloads.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "docker/docker-compose.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Self-Managed Databases",
+      "description": "Databases are self-managed via Docker Compose or local SQLite. No managed database infrastructure (RDS, Aurora, DynamoDB) is defined in IaC.",
+      "gap": "All databases are self-managed with no automated failover, backup, or scaling.",
+      "recommendation": "Migrate to Aurora PostgreSQL for the primary database with Multi-AZ failover. Use ElastiCache for Redis.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "packages/server/src/DataSource.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Basic Workflow Orchestration",
+      "description": "BullMQ provides task queue orchestration but multi-step workflows are hardcoded as sequential application logic.",
+      "gap": "Multi-step workflows are hardcoded in BullMQ job handlers with no visual management or cross-service state tracking.",
+      "recommendation": "Evaluate AWS Step Functions for document processing and chatflow execution workflows.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/server/src/index.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Self-Managed Messaging Infrastructure",
+      "description": "BullMQ uses self-managed Redis. No managed messaging service (SQS, SNS, EventBridge) is in use.",
+      "gap": "Self-managed Redis for messaging. Redis failure would take down the queue system without managed failover.",
+      "recommendation": "Migrate to ElastiCache for Redis. Introduce EventBridge for event-driven patterns.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/server/src/utils/rateLimit.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Network Security",
+      "description": "No VPC, subnet, security group, or network segmentation is defined. Docker Compose exposes port 3000 directly.",
+      "gap": "No network segmentation. Services are not deployed in private subnets with least-privilege security groups.",
+      "recommendation": "Define a VPC with private subnets for EKS worker nodes, Aurora, and ElastiCache. Use VPC endpoints for S3 and Secrets Manager.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "docker/docker-compose.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Managed API Entry Point",
+      "description": "The Express server is exposed directly on port 3000 without API Gateway, ALB, or CloudFront.",
+      "gap": "No managed entry point with throttling, request validation, and WAF.",
+      "recommendation": "Deploy API Gateway in front of the EKS service with throttling and WAF. Use CloudFront for the React UI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Auto-Scaling",
+      "description": "Docker Compose runs single instances with no scaling mechanism. No HPA, ASG, or auto-scaling configuration exists.",
+      "gap": "All capacity is statically provisioned. Cannot respond to traffic spikes.",
+      "recommendation": "Configure HPA on EKS for both server and worker deployments. Configure Aurora auto-scaling for read replicas.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Backup and Recovery",
+      "description": "No backup configuration exists. No automated backups, no PITR, no restore procedures.",
+      "gap": "No automated backups for any data store. Data loss would be unrecoverable.",
+      "recommendation": "Aurora PostgreSQL provides automated backups and PITR. Enable S3 versioning. Define an AWS Backup plan.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Multi-AZ Deployment",
+      "description": "Single-instance Docker Compose deployment. Architecture supports multi-AZ but no HA configuration is defined.",
+      "gap": "No multi-AZ deployment. Single point of failure for all components.",
+      "recommendation": "Deploy on EKS across 2+ AZs. Use Aurora Multi-AZ. Use ElastiCache Multi-AZ.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docker/docker-compose.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Infrastructure as Code",
+      "description": "Zero infrastructure is defined in IaC. No Terraform, CDK, CloudFormation, Helm charts, or Kustomize.",
+      "gap": "0% IaC coverage. Infrastructure changes are manual, non-reproducible, and undocumented.",
+      "recommendation": "Create Terraform modules defining VPC, EKS, Aurora, ElastiCache, S3, API Gateway, IAM, and CloudWatch alarms.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Partial CI/CD Automation",
+      "description": "GitHub Actions provides automated build/test but deployment is manual dispatch only.",
+      "gap": "Build is automated but deployment is manual. No continuous delivery pipeline.",
+      "recommendation": "Extend with automated deployment stages. Implement ArgoCD for GitOps on EKS.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": ".github/workflows/docker-image-ecr.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith with Identifiable Modules",
+      "description": "Single deployable unit with shared database schema. Clear package boundaries but no independent deployment or scaling.",
+      "gap": "All controllers access shared TypeORM entities. No independent scaling of sub-domains.",
+      "recommendation": "Apply Strangler Fig pattern to extract prediction engine, document store, and credential vault.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/server/src/database/entities/",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Primarily Synchronous Communication",
+      "description": "All API endpoints respond synchronously. BullMQ async is optional and intra-application.",
+      "gap": "No event-driven communication between components. No EventBridge or managed messaging.",
+      "recommendation": "Introduce EventBridge for cross-service state propagation when services are extracted.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/server/src/index.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-Running Process Handling Partially Async",
+      "description": "BullMQ handles long-running operations but some prediction paths are still synchronous when not in queue mode.",
+      "gap": "Default mode is non-queue (synchronous predictions). Status polling not universally applied.",
+      "recommendation": "Default all prediction paths to async. Expose standardized job status API.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "docker/worker/Dockerfile",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Single API Version Without Evolution Strategy",
+      "description": "API uses /api/v1/ prefix but only one version exists with no deprecation policy.",
+      "gap": "No backward compatibility guarantees or migration path for breaking changes.",
+      "recommendation": "Document a versioning policy. Use API Gateway versioning stages for production.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "packages/server/src/routes/index.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No Service Discovery",
+      "description": "All service endpoints are configured via static environment variables. No dynamic discovery.",
+      "gap": "All endpoints hard-coded in env vars. No Kubernetes DNS, Cloud Map, or service registry.",
+      "recommendation": "Leverage Kubernetes DNS on EKS. Use AWS Cloud Map if extracting to microservices.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/server/.env.example",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unstructured Data on Local Filesystem by Default",
+      "description": "S3 is supported but default is local filesystem. No managed parsing pipeline (Textract).",
+      "gap": "Default is local filesystem storage. No managed parsing pipeline.",
+      "recommendation": "Default to S3 in production. Evaluate Textract for document parsing.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/server/.env.example",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Mostly Centralized Data Access",
+      "description": "TypeORM provides centralized data access. Some direct queries and vector store connections outside the main layer.",
+      "gap": "Components package has independent database connections for vector stores.",
+      "recommendation": "Standardize connection management for vector store backends.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "packages/server/src/DataSource.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Audit Logging",
+      "description": "No CloudTrail or infrastructure-level audit logging. Only application-level Winston request logs.",
+      "gap": "No infrastructure audit trail. No immutable log storage. No forensic analysis capability.",
+      "recommendation": "Enable CloudTrail with log file validation and S3 Object Lock. Define in IaC.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Infrastructure Encryption at Rest",
+      "description": "Application-level crypto-js encryption exists but no KMS, S3 bucket encryption, or RDS encryption.",
+      "gap": "No KMS. No S3 encryption policy. No database encryption at rest.",
+      "recommendation": "Configure customer-managed KMS keys for Aurora, S3, and ElastiCache.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "packages/server/.env.example",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Application-Level Auth Without Gateway Defense",
+      "description": "JWT auth with Passport.js exists but no API Gateway authorizer for defense-in-depth.",
+      "gap": "No API Gateway authorizer. Public endpoints rely solely on application-level rate limiting.",
+      "recommendation": "Configure API Gateway JWT authorizers and WAF rules.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/server/src/enterprise/middleware/passport/",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Default Auth is Self-Managed",
+      "description": "External IdPs supported (Auth0, Google, OIDC) but default path is local username/password.",
+      "gap": "Primary auth is self-managed. No Cognito integration.",
+      "recommendation": "Consider Cognito User Pool as the centralized identity provider for AWS deployment.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "packages/server/src/enterprise/sso/",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Most Secrets in Environment Variables",
+      "description": "Only encryption master key supports Secrets Manager. Database, Redis, S3 credentials are plain env vars.",
+      "gap": "Most production credentials in env vars without rotation.",
+      "recommendation": "Migrate all secrets to Secrets Manager with rotation. Use IAM roles for S3.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "packages/server/.env.example",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Compute Hardening",
+      "description": "Single-stage Dockerfile with build tools in production image. No vulnerability scanning.",
+      "gap": "No vulnerability scanning. Build tools and chromium in production image.",
+      "recommendation": "Use multi-stage builds. Enable ECR scanning. Integrate Trivy in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "Dockerfile",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No Security Scanning in Pipeline",
+      "description": "CI runs lint and tests but no SAST, dependency scanning, or container scanning.",
+      "gap": "No Dependabot, npm audit, SAST, or container image scanning in CI.",
+      "recommendation": "Add npm audit, Dependabot, Semgrep, and ECR image scanning.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/main.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Tracing Gaps in Worker Flows",
+      "description": "OpenTelemetry integrated on primary server. Unclear if trace context propagates through BullMQ.",
+      "gap": "Trace propagation through queue boundaries not confirmed. OTel exports to Datadog only.",
+      "recommendation": "Ensure trace propagation through BullMQ. Add X-Ray exporter to OTel Collector.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "packages/server/src/metrics/OpenTelemetry.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No SLO Definitions",
+      "description": "No SLO definitions, error budgets, or latency targets defined.",
+      "gap": "Cannot measure whether the system is meeting user expectations.",
+      "recommendation": "Define SLOs for prediction latency, chatflow success rate, and document processing completion.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Operational Metrics Only",
+      "description": "Prometheus counters and PostHog analytics exist but no formal business outcome metrics.",
+      "gap": "No business outcome metrics (cost-per-prediction, time-to-value) in observability stack.",
+      "recommendation": "Define and publish business metrics to CloudWatch custom metrics.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "packages/server/src/metrics/Prometheus.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Alerting Configured",
+      "description": "Metrics collected but no alerting rules or anomaly detection configured.",
+      "gap": "No automated response to anomalies. Dashboards only.",
+      "recommendation": "Configure CloudWatch anomaly detection. Define Grafana alerting rules.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "metrics/prometheus/prometheus.config.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Deployment Strategy",
+      "description": "Manual dispatch to ECR. No blue/green, canary, or staged deployment. No rollback mechanism.",
+      "gap": "Direct-to-production with no staged rollout or automated rollback.",
+      "recommendation": "Implement ArgoCD on EKS with Argo Rollouts for canary deployments.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": ".github/workflows/docker-image-ecr.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Limited Integration Testing",
+      "description": "Unit tests exist. Cypress E2E covers only 2 basic flows. No integration tests for AI workflows.",
+      "gap": "Missing integration tests for prediction, document processing, and multi-agent execution.",
+      "recommendation": "Add integration tests for critical AI workflows. Use Testcontainers for PostgreSQL/Redis.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/server/cypress/e2e/",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Incident Response Automation",
+      "description": "No runbooks, no automated remediation, no self-healing patterns.",
+      "gap": "Incident response is entirely ad hoc.",
+      "recommendation": "Create runbooks for common incidents. Implement SSM Automation for remediation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Observability Ownership",
+      "description": "Dashboards exist but no CODEOWNERS, no named alarm owners, no team attribution.",
+      "gap": "No ownership attribution on observability assets.",
+      "recommendation": "Create CODEOWNERS. Add team tags to dashboards and alarms.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "metrics/grafana/",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No Resource Tagging",
+      "description": "No IaC means no resource tagging governance.",
+      "gap": "No tags on any AWS resources. No cost allocation or ownership attribution.",
+      "recommendation": "Define mandatory tags in IaC: Environment, Service, Team, CostCenter, ManagedBy.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2 < 3 (primary) AND INF-Q1 < 3 AND APP-Q3 < 3 (supporting)",
+      "triggering_questions": [
+        {
+          "question_id": "APP-Q2",
+          "score": 2,
+          "note": "Monolith with identifiable modules but shared database schema"
+        },
+        {
+          "question_id": "INF-Q1",
+          "score": 1,
+          "note": "All compute on Docker Compose"
+        },
+        {
+          "question_id": "APP-Q3",
+          "score": 2,
+          "note": "Primarily synchronous communication"
+        }
+      ],
+      "detail": {
+        "recommended_services": [
+          "EKS",
+          "API Gateway",
+          "EventBridge",
+          "Aurora PostgreSQL",
+          "ElastiCache",
+          "S3"
+        ],
+        "immediate_actions": [
+          "Deploy monolith on EKS as Phase 1",
+          "Define Helm charts",
+          "Extract prediction engine as first service"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN",
+          "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1 < 3 AND no container definitions \u2014 but Dockerfiles exist (contextual guard blocks)",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q1",
+          "score": 1,
+          "note": "Score meets threshold but contextual guard blocks: Dockerfiles and Docker Compose already exist"
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "Compute is already containerized via Docker. Dockerfiles and Docker Compose are present. The pathway targets VM-to-container migration which is not applicable here."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4 < 3 AND commercial DB engines detected \u2014 neither condition met",
+      "triggering_questions": [
+        {
+          "question_id": "DATA-Q4",
+          "score": 4,
+          "note": "No stored procedures; all logic in application layer. Threshold not met."
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "No commercial database engines detected. Application uses PostgreSQL, MySQL, MariaDB, SQLite \u2014 all open source."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2 < 3 (self-managed databases detected)",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q2",
+          "score": 1,
+          "note": "All databases self-managed via Docker Compose or local file"
+        }
+      ],
+      "detail": {
+        "recommended_services": [
+          "Aurora PostgreSQL",
+          "DynamoDB",
+          "ElastiCache",
+          "AWS DMS"
+        ],
+        "immediate_actions": [
+          "Provision Aurora PostgreSQL with Multi-AZ",
+          "Migrate Redis to ElastiCache",
+          "Configure automated backups"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
+          "https://skillbuilder.aws/learn/ND246G8Y3W"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q4 < 3 AND evidence of data processing workloads \u2014 contextual guard: no analytics workloads detected",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q4",
+          "score": 2,
+          "note": "Score meets threshold but no data processing/analytics workloads exist. BullMQ is a task queue, not an analytics pipeline."
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "No data processing, ETL, or analytics workloads detected. BullMQ handles task execution (LLM predictions, document processing) not data analytics."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10 < 3 OR INF-Q11 < 3 OR OPS-Q5 < 3 OR OPS-Q6 < 3",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q10",
+          "score": 1,
+          "note": "Zero IaC coverage"
+        },
+        {
+          "question_id": "INF-Q11",
+          "score": 2,
+          "note": "Build automated but deployment manual"
+        },
+        {
+          "question_id": "OPS-Q5",
+          "score": 1,
+          "note": "No deployment strategy"
+        },
+        {
+          "question_id": "OPS-Q6",
+          "score": 2,
+          "note": "Limited integration testing"
+        }
+      ],
+      "detail": {
+        "recommended_services": [
+          "EKS",
+          "ECR",
+          "CodePipeline",
+          "CodeBuild",
+          "CDK/Terraform"
+        ],
+        "immediate_actions": [
+          "Create Terraform/CDK IaC modules",
+          "Implement ArgoCD for GitOps",
+          "Add integration test suite"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent frameworks detected \u2014 but extensive AI frameworks ARE present (LangChain, Bedrock, OpenAI, etc.)",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "AI/agent frameworks are extensively present. This IS an AI-native platform with 30+ LLM providers, 25+ vector databases, LangChain/LangGraph/LlamaIndex, and MCP protocol support. The Move to AI pathway targets systems that lack AI capabilities \u2014 not applicable here."
+    }
+  ]
+}

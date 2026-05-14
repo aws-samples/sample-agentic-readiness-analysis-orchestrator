@@ -1,0 +1,607 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2025-05-08",
+    "td_version": "agentic-readiness-analysis",
+    "report_format_version": "V6",
+    "target": "Prowlarr--Prowlarr",
+    "repository_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Prowlarr owns persistent state in SQLite/PostgreSQL databases, exposes full CRUD operations on business entities (indexers, applications, tags, notifications), and manages user-specific configuration data.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["csharp", "media", "desktop"],
+    "context": "Indexer manager/proxy for the *arr suite.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 1,
+    "medium_count": 17,
+    "low_count": 10,
+    "safety_impact_medium_count": 7,
+    "rule_matched": "1-2 High → Remediation Required"
+  },
+  "summary": {
+    "blocker_count": 1,
+    "risk_safety_count": 7,
+    "risk_quality_count": 10,
+    "info_count": 10,
+    "na_count": 0,
+    "not_evaluated_count": 15,
+    "total": 43,
+    "core_questions_evaluated": 24,
+    "extended_questions_triggered": 4,
+    "extended_questions_not_triggered": 15
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No machine identity authentication — single shared API key",
+      "description": "Prowlarr uses a single shared API key for all programmatic access. The same API key is used by all consumers — there is no mechanism to issue distinct machine identities per agent or per consumer. Authentication validates possession of the key but cannot distinguish which agent instance made a call.",
+      "gap": "No support for per-agent machine identity. A single shared API key cannot provide principal attribution in audit logs.",
+      "recommendation": "Implement multiple API key support with principal labels. Each agent or integration gets its own key that is logged with its label/name in the Auth logger.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Prowlarr.Http/Authentication/ApiKeyAuthenticationHandler.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Implement multiple API key support with principal labels.",
+          "target_state": "Each agent identity has a unique credential with attribution in audit logs, and individual keys can be revoked without affecting other consumers.",
+          "estimated_effort": "Medium",
+          "dependencies": ["AUTH-Q7"]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No scoped permissions — binary access model",
+      "description": "The application has no scoped permission model. Authentication is binary — a valid API key grants full access to all endpoints and all operations (read, write, delete). There is no concept of roles, scopes, or permission levels.",
+      "gap": "No least-privilege enforcement. An agent with the API key can perform any operation including destructive ones.",
+      "recommendation": "Implement role-based access control (RBAC) with at least read-only and admin roles. Add scope claims to API keys.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Prowlarr.Http/Authentication/ApiKeyAuthenticationHandler.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No action-level authorization",
+      "description": "No action-level authorization exists. Once authenticated, there is no distinction between read and write operations. A caller with the API key can GET, POST, PUT, and DELETE on any resource.",
+      "gap": "Cannot restrict an agent to read-only operations at the application level.",
+      "recommendation": "Introduce an authorization policy that distinguishes read (GET) from write (POST/PUT/DELETE) operations, enforceable per authenticated principal.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/NzbDrone.Host/Startup.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No immutable audit logging for API operations",
+      "description": "Authentication events are logged locally. However, there is no immutable audit trail for API operations. Logs are written to local rotating files with no integrity protection.",
+      "gap": "No immutable, tamper-evident audit log for API operations. No centralized audit logging. API operation logs do not record which principal performed the action.",
+      "recommendation": "Add audit logging middleware that logs principal identity, HTTP method, resource path, and timestamp for all state-changing operations. Ship logs to an immutable store.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Prowlarr.Http/Authentication/AuthenticationService.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, audit logging still important but not a deployment blocker.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, reducing but not eliminating the need for immutable audit trails."
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No per-agent identity suspension capability",
+      "description": "There is only one API key for the entire application. It cannot be selectively revoked for one agent without revoking access for all consumers.",
+      "gap": "All-or-nothing key revocation. Cannot isolate a misbehaving agent without disrupting all integrations.",
+      "recommendation": "Implement multi-key support where individual keys can be disabled without affecting others. Requires AUTH-Q1 to be resolved first.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/NzbDrone.Core/Configuration/ConfigFileProvider.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No server-side rate limiting on API endpoints",
+      "description": "There is no server-side rate limiting on the Prowlarr API. The existing RateLimitService is client-side only — it rate-limits outbound requests to external indexers, not inbound API calls.",
+      "gap": "A runaway agent loop could overwhelm the application at machine speed. No protection against brute-force or denial-of-service.",
+      "recommendation": "Add ASP.NET Core rate limiting middleware (Microsoft.AspNetCore.RateLimiting) or deploy an API Gateway with throttling.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/NzbDrone.Common/TPL/RateLimitService.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Sensitive credentials exposed in API responses",
+      "description": "HostConfigResource returns ApiKey, SslCertPassword, ProxyUsername, and ProxyPassword directly in the API response. No field-level filtering for sensitive data.",
+      "gap": "Agent-facing API responses include plaintext secrets. No DTO separation for sensitive vs non-sensitive data.",
+      "recommendation": "Create separate response DTOs for sensitive config endpoints that exclude credential fields. Mark sensitive fields with [JsonIgnore].",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/Prowlarr.Api.V1/Config/HostConfigResource.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, B1 fires as RISK-SAFETY because sensitive fields are returned in general API responses under read-only scope.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q1 B1 fired because HostConfigResource returns ApiKey, SslCertPassword, ProxyPassword in standard API responses. Under read-only scope, this is RISK-SAFETY rather than BLOCKER.",
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": true,
+            "severity": "RISK-SAFETY",
+            "reasoning": "Sensitive fields (ApiKey, SslCertPassword, ProxyPassword) are returned in the GET /api/v1/config/host response. Agent scope is read-only, so RISK-SAFETY rather than BLOCKER."
+          },
+          "b2": {
+            "fired": true,
+            "severity": "RISK-SAFETY",
+            "reasoning": "No access control differentiation — single API key grants access to all endpoints including sensitive config."
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No formal classification metadata exists. No field-level sensitivity annotations."
+          }
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Reactive PII redaction model in logs",
+      "description": "Comprehensive 40+ regex pattern redaction applied to all log outputs. However, this is a reactive pattern-based approach rather than proactive allowlisting. Novel credential formats may not be captured.",
+      "gap": "Reactive pattern-based redaction rather than proactive field-allowlisting. New credential formats may not be covered.",
+      "recommendation": "Migrate to allowlist-based logging model for sensitive contexts. Ensure new indexer credential fields are automatically covered.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/NzbDrone.Common/Instrumentation/CleanseLogMessage.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "OpenAPI spec lacks CI validation for drift",
+      "description": "An OpenAPI 3.0.4 JSON specification exists and is committed. Generated via Swashbuckle. However, there is no CI step that validates spec-code synchronization.",
+      "gap": "No automated spec drift detection in CI pipeline.",
+      "recommendation": "Add a CI step that generates the OpenAPI spec and fails if it differs from the committed version.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/Prowlarr.Api.V1/openapi.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Error responses lack retryable classification",
+      "description": "Global error pipeline maps exceptions to HTTP codes with structured JSON bodies. Lacks retryable indicator and machine-readable error codes beyond HTTP status.",
+      "gap": "No retryable/terminal classification in error responses. No standardized machine-readable error codes.",
+      "recommendation": "Add error code and retryable boolean to error response envelope.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/Prowlarr.Http/ErrorManagement/ProwlarrErrorPipeline.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No breaking change detection in CI",
+      "description": "API versioned at URL level (/api/v1/). OpenAPI spec committed. No breaking change detection, no consumer-driven contract tests.",
+      "gap": "No automated breaking change detection. Agent tool schemas could break silently.",
+      "recommendation": "Add OpenAPI diff tooling (oasdiff) and contract tests to CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/Prowlarr.Api.V1/openapi.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No distributed tracing or correlation IDs",
+      "description": "No OpenTelemetry, X-Ray, or trace ID propagation. Logging uses pipe-delimited format by default. Optional CLEF JSON available. No correlation IDs.",
+      "gap": "Cannot trace agent-initiated requests. No structured logging by default. No request correlation.",
+      "recommendation": "Add OpenTelemetry instrumentation and correlation ID middleware. Enable structured JSON logging.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/NzbDrone.Common/Instrumentation/NzbDroneLogger.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No alerting for API error rates or latency",
+      "description": "No alerting configured for API error rates or latency. Custom health check system monitors indexer connectivity but not API performance.",
+      "gap": "No automated detection of API degradation from agent traffic.",
+      "recommendation": "Add metrics export (Prometheus) and alert thresholds for 5xx rates and P99 latency.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/Prowlarr.Api.V1/Health/HealthController.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No infrastructure as code in repository",
+      "description": "No IaC exists. Application distributed as self-contained archives deployed manually or via community packages.",
+      "gap": "No IaC governance for deployment infrastructure. No drift detection, no peer review on infrastructure changes.",
+      "recommendation": "Create IaC definitions for deployment infrastructure externally — at minimum networking, reverse proxy, and access control.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": null,
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API contract testing in CI/CD",
+      "description": "Comprehensive CI/CD pipeline exists with unit and integration tests. No API contract tests or breaking change detection.",
+      "gap": "Breaking API changes not caught in CI. Agent tool bindings could break silently.",
+      "recommendation": "Add contract testing (Pact or OpenAPI diff) to Azure Pipelines.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "azure-pipelines.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Manual file-system-level rollback only",
+      "description": "Self-update mechanism backs up current installation before applying updates. No platform-level rollback, no blue/green, no canary, no automated rollback triggers.",
+      "gap": "Manual rollback only. No deployment platform with automated rollback capability.",
+      "recommendation": "Containerize and deploy via orchestration with automated rollback on health check failure.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 3,
+      "evidence": {
+        "file": "src/NzbDrone.Update/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No encryption at rest for local data store",
+      "description": "SQLite plain files with no encryption. Credentials stored in database accessible with filesystem access. No KMS integration.",
+      "gap": "No encryption at rest for the local SQLite database containing indexer credentials.",
+      "recommendation": "Deploy on encrypted volumes or use SQLCipher for SQLite encryption.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/NzbDrone.Core/Datastore/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Offset-only pagination without cursor support",
+      "description": "Page-based offset pagination with page/pageSize/sort parameters. No cursor-based pagination, no field selection, no enforced maximum page size.",
+      "gap": "Offset pagination degrades at scale. No cursor-based pagination. No field selection for payload reduction.",
+      "recommendation": "Add maximum page size enforcement and consider cursor-based pagination for large collections.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/NzbDrone.Core/Datastore/PagingSpec.cs",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "API-Q1",
+      "status": "pass",
+      "native_severity": null,
+      "rationale": "Well-documented REST API at /api/v1/ with 31 controllers and committed OpenAPI 3.0.4 specification."
+    },
+    {
+      "question_id": "API-Q4",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "agent_scope is read-only — idempotency for write operations is informational only."
+    },
+    {
+      "question_id": "API-Q5",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "All API responses are JSON. Ideal for agent consumption."
+    },
+    {
+      "question_id": "API-Q6",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered. Archetype: stateful-crud, agent_scope: read-only."
+    },
+    {
+      "question_id": "API-Q7",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered."
+    },
+    {
+      "question_id": "API-Q8",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "No rate limit headers returned. Agents cannot self-throttle."
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered for this service."
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "Credentials stored in XML config files and SQLite. No external secrets management."
+    },
+    {
+      "question_id": "STATE-Q1",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "agent_scope is read-only — compensation for write workflows is informational only."
+    },
+    {
+      "question_id": "STATE-Q2",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered."
+    },
+    {
+      "question_id": "STATE-Q3",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "agent_scope is read-only — concurrency controls for writes are informational only."
+    },
+    {
+      "question_id": "STATE-Q4",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered."
+    },
+    {
+      "question_id": "STATE-Q6",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "agent_scope is read-only — transaction limits for writes are informational only."
+    },
+    {
+      "question_id": "STATE-Q7",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered. P2 priority, not on critical path."
+    },
+    {
+      "question_id": "HITL-Q1",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered. agent_scope is read-only."
+    },
+    {
+      "question_id": "HITL-Q2",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered. agent_scope is read-only."
+    },
+    {
+      "question_id": "HITL-Q3",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "No dedicated staging environment. Dev container available for development."
+    },
+    {
+      "question_id": "DATA-Q2",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "agent_scope is read-only — data residency risk profile is lower."
+    },
+    {
+      "question_id": "DATA-Q4",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered."
+    },
+    {
+      "question_id": "DATA-Q5",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered."
+    },
+    {
+      "question_id": "DATA-Q7",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "No data quality metrics or freshness SLAs."
+    },
+    {
+      "question_id": "DISC-Q2",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "Field names are human-readable and semantically meaningful."
+    },
+    {
+      "question_id": "DISC-Q3",
+      "status": "info",
+      "native_severity": "INFO",
+      "rationale": "No formal data catalog. OpenAPI spec serves as primary documentation."
+    },
+    {
+      "question_id": "OBS-Q3",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered."
+    },
+    {
+      "question_id": "ENG-Q4",
+      "status": "not_evaluated",
+      "native_severity": null,
+      "rationale": "Extended question not triggered."
+    }
+  ]
+}

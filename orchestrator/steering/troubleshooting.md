@@ -1,10 +1,10 @@
 # Troubleshooting
 
-Common errors and fixes. Read this when an assessment fails, when reports go missing, or when the user reports unexpected behavior.
+Common errors and fixes. Read this when an analysis fails, when reports go missing, or when the user reports unexpected behavior.
 
 ---
 
-## Per-Repo Assessment Fails
+## Per-Repo Analysis Fails
 
 **Symptoms:** `atx custom def exec` returns a non-zero exit code, or the expected `.md` report does not appear.
 
@@ -29,11 +29,11 @@ Common errors and fixes. Read this when an assessment fails, when reports go mis
 
 ## Portfolio TD Cannot Find Per-Repo Reports
 
-**Symptoms:** Portfolio assessment runs but reports show "0 services aggregated" or are missing entire repos.
+**Symptoms:** Portfolio analysis runs but reports show "0 services aggregated" or are missing entire repos.
 
 **Root causes (in order of frequency):**
 1. Per-repo `.json` artifact missing (only `.md` was emitted) — portfolio TDs require `.json`
-2. Reports landed at non-canonical paths (e.g., repo root instead of `modernization-assessment/`)
+2. Reports landed at non-canonical paths (e.g., repo root instead of `modernization-analysis/`)
 3. Reports stranded on ATX staging branches that were never merged into the working branch
 4. Slug mismatch — the report's filename slug doesn't match the configured `repo.name` (the reconciliation gate auto-renames in this case; only an issue if the gate did not run)
 5. Two or more strays for the same TD inside a single repo's tree (this is a real correctness failure — the reconciliation gate aborts here and asks the operator to investigate)
@@ -43,11 +43,11 @@ Common errors and fixes. Read this when an assessment fails, when reports go mis
 2. For each repo:
    ```bash
    # Verify the canonical .md exists
-   ls {repo}/agentic-readiness-assessment/{slug}-ara-report.md
-   ls {repo}/modernization-assessment/{slug}-mod-report.md
+   ls {repo}/agentic-readiness-analysis/{slug}-ara-report.md
+   ls {repo}/modernization-analysis/{slug}-mod-report.md
 
    # Verify all four artifacts are present
-   ls {repo}/agentic-readiness-assessment/{slug}-ara-report.{md,json,html,metadata.json}
+   ls {repo}/agentic-readiness-analysis/{slug}-ara-report.{md,json,html,metadata.json}
    ```
 3. If `.md` is at the wrong path, move the full bundle (md/json/html/metadata.json) to the canonical path
 4. If `.json` is missing, re-run that per-repo TD
@@ -68,12 +68,12 @@ Common errors and fixes. Read this when an assessment fails, when reports go mis
 **Fix (in order):**
 1. **Check the report file first** — the command may have completed successfully even if executeBash timed out:
    ```bash
-   ls {repo}/agentic-readiness-assessment/*-ara-report.md
-   ls {repo}/modernization-assessment/*-mod-report.md
-   ls agentic-readiness-assessment/*-portfolio-ara-report.md
-   ls modernization-assessment/*-portfolio-mod-report.md
+   ls {repo}/agentic-readiness-analysis/*-ara-report.md
+   ls {repo}/modernization-analysis/*-mod-report.md
+   ls agentic-readiness-analysis/*-portfolio-ara-report.md
+   ls modernization-analysis/*-portfolio-mod-report.md
    ```
-2. If the report exists, the assessment succeeded — the No-Polling Contract treats this as SUCCESS regardless of executeBash exit status
+2. If the report exists, the analysis succeeded — the No-Polling Contract treats this as SUCCESS regardless of executeBash exit status
 3. If the report is missing, re-run with extended timeout (e.g., 2400000ms for very large repos)
 4. For very large repositories, consider running interactively (drop `-x`) to monitor progress
 
@@ -110,8 +110,8 @@ See `POWER.md` for the full No-Polling Contract.
 **Fix:**
 1. Verify both portfolio reports exist at canonical paths:
    ```bash
-   ls agentic-readiness-assessment/{portfolio_name}-portfolio-ara-report.md
-   ls modernization-assessment/{portfolio_name}-portfolio-mod-report.md
+   ls agentic-readiness-analysis/{portfolio_name}-portfolio-ara-report.md
+   ls modernization-analysis/{portfolio_name}-portfolio-mod-report.md
    ```
 2. If only one exists, re-run the missing portfolio TD before retrying Bridge
 3. Update the bridge ATX config to use `portfolio_bao_report_path` (singular) for the aggregated BAO portfolio report
@@ -131,8 +131,8 @@ See `POWER.md` for the full No-Polling Contract.
    ```
 2. Common required-field errors:
    - `portfolio_name` is missing or empty
-   - `assessment_type` is missing or not one of the four valid values
-   - `transformation_definitions` is missing one or more required TD names for the chosen `assessment_type`
+   - `analysis_type` is missing or not one of the four valid values
+   - `transformation_definitions` is missing one or more required TD names for the chosen `analysis_type`
    - A `repositories[]` entry is missing `name` or `path`
 
 3. Common enum errors:
@@ -221,7 +221,7 @@ Do not parallelize publish commands.
    ```
 4. Verify reports are now visible:
    ```bash
-   ls <repo_path>/agentic-readiness-assessment/
+   ls <repo_path>/agentic-readiness-analysis/
    ```
 
 ---
@@ -236,11 +236,11 @@ Do not parallelize publish commands.
 1. Either commit your local changes:
    ```bash
    git -C <repo_path> add -A
-   git -C <repo_path> commit -m "WIP before assessment"
+   git -C <repo_path> commit -m "WIP before analysis"
    ```
 2. Or stash them yourself:
    ```bash
-   git -C <repo_path> stash push -m "before assessment"
+   git -C <repo_path> stash push -m "before analysis"
    ```
 3. Then re-run the TD
 

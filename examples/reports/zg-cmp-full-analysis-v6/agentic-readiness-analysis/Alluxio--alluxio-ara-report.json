@@ -1,0 +1,865 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2025-05-07",
+    "td_version": "agentic-readiness-analysis",
+    "report_format_version": "V6",
+    "target": "Alluxio--alluxio",
+    "repo_type": "monorepo",
+    "service_archetype": "data-gateway",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Alluxio is primarily a read-heavy data access and caching layer over multiple storage backends (S3, HDFS, GCS, Azure, etc.). Database queries (block lookups, metadata reads) dominate the logic with pagination, filtering, and read-heavy traffic patterns.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["java", "storage", "distributed"],
+    "context": "Data orchestration / virtual distributed file system. JVM, distributed storage caching layer.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 1,
+    "medium_count": 18,
+    "low_count": 18,
+    "safety_impact_medium_count": 6,
+    "rule_matched": "1-2 High → Remediation Required"
+  },
+  "summary": {
+    "blocker_count": 1,
+    "risk_safety_count": 6,
+    "risk_quality_count": 12,
+    "info_count": 18,
+    "na_count": 0,
+    "not_evaluated_count": 3,
+    "total": 43,
+    "core_questions_evaluated": 24,
+    "extended_questions_triggered": 16,
+    "extended_questions_not_triggered": 3
+  },
+  "evaluations": [
+    {
+      "question_id": "API-Q1",
+      "status": "pass",
+      "title": "Documented API Interface"
+    },
+    {
+      "question_id": "API-Q6",
+      "status": "not_evaluated_extended",
+      "title": "Asynchronous Operation Support",
+      "trigger": "Service has operations >30s OR long-running workflows"
+    },
+    {
+      "question_id": "API-Q7",
+      "status": "not_evaluated_extended",
+      "title": "Event Emission for State Changes",
+      "trigger": "Service has state changes (stateful-crud, orchestrator)"
+    },
+    {
+      "question_id": "STATE-Q2",
+      "status": "pass",
+      "title": "Queryable Current State"
+    },
+    {
+      "question_id": "STATE-Q7",
+      "status": "not_evaluated_extended",
+      "title": "Infrastructure Capacity for Agent Traffic",
+      "trigger": "Service is P0 priority OR is on the critical path"
+    },
+    {
+      "question_id": "DATA-Q3",
+      "status": "pass",
+      "title": "Selective Query Support"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No machine identity authentication suitable for agent principals",
+      "description": "Alluxio supports SASL-based authentication with SIMPLE (trust-based, no credential verification), CUSTOM (pluggable provider), and NOSASL modes. The S3 REST API uses a PassAllAuthenticator by default that always returns true. There is no OAuth2 client credentials flow, no API key with principal attribution, and no mTLS support.",
+      "gap": "No machine identity authentication mechanism suitable for agent principals. SIMPLE auth is trust-based with no credential verification. No OAuth2/OIDC support. No API key management with principal attribution. S3 REST auth is disabled by default.",
+      "recommendation": "Enable S3 REST authentication and implement a CUSTOM AuthenticationProvider that validates agent credentials and maps them to distinct principals. Target: OAuth2 client credentials or API key authentication with per-agent principal attribution.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "core/common/src/main/java/alluxio/security/authentication/AuthType.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Enable S3 REST authentication (alluxio.s3.rest.authentication.enabled=true) and implement a CUSTOM AuthenticationProvider that validates agent credentials.",
+          "target_state": "OAuth2 client credentials or API key authentication with per-agent principal attribution, supporting distinct agent identities traceable in audit logs.",
+          "estimated_effort": "High",
+          "dependencies": ["AUTH-Q6"]
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Coarse-grained permissions — no fine-grained RBAC/ABAC",
+      "description": "Alluxio uses POSIX-style permissions (owner/group/other with rwx) and extended ACLs. The authorization model is file-system-level, not operation-level. No mechanism to grant an agent identity read access to specific API operations while denying others.",
+      "gap": "No operation-level permission scoping. An agent with read access to a path can invoke any read operation without differentiation.",
+      "recommendation": "Deploy an API gateway in front of the Alluxio proxy that enforces operation-level access control per agent identity.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "core/common/src/main/java/alluxio/security/authorization/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Restrict agent identity to specific path prefixes using ACLs",
+          "Deploy an API gateway with operation-level access control per agent identity"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No action-level authorization beyond file permission bits",
+      "description": "Authorization is POSIX permission-based (rwx) at the path level. A user with write permission can create, rename, and delete — no mechanism to allow create but deny delete within the same permission scope.",
+      "gap": "No action-level authorization. Cannot restrict an agent to read-only within the gRPC or REST API independently of file-system permissions.",
+      "recommendation": "Implement ABAC or fine-grained RBAC at the proxy/gateway layer to enforce action-level controls.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Grant only r and x permissions to agent identity paths for read-only scope",
+          "Deploy proxy-layer authorization that filters write RPCs from agent requests"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No JWT/OAuth token exchange or on-behalf-of flows",
+      "description": "Impersonation support exists via ImpersonationAuthenticator. No JWT/OAuth token exchange, no on-behalf-of flow, and no explicit distinction between agent-as-self vs agent-on-behalf-of-user.",
+      "gap": "No identity propagation mechanism suitable for agent delegation scenarios.",
+      "recommendation": "Adapt the impersonation framework to support explicit agent-on-behalf-of-user semantics with audit differentiation.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "core/common/src/main/java/alluxio/security/authentication/ImpersonationAuthenticator.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Static credential management with no rotation",
+      "description": "Credentials are configured via properties files and environment variables. No integration with AWS Secrets Manager or HashiCorp Vault. No credential rotation mechanism.",
+      "gap": "No secrets management integration. Static credentials require service restart to rotate.",
+      "recommendation": "Integrate with a secrets management system (Secrets Manager, Vault) for dynamic credential loading and rotation.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "conf/alluxio-site.properties.template", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Audit logging disabled by default and not immutable",
+      "description": "Comprehensive audit logging framework (AsyncUserAccessAuditLogWriter) exists logging user, IP, command, success/fail, permissions, and execution time. However, audit logging is disabled by default and logs go to local filesystem with no immutability guarantees.",
+      "gap": "Audit logging disabled by default. When enabled, logs are local files with no tamper-evident or centralized log storage.",
+      "recommendation": "Enable audit logging for all services and configure log shipping to an immutable, centralized store with retention policies.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "core/server/master/src/main/java/alluxio/master/file/FileSystemMasterAuditContext.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, audit logging still important for read-only agents but not a deployment blocker.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "AUTH-Q6 evaluated as RISK-SAFETY because agent_scope is read-only. Audit logging exists but lacks immutability guarantees.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Enable audit logging and ship logs to an immutable store (CloudWatch Logs, S3 with Object Lock)",
+          "Configure log aggregation pipeline (Fluentd/Fluent Bit → S3 with write-once retention)"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No mechanism to suspend individual agent identities",
+      "description": "No mechanism exists to immediately suspend or revoke a specific agent identity. The DefaultAuthenticationServer manages channels via ConcurrentHashMap with stale channel cleanup every 3 days. No revocation API or identity lifecycle management.",
+      "gap": "No API or mechanism to disable a specific agent identity in real-time. No revocation list or token blacklist.",
+      "recommendation": "Implement an identity revocation API or reduce authentication token TTL to minutes/hours to enable rapid agent isolation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "core/common/src/main/java/alluxio/security/authentication/DefaultAuthenticationServer.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Implement short-lived authentication tokens with configurable TTL",
+          "Use network-level isolation (security group/firewall rule) to block agent traffic immediately"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No committed machine-readable API specification for REST surface",
+      "description": "The gRPC API is defined in 27 Protocol Buffer files (machine-readable). REST proxy API has no OpenAPI/Swagger specification committed. Documentation references MireDot auto-generation at build time but no generated spec in repo.",
+      "gap": "No OpenAPI specification for the REST proxy API surface.",
+      "recommendation": "Generate and commit an OpenAPI specification from the JAX-RS annotations in the proxy REST handlers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use protobuf definitions directly for gRPC tool generation",
+          "Generate OpenAPI spec from JAX-RS annotations using swagger-core"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Non-S3 REST API lacks structured error responses",
+      "description": "The S3 REST API has well-structured XML error responses with S3ErrorCode (25+ codes). The gRPC layer uses AlluxioRuntimeException with RetryInfo. However, the PathsRestServiceHandler lacks structured error responses — exceptions return generic HTTP status codes without machine-readable error bodies.",
+      "gap": "The /api/v1/paths/ REST endpoints lack structured error responses with error codes and retryability indicators.",
+      "recommendation": "Add structured error responses (JSON with error code, message, retryable flag) to the /api/v1/paths/ REST endpoints.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "core/server/proxy/src/main/java/alluxio/proxy/s3/S3ErrorCode.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use the S3-compatible API which has structured errors",
+          "Use gRPC API directly which provides RetryInfo metadata"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No general idempotency framework for write operations",
+      "description": "Idempotency narrowly implemented only in S3 CompleteMultipartUpload and BlockMaster CommitBlock. No general idempotency key pattern for write endpoints.",
+      "gap": "No general idempotency key support for write API endpoints.",
+      "recommendation": "Implement idempotency keys for write API endpoints before expanding agent scope to write-enabled.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "core/server/proxy/src/main/java/alluxio/proxy/s3/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, idempotency for write operations is informational only.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "API-Q4 evaluated as INFO because agent_scope is read-only. Read-only agents do not execute write operations."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Mixed response formats across API surfaces",
+      "description": "The gRPC API uses Protocol Buffers (binary). The S3 REST API uses XML. The /api/v1/paths/ REST API returns JSON. Mixed formats across surfaces.",
+      "gap": "Multiple serialization formats require different parsing approaches for agent tooling.",
+      "recommendation": "Standardize on the gRPC/protobuf surface for agent integration (most type-safe and tooling-friendly).",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "core/transport/src/main/proto/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No rate limit headers in HTTP responses",
+      "description": "Rate limits are configurable via properties but disabled by default. The proxy does not return rate limit headers (X-RateLimit-Remaining, Retry-After) in HTTP responses.",
+      "gap": "Agents cannot self-throttle based on response headers.",
+      "recommendation": "Add rate limit headers to proxy HTTP responses when rate limiting is enabled.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "core/common/src/main/java/alluxio/conf/PropertyKey.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No compensation or rollback for multi-step operations",
+      "description": "No saga pattern, no compensating transactions, no explicit undo endpoints. Journal-based consistency for metadata (Raft consensus) but no application-level compensation for multi-step workflows.",
+      "gap": "No compensation for multi-step file operations.",
+      "recommendation": "Implement compensation logic for multi-step file operations before expanding agent scope to write-enabled.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "core/server/master/src/main/java/alluxio/master/file/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND data-gateway archetype — read-only agents do not execute write workflows.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "STATE-Q1 evaluated as INFO because agent_scope is read-only and archetype is data-gateway. No multi-step write sequences for read-only agents."
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No API-level concurrency primitives (ETags, version fields)",
+      "description": "Internal state lock and Raft consensus for metadata consistency. No optimistic locking, ETag support, or version fields exposed at the API level for client-side concurrency control.",
+      "gap": "No client-facing concurrency primitives for write operations.",
+      "recommendation": "Expose version/ETag metadata in API responses for future write-enabled agent support.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No circuit breakers for external UFS dependency calls",
+      "description": "Pluggable retry policies (ExponentialBackoffRetry, CountingRetry, TimeoutRetry) for UFS operations. No explicit circuit breaker patterns. A failing UFS backend causes retries with backoff but does not fail-fast or isolate the failure.",
+      "gap": "No circuit breaker pattern for external UFS calls. Cascading failures from unresponsive storage backends are not isolated.",
+      "recommendation": "Implement circuit breakers for UFS backend connections using Resilience4j or equivalent pattern.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "core/common/src/main/java/alluxio/retry/ExponentialBackoffRetry.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Configure aggressive timeouts on UFS connections to limit impact duration",
+          "Master throttle system detects OVERLOADED state and can reduce throughput"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No per-identity rate limiting at API layer",
+      "description": "Server-wide rate limiting exists (ThrottleMaster, S3 bandwidth limits) but no per-client or per-identity rate limits. All mechanisms disabled by default. A runaway agent loop would not be individually throttled.",
+      "gap": "No per-identity or per-client request rate limiting. Rate limits are bandwidth-based or server-health-based, all disabled by default.",
+      "recommendation": "Enable rate limiting and add per-identity request rate limiting at proxy REST layer and gRPC interceptor level.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "core/server/proxy/src/main/java/alluxio/proxy/s3/RateLimitInputStream.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Enable S3 proxy rate limiting (alluxio.proxy.s3.global.read.rate.limit.mb > 0)",
+          "Enable master throttle foreground operations and deploy API Gateway with per-identity rate limits"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No per-identity transaction limits",
+      "description": "Global operation limits exist (alluxio.master.throttle.filesystem.op.per.sec=2000) but no per-identity limits. No mechanism to configure per-agent transaction limits.",
+      "gap": "No per-agent transaction limits (max records per run, max operations per session).",
+      "recommendation": "Implement per-identity operation quotas before expanding agent scope to write-enabled.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "core/server/master/src/main/java/alluxio/master/throttle/DefaultThrottleMaster.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No draft/pending state concept",
+      "description": "No draft/pending state concept for file operations. File creation is immediate upon CreateFile + CompleteFile. No approval workflow.",
+      "gap": "No draft state for agent-proposed changes.",
+      "recommendation": "Not applicable for current read-only scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No configurable approval gates",
+      "description": "No configurable approval gates for any operations. All operations execute immediately upon invocation.",
+      "gap": "No configurable approval workflows.",
+      "recommendation": "Not applicable for current read-only scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "core/server/proxy/src/main/java/alluxio/proxy/PathsRestServiceHandler.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No documented staging/sandbox environment with production-equivalent data",
+      "description": "Docker Compose, minicluster, and Vagrant available for local testing. No explicit staging environment configuration with production-equivalent data shape. No separate staging/production Helm value overlays.",
+      "gap": "No documented staging/sandbox environment with production-equivalent data shape for agent testing.",
+      "recommendation": "Create a staging Helm values overlay with synthetic data generation for agent testing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "integration/metrics/docker-compose-master.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use minicluster for local agent testing",
+          "Deploy a separate Helm release with test data as a staging environment"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Caching layer does not own data classification",
+      "description": "Alluxio is a caching/data-gateway layer that stores opaque file blocks from underlying storage. It does not classify or tag the sensitivity of data passing through it. No PII detection, no field-level classification, no data tagging mechanism.",
+      "gap": "No path-based sensitivity metadata to restrict agent access to sensitive paths.",
+      "recommendation": "Implement path-based sensitivity metadata so agents can be restricted from accessing paths containing sensitive data.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "docs/en/security/Security.md", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: data-gateway archetype caches opaque blocks — data classification is delegated to underlying storage systems.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q1 evaluated as INFO because as a data-gateway/caching layer, Alluxio does not own data semantics. Classification is the responsibility of applications writing to underlying storage.",
+        "data_q1_subchecks": {
+          "b1": {"fired": false, "severity": null, "reasoning": "Data-gateway archetype — API responses contain file metadata (paths, sizes, timestamps) not user-record fields. Sensitive data is opaque block content that passes through without parsing."},
+          "b2": {"fired": false, "severity": null, "reasoning": "Access differentiation is path-based (POSIX permissions + ACLs). Adequate for a caching layer that does not interpret data content."},
+          "b3": {"fired": true, "severity": "INFO", "reasoning": "No formal classification metadata exists. Expected for a caching layer that delegates data semantics to upstream systems."}
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Data residency delegated to underlying storage",
+      "description": "Data residency is determined by UFS backend configuration (S3 regions, HDFS clusters). Alluxio itself has no data residency controls — it will cache data from any configured mount point on any worker node.",
+      "gap": "Caching behavior could inadvertently move data across regions if workers are in different regions than the UFS.",
+      "recommendation": "Configure mount points with awareness of data residency requirements. Restrict agent access to mount points with known residency properties.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND data-gateway archetype delegates residency to UFS backends.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q2 evaluated as INFO because agent_scope is read-only and as a data-gateway caching layer, residency is determined by the underlying storage systems."
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No formal system-of-record documentation",
+      "description": "Alluxio is explicitly NOT the system of record — it is a caching layer. The underlying file systems (S3, HDFS, GCS) are the systems of record. CheckConsistency and NeedsSync RPCs exist for verification but no formal SoR documentation.",
+      "gap": "No formal system-of-record designation documentation. Agents cannot determine data authority without explicit API calls.",
+      "recommendation": "Document system-of-record designations and expose cache freshness metadata in API responses.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use CheckConsistency and NeedsSync RPCs to verify data freshness",
+          "Configure aggressive metadata sync intervals"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No explicit freshness/staleness signaling in API responses",
+      "description": "File metadata includes lastModificationTimeMs, lastAccessTimeMs, creationTimeMs. System can signal sync status via NeedsSync. No explicit freshness headers (Cache-Control, X-Data-Age) or consistency_level field in API responses.",
+      "gap": "Agents cannot determine from a response whether data is fresh from UFS or served from potentially stale cache.",
+      "recommendation": "Add cache freshness metadata to API responses (e.g., cached_at, source: cache|ufs, sync_status).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use metadata sync operations to ensure cache freshness before agent reads",
+          "Check lastModificationTimeMs against expected freshness thresholds"
+        ]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII scrubbing in audit or application logs",
+      "description": "Audit logs capture user identity (ugi), IP address, command, source/destination paths, and permissions. File paths could contain PII (e.g., /users/john.doe@email.com/documents/). No PII scrubbing or path anonymization applied.",
+      "gap": "File paths in logs could contain PII. No PII detection or anonymization in logging.",
+      "recommendation": "Implement path-based PII detection for audit logs if file paths may contain sensitive identifiers.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "core/server/master/src/main/java/alluxio/master/file/FileSystemMasterAuditContext.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No data quality scores or completeness metrics",
+      "description": "No data quality scores or completeness metrics. The system tracks metadata consistency (CheckConsistency) and sync status (NeedsSync, GetSyncProgress) but no broader data quality metrics.",
+      "gap": "Agents cannot assess data quality or completeness programmatically.",
+      "recommendation": "Consider exposing cache hit rates and consistency metrics as data quality indicators.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No API versioning or breaking-change detection in CI",
+      "description": "Protobuf definitions unversioned — no package versioning, no deprecation annotations, no breaking change detection in CI. REST API uses /api/v1/ but no v2 exists. No consumer-driven contract tests.",
+      "gap": "No schema versioning, no breaking change detection in CI pipeline. Agent tool bindings could break silently.",
+      "recommendation": "Add buf breaking to CI pipeline for protobuf schema stability. Implement REST API versioning headers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Pin agent tool bindings to specific Alluxio release versions",
+          "Add protobuf lint rules (buf) to CI to detect breaking changes"
+        ]
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically meaningful field names throughout",
+      "description": "Field names in protobuf definitions are semantically clear and human-readable: lastModificationTimeMs, blockSizeBytes, replicationMax, isCacheable, isMountPoint. No legacy abbreviations.",
+      "gap": "None — field naming is exemplary.",
+      "recommendation": "None required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "core/transport/src/main/proto/grpc/file_system_master.proto", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Table/Catalog service provides structured data catalog",
+      "description": "Alluxio includes a Table/Catalog service integrating with Hive Metastore and AWS Glue. The primary file system API has no data catalog beyond the file/directory namespace and mount table.",
+      "gap": "No semantic metadata layer for unstructured file data beyond file attributes.",
+      "recommendation": "Consider exposing mount-level metadata (purpose, data domain, sensitivity) for agent discoverability.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "table/server/", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No structured logging or trace ID in application logs",
+      "description": "Full OpenTelemetry integration with auto-instrumentation. Traces exported to Jaeger. However, application logs use SLF4J/Log4j without structured JSON format. No application-level correlation ID propagation.",
+      "gap": "Logs not structured (JSON). No trace ID in application logs. Tracing is auto-instrumented but logs are not correlated.",
+      "recommendation": "Configure structured JSON logging with trace ID injection from OpenTelemetry context.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "conf/log4j.properties", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "OpenTelemetry auto-instrumentation provides trace context propagation at the gRPC level",
+          "Configure log4j to output JSON format and inject trace IDs via OTEL context"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No alerting configuration for API error rates or latency",
+      "description": "Rich metrics published to Prometheus-compatible endpoints. No alerting rules defined — no CloudWatch alarms, no Prometheus alerting rules, no PagerDuty/OpsGenie integration.",
+      "gap": "No alerting thresholds configured for error rates or latency.",
+      "recommendation": "Define Prometheus alerting rules for key metrics: MASTER_TOTAL_RPCS, PROXY_*_LATENCY, MASTER_RPC_QUEUE_LENGTH.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "integration/metrics/prometheus.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Deploy Prometheus AlertManager with alert rules based on existing metric keys",
+          "Configure CloudWatch alarms on proxy latency and error rate metrics"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Cache effectiveness metrics serve as business outcome metrics",
+      "description": "Metrics include cache hit rates, operation throughput, latency, and job outcomes. Cache effectiveness IS the business outcome for a caching system. Published via MetricsMaster with multiple sink options.",
+      "gap": "No agent-specific metrics (per agent identity, per agent path prefix).",
+      "recommendation": "Consider publishing agent-specific metrics (operations per agent identity, cache hit rate per agent path prefix).",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "core/common/src/main/java/alluxio/metrics/MetricKey.java", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No drift detection or comprehensive IaC beyond Helm",
+      "description": "Helm charts define deployment infrastructure. No IaC for API gateways, IAM, or network config. No drift detection. No explicit peer review requirement documented for Helm value changes.",
+      "gap": "No comprehensive IaC beyond Helm. No drift detection. Integration surface not defined as code.",
+      "recommendation": "Implement GitOps-based Helm deployment with PR review gates and drift detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Use GitOps (ArgoCD/Flux) to manage Helm releases with PR-based approval",
+          "Implement Helm diff in CI to detect drift"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API contract testing in CI pipeline",
+      "description": "7 CI workflows with unit/integration tests across multiple parallel groups. No API contract tests, no consumer-driven contract testing (Pact), no protobuf breaking change detection.",
+      "gap": "No API contract testing in CI. No breaking-change detection for agent-facing APIs.",
+      "recommendation": "Add protobuf breaking change detection (buf breaking) and REST API contract validation to CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/java8_unit_tests.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Existing integration tests provide some coverage of API behavior",
+          "Add buf breaking check for protobuf schema changes"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No automated rollback capability",
+      "description": "Recreate deployment strategy for LogServer. No blue/green, no canary, no CodeDeploy rollback triggers, no feature flags. Helm natively supports rollback but no automation configured.",
+      "gap": "No explicit rollback configuration. No automated rollback on failure detection.",
+      "recommendation": "Configure automated rollback triggers (e.g., using Flagger or ArgoCD progressive delivery).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "integration/kubernetes/helm-chart/alluxio/values.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use helm rollback manually if a deployment breaks agent-facing APIs",
+          "Implement readiness probe failures to prevent bad deployments from receiving traffic"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No dedicated API contract test suites for proxy endpoints",
+      "description": "890 Java test files covering unit and integration tests across 7 parallel matrix groups. No dedicated API contract test suites (Postman/Newman, REST Assured) for proxy endpoints.",
+      "gap": "Integration tests provide behavioral coverage but do not explicitly validate agent-facing API contract stability.",
+      "recommendation": "Add dedicated API contract tests for proxy REST endpoints.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": ".github/workflows/java8_integration_tests.yml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No service-level encryption at rest for cached data",
+      "description": "No service-level encryption. Encryption delegated to underlying storage (S3 SSE). Cached data on workers (blocks on local SSD/HDD) and metadata in RocksDB stored unencrypted.",
+      "gap": "No encryption at rest for cached data on worker nodes.",
+      "recommendation": "Enable disk-level encryption on all worker storage volumes and configure SSE for all UFS backends.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "docs/en/security/Security.md", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Enable Linux disk encryption (dm-crypt/LUKS) on worker storage volumes",
+          "Enable S3 SSE for underlying storage and use encrypted EBS volumes for Kubernetes PVCs"
+        ]
+      }
+    }
+  ]
+}

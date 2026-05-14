@@ -1,0 +1,427 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2025-05-08",
+    "td_version": "agentic-readiness-analysis",
+    "report_format_version": "V6",
+    "target": "scality--backbeat",
+    "repository_type": "application",
+    "service_archetype": "event-processor",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Backbeat is primarily a message queue consumer system that reads MongoDB oplogs and Kafka topics to process replication, lifecycle, and notification events asynchronously.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["javascript", "storage", "replication"],
+    "context": "Scality backend engine for replication, lifecycle, and metadata workflows.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "high_count": 2,
+    "medium_count": 15,
+    "low_count": 20,
+    "safety_impact_medium_count": 6,
+    "rule_matched": "1-2 High → Remediation Required"
+  },
+  "summary": {
+    "blocker_count": 2,
+    "risk_safety_count": 6,
+    "risk_quality_count": 9,
+    "info_count": 20,
+    "na_count": 0,
+    "not_evaluated_count": 6,
+    "total": 43,
+    "core_evaluated": 24,
+    "extended_triggered": 13,
+    "extended_not_triggered": 6
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No machine identity authentication on management API",
+      "description": "The management API server uses IP-based access control only (ipCheck.ipMatchCidrList). No OAuth2, API keys with principal attribution, or mTLS. Agents cannot be individually identified or attributed.",
+      "gap": "No machine identity authentication on the agent-facing API. IP-based ACL provides no principal attribution.",
+      "recommendation": "Deploy an API Gateway with OAuth2 or API key authentication that attributes each request to a specific principal.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": "57-62"},
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Deploy an API Gateway in front of Backbeat management API with OAuth2 or API key authentication.",
+          "target_state": "Token-based authentication (OAuth2 client credentials or mTLS) with principal attribution in request context and audit logs.",
+          "estimated_effort": "Medium",
+          "dependencies": ["AUTH-Q6"]
+        }
+      }
+    },
+    {
+      "question_id": "API-Q1",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No documented API interface for agent tool binding",
+      "description": "Backbeat exposes an HTTP API on port 8900 with 15+ endpoints defined programmatically in lib/api/routes.js. The API is internal-only with IP-based access control and no formal documentation.",
+      "gap": "No formal, versioned, documented API contract exists. Agents cannot reliably bind to an undocumented interface.",
+      "recommendation": "Create an OpenAPI specification documenting all routes, request/response schemas, error codes, and authentication requirements.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/api/routes.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Create an OpenAPI specification documenting all routes from lib/api/routes.js.",
+          "target_state": "A versioned OpenAPI spec maintained alongside the code, with breaking changes detected in CI.",
+          "estimated_effort": "Medium",
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No per-identity permission scoping at API layer",
+      "description": "IAM policies in policies/ show scoped permissions for internal operations, but the API server uses only IP-based access with no per-identity permission scoping.",
+      "gap": "All callers from allowed IPs have identical access to all API operations.",
+      "recommendation": "Implement token-based authentication with per-identity route-level permissions.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": "57-62"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": ["Restrict agent-accessible IPs to narrow CIDR range", "Deploy API Gateway with per-identity route-level authorization"]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No action-level authorization",
+      "description": "BackbeatServer validates only HTTP method and route prefix. No RBAC, ABAC, or action-level permissions enforce read vs write differentiation.",
+      "gap": "A read-only agent could invoke POST endpoints (pause/resume, retryFailedCRR, applyWorkflowConfiguration).",
+      "recommendation": "Add middleware that checks caller identity against an action-permission matrix.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": ["Enforce agent read-only access at network layer", "Deploy API Gateway with method-level authorization"]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No immutable audit logging of authenticated principals",
+      "description": "No audit logging of authenticated principals found. API logs request metadata (IP, method, URL, status code) but not caller identity. No immutable log storage.",
+      "gap": "No audit trail attributing API actions to specific callers.",
+      "recommendation": "After implementing token-based auth, add audit logging that records the authenticated principal for every operation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents still require audit attribution for compliance and forensics, but not at BLOCKER severity since no write operations are executed.",
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": ["Log all requests with source IP, timestamp, and action for basic traceability"]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No agent identity suspension capability",
+      "description": "Authentication is IP-based only. No individual agent identities exist that can be suspended. Revoking access requires config change and service restart.",
+      "gap": "Cannot suspend individual agent access without affecting all callers.",
+      "recommendation": "Implement token-based or API-key-based authentication with individual identity revocation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Use network-level controls to block specific agent IPs", "Deploy API Gateway with API key management"]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No API-layer rate limiting",
+      "description": "No HTTP-level rate limiting on the API server. Concurrency controls exist for Kafka consumers but do not protect API endpoints.",
+      "gap": "Management API endpoints are unprotected against traffic storms from runaway agents.",
+      "recommendation": "Add rate limiting middleware to the HTTP server or deploy behind an API Gateway with throttling.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Deploy API Gateway or reverse proxy with rate limiting", "Implement express-rate-limit or equivalent middleware"]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII redaction in logs",
+      "description": "Structured logging via werelogs captures request metadata including URLs with object keys and bucket names. No PII redaction middleware found.",
+      "gap": "Object keys and bucket names (which could contain PII) logged without redaction.",
+      "recommendation": "Add log sanitization layer that redacts or hashes potentially sensitive fields.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Configure log retention policies", "Implement log scrubbing at aggregation layer"]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No machine-readable API specification",
+      "description": "No OpenAPI, AsyncAPI, GraphQL schema, or Smithy specification file exists. API routes defined programmatically only in lib/api/routes.js.",
+      "gap": "Agent tool generation requires manual route analysis and tool authoring.",
+      "recommendation": "Create an OpenAPI 3.0 specification covering all endpoints and schemas.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/api/routes.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Generate OpenAPI spec from routes.js definitions", "Document API surface in structured wiki"]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Error responses lack retryable signal",
+      "description": "Arsenal error objects provide HTTP status codes and descriptions in JSON, but lack a retryable boolean or error category field.",
+      "gap": "Agents cannot programmatically distinguish retriable from terminal errors.",
+      "recommendation": "Add retryable boolean and errorCode to error response body.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Document retriable vs terminal status codes", "Add error category metadata to agent tool definitions"]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No API versioning or contract testing",
+      "description": "No API versioning scheme, no schema registry, no breaking change detection in CI, no consumer-driven contract tests.",
+      "gap": "Agent tool bindings could break silently on any deployment.",
+      "recommendation": "Implement API versioning, create OpenAPI spec, add spec validation to CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/api/routes.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": ["Pin agent tool definitions to known-good API behavior", "Add API contract tests to CI"]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No distributed tracing",
+      "description": "Structured logging with werelogs and per-request loggers exists. No distributed tracing (OpenTelemetry/X-Ray) or traceparent header propagation.",
+      "gap": "No trace ID propagation for correlating requests across service boundaries.",
+      "recommendation": "Integrate OpenTelemetry SDK for distributed tracing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/api/BackbeatServer.js", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": ["Use Kafka message headers for correlation", "Implement request ID injection at API Gateway level"]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No alerting on HTTP API error rates and latency",
+      "description": "Comprehensive Prometheus alerting exists for event-processing workflows but not specifically for the HTTP management API endpoints.",
+      "gap": "No alerting on the management API server's error rate and latency.",
+      "recommendation": "Add Prometheus alerting rules for BackbeatServer HTTP API.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "monitoring/replication/alerts.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Monitor API server health via healthcheck endpoint", "Add HTTP response code alerts"]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No infrastructure-as-code in repository",
+      "description": "No Terraform, CloudFormation, CDK, Helm, or Kustomize files exist. Infrastructure configured via environment variables and Docker.",
+      "gap": "No IaC for agent-facing infrastructure. May exist in separate deployment repo.",
+      "recommendation": "Define agent-facing infrastructure as IaC with PR-based review and drift detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "docker-entrypoint.sh", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": ["IaC may exist in separate deployment repository", "Docker image tagging provides deployment control"]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API contract testing in CI",
+      "description": "CI pipeline includes unit, functional, and performance tests but no API contract testing (Pact), OpenAPI spec validation, or breaking change detection.",
+      "gap": "Functional tests validate behavior but do not guard against schema-level breaking changes.",
+      "recommendation": "Add OpenAPI spec validation and schema diff checking to CI pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/tests.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Functional API tests provide regression coverage", "Manual review of API changes via PR"]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No automated rollback mechanism",
+      "description": "Docker images tagged by SHA on GHCR. No blue/green, canary, or automated rollback mechanism visible.",
+      "gap": "Manual Docker image redeployment is the implied rollback strategy.",
+      "recommendation": "Implement health-check-based automated rollback triggers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/docker-build.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Docker image immutability enables manual rollback", "Kubernetes deployment rollback if deployed via k8s"]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No production-equivalent staging environment documented",
+      "description": "Docker-compose configs exist for CI functional testing, but no production-equivalent staging/sandbox for agent testing is documented.",
+      "gap": "No staging environment documented for agent integration testing.",
+      "recommendation": "Document how to provision staging using existing Docker-compose infrastructure.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/tests.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Use existing Docker-compose CI infrastructure as sandbox template", "Provision dedicated staging namespace in Kubernetes"]
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q4", "status": "INFO", "reason": "agent_scope is read-only — write endpoint idempotency is informational"},
+    {"question_id": "API-Q5", "status": "INFO", "reason": "Responses are JSON — ideal for agent consumption"},
+    {"question_id": "API-Q6", "status": "INFO", "reason": "System is natively async with Kafka-based job submission"},
+    {"question_id": "API-Q7", "status": "not_evaluated", "reason": "Extended not triggered: event-processor archetype"},
+    {"question_id": "API-Q8", "status": "INFO", "reason": "No rate limit headers or documentation"},
+    {"question_id": "AUTH-Q4", "status": "INFO", "reason": "Event-processor archetype — identity propagation less critical"},
+    {"question_id": "AUTH-Q5", "status": "INFO", "reason": "Credentials managed via STS AssumeRole and Vault — reasonable"},
+    {"question_id": "STATE-Q1", "status": "INFO", "reason": "agent_scope is read-only — event-processor has retry/replay mechanisms"},
+    {"question_id": "STATE-Q2", "status": "not_evaluated", "reason": "Extended not triggered: event-processor archetype"},
+    {"question_id": "STATE-Q3", "status": "INFO", "reason": "agent_scope is read-only — consumer-level concurrency controls exist"},
+    {"question_id": "STATE-Q4", "status": "INFO", "reason": "Circuit breakers well-implemented via breakbeat library"},
+    {"question_id": "STATE-Q6", "status": "INFO", "reason": "agent_scope is read-only — batch/concurrency limits exist"},
+    {"question_id": "STATE-Q7", "status": "not_evaluated", "reason": "Extended not triggered: P2 priority, not on critical path"},
+    {"question_id": "HITL-Q1", "status": "INFO", "reason": "agent_scope is read-only — pause/resume provides operational gating"},
+    {"question_id": "HITL-Q2", "status": "INFO", "reason": "agent_scope is read-only — no approval gates needed"},
+    {"question_id": "DATA-Q1", "status": "INFO", "reason": "Not a data-handling target — processes S3 object metadata, not PII"},
+    {"question_id": "DATA-Q2", "status": "INFO", "reason": "agent_scope is read-only — data residency governed by S3 config"},
+    {"question_id": "DATA-Q3", "status": "not_evaluated", "reason": "Extended not triggered: event-processor archetype"},
+    {"question_id": "DATA-Q4", "status": "not_evaluated", "reason": "Extended not triggered: event-processor archetype"},
+    {"question_id": "DATA-Q5", "status": "not_evaluated", "reason": "Extended not triggered: event-processor archetype"},
+    {"question_id": "DATA-Q7", "status": "INFO", "reason": "Operational metrics serve as data quality proxies"},
+    {"question_id": "DISC-Q2", "status": "INFO", "reason": "Field names are semantically meaningful"},
+    {"question_id": "DISC-Q3", "status": "INFO", "reason": "No formal data catalog; Joi schemas provide implicit documentation"},
+    {"question_id": "OBS-Q3", "status": "INFO", "reason": "Strong business outcome metrics via Prometheus"},
+    {"question_id": "ENG-Q4", "status": "INFO", "reason": "Functional API tests exist in CI with full service dependencies"},
+    {"question_id": "ENG-Q5", "status": "INFO", "reason": "Encryption at rest is infrastructure-layer concern, not in app repo"}
+  ]
+}

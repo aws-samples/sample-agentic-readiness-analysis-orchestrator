@@ -1,0 +1,819 @@
+{
+  "version": "V6",
+  "analysis_type": "mod",
+  "repo_name": "umami-software--umami",
+  "analysis_date": "2026-01-15",
+  "td_version": "modernization-analysis-v6.2-simulated",
+  "report_format_version": "V6",
+  "metadata": {
+    "repo_type": "application",
+    "priority": "P1",
+    "tags": ["typescript", "analytics", "web-app"],
+    "context": "Self-hosted privacy-focused web analytics.",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Next.js app backed by Prisma ORM against PostgreSQL with user/session management (bcrypt + JWT auth), CRUD REST routes for websites, teams, reports, and users, and owned persistent state. Classified as stateful-crud.",
+    "preferences": {
+      "prefer": ["eks", "aurora", "dynamodb", "api-gateway", "eventbridge", "bedrock"],
+      "avoid": ["self-managed-kafka", "self-managed-kubernetes", "oracle"]
+    },
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": false
+    },
+    "surface_flag_rationale": "PostgreSQL + ClickHouse + Redis driven via Prisma / @clickhouse/client / @umami/redis-client with data volume in docker-compose => has_persistent_data_store and has_at_rest_data_surface both true. Dockerfile plus GHCR/Docker Hub image publishing workflow => has_deployed_workload true. Next.js API routes under src/app/api => has_api_surface true. docker-compose.yml runs a single container with no replicas, no k8s/helm manifests => has_multi_instance_deployment false. No Terraform, CloudFormation, CDK, or SAM for AWS resources in repo => has_iac_provisioning_aws_resources false."
+  },
+  "overall_score": 1.79,
+  "overall_rating": "Needs Work",
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 6,
+    "medium_count": 26,
+    "low_count": 1,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent",
+    "rationale": "V5 overall_score 1.79 falls in the V5 Needs Work band (1.5–2.4). V6 tier Remediation Required (2-11 High). Per Req 29 equivalence, V5 Needs Work ≡ V6 Remediation Required → consistent. MOD classification is deliberately softer than ARA on '1 High' — ARA treats a single High as an agent-deployment blocker, MOD treats it as a single modernization gap mapping to Pilot-Ready."
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.09,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical",
+      "scoring_note": "INF: (1+1+1+1+1+1+1+1+1+1+2) / 11 = 12/11 = 1.09"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.17,
+      "score_rating": "Needs Work",
+      "severity_status": "Needs Work",
+      "scoring_note": "APP: (4+2+2+2+1+2) / 6 = 13/6 = 2.17"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 3.25,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work",
+      "scoring_note": "DATA: (2+4+3+4) / 4 = 13/4 = 3.25"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.33,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical",
+      "scoring_note": "SEC: (null+1+2+1+2+1+1) / 6 = 8/6 = 1.33 — SEC-Q1 Not Evaluated (no account-level IaC)."
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.11,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical",
+      "scoring_note": "OPS: (1+1+1+1+1+2+1+1+1) / 9 = 10/9 = 1.11"
+    }
+  ],
+  "top_gaps": [
+    {"rank": 1, "question_id": "INF-Q10", "title": "Infrastructure as Code Coverage", "score": 1, "gap": "No IaC — zero Terraform/CloudFormation/CDK/Helm files in repo.", "impact": "Blocks reproducible environments and every downstream modernization pathway."},
+    {"rank": 2, "question_id": "INF-Q1", "title": "Managed Compute", "score": 1, "gap": "Compute model is Dockerfile + docker-compose with no managed container orchestration target.", "impact": "Cannot scale elastically; operators run raw Docker on their own hosts."},
+    {"rank": 3, "question_id": "INF-Q2", "title": "Managed Databases", "score": 1, "gap": "Default deployment runs self-managed PostgreSQL (and optional ClickHouse, Redis) in Docker.", "impact": "Operators shoulder patching, backups, HA, and failover."},
+    {"rank": 4, "question_id": "INF-Q5", "title": "Network Security", "score": 1, "gap": "No VPC / subnet / security-group IaC; port 3000 bound on host directly.", "impact": "No baseline segmentation shipped; blast radius is the whole host."},
+    {"rank": 5, "question_id": "SEC-Q2", "title": "Encryption at Rest", "score": 1, "gap": "No KMS, no storage encryption configured; local Docker volume only.", "impact": "No encryption-at-rest guarantees for analytics data."}
+  ],
+  "quick_agent_wins": [
+    {
+      "name": "API-aware agent",
+      "prerequisite": "Next.js API route tree under src/app/api exposes documented CRUD endpoints with structured JSON responses (APP-Q5 = 1 but APP-Q5 >= 2 threshold fails — see note).",
+      "what_it_enables": "Not yet — APP-Q5 scored 1 (no versioning). Once /api/v1/* versioning lands, an API-aware agent can discover and invoke admin endpoints as tools.",
+      "additional_steps": "Introduce /api/v1 path prefix; generate OpenAPI spec from the existing route handlers.",
+      "effort": "Medium",
+      "blocked": true,
+      "blocker_reason": "APP-Q5 = 1 does not meet the prerequisite APP-Q5 >= 2."
+    },
+    {
+      "name": "Data query agent",
+      "prerequisite": "Centralised Prisma schema and unified repository layer (DATA-Q2 = 4).",
+      "what_it_enables": "Natural-language-to-SQL agent over the Umami event model (sessions, page views, events).",
+      "additional_steps": "Expose a read-only Prisma connection and add row/column allowlists to keep PII out of agent scope.",
+      "effort": "Medium"
+    },
+    {
+      "name": "DevOps agent",
+      "prerequisite": "GitHub Actions workflows exist for CI build, tag-triggered Docker publish, and cloud image builds (INF-Q11 = 2).",
+      "what_it_enables": "Agent can trigger release tagging, inspect build status, and manage Docker image promotions.",
+      "additional_steps": "Add a scoped GitHub App for the agent; restrict to release-management scopes.",
+      "effort": "Low"
+    },
+    {
+      "name": "RAG-based knowledge agent",
+      "prerequisite": "README.md plus extensive inline comments across src/ and db/ supply a corpus (detected during Step 1 discovery).",
+      "what_it_enables": "Developer-facing RAG agent answering 'how does tracker ingest work?' or 'what does APP_SECRET control?' from the repo's own documentation.",
+      "additional_steps": "Index README + src/lib comments into a vector store (OpenSearch with vector engine).",
+      "effort": "Low"
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2 < 3 (primary) AND at least one of INF-Q1 < 3, APP-Q3 < 3, APP-Q4 < 3",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2, "note": "Primary: monolith with module boundaries but shared Prisma schema."},
+        {"question_id": "INF-Q1", "score": 1, "note": "Supporting: no managed compute target."},
+        {"question_id": "APP-Q3", "score": 2, "note": "Supporting: mostly synchronous HTTP/Prisma; Kafka is optional."},
+        {"question_id": "APP-Q4", "score": 2, "note": "Supporting: heavy report queries run synchronously in the request path."}
+      ],
+      "detail": {
+        "aws_services": ["EKS", "API Gateway", "EventBridge", "Aurora PostgreSQL", "Lambda"],
+        "patterns": ["Strangler Fig", "Anti-corruption Layer", "Event Sourcing"],
+        "immediate_actions": [
+          "Extract tracker/event ingestion as a separate service",
+          "Extract the report/query engine",
+          "Keep admin/management API as the core service"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN",
+          "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"
+        ]
+      }
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1 < 3 AND no container definitions found",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 1, "note": "Primary score threshold met, but Dockerfile + docker-compose.yml exist — workload is already containerized."}
+      ],
+      "detail": null,
+      "not_triggered_reason": "Dockerfile and docker-compose.yml exist. The gap is managed orchestration, not containerization itself — covered under Move to Cloud Native."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4 < 3 AND commercial DB engines detected",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "No stored procedures, triggers, or proprietary SQL. Supported engines (PostgreSQL, ClickHouse, Redis) are all open source."}
+      ],
+      "detail": null,
+      "not_triggered_reason": "DATA-Q4 = 4 and supported engines are all open source (PostgreSQL, ClickHouse, Redis)."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2 < 3 (primary). DATA-Q3 supporting.",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": 1, "note": "Primary: docker-compose runs postgres:15-alpine as a container; Redis and ClickHouse similarly self-managed when enabled."},
+        {"question_id": "DATA-Q3", "score": 3, "note": "Supporting: engine version pinned (postgres:15-alpine) but no documented upgrade/EOL procedure."}
+      ],
+      "detail": {
+        "aws_services": ["Aurora PostgreSQL", "ElastiCache for Redis", "Amazon MemoryDB"],
+        "migration_tools": ["AWS DMS", "Prisma connection-string switchover"],
+        "immediate_actions": [
+          "Migrate PostgreSQL to Aurora PostgreSQL (preferences.prefer: aurora)",
+          "Migrate Redis to ElastiCache for Redis",
+          "Publish a CDK reference deployment alongside the docker-compose default"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
+          "https://skillbuilder.aws/learn/ND246G8Y3W"
+        ]
+      }
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q4 < 3 (primary) AND data processing workloads present (ClickHouse analytics engine, optional Kafka event stream)",
+      "triggering_questions": [
+        {"question_id": "INF-Q4", "score": 1, "note": "Primary: optional Kafka path uses kafkajs against self-managed Kafka; preferences.avoid explicitly lists self-managed-kafka."},
+        {"question_id": "DATA-Q2", "score": 4, "note": "Guard check: data access is centralized via Prisma + src/queries, so the sprawl guard does not block trigger."}
+      ],
+      "detail": {
+        "aws_services": ["Amazon MSK Serverless", "EventBridge", "Kinesis Data Streams", "Amazon Redshift Serverless", "Amazon Athena"],
+        "immediate_actions": [
+          "Replace self-managed Kafka with MSK Serverless or EventBridge (preferences.prefer: eventbridge)",
+          "Evaluate managed analytics alternatives for the self-managed ClickHouse reporting store"
+        ],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/RWZA84NMVV"]
+      }
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10 < 3 OR INF-Q11 < 3 (primary). OPS-Q5 < 3 and OPS-Q6 < 3 supporting.",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 1, "note": "Primary: zero IaC coverage."},
+        {"question_id": "INF-Q11", "score": 2, "note": "Primary: CI runs tests and builds; CD only publishes Docker images — no deployment stage."},
+        {"question_id": "OPS-Q5", "score": 1, "note": "Supporting: no blue/green or canary strategy defined in repo."},
+        {"question_id": "OPS-Q6", "score": 2, "note": "Supporting: Jest unit tests run in CI; Cypress E2E exists but is not wired into CI."}
+      ],
+      "detail": {
+        "aws_services": ["CodePipeline", "CodeBuild", "CDK", "EKS + ArgoCD"],
+        "immediate_actions": [
+          "Adopt CDK (preferences.prefer) for IaC of the reference deployment",
+          "Extend GitHub Actions with deployment stages for each release tag",
+          "Wire Cypress E2E into CI as a merge gate",
+          "Add canary rollout via Argo Rollouts or CodeDeploy weighted target groups"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
+        ]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent frameworks AND AI intent in portfolio or service context",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "Contextual guard not satisfied: the service context string 'Self-hosted privacy-focused web analytics.' contains none of the 17 AI signal terms (AI, agent, agentic, LLM, ML, Bedrock, generative, GenAI, RAG, vector, embedding, copilot, assistant, chatbot, autonomous, machine learning, ML). preferences.prefer contains 'bedrock' but preferences do NOT influence pathway trigger logic per TD Step 7.7 / Constraint C6 — only context strings do."
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Strangler Fig (Parallel Track)",
+    "rationale": "APP-Q2 = 2 with identifiable modules (tracker ingest, query/report engine, admin UI) but shared Prisma schema. Clear extraction boundaries exist; Strangler Fig keeps the monolith running while peeling off the highest-volume path (tracker ingest) first.",
+    "approach_options": [
+      {"name": "Strangler Fig (Parallel Track)", "level_of_effort": "Medium-High (9-15 months)", "recommendation": "Recommended"},
+      {"name": "Conditional / Adaptive", "level_of_effort": "Low-Medium (already containerized; selectively extract)", "recommendation": "Acceptable when capacity is constrained"},
+      {"name": "Big-Bang Rewrite", "level_of_effort": "Very High", "recommendation": "Against"}
+    ],
+    "patterns": [
+      {"pattern": "Anti-corruption Layer", "purpose": "Isolate extracted tracker service from shared Prisma schema"},
+      {"pattern": "Saga", "purpose": "Coordinate session → event → event_data writes across stores"},
+      {"pattern": "Event Sourcing", "purpose": "Tracker ingestion is already an event log — natural fit for event-sourced extraction"},
+      {"pattern": "Hexagonal Architecture", "purpose": "Structure new services with ports/adapters"}
+    ],
+    "effort_factors": {
+      "module_boundaries": "Clear (tracker, reports, admin) — Low-effort signal",
+      "data_coupling": "High — shared Prisma schema — High-effort signal",
+      "stored_procedures": "None — Low-effort signal",
+      "communication_patterns": "Mostly synchronous — High-effort signal",
+      "cicd_maturity": "Build+publish pipeline exists; deploy pipeline does not — Mixed",
+      "test_coverage": "Jest unit + Cypress E2E exist; Cypress not in CI — Mixed"
+    }
+  },
+  "evaluations": [
+    {"question_id": "INF-Q1", "status": "Evaluated", "score": 1},
+    {"question_id": "INF-Q2", "status": "Evaluated", "score": 1, "gate": "has_persistent_data_store = true → evaluated"},
+    {"question_id": "INF-Q3", "status": "Evaluated", "score": 1, "archetype_calibrated": true, "archetype": "stateful-crud"},
+    {"question_id": "INF-Q4", "status": "Evaluated", "score": 1, "archetype_calibrated": true, "archetype": "stateful-crud"},
+    {"question_id": "INF-Q5", "status": "Evaluated", "score": 1},
+    {"question_id": "INF-Q6", "status": "Evaluated", "score": 1},
+    {"question_id": "INF-Q7", "status": "Evaluated", "score": 1},
+    {"question_id": "INF-Q8", "status": "Evaluated", "score": 1, "gate": "has_persistent_data_store OR has_at_rest_data_surface = true → evaluated"},
+    {"question_id": "INF-Q9", "status": "Evaluated", "score": 1, "gate": "has_deployed_workload AND (has_api_surface OR has_persistent_data_store) = true → evaluated"},
+    {"question_id": "INF-Q10", "status": "Evaluated", "score": 1},
+    {"question_id": "INF-Q11", "status": "Evaluated", "score": 2},
+    {"question_id": "APP-Q1", "status": "Evaluated", "score": 4, "passing": true},
+    {"question_id": "APP-Q2", "status": "Evaluated", "score": 2},
+    {"question_id": "APP-Q3", "status": "Evaluated", "score": 2, "archetype_calibrated": true, "archetype": "stateful-crud"},
+    {"question_id": "APP-Q4", "status": "Evaluated", "score": 2, "archetype_calibrated": true, "archetype": "stateful-crud"},
+    {"question_id": "APP-Q5", "status": "Evaluated", "score": 1},
+    {"question_id": "APP-Q6", "status": "Evaluated", "score": 2},
+    {"question_id": "DATA-Q1", "status": "Evaluated", "score": 2},
+    {"question_id": "DATA-Q2", "status": "Evaluated", "score": 4, "passing": true},
+    {"question_id": "DATA-Q3", "status": "Evaluated", "score": 3},
+    {"question_id": "DATA-Q4", "status": "Evaluated", "score": 4, "passing": true},
+    {"question_id": "SEC-Q1", "status": "Not Evaluated (archetype-N/A)", "gate": "has_iac_provisioning_aws_resources = false AND no account-level IaC — per Step 1.6 SEC-Q1 gate, CloudTrail is account/foundation-level and belongs in foundation IaC, not this application repo."},
+    {"question_id": "SEC-Q2", "status": "Evaluated", "score": 1, "gate": "has_at_rest_data_surface = true → evaluated"},
+    {"question_id": "SEC-Q3", "status": "Evaluated", "score": 2},
+    {"question_id": "SEC-Q4", "status": "Evaluated", "score": 1},
+    {"question_id": "SEC-Q5", "status": "Evaluated", "score": 2},
+    {"question_id": "SEC-Q6", "status": "Evaluated", "score": 1},
+    {"question_id": "SEC-Q7", "status": "Evaluated", "score": 1},
+    {"question_id": "OPS-Q1", "status": "Evaluated", "score": 1},
+    {"question_id": "OPS-Q2", "status": "Evaluated", "score": 1, "gate": "has_api_surface OR has_persistent_data_store = true → evaluated. Scoring-limitation note applies (SLOs often live in external platforms)."},
+    {"question_id": "OPS-Q3", "status": "Evaluated", "score": 1},
+    {"question_id": "OPS-Q4", "status": "Evaluated", "score": 1},
+    {"question_id": "OPS-Q5", "status": "Evaluated", "score": 1, "gate": "has_deployed_workload = true → evaluated. Scoring-limitation note applies (deployment orchestration may live in a separate GitOps repo)."},
+    {"question_id": "OPS-Q6", "status": "Evaluated", "score": 2},
+    {"question_id": "OPS-Q7", "status": "Evaluated", "score": 1},
+    {"question_id": "OPS-Q8", "status": "Evaluated", "score": 1},
+    {"question_id": "OPS-Q9", "status": "Evaluated", "score": 1}
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No managed compute target — Docker Compose only",
+      "description": "Compute model is a Dockerfile (Next.js standalone output on node:22-alpine) plus docker-compose.yml running one umami container and one postgres:15-alpine container. No ECS, EKS, Fargate, Lambda, or App Runner references in the repo. GitHub Actions cd.yml publishes the image to GHCR and Docker Hub but does not deploy anywhere.",
+      "gap": "No managed container orchestration, no serverless. All compute guidance leaves operators on raw Docker.",
+      "recommendation": "Publish a reference CDK or Helm deployment targeting EKS (preferences.prefer: eks). Keep docker-compose as the local-dev default and add EKS manifests as the recommended production path.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "Dockerfile", "lines": "1-60"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Self-managed PostgreSQL in Docker Compose",
+      "description": "docker-compose.yml runs postgres:15-alpine as the reference database deployment. When enabled, ClickHouse (@clickhouse/client) and Redis (@umami/redis-client) are also self-managed. No RDS, Aurora, DynamoDB, DocumentDB, or ElastiCache resources defined in the repo.",
+      "gap": "Default production guidance points operators at self-managed engines. Backups, patching, HA, and failover are manual.",
+      "recommendation": "Document Aurora PostgreSQL (preferences.prefer: aurora) plus ElastiCache for Redis as the recommended managed path. Provide a CDK or Terraform module alongside the docker-compose fast-path.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": "17-30"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No workflow orchestration — multi-step flows hardcoded",
+      "description": "Multi-step flows (session → event save → event-data save → optional Kafka publish) are implemented inline in src/queries/sql/events and src/queries/sql/sessions. No Step Functions, Temporal, MWAA, or Camunda references. Archetype-calibrated as stateful-crud: Score 1 under the calibrated rubric (no orchestration — all workflow logic in code).",
+      "gap": "Business-critical multi-step writes are state-machine-in-code with no retry/compensation primitives.",
+      "recommendation": "In the managed reference deployment, wrap cross-store writes (Postgres + ClickHouse + Kafka/EventBridge) in Step Functions Express Workflows or EventBridge Pipes for built-in retries and observability.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/queries/sql/events/saveEvent.ts", "lines": "1-240"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": true, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Optional Kafka is self-managed; no managed streaming",
+      "description": "src/lib/kafka.ts uses kafkajs to connect to a Kafka cluster configured via KAFKA_URL and KAFKA_BROKER. The Kafka path is env-gated and optional, but the only documented streaming target is self-managed Kafka. No SQS, SNS, EventBridge, MSK, or Kinesis. Archetype-calibrated as stateful-crud: Score 1 under the calibrated rubric (cross-service state changes with no managed messaging).",
+      "gap": "When operators enable event streaming, they run Kafka themselves. preferences.avoid explicitly lists self-managed-kafka.",
+      "recommendation": "Replace the kafkajs target with MSK Serverless or EventBridge (preferences.prefer). Keep the env-gated adapter so self-hosted operators can still choose Kafka.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/lib/kafka.ts", "lines": "1-115"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": true, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No network security configuration in repo",
+      "description": "No VPC, subnet, security group, NACL, or PrivateLink definitions anywhere in the repo. docker-compose.yml exposes port 3000:3000 on the host.",
+      "gap": "Network segmentation is entirely an operator responsibility — no baseline segmentation shipped.",
+      "recommendation": "Ship reference IaC that places the app in private subnets behind an ALB, with least-privilege security groups to RDS / ElastiCache, per AWS WAF SEC pillar.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": "1-36"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No managed API entry point",
+      "description": "Next.js serves /api routes directly on port 3000 (src/app/api/**). No API Gateway, AppSync, ALB, or CloudFront references in the repo.",
+      "gap": "No throttling, auth gateway, request validation, or WAF at the entry point.",
+      "recommendation": "Front the app with API Gateway (preferences.prefer: api-gateway) or CloudFront + ALB. Move per-request auth for admin APIs behind a Lambda authorizer.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": "4-9"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No auto-scaling configured",
+      "description": "docker-compose runs one fixed umami container and one fixed postgres container. No ASG, ECS service, Lambda concurrency, DynamoDB auto-scaling, or Aurora replica auto-scaling anywhere.",
+      "gap": "All capacity is statically provisioned. No response to tracker traffic spikes or report-generation load.",
+      "recommendation": "In the reference EKS deployment, add HPA on the Next.js pod plus Aurora auto-scaling replicas for the reporting path. Expose custom CloudWatch metrics for tracker-ingest requests-in-flight.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": "1-36"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No automated backup or point-in-time recovery",
+      "description": "docker-compose declares umami-db-data as a local Docker volume. No aws_backup_plan, no RDS backup_retention_period, no DynamoDB point_in_time_recovery, no S3 versioning, no EBS snapshot lifecycle. No restore-testing procedure in the repo.",
+      "gap": "No backup strategy shipped with the distribution — operators must provision their own.",
+      "recommendation": "In the reference Aurora deployment, enable backup_retention_period = 30 with PITR, plus cross-region automated backups. Ship a documented restore runbook.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": "29-31"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Single-AZ reference deployment",
+      "description": "docker-compose.yml defines a single-container reference deployment with no replica / multi-AZ configuration. No Aurora Multi-AZ, no ASG spanning AZs, no ECS service across AZs.",
+      "gap": "Reference deployment has no HA / fault isolation.",
+      "recommendation": "Reference EKS deployment should span 2+ AZs with Aurora Multi-AZ. Document the minimum production topology.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": "1-36"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "No Infrastructure as Code",
+      "description": "No Terraform, CloudFormation, CDK, Helm, or Kustomize files anywhere in the repo. The only deployment artifacts are Dockerfile and docker-compose.yml.",
+      "gap": "0% IaC coverage. Infrastructure changes are manual, non-reproducible, and not version-controlled.",
+      "recommendation": "Adopt CDK (preferred for TypeScript teams and preferences.prefer) to define EKS, Aurora, ElastiCache, networking, and security. Start with compute + database.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": ".", "lines": "no-iac-files-in-tree"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI runs tests and builds images, but no deploy stage",
+      "description": "ci.yml installs, runs pnpm test, and builds on push. cd.yml builds and pushes multi-arch Docker images to GHCR and Docker Hub on tag. cd-cloud.yml pushes a cloud image. No deployment stage, no rollback, no environment promotion.",
+      "gap": "Build + publish automation exists; deploy automation does not.",
+      "recommendation": "Extend cd.yml with a deploy stage to the reference EKS cluster via CDK + ArgoCD. Add automated rollback on deployment health-check failure.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/cd.yml", "lines": "1-135"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith with identifiable modules but shared Prisma schema",
+      "description": "Single Next.js deployable serves tracker ingest (/api/send), the admin UI, and the reporting API. Module boundaries exist under src/app/api (websites, reports, events, users, teams) but all modules share the same Prisma schema and database. No per-module isolation.",
+      "gap": "Tracker ingest and reporting cannot scale independently; deploys affect the whole product.",
+      "recommendation": "Strangler Fig extraction starting with tracker ingest (highest-volume, naturally async). Use an Anti-corruption Layer when the extracted service reads the shared schema.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "src/app/api", "lines": "module-tree"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Mostly synchronous communication; optional async via Kafka",
+      "description": "Inter-module communication is synchronous Prisma/HTTP. The Kafka integration is env-gated and optional. Archetype = stateful-crud — Score 2 under the calibrated rubric (primarily synchronous with some async for background jobs when Kafka is enabled).",
+      "gap": "State changes don't propagate across services (no services yet); no event-driven path unless Kafka is enabled.",
+      "recommendation": "Publish tracker-event events to EventBridge as the reference async path. Keep synchronous Prisma for admin/CRUD flows.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/lib/kafka.ts", "lines": "1-115"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": true, "core_question": false}
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Report queries run synchronously; no async job pattern",
+      "description": "Reporting endpoints under src/app/api/reports execute Prisma / ClickHouse queries inline in the request path. No background job queue, no callback pattern for long-running exports. Archetype = stateful-crud.",
+      "gap": "Heavy reports risk request timeouts; no 'request an export; we will notify you' pattern.",
+      "recommendation": "Offload heavy report generation to an SQS-backed worker (managed) or Step Functions, returning a job ID the UI polls.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/app/api/reports", "lines": "report-routes"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": true, "core_question": false}
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "No explicit API versioning strategy",
+      "description": "Next.js App Router routes under src/app/api/* are not grouped under /v1, /v2, or similar. No Accept-Version headers. No versioning annotations.",
+      "gap": "No versioning — breaking changes to admin APIs propagate directly to consumers.",
+      "recommendation": "Introduce /api/v1/* path prefix and document deprecation windows. Apply first to tracker ingest, then admin APIs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/app/api", "lines": "route-tree"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Environment-variable service endpoints; no dynamic discovery",
+      "description": "DATABASE_URL, KAFKA_URL, CLICKHOUSE_URL, REDIS_URL are supplied via environment variables. No AWS Service Discovery / Cloud Map / Consul / service mesh.",
+      "gap": "Endpoint changes require restart; no dynamic discovery.",
+      "recommendation": "For the EKS reference deployment, use AWS Cloud Map / CoreDNS for intra-cluster service discovery.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/lib/kafka.ts", "lines": "14-20"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "No managed object storage path for unstructured data",
+      "description": "All analytics data lives in PostgreSQL (via Prisma) and ClickHouse. No aws_s3_bucket, no Textract, no document-parsing libraries. The product's core domain has no unstructured-data path today, but there is also no reference path for future exports/uploads.",
+      "gap": "If the roadmap adds user-uploaded assets (brand logos, PDF report exports), there is no storage target.",
+      "recommendation": "When future features require unstructured storage (e.g., PDF exports of reports), standardise on S3 with server-side encryption.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "prisma/schema.prisma", "lines": "schema-review"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Engine versions pinned but no documented upgrade procedure",
+      "description": "docker-compose pins postgres:15-alpine. Dockerfile uses node:22-alpine. Prisma migrations (14 folders under prisma/migrations) track schema changes cleanly. No documented engine EOL / upgrade procedure in the repo.",
+      "gap": "PostgreSQL 15 is still supported, but no documented upgrade playbook or rollback window for operators.",
+      "recommendation": "Add a MAINTAINERS.md section covering the PostgreSQL upgrade path, rollback window, and testing procedure. Track engine EOL against major releases.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "docker-compose.yml", "lines": "17-30"},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No encryption-at-rest configuration",
+      "description": "The persistent data surface in this repo is the docker-compose volume umami-db-data. No KMS, no aws_kms_key, no encryption config on any data store. Self-hosted operators are on their own for filesystem or RDS encryption.",
+      "gap": "No encryption-at-rest shipped with the distribution.",
+      "recommendation": "In the reference Aurora deployment, enable storage encryption with a customer-managed KMS key. Document the key-rotation policy.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": "29-31"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "JWT auth on admin APIs; tracker endpoint intentionally public",
+      "description": "Admin APIs use JWT (src/lib/jwt.ts, jsonwebtoken) authenticated against an APP_SECRET-derived key. Tracker ingestion endpoints (/api/send) are intentionally public to accept calls from untrusted browsers. bcryptjs is used for password hashing (SALT_ROUNDS = 10).",
+      "gap": "No OAuth2/OIDC; all auth is app-managed. Tracker endpoint has no throttling at the app layer.",
+      "recommendation": "Keep JWT for admin but place /api/send behind API Gateway with per-origin throttling. Consider Cognito for admin-user identity federation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/app/api/auth/login/route.ts", "lines": "1-40"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "App manages its own identity — no external IdP",
+      "description": "src/app/api/auth/login/route.ts authenticates users against Umami's own users table with bcrypt. No Cognito, Okta, OIDC, or SAML integration in the repo.",
+      "gap": "Enterprise customers cannot federate against their existing IdP.",
+      "recommendation": "Add an OIDC adapter (NextAuth.js or AWS Cognito) and document how operators plug in their own IdP.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/app/api/auth/login/route.ts", "lines": "1-40"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets in environment variables with no rotation",
+      "description": "APP_SECRET, DATABASE_URL, KAFKA_URL, and related secrets are supplied via environment variables (src/lib/crypto.ts, src/lib/kafka.ts). docker-compose.yml ships APP_SECRET: replace-me-with-a-random-string as a placeholder; POSTGRES_PASSWORD: umami is a literal placeholder. No Secrets Manager, Vault, or encrypted parameter store references. No rotation. The repo does not commit real credentials — only placeholders — so this is Score 2 (no plaintext in source, but no rotation).",
+      "gap": "Production credentials held in environment variables with no rotation mechanism.",
+      "recommendation": "Store all secrets in AWS Secrets Manager with automated rotation. Reference from EKS via External Secrets Operator or the native Secrets Store CSI driver.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "docker-compose.yml", "lines": "8-12"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No managed patching or vulnerability scanning",
+      "description": "Dockerfile builds against node:22-alpine and postgres:15-alpine (official images). No SSM Patch Manager, Inspector, Snyk, or Trivy scan configured. cd.yml does not scan container images. No hardened base images (Bottlerocket).",
+      "gap": "Vulnerability scanning and patching are entirely operator responsibility.",
+      "recommendation": "Add container scanning (ECR image scan, Trivy, or Snyk) to cd.yml before image push. In the managed deployment, use Bottlerocket for EKS worker nodes.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/cd.yml", "lines": "1-135"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "No SAST, DAST, or dependency scanning in CI",
+      "description": "ci.yml runs pnpm install, pnpm test, pnpm build only. No Dependabot config in .github, no SonarQube, Semgrep, CodeGuru Reviewer, or npm/pnpm audit step. pnpm-lock.yaml is committed but not scanned in CI.",
+      "gap": "No automated security validation in the pipeline.",
+      "recommendation": "Enable Dependabot for pnpm and GitHub Actions. Add a Semgrep or CodeQL SAST step to ci.yml. Gate release on critical findings.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": "1-30"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No distributed tracing",
+      "description": "Application logging uses the debug npm package for unstructured text output gated by DEBUG (e.g. 'umami:kafka'). No OpenTelemetry, X-Ray, Jaeger, or APM SDK. No trace-id propagation, no correlation IDs in logs.",
+      "gap": "Cannot trace a request across Next.js → Prisma → PostgreSQL → ClickHouse → Redis → Kafka.",
+      "recommendation": "Instrument with OpenTelemetry SDK for Node.js (auto-instrumentation covers Next.js, Prisma, Redis, Kafka). Export to AWS X-Ray or CloudWatch ServiceLens.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "package.json", "lines": "debug-dependency-only"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No SLO definitions in repo",
+      "description": "No SLO files, CloudWatch alarm definitions, error-budget tracking, or SLO dashboards. Per the OPS-Q2 scoring-limitation note, SLOs typically live in external monitoring platforms, so this finding has a known high false-positive rate for code-only scans.",
+      "gap": "No SLO evidence in the repo.",
+      "recommendation": "Ship a reference SLO set for the tracker ingest path (availability, p99 latency) and admin API. Track in CloudWatch with error-budget burn alarms.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": ".", "lines": "no-slo-artifacts"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No business-metrics publishing",
+      "description": "No cloudwatch.put_metric_data, StatsD, or Prometheus metric-publishing code in src/. The product's data is analytics events for its users — not operational metrics for itself. No KPI alarms for Umami's own health.",
+      "gap": "Operators cannot track business-relevant metrics (tracker-ingest success rate, report generation latency, DB pool exhaustion) as first-class metrics.",
+      "recommendation": "Publish tracker-ingest count, report-generation latency p99, and DB pool exhaustion as CloudWatch custom metrics. Add per-tenant dashboards.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src", "lines": "no-metrics-publishing"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No anomaly detection or alerting",
+      "description": "No CloudWatch alarm definitions, PagerDuty integration, or anomaly detectors in the repo.",
+      "gap": "No alerting on error-rate or latency regressions.",
+      "recommendation": "In the reference deployment, add CloudWatch anomaly detection on /api/send ingest error rate and admin-API p99 latency.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": ".", "lines": "no-alarms"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No blue/green or canary deployment strategy",
+      "description": "cd.yml and cd-cloud.yml only build and push Docker images. No CodeDeploy, no Helm canary, no Argo Rollouts, no Lambda traffic shifting, no ALB weighted target groups. The GHCR 'latest' tag is reassigned on every tagged release (direct replacement). Per the OPS-Q5 scoring-limitation note, deployment orchestration for self-hosted operators may live outside the repo — recommendation accommodates this.",
+      "gap": "No staged rollout strategy shipped with the distribution.",
+      "recommendation": "In the reference EKS deployment, adopt Argo Rollouts for canary releases. For the published image tagging, publish immutable version tags only (stop reassigning 'latest').",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": ".github/workflows/cd.yml", "lines": "60-135"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Cypress E2E exists but is not wired into CI",
+      "description": "cypress.config.ts and cypress/ directory contain E2E tests; package.json defines cypress-open and cypress-run scripts. ci.yml runs pnpm test (Jest unit tests) but does NOT invoke Cypress. No integration tests against a live service in the pipeline.",
+      "gap": "E2E coverage exists in-repo but never runs in CI. Only Jest unit tests execute on every push.",
+      "recommendation": "Add a Cypress job to ci.yml that runs against the locally-started Next.js + postgres docker-compose stack. Gate merges on passing E2E.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "cypress.config.ts", "lines": "1-50"},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No runbooks or automated incident response",
+      "description": "No runbook files (markdown/YAML/JSON), no SSM Automation documents, no Lambda-based remediation, no self-healing patterns in the repo.",
+      "gap": "Incident response is entirely ad hoc.",
+      "recommendation": "Publish runbooks for common incidents (DB connection pool exhaustion, tracker ingest backlog, Kafka consumer lag). Automate recovery as SSM documents in the reference deployment.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": ".", "lines": "no-runbooks"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No CODEOWNERS, no named alarm owners",
+      "description": "No CODEOWNERS file. No service-level dashboards, no SLO definitions with team attribution, no team tags on observability assets.",
+      "gap": "No defined observability ownership.",
+      "recommendation": "Add CODEOWNERS for the repo. Ship a reference Grafana/CloudWatch dashboard JSON with named owners.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": ".", "lines": "no-codeowners"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No resource tagging governance",
+      "description": "No IaC in repo, therefore no default_tags, required-tags Config rules, or Tag Policies.",
+      "gap": "No resource tagging strategy shipped with the distribution.",
+      "recommendation": "In the CDK reference, add default_tags for application, environment, owner, cost-center; layer AWS Config required-tags rule + Organizations Tag Policies in the foundation account.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": ".", "lines": "no-iac"},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    }
+  ]
+}

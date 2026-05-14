@@ -1,0 +1,207 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2026-05-07",
+    "td_version": "agentic-readiness-analysis",
+    "report_format_version": "V6",
+    "target": "akveo--ngx-admin",
+    "analyzed_by": "AWS Transform Custom — Agentic Readiness Analysis",
+    "repository_type": "application",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Frontend-only SPA serving as an admin dashboard template. No backend server, no database, no persistent state, no write operations. All data is mocked in-memory.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["typescript", "frontend", "angular"],
+    "context": "Angular admin dashboard template.",
+    "dev_library_application_override": true,
+    "dev_library_application_rationale": "repo_type is application, service_archetype is stateless-utility, and all 5 surface flags are false. Per Step 1.5, the library N/A mapping is applied.",
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_http_rpc_surface": false,
+      "has_auth_surface": false,
+      "has_write_operations": false,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Agent-Ready",
+    "sub_qualifier": null,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 5,
+    "safety_impact_medium_count": 0,
+    "rule_matched": "0 High, ≤1 Medium → Agent-Ready"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 0,
+    "risk_quality_count": 0,
+    "info_count": 5,
+    "na_count": 38,
+    "not_evaluated_extended_count": 0,
+    "total": 43,
+    "core_questions_evaluated": 5,
+    "extended_questions_triggered": 0,
+    "extended_questions_not_triggered": 0,
+    "questions_na": 38
+  },
+  "readiness_profile": {
+    "profile": "Agent-Ready",
+    "deployment_gate": "Cleared for autonomous operation. Instrument observability. Define scope explicitly. Run controlled pilot first.",
+    "rationale": "This is a frontend-only Angular admin dashboard template with no backend services, no API surface, no persistent data, and no authentication enforcement. All 5 surface flags are false. The dev-library-application override applies, making the vast majority of ARA questions N/A. The 5 questions that remain applicable (ENG-Q1 through ENG-Q5) all resolve to INFO."
+  },
+  "findings": [
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No IaC governance for deployment infrastructure",
+      "description": "No HTTP/RPC surface and no auth surface detected. This is a frontend-only Angular template deployed via rsync to a remote server. No IaC (Terraform, CDK, CloudFormation) defines the deployment infrastructure.",
+      "gap": "No IaC governance for deployment infrastructure. Deployment is ad-hoc rsync without peer review or drift detection.",
+      "recommendation": "If deploying to production, define hosting infrastructure (S3+CloudFront, or containerized) as IaC. For template consumers, this is informational.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": ".github/workflows/demoDeploy.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API contract testing (not applicable)",
+      "description": "No HTTP/RPC surface — API contract testing is not applicable. CI/CD exists (GitHub Actions and legacy Travis CI) but performs build and lint only. No API contracts exist to test.",
+      "gap": "No API contract testing (not applicable for frontend template).",
+      "recommendation": "No action required for current scope. If a backend API is added, introduce contract testing.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": ".github/workflows/demoDeploy.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No rollback mechanism for demo deployment",
+      "description": "No deployed HTTP/RPC surface — deployment rollback is a consumer concern. The demo deployment uses rsync without rollback capability. No blue/green, canary, or feature-flag patterns are present.",
+      "gap": "No rollback mechanism for demo deployment (not applicable for frontend template consumed via npm/git).",
+      "recommendation": "If deploying to production, adopt CloudFront distribution with versioned S3 origins or container-based blue/green.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": ".github/workflows/demoDeploy.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No test files despite configured test infrastructure",
+      "description": "No HTTP/RPC surface — no APIs exist to test. Test infrastructure is configured (karma.conf.js, protractor.conf.js, tsconfig.spec.json) but no actual test spec files (*.spec.ts) are present in the source tree.",
+      "gap": "Complete absence of test files despite configured test infrastructure.",
+      "recommendation": "Add unit tests for Angular components and services. Migrate from deprecated Protractor to Cypress or Playwright for E2E testing.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "High",
+      "phase": 4,
+      "evidence": {
+        "file": "karma.conf.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No persistent data store — encryption at rest not applicable",
+      "description": "No persistent data store exists. All data in this application is mocked in-memory via the src/app/@core/mock/ services. There is no database, no S3 bucket, no file storage defined.",
+      "gap": "No data at rest to encrypt.",
+      "recommendation": "No action required for current scope. Template consumers who add a backend data store should ensure KMS encryption at rest.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/app/@core/mock/",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "status": "N/A", "reason": "Dev-library-application override. Frontend-only template with no HTTP/RPC surface."},
+    {"question_id": "API-Q2", "status": "N/A", "reason": "Dev-library-application override. Frontend-only template with no HTTP/RPC surface."},
+    {"question_id": "API-Q3", "status": "N/A", "reason": "Dev-library-application override. Frontend-only template with no HTTP/RPC surface."},
+    {"question_id": "API-Q4", "status": "N/A", "reason": "Dev-library-application override. Frontend-only template with no HTTP/RPC surface or write operations."},
+    {"question_id": "API-Q5", "status": "N/A", "reason": "Dev-library-application override. Frontend-only template with no HTTP/RPC surface."},
+    {"question_id": "API-Q6", "status": "N/A", "reason": "Dev-library-application override. Frontend-only template with no HTTP/RPC surface."},
+    {"question_id": "API-Q7", "status": "N/A", "reason": "Dev-library-application override. Frontend-only template with no HTTP/RPC surface or write operations."},
+    {"question_id": "API-Q8", "status": "N/A", "reason": "Dev-library-application override. Frontend-only template with no HTTP/RPC surface."},
+    {"question_id": "AUTH-Q1", "status": "N/A", "reason": "Dev-library-application override. NbDummyAuthStrategy is demo-only, no real auth surface."},
+    {"question_id": "AUTH-Q2", "status": "N/A", "reason": "Dev-library-application override. NbSecurityModule is client-side only, no backend enforcement."},
+    {"question_id": "AUTH-Q3", "status": "N/A", "reason": "Dev-library-application override. No backend authorization enforcement."},
+    {"question_id": "AUTH-Q4", "status": "N/A", "reason": "Dev-library-application override. No backend services for identity propagation."},
+    {"question_id": "AUTH-Q5", "status": "N/A", "reason": "Dev-library-application override. No backend credentials to manage."},
+    {"question_id": "AUTH-Q6", "status": "N/A", "reason": "Dev-library-application override. No agent-invoked write operations to audit."},
+    {"question_id": "AUTH-Q7", "status": "N/A", "reason": "Dev-library-application override. No agent identities to suspend."},
+    {"question_id": "STATE-Q1", "status": "N/A", "reason": "Dev-library-application override. No write operations."},
+    {"question_id": "STATE-Q2", "status": "N/A", "reason": "Dev-library-application override. No persistent state."},
+    {"question_id": "STATE-Q3", "status": "N/A", "reason": "Dev-library-application override. No write operations."},
+    {"question_id": "STATE-Q4", "status": "N/A", "reason": "Dev-library-application override. No external service dependencies."},
+    {"question_id": "STATE-Q5", "status": "N/A", "reason": "Dev-library-application override. No HTTP/RPC surface."},
+    {"question_id": "STATE-Q6", "status": "N/A", "reason": "Dev-library-application override. No write operations."},
+    {"question_id": "STATE-Q7", "status": "N/A", "reason": "Dev-library-application override. No backend infrastructure."},
+    {"question_id": "HITL-Q1", "status": "N/A", "reason": "Dev-library-application override. No write operations."},
+    {"question_id": "HITL-Q2", "status": "N/A", "reason": "Dev-library-application override. No write operations."},
+    {"question_id": "HITL-Q3", "status": "N/A", "reason": "Dev-library-application override. No HTTP/RPC surface or persistent data store."},
+    {"question_id": "DATA-Q1", "status": "N/A", "reason": "Dev-library-application override. No data owned by this template."},
+    {"question_id": "DATA-Q2", "status": "N/A", "reason": "Dev-library-application override. No persistent data store or user-data logging."},
+    {"question_id": "DATA-Q3", "status": "N/A", "reason": "Dev-library-application override. No backend API."},
+    {"question_id": "DATA-Q4", "status": "N/A", "reason": "Dev-library-application override. No persistent data."},
+    {"question_id": "DATA-Q5", "status": "N/A", "reason": "Dev-library-application override. No persistent data."},
+    {"question_id": "DATA-Q6", "status": "N/A", "reason": "Dev-library-application override. No user data logged."},
+    {"question_id": "DATA-Q7", "status": "N/A", "reason": "Dev-library-application override. Only mocked demo data."},
+    {"question_id": "DISC-Q1", "status": "N/A", "reason": "Dev-library-application override. No backend API."},
+    {"question_id": "DISC-Q2", "status": "N/A", "reason": "Dev-library-application override. Frontend template."},
+    {"question_id": "DISC-Q3", "status": "N/A", "reason": "Dev-library-application override. No data to catalog."},
+    {"question_id": "OBS-Q1", "status": "N/A", "reason": "Dev-library-application override. No HTTP/RPC surface to trace."},
+    {"question_id": "OBS-Q2", "status": "N/A", "reason": "Dev-library-application override. No HTTP/RPC surface to alert on."},
+    {"question_id": "OBS-Q3", "status": "N/A", "reason": "Dev-library-application override. No backend business operations."},
+    {"question_id": "ENG-Q1", "status": "finding", "severity": "Low"},
+    {"question_id": "ENG-Q2", "status": "finding", "severity": "Low"},
+    {"question_id": "ENG-Q3", "status": "finding", "severity": "Low"},
+    {"question_id": "ENG-Q4", "status": "finding", "severity": "Low"},
+    {"question_id": "ENG-Q5", "status": "finding", "severity": "Low"}
+  ]
+}

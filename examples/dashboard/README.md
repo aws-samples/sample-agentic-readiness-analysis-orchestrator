@@ -1,6 +1,6 @@
-# Assessment Dashboard
+# Analysis Dashboard
 
-Interactive HTML dashboards for visualizing ARA and MOD assessment results.
+Interactive HTML dashboards for visualizing ARA and MOD analysis results.
 
 | File | Description |
 |------|-------------|
@@ -35,4 +35,4 @@ aws cloudfront create-invalidation \
 
 ## Data Source
 
-Dashboard data comes from the Online Boutique portfolio assessment (11 microservices from Google's microservices-demo). The ARA dashboard supports multiple assessment runs with delta comparison between any two runs.
+Dashboard data comes from the Online Boutique portfolio analysis (11 microservices from Google's microservices-demo). The ARA dashboard supports multiple analysis runs with delta comparison between any two runs.

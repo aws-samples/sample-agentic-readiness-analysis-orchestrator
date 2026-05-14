@@ -1,0 +1,205 @@
+{
+  "metadata": {
+    "version": "V6",
+    "analysis_type": "ara",
+    "analysis_date": "2025-05-08",
+    "td_version": "agentic-readiness-analysis-v6.0.1",
+    "report_format_version": "V6",
+    "target": "/Users/lucasdu/Documents/AWS-MAC/2026-projects/sample-agentic-readiness-analysis/services/serverless--serverless",
+    "repository_type": "application",
+    "service_archetype": "stateless-utility",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "CLI tool and developer framework that generates and deploys IaC to AWS. No persistent state, no production HTTP API, no agent-invoked operations.",
+    "agent_scope": "read-only",
+    "priority": "P2",
+    "tags": ["javascript", "serverless", "iac", "cli"],
+    "context": "Serverless Framework CLI for building and deploying serverless apps.",
+    "dev_library_application_override": true,
+    "surface_flags": {
+      "has_persistent_data_store": false,
+      "has_http_rpc_surface": false,
+      "has_auth_surface": false,
+      "has_write_operations": false,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Agent-Ready",
+    "sub_qualifier": null,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 5,
+    "safety_impact_medium_count": 0,
+    "rule_matched": "0 High, ≤1 Medium → Agent-Ready"
+  },
+  "summary": {
+    "blocker_count": 0,
+    "risk_safety_count": 0,
+    "risk_quality_count": 0,
+    "info_count": 5,
+    "na_count": 5,
+    "not_evaluated_count": 33,
+    "total": 43,
+    "core_questions_evaluated": 10,
+    "extended_questions_triggered": 0,
+    "extended_questions_not_triggered": 33
+  },
+  "findings": [
+    {
+      "question_id": "API-Q1",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "CLI tool — no deployed API interface",
+      "description": "This is a CLI tool/developer framework, not a deployed API service. The primary interface is the command line (sf-core binary) and the MCP protocol (15 tools via @modelcontextprotocol/sdk). No REST/GraphQL/AsyncAPI production endpoint exists.",
+      "gap": "No formal API specification exists for the MCP tool surface — tool definitions are in code only.",
+      "recommendation": "The MCP tool definitions serve as the agent interface. Consider generating documentation from the Zod schemas.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "packages/mcp/src/tools-definition.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Dev-library-application override applied. No HTTP/RPC surface detected.",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "CLI tool with no deployed API surface. The MCP server runs on localhost only for IDE integration."
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Audit logging — consumer responsibility",
+      "description": "System does not execute agent-invoked write operations — audit logging is a consumer responsibility. The library/utility is called by applications that own the audit context.",
+      "gap": "No gap — correct architecture for a dev tool.",
+      "recommendation": "No action required. Consumers deploying via Serverless Framework inherit CloudTrail audit coverage from their AWS accounts.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "packages/mcp/src/server.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND dev-library-application override (has_auth_surface=false, has_write_operations=false).",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "CLI tool does not execute agent-invoked write operations. Audit logging belongs in the AWS account where deployments happen (CloudTrail), not in the deployment tool itself."
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Identity suspension — consumer responsibility",
+      "description": "System does not issue or enforce agent identities — suspension is a consumer responsibility. Libraries and utilities are invoked by applications that own identity lifecycle.",
+      "gap": "No gap — correct architecture for a dev tool.",
+      "recommendation": "No action required. Agent identity suspension would be managed at the AWS IAM layer.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "packages/sf-core/package.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "MCP tool schema versioning lacks breaking-change detection",
+      "description": "The MCP tool definitions use Zod schemas for parameter validation, providing typed tool contracts. The framework is versioned via semver (v4.33.2). CI runs tests on PRs. No formal breaking-change detection exists for MCP tool schemas.",
+      "gap": "No breaking-change detection for MCP tool parameter schemas.",
+      "recommendation": "Consider adding schema snapshot tests for MCP tool definitions to detect breaking changes in CI.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "packages/mcp/src/tools-definition.js",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox environment — consumer responsibility",
+      "description": "Library/utility — does not own staging environments. The CI pipeline uses TEST_STAGE for integration tests against a real AWS account. Consumers create their own sandbox environments using the tool's --stage flag.",
+      "gap": "No gap — correct architecture for a dev tool.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": ".github/workflows/ci-framework.yml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "status": "finding", "severity": "Low"},
+    {"question_id": "API-Q2", "status": "info_no_finding", "severity": "Low", "rationale": "No HTTP/RPC surface — machine-readable spec is not applicable."},
+    {"question_id": "API-Q3", "status": "info_no_finding", "severity": "Low", "rationale": "No HTTP/RPC surface — structured error responses are not applicable."},
+    {"question_id": "API-Q4", "status": "info_no_finding", "severity": "Low", "rationale": "agent_scope is read-only — idempotency is informational only."},
+    {"question_id": "API-Q5", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "API-Q6", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "API-Q7", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "API-Q8", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "AUTH-Q1", "status": "na", "rationale": "Dev-library-application override — CLI delegates auth to caller."},
+    {"question_id": "AUTH-Q2", "status": "na", "rationale": "Dev-library-application override — scoped permissions enforced by AWS IAM."},
+    {"question_id": "AUTH-Q3", "status": "na", "rationale": "Dev-library-application override — action-level auth enforced by AWS IAM."},
+    {"question_id": "AUTH-Q4", "status": "not_evaluated", "rationale": "Extended question; archetype calibration: stateless-utility → INFO."},
+    {"question_id": "AUTH-Q5", "status": "na", "rationale": "Dev-library-application override — credentials managed by caller."},
+    {"question_id": "AUTH-Q6", "status": "finding", "severity": "Low"},
+    {"question_id": "AUTH-Q7", "status": "finding", "severity": "Low"},
+    {"question_id": "STATE-Q1", "status": "info_no_finding", "severity": "Low", "rationale": "Stateless-utility archetype + dev-library-application override."},
+    {"question_id": "STATE-Q2", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "STATE-Q3", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "STATE-Q4", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "STATE-Q5", "status": "info_no_finding", "severity": "Low", "rationale": "No HTTP/RPC surface."},
+    {"question_id": "STATE-Q6", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "STATE-Q7", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "HITL-Q1", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "HITL-Q2", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "HITL-Q3", "status": "finding", "severity": "Low"},
+    {"question_id": "DATA-Q1", "status": "info_no_finding", "severity": "Low", "rationale": "Dev-library-application override — not a data-handling target."},
+    {"question_id": "DATA-Q2", "status": "info_no_finding", "severity": "Low", "rationale": "No persistent data store — residency not applicable."},
+    {"question_id": "DATA-Q3", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "DATA-Q4", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "DATA-Q5", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "DATA-Q6", "status": "info_no_finding", "severity": "Low", "rationale": "No user-data logging — PII risk not applicable."},
+    {"question_id": "DATA-Q7", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "DISC-Q1", "status": "finding", "severity": "Low"},
+    {"question_id": "DISC-Q2", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "DISC-Q3", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "OBS-Q1", "status": "info_no_finding", "severity": "Low", "rationale": "Library/utility — tracing is consumer concern."},
+    {"question_id": "OBS-Q2", "status": "info_no_finding", "severity": "Low", "rationale": "Library/utility — alerting is consumer concern."},
+    {"question_id": "OBS-Q3", "status": "not_evaluated", "rationale": "Extended question not triggered."},
+    {"question_id": "ENG-Q1", "status": "na", "rationale": "Dev-library-application override (library N/A mapping)."},
+    {"question_id": "ENG-Q2", "status": "na", "rationale": "Dev-library-application override (library N/A mapping)."},
+    {"question_id": "ENG-Q3", "status": "na", "rationale": "Dev-library-application override (library N/A mapping)."},
+    {"question_id": "ENG-Q4", "status": "na", "rationale": "Dev-library-application override (library N/A mapping)."},
+    {"question_id": "ENG-Q5", "status": "na", "rationale": "Dev-library-application override (library N/A mapping)."}
+  ]
+}
