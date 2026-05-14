@@ -1,12 +1,12 @@
 ---
 name: "orchestrator"
-displayName: "Agentic Assessment Orchestrator"
-description: "Orchestrate agentic readiness, modernization, and BPMN opportunity assessments across a service portfolio with reconciliation gates and dependency-aware roadmaps."
-keywords: ["agentic-readiness", "modernization-assessment", "portfolio-assessment", "bpmn-opportunity", "ara", "mod", "aws-transform"]
+displayName: "Portfolio Analysis Orchestrator"
+description: "Orchestrate agentic readiness, modernization, and BPMN opportunity analyses across a service portfolio with reconciliation gates and dependency-aware roadmaps."
+keywords: ["agentic-readiness", "modernization-analysis", "portfolio-analysis", "bpmn-opportunity", "ara", "mod", "aws-transform"]
 author: "AWS"
 ---
 
-# Agentic Assessment Orchestrator
+# Portfolio Analysis Orchestrator
 
 ## Overview
 
@@ -16,8 +16,8 @@ Three assessments are supported. The `assessment_type` field in `portfolio-confi
 
 | Assessment | What it evaluates |
 |---|---|
-| **Agentic Readiness Assessment (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are safe for autonomous AI agent integration. |
-| **Modernization Assessment (MOD)** | 37 questions, 5 sections, 1-4 scale. Evaluates cloud architecture maturity and identifies modernization pathways. |
+| **Agentic Readiness Analysis (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are safe for autonomous AI agent integration. |
+| **Modernization Analysis (MOD)** | 37 questions, 5 sections, 1-4 scale. Evaluates cloud architecture maturity and identifies modernization pathways. |
 | **BPMN Agentic Opportunity (BAO)** | Analyzes BPMN 2.0 process models to identify agentic candidates by reasoning complexity and data readiness. |
 
 | `assessment_type` | What runs |
@@ -182,7 +182,7 @@ ATX staging branches fork from this isolation branch. Cleanup is then a single m
 ### 3. Ask Kiro to Run the Orchestrator
 
 ```
-"Run the agentic assessment orchestrator on portfolio-config.yaml"
+"Run the portfolio analysis orchestrator on portfolio-config.yaml"
 ```
 
 Kiro will work through the orchestration workflow in `steering/orchestration-workflow.md`, enforcing all three safety contracts above.

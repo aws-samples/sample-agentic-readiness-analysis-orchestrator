@@ -1,10 +1,10 @@
 ## Name
 
-Portfolio Agentic Readiness Assessment
+Portfolio Agentic Readiness Analysis
 
 ## Objective
 
-Aggregate individual repository Agentic Readiness Assessment (ARA) reports into a portfolio-level analysis that identifies cross-cutting blockers, shared risks, service dependency patterns, and portfolio-wide remediation guidance — enabling coordinated agentic readiness across the entire service estate.
+Aggregate individual repository Agentic Readiness Analysis (ARA) reports into a portfolio-level analysis that identifies cross-cutting blockers, shared risks, service dependency patterns, and portfolio-wide remediation guidance — enabling coordinated agentic readiness across the entire service estate.
 
 ## Summary
 
@@ -557,7 +557,7 @@ Evaluate each program against its trigger condition. Include a program in the re
 |---------|-------------|-------------------|-----------------|
 | **AI DLC (AI Driven Development Lifecycle)** | Workshop for adopting the AI Driven Development Lifecycle, emphasizing two dimensions: (1) AI Powered Execution with Human Oversight — AI creates detailed work plans, seeks clarification, and defers critical decisions to humans who possess contextual understanding and business knowledge; (2) Dynamic Team Collaboration — as AI handles routine tasks, teams unite in collaborative spaces for real-time problem solving, creative thinking, and rapid decision-making, shifting from isolated work to high-energy teamwork that accelerates innovation and delivery. | Portfolio shows teams without established AI-assisted development practices, or when engineering maturity findings indicate manual development workflows that could benefit from AI-driven automation. | Check ENG section findings across the portfolio. If 50%+ of services have RISK-QUALITY or worse findings on ENG-Q1 (Infra Governance), ENG-Q2 (CI/CD + Contracts), or ENG-Q3 (Rollback), recommend AI DLC. Also recommend if the portfolio context mentions desire for AI-assisted development practices. |
 | **AXE (Agent Experience Engagement)** | A strategic methodology that helps enterprises implement agentic AI solutions by starting with desired customer and employee experience and working backwards to define AI agents and technical architecture. Built on the proven D2E methodology with 580+ successful engagements, AXE delivers a six-phase framework covering business process mapping, task identification, evaluation metrics, data architecture, governance, and guardrails. The Guardrails & Boundaries phase aligns with ARA, which evaluates whether target systems have the technical controls needed to safely support autonomous agents. Together, they provide a complete assess-to-implement pathway: ARA validates system readiness while AXE designs the agent experience and implementation roadmap. | Portfolio shows 3+ services in "Pilot-Ready" or "Agent-Ready" state, or when business has defined customer/employee experience goals but lacks technical implementation roadmap. | Count services with profile Agent-Ready or Pilot-Ready. If count >= 3, recommend AXE. Also recommend if the portfolio `context` describes experience-level goals (e.g., "customer support agent", "employee productivity") without a corresponding technical implementation plan. |
-| **EBA on Agentic AI** (Experience-Based Acceleration) | An Agentic EBA is an intensive, time-boxed engagement that accelerates an organization's path from agentic readiness assessment to production deployment of autonomous AI agents. It is designed for organizations where executive leadership has committed to an agentic AI transformation and where portfolio-level ARA findings reveal systemic gaps that cannot be resolved through standard advisory engagements alone. The engagement embeds AWS expertise to compress multi-quarter remediation cycles into a focused sprint, producing working outcomes — remediated systems, validated agent integrations, and a sequenced deployment roadmap that customers can keep doing. | Portfolio-level ARA results show systemic cross-cutting blockers appearing across five or more repositories, requiring coordinated architecture remediation. | Count cross-cutting BLOCKERs (same BLOCKER in 2+ repos). If any single cross-cutting BLOCKER affects 5 or more repositories, recommend EBA on Agentic AI. |
+| **EBA on Agentic AI** (Experience-Based Acceleration) | An Agentic EBA is an intensive, time-boxed engagement that accelerates an organization's path from agentic readiness analysis to production deployment of autonomous AI agents. It is designed for organizations where executive leadership has committed to an agentic AI transformation and where portfolio-level ARA findings reveal systemic gaps that cannot be resolved through standard advisory engagements alone. The engagement embeds AWS expertise to compress multi-quarter remediation cycles into a focused sprint, producing working outcomes — remediated systems, validated agent integrations, and a sequenced deployment roadmap that customers can keep doing. | Portfolio-level ARA results show systemic cross-cutting blockers appearing across five or more repositories, requiring coordinated architecture remediation. | Count cross-cutting BLOCKERs (same BLOCKER in 2+ repos). If any single cross-cutting BLOCKER affects 5 or more repositories, recommend EBA on Agentic AI. |
 
 #### 7.2 Program Sequencing Guidance
 
@@ -639,7 +639,7 @@ The portfolio ARA TD emits a **four-artifact bundle**: `{portfolio_name}-portfol
 ### Report Header
 
 ```markdown
-# Portfolio Agentic Readiness Assessment Report
+# Portfolio Agentic Readiness Analysis Report
 
 **Date**: <YYYY-MM-DD>
 **Services Assessed**: <count>
@@ -1012,7 +1012,7 @@ Group related BLOCKERs that can be addressed together.>
 The complete report structure, for reference:
 
 ```markdown
-# Portfolio Agentic Readiness Assessment Report
+# Portfolio Agentic Readiness Analysis Report
 
 1. Executive Dashboard
    - Readiness Distribution
@@ -1354,7 +1354,7 @@ Table columns: `Program`, `Description`, `Why Recommended`, `Duration`
 
 #### Footer
 
-- `Generated by AWS Transform · Portfolio Agentic Readiness Assessment Report`
+- `Generated by AWS Transform · Portfolio Agentic Readiness Analysis Report`
 - `© {year} Amazon Web Services, Inc. All rights reserved.`
 
 #### Data Sourcing (JSON → HTML mapping)
