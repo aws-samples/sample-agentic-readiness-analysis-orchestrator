@@ -33,7 +33,7 @@ Common errors and fixes. Read this when an analysis fails, when reports go missi
 
 **Root causes (in order of frequency):**
 1. Per-repo `.json` artifact missing (only `.md` was emitted) — portfolio TDs require `.json`
-2. Reports landed at non-canonical paths (e.g., repo root instead of `modernization-analysis/`)
+2. Reports landed at non-canonical paths (e.g., repo root instead of `modernization-readiness-analysis/`)
 3. Reports stranded on ATX staging branches that were never merged into the working branch
 4. Slug mismatch — the report's filename slug doesn't match the configured `repo.name` (the reconciliation gate auto-renames in this case; only an issue if the gate did not run)
 5. Two or more strays for the same TD inside a single repo's tree (this is a real correctness failure — the reconciliation gate aborts here and asks the operator to investigate)
@@ -44,7 +44,7 @@ Common errors and fixes. Read this when an analysis fails, when reports go missi
    ```bash
    # Verify the canonical .md exists
    ls {repo}/agentic-readiness-analysis/{slug}-ara-report.md
-   ls {repo}/modernization-analysis/{slug}-mod-report.md
+   ls {repo}/modernization-readiness-analysis/{slug}-mod-report.md
 
    # Verify all four artifacts are present
    ls {repo}/agentic-readiness-analysis/{slug}-ara-report.{md,json,html,metadata.json}
@@ -69,9 +69,9 @@ Common errors and fixes. Read this when an analysis fails, when reports go missi
 1. **Check the report file first** — the command may have completed successfully even if executeBash timed out:
    ```bash
    ls {repo}/agentic-readiness-analysis/*-ara-report.md
-   ls {repo}/modernization-analysis/*-mod-report.md
+   ls {repo}/modernization-readiness-analysis/*-mod-report.md
    ls agentic-readiness-analysis/*-portfolio-ara-report.md
-   ls modernization-analysis/*-portfolio-mod-report.md
+   ls modernization-readiness-analysis/*-portfolio-mod-report.md
    ```
 2. If the report exists, the analysis succeeded — the No-Polling Contract treats this as SUCCESS regardless of executeBash exit status
 3. If the report is missing, re-run with extended timeout (e.g., 2400000ms for very large repos)
@@ -111,7 +111,7 @@ See `POWER.md` for the full No-Polling Contract.
 1. Verify both portfolio reports exist at canonical paths:
    ```bash
    ls agentic-readiness-analysis/{portfolio_name}-portfolio-ara-report.md
-   ls modernization-analysis/{portfolio_name}-portfolio-mod-report.md
+   ls modernization-readiness-analysis/{portfolio_name}-portfolio-mod-report.md
    ```
 2. If only one exists, re-run the missing portfolio TD before retrying Bridge
 3. Update the bridge ATX config to use `portfolio_bao_report_path` (singular) for the aggregated BAO portfolio report

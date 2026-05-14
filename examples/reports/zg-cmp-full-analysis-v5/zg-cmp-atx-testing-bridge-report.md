@@ -3,7 +3,7 @@
 **Portfolio**: zg-cmp-atx-testing
 **Date**: 2026-05-01
 **ARA Report**: agentic-readiness-analysis/zg-cmp-atx-testing-portfolio-ara-report.md
-**MOD Report**: modernization-analysis/zg-cmp-atx-testing-portfolio-mod-report.md
+**MOD Report**: modernization-readiness-analysis/zg-cmp-atx-testing-portfolio-mod-report.md
 
 ---
 

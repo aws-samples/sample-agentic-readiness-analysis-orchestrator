@@ -105,7 +105,7 @@ analysis_type: "agentic-readiness"  # Single TD path = simplest
 
 transformation_definitions:
   agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-analysis"
+  modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
 

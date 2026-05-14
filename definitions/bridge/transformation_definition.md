@@ -4,7 +4,7 @@ Portfolio Agentic Readiness — Modernization Bridge Analysis
 
 ## Objective
 
-Cross-reference the portfolio-level Agentic Readiness Analysis (ARA) report and the portfolio-level Modernization Analysis (MOD) report to produce a unified bridge report that maps shared findings, quantifies the agentic readiness impact of modernization work, identifies foundational gaps that block ARA remediation, and deduplicates overlapping remediation items — enabling coordinated planning across both analyses.
+Cross-reference the portfolio-level Agentic Readiness Analysis (ARA) report and the portfolio-level Modernization Readiness Analysis (MOD) report to produce a unified bridge report that maps shared findings, quantifies the agentic readiness impact of modernization work, identifies foundational gaps that block ARA remediation, and deduplicates overlapping remediation items — enabling coordinated planning across both analyses.
 
 ## Summary
 
@@ -46,7 +46,7 @@ Extract the following fields from `additionalPlanContext`:
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `portfolio_ara_report_path` | string | **Yes** | — | File path to the portfolio ARA report (e.g., `agentic-readiness-analysis/ecommerce-platform-v2-portfolio-ara-report.md`). |
-| `portfolio_mod_report_path` | string | **Yes** | — | File path to the portfolio MOD report (e.g., `modernization-analysis/ecommerce-platform-v2-portfolio-mod-report.md`). |
+| `portfolio_mod_report_path` | string | **Yes** | — | File path to the portfolio MOD report (e.g., `modernization-readiness-analysis/ecommerce-platform-v2-portfolio-mod-report.md`). |
 | `portfolio_name` | string | **Yes** | — | Name of the portfolio (e.g., `ecommerce-platform-v2`). Used in the output filename and report title. |
 | `bpmn_opportunity_report_paths` | string[] | No | — | **Deprecated.** Use `portfolio_bao_report_path` instead. If individual report paths are provided, the Bridge TD will still attempt to read them but the preferred input is the portfolio-level BAO report. |
 | `portfolio_bao_report_path` | string | No | -- | File path to the Portfolio BAO report (e.g., `bpmn-opportunity-analysis/my-platform-portfolio-bao-report.md`). When present, the bridge report includes a BAO + ARA Readiness Matrix (Section 6). When absent, Section 6 is omitted and the bridge report works as before (ARA + MOD only). |
@@ -56,7 +56,7 @@ Extract the following fields from `additionalPlanContext`:
 ```yaml
 additionalPlanContext: |
   portfolio_ara_report_path: "agentic-readiness-analysis/ecommerce-platform-v2-portfolio-ara-report.md"
-  portfolio_mod_report_path: "modernization-analysis/ecommerce-platform-v2-portfolio-mod-report.md"
+  portfolio_mod_report_path: "modernization-readiness-analysis/ecommerce-platform-v2-portfolio-mod-report.md"
   portfolio_name: "ecommerce-platform-v2"
   portfolio_bao_report_path: "bpmn-opportunity-analysis/ecommerce-platform-v2-portfolio-bao-report.md"
 ```
@@ -527,6 +527,6 @@ Compile all sections into the final bridge report and save it.
 
 #### 6.2 Save the Report
 
-Save the bridge report as `{portfolio_name}-bridge-report.md` at the portfolio root directory (the same level as the `agentic-readiness-analysis/` and `modernization-analysis/` directories, not inside either one).
+Save the bridge report as `{portfolio_name}-bridge-report.md` at the portfolio root directory (the same level as the `agentic-readiness-analysis/` and `modernization-readiness-analysis/` directories, not inside either one).
 
 **Output path:** `{portfolio_name}-bridge-report.md`

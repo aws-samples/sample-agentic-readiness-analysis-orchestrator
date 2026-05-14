@@ -6,7 +6,7 @@
 **Total BAO Reports Aggregated**: 58
 **Portfolio Context**: Demonstrating BPMN agentic opportunity analysis across official open source process repositories covering invoice processing, order management, and BPMN interchange test cases.
 
-> **Note**: This is a BAO-only portfolio aggregation. It does NOT cross-reference with ARA (Agentic Readiness Analysis) or MOD (Modernization Analysis) findings. Cross-referencing is the Bridge TD's responsibility. Run a full analysis (`analysis_type: full`) to identify which agent opportunities are blocked by ARA findings on target systems.
+> **Note**: This is a BAO-only portfolio aggregation. It does NOT cross-reference with ARA (Agentic Readiness Analysis) or MOD (Modernization Readiness Analysis) findings. Cross-referencing is the Bridge TD's responsibility. Run a full analysis (`analysis_type: full`) to identify which agent opportunities are blocked by ARA findings on target systems.
 
 ---
 

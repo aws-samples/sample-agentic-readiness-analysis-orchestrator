@@ -76,7 +76,7 @@ Each portfolio TD expects artifacts at canonical paths with canonical names. Any
 | Per-Repo TD | Canonical artifact path (relative to repo root) | Slug source |
 |---|---|---|
 | ARA | `{repo_path}/agentic-readiness-analysis/{slug}-ara-report.{md,json,html,metadata.json}` | `slug = lowercase(repo.name)` from portfolio config |
-| MOD | `{repo_path}/modernization-analysis/{slug}-mod-report.{md,json,html,metadata.json}` | Same slug as ARA |
+| MOD | `{repo_path}/modernization-readiness-analysis/{slug}-mod-report.{md,json,html,metadata.json}` | Same slug as ARA |
 | BAO | `{repo_path}/bpmn-opportunity-analysis/{slug}-bpmn-opportunity-report.{md,json,html,metadata.json}` | Same slug as ARA |
 
 ### Slug Derivation Rule
@@ -123,7 +123,7 @@ The two-or-more case remains ABORT because it indicates a real correctness probl
 
 | Observed location | Cause | Auto-reconcile action |
 |---|---|---|
-| `{repo}/{slug}-mod-report.md` | Report landed at repo root instead of `modernization-analysis/` subfolder | Move bundle into canonical subfolder |
+| `{repo}/{slug}-mod-report.md` | Report landed at repo root instead of `modernization-readiness-analysis/` subfolder | Move bundle into canonical subfolder |
 | `{repo}/services/{slug}/{slug}-ara-report.md` | Working-directory confusion produced extra nesting | Move bundle up to canonical subfolder |
 | `{repo}/agentic-readiness-analysis/{basename}-ara-report.md` (basename ≠ config slug) | TD emitted the on-disk basename as slug | Rename bundle to canonical slug, keep in same folder |
 | `{repo}/{basename}-mod-report.md` (basename ≠ config slug, no subfolder) | Both wrong slug and wrong location | Rename + move |

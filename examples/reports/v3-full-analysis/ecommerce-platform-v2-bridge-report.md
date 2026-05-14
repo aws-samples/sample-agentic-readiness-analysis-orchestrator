@@ -3,7 +3,7 @@
 **Portfolio**: ecommerce-platform-v2
 **Date**: 2026-04-27
 **ARA Report**: agentic-readiness-analysis/ecommerce-platform-v2-portfolio-ara-report.md
-**MOD Report**: modernization-analysis/ecommerce-platform-v2-portfolio-mod-report.md
+**MOD Report**: modernization-readiness-analysis/ecommerce-platform-v2-portfolio-mod-report.md
 
 ---
 

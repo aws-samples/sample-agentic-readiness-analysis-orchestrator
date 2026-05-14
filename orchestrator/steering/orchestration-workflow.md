@@ -102,7 +102,7 @@ portfolio-config.yaml
           ▼
 ┌─────────────────────┐
 │  9. Consolidate      │  ARA → agentic-readiness-analysis/
-│     reports          │  MOD → modernization-analysis/
+│     reports          │  MOD → modernization-readiness-analysis/
 │                      │  BAO → bpmn-opportunity-analysis/
 │                      │  Bridge → portfolio root
 │                      │  Clean up temp .atx-config-*.yaml files
@@ -223,7 +223,7 @@ atx custom def exec -n <bpmn_opportunity> -p <repo-path> -g file://.atx-config-<
 | TD | Output path (relative to repo root) |
 |---|---|
 | ARA | `{repo}/agentic-readiness-analysis/{slug}-ara-report.{md,json,html,metadata.json}` |
-| MOD | `{repo}/modernization-analysis/{slug}-mod-report.{md,json,html,metadata.json}` |
+| MOD | `{repo}/modernization-readiness-analysis/{slug}-mod-report.{md,json,html,metadata.json}` |
 | BAO | `{repo}/bpmn-opportunity-analysis/{slug}-bpmn-opportunity-report.{md,json,html,metadata.json}` |
 
 `slug = lowercase(repo.name)` with any character not in `[a-z0-9_-]` replaced by `-`. Always derived from the portfolio config — never from the filesystem basename.
@@ -369,7 +369,7 @@ The Reconciliation Gate between portfolio TDs runs Checks A and B (branch consol
 | TD | Output path |
 |---|---|
 | Portfolio ARA | `agentic-readiness-analysis/{portfolio-name}-portfolio-ara-report.{md,json,html,metadata.json}` |
-| Portfolio MOD | `modernization-analysis/{portfolio-name}-portfolio-mod-report.{md,json,html,metadata.json}` |
+| Portfolio MOD | `modernization-readiness-analysis/{portfolio-name}-portfolio-mod-report.{md,json,html,metadata.json}` |
 | Portfolio BAO | `bpmn-opportunity-analysis/{portfolio-name}-portfolio-bao-report.{md,json,html,metadata.json}` |
 | Bridge | `{portfolio-name}-bridge-report.{md,json,html,metadata.json}` (workspace root) |
 
@@ -384,14 +384,14 @@ When `analysis_type: full` and `portfolio_bridge` is configured, the Bridge TD r
 ```yaml
 additionalPlanContext: |
   portfolio_ara_report_path: "agentic-readiness-analysis/ecommerce-platform-portfolio-ara-report.md"
-  portfolio_mod_report_path: "modernization-analysis/ecommerce-platform-portfolio-mod-report.md"
+  portfolio_mod_report_path: "modernization-readiness-analysis/ecommerce-platform-portfolio-mod-report.md"
   portfolio_name: "ecommerce-platform"
   portfolio_bao_report_path: "bpmn-opportunity-analysis/ecommerce-platform-portfolio-bao-report.md"
 ```
 
 **Bridge generation rules:**
 1. `portfolio_ara_report_path` → `agentic-readiness-analysis/{portfolio_name}-portfolio-ara-report.md`
-2. `portfolio_mod_report_path` → `modernization-analysis/{portfolio_name}-portfolio-mod-report.md`
+2. `portfolio_mod_report_path` → `modernization-readiness-analysis/{portfolio_name}-portfolio-mod-report.md`
 3. `portfolio_name` from portfolio config
 4. If a portfolio BAO report exists at `bpmn-opportunity-analysis/{portfolio_name}-portfolio-bao-report.md`, set `portfolio_bao_report_path` to that path. Otherwise omit.
 5. **Do NOT** use the deprecated `bpmn_opportunity_report_paths[]` field — Bridge consumes a single aggregated portfolio BAO report.
@@ -422,7 +422,7 @@ For each `analysis_type`:
 | `analysis_type` | Consolidation actions |
 |---|---|
 | `agentic-readiness` | Create/use `agentic-readiness-analysis/` at portfolio root. Copy each per-repo ARA report from `{repo}/agentic-readiness-analysis/` into the root folder. Portfolio ARA report already lives there. |
-| `modernization` | Same pattern with `modernization-analysis/` |
+| `modernization` | Same pattern with `modernization-readiness-analysis/` |
 | `bpmn-opportunity` | Same pattern with `bpmn-opportunity-analysis/` |
 | `full` | All three folders + bridge report at portfolio root |
 
@@ -439,7 +439,7 @@ agentic-readiness-analysis/
 ├── service-c-ara-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-ara-report.{md,json,html,metadata.json}
 
-modernization-analysis/
+modernization-readiness-analysis/
 ├── service-a-mod-report.{md,json,html,metadata.json}
 ├── service-b-mod-report.{md,json,html,metadata.json}
 ├── service-c-mod-report.{md,json,html,metadata.json}

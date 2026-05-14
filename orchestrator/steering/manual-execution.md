@@ -192,7 +192,7 @@ atx custom def exec -n <your-bridge-td-name> -p . -g file://atx-config-bridge.ya
 ```yaml
 additionalPlanContext: |
   portfolio_ara_report_path: "agentic-readiness-analysis/my-platform-portfolio-ara-report.md"
-  portfolio_mod_report_path: "modernization-analysis/my-platform-portfolio-mod-report.md"
+  portfolio_mod_report_path: "modernization-readiness-analysis/my-platform-portfolio-mod-report.md"
   portfolio_name: "my-platform"
   # Optional: include if a portfolio BAO report exists
   # portfolio_bao_report_path: "bpmn-opportunity-analysis/my-platform-portfolio-bao-report.md"
@@ -258,7 +258,7 @@ If you are running portfolio TDs manually, also run the equivalent of Check B an
 # Verify each per-repo report is at the canonical path
 for repo in service-a service-b service-c; do
   ls services/$repo/agentic-readiness-analysis/$repo-ara-report.md
-  ls services/$repo/modernization-analysis/$repo-mod-report.md
+  ls services/$repo/modernization-readiness-analysis/$repo-mod-report.md
 done
 ```
 

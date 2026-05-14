@@ -12,7 +12,7 @@ analysis_type: "agentic-readiness"
 
 transformation_definitions:
   agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-analysis"
+  modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
 
@@ -256,7 +256,7 @@ context: "Evaluating payment services for autonomous agent integration"
 
 transformation_definitions:
   agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-analysis"
+  modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
 
@@ -281,7 +281,7 @@ context: "Modernizing legacy e-commerce platform for cloud-native architecture"
 
 transformation_definitions:
   agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-analysis"
+  modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
 
@@ -333,7 +333,7 @@ agent_scope: "read-only"
 
 transformation_definitions:
   agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-analysis"
+  modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
   portfolio_bridge: "portfolio-bridge"
@@ -366,7 +366,7 @@ context: "Identifying agentic opportunities in loan origination workflows"
 
 transformation_definitions:
   agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-analysis"
+  modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
   bpmn_opportunity: "bpmn-opportunity-analysis"

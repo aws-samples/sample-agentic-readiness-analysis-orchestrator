@@ -2,7 +2,7 @@
 name: "orchestrator"
 displayName: "Portfolio Analysis Orchestrator"
 description: "Orchestrate agentic readiness, modernization, and BPMN opportunity analyses across a service portfolio with reconciliation gates and dependency-aware roadmaps."
-keywords: ["agentic-readiness", "modernization-analysis", "portfolio-analysis", "bpmn-opportunity", "ara", "mod", "aws-transform"]
+keywords: ["agentic-readiness", "modernization-readiness-analysis", "portfolio-analysis", "bpmn-opportunity", "ara", "mod", "aws-transform"]
 author: "AWS"
 ---
 
@@ -16,8 +16,8 @@ Three analyses are supported. The `analysis_type` field in `portfolio-config.yam
 
 | Analysis | What it evaluates |
 |---|---|
-| **Agentic Readiness Analysis (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are safe for autonomous AI agent integration. |
-| **Modernization Analysis (MOD)** | 37 questions, 5 sections, 1-4 scale. Evaluates cloud architecture maturity and identifies modernization pathways. |
+| **Modernization Readiness Analysis (MOD)** | 37 questions, 5 sections, 1-4 scale. Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
+| **Agentic Readiness Analysis (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
 | **BPMN Agentic Opportunity (BAO)** | Analyzes BPMN 2.0 process models to identify agentic candidates by reasoning complexity and data readiness. |
 
 | `analysis_type` | What runs |
@@ -76,7 +76,7 @@ To load a steering file: `Call action "readSteering" with powerName="orchestrato
 6. **Do exactly one filesystem check after executeBash returns** (success, error, or timeout). The `.md` presence is the authoritative success signal — all four artifacts are produced together or none are:
    ```bash
    ls {repo}/agentic-readiness-analysis/{slug}-ara-report.md 2>/dev/null     # ARA
-   ls {repo}/modernization-analysis/{slug}-mod-report.md 2>/dev/null         # MOD
+   ls {repo}/modernization-readiness-analysis/{slug}-mod-report.md 2>/dev/null         # MOD
    ls {repo}/bpmn-opportunity-analysis/{slug}-bpmn-opportunity-report.md 2>/dev/null  # BAO
    ```
 7. If the `.md` file exists → **SUCCESS**, regardless of executeBash exit code or timeout status.
@@ -128,7 +128,7 @@ Detailed step-by-step flow lives in `steering/orchestration-workflow.md`. Summar
 6. **Per-repo execution (Contract 2):** One subagent per repo. Subagent runs its assigned TDs sequentially within the repo. All subagents in parallel across repos.
 7. **Reconciliation Gate (Step 1.5):** Check A (branch consolidation), Check B (canonical paths — auto-rename and auto-move strays since Contract 2 makes their attribution unambiguous, ABORT only when ≥2 strays exist for the same TD in one repo), Check C (four-artifact bundle completeness, `.json` mandatory). Abort before any portfolio TD if any check fails.
 8. **Portfolio TDs (Contract 3):** Strictly serial — Portfolio ARA → Portfolio MOD → Portfolio BAO → Bridge — with a Reconciliation Gate between each.
-9. **Consolidate reports:** Copy per-repo reports into top-level `agentic-readiness-analysis/`, `modernization-analysis/`, `bpmn-opportunity-analysis/` folders. Bridge report stays at workspace root. Clean up `.atx-config-*.yaml` and `bpmn-analysis.json`.
+9. **Consolidate reports:** Copy per-repo reports into top-level `agentic-readiness-analysis/`, `modernization-readiness-analysis/`, `bpmn-opportunity-analysis/` folders. Bridge report stays at workspace root. Clean up `.atx-config-*.yaml` and `bpmn-analysis.json`.
 
 > All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) — analyses run at scale without human intervention. Always pass **absolute paths** to `-p` and `-g`; relative paths silently break across `executeBash` boundaries because each call starts a fresh shell. See `steering/atx-cli-reference.md` for full flag details and `steering/troubleshooting.md` for the path-corruption failure mode.
 
@@ -148,7 +148,7 @@ agent_scope: "read-only"
 
 transformation_definitions:
   agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-analysis"
+  modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
   portfolio_bridge: "portfolio-bridge"
@@ -201,7 +201,7 @@ agentic-readiness-analysis/
 ├── service-b-ara-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-ara-report.{md,json,html,metadata.json}
 
-modernization-analysis/
+modernization-readiness-analysis/
 ├── service-a-mod-report.{md,json,html,metadata.json}
 ├── service-b-mod-report.{md,json,html,metadata.json}
 └── my-platform-portfolio-mod-report.{md,json,html,metadata.json}

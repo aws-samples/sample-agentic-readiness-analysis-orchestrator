@@ -15,8 +15,8 @@ There are two layers:
 
 | Analysis | Questions | Scoring | Focus |
 |---|---|---|---|
-| **ARA** (Agentic Readiness) | 43 across 8 sections | BLOCKER / RISK / INFO | Is this system safe for autonomous AI agents? |
-| **MOD** (Modernization) | 37 across 5 sections | 1-4 scale | How mature is the cloud architecture? |
+| **MOD** (Modernization Readiness) | 37 across 5 sections | 1-4 scale | Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
+| **ARA** (Agentic Readiness) | 43 across 8 sections | BLOCKER / RISK / INFO | Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
 | **BAO** (BPMN Agentic Opportunity) | Per-task scoring | 4 categories + autonomy levels | Which process steps should become agents? |
 | **Bridge** | — | Cross-reference | What work is shared? What's the modernization dividend for agentic readiness? |
 
@@ -137,7 +137,7 @@ flowchart LR
         AR3[portfolio-ara-report<br/>md · json · html · metadata.json]
     end
 
-    subgraph MOD [📁 modernization-analysis/]
+    subgraph MOD [📁 modernization-readiness-analysis/]
         MR1[repo-a-mod-report<br/>md · json · html · metadata.json]
         MR2[repo-b-mod-report<br/>md · json · html · metadata.json]
         MR3[portfolio-mod-report<br/>md · json · html · metadata.json]
@@ -171,7 +171,7 @@ flowchart LR
 atx custom def publish -n agentic-readiness-analysis --sd definitions/ara \
   --description "Evaluate a repository against 43 agentic readiness criteria (BLOCKER/RISK/INFO)"
 
-atx custom def publish -n modernization-analysis --sd definitions/mod \
+atx custom def publish -n modernization-readiness-analysis --sd definitions/mod \
   --description "Evaluate a repository against 37 modernization criteria (1-4 scale)"
 
 atx custom def publish -n bpmn-opportunity-analysis --sd definitions/bao \
@@ -214,7 +214,7 @@ agent_scope: "write-enabled"
 
 transformation_definitions:
   agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-analysis"
+  modernization: "modernization-readiness-analysis"
   bpmn_opportunity: "bpmn-opportunity-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
@@ -264,7 +264,7 @@ Kiro handles cloning, classification, config generation, parallel execution, and
 atx custom def exec -n agentic-readiness-analysis -p ./services/my-service -g file://atx-config-ara.yaml -x -t
 
 # Individual MOD (per repo)
-atx custom def exec -n modernization-analysis -p ./services/my-service -g file://atx-config-mod.yaml -x -t
+atx custom def exec -n modernization-readiness-analysis -p ./services/my-service -g file://atx-config-mod.yaml -x -t
 
 # BPMN Opportunity (per repo with .bpmn files — run analyzer first)
 cd ./services/my-service
@@ -352,7 +352,7 @@ examples/reports/v2-full-analysis/
 │   ├── eks-saas-gitops-ara-report.{md,json,html,metadata.json}
 │   ├── monolith-ara-report.{md,json,html,metadata.json}
 │   └── ecommerce-platform-v2-portfolio-ara-report.{md,json,html,metadata.json}
-└── modernization-analysis/
+└── modernization-readiness-analysis/
     ├── MonoToMicroLegacy-mod-report.{md,json,html,metadata.json}
     ├── aws-microservices-mod-report.{md,json,html,metadata.json}
     ├── books-api-mod-report.{md,json,html,metadata.json}
@@ -378,7 +378,7 @@ examples/reports/online-boutique/
 │   ├── cartservice-ara-report.{md,json,html,metadata.json}
 │   ├── ... (11 individual + 1 portfolio)
 │   └── online-boutique-portfolio-ara-report.{md,json,html,metadata.json}
-└── modernization-analysis/           # MOD reports
+└── modernization-readiness-analysis/           # MOD reports
     └── ... (11 individual + 1 portfolio)
 ```
 
