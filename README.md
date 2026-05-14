@@ -13,12 +13,12 @@ There are two layers:
 
 ### Three-Analysis Architecture (+ Bridge)
 
-| Analysis | Questions | Scoring | Focus |
-|---|---|---|---|
-| **MOD** (Modernization Readiness) | 37 across 5 sections | 1-4 scale | Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
-| **ARA** (Agentic Readiness) | 43 across 8 sections | BLOCKER / RISK / INFO | Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
-| **BAO** (BPMN Agentic Opportunity) | Per-task scoring | 4 categories + autonomy levels | Which process steps should become agents? |
-| **Bridge** | — | Cross-reference | What work is shared? What's the modernization dividend for agentic readiness? |
+| Analysis | Description |
+|---|---|
+| **Modernization Readiness Analysis (MOD)** | Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
+| **Agentic Readiness Analysis (ARA)** | Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
+| **BPMN Agentic Opportunity (BAO)** | Analyzes BPMN 2.0 process models to identify which process steps should become agents. |
+| **Bridge** | Cross-references MOD and ARA portfolio reports to map shared work and quantify the modernization dividend for agentic readiness. |
 
 Zero question overlap between ARA and MOD. The `analysis_type` field routes which analyses run:
 - `agentic-readiness` -> ARA only
