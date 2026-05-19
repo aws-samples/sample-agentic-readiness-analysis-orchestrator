@@ -1,0 +1,901 @@
+{
+  "metadata": {
+    "analysis_type": "ara",
+    "analysis_date": "2026-05-18",
+    "td_version": "agentic-readiness-analysis",
+    "repo_name": "monotoMicrolegacy",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "MySQL database with CRUD operations on users and shopping baskets (POST/DELETE basket items, POST user), entity lifecycle management with UUID-based identifiers, and user-specific data access patterns.",
+    "agent_scope": "read-only",
+    "priority": "P0",
+    "tags": ["monolith", "java", "ec2", "decomposition-target"],
+    "context": "Legacy Java Spring Boot monolith on EC2 with MySQL — primary decomposition target. The agent needs access to order and return data through discrete service APIs.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": false,
+      "has_write_operations": true,
+      "has_logging_of_user_data": false
+    },
+    "tech_stack": {
+      "language": "Java",
+      "loc": 3115,
+      "framework": "Spring Boot 2.1.6",
+      "architecture": "Monolith (layered MVC)"
+    },
+    "portfolio_name": "unishop-monolith-to-microservices"
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "blocker_count": 1,
+    "risk_safety_count": 11,
+    "risk_quality_count": 15,
+    "info_count": 11,
+    "high_count": 1,
+    "medium_count": 26,
+    "low_count": 11,
+    "rule_matched": "1-2 BLOCKER → Remediation Required"
+  },
+  "counts": {
+    "total": 38,
+    "high": 1,
+    "medium": 26,
+    "low": 11
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Machine Identity Authentication",
+      "description": "OAuth2 configured with @EnableResourceServer but all endpoints set to permitAll(). No authentication enforced. No machine identity (service account, API key, mTLS, or client credentials flow) exists.",
+      "gap": "No mechanism to authenticate agent callers or attribute actions to specific agent identities.",
+      "recommendation": "Implement API Gateway with IAM/Cognito authorizers or OAuth2 client credentials flow with principal attribution.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/java/com/monoToMicro/security/ResourceServerConfig.java", "lines": "30-35"},
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Deploy API Gateway with IAM or Cognito authorizers in front of EC2 instance",
+          "target_state": "Every API call authenticated with machine-readable principal identifier in audit logs",
+          "estimated_effort": "Medium",
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Scoped Permissions",
+      "description": "All endpoints use @PreAuthorize(\"permitAll()\"). No role differentiation, no scoped permissions, no mechanism to grant read-only vs read-write access per caller.",
+      "gap": "Cannot create a scoped agent identity with restricted access.",
+      "recommendation": "Implement RBAC with read-only and read-write roles enforced at Spring Security or API Gateway level.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/BasketController.java", "lines": "45-47"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": ["API Gateway resource policies restricting agent identities to specific endpoints", "Network-level segmentation"],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Action-Level Authorization",
+      "description": "No action-level authorization. All endpoints (read and write) open to any caller with identical access.",
+      "gap": "Cannot restrict an agent to read-only access while allowing another agent write access.",
+      "recommendation": "Implement method-level security annotations or API Gateway method-level auth.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/java/com/monoToMicro/security/ResourceServerConfig.java", "lines": "30-35"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": ["API Gateway method-level authorization", "Network segmentation exposing only read endpoints"],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Identity Propagation",
+      "description": "No identity propagation. User context passed as URL parameter (userUuid), not from authenticated token. Cannot distinguish agent-as-self vs agent-on-behalf-of-user.",
+      "gap": "Cannot determine whether an API call was made by an agent under its own authority or on behalf of a specific user.",
+      "recommendation": "Implement JWT-based identity propagation with both agent and delegated user identity.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/BasketController.java", "lines": "88-89"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": ["Require agents to pass X-On-Behalf-Of header for logging", "Restrict agent to operations not requiring user delegation"],
+        "remediation_timeline": "60–90 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Hardcoded Database Credentials",
+      "description": "Database credentials hardcoded in application.properties: username MonoToMicroUser and password MonoToMicroPassword. No secrets management system used.",
+      "gap": "Hardcoded credentials with no rotation. Prompt injection or config exposure leaks database access.",
+      "recommendation": "Migrate credentials to AWS Secrets Manager with IAM-based access and automatic rotation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "src/main/resources/application.properties", "lines": "3-4"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": ["Restrict database network access to EC2 security group only", "Rotate credentials manually on schedule"],
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Audit Logging",
+      "description": "No audit logging exists. No CloudTrail, no application-level audit log, no immutable log storage. Only System.out.println for EC2 metadata in HealthController.",
+      "gap": "Cannot determine who made any API call, when, or what the outcome was.",
+      "recommendation": "Implement structured audit logging with principal attribution stored in CloudWatch Logs or S3 with Object Lock.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/HealthController.java", "lines": "42-55"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents still require audit trails for compliance but immutable logging is not a deployment blocker under read-only scope.",
+        "compensating_controls": ["Deploy ALB/API Gateway with access logging", "Enable CloudTrail for AWS API audit"],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Agent Identity Suspension Mechanism",
+      "description": "No identity management system exists. Authentication is disabled (permitAll()), so no mechanism to revoke or suspend any identity.",
+      "gap": "Cannot isolate or disable a misbehaving agent without taking down the entire application.",
+      "recommendation": "Implement API key or OAuth2 client identity with revocation mechanism.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/java/com/monoToMicro/security/ResourceServerConfig.java", "lines": "30-35"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": ["API Gateway API keys with revocation", "Network-level blocking via security groups"],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Compensation or Rollback",
+      "description": "No compensation or rollback mechanisms. Basket operations are single INSERT/DELETE statements with no transaction coordination. No saga pattern, no undo endpoints.",
+      "gap": "Partial state cannot be reverted if multi-step workflows fail.",
+      "recommendation": "Implement compensation endpoints and wrap multi-step operations in database transactions.",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/core/services/UnicornServiceImpl.java", "lines": "45-80"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write workflows, but compensation capability is relevant for system maturity and future write-enabled scope.",
+        "compensating_controls": ["Restrict agent to read-only operations", "Add remove-from-basket as compensation for add-to-basket"],
+        "remediation_timeline": "60–90 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Rate Limiting",
+      "description": "No rate limiting at any layer. No API Gateway, no WAF, no application-level middleware. Application accepts unlimited requests.",
+      "gap": "Runaway agent loops can overwhelm the application at machine speed.",
+      "recommendation": "Deploy API Gateway with throttling or add rate limiting middleware.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "build.gradle", "lines": "1-80"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": ["Deploy ALB with connection limits", "API Gateway with usage plans"],
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Sensitive Data Exposed via API Without Filtering",
+      "description": "User PII (email, first_name, last_name) stored in unicorn_user table and returned via API responses with no filtering. Login endpoint returns full User object including email.",
+      "gap": "B1: PII fields (email) exposed in API responses. B2: No access control differentiation. B3: No formal classification.",
+      "recommendation": "Create agent-facing response DTOs excluding PII. Implement OAuth scopes for data access differentiation.",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/java/com/monoToMicro/core/model/User.java", "lines": "24-30"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, B1 fires as RISK-SAFETY",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Under read-only scope, B1 fires as RISK-SAFETY because PII fields are returned in general API responses. B2 fires as RISK-SAFETY due to no access differentiation. Overall DATA-Q1 = RISK-SAFETY.",
+        "data_q1_subchecks": {
+          "b1": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "User email returned in login response without @JsonIgnore. Under read-only scope, B1 resolves to RISK-SAFETY."},
+          "b2": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "All callers get identical access via permitAll(). No differentiation between sensitive and non-sensitive data access."},
+          "b3": {"fired": true, "severity": "INFO", "reasoning": "No formal data classification metadata (tags, annotations, or catalog entries)."}
+        },
+        "compensating_controls": ["Create separate response DTOs excluding email for agent endpoints", "Field-level serialization control with @JsonView"],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Data Residency Controls",
+      "description": "No data residency configuration. User PII stored with no documented residency requirements or region constraints.",
+      "gap": "No mechanism to prevent agent from transmitting PII to LLM endpoint in different region.",
+      "recommendation": "Document data residency requirements. Configure agent orchestration for same-region LLM endpoints.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "src/main/resources/application.properties", "lines": "3"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Data residency is relevant for read-only agents accessing PII but risk profile is lower without data modification.",
+        "compensating_controls": ["Document data classification and residency requirements", "Configure agent orchestration to use same-region LLM endpoints"],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No PII Redaction Controls in Logs",
+      "description": "No PII redaction controls exist. Current logging is minimal but no safeguards against PII leakage if log verbosity increases.",
+      "gap": "No systematic PII protection in logging pipeline.",
+      "recommendation": "Implement structured logging with PII field masking before enabling detailed logging.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/HealthController.java", "lines": "42-55"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": ["Keep logging at minimal level", "Add log scrubbing before increasing verbosity"],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Machine-Readable API Specification",
+      "description": "No OpenAPI, Swagger, AsyncAPI, or machine-readable spec exists. API defined only in Java annotations.",
+      "gap": "Agent tool definitions must be manually authored. Drift between tools and implementation likely.",
+      "recommendation": "Add springdoc-openapi-ui dependency to auto-generate OpenAPI spec.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Structured Error Responses",
+      "description": "Error responses are bare HTTP status codes with empty bodies. ResponseEntity(HttpStatus.BAD_REQUEST) with no error detail.",
+      "gap": "Agent cannot distinguish retriable from terminal errors or identify failed fields.",
+      "recommendation": "Implement @ControllerAdvice with structured JSON error bodies.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/BasketController.java", "lines": "60"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Graceful Degradation Signaling",
+      "description": "Health endpoints provide binary status only. No machine-readable degradation indicators or freshness headers.",
+      "gap": "Agents cannot detect degraded mode operation.",
+      "recommendation": "Enhance health endpoints with granular JSON status. Add X-Data-Freshness headers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/HealthController.java", "lines": "65-68"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Sandbox/Staging Environment",
+      "description": "No sandbox, staging, or local development environment configuration. No Docker Compose, no environment profiles.",
+      "gap": "No safe environment to test agent behavior.",
+      "recommendation": "Create Docker Compose setup with MySQL for local/staging agent testing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Pagination or Filtering",
+      "description": "GET /unicorns returns ALL records. Unbounded SELECT queries with no LIMIT, pagination, or filtering.",
+      "gap": "Agents receive entire datasets. Context window exhaustion risk.",
+      "recommendation": "Add pagination parameters to list endpoints.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml", "lines": "7-11"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Minimal Input Validation",
+      "description": "Only null checks in controllers. No validation framework, no @Valid annotations, no structured validation errors. SQL uses parameterized queries preventing injection.",
+      "gap": "Malformed agent payloads not rejected with useful feedback.",
+      "recommendation": "Add spring-boot-starter-validation with Bean Validation annotations.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/BasketController.java", "lines": "48-50"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Temporal Metadata Not Exposed",
+      "description": "Database has creation_date and last_modified_date columns but API does not expose them. No freshness headers.",
+      "gap": "Agents cannot determine data freshness from API responses.",
+      "recommendation": "Map timestamp fields to response DTOs. Add Last-Modified headers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "database/create_tables.sql", "lines": "4-5"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Schema Versioning or API Contracts",
+      "description": "No API versioning, no schema versioning, no breaking change detection, no CI/CD pipeline.",
+      "gap": "Agent tool bindings break silently on API changes.",
+      "recommendation": "Version API paths and implement contract testing in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/UnicornController.java", "lines": "38"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Distributed Tracing or Structured Logging",
+      "description": "No X-Ray, no OpenTelemetry, no structured logging. Only System.out.println. No correlation IDs.",
+      "gap": "Cannot trace or debug agent-initiated requests.",
+      "recommendation": "Add X-Ray SDK or OpenTelemetry. Implement structured JSON logging.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "build.gradle", "lines": "20"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Alerting Configuration",
+      "description": "No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration.",
+      "gap": "Cannot detect target system degradation proactively.",
+      "recommendation": "Deploy CloudWatch alarms for error rates and latency.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Infrastructure as Code",
+      "description": "No IaC exists. No Terraform, CloudFormation, CDK, or Helm. Infrastructure presumably managed manually.",
+      "gap": "Agent-facing infrastructure is unauditable and non-reproducible.",
+      "recommendation": "Define infrastructure in CloudFormation or CDK.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No CI/CD Pipeline",
+      "description": "No CI/CD configuration. No GitHub Actions, GitLab CI, Jenkins, or CodeBuild.",
+      "gap": "API changes deployed without automated verification.",
+      "recommendation": "Implement CI/CD with contract testing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Rollback Capability",
+      "description": "No deployment or rollback configuration. Manual JAR deployment to EC2.",
+      "gap": "Cannot roll back broken deployments affecting agent APIs.",
+      "recommendation": "Implement CodeDeploy with health-check-based rollback.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "build.gradle", "lines": "27-29"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Zero Test Coverage",
+      "description": "No test files exist. Test dependency in build.gradle unused. No unit, integration, or API tests.",
+      "gap": "No automated verification of API behavior.",
+      "recommendation": "Create integration tests for controller endpoints.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "build.gradle", "lines": "22"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Encryption at Rest Unverifiable",
+      "description": "No IaC to verify KMS encryption on database storage. No KMS references.",
+      "gap": "PII may be unencrypted at rest.",
+      "recommendation": "Enable RDS/EBS encryption with KMS. Document in IaC.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days"
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Partial Idempotency via Database Constraints",
+      "description": "INSERT IGNORE and UNIQUE constraints provide database-level idempotency for basket operations. No explicit idempotency key support.",
+      "gap": "No request-level idempotency mechanism for general write operations.",
+      "recommendation": "Implement idempotency keys when expanding to write-enabled scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/main/resources/com/monoToMicro/core/repository/mappers/UnicornMapper.xml", "lines": "13-22"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, so idempotency is informational only."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "JSON Response Format",
+      "description": "All API responses use JSON via Jackson. Agent-friendly format requiring no additional parsing.",
+      "gap": "None.",
+      "recommendation": "No action needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "src/main/java/com/monoToMicro/core/model/User.java", "lines": "22"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q7",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Event Emission",
+      "description": "No event emission. Internal event objects are in-process DTOs, not distributed events. No webhooks, SNS, SQS, or EventBridge.",
+      "gap": "Agents cannot subscribe to state changes reactively.",
+      "recommendation": "Add EventBridge integration during decomposition.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/main/java/com/monoToMicro/core/events/", "lines": "N/A"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Rate Limit Headers",
+      "description": "No rate limit documentation or X-RateLimit-Remaining/Retry-After headers.",
+      "gap": "Agents have no visibility into call budget.",
+      "recommendation": "Add rate limit headers when implementing STATE-Q5 rate limiting.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Concurrency Controls",
+      "description": "No optimistic locking, no version fields, no ETags. INSERT IGNORE prevents duplicates but not general concurrency control.",
+      "gap": "Concurrent writes could cause race conditions under write-enabled scope.",
+      "recommendation": "Add version fields and optimistic locking when expanding scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "database/create_tables.sql", "lines": "1-20"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Transaction Limits",
+      "description": "No transaction limits or blast radius controls. No configurable limits on operations per session.",
+      "gap": "Under write-enabled scope, unbounded operations possible.",
+      "recommendation": "Implement per-caller transaction limits for write-enabled scope.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java", "lines": "40-50"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Draft/Pending State",
+      "description": "No draft or pending state. All writes commit immediately.",
+      "gap": "No human review opportunity for agent-proposed changes.",
+      "recommendation": "Add PENDING status for write operations under write-enabled scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/BasketController.java", "lines": "45-60"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Approval Gates",
+      "description": "No approval gate mechanism. All operations execute immediately.",
+      "gap": "Cannot configure human approval for specific operations.",
+      "recommendation": "Consider Step Functions approval tasks for high-risk operations.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Data Quality Metrics",
+      "description": "No data quality monitoring, profiling, or completeness metrics.",
+      "gap": "Cannot assess data reliability for agent decisions.",
+      "recommendation": "Add data quality monitoring.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "database/create_tables.sql", "lines": "50-60"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Data Catalog",
+      "description": "No data catalog or metadata layer. Only schema reference is create_tables.sql.",
+      "gap": "Agent tool builders must reverse-engineer the data model.",
+      "recommendation": "Document data model in structured format.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "database/create_tables.sql", "lines": "1-60"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Business Outcome Metrics",
+      "description": "No custom business metrics. Only infrastructure metrics via Spring Boot Actuator.",
+      "gap": "Cannot measure agent interaction quality.",
+      "recommendation": "Publish business metrics (basket operations, registrations) to CloudWatch.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "build.gradle", "lines": "23"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "API-Q1",
+      "category_id": "API",
+      "title": "Documented API Interface",
+      "status": "pass",
+      "reason": "Application exposes REST endpoints via Spring Boot @RestController annotations. Integration does not require direct database access or UI automation."
+    },
+    {
+      "question_id": "API-Q6",
+      "category_id": "API",
+      "title": "Asynchronous Operation Support",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — no operations exceeding 30s or long-running workflows detected in this simple CRUD application."
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category_id": "STATE",
+      "title": "Queryable Current State",
+      "status": "pass",
+      "reason": "Application exposes GET /unicorns and GET /unicorns/basket/{userUuid} for querying current state."
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered — service does not call other business services or external APIs. EC2 metadata is infrastructure-level, not a business dependency."
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "status": "pass",
+      "reason": "Field names are human-readable and semantically meaningful: uuid, email, firstName, lastName, name, description, price, image. No legacy abbreviations requiring data dictionaries."
+    }
+  ],
+  "remediation_roadmap": {
+    "phases": [1, 2, 3],
+    "items": [
+      {
+        "phase": 1,
+        "phase_name": "Blockers & Safety Foundation",
+        "findings": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q5", "AUTH-Q6", "AUTH-Q7", "STATE-Q5", "DATA-Q1", "DATA-Q2"],
+        "summary": "Resolve the authentication blocker and establish foundational safety controls: machine identity, scoped permissions, audit logging, rate limiting, and sensitive data protection."
+      },
+      {
+        "phase": 2,
+        "phase_name": "Quality & Operability",
+        "findings": ["AUTH-Q4", "STATE-Q1", "STATE-Q7", "DATA-Q3", "DATA-Q4", "DATA-Q6", "API-Q2", "API-Q3", "HITL-Q3", "DISC-Q1", "OBS-Q1", "OBS-Q2", "ENG-Q1", "ENG-Q2", "ENG-Q3", "ENG-Q5"],
+        "summary": "Build operational maturity: API documentation, structured errors, observability, CI/CD, IaC, and data quality improvements."
+      },
+      {
+        "phase": 3,
+        "phase_name": "Future Scope Readiness",
+        "findings": ["API-Q4", "API-Q7", "API-Q8", "STATE-Q3", "STATE-Q6", "HITL-Q1", "HITL-Q2", "DATA-Q5", "DATA-Q7", "DISC-Q3", "OBS-Q3", "ENG-Q4"],
+        "summary": "Prepare for write-enabled scope and event-driven patterns: idempotency, concurrency controls, approval workflows, event emission, and test coverage."
+      }
+    ]
+  },
+  "recommended_actions": [
+    {
+      "action": "Deploy API Gateway with Cognito/IAM authorizers",
+      "question_ids": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q7", "STATE-Q5"],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Resolves the only BLOCKER (AUTH-Q1) and simultaneously addresses scoped permissions, action-level auth, identity suspension, and rate limiting via a single API Gateway deployment."
+    },
+    {
+      "action": "Migrate credentials to AWS Secrets Manager",
+      "question_ids": ["AUTH-Q5"],
+      "priority": "P1",
+      "effort": "Low",
+      "rationale": "Quick win that eliminates hardcoded credential risk. Low effort, high security impact."
+    },
+    {
+      "action": "Implement structured audit logging",
+      "question_ids": ["AUTH-Q6"],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "Required for compliance and forensics. Enable CloudTrail and application-level audit interceptor."
+    },
+    {
+      "action": "Add springdoc-openapi for API documentation",
+      "question_ids": ["API-Q2", "DISC-Q1"],
+      "priority": "P2",
+      "effort": "Low",
+      "rationale": "Auto-generates OpenAPI spec from existing annotations. Enables automated agent tool generation."
+    },
+    {
+      "action": "Implement CI/CD pipeline with contract testing",
+      "question_ids": ["ENG-Q2", "ENG-Q3", "ENG-Q4"],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Foundation for all deployment safety: automated testing, rollback, and breaking change detection."
+    },
+    {
+      "action": "Create agent-facing response DTOs with PII filtering",
+      "question_ids": ["DATA-Q1"],
+      "priority": "P1",
+      "effort": "Low",
+      "rationale": "Prevents PII exposure to agent-facing endpoints without requiring full auth overhaul."
+    }
+  ]
+}

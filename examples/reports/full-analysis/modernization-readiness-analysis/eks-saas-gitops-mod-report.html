@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eks-saas-gitops - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; line-height: 1.6; padding: 2rem; }
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 1.8rem; color: #fff; margin-bottom: 0.5rem; }
+.subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+.executive-summary { background: #1a1a2e; border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid #2a2a3e; }
+.executive-summary h2 { color: #fff; font-size: 1.2rem; margin-bottom: 1rem; }
+.executive-summary p { color: #ccc; margin-bottom: 0.8rem; }
+.tier-badge { display: inline-block; padding: 0.3rem 0.8rem; border-radius: 6px; font-weight: 600; font-size: 0.85rem; }
+.tier-remediation { background: #ff6b3520; color: #ff6b35; border: 1px solid #ff6b3540; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+.stat-card { background: #1a1a2e; border-radius: 12px; padding: 1.2rem; text-align: center; border: 1px solid #2a2a3e; }
+.stat-card .number { font-size: 2rem; font-weight: 700; }
+.stat-card .label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+.high { color: #ff4757; }
+.medium { color: #ffa502; }
+.low { color: #2ed573; }
+.total { color: #70a1ff; }
+.section { margin-bottom: 2rem; }
+.section h2 { color: #fff; font-size: 1.3rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #2a2a3e; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+th, td { padding: 0.7rem 1rem; text-align: left; border-bottom: 1px solid #2a2a3e; }
+th { background: #1a1a2e; color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+td { color: #ddd; font-size: 0.9rem; }
+.badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+.badge-high { background: #ff475720; color: #ff4757; }
+.badge-medium { background: #ffa50220; color: #ffa502; }
+.badge-low { background: #2ed57320; color: #2ed573; }
+.badge-ready { background: #2ed57320; color: #2ed573; }
+.badge-needs-work { background: #ffa50220; color: #ffa502; }
+.badge-critical { background: #ff475720; color: #ff4757; }
+.badge-na { background: #66666620; color: #888; }
+.finding-card { background: #1a1a2e; border-radius: 12px; padding: 1.2rem; margin-bottom: 1rem; border: 1px solid #2a2a3e; }
+.finding-card h3 { color: #fff; font-size: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+.finding-card .category-line { color: #888; font-size: 0.8rem; margin-bottom: 0.8rem; }
+.finding-card .finding-section { margin-bottom: 0.8rem; }
+.finding-card .finding-section h4 { color: #aaa; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+.finding-card .finding-section p { color: #ccc; font-size: 0.9rem; }
+.tabs { display: flex; gap: 0; margin-bottom: 2rem; border-bottom: 2px solid #2a2a3e; }
+.tab { padding: 0.8rem 1.5rem; cursor: pointer; color: #888; font-size: 0.9rem; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab.active { color: #70a1ff; border-bottom-color: #70a1ff; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.footer { text-align: center; color: #666; font-size: 0.8rem; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #2a2a3e; }
+.recommendation-block { background: #1a2e1a; border: 1px solid #2e4a2e; border-radius: 12px; padding: 1.5rem; margin-top: 2rem; }
+.recommendation-block h3 { color: #2ed573; margin-bottom: 1rem; }
+.recommendation-block li { color: #ccc; margin-bottom: 0.5rem; margin-left: 1.5rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>eks-saas-gitops - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2025-05-18 &middot; Terraform/HCL &middot; Infrastructure-Only &middot; Priority: P1</p>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="tier-badge tier-pilot">&#x1F7E1; Pilot-Ready</span></p>
+<p><strong>Key Findings:</strong> This EKS SaaS GitOps infrastructure repository demonstrates strong compute and data platform maturity (EKS + Karpenter + DynamoDB) but has significant gaps in observability, incident response, and security audit controls. The GitOps deployment model via Flux CD is well-architected but lacks progressive delivery and quality gates.</p>
+<p><strong>Remediation Plan:</strong> Priority actions focus on adding distributed tracing (ADOT/OpenTelemetry), CloudTrail audit logging, CI pipeline quality gates (security scanning, terraform validate), and integration testing for the tenant lifecycle.</p>
+<p><strong>Recommended Actions:</strong> (1) Deploy ADOT for distributed tracing, (2) Add CloudTrail with immutable logs, (3) Add security scanning to CI pipeline.</p>
+</div>
+
+<div class="stats-row">
+<div class="stat-card"><div class="number total">24</div><div class="label">Total Findings</div></div>
+<div class="stat-card"><div class="number high">0</div><div class="label">High Severity</div></div>
+<div class="stat-card"><div class="number medium">11</div><div class="label">Medium Severity</div></div>
+<div class="stat-card"><div class="number low">13</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="tabs">
+<div class="tab active" onclick="showTab('stats')">Stats</div>
+<div class="tab" onclick="showTab('techstack')">Tech Stack</div>
+<div class="tab" onclick="showTab('findings')">Findings</div>
+<div class="tab" onclick="showTab('roadmap')">Roadmap</div>
+<div class="tab" onclick="showTab('programs')">Programs</div>
+</div>
+
+<div id="stats" class="tab-content active">
+<div class="section">
+<h2>Score Summary</h2>
+<table>
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>3.09 / 4.0</td><td>&#x1F7E1; Partial</td><td><span class="badge badge-needs-work">Needs Work</span></td></tr>
+<tr><td>Application Architecture (APP)</td><td>N/A</td><td>N/A</td><td><span class="badge badge-na">N/A</span></td></tr>
+<tr><td>Data Platform (DATA)</td><td>4.00 / 4.0</td><td>&#x2705; Mature</td><td><span class="badge badge-ready">Ready</span></td></tr>
+<tr><td>Security Baseline (SEC)</td><td>2.57 / 4.0</td><td>&#x1F7E1; Partial</td><td><span class="badge badge-critical">Critical</span></td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>2.11 / 4.0</td><td>&#x1F7E0; Needs Work</td><td><span class="badge badge-critical">Critical</span></td></tr>
+<tr style="font-weight:700"><td>Overall</td><td>2.93 / 4.0</td><td>&#x1F7E1; Partial</td><td></td></tr>
+</table>
+</div>
+</div>
+
+<div id="techstack" class="tab-content">
+<div class="section">
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Dimension</th><th>Value</th></tr>
+<tr><td>Primary Language</td><td>HCL (Terraform)</td></tr>
+<tr><td>Compute</td><td>EKS 1.32, Karpenter 1.4.0, Managed Node Groups</td></tr>
+<tr><td>Data Stores</td><td>DynamoDB (PAY_PER_REQUEST, PITR), SQS (SSE), S3</td></tr>
+<tr><td>GitOps</td><td>Flux CD v2.7.5, Argo Workflows, Argo Events</td></tr>
+<tr><td>Networking</td><td>VPC (3 AZ), ALB (AWS LB Controller), Single NAT GW</td></tr>
+<tr><td>Monitoring</td><td>Kubecost v2.1.0, Prometheus, Metrics Server</td></tr>
+<tr><td>CI/CD</td><td>Gitea Actions, Flux Image Automation, TF Controller</td></tr>
+<tr><td>Priority</td><td>P1</td></tr>
+</table>
+</div>
+</div>
+
+<div id="findings" class="tab-content">
+<div class="section">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q1: Distributed Tracing</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No distributed tracing (X-Ray, OpenTelemetry, Jaeger) found in any IaC, Helm chart, or GitOps manifest. Complete absence in a multi-tenant, multi-service architecture.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Deploy ADOT as DaemonSet on EKS. Instrument microservices with OpenTelemetry SDK. Enable X-Ray for SQS/DynamoDB tracing.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q3: Business Metrics</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No custom business metrics published. Kubecost tracks costs but no tenant onboarding rates, message throughput, or per-tier utilization metrics exist.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add custom Prometheus metrics in microservices (messages_processed_total, onboarding_duration_seconds). Create Grafana dashboards for business KPIs.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q1: Audit Logging</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No CloudTrail configuration despite provisioning account-level resources (EKS, VPC, IAM). EKS control plane logging not enabled.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add CloudTrail with log file validation and S3 Object Lock. Enable EKS control plane logging (api, audit, authenticator).</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q4: Centralized Identity</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>No centralized IdP integration. Gitea uses local auth. EKS uses IAM. No SSO or federated identity configuration.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Integrate Amazon Cognito for tenant apps. Federate EKS access with organizational IdP via OIDC.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> SEC-Q6: Compute Hardening</h3>
+<p class="category-line">Category: Security Baseline</p>
+<div class="finding-section"><h4>Finding</h4><p>Karpenter uses al2023@latest AMI with SSM policy. No Patch Manager, vulnerability scanning, or hardened AMI pipeline.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Enable ECR scanning. Add Trivy to CI. Configure SSM Patch Manager. Consider Bottlerocket AMIs.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q2: SLO Definitions</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Prometheus deployed via Kubecost but no formal SLO definitions, no latency/error-rate alarms, no error budgets.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define SLOs for tenant onboarding latency, message processing, and API availability per tier.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q4: Anomaly Detection</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Prometheus deployed but no alerting rules, no anomaly detection, no PagerDuty/OpsGenie integration configured.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define PrometheusRule CRDs. Add Alertmanager with notification integration. Add CloudWatch anomaly detection.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q6: Integration Testing</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Helm test and manual scripts exist but no automated integration tests in CI pipeline. No E2E testing of tenant lifecycle.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create integration tests for tenant onboarding workflow. Add to CI or scheduled Argo Workflow.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q7: Incident Response</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>No runbooks, SSM Automation, or self-healing patterns defined despite Argo Workflows being available.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Create runbooks for common scenarios. Implement self-healing via Argo Workflows triggered by Prometheus alerts.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q8: Observability Ownership</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Kubecost provides namespace-level cost tracking but no per-service dashboards, named alarm owners, or CODEOWNERS.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Define CODEOWNERS for observability configs. Create per-tier Grafana dashboards with ownership annotations.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-medium">MEDIUM</span> OPS-Q9: Resource Tagging</h3>
+<p class="category-line">Category: Operations &amp; Observability</p>
+<div class="finding-section"><h4>Finding</h4><p>Basic tagging (Blueprint, Name) but no consistent strategy. Missing cost allocation, ownership, and environment tags.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add default_tags to AWS provider. Add required-tags Config rule. Implement Tag Policies.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q3: Workflow Orchestration</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Argo Workflows for tenant lifecycle automation but no application-level business workflow orchestration.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Consider Step Functions or extend Argo Workflows for business-critical multi-step operations.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q5: Network Security</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>VPC with 3 AZs and private subnets but EKS endpoint is public and no VPC endpoints configured.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Restrict EKS endpoint to private. Add VPC endpoints for ECR, STS, S3, DynamoDB, SQS.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q6: API Entry Point</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>ALB via AWS LB Controller but no API Gateway, throttling, or request validation at entry point.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add AWS WAF on ALB. Evaluate API Gateway for per-tenant throttling.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q7: Auto-Scaling</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>Karpenter provides node scaling but HPA disabled by default in application Helm charts.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Enable HPA by default with sensible CPU/memory targets. Add custom metrics for scaling.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q8: Backup and Recovery</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>DynamoDB PITR enabled but no documented restore procedures and no Gitea backup strategy.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Add S3 versioning. Implement Gitea backup. Document restore procedures.</p></div>
+</div>
+
+<div class="finding-card">
+<h3><span class="badge badge-low">LOW</span> INF-Q9: High Availability</h3>
+<p class="category-line">Category: Infrastructure &amp; DevOps</p>
+<div class="finding-section"><h4>Finding</h4><p>3 AZ deployment but single NAT Gateway creates SPOF. Gitea is single-instance.</p></div>
+<div class="finding-section"><h4>Recommendation</h4><p>Deploy NAT Gateways per AZ. Evaluate managed Git service or HA Gitea.</p></div>
+</div>
+
+</div>
+</div>
+
+<div id="roadmap" class="tab-content">
+<div class="section">
+<h2>Remediation Roadmap</h2>
+<table>
+<tr><th>Phase</th><th>Findings</th><th>Focus Area</th></tr>
+<tr><td>Phase 1</td><td>OPS-Q1, SEC-Q1, SEC-Q5, INF-Q11, SEC-Q7, OPS-Q6</td><td>Observability foundation, audit logging, CI quality gates</td></tr>
+<tr><td>Phase 2</td><td>INF-Q5, INF-Q6, INF-Q7, INF-Q8, INF-Q9, INF-Q10, SEC-Q2, SEC-Q3, SEC-Q4, SEC-Q6, OPS-Q2, OPS-Q3, OPS-Q4, OPS-Q5, OPS-Q9</td><td>Network hardening, scaling, HA, identity, alerting</td></tr>
+<tr><td>Phase 3</td><td>INF-Q3, OPS-Q7, OPS-Q8</td><td>Advanced orchestration, incident automation, ownership</td></tr>
+</table>
+</div>
+</div>
+
+<div id="programs" class="tab-content">
+<div class="section">
+<h2>AWS Modernization Pathways</h2>
+<table>
+<tr><th>#</th><th>Pathway</th><th>Status</th><th>Priority</th><th>Effort</th></tr>
+<tr><td>1</td><td>Move to Cloud Native</td><td><span class="badge badge-na">Not Applicable</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>2</td><td>Move to Containers</td><td><span class="badge badge-na">Not Applicable</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>3</td><td>Move to Open Source</td><td><span class="badge badge-ready">Not Triggered</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>4</td><td>Move to Managed Databases</td><td><span class="badge badge-ready">Not Triggered</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>5</td><td>Move to Managed Analytics</td><td><span class="badge badge-na">Not Applicable</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>6</td><td>Move to Modern DevOps</td><td><span class="badge badge-ready">Not Triggered</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>7</td><td>Move to AI</td><td><span class="badge badge-na">Not Applicable</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+</table>
+<p style="color:#888;margin-top:1rem;">No pathways triggered. The infrastructure is already on managed services (EKS, DynamoDB, SQS) with GitOps automation. Focus remediation on observability, security controls, and CI quality gates.</p>
+</div>
+</div>
+
+<div class="recommendation-block">
+<h3>&#x1F7E0; Modernization Recommendations</h3>
+<ol>
+<li><strong>Deploy distributed tracing (ADOT/OpenTelemetry)</strong> — Critical for debugging in multi-tenant architecture</li>
+<li><strong>Add CloudTrail audit logging</strong> — Compliance requirement for AWS resource provisioning</li>
+<li><strong>Add CI quality gates</strong> — Security scanning (Checkov, Trivy), terraform validate, integration tests</li>
+</ol>
+</div>
+
+<p class="footer">Generated by AWS Transform &middot; Modernization Readiness Analysis Report</p>
+</div>
+
+<script>
+function showTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

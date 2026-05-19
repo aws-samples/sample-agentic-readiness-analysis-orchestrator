@@ -1,0 +1,201 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Portfolio Analysis Configuration Schema (V2)",
+  "description": "Configuration schema for the V2 two-analysis architecture. Supports agentic-readiness (ARA), modernization (MOD), or full (both) analysis types. Breaking change from V1 — old configs require migration (goal → analysis_type, goal_context → context, deployment-cicd → deployment-config).",
+  "type": "object",
+  "required": ["portfolio_name", "analysis_type", "transformation_definitions", "repositories"],
+  "additionalProperties": false,
+  "properties": {
+    "portfolio_name": {
+      "type": "string",
+      "description": "Name of the portfolio being analyzed",
+      "examples": ["ecommerce-platform", "payment-services", "customer-portal"]
+    },
+    "analysis_type": {
+      "type": "string",
+      "description": "Determines which analysis TDs to run. 'agentic-readiness' runs ARA only, 'modernization' runs MOD only, 'full' runs both analyses.",
+      "enum": [
+        "agentic-readiness",
+        "modernization",
+        "full"
+      ]
+    },
+    "context": {
+      "type": "string",
+      "description": "Optional free-text context for framing recommendations. Passed to all TDs (ARA, MOD, Portfolio ARA, Portfolio MOD) as general framing context.",
+      "examples": [
+        "Building a customer support agent for order and inventory data",
+        "Migrating off Oracle to reduce licensing costs by 60%",
+        "Evaluating portfolio for both agentic integration and cloud modernization"
+      ]
+    },
+    "agent_scope": {
+      "type": "string",
+      "description": "Scope of agent integration — affects conditional BLOCKER evaluation in ARA. ARA-only: the Power passes this only to ARA ATX configs and ignores it for MOD configs. Defaults to 'read-only' if not provided.",
+      "enum": [
+        "read-only",
+        "write-enabled"
+      ]
+    },
+    "transformation_definitions": {
+      "type": "object",
+      "description": "Names of the AWS Transform managed transformation definitions. All four are required.",
+      "required": ["agentic_readiness", "modernization", "portfolio_agentic_readiness", "portfolio_modernization"],
+      "properties": {
+        "agentic_readiness": {
+          "type": "string",
+          "description": "Transformation definition name for individual ARA (Agentic Readiness Analysis) per repo",
+          "examples": ["AWS/agentic-readiness-analysis"]
+        },
+        "modernization": {
+          "type": "string",
+          "description": "Transformation definition name for individual MOD (Modernization Readiness Analysis) per repo",
+          "examples": ["AWS/modernization-readiness-analysis"]
+        },
+        "portfolio_agentic_readiness": {
+          "type": "string",
+          "description": "Transformation definition name for portfolio-level ARA aggregation",
+          "examples": ["AWS/portfolio-agentic-readiness-analysis"]
+        },
+        "portfolio_modernization": {
+          "type": "string",
+          "description": "Transformation definition name for portfolio-level MOD aggregation",
+          "examples": ["AWS/portfolio-modernization-readiness-analysis"]
+        }
+      }
+    },
+    "preferences": {
+      "type": "object",
+      "description": "Global transformation preferences using flat prefer/avoid arrays. MOD-only: the Power passes these only to MOD ATX configs (individual and portfolio) and ignores them for ARA configs. Per-repo preferences merge with (and can override) these global preferences.",
+      "properties": {
+        "prefer": {
+          "type": "array",
+          "description": "Technologies, patterns, or approaches to prefer in recommendations (e.g., eks, aurora, bedrock, rest-api)",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["eks", "aurora", "bedrock"], ["ecs", "fargate"]]
+        },
+        "avoid": {
+          "type": "array",
+          "description": "Technologies, patterns, or approaches to avoid in recommendations (e.g., serverless, self-managed-kafka, microservices-decomposition)",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["self-managed-kafka", "serverless"], ["kubernetes"]]
+        }
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "description": "List of repositories to include in the portfolio analysis",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Service/repository name (must be unique within portfolio)"
+          },
+          "path": {
+            "type": "string",
+            "description": "Absolute or relative path to the repository root directory. If repository_url is provided and this path doesn't exist, it will be cloned here"
+          },
+          "priority": {
+            "type": "string",
+            "description": "Business priority for this service (P0=Critical, P1=High, P2=Medium)",
+            "enum": ["P0", "P1", "P2"],
+            "default": "P2"
+          },
+          "context": {
+            "type": "string",
+            "description": "Optional free-text context about this repository (e.g., 'Main order processing service, handles 80% of traffic')"
+          },
+          "preferences": {
+            "type": "object",
+            "description": "Per-repo transformation preferences. MOD-only. Merged with global preferences — per-repo avoid overrides global prefer for conflicts.",
+            "properties": {
+              "prefer": {
+                "type": "array",
+                "description": "Technologies, patterns, or approaches to prefer for this repo",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "avoid": {
+                "type": "array",
+                "description": "Technologies, patterns, or approaches to avoid for this repo",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "repo_type": {
+            "type": "string",
+            "description": "Optional override for repository type classification. If not provided, the agent auto-detects during discovery.",
+            "enum": ["application", "infrastructure-only", "deployment-config", "monorepo", "library"]
+          },
+          "service_archetype": {
+            "type": "string",
+            "description": "Optional override for service archetype classification. MOD-only: calibrates scoring on architecture-sensitive questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4) so services whose correct design is synchronous and stateless are not penalized for lacking async infrastructure they do not need. Only applies when repo_type is 'application'. If not provided, the MOD TD auto-detects during discovery.",
+            "enum": ["stateless-utility", "stateful-crud", "orchestrator", "data-gateway", "event-processor"]
+          },
+          "tags": {
+            "type": "array",
+            "description": "Optional tags for categorization (e.g., frontend, backend, data, ml, monolith)",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repository_url": {
+            "type": "string",
+            "description": "Optional Git repository URL. If provided and path doesn't exist, Kiro will clone the repository automatically",
+            "format": "uri",
+            "examples": [
+              "https://github.com/aws-samples/unishop-monolith-to-microservices.git",
+              "https://github.com/awsrun/aws-microservices.git"
+            ]
+          },
+          "report_path": {
+            "type": "string",
+            "description": "Optional explicit path to the analysis report (if not in standard location)"
+          },
+          "agent_scope": {
+            "type": "string",
+            "description": "Optional per-repo override for agent scope. ARA-only. If set, overrides the portfolio-level agent_scope for this repo. Use to set infrastructure-only repos to read-only while application repos are write-enabled.",
+            "enum": ["read-only", "write-enabled"]
+          }
+        }
+      }
+    },
+    "dependency_overrides": {
+      "type": "array",
+      "description": "Optional manual dependency declarations (for cases where auto-detection fails)",
+      "items": {
+        "type": "object",
+        "required": ["source", "target", "type"],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Source service name (depends on target)"
+          },
+          "target": {
+            "type": "string",
+            "description": "Target service name (dependency)"
+          },
+          "type": {
+            "type": "string",
+            "description": "Type of dependency",
+            "enum": ["sync", "async", "shared_db", "shared_infra"]
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional description of the dependency relationship"
+          }
+        }
+      }
+    }
+  }
+}

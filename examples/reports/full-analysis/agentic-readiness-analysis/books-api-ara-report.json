@@ -1,0 +1,495 @@
+{
+  "metadata": {
+    "analysis_type": "ara",
+    "analysis_date": "2026-05-18",
+    "td_version": "agentic-readiness-analysis",
+    "repo_name": "books-api",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Service owns a DynamoDB table with CRUD operations (POST to create books, GET to read all books) and manages entity lifecycle.",
+    "agent_scope": "read-only",
+    "priority": "P1",
+    "tags": ["serverless", "cdk", "api", "dynamodb"],
+    "context": "Serverless REST API with CDK infrastructure for book catalog management. Clean API surface the agent can use as a tool for product lookups.",
+    "portfolio_name": "sample-agentic-readiness-assessment-fresh",
+    "tech_stack": {
+      "language": "TypeScript",
+      "loc": 350,
+      "framework": "AWS SAM / Lambda",
+      "architecture": "Serverless REST API"
+    },
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "blocker_count": 1,
+    "risk_safety_count": 5,
+    "risk_quality_count": 11,
+    "info_count": 14,
+    "high_count": 1,
+    "medium_count": 16,
+    "low_count": 14,
+    "rule_matched": "1-2 BLOCKER → Remediation Required"
+  },
+  "counts": {
+    "total": 17,
+    "high": 1,
+    "medium": 16,
+    "low": 14
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Machine Identity Authentication",
+      "description": "The application uses Amazon Cognito for authentication on POST /books with implicit OAuth flow and USER_PASSWORD_AUTH only. GET /books requires no authentication. No client_credentials flow, API keys, or mTLS configured for machine-to-machine authentication.",
+      "gap": "No machine identity authentication mechanism exists. Cognito is configured for human user authentication only.",
+      "recommendation": "Add a Cognito App Client with client_credentials grant type and configure a resource server with custom scopes (e.g., books/read, books/write). Alternatively, enable API Gateway API keys with a usage plan.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "template.yml", "lines": "150-182"},
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Add a Cognito App Client with client_credentials grant type and configure a resource server with custom scopes.",
+          "target_state": "Agent callers authenticate via OAuth2 client_credentials flow or API key with principal attribution.",
+          "estimated_effort": "Medium",
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Identity Propagation or Delegation Mechanism",
+      "description": "No mechanism to distinguish between an agent acting under its own service identity vs. acting on behalf of a specific human user. No token exchange, on-behalf-of flow, or dual-identity pattern exists.",
+      "gap": "Cannot distinguish agent identity modes (self vs delegated).",
+      "recommendation": "Design token model with acting_as claim to distinguish self-service vs delegated calls when implementing machine identity.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "template.yml", "lines": "150-170"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": ["Use separate Cognito app clients for agent-as-self vs agent-on-behalf-of-user scenarios", "Implement custom claims in JWT tokens to carry delegation context"]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Immutable Audit Logging",
+      "description": "API Gateway access logging is enabled at INFO level. No CloudTrail configuration, no immutable log storage (S3 with object lock), and no log integrity validation defined in IaC.",
+      "gap": "No immutable, tamper-evident audit trail. CloudWatch logs are mutable.",
+      "recommendation": "Add AWS::CloudTrail::Trail with EnableLogFileValidation and S3 bucket with object lock for log storage.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "template.yml", "lines": "36-57"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations requiring full audit attribution, but audit logging is still important for system maturity.",
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["Enable CloudTrail with log file validation", "Configure CloudWatch Logs retention and export to S3 with object lock"]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Cannot Suspend Agent Identity on Unauthenticated Endpoint",
+      "description": "GET /books requires no authentication. Without identity enforcement, there is no identity to suspend or revoke for read-only agent access. The only option is network-level blocking (WAF, IP rules) which is not configured.",
+      "gap": "Unauthenticated read endpoint means no agent identity lifecycle is possible.",
+      "recommendation": "Require authentication (API key or OAuth) on all agent-facing endpoints to enable identity-level suspension.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "template.yml", "lines": "81-101"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["Add API Gateway API keys to GET /books for per-agent key revocation", "Configure WAF with IP-based blocking as emergency kill switch"]
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Compensation or Rollback for Write Operations",
+      "description": "CreateBook performs a simple DynamoDB putItem with no compensation logic, undo endpoint, or saga pattern. No mechanism to reverse operations if a workflow fails mid-sequence.",
+      "gap": "No compensation or rollback mechanism for write operations.",
+      "recommendation": "Add a DELETE /books/{isbn} endpoint and consider soft-delete with status field for reversibility.",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/books/create/index.ts", "lines": "23-40"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write workflows, but compensation capability is relevant for system maturity.",
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": ["Read-only agents do not execute writes", "DynamoDB point-in-time recovery could be enabled"]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Explicit Rate Limiting Configuration",
+      "description": "No explicit rate limiting or throttling configuration in IaC. No usage plans, per-method throttling, or WAF rate rules. Only default API Gateway account-level throttling (10,000 rps) applies.",
+      "gap": "No rate limiting to prevent runaway agent loops from overwhelming the service.",
+      "recommendation": "Add API Gateway usage plan with throttle settings and per-method throttling configuration.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "template.yml", "lines": "60-73"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["API Gateway default account-level throttling provides baseline protection", "Lambda concurrency limits could be set as a safety valve"]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Machine-Readable API Specification",
+      "description": "No OpenAPI, AsyncAPI, GraphQL schema, or Smithy specification file exists. The API surface is defined only in the SAM template and source code.",
+      "gap": "No machine-readable API specification for automated agent tool generation.",
+      "recommendation": "Generate an OpenAPI 3.0 spec. SAM supports inline OpenAPI via the DefinitionBody property.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "template.yml", "lines": "60-62"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["SAM template provides basic path/method information", "Manual tool definition based on source code"]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Structured Error Responses",
+      "description": "Error responses return HTTP 500 with empty body and empty headers. No error code, message, or retryable indicator.",
+      "gap": "Empty error response body provides zero diagnostic information for agents.",
+      "recommendation": "Implement standard error envelope: { error: { code, message, retryable } } in both handlers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/books/create/index.ts", "lines": "43-47"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["Agent tool wrappers can implement retry based on HTTP status codes", "CloudWatch logs for post-hoc diagnosis"]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "X-Ray Tracing Present but Structured Logging Absent",
+      "description": "X-Ray tracing enabled on Lambda and API Gateway. However, application logs use unstructured console.log without JSON formatting or correlation IDs.",
+      "gap": "Distributed tracing exists but structured logging with correlation IDs is absent.",
+      "recommendation": "Add @aws-lambda-powertools/logger for structured JSON logs with trace_id and correlation_id fields.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "template.yml", "lines": "30-32"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["X-Ray traces provide end-to-end request visibility", "API Gateway access logs include request IDs"]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Error Rate Alerting Present but Latency Alerting Absent",
+      "description": "CloudWatch alarms configured for Lambda function errors (threshold > 0). No latency-based alerting configured.",
+      "gap": "Latency degradation affecting agent responsiveness would go undetected.",
+      "recommendation": "Add CloudWatch alarms for API Gateway Latency and IntegrationLatency at p95/p99 thresholds.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "template.yml", "lines": "186-215"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["Error alarms catch catastrophic failures", "X-Ray service map shows latency distribution"]
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Pagination or Result Size Limiting",
+      "description": "GET /books performs unbounded DynamoDB scan with no pagination, filters, or sorting. All books returned in single response.",
+      "gap": "Unbounded result sets exhaust agent context windows as dataset grows.",
+      "recommendation": "Add limit and exclusiveStartKey query parameters for DynamoDB pagination.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/books/get-all/index.ts", "lines": "24-27"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["Current dataset likely small", "Agent wrappers can truncate responses client-side"]
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Input Validation or Schema Enforcement",
+      "description": "POST /books destructures request body without validation. No type checking, field presence validation, or format validation. Malformed input returns generic 500.",
+      "gap": "No input validation at API boundary. Malformed agent payloads fail silently.",
+      "recommendation": "Add request body validation (zod schema or API Gateway request validator) with structured error responses.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/books/create/index.ts", "lines": "25-27"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["DynamoDB rejects null/undefined for required attributes", "Read-only agents do not submit POST requests"]
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Temporal Metadata on Records",
+      "description": "DynamoDB items have no created_at, updated_at, or event_time fields. API responses include no freshness indicators.",
+      "gap": "Agents cannot determine when data was last updated or whether it is stale.",
+      "recommendation": "Add created_at and updated_at attributes. Include Last-Modified response headers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/books/create/index.ts", "lines": "28-37"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["DynamoDB Streams could provide change timestamps if enabled", "Book catalog data changes infrequently"]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Schema Versioning or Breaking Change Detection",
+      "description": "No API versioning (no /v1/ prefix, no Accept-Version header). No schema registry or breaking change detection in CI.",
+      "gap": "Agent tool bindings could break silently when the API changes.",
+      "recommendation": "Adopt URL-prefix versioning and add OpenAPI spec validation to CI pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "template.yml", "lines": "93-97"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": ["Staging E2E tests provide some regression detection", "Small API surface limits change frequency"]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No API Contract Testing in CI/CD",
+      "description": "Full CI/CD pipeline with unit and E2E tests. No API contract tests (Pact), OpenAPI validation, or breaking change detection tools.",
+      "gap": "Breaking API changes not caught automatically before affecting agents.",
+      "recommendation": "Add OpenAPI spec validation or consumer-driven contract tests to the build stage.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "pipeline/buildspec.json", "lines": "1-40"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": ["E2E tests validate basic API behavior", "Manual approval gate before production"]
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Test Coverage Lacks API Contract Validation",
+      "description": "Unit tests cover both handlers. E2E tests validate full API flow. No API contract tests or schema validation tests for agent consumption patterns.",
+      "gap": "No contract-level test coverage for agent-like consumption patterns.",
+      "recommendation": "Add API schema validation tests validating response structure and error formats.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/books/create/tests/index.spec.ts", "lines": "1-105"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days",
+        "compensating_controls": ["Existing unit and E2E tests catch major regressions", "Pre-traffic hooks validate deployment correctness"]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Dedicated Sandbox for Agent Testing",
+      "description": "CI/CD pipeline deploys to staging environment. No dedicated sandbox for agent testing with production-equivalent data.",
+      "gap": "No dedicated agent testing sandbox environment.",
+      "recommendation": "Create dedicated sandbox stack with seeded test data for agent development.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "pipeline/lib/pipeline-stack.ts", "lines": "87-108"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days",
+        "compensating_controls": ["SAM local enables local testing", "Staging can be repurposed for agent testing between deployments"]
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "category_id": "API", "title": "Documented API Interface", "status": "pass", "reason": "REST API documented in SAM template with clear endpoints (GET /books, POST /books)"},
+    {"question_id": "API-Q4", "category_id": "API", "title": "Idempotent Write Operations", "status": "pass", "reason": "Evaluated as INFO under read-only scope — not emitted as finding since DynamoDB putItem provides natural idempotency on primary key"},
+    {"question_id": "API-Q5", "category_id": "API", "title": "Structured Response Format", "status": "pass", "reason": "JSON responses with Content-Type header — INFO finding recorded in MD but no remediation needed"},
+    {"question_id": "API-Q6", "category_id": "API", "title": "Asynchronous Operation Support", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no operations >30s, Lambda timeout is 5 seconds"},
+    {"question_id": "API-Q7", "category_id": "API", "title": "Event Emission for State Changes", "status": "pass", "reason": "INFO — no event emission but this is informational only"},
+    {"question_id": "API-Q8", "category_id": "API", "title": "Rate Limit Documentation and Headers", "status": "pass", "reason": "INFO — no rate limit headers but this is informational only"},
+    {"question_id": "AUTH-Q2", "category_id": "AUTH", "title": "Scoped Permissions (Least Privilege)", "status": "pass", "reason": "Authorization model supports scoped permissions via Cognito scopes and endpoint-level auth differentiation"},
+    {"question_id": "AUTH-Q3", "category_id": "AUTH", "title": "Action-Level Authorization", "status": "pass", "reason": "POST requires Cognito auth with scopes; GET is open — demonstrates action-level differentiation"},
+    {"question_id": "AUTH-Q5", "category_id": "AUTH", "title": "Credential Management", "status": "pass", "reason": "No application-managed secrets; IAM execution roles handle all AWS access"},
+    {"question_id": "STATE-Q2", "category_id": "STATE", "title": "Queryable Current State", "status": "pass", "reason": "GET /books returns current state from DynamoDB"},
+    {"question_id": "STATE-Q3", "category_id": "STATE", "title": "Concurrency Controls", "status": "pass", "reason": "Evaluated as INFO under read-only scope — informational only"},
+    {"question_id": "STATE-Q4", "category_id": "STATE", "title": "Circuit Breakers and Resilience", "status": "not_evaluated_extended", "reason": "Extended question not triggered — service only calls DynamoDB (managed service), no external service dependencies"},
+    {"question_id": "STATE-Q6", "category_id": "STATE", "title": "Blast Radius and Transaction Limits", "status": "pass", "reason": "Evaluated as INFO under read-only scope — informational only"},
+    {"question_id": "STATE-Q7", "category_id": "STATE", "title": "Graceful Degradation Signaling", "status": "not_evaluated_extended", "reason": "Extended question not triggered — service is P1 priority, not P0 or on critical path"},
+    {"question_id": "HITL-Q1", "category_id": "HITL", "title": "Draft/Pending State", "status": "pass", "reason": "Evaluated as INFO under read-only scope — informational only"},
+    {"question_id": "HITL-Q2", "category_id": "HITL", "title": "Configurable Approval Gates", "status": "pass", "reason": "Evaluated as INFO under read-only scope — informational only"},
+    {"question_id": "DATA-Q1", "category_id": "DATA", "title": "Sensitive Data Classification", "status": "pass", "reason": "Stage A = No: book catalog data is not sensitive (isbn, title, year, author, publisher, rating, pages)"},
+    {"question_id": "DATA-Q2", "category_id": "DATA", "title": "Data Residency and Sovereignty", "status": "pass", "reason": "Book catalog data has no residency requirements — public product information"},
+    {"question_id": "DATA-Q6", "category_id": "DATA", "title": "PII Redaction in Logs", "status": "pass", "reason": "No PII in data pipeline — book catalog data only"},
+    {"question_id": "DATA-Q7", "category_id": "DATA", "title": "Data Quality Awareness", "status": "pass", "reason": "INFO — no data quality metrics but informational only"},
+    {"question_id": "DISC-Q2", "category_id": "DISC", "title": "Semantically Meaningful Field Names", "status": "pass", "reason": "INFO — all field names are clear and human-readable"},
+    {"question_id": "DISC-Q3", "category_id": "DISC", "title": "Data Catalog / Metadata Layer", "status": "pass", "reason": "INFO — no data catalog but informational only"},
+    {"question_id": "OBS-Q3", "category_id": "OBS", "title": "Business Outcome Metrics", "status": "pass", "reason": "INFO — no custom business metrics but informational only"},
+    {"question_id": "ENG-Q1", "category_id": "ENG", "title": "Infrastructure Governance", "status": "pass", "reason": "All infrastructure defined as IaC (SAM + CDK) with CI/CD pipeline and approval gates"},
+    {"question_id": "ENG-Q3", "category_id": "ENG", "title": "Rollback Capability", "status": "pass", "reason": "CodeDeploy with canary deployment and CloudWatch alarm-triggered automatic rollback"},
+    {"question_id": "ENG-Q5", "category_id": "ENG", "title": "Encryption at Rest", "status": "pass", "reason": "DynamoDB SSE enabled, S3 buckets use S3-managed encryption"}
+  ],
+  "remediation_roadmap": {
+    "phases": [1, 2, 3],
+    "items": [
+      {
+        "phase": 1,
+        "phase_name": "Blockers & Safety",
+        "findings": ["AUTH-Q1", "AUTH-Q4", "AUTH-Q6", "AUTH-Q7", "STATE-Q1", "STATE-Q5"],
+        "summary": "Resolve the machine identity blocker and address safety risks: implement machine auth, audit logging, rate limiting, and identity suspension capability."
+      },
+      {
+        "phase": 2,
+        "phase_name": "Quality & Integration",
+        "findings": ["API-Q2", "API-Q3", "OBS-Q1", "OBS-Q2", "DATA-Q3", "DATA-Q4", "DATA-Q5", "DISC-Q1", "ENG-Q2", "HITL-Q3"],
+        "summary": "Improve agent integration quality: add OpenAPI spec, structured errors, pagination, input validation, structured logging, and contract testing."
+      },
+      {
+        "phase": 3,
+        "phase_name": "Maturity",
+        "findings": ["ENG-Q4"],
+        "summary": "Enhance test coverage with API contract validation tests for agent consumption patterns."
+      }
+    ]
+  },
+  "recommended_actions": [
+    {
+      "action": "Implement machine identity authentication (OAuth2 client_credentials or API keys)",
+      "question_ids": ["AUTH-Q1", "AUTH-Q7", "STATE-Q5"],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Foundational blocker — all other identity and rate-limiting controls depend on having a machine identity mechanism."
+    },
+    {
+      "action": "Add immutable audit logging with CloudTrail",
+      "question_ids": ["AUTH-Q6"],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "Audit trail is required for forensics and compliance when agents interact with the system."
+    },
+    {
+      "action": "Configure API Gateway usage plans and rate limiting",
+      "question_ids": ["STATE-Q5", "API-Q8"],
+      "priority": "P1",
+      "effort": "Low",
+      "rationale": "Prevents runaway agent loops from overwhelming the service at machine speed."
+    },
+    {
+      "action": "Generate OpenAPI specification and add to CI validation",
+      "question_ids": ["API-Q2", "DISC-Q1", "ENG-Q2"],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Enables automated agent tool generation and breaking change detection."
+    },
+    {
+      "action": "Add structured error responses and input validation",
+      "question_ids": ["API-Q3", "DATA-Q4"],
+      "priority": "P2",
+      "effort": "Low",
+      "rationale": "Enables agents to self-correct on malformed requests and distinguish error types."
+    },
+    {
+      "action": "Implement pagination on GET /books",
+      "question_ids": ["DATA-Q3"],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Prevents unbounded result sets from exhausting agent context windows."
+    }
+  ]
+}

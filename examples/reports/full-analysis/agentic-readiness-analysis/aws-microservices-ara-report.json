@@ -1,0 +1,890 @@
+{
+  "analysis_type": "ara",
+  "analysis_date": "2026-05-18",
+  "td_version": "agentic-readiness-analysis",
+  "repo_name": "aws-microservices",
+  "metadata": {
+    "target": "services/aws-microservices",
+    "analysis_date": "2026-05-18",
+    "analyzed_by": "AWS Transform Custom — Agentic Readiness Analysis",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The system owns persistent state in DynamoDB (product, basket, order tables) and exposes CRUD operations via API Gateway. Primary interaction model is synchronous CRUD with user-specific data.",
+    "agent_scope": "read-only",
+    "priority": "P0",
+    "tags": ["microservices", "serverless", "event-driven"],
+    "context": "Event-driven serverless microservices (product, basket, ordering) with Lambda, DynamoDB, EventBridge, SQS. The agent will invoke these as tools for order status lookups and return processing.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": false,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    },
+    "tech_stack": {
+      "language": "TypeScript/JavaScript",
+      "loc": 850,
+      "framework": "AWS CDK v2 + AWS Lambda",
+      "architecture": "Event-driven serverless microservices"
+    },
+    "portfolio_name": "aws-microservices"
+  },
+  "classification": {
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "blocker_count": 1,
+    "risk_safety_count": 9,
+    "risk_quality_count": 13,
+    "info_count": 12,
+    "high_count": 1,
+    "medium_count": 22,
+    "low_count": 12,
+    "rule_matched": "1-2 BLOCKER → Remediation Required"
+  },
+  "counts": {
+    "total": 35,
+    "high": 1,
+    "medium": 22,
+    "low": 12,
+    "blocker": 1,
+    "risk_safety": 9,
+    "risk_quality": 13,
+    "info": 12,
+    "na": 0,
+    "not_evaluated": 1,
+    "pass": 4
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Machine Identity Authentication",
+      "description": "API Gateway endpoints have no authorization configured. All three REST APIs (Product, Basket, Order) are publicly accessible without authentication. No OAuth2, API keys, mTLS, Cognito authorizers, or IAM authorization.",
+      "gap": "No machine identity mechanism exists. Cannot attribute API calls to any principal or distinguish callers.",
+      "recommendation": "Implement API Gateway authorization (IAM SigV4, Cognito, or API keys with usage plans) on all methods in lib/apigateway.ts.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/apigateway.ts", "lines": "1-96"},
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Add authorizationType: AuthorizationType.IAM to all API Gateway methods",
+          "target_state": "Every API call requires machine-identifiable credential logged in CloudTrail",
+          "estimated_effort": "Medium",
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Scoped Permissions for Agent Identity",
+      "description": "All Lambda functions receive grantReadWriteData to their DynamoDB tables. No mechanism exists to create a scoped agent identity with read-only access.",
+      "gap": "Cannot create a read-only agent identity. All callers get the same broad access level.",
+      "recommendation": "Implement per-method IAM authorization that differentiates read vs write access.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/microservice.ts", "lines": "42-88"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["API Gateway routes limit HTTP methods per endpoint", "Implement request-level authorization in Lambda handlers"]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Action-Level Authorization",
+      "description": "No action-level authorization exists. No auth middleware, no per-method authorization, no RBAC or ABAC. Any caller can invoke any HTTP method on any endpoint.",
+      "gap": "Cannot enforce read-only access for agents within a resource type.",
+      "recommendation": "Implement IAM authorization with per-method policy conditions on execute-api:method.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/apigateway.ts", "lines": "30-96"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Ordering API only exposes GET methods", "IAM policies can scope to specific methods"]
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Identity Propagation or Delegation",
+      "description": "No identity propagation mechanism exists. No JWT parsing, token exchange, on-behalf-of flows, or user context headers. Cannot distinguish agent-as-self from agent-on-behalf-of-user.",
+      "gap": "Cannot determine whose data an agent accesses. Ordering service returns data by userName without verifying caller authority.",
+      "recommendation": "Design on-behalf-of flow with AUTH-Q1 implementation. Propagate caller identity via API Gateway context.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "src/ordering/index.js", "lines": "87-105"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": ["Limit agent tool to specific userNames", "Implement API Gateway request context propagation"]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Agent Identity Suspension Capability",
+      "description": "No authentication mechanism exists, therefore no mechanism to suspend or revoke individual agent identities. Cannot isolate a misbehaving agent without shutting down the entire API.",
+      "gap": "No per-agent revocation capability.",
+      "recommendation": "Implement API key authentication with usage plans providing per-key revocation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/apigateway.ts", "lines": "1-96"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["WAF rules can block specific IPs", "API keys enable per-key revocation when implemented"]
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Circuit Breakers or Resilience Patterns",
+      "description": "Basket service calls EventBridge and DynamoDB without circuit breakers, explicit retry, or timeout config. SQS queue has no DLQ. No resilience patterns exist.",
+      "gap": "Cascading failures propagate uncontrolled. Failed SQS messages retry indefinitely without DLQ.",
+      "recommendation": "Add DLQ to SQS queue. Configure Lambda timeouts. Consider AWS Lambda Powertools.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/queue.ts", "lines": "14-24"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["AWS SDK v3 default retry logic", "SQS visibility timeout provides implicit retry", "Lambda default timeout"]
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Rate Limiting or Throttling",
+      "description": "No rate limiting configured on API Gateway. No usage plans, WAF, or per-client throttling. Only AWS account-level limits provide protection.",
+      "gap": "Runaway agent loops can overwhelm services at machine speed.",
+      "recommendation": "Add deployOptions with throttle settings. Create usage plans with per-key rate limits.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/apigateway.ts", "lines": "30-50"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["API Gateway account-level throttle defaults", "Lambda concurrency limits provide backpressure"]
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Sensitive Data Exposed in Agent-Facing API Responses",
+      "description": "Order table stores PII (firstName, lastName, email, address, paymentMethod, cardInfo). GET /order endpoints return all fields including PII without filtering.",
+      "gap": "Agent-facing APIs return sensitive PII fields without field-level filtering.",
+      "recommendation": "Implement field projection in ordering Lambda to exclude PII from GET responses intended for agent consumption.",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "src/ordering/index.js", "lines": "87-115"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, B1 fires because agent-facing APIs return PII unfiltered",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q1 B1 fired because GET /order endpoints return full DynamoDB records including cardInfo, address, email without field filtering. Under read-only scope, B1 resolves to RISK-SAFETY.",
+        "data_q1_subchecks": {
+          "b1": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "Agent-facing GET /order returns all PII fields unfiltered. Under read-only scope, RISK-SAFETY."},
+          "b2": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "No access control differentiation — all callers see all fields."},
+          "b3": {"fired": true, "severity": "INFO", "reasoning": "No formal classification metadata exists."}
+        },
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["Restrict agent tool bindings to expose only non-PII fields", "API Gateway response mapping templates can filter fields"]
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Data Residency Controls for PII",
+      "description": "Order table stores customer PII in DynamoDB without explicit region pinning, data residency documentation, or cross-region replication restrictions.",
+      "gap": "No documented data residency controls. Agent could transmit PII to LLM provider in different jurisdiction.",
+      "recommendation": "Document data residency requirements. Pin CDK stack to specific region. Filter PII from agent access.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/database.ts", "lines": "56-73"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, PII stored without residency controls",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "DATA-Q2 resolved to RISK-SAFETY because the system stores customer PII (order details) without data residency controls, but agent_scope is read-only so risk is lower than BLOCKER.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Configure Bedrock agents in same AWS region as DynamoDB tables", "Implement response filtering to prevent PII from reaching agent context"]
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "PII Logged to CloudWatch Without Redaction",
+      "description": "All Lambda handlers log full event payloads including PII (names, email, addresses, payment card info) to CloudWatch Logs without any redaction or masking.",
+      "gap": "Customer PII written to logs without redaction. Compliance violation risk.",
+      "recommendation": "Remove full event logging. Implement structured logging excluding PII. Apply CloudWatch Logs data protection policies.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "src/basket/index.js", "lines": "7"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["CloudWatch Logs data protection policies can mask PII", "Reduce log verbosity for production"]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Machine-Readable API Specification",
+      "description": "No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy specification files exist. API structure defined only in CDK constructs and Lambda code.",
+      "gap": "No machine-readable spec for auto-generating agent tool definitions.",
+      "recommendation": "Create OpenAPI specification documenting all endpoints, request/response schemas, and error codes.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["Export OpenAPI from deployed API Gateway", "Manually define tool schemas"]
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Unstructured Error Responses",
+      "description": "Errors return HTTP 500 with { message, errorMsg, errorStack }. No error codes, no retryable indicators. All errors conflated as 500. Stack traces exposed.",
+      "gap": "Agents cannot distinguish retriable from terminal errors. Stack trace exposure is a security concern.",
+      "recommendation": "Add error codes and retryable boolean. Differentiate 400/500. Remove stack traces.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/product/index.js", "lines": "42-49"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["Agent tools treat 500 as retriable with backoff", "Wrap tool calls with retry logic"]
+      }
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Graceful Degradation Signaling",
+      "description": "No degradation signaling. No health endpoints, no X-Degraded headers, no Cache-Control headers. Generic 500 on all failures.",
+      "gap": "Agents cannot detect when receiving degraded vs authoritative responses.",
+      "recommendation": "Add health endpoint with granular status. Include degradation headers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["API Gateway custom headers in integration responses", "Agent tools interpret 500 as potential degradation"]
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Pagination or Selective Query Support",
+      "description": "GET /product and GET /order perform full DynamoDB table scans without pagination, filtering, or result size limits.",
+      "gap": "Agents get unbounded result sets that can exhaust LLM context windows.",
+      "recommendation": "Add Limit and ExclusiveStartKey parameters for cursor-based pagination.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/product/index.js", "lines": "72-84"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["Agent tools limit response processing client-side", "DynamoDB scans limited by table size"]
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Input Validation or Schema Enforcement",
+      "description": "No input validation in any Lambda handler. POST/PUT endpoints parse JSON and write directly to DynamoDB without field validation or type checking.",
+      "gap": "Malformed agent payloads persisted without rejection. No structured validation errors.",
+      "recommendation": "Add API Gateway request validators with JSON schemas for POST/PUT endpoints.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/product/index.js", "lines": "86-101"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["API Gateway request validators configurable without code changes", "Agent tool schemas enforce constraints at orchestration layer"]
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Incomplete Temporal Metadata",
+      "description": "Orders have orderDate. Products and baskets lack created_at/updated_at fields. No Cache-Control or freshness headers.",
+      "gap": "Cannot determine data freshness for products or baskets.",
+      "recommendation": "Add createdAt and updatedAt fields. Include Last-Modified headers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/ordering/index.js", "lines": "48"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Order data has orderDate", "DynamoDB GetItem is strongly consistent"]
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Schema Versioning or API Contracts",
+      "description": "No API versioning, no schema documentation, no breaking change detection in CI, no consumer-driven contract tests.",
+      "gap": "API changes break agent tool bindings silently.",
+      "recommendation": "Add /v1/ prefix to routes. Implement OpenAPI spec validation in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/apigateway.ts", "lines": "30-96"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["CDK code in git provides change history", "Manual diff review before deploy"]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Distributed Tracing or Structured Logging",
+      "description": "No X-Ray or OpenTelemetry tracing. Unstructured console.log without correlation IDs or trace propagation.",
+      "gap": "Cannot trace agent-initiated requests end-to-end.",
+      "recommendation": "Enable X-Ray active tracing. Add structured JSON logging with correlation IDs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/microservice.ts", "lines": "36-88"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["Lambda auto-includes requestId", "CloudWatch Logs Insights for correlation"]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Alerting on Error Rates or Latency",
+      "description": "No CloudWatch alarms, anomaly detection, or alerting configuration exists.",
+      "gap": "System degradation affecting agent consumers goes undetected.",
+      "recommendation": "Add CloudWatch alarms for Lambda error rate, API Gateway 5xx rate, and P99 latency.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "7–14 days",
+        "compensating_controls": ["Lambda/API Gateway auto-publish metrics", "Alarms can be added without code changes"]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "IaC Present but No Governance Controls",
+      "description": "CDK IaC exists but no CI/CD enforces peer review and no drift detection is configured.",
+      "gap": "Changes unreviewed; drift undetected.",
+      "recommendation": "Add CI pipeline with cdk diff on PRs. Enable branch protection. Add Config drift detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/aws-microservices-stack.ts", "lines": "1-35"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["CDK code in git enables PR review", "cdk diff can be run manually"]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No CI/CD or Contract Testing",
+      "description": "No CI/CD pipeline. Only test file is entirely commented out. No automated testing on changes.",
+      "gap": "API-breaking changes cannot be caught before production.",
+      "recommendation": "Create CI pipeline: cdk synth + API integration tests + OpenAPI validation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "test/aws-microservices.test.ts", "lines": "1-16"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Manual testing", "CDK synth validates structure"]
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Controlled Rollback Capability",
+      "description": "No blue/green, canary, CodeDeploy, or feature flags. Only CloudFormation default rollback on failed deployments.",
+      "gap": "Cannot quickly roll back behaviorally broken deployments.",
+      "recommendation": "Implement Lambda aliases + CodeDeploy with automatic rollback on alarm triggers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/microservice.ts", "lines": "36-88"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["CloudFormation maintains stack history", "Redeploy previous git commit manually"]
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Zero Effective Test Coverage",
+      "description": "Single test file is entirely commented out. No API tests, integration tests, or contract tests.",
+      "gap": "No automated verification of API behavior.",
+      "recommendation": "Write integration tests for all API endpoints.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "test/aws-microservices.test.ts", "lines": "1-16"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Manual testing", "CDK synth validates IaC"]
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Customer-Managed Encryption for PII Data",
+      "description": "DynamoDB default encryption (AWS-owned keys). No customer-managed KMS keys for order table containing PII.",
+      "gap": "Data encrypted with AWS-owned keys rather than CMK for PII.",
+      "recommendation": "Add TableEncryption.CUSTOMER_MANAGED with KMS key to order table.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/database.ts", "lines": "56-73"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "7–14 days",
+        "compensating_controls": ["AWS-owned encryption provides baseline protection", "DynamoDB default meets most compliance requirements"]
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Write Operations Lack Idempotency Keys",
+      "description": "POST endpoints lack idempotency keys. Product creation uses server-generated UUID. Checkout has no duplicate protection.",
+      "gap": "Non-idempotent writes risk duplication on retry.",
+      "recommendation": "Add idempotency key support before enabling write-enabled agent scope.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/product/index.js", "lines": "86-101"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, write operations not invoked by agent",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "API-Q4 resolved to INFO because agent_scope is read-only — agents will not execute write operations, so idempotency is informational."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Structured JSON Response Format",
+      "description": "All responses are structured JSON with consistent envelope { message, body }. Well-suited for LLM consumption.",
+      "gap": "None — format is appropriate.",
+      "recommendation": "Document response schemas in OpenAPI spec.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/product/index.js", "lines": "35-40"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q7",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Partial Event Coverage for State Changes",
+      "description": "Basket checkout emits EventBridge events. Product CRUD and order creation do not emit events.",
+      "gap": "Only checkout observable via events. Product/order changes invisible to reactive agents.",
+      "recommendation": "Add events for product/order state changes if event-reactive agents planned.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/basket/index.js", "lines": "130-152"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "No Rate Limit Documentation or Headers",
+      "description": "No rate limit documentation. No rate limit response headers. API Gateway defaults apply silently.",
+      "gap": "Agents cannot self-throttle based on quota signals.",
+      "recommendation": "Configure usage plans and return X-RateLimit-Remaining headers.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/apigateway.ts", "lines": "30-50"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Immutable Audit Logging",
+      "description": "No CloudTrail, no immutable audit storage, no principal attribution in logs.",
+      "gap": "No audit trail for API calls.",
+      "recommendation": "Enable CloudTrail with log validation when auth is implemented.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only AND has_auth_surface=false",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "AUTH-Q6 resolved to INFO because agent_scope is read-only AND the system has no auth surface — audit logging is moot without authentication."
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Multi-Step Operations Without Compensation",
+      "description": "Checkout flow has sequential steps (get basket → publish event → delete basket) without compensation logic for partial failures.",
+      "gap": "Partial failures leave inconsistent state.",
+      "recommendation": "Implement compensation logic before expanding to write-enabled agents.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "src/basket/index.js", "lines": "104-122"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, agents will not execute write workflows",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "STATE-Q1 resolved to INFO because agent_scope is read-only — agents will not execute the checkout flow or other multi-step write workflows."
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Concurrency Controls",
+      "description": "No optimistic locking, version fields, or conditional writes in DynamoDB operations.",
+      "gap": "No concurrency protection for writes.",
+      "recommendation": "Add conditional writes before enabling write-enabled agents.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/product/index.js", "lines": "86-135"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Transaction or Blast Radius Limits",
+      "description": "No per-caller operation caps. Scan operations return unbounded results. No bulk operation limits.",
+      "gap": "No business-domain caps on operation scope.",
+      "recommendation": "Add pagination limits and per-caller caps.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/product/index.js", "lines": "72-84"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Draft/Pending State Mechanism",
+      "description": "All writes immediately committed. No reviewable intermediate state.",
+      "gap": "No mechanism for human review of agent-proposed changes.",
+      "recommendation": "Add status fields for future write-enabled agents.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/product/index.js", "lines": "86-101"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Configurable Approval Gates",
+      "description": "No approval workflow or human-in-the-loop gates.",
+      "gap": "No mechanism for human oversight of agent operations.",
+      "recommendation": "Consider Step Functions human approval tasks.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Sandbox/Staging Environment",
+      "description": "No staging environment. Single CDK stack. No local testing setup.",
+      "gap": "Agent testing only possible in production.",
+      "recommendation": "Create separate staging stack with synthetic data.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "lib/aws-microservices-stack.ts", "lines": "1-35"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Data Quality Awareness",
+      "description": "No data quality monitoring, completeness metrics, or data lifecycle management.",
+      "gap": "Agent may reason on stale data without awareness.",
+      "recommendation": "Implement DynamoDB TTL on basket table.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/database.ts", "lines": "37-52"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Data Catalog or Metadata Layer",
+      "description": "No data catalog. DynamoDB schemas documented only in CDK code comments.",
+      "gap": "Agent tool builders must read source for data semantics.",
+      "recommendation": "Create schema reference documentation.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/database.ts", "lines": "1-73"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Business Outcome Metrics",
+      "description": "No custom business metrics published. No PutMetricData calls.",
+      "gap": "Cannot measure agent interaction quality.",
+      "recommendation": "Publish order completion and checkout success metrics.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "category_id": "API", "title": "Documented API Interface", "status": "pass", "reason": "Application exposes REST APIs via API Gateway. Integration through HTTP endpoints, not DB access or UI automation."},
+    {"question_id": "API-Q6", "category_id": "API", "title": "Asynchronous Operation Support", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no operations >30s identified in this stateful-crud service."},
+    {"question_id": "AUTH-Q5", "category_id": "AUTH", "title": "Credential Management", "status": "pass", "reason": "System uses IAM roles for all AWS service access. No credentials hardcoded or embedded. Best practice approach for Lambda."},
+    {"question_id": "STATE-Q2", "category_id": "STATE", "title": "Queryable Current State", "status": "pass", "reason": "GET endpoints exist for all resource types enabling agents to inspect current state."},
+    {"question_id": "DISC-Q2", "category_id": "DISC", "title": "Semantically Meaningful Field Names", "status": "pass", "reason": "All field names are human-readable and semantically meaningful (userName, orderDate, totalPrice, etc.). No legacy abbreviations."}
+  ],
+  "remediation_roadmap": {
+    "phases": [1, 2, 3],
+    "items": [
+      {
+        "phase": 1,
+        "phase_name": "Blockers & Safety",
+        "findings": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q7", "STATE-Q4", "STATE-Q5", "DATA-Q1", "DATA-Q2", "DATA-Q6"],
+        "summary": "Resolve the authentication blocker and address safety risks: implement machine identity, scoped permissions, rate limiting, PII filtering, and log redaction."
+      },
+      {
+        "phase": 2,
+        "phase_name": "Quality & Observability",
+        "findings": ["API-Q2", "API-Q3", "AUTH-Q4", "STATE-Q7", "DATA-Q3", "DATA-Q4", "DATA-Q5", "DISC-Q1", "OBS-Q1", "OBS-Q2", "ENG-Q1", "ENG-Q2", "ENG-Q3", "ENG-Q5"],
+        "summary": "Improve agent effectiveness: add API specification, structured errors, tracing, alerting, pagination, input validation, and CI/CD pipeline."
+      },
+      {
+        "phase": 3,
+        "phase_name": "Architecture & Future-Proofing",
+        "findings": ["API-Q4", "API-Q5", "API-Q7", "API-Q8", "AUTH-Q6", "STATE-Q1", "STATE-Q3", "STATE-Q6", "HITL-Q1", "HITL-Q2", "HITL-Q3", "DATA-Q7", "DISC-Q3", "OBS-Q3", "ENG-Q4"],
+        "summary": "Prepare for expanded agent scope: add idempotency, compensation, concurrency controls, approval gates, staging environment, and business metrics."
+      }
+    ]
+  },
+  "recommended_actions": [
+    {
+      "action": "Implement API Gateway Authentication",
+      "question_ids": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q7"],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Foundational blocker. All other identity controls depend on authentication being in place. Add IAM or API key authorization to all endpoints."
+    },
+    {
+      "action": "Add PII Filtering to Agent-Facing Endpoints",
+      "question_ids": ["DATA-Q1", "DATA-Q2", "DATA-Q6"],
+      "priority": "P0",
+      "effort": "Low",
+      "rationale": "Order endpoints return sensitive data (cardInfo, addresses) that should never reach agent context. Add field projection in ordering Lambda."
+    },
+    {
+      "action": "Configure Rate Limiting and Resilience",
+      "question_ids": ["STATE-Q4", "STATE-Q5"],
+      "priority": "P1",
+      "effort": "Low",
+      "rationale": "Protect services from agent traffic storms. Add API Gateway throttle settings, usage plans, SQS DLQ, and Lambda timeouts."
+    },
+    {
+      "action": "Create OpenAPI Specification",
+      "question_ids": ["API-Q2", "DISC-Q1"],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Machine-readable API spec enables automated tool generation and contract testing."
+    },
+    {
+      "action": "Enable Observability Stack",
+      "question_ids": ["OBS-Q1", "OBS-Q2"],
+      "priority": "P2",
+      "effort": "Low",
+      "rationale": "X-Ray tracing and CloudWatch alarms are essential for debugging agent-initiated requests."
+    },
+    {
+      "action": "Implement CI/CD Pipeline",
+      "question_ids": ["ENG-Q1", "ENG-Q2", "ENG-Q3", "ENG-Q4"],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Automated testing and deployment controls prevent breaking changes from reaching agent consumers."
+    }
+  ]
+}

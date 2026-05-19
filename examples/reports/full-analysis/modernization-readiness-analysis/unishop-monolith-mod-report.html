@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MonoToMicroLegacy - Modernization Readiness Analysis Report</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0e1a;color:#e0e0e0;line-height:1.6;padding:2rem}
+.container{max-width:1200px;margin:0 auto}
+h1{font-size:1.8rem;color:#fff;margin-bottom:.5rem}
+h2{font-size:1.4rem;color:#fff;margin:2rem 0 1rem;border-bottom:1px solid #2a2f45;padding-bottom:.5rem}
+h3{font-size:1.1rem;color:#fff;margin:1.5rem 0 .75rem}
+.subtitle{color:#8899aa;font-size:.9rem;margin-bottom:2rem}
+.card-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+.card{background:#141928;border:1px solid #2a2f45;border-radius:8px;padding:1.25rem;text-align:center}
+.card-value{font-size:2rem;font-weight:700;margin:.5rem 0}
+.card-label{font-size:.8rem;color:#8899aa;text-transform:uppercase}
+.high .card-value{color:#ff4757}
+.medium .card-value{color:#ffa502}
+.low .card-value{color:#2ed573}
+.total .card-value{color:#70a1ff}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:700;text-transform:uppercase}
+.badge-high{background:#ff475733;color:#ff4757;border:1px solid #ff4757}
+.badge-medium{background:#ffa50233;color:#ffa502;border:1px solid #ffa502}
+.badge-low{background:#2ed57333;color:#2ed573;border:1px solid #2ed573}
+table{width:100%;border-collapse:collapse;margin:1rem 0}
+th,td{padding:.75rem 1rem;text-align:left;border-bottom:1px solid #2a2f45}
+th{background:#141928;color:#8899aa;font-size:.8rem;text-transform:uppercase}
+td{font-size:.9rem}
+.status-critical{color:#ff4757}
+.status-needs-work{color:#ffa502}
+.status-ready{color:#2ed573}
+.finding-card{background:#141928;border:1px solid #2a2f45;border-radius:8px;padding:1.5rem;margin:1rem 0}
+.finding-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.finding-title{font-weight:600;color:#fff}
+.finding-category{color:#8899aa;font-size:.8rem;margin-bottom:.75rem}
+.finding-section{margin:.75rem 0}
+.finding-section-title{font-size:.75rem;color:#8899aa;text-transform:uppercase;margin-bottom:.25rem}
+.exec-summary{background:#141928;border:1px solid #2a2f45;border-radius:8px;padding:1.5rem;margin:1.5rem 0}
+.tier-badge{font-size:1.1rem;font-weight:700;padding:.5rem 1rem;border-radius:6px;display:inline-block;margin:.5rem 0}
+.tier-remediation{background:#ffa50222;color:#ffa502;border:1px solid #ffa502}
+.tech-table{margin:1rem 0}
+.pathway-triggered{color:#2ed573}
+.pathway-not-triggered{color:#8899aa}
+.footer{text-align:center;color:#556677;font-size:.8rem;margin-top:3rem;padding-top:1rem;border-top:1px solid #2a2f45}
+.tabs{display:flex;gap:0;margin-bottom:2rem;border-bottom:2px solid #2a2f45}
+.tab{padding:.75rem 1.5rem;cursor:pointer;color:#8899aa;border-bottom:2px solid transparent;margin-bottom:-2px;font-size:.9rem}
+.tab.active{color:#70a1ff;border-bottom-color:#70a1ff}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.warning-block{background:#ffa50215;border:1px solid #ffa502;border-radius:6px;padding:1rem;margin:1rem 0;font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>MonoToMicroLegacy - Modernization Readiness Analysis Report</h1>
+<p class="subtitle">2026-05-18 &middot; Java 8 &middot; ~2,500 LOC &middot; Priority: P0</p>
+
+<div class="exec-summary">
+<h3>Executive Summary</h3>
+<p><strong>Repository Status:</strong></p>
+<span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span>
+<p style="margin-top:1rem"><strong>Significant Modernization Required</strong> &mdash; This legacy Java Spring Boot monolith scores 1.40/4.0 overall, with critical gaps across all five evaluation dimensions. 11 High-severity findings require immediate attention before the system can serve as a reliable API surface for discrete service consumers.</p>
+
+<p style="margin-top:1rem"><strong>Key Findings:</strong></p>
+<ul style="margin:.5rem 0 .5rem 1.5rem;color:#ccc">
+<li>Zero Infrastructure as Code &mdash; all infrastructure manually provisioned</li>
+<li>No CI/CD pipeline &mdash; all deployments manual</li>
+<li>Plaintext database credentials committed to source control</li>
+<li>Tightly-coupled monolith blocking independent service delivery</li>
+</ul>
+
+<p style="margin-top:1rem"><strong>Remediation Plan:</strong> 4 modernization pathways triggered: Move to Cloud Native, Move to Containers, Move to Managed Databases, Move to Modern DevOps.</p>
+
+<p style="margin-top:1rem"><strong>Recommended Actions:</strong></p>
+<ol style="margin:.5rem 0 0 1.5rem;color:#ccc">
+<li>Immediately move secrets to AWS Secrets Manager</li>
+<li>Define infrastructure in Terraform (VPC, EKS, Aurora MySQL)</li>
+<li>Implement CI/CD pipeline with security scanning</li>
+</ol>
+</div>
+
+<div class="tabs">
+<div class="tab active" onclick="showTab('stats')">Stats</div>
+<div class="tab" onclick="showTab('tech')">Tech Stack</div>
+<div class="tab" onclick="showTab('findings')">Findings</div>
+<div class="tab" onclick="showTab('roadmap')">Roadmap</div>
+<div class="tab" onclick="showTab('programs')">Programs</div>
+</div>
+
+<div id="stats" class="tab-content active">
+<div class="card-row">
+<div class="card total"><div class="card-label">Total Findings</div><div class="card-value">34</div></div>
+<div class="card high"><div class="card-label">High Severity</div><div class="card-value">11</div></div>
+<div class="card medium"><div class="card-label">Medium Severity</div><div class="card-value">22</div></div>
+<div class="card low"><div class="card-label">Low Severity</div><div class="card-value">1</div></div>
+</div>
+
+<h3>Category-by-Category Breakdown</h3>
+<table>
+<thead><tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>1.09 / 4.0</td><td>&#x274C; Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr><td>Application Architecture (APP)</td><td>1.50 / 4.0</td><td>&#x274C; Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.25 / 4.0</td><td>&#x1F7E0; Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Security Baseline (SEC)</td><td>1.17 / 4.0</td><td>&#x274C; Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.00 / 4.0</td><td>&#x274C; Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr style="font-weight:700"><td>Overall</td><td>1.40 / 4.0</td><td>&#x274C; Not Ready</td><td class="status-critical">Critical</td></tr>
+</tbody>
+</table>
+
+<div class="warning-block">
+<strong>&#x26A0;&#xFE0F; Classification Consistency Note:</strong> Score-based band (1.40 = Not Ready) diverges from count-based tier (11 High = Remediation Required). This occurs because 29/36 questions score 1 but only 11 are core (High-severity). The count-based tier is authoritative.
+</div>
+</div>
+
+<div id="tech" class="tab-content">
+<h3>Technology Stack</h3>
+<table class="tech-table">
+<thead><tr><th>Property</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Language</td><td>Java 8 (sourceCompatibility 1.8)</td></tr>
+<tr><td>Framework</td><td>Spring Boot 2.1.6.RELEASE (EOL)</td></tr>
+<tr><td>Build Tool</td><td>Gradle 7.4</td></tr>
+<tr><td>Database</td><td>MySQL 8.x (connector 8.0.11)</td></tr>
+<tr><td>ORM</td><td>MyBatis 3.2.2</td></tr>
+<tr><td>AWS SDK</td><td>v1.11.567 (deprecated)</td></tr>
+<tr><td>Security</td><td>Spring Security OAuth2 (disabled - permitAll)</td></tr>
+<tr><td>Archetype</td><td>stateful-crud (auto-detected)</td></tr>
+<tr><td>Priority</td><td>P0</td></tr>
+</tbody>
+</table>
+</div>
+
+<div id="findings" class="tab-content">
+<h3>Detailed Findings</h3>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q1: Managed Compute</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>All compute runs on raw EC2. Application produces executable JAR with embedded launch script deployed directly to EC2. No ECS/EKS, no Lambda, no Fargate.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Containerize and deploy on Amazon EKS with managed node groups. Create Dockerfile, push to ECR, deploy via Helm.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q2: Managed Databases</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>MySQL database likely self-managed on EC2. No IaC defines managed database service. No RDS/Aurora evidence.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Migrate to Amazon Aurora MySQL with automated failover, backups, and Multi-AZ. Use AWS DMS for minimal-downtime migration.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q5: Network Security</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No VPC, subnet, security group, or network segmentation configuration. Application exposes port 8080 directly.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Define VPC in Terraform: private subnets, least-privilege security groups, VPC endpoints for AWS service access.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q10: Infrastructure as Code</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>0% IaC coverage. No Terraform, CloudFormation, CDK, or any IaC. All infrastructure manually provisioned.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Define all infrastructure in Terraform: VPC, EKS, Aurora MySQL, API Gateway, ECR. Use modules for reusability.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">INF-Q11: CI/CD Automation</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No CI/CD pipeline. No GitHub Actions, Jenkins, CodePipeline, or automation. All deployments manual.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Implement pipeline: lint &rarr; build &rarr; test &rarr; container image &rarr; ECR &rarr; ArgoCD deploy. Add Terraform plan/apply stages.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">SEC-Q5: Secrets Management</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Plaintext database credentials in application.properties: spring.datasource.password: MonoToMicroPassword. Committed to source control.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Move to AWS Secrets Manager with automated rotation. Remove from application.properties and git history immediately.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">SEC-Q2: Encryption at Rest</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No encryption at rest configured. User PII (email, names) stored unencrypted in MySQL database.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Enable encryption at rest with KMS customer-managed key after Aurora migration. Define key rotation policy.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">DATA-Q1: Unstructured Data Storage</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Data Platform</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Product images referenced by name only. S3 SDK in dependencies but not used. No managed object storage configured.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Store product images in S3 with lifecycle policies. Implement document processing with Textract for future needs.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">DATA-Q3: Database Engine Version</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Data Platform</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No database engine version pinned in IaC. MySQL connector 8.0.11 (2018) suggests older server. No lifecycle management.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>After Aurora migration, pin engine version in Terraform. Enable minor auto-upgrade. Document major version upgrade procedure.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">OPS-Q5: Deployment Strategy</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>No deployment strategy. Direct manual JAR deployment to EC2. No blue/green, canary, or rolling updates.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Implement progressive delivery via ArgoCD Rollouts with canary strategy on EKS. Automated rollback on error rate increase.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">OPS-Q6: Integration Testing</span><span class="badge badge-high">HIGH</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Zero automated tests. No src/test/ directory despite spring-boot-starter-test being declared. No integration, unit, or contract tests.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Establish integration tests before decomposition. Use Spring Boot Test with Testcontainers. Add Pact contract tests for API consumers.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">APP-Q2: Monolith vs Microservices</span><span class="badge badge-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Single Spring Boot JAR with all domains (catalog, basket, users) sharing one database schema. Layered architecture but tight data coupling.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Apply Strangler Fig pattern. Containerize first, then extract basket/order service as first independent microservice.</p></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="finding-title">APP-Q1: Programming Languages</span><span class="badge badge-medium">MEDIUM</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><p>Java 8 (EOL) + Spring Boot 2.1.x (EOL) + AWS SDK v1 (deprecated). Compound legacy across all three axes.</p></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><p>Upgrade to Java 17+ with Spring Boot 3.x and AWS SDK v2. Prerequisite for modern containerization.</p></div>
+</div>
+
+</div>
+
+<div id="roadmap" class="tab-content">
+<h3>Modernization Roadmap</h3>
+<table>
+<thead><tr><th>Phase</th><th>Actions</th><th>Findings Addressed</th></tr></thead>
+<tbody>
+<tr><td><strong>Phase 1</strong><br>Foundation</td><td>Secrets to Secrets Manager; Define IaC (Terraform); CI/CD pipeline; Integration tests; Containerize monolith</td><td>SEC-Q5, INF-Q10, INF-Q11, OPS-Q6, INF-Q1, INF-Q2, INF-Q5, SEC-Q2, DATA-Q3, APP-Q2, OPS-Q5, SEC-Q3</td></tr>
+<tr><td><strong>Phase 2</strong><br>Modernize</td><td>Java 17 + Spring Boot 3 upgrade; EKS deployment; Aurora migration; API Gateway; Observability; Security scanning</td><td>APP-Q1, INF-Q3, INF-Q4, INF-Q6, INF-Q7, INF-Q8, INF-Q9, APP-Q5, APP-Q6, SEC-Q4, SEC-Q6, SEC-Q7, OPS-Q1, OPS-Q9, DATA-Q1</td></tr>
+<tr><td><strong>Phase 3</strong><br>Optimize</td><td>Service decomposition; SLOs; Business metrics; Incident automation; Observability ownership</td><td>APP-Q3, APP-Q4, DATA-Q2, OPS-Q2, OPS-Q3, OPS-Q4, OPS-Q7, OPS-Q8</td></tr>
+</tbody>
+</table>
+</div>
+
+<div id="programs" class="tab-content">
+<h3>AWS Modernization Pathways</h3>
+<table>
+<thead><tr><th>#</th><th>Pathway</th><th>Status</th><th>Priority</th><th>Effort</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Move to Cloud Native</td><td class="pathway-triggered">Triggered</td><td>High</td><td>High</td></tr>
+<tr><td>2</td><td>Move to Containers</td><td class="pathway-triggered">Triggered</td><td>Medium</td><td>Medium</td></tr>
+<tr><td>3</td><td>Move to Open Source</td><td class="pathway-not-triggered">Not Triggered</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>4</td><td>Move to Managed Databases</td><td class="pathway-triggered">Triggered</td><td>High</td><td>Medium</td></tr>
+<tr><td>5</td><td>Move to Managed Analytics</td><td class="pathway-not-triggered">Not Triggered</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>6</td><td>Move to Modern DevOps</td><td class="pathway-triggered">Triggered</td><td>High</td><td>Medium</td></tr>
+<tr><td>7</td><td>Move to AI</td><td class="pathway-not-triggered">Not Triggered</td><td>&mdash;</td><td>&mdash;</td></tr>
+</tbody>
+</table>
+
+<h3>Learning Materials</h3>
+<ul style="margin:1rem 0 0 1.5rem">
+<li><a href="https://skillbuilder.aws/learning-plan/CMK2J48MVN" style="color:#70a1ff">Move to Cloud Native Serverless</a></li>
+<li><a href="https://skillbuilder.aws/learning-plan/GNYBZ9X9EM" style="color:#70a1ff">Move to Containers with Amazon EKS</a></li>
+<li><a href="https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC" style="color:#70a1ff">Move to Managed Databases</a></li>
+<li><a href="https://skillbuilder.aws/learning-plan/1FGEQKGPQD" style="color:#70a1ff">Move to Modern DevOps</a></li>
+<li><a href="https://www.eksworkshop.com/" style="color:#70a1ff">EKS Workshop</a></li>
+<li><a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html" style="color:#70a1ff">Cloud Design Patterns</a></li>
+</ul>
+</div>
+
+<div style="margin-top:2rem;padding:1.5rem;background:#141928;border:1px solid #2a2f45;border-radius:8px">
+<h3>&#x1F7E0; Top Modernization Recommendations</h3>
+<ol style="margin:1rem 0 0 1.5rem;color:#ccc">
+<li><strong>Secrets Management (SEC-Q5):</strong> Move plaintext credentials to AWS Secrets Manager immediately &mdash; this is a deployment-blocking security vulnerability.</li>
+<li><strong>Infrastructure as Code (INF-Q10):</strong> Define all infrastructure in Terraform to enable reproducibility, disaster recovery, and environment consistency.</li>
+<li><strong>CI/CD Pipeline (INF-Q11):</strong> Implement automated build/test/deploy pipeline to eliminate manual deployment risk and enable continuous delivery.</li>
+</ol>
+</div>
+
+<div class="footer">Generated by AWS Transform &middot; Modernization Readiness Analysis Report</div>
+</div>
+
+<script>
+function showTab(id){document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');event.target.classList.add('active')}
+</script>
+</body>
+</html>

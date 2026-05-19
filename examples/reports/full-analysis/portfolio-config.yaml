@@ -1,0 +1,100 @@
+# ============================================================================
+# V2 Portfolio Analysis Configuration
+# ============================================================================
+# This config uses the v2 two-analysis architecture:
+#   - ARA (Agentic Readiness Analysis): 43 questions, BLOCKER/RISK/INFO
+#   - MOD (Modernization Readiness Analysis): 37 questions, 1-4 scale
+# ============================================================================
+
+portfolio_name: "ecommerce-platform-v2"
+analysis_type: "full"
+
+context: "Evaluating the e-commerce platform portfolio for both autonomous AI agent integration and cloud-native modernization. The team is building a customer support agent that handles order inquiries, processes returns, and manages inventory restocking — while simultaneously modernizing legacy monoliths into containerized microservices on EKS."
+
+agent_scope: "read-only"
+
+transformation_definitions:
+  agentic_readiness: "AWS/agentic-readiness-analysis"
+  modernization: "AWS/modernization-readiness-analysis"
+  portfolio_agentic_readiness: "AWS/portfolio-agentic-readiness-analysis"
+  portfolio_modernization: "AWS/portfolio-modernization-readiness-analysis"
+
+preferences:
+  prefer:
+    - "eks"
+    - "aurora"
+    - "dynamodb"
+    - "api-gateway"
+    - "eventbridge"
+    - "bedrock"
+    - "terraform"
+    - "gitops"
+  avoid:
+    - "self-managed-kafka"
+    - "self-managed-kubernetes"
+    - "oracle"
+    - "manual-deployments"
+
+repositories:
+  - name: "unishop-monolith"
+    path: "./services/unishop-monolith-to-microservices/MonoToMicroLegacy"
+    priority: "P0"
+    repository_url: "https://github.com/aws-samples/unishop-monolith-to-microservices.git"
+    context: "Legacy Java Spring Boot monolith on EC2 with MySQL — primary decomposition target. The agent needs access to order and return data through discrete service APIs."
+    tags:
+      - "monolith"
+      - "java"
+      - "ec2"
+      - "decomposition-target"
+    preferences:
+      prefer:
+        - "containers"
+        - "aurora-mysql"
+        - "microservices-decomposition"
+      avoid:
+        - "serverless"
+        - "lambda"
+
+  - name: "aws-microservices"
+    path: "./services/aws-microservices"
+    priority: "P0"
+    repository_url: "https://github.com/awsrun/aws-microservices.git"
+    context: "Event-driven serverless microservices (product, basket, ordering) with Lambda, DynamoDB, EventBridge, SQS. The agent will invoke these as tools for order status lookups and return processing."
+    tags:
+      - "microservices"
+      - "serverless"
+      - "event-driven"
+
+  - name: "local-monolith"
+    path: "./monolith"
+    priority: "P0"
+    context: "PHP monolith with Docker and CloudFormation on App Runner — containerize and expose inventory APIs the agent needs for restocking decisions."
+    tags:
+      - "monolith"
+      - "php"
+      - "containers"
+
+  - name: "books-api"
+    path: "./services/books-api"
+    priority: "P1"
+    repository_url: "https://github.com/aws-samples/aws-serverless-books-api-sample.git"
+    context: "Serverless REST API with CDK infrastructure for book catalog management. Clean API surface the agent can use as a tool for product lookups."
+    tags:
+      - "serverless"
+      - "cdk"
+      - "api"
+      - "dynamodb"
+
+  - name: "eks-saas-gitops"
+    path: "./services/eks-saas-gitops"
+    priority: "P1"
+    repository_url: "https://github.com/aws-solutions-library-samples/eks-saas-gitops"
+    repo_type: "infrastructure-only"
+    agent_scope: "read-only"
+    context: "EKS SaaS GitOps monorepo with Terraform IaC, Karpenter, and multi-tenant infrastructure. Classified as infrastructure-only to test N/A mappings, everything that is not serverless will run here, EKS will be the centralized platform"
+    tags:
+      - "eks"
+      - "gitops"
+      - "terraform"
+      - "saas"
+      - "infrastructure"

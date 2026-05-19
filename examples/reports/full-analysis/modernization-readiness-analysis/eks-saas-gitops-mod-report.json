@@ -1,0 +1,906 @@
+{
+  "analysis_type": "mod",
+  "metadata": {
+    "repository": "eks-saas-gitops",
+    "analysis_date": "2025-05-18",
+    "td_version": "modernization-readiness-analysis",
+    "repo_type": "infrastructure-only",
+    "priority": "P1",
+    "tags": [
+      "eks",
+      "gitops",
+      "terraform",
+      "saas",
+      "infrastructure"
+    ],
+    "context": "EKS SaaS GitOps monorepo with Terraform IaC, Karpenter, and multi-tenant infrastructure. Classified as infrastructure-only to test N/A mappings, everything that is not serverless will run here, EKS will be the centralized platform",
+    "preferences": {
+      "prefer": [
+        "eks",
+        "aurora",
+        "dynamodb",
+        "api-gateway",
+        "eventbridge",
+        "bedrock",
+        "terraform",
+        "gitops"
+      ],
+      "avoid": [
+        "self-managed-kafka",
+        "self-managed-kubernetes",
+        "oracle",
+        "manual-deployments"
+      ]
+    },
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": true,
+      "has_iac_provisioning_aws_resources": true
+    }
+  },
+  "overall_score": 2.93,
+  "classification": {
+    "tier": "Pilot-Ready",
+    "high_count": 0,
+    "medium_count": 11,
+    "low_count": 13,
+    "rule_matched": "0 High, >=2 Medium \u2192 Pilot-Ready",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 3.09,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": null,
+      "score_rating": null,
+      "severity_status": "Ready"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 4.0,
+      "score_rating": "Mature",
+      "severity_status": "Ready"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 2.57,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 2.11,
+      "score_rating": "Needs Work",
+      "severity_status": "Needs Work"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "OPS-Q1",
+      "title": "Distributed Tracing",
+      "score": 1,
+      "gap": "No distributed tracing instrumented in infrastructure or GitOps configuration",
+      "impact": "Cannot trace requests across multi-tenant services; debugging requires manual log correlation"
+    },
+    {
+      "rank": 2,
+      "question_id": "OPS-Q3",
+      "title": "Business Metrics",
+      "score": 1,
+      "gap": "No custom business metrics \u2014 only infrastructure-level monitoring via Kubecost/Prometheus",
+      "impact": "Cannot measure tenant SaaS outcomes to inform modernization decisions"
+    },
+    {
+      "rank": 3,
+      "question_id": "SEC-Q1",
+      "title": "Audit Logging",
+      "score": 2,
+      "gap": "No CloudTrail configuration despite provisioning account-level resources",
+      "impact": "Cannot audit API calls to AWS resources provisioned by this infrastructure"
+    },
+    {
+      "rank": 4,
+      "question_id": "SEC-Q5",
+      "title": "Secrets Management",
+      "score": 2,
+      "gap": "SSM SecureString used but no automated rotation configured",
+      "impact": "Credentials may become stale; no rotation policy for long-lived secrets"
+    },
+    {
+      "rank": 5,
+      "question_id": "OPS-Q7",
+      "title": "Incident Response Automation",
+      "score": 1,
+      "gap": "No runbooks or automated incident response workflows defined",
+      "impact": "Incident response is entirely ad hoc with no self-healing patterns"
+    }
+  ],
+  "decomposition_strategy": null,
+  "findings": [
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Workflow Orchestration \u2014 Partial Adoption",
+      "description": "Argo Workflows and Argo Events deployed for tenant lifecycle automation but no application-level business workflow orchestration (Step Functions) present.",
+      "gap": "Workflow orchestration covers infrastructure automation but not application business logic workflows.",
+      "recommendation": "Consider AWS Step Functions or extending Argo Workflows for business-critical multi-step operations as application services mature on this platform.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "gitops/control-plane/production/workflows/tenant-onboarding-workflow-template.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Network Security \u2014 Public EKS Endpoint",
+      "description": "VPC with 3 AZs and private subnets for EKS workers. However, EKS cluster endpoint is publicly accessible and no VPC endpoints configured.",
+      "gap": "EKS cluster API endpoint publicly accessible. No VPC endpoints for AWS services.",
+      "recommendation": "Restrict EKS cluster endpoint to private access. Add VPC endpoints for ECR, STS, S3, DynamoDB, SQS.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/workshop/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "API Entry Point \u2014 ALB Without Advanced Controls",
+      "description": "AWS Load Balancer Controller deployed for ALB ingress but no API Gateway, throttling, or request validation at entry point.",
+      "gap": "No throttling, authentication, or request validation at the entry point level.",
+      "recommendation": "Add AWS WAF on the ALB. Evaluate API Gateway for per-tenant throttling and API key management.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "gitops/infrastructure/production/04-lb-controller.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Auto-Scaling \u2014 HPA Disabled by Default",
+      "description": "Karpenter provides mature node-level scaling but HPA is disabled by default in application Helm charts. No custom scaling metrics.",
+      "gap": "HPA not enabled by default. No custom metrics for scaling decisions.",
+      "recommendation": "Enable HPA by default in tenant Helm charts. Consider custom metrics (queue depth, requests-per-second) for scaling.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "helm-charts/application-chart/values.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Backup and Recovery \u2014 No Restore Procedures",
+      "description": "DynamoDB PITR enabled but no documented restore procedures, no cross-region backup, no S3 versioning, and no Gitea backup strategy.",
+      "gap": "No documented restore procedures. Gitea (source of truth) has no backup strategy.",
+      "recommendation": "Add S3 versioning. Implement Gitea backup. Document DynamoDB PITR restore procedures. Consider AWS Backup.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/modules/tenant-apps/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "High Availability \u2014 Single NAT Gateway",
+      "description": "EKS spans 3 AZs with DynamoDB multi-AZ and NATS 3 replicas. However, single NAT Gateway is a SPOF. Gitea is single-instance.",
+      "gap": "Single NAT Gateway creates AZ-failure risk for outbound connectivity. Gitea has no HA.",
+      "recommendation": "Deploy NAT Gateways per AZ. Evaluate managed Git service or HA Gitea deployment.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/workshop/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "IaC Coverage \u2014 Operational Resources Missing",
+      "description": "Comprehensive IaC for compute, networking, databases, and GitOps. However, no IaC for monitoring, alarms, backup plans, or WAF.",
+      "gap": "Operational/DR resources (alarms, backup plans, health checks, WAF) not in IaC. Estimated 70-85% coverage.",
+      "recommendation": "Add Terraform resources for CloudWatch alarms, AWS Backup plans, Route 53 health checks, and WAF rules.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/workshop/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation \u2014 No Quality Gates",
+      "description": "Multi-layered CI/CD with Gitea Actions, Flux CD, Image Automation, and Argo Workflows. However, no automated testing, no terraform validate/plan in CI, no security scanning.",
+      "gap": "No automated testing in CI. No terraform plan/validate in CI. No security scanning in build pipeline.",
+      "recommendation": "Add terraform validate/plan, container image scanning, and linting as CI gates.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "tenant-microservices/producer/.gitea/workflows/build-and-push.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Audit Logging \u2014 No CloudTrail",
+      "description": "No CloudTrail configuration in repository despite provisioning account-level resources (EKS, VPC, IAM). EKS control plane logging not enabled.",
+      "gap": "No CloudTrail. No EKS control plane audit logging. No immutable log storage.",
+      "recommendation": "Add CloudTrail with log file validation and S3 Object Lock. Enable EKS control plane logging.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "terraform/workshop/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption at Rest \u2014 AWS-Managed Keys Only",
+      "description": "All data stores use AWS-managed encryption (SQS SSE, DynamoDB default, EBS CSI). No customer-managed KMS keys configured.",
+      "gap": "No customer-managed KMS keys. Less control over rotation and access auditing.",
+      "recommendation": "Create customer-managed KMS keys for sensitive data. Define key rotation policies.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/modules/tenant-apps/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Authentication \u2014 No External Auth at Ingress",
+      "description": "IRSA provides pod-level AWS authentication. However, no OAuth2/JWT/Cognito authentication at ALB ingress for tenant-facing endpoints.",
+      "gap": "No application-level API authentication at the ingress layer.",
+      "recommendation": "Add Cognito or OIDC authentication at ALB level for tenant-facing APIs.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "helm-charts/helm-tenant-chart/templates/ingress.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Centralized Identity \u2014 No IdP Integration",
+      "description": "No centralized identity provider integration. Gitea uses local auth. EKS uses IAM. No SSO or federated identity.",
+      "gap": "Each component manages identity independently. No centralized IdP.",
+      "recommendation": "Integrate Amazon Cognito for tenant apps. Federate EKS access with organizational IdP via OIDC.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/workshop/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets Management \u2014 No Rotation",
+      "description": "SSM SecureString for Gitea password. Kubernetes Secrets for Flux credentials. No plaintext in source. But no Secrets Manager, no rotation.",
+      "gap": "No automated rotation. SSM used but Secrets Manager with rotation would be more appropriate.",
+      "recommendation": "Migrate to Secrets Manager with rotation. Add External Secrets Operator for K8s sync.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "terraform/workshop/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Compute Hardening \u2014 No Vulnerability Scanning",
+      "description": "Karpenter uses al2023@latest AMI. SSM policy attached. But no Patch Manager, no vulnerability scanning, no hardened AMI pipeline.",
+      "gap": "No automated patching beyond latest AMI. No container or node vulnerability scanning.",
+      "recommendation": "Enable ECR scanning. Add Trivy to CI. Configure SSM Patch Manager. Consider Bottlerocket.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "gitops/infrastructure/production/dependencies/01-default-karpenter-config.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Security Pipeline \u2014 Checkov Referenced But Not in CI",
+      "description": "Checkov skip annotations in Terraform indicate awareness but no security scanning integrated into Gitea Actions CI pipeline.",
+      "gap": "Checkov not in CI. No container scanning. No dependency scanning. No security gates.",
+      "recommendation": "Add Checkov/tfsec to Terraform CI. Add Trivy for containers. Add pip-audit for Python deps.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "tenant-microservices/producer/.gitea/workflows/build-and-push.yml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Distributed Tracing \u2014 Not Instrumented",
+      "description": "No distributed tracing (X-Ray, OpenTelemetry, Jaeger) found in any IaC, Helm chart, or GitOps manifest.",
+      "gap": "Complete absence of distributed tracing in a multi-tenant, multi-service architecture.",
+      "recommendation": "Deploy ADOT as DaemonSet. Instrument microservices with OpenTelemetry SDK. Enable X-Ray for SQS/DynamoDB.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "SLO Definitions \u2014 Implicit Only",
+      "description": "Prometheus deployed via Kubecost but no formal SLO definitions, no latency/error-rate alarms, no error budgets.",
+      "gap": "No formal SLOs despite having monitoring infrastructure (Prometheus).",
+      "recommendation": "Define SLOs for tenant onboarding latency, message processing, and API availability per tier.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "gitops/infrastructure/production/05-kubecost.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Business Metrics \u2014 Not Published",
+      "description": "No custom business metrics. Kubecost tracks costs but no tenant onboarding rates, message throughput, or per-tier utilization.",
+      "gap": "Cannot measure SaaS platform health from a business perspective.",
+      "recommendation": "Add custom Prometheus metrics in microservices. Create Grafana dashboards for business KPIs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "gitops/infrastructure/production/05-kubecost.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Anomaly Detection \u2014 Infrastructure Exists But Unused",
+      "description": "Prometheus deployed but no alerting rules (PrometheusRule CRDs), no anomaly detection, no PagerDuty integration.",
+      "gap": "Alerting infrastructure exists but no alert rules defined.",
+      "recommendation": "Define PrometheusRule CRDs. Add Alertmanager with notification integration. Add CloudWatch anomaly detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "gitops/infrastructure/production/05-kubecost.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Deployment Strategy \u2014 No Progressive Delivery",
+      "description": "GitOps pull-based via Flux CD with rolling updates. No canary or blue/green deployments configured.",
+      "gap": "No canary or blue/green. Changes applied directly via Flux reconciliation.",
+      "recommendation": "Add Flagger for canary deployments. Configure automated rollback on failed health checks.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "gitops/clusters/production/",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing \u2014 Manual Only",
+      "description": "Helm test and manual scripts exist but no automated integration tests in CI pipeline.",
+      "gap": "No automated integration tests. No end-to-end testing of tenant lifecycle.",
+      "recommendation": "Create integration tests for tenant onboarding workflow. Add to CI or scheduled Argo Workflow.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "helm-charts/application-chart/templates/tests/test-connection.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Incident Response \u2014 No Automation",
+      "description": "No runbooks, no SSM Automation, no self-healing patterns. Argo Workflows available but only used for tenant lifecycle.",
+      "gap": "Complete absence of incident response automation despite having Argo Workflows infrastructure.",
+      "recommendation": "Create runbooks for common scenarios. Implement self-healing via Argo Workflows triggered by Prometheus alerts.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Ownership \u2014 Not Formalized",
+      "description": "Kubecost provides per-namespace cost dashboards but no per-service dashboards, no named alarm owners, no CODEOWNERS.",
+      "gap": "No formalized observability ownership. No team attribution on monitoring resources.",
+      "recommendation": "Define CODEOWNERS for observability configs. Create per-tier Grafana dashboards with ownership annotations.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "gitops/infrastructure/production/05-kubecost.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Resource Tagging \u2014 Inconsistent",
+      "description": "Basic tagging (Blueprint, Name, karpenter.sh/discovery) but no consistent strategy. No cost allocation, ownership, or environment tags. No enforcement.",
+      "gap": "Inconsistent tagging. No default_tags in provider. No enforcement.",
+      "recommendation": "Add default_tags to AWS provider. Add required-tags Config rule. Implement Tag Policies.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "terraform/workshop/main.tf",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "INF-Q1",
+      "category_id": "INF",
+      "title": "Managed Compute",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 all workloads on EKS with Karpenter; EC2 only for auxiliary Gitea"
+    },
+    {
+      "question_id": "INF-Q2",
+      "category_id": "INF",
+      "title": "Managed Databases",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 all data stores fully managed (DynamoDB with PITR, SQS with SSE)"
+    },
+    {
+      "question_id": "INF-Q4",
+      "category_id": "INF",
+      "title": "Async Messaging and Streaming",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 managed SQS for messaging, Argo Events + NATS EventBus for event-driven patterns"
+    },
+    {
+      "question_id": "APP-Q1",
+      "category_id": "APP",
+      "title": "Programming Languages",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 APP questions are N/A"
+    },
+    {
+      "question_id": "APP-Q2",
+      "category_id": "APP",
+      "title": "Monolith vs Microservices",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 APP questions are N/A"
+    },
+    {
+      "question_id": "APP-Q3",
+      "category_id": "APP",
+      "title": "Async vs Sync Communication",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 APP questions are N/A"
+    },
+    {
+      "question_id": "APP-Q4",
+      "category_id": "APP",
+      "title": "Long-Running Process Handling",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 APP questions are N/A"
+    },
+    {
+      "question_id": "APP-Q5",
+      "category_id": "APP",
+      "title": "API Versioning Strategy",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 APP questions are N/A"
+    },
+    {
+      "question_id": "APP-Q6",
+      "category_id": "APP",
+      "title": "Service Discovery",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 APP questions are N/A"
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category_id": "DATA",
+      "title": "Unstructured Data Storage",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 DATA-Q1 is N/A"
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category_id": "DATA",
+      "title": "Unified Data Access Layer",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 DATA-Q2 is N/A"
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category_id": "DATA",
+      "title": "Database Engine Version and EOL",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 DynamoDB is versionless managed service, no EOL concern"
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category_id": "DATA",
+      "title": "Stored Procedures and Schema Complexity",
+      "status": "na",
+      "score": null,
+      "reason": "Infrastructure-only repo \u2014 DATA-Q4 is N/A"
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "This is a `infrastructure-only` repository. This pathway does not apply.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "This is a `infrastructure-only` repository. This pathway does not apply.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4 is N/A for infrastructure-only repos; no commercial database engines detected (DynamoDB is AWS-native).",
+      "triggering_questions": [
+        {
+          "question_id": "DATA-Q4",
+          "score": null,
+          "note": "N/A for infrastructure-only repo"
+        },
+        {
+          "question_id": "INF-Q2",
+          "score": 4,
+          "note": "No commercial DB engines detected \u2014 DynamoDB only"
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "DATA-Q4 is N/A for this repo type and no commercial database engines are present."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q2 = 4 \u2014 all databases fully managed (DynamoDB with PITR).",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q2",
+          "score": 4,
+          "note": "INF-Q2 = 4 meets threshold; pathway not needed"
+        }
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "This is a `infrastructure-only` repository. This pathway does not apply.",
+      "triggering_questions": [],
+      "detail": null
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q10 = 3, INF-Q11 = 3 \u2014 both meet threshold (\u2265 3).",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q10",
+          "score": 3,
+          "note": "INF-Q10 = 3 meets threshold; pathway not needed"
+        },
+        {
+          "question_id": "INF-Q11",
+          "score": 3,
+          "note": "INF-Q11 = 3 meets threshold; pathway not needed"
+        }
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Applicable",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "This is a `infrastructure-only` repository. This pathway does not apply.",
+      "triggering_questions": [],
+      "detail": null
+    }
+  ],
+  "filter_vocab": {
+    "categories": [
+      "Infrastructure & DevOps",
+      "Application Architecture",
+      "Data Platform",
+      "Security Baseline",
+      "Operations & Observability"
+    ],
+    "severities": [
+      "High",
+      "Medium",
+      "Low"
+    ],
+    "priorities": [
+      "P1",
+      "P2"
+    ]
+  }
+}

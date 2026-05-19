@@ -1,0 +1,355 @@
+{
+  "analysis_type": "ara",
+  "repo_name": "eks-saas-gitops",
+  "metadata": {
+    "analysis_date": "2026-05-18",
+    "td_version": "agentic-readiness-analysis",
+    "repo_type": "infrastructure-only",
+    "agent_scope": "read-only",
+    "service_archetype": null,
+    "priority": "P1",
+    "tags": ["eks", "gitops", "terraform", "saas", "infrastructure"],
+    "context": "EKS SaaS GitOps monorepo with Terraform IaC, Karpenter, and multi-tenant infrastructure. Classified as infrastructure-only to test N/A mappings, everything that is not serverless will run here, EKS will be the centralized platform.",
+    "portfolio_name": null,
+    "tech_stack": {
+      "language": "HCL/Python",
+      "loc": 4500,
+      "framework": "Terraform, Flux CD, Helm, Flask",
+      "architecture": "EKS multi-tenant SaaS with GitOps"
+    },
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": false
+    }
+  },
+  "classification": {
+    "tier": "Pilot-Ready",
+    "sub_qualifier": "Pilot-Ready (Safety Concerns)",
+    "blocker_count": 0,
+    "risk_safety_count": 3,
+    "risk_quality_count": 5,
+    "info_count": 1,
+    "high_count": 0,
+    "medium_count": 8,
+    "low_count": 1,
+    "rule_matched": "0 BLOCKER, ≥3 RISK-SAFETY → Pilot-Ready (Safety Concerns)"
+  },
+  "counts": {
+    "total": 9,
+    "high": 0,
+    "medium": 8,
+    "low": 1,
+    "blocker": 0,
+    "risk_safety": 3,
+    "risk_quality": 5,
+    "info": 1,
+    "na": 29,
+    "not_evaluated_extended": 5
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credential Management — No Rotation Configured",
+      "description": "Credentials are stored in AWS SSM Parameter Store (SecureString) which is a valid secrets management service. Random password generation is used for Gitea admin credentials. However, no credential rotation is configured — SSM Parameter Store does not provide automatic rotation like AWS Secrets Manager.",
+      "gap": "No automatic credential rotation mechanism. SSM Parameter Store lacks native rotation support. No evidence of rotation schedules or Lambda-based rotation functions.",
+      "recommendation": "Migrate sensitive credentials (Gitea admin password, Flux tokens) from SSM Parameter Store to AWS Secrets Manager with automatic rotation enabled. Define rotation Lambda functions for non-IAM credentials.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "terraform/workshop/main.tf", "lines": "168-180"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Use short-lived IRSA tokens (already in place) as primary credential mechanism",
+          "Implement manual rotation runbook with documented cadence until Secrets Manager migration"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Immutable Audit Logging — Not Configured",
+      "description": "No CloudTrail configuration found in any Terraform module. No aws_cloudtrail resources defined. No immutable log storage (S3 with Object Lock). No CloudWatch Logs retention policies for audit purposes.",
+      "gap": "No audit trail infrastructure defined. Cannot attribute actions to specific principals in an immutable, tamper-evident log store.",
+      "recommendation": "Add aws_cloudtrail resource with S3 bucket (Object Lock enabled), CloudTrail log file validation, and multi-region trail. Enable EKS control plane logging.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "terraform/", "lines": "N/A"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, would be BLOCKER if write-enabled",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "AUTH-Q6 evaluated as RISK-SAFETY because agent_scope is read-only. No CloudTrail or immutable audit logging configuration exists in the repository IaC. Read-only agents still need audit attribution but it is not a deployment blocker.",
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "AWS CloudTrail may be enabled at the organization/account level outside this repository",
+          "EKS control plane logging (audit logs) may be enabled via the EKS module but is not explicitly configured"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Agent Identity Suspension — No Immediate Mechanism",
+      "description": "IAM roles are defined in Terraform (IRSA roles for each service). While IAM inherently supports role deletion/policy detachment, there is no mechanism for immediate identity suspension without a full Terraform plan/apply cycle. No automated anomaly-triggered suspension.",
+      "gap": "No immediate suspension mechanism for agent identities. Revoking an IRSA role requires modifying Terraform state and re-applying, which is not an immediate response capability.",
+      "recommendation": "Implement automation (Lambda + EventBridge) that can immediately attach a deny-all inline policy to any IRSA role upon anomaly detection. Consider AWS IAM Access Analyzer for continuous monitoring.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "terraform/modules/gitops-saas-infra/main.tf", "lines": "220-240"},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "IAM inline deny policies can be manually attached to a role for immediate effect without Terraform",
+          "Kubernetes ServiceAccount deletion provides immediate pod-level credential revocation within the cluster"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Distributed Tracing and Structured Logging — Not Configured",
+      "description": "No distributed tracing (X-Ray, OpenTelemetry) is configured in the repository. Microservices use basic Python logging module without structured JSON output or correlation IDs. No traceparent header propagation.",
+      "gap": "No distributed tracing infrastructure. No structured logging. No correlation ID propagation between services.",
+      "recommendation": "Deploy OpenTelemetry Collector as a Flux HelmRelease. Add ADOT DaemonSet. Update microservices to emit structured JSON logs with request_id correlation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "gitops/infrastructure/production/", "lines": "N/A"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "EKS supports AWS X-Ray daemon as a DaemonSet — can be added as infrastructure add-on via Flux HelmRelease",
+          "OpenTelemetry Collector can be deployed as a Helm chart with minimal application changes"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Alerting on Error Rates and Latency — Not Configured",
+      "description": "No alerting infrastructure configured. No CloudWatch alarms, no Prometheus alerting rules, no PagerDuty/OpsGenie integration. Kubecost provides cost metrics only. README references Amazon Managed Grafana and Prometheus but these are not defined in the IaC.",
+      "gap": "No alerting thresholds for error rates, latency, or availability. No anomaly detection.",
+      "recommendation": "Deploy kube-prometheus-stack via Flux HelmRelease with pre-configured alerting rules for error rates (5xx), latency (p99), and pod restart counts. Integrate with SNS for alert routing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "gitops/infrastructure/production/05-kubecost.yaml", "lines": "1-30"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Kubecost provides cost anomaly detection which may surface some operational issues indirectly",
+          "EKS provides basic CloudWatch metrics for node/pod health at the cluster level"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Infrastructure Governance — Partial Coverage",
+      "description": "Infrastructure is comprehensively defined as IaC (Terraform for AWS, Flux CD for Kubernetes). Drift detection is partially covered via Flux reconciliation and TF Controller. However, no branch protection, no PR review requirements, no AWS Config rules, and no terraform plan review gates in CI.",
+      "gap": "No peer review enforcement on IaC changes. No AWS Config drift detection. No plan-review gates in CI/CD.",
+      "recommendation": "Configure branch protection in Gitea requiring PR approval for main branch. Add Terraform plan step to CI. Deploy AWS Config conformance packs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "tenant-microservices/consumer/.gitea/workflows/build-and-push.yml", "lines": "1-20"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": [
+          "Flux CD reconciliation provides self-healing for Kubernetes state drift",
+          "TF Controller applies Terraform continuously, detecting drift on managed resources"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "CI/CD with API Contract Testing — No Tests",
+      "description": "CI/CD pipelines exist via Gitea Actions for all three microservices. Pipelines build Docker images and push to ECR with immutable tags. However, pipelines contain zero automated tests — no unit tests, no integration tests, no contract tests, no API validation.",
+      "gap": "No automated testing in CI. No API contract testing. No breaking change detection. No quality gates before deployment.",
+      "recommendation": "Add pytest stages to Gitea Actions workflows with API endpoint tests. Implement smoke tests post-deployment via Flux health checks. Consider Pact contract tests.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "tenant-microservices/consumer/.gitea/workflows/build-and-push.yml", "lines": "1-30"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "ECR image immutability prevents tag overwriting, providing deployment artifact integrity",
+          "Flux CD reconciliation can be paused manually if a bad image is detected"
+        ]
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "API Test Coverage — Zero Coverage",
+      "description": "No automated test suites found. The only test artifact is a Helm chart test template (test-connection.yaml) that verifies HTTP connectivity. No pytest, no unittest, no integration test directories. CI pipelines skip testing entirely.",
+      "gap": "Zero automated test coverage for API endpoints or business logic.",
+      "recommendation": "Create test suites for each microservice covering endpoint response format, error handling, and SQS/DynamoDB integration. Add test execution to CI pipelines as a required gate.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "High",
+      "phase": 3,
+      "evidence": {"file": "helm-charts/application-chart/templates/tests/test-connection.yaml", "lines": "1-10"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": [
+          "Helm test-connection provides basic liveness verification post-deployment",
+          "Health check endpoints (/readiness-probe) verify service availability"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "Business Outcome Metrics — Cost Only",
+      "description": "Kubecost provides cost-per-tenant metrics. Metrics Server provides resource utilization for HPA. No custom business outcome metrics are published (e.g., tenant onboarding success rate, message processing throughput, payment completion rate).",
+      "gap": "No business-level metrics beyond cost. No tenant lifecycle success/failure tracking.",
+      "recommendation": "Publish custom CloudWatch metrics for tenant lifecycle operations (onboarding duration, deployment success/failure rate) and per-tenant message throughput from the microservices.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "gitops/infrastructure/production/05-kubecost.yaml", "lines": "1-20"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "API-Q1", "category_id": "API", "title": "Documented API Interface", "status": "na", "reason": "Infrastructure-only repo — API questions are N/A"},
+    {"question_id": "API-Q2", "category_id": "API", "title": "Machine-Readable API Specification", "status": "na", "reason": "Infrastructure-only repo — API questions are N/A"},
+    {"question_id": "API-Q3", "category_id": "API", "title": "Structured Error Responses", "status": "na", "reason": "Infrastructure-only repo — API questions are N/A"},
+    {"question_id": "API-Q4", "category_id": "API", "title": "Idempotent Write Operations", "status": "na", "reason": "Infrastructure-only repo — API questions are N/A"},
+    {"question_id": "API-Q5", "category_id": "API", "title": "Structured Response Format", "status": "na", "reason": "Infrastructure-only repo — API questions are N/A"},
+    {"question_id": "API-Q6", "category_id": "API", "title": "Asynchronous Operation Support", "status": "na", "reason": "Infrastructure-only repo — API questions are N/A"},
+    {"question_id": "API-Q7", "category_id": "API", "title": "Event Emission for State Changes", "status": "na", "reason": "Infrastructure-only repo — API questions are N/A"},
+    {"question_id": "API-Q8", "category_id": "API", "title": "Rate Limit Documentation and Headers", "status": "na", "reason": "Infrastructure-only repo — API questions are N/A"},
+    {"question_id": "AUTH-Q1", "category_id": "AUTH", "title": "Machine Identity Authentication", "status": "pass", "reason": "IRSA provides machine identity with OIDC trust policies scoped to specific namespaces and service accounts"},
+    {"question_id": "AUTH-Q2", "category_id": "AUTH", "title": "Scoped Permissions (Least Privilege)", "status": "pass", "reason": "Authorization model supports scoped permissions — per-tenant roles demonstrate action-level and resource-level scope differentiation"},
+    {"question_id": "AUTH-Q3", "category_id": "AUTH", "title": "Action-Level Authorization", "status": "pass", "reason": "IAM policies demonstrate action-level authorization with specific allowed actions per role"},
+    {"question_id": "AUTH-Q4", "category_id": "AUTH", "title": "Identity Propagation and Delegation", "status": "na", "reason": "Infrastructure-only repo — AUTH-Q4 is N/A"},
+    {"question_id": "STATE-Q1", "category_id": "STATE", "title": "Compensation and Rollback", "status": "na", "reason": "Infrastructure-only repo — STATE questions are N/A"},
+    {"question_id": "STATE-Q2", "category_id": "STATE", "title": "Queryable Current State", "status": "na", "reason": "Infrastructure-only repo — STATE questions are N/A"},
+    {"question_id": "STATE-Q3", "category_id": "STATE", "title": "Concurrency Controls", "status": "na", "reason": "Infrastructure-only repo — STATE questions are N/A"},
+    {"question_id": "STATE-Q4", "category_id": "STATE", "title": "Circuit Breakers and Resilience", "status": "na", "reason": "Infrastructure-only repo — STATE questions are N/A"},
+    {"question_id": "STATE-Q5", "category_id": "STATE", "title": "Rate Limiting and Throttling", "status": "na", "reason": "Infrastructure-only repo — STATE questions are N/A"},
+    {"question_id": "STATE-Q6", "category_id": "STATE", "title": "Blast Radius and Transaction Limits", "status": "na", "reason": "Infrastructure-only repo — STATE questions are N/A"},
+    {"question_id": "STATE-Q7", "category_id": "STATE", "title": "Graceful Degradation Signaling", "status": "na", "reason": "Infrastructure-only repo — STATE questions are N/A"},
+    {"question_id": "HITL-Q1", "category_id": "HITL", "title": "Draft/Pending State", "status": "na", "reason": "Infrastructure-only repo — HITL questions are N/A"},
+    {"question_id": "HITL-Q2", "category_id": "HITL", "title": "Configurable Approval Gates", "status": "na", "reason": "Infrastructure-only repo — HITL questions are N/A"},
+    {"question_id": "HITL-Q3", "category_id": "HITL", "title": "Sandbox/Staging Environment", "status": "na", "reason": "Infrastructure-only repo — HITL questions are N/A"},
+    {"question_id": "DATA-Q1", "category_id": "DATA", "title": "Sensitive Data Classification", "status": "na", "reason": "Infrastructure-only repo — DATA questions are N/A"},
+    {"question_id": "DATA-Q2", "category_id": "DATA", "title": "Data Residency and Sovereignty", "status": "na", "reason": "Infrastructure-only repo — DATA questions are N/A"},
+    {"question_id": "DATA-Q3", "category_id": "DATA", "title": "Selective Query Support", "status": "na", "reason": "Infrastructure-only repo — DATA questions are N/A"},
+    {"question_id": "DATA-Q4", "category_id": "DATA", "title": "Input Validation and Schema Enforcement", "status": "na", "reason": "Infrastructure-only repo — DATA questions are N/A"},
+    {"question_id": "DATA-Q5", "category_id": "DATA", "title": "Temporal Metadata and Freshness", "status": "na", "reason": "Infrastructure-only repo — DATA questions are N/A"},
+    {"question_id": "DATA-Q6", "category_id": "DATA", "title": "PII Redaction in Logs", "status": "na", "reason": "Infrastructure-only repo — DATA questions are N/A"},
+    {"question_id": "DATA-Q7", "category_id": "DATA", "title": "Data Quality Awareness", "status": "na", "reason": "Infrastructure-only repo — DATA questions are N/A"},
+    {"question_id": "DISC-Q1", "category_id": "DISC", "title": "Schema Versioning and API Contracts", "status": "na", "reason": "Infrastructure-only repo — DISC questions are N/A"},
+    {"question_id": "DISC-Q2", "category_id": "DISC", "title": "Semantically Meaningful Field Names", "status": "na", "reason": "Infrastructure-only repo — DISC questions are N/A"},
+    {"question_id": "DISC-Q3", "category_id": "DISC", "title": "Data Catalog / Metadata Layer", "status": "na", "reason": "Infrastructure-only repo — DISC questions are N/A"},
+    {"question_id": "ENG-Q3", "category_id": "ENG", "title": "Rollback Capability", "status": "pass", "reason": "Flux CD GitOps model provides reliable rollback via git revert triggering automatic reconciliation"},
+    {"question_id": "ENG-Q5", "category_id": "ENG", "title": "Encryption at Rest for Agent-Accessible Data", "status": "pass", "reason": "Encryption at rest configured across all data stores (ECR AES256, SQS SSE, EC2 encrypted EBS, DynamoDB PITR)"}
+  ],
+  "remediation_roadmap": {
+    "phases": [1, 2, 3],
+    "items": [
+      {
+        "phase": 1,
+        "phase_name": "Safety",
+        "findings": ["AUTH-Q6", "AUTH-Q7"],
+        "summary": "Establish audit trail infrastructure and agent identity suspension mechanisms to address safety concerns."
+      },
+      {
+        "phase": 2,
+        "phase_name": "Quality",
+        "findings": ["AUTH-Q5", "OBS-Q1", "OBS-Q2", "ENG-Q1", "ENG-Q2"],
+        "summary": "Improve credential rotation, observability, and CI/CD governance to support reliable agent operations."
+      },
+      {
+        "phase": 3,
+        "phase_name": "Maturity",
+        "findings": ["ENG-Q4", "OBS-Q3"],
+        "summary": "Add test coverage and business metrics to complete engineering maturity for full agent integration."
+      }
+    ]
+  },
+  "recommended_actions": [
+    {
+      "action": "Deploy CloudTrail with immutable S3 storage",
+      "question_ids": ["AUTH-Q6"],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "Immutable audit logging is the foundation for agent accountability and compliance. Required before expanding agent scope to write-enabled."
+    },
+    {
+      "action": "Implement agent identity emergency suspension automation",
+      "question_ids": ["AUTH-Q7"],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "Immediate identity revocation is critical for containing agent misbehavior without disrupting the platform."
+    },
+    {
+      "action": "Migrate credentials to Secrets Manager with rotation",
+      "question_ids": ["AUTH-Q5"],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Automatic credential rotation eliminates long-lived secret exposure risk from prompt injection or agent bugs."
+    },
+    {
+      "action": "Deploy observability stack (OpenTelemetry + Prometheus alerting)",
+      "question_ids": ["OBS-Q1", "OBS-Q2", "OBS-Q3"],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Tracing and alerting are required to diagnose and detect agent-initiated failures and anomalies."
+    },
+    {
+      "action": "Add automated testing and governance to CI/CD pipelines",
+      "question_ids": ["ENG-Q1", "ENG-Q2", "ENG-Q4"],
+      "priority": "P2",
+      "effort": "High",
+      "rationale": "Automated tests and peer review gates prevent breaking changes from reaching agent-facing surfaces undetected."
+    }
+  ]
+}

@@ -1,0 +1,792 @@
+{
+  "analysis_type": "mod",
+  "metadata": {
+    "repository": "MonoToMicroLegacy",
+    "analysis_date": "2026-05-18",
+    "td_version": "modernization-readiness-analysis",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "MySQL database with CRUD operations on unicorns, basket, and user entities. Write endpoints (POST/DELETE) with user-specific data (userUuid basket). Classified as stateful-crud.",
+    "priority": "P0",
+    "tags": ["monolith", "java", "ec2", "decomposition-target"],
+    "context": "Legacy Java Spring Boot monolith on EC2 with MySQL — primary decomposition target. The agent needs access to order and return data through discrete service APIs.",
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": false
+    },
+    "preferences": {
+      "prefer": ["eks", "aurora", "dynamodb", "api-gateway", "eventbridge", "bedrock", "terraform", "gitops", "containers", "aurora-mysql", "microservices-decomposition"],
+      "avoid": ["self-managed-kafka", "self-managed-kubernetes", "oracle", "manual-deployments", "serverless", "lambda"]
+    }
+  },
+  "overall_score": 1.40,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 11,
+    "medium_count": 22,
+    "low_count": 1,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": {
+      "status": "divergent",
+      "score_band": "Not Ready",
+      "count_tier": "Remediation Required",
+      "reason": "Score 1.40 yields Not Ready band but 11 High findings (from 11 core questions at score 1) maps to Remediation Required tier. The 18 non-core questions at score 1 produce Medium severity rather than High, capping the High count at 11. The extremely low overall score reflects the breadth of gaps across all 36 evaluated questions (29 scoring 1), while the count-based system limits High to core-question scores only."
+    }
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.09,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 1.50,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 2.25,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.17,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.00,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "Zero IaC — all infrastructure manually provisioned",
+      "impact": "No reproducibility, no disaster recovery automation, no environment consistency"
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q11",
+      "title": "CI/CD Automation",
+      "score": 1,
+      "gap": "No CI/CD pipeline exists",
+      "impact": "Manual deployments are error-prone, slow, and prevent continuous delivery"
+    },
+    {
+      "rank": 3,
+      "question_id": "SEC-Q5",
+      "title": "Secrets Management",
+      "score": 1,
+      "gap": "Plaintext database password in application.properties committed to git",
+      "impact": "Critical security vulnerability — credentials exposed in source control"
+    },
+    {
+      "rank": 4,
+      "question_id": "APP-Q2",
+      "title": "Monolith vs Microservices",
+      "score": 2,
+      "gap": "Tightly-coupled monolith with shared database schema",
+      "impact": "Cannot scale components independently, blocks team autonomy and deployment independence"
+    },
+    {
+      "rank": 5,
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
+      "score": 1,
+      "gap": "All compute on raw EC2 with no managed services",
+      "impact": "Manual scaling, patching, and capacity planning required"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Compute — All compute on raw EC2",
+      "description": "All compute runs on raw EC2. The application produces an executable JAR with embedded launch script deployed directly to EC2 instances. No managed container orchestration (ECS/EKS), no serverless (Lambda), no Fargate.",
+      "gap": "No managed compute services in use. All operational burden (patching, scaling, capacity planning) is manual.",
+      "recommendation": "Containerize the application and deploy on Amazon EKS with managed node groups. Create a Dockerfile for the Spring Boot JAR, push to ECR, and deploy via Helm charts to EKS.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "build.gradle", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Databases — Self-managed MySQL",
+      "description": "MySQL database referenced via environment variable. No IaC defines the database as a managed service. Database is likely self-managed on EC2.",
+      "gap": "No managed database service. Self-managed MySQL requires manual patching, backup management, failover configuration, and scaling.",
+      "recommendation": "Migrate to Amazon Aurora MySQL — compatible engine with automated failover, backups, and Multi-AZ. Use AWS DMS for minimal-downtime migration.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/resources/application.properties", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Workflow Orchestration — Internal event pattern only",
+      "description": "Internal event-driven pattern (16 event classes) provides structure but no dedicated workflow orchestration service. No Step Functions, Temporal, or equivalent.",
+      "gap": "No dedicated workflow orchestration for multi-step operations. As the system grows and decomposes, coordinated workflows will need explicit orchestration.",
+      "recommendation": "When decomposing the monolith, adopt AWS Step Functions for multi-step business workflows (order processing, user onboarding).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/core/events/", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": true, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Async Messaging — No messaging infrastructure",
+      "description": "No messaging or streaming infrastructure exists. All operations are synchronous HTTP. Internal event classes are plain Java objects passed synchronously — not async message passing.",
+      "gap": "No messaging infrastructure for state change propagation. Blocks decomposition goal where agent needs discrete service APIs.",
+      "recommendation": "Introduce Amazon EventBridge for domain event publishing when decomposing. Each extracted service publishes events to EventBridge for loose coupling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/core/events/", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": true, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Network Security — No network configuration",
+      "description": "No VPC, subnet, security group, or network segmentation configuration exists in this repository. Application exposes port 8080 directly.",
+      "gap": "No network security configuration. Service likely exposed without proper isolation.",
+      "recommendation": "Define VPC infrastructure in Terraform: private subnets for application and database tiers, security groups with least-privilege rules, VPC endpoints for AWS service access.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/resources/application.properties", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "API Entry Point — Direct service exposure",
+      "description": "No API Gateway, ALB, or CloudFront configured. Spring Boot application serves directly on port 8080 with no managed entry point.",
+      "gap": "No managed API entry point. No throttling, no centralized auth, no request validation at the edge.",
+      "recommendation": "Deploy Amazon API Gateway as the entry point. Configure throttling, request validation, and integrate with Amazon Cognito for authentication.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/main/resources/application.properties", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Auto-Scaling — No scaling configured",
+      "description": "No auto-scaling configuration exists. Application runs on EC2 with static capacity. No ASG, no HPA, no scaling policies.",
+      "gap": "All capacity is statically provisioned. Cannot respond to traffic spikes or scale down during low demand.",
+      "recommendation": "After containerization on EKS, configure HPA with appropriate metrics. Use Karpenter for node-level auto-scaling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Backup and Recovery — No backup configuration",
+      "description": "No backup configuration found. No aws_backup_plan, no backup retention settings, no PITR configuration.",
+      "gap": "No automated backups. Data loss event would be unrecoverable without manual intervention.",
+      "recommendation": "After migrating to Aurora MySQL, automated backups are included. Enable PITR and configure AWS Backup with cross-region replication.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "High Availability — Single-AZ deployment",
+      "description": "No multi-AZ deployment evidence. Single EC2 instance implied by context. No AZ configuration, no cross-zone load balancing.",
+      "gap": "Single-AZ deployment — an AZ failure takes down the entire workload with no automatic recovery.",
+      "recommendation": "After containerization on EKS, deploy pods across multiple AZs. Configure Aurora MySQL with Multi-AZ failover.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Infrastructure as Code — Zero coverage",
+      "description": "0% IaC coverage. No Terraform, CloudFormation, CDK, Helm charts, or any Infrastructure as Code exists. All infrastructure manually provisioned.",
+      "gap": "All infrastructure is manually created (ClickOps). No reproducibility, no version control for infrastructure changes.",
+      "recommendation": "Define all infrastructure in Terraform: VPC, subnets, security groups, EKS cluster, Aurora MySQL, API Gateway, ECR repositories.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation — No pipeline exists",
+      "description": "No CI/CD pipeline exists. No GitHub Actions, Jenkinsfile, buildspec.yml, or CodePipeline definitions. All builds and deployments are manual.",
+      "gap": "All deployments are manual — error-prone, slow, and prevent continuous delivery.",
+      "recommendation": "Implement CI/CD pipeline with GitHub Actions or AWS CodePipeline. Stages: lint → build → test → container image → push to ECR → deploy via ArgoCD.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Programming Languages — Compound legacy (Java 8 + Spring Boot 2.1 + SDK v1)",
+      "description": "Java 8 with Spring Boot 2.1.6.RELEASE and AWS SDK v1.11.567. All three axes are regressed: Java 8 is EOL, Spring Boot 2.1.x is EOL, AWS SDK v1 is deprecated.",
+      "gap": "Compound legacy across language version, framework, AND SDK. Blocks access to modern features, security patches, and performance improvements.",
+      "recommendation": "Upgrade to Java 17+ with Spring Boot 3.x and AWS SDK v2. This is a prerequisite for containerization on modern base images.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {"file": "build.gradle", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith vs Microservices — Tightly-coupled monolith",
+      "description": "Single deployable Spring Boot JAR containing all domains: product catalog, shopping basket, and user management. Shared unishop database schema. Identifiable layers exist but tight data coupling.",
+      "gap": "Monolith with shared database schema and direct cross-module data access. Cannot deploy, scale, or develop modules independently.",
+      "recommendation": "Apply Strangler Fig decomposition pattern. Containerize first, then extract basket/order service (highest business value).",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {"file": "database/create_tables.sql", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Async vs Sync — All synchronous",
+      "description": "All communication is synchronous HTTP request/response. Internal event classes are synchronous POJOs. No async messaging patterns.",
+      "gap": "100% synchronous with no async patterns. Tight coupling creates cascading failure risk when decomposed.",
+      "recommendation": "Introduce Amazon EventBridge for domain events when decomposing. Basket and user state changes should emit events consumed asynchronously.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": true, "core_question": false}
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-Running Process Handling — No async job infrastructure",
+      "description": "All operations synchronous regardless of duration. No async job infrastructure exists. DataReplicationController handles data export synchronously.",
+      "gap": "No async job infrastructure. As system evolves toward order processing, long-running operations will need async handling.",
+      "recommendation": "Implement async job pattern with AWS Step Functions for multi-step order/return workflows. SQS for job queuing with worker services.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/DataReplicationController.java", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": true, "core_question": false}
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "API Versioning — No versioning strategy",
+      "description": "No API versioning. All endpoints use unversioned paths: /unicorns, /user, /health, /data. No /v1/ prefix, no version headers.",
+      "gap": "No versioning — any API change is a breaking change for all consumers.",
+      "recommendation": "Adopt URL-path versioning (/v1/unicorns, /v1/basket) as part of decomposition. API Gateway supports versioning natively.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Service Discovery — Environment variables only",
+      "description": "Environment variable used for database endpoint. No dynamic service discovery, no service mesh, no Cloud Map.",
+      "gap": "Static endpoint configuration via environment variables. Will not scale when decomposed into multiple services.",
+      "recommendation": "After decomposition to EKS, use Kubernetes native service discovery. For external communication, use AWS Cloud Map or VPC Lattice.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/main/resources/application.properties", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unstructured Data Storage — No managed object storage",
+      "description": "Product images referenced by name strings. AWS S3 SDK included but not used in application source. No S3 bucket or object storage configured.",
+      "gap": "No managed object storage with parsing capabilities. Product images not stored in S3.",
+      "recommendation": "Store product images in Amazon S3 with appropriate lifecycle policies. Implement S3 with Amazon Textract for future document processing.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "database/create_tables.sql", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unified Data Access Layer — Consistent repository pattern",
+      "description": "Consistent repository pattern: Controllers → Services → Repositories → MyBatis Mappers. All database access centralized through mapper interfaces.",
+      "gap": "Repository layer directly exposes MyBatis-specific patterns. No abstraction for swapping persistence technology.",
+      "recommendation": "Maintain repository pattern during decomposition. Consider Spring Data JPA for new services to reduce ORM coupling.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/main/java/com/monoToMicro/core/repository/", "lines": null},
+      "mod_metadata": {"internal_score": 3, "score_label": "Partial", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Database Engine Version — No version pinning",
+      "description": "No database engine version pinned in IaC. MySQL connector 8.0.11 suggests MySQL 8.0 server but exact version undetermined. No lifecycle management.",
+      "gap": "No version pinning, no lifecycle management. Database engine version is uncontrolled.",
+      "recommendation": "After migrating to Aurora MySQL, pin engine version in Terraform, enable minor version auto-upgrade, document major version upgrade procedure.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "build.gradle", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption at Rest — No encryption configured",
+      "description": "No encryption at rest configured for any data store. User PII (email, names) stored unencrypted.",
+      "gap": "No encryption at rest. User PII stored unencrypted. No KMS key management.",
+      "recommendation": "After migrating to Aurora MySQL, enable encryption at rest with AWS KMS customer-managed key. Define KMS key rotation policy.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "database/create_tables.sql", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Authentication — All endpoints open",
+      "description": "Security effectively disabled. ResourceServerConfig sets all endpoints to permitAll(). OAuth2/JWT libraries present but not enforced.",
+      "gap": "No API authentication — all endpoints publicly accessible without credential verification.",
+      "recommendation": "Implement API authentication via Amazon API Gateway with Amazon Cognito authorizer. Remove permitAll() from security configuration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "src/main/java/com/monoToMicro/security/ResourceServerConfig.java", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Centralized Identity — OAuth2 infrastructure disabled",
+      "description": "Spring Security OAuth2 Resource Server and JWT libraries configured but non-functional (permitAll bypasses all auth). Application manages its own user table.",
+      "gap": "OAuth2/JWT infrastructure exists but disabled. Application manages own authentication with no external IdP active.",
+      "recommendation": "Integrate with Amazon Cognito as centralized IdP. Migrate user authentication from unicorn_user table to Cognito User Pool.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/main/java/com/monoToMicro/security/ResourceServerConfig.java", "lines": null},
+      "mod_metadata": {"internal_score": 2, "score_label": "Needs Work", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets Management — Plaintext credentials in source",
+      "description": "Plaintext database credentials in application.properties: spring.datasource.password: MonoToMicroPassword. Hardcoded values committed to source control.",
+      "gap": "Critical security vulnerability — plaintext credentials in version-controlled source. Anyone with repo access has database credentials.",
+      "recommendation": "Move credentials to AWS Secrets Manager with automated rotation. Remove plaintext credentials from application.properties and git history.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "src/main/resources/application.properties", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Compute Hardening — No patching strategy",
+      "description": "No evidence of compute hardening or patching strategy. No SSM Patch Manager, no vulnerability scanning, no hardened base images.",
+      "gap": "No patching strategy, no vulnerability scanning. EC2 instances may be running with known vulnerabilities.",
+      "recommendation": "After containerization on EKS, use hardened base images (Bottlerocket for nodes). Enable Amazon Inspector for container image scanning.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Application Security Pipeline — No security scanning",
+      "description": "No CI/CD pipeline exists, therefore no security scanning integrated. No SAST, no dependency scanning, no container scanning.",
+      "gap": "No security scanning — vulnerabilities in outdated dependencies reach production undetected.",
+      "recommendation": "When implementing CI/CD, include Dependabot, Snyk/Trivy for container scanning, and CodeGuru/SonarQube for SAST. Configure security gates.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Distributed Tracing — No tracing instrumented",
+      "description": "No distributed tracing. No X-Ray SDK, no OpenTelemetry, no trace ID propagation. Spring Boot Actuator provides basic metrics only.",
+      "gap": "No tracing. Cannot trace requests through the application or across service boundaries after decomposition.",
+      "recommendation": "Instrument with AWS X-Ray SDK or OpenTelemetry (ADOT). Deploy ADOT Collector as DaemonSet on EKS.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "build.gradle", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "SLO Definitions — No SLOs defined",
+      "description": "No SLOs defined. No CloudWatch alarms, no latency targets, no error rate thresholds. Only basic Actuator health endpoint.",
+      "gap": "No formal definition of acceptable service levels. Cannot measure system performance against user expectations.",
+      "recommendation": "Define SLOs: product listing p99 < 500ms, basket operations 99.9% availability, login success rate. Implement with CloudWatch alarms.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "src/main/java/com/monoToMicro/rest/controller/HealthController.java", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Business Metrics — No custom metrics",
+      "description": "No custom business metrics published. Only default Spring Boot Actuator infrastructure metrics.",
+      "gap": "No visibility into business outcomes. Cannot track basket conversion, product views, or user signups.",
+      "recommendation": "Instrument business metrics: basket additions/removals, user registrations, product views. Use Micrometer with CloudWatch exporter.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Anomaly Detection — No alerting configured",
+      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration.",
+      "gap": "No alerting — issues discovered by users, not monitoring.",
+      "recommendation": "Configure CloudWatch alarms for HTTP 5xx > 1%, p99 latency > 2s, DB connection failures. Enable anomaly detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Deployment Strategy — Direct to production",
+      "description": "No deployment strategy. Application deployed directly to EC2 via manual JAR copy. No blue/green, no canary, no rolling updates.",
+      "gap": "Direct-to-production with no staged rollout. Any deployment failure affects all users immediately.",
+      "recommendation": "After containerization on EKS, implement progressive delivery via ArgoCD Rollouts with canary strategy.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "build.gradle", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing — Zero test coverage",
+      "description": "Zero automated tests. No src/test/ directory. spring-boot-starter-test declared but no test classes written.",
+      "gap": "No automated testing. Decomposition carries unquantified regression risk. Cannot validate service behavioral parity.",
+      "recommendation": "Establish integration tests for critical workflows before decomposition. Use Spring Boot Test with Testcontainers. Add Pact contract tests.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "build.gradle", "lines": null},
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": true}
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Incident Response — No runbooks or automation",
+      "description": "No runbooks, no incident response automation, no self-healing patterns. No SSM Automation documents.",
+      "gap": "Incident response entirely ad hoc. No documented procedures for common failure scenarios.",
+      "recommendation": "Create runbooks. After EKS migration, implement self-healing via Kubernetes liveness/readiness probes. Define SSM Automation documents.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Ownership — No ownership defined",
+      "description": "No observability ownership. No per-service dashboards, no named alarm owners, no CODEOWNERS for observability assets.",
+      "gap": "No observability ownership. Monitoring is reactive and fragmented.",
+      "recommendation": "Define service ownership in CODEOWNERS. Create per-service CloudWatch dashboards with named owners after decomposition.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Resource Tagging — No tags",
+      "description": "No resource tagging. No IaC exists, therefore no tags defined on AWS resources. No tagging standard.",
+      "gap": "Cannot track costs per workload, identify resource ownership, or enforce budget controls.",
+      "recommendation": "Define tagging standard in Terraform default_tags. Enforce via AWS Config required-tags rule. Activate cost allocation tags.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {"internal_score": 1, "score_label": "Not Ready", "archetype_calibrated": false, "core_question": false}
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "DATA-Q4",
+      "category_id": "DATA",
+      "title": "Stored Procedures and Schema Complexity",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 — No stored procedures, triggers, or proprietary SQL. All business logic in application layer. DDL uses standard SQL only."
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category_id": "SEC",
+      "title": "Audit Logging",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_iac_provisioning_aws_resources=false. This repo contains no IaC provisioning AWS resources. CloudTrail is an account-level service — evaluation belongs in foundation infrastructure repo."
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=2 < 3 (primary); INF-Q1=1 < 3, APP-Q3=1 < 3, APP-Q4=1 < 3 (supporting)",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 2, "note": "Tightly-coupled monolith with shared schema — primary trigger"},
+        {"question_id": "INF-Q1", "score": 1, "note": "All compute on raw EC2 — supporting"},
+        {"question_id": "APP-Q3", "score": 1, "note": "All synchronous communication — supporting"},
+        {"question_id": "APP-Q4", "score": 1, "note": "No async job infrastructure — supporting"}
+      ],
+      "detail": {
+        "aws_services": ["Amazon EKS", "Amazon API Gateway", "Amazon EventBridge", "AWS Step Functions", "Amazon Aurora MySQL"],
+        "patterns": ["Strangler Fig", "Anti-corruption Layer", "Event Sourcing", "Saga"],
+        "immediate_actions": ["Containerize monolith", "Establish CI/CD", "Extract basket/order service first"]
+      }
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q1=1 < 3; no container definitions found; compute is EC2 (not Lambda/Fargate/ECS)",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 1, "note": "All compute on raw EC2, no Dockerfile or container definitions found"}
+      ],
+      "detail": {
+        "aws_services": ["Amazon EKS", "Amazon ECR", "Karpenter"],
+        "migration_approach": "Lift-and-containerize (create Dockerfile for existing JAR), then refactor architecture",
+        "immediate_actions": ["Create Dockerfile for Spring Boot JAR", "Set up ECR repository", "Define EKS cluster in Terraform"]
+      }
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures or proprietary SQL); MySQL is already open source",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "DATA-Q4 = 4 meets threshold; no proprietary SQL detected. MySQL is open source — no commercial DB migration needed."}
+      ],
+      "detail": null,
+      "not_triggered_reason": "DATA-Q4 scored 4 (no stored procedures). MySQL is already an open-source engine — no commercial database migration is needed."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2=1 < 3 (primary); DATA-Q3=1 < 3 (supporting — no version pinning)",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": 1, "note": "Self-managed MySQL, no managed database evidence — primary trigger"},
+        {"question_id": "DATA-Q3", "score": 1, "note": "No database engine version pinning — supporting"}
+      ],
+      "detail": {
+        "aws_services": ["Amazon Aurora MySQL", "AWS DMS", "AWS SCT"],
+        "target": "Aurora MySQL (compatible engine, managed failover, automated backups, Multi-AZ)",
+        "immediate_actions": ["Provision Aurora MySQL cluster in Terraform", "Plan DMS migration with minimal downtime", "Enable Multi-AZ and automated backups"]
+      }
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q4=1 < 3 but contextual guard blocks: no data processing workloads (streaming, ETL, analytics) detected",
+      "triggering_questions": [
+        {"question_id": "INF-Q4", "score": 1, "note": "INF-Q4 = 1 meets threshold but contextual guard blocks — no streaming/ETL/analytics workloads exist in this CRUD application"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No evidence of data processing workloads. This is a simple CRUD product catalog with no streaming, ETL, or analytics requirements."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3 (both primary triggers met); OPS-Q5=1, OPS-Q6=1 (supporting)",
+      "triggering_questions": [
+        {"question_id": "INF-Q10", "score": 1, "note": "Zero IaC coverage — primary trigger"},
+        {"question_id": "INF-Q11", "score": 1, "note": "No CI/CD pipeline — primary trigger"},
+        {"question_id": "OPS-Q5", "score": 1, "note": "No deployment strategy — supporting"},
+        {"question_id": "OPS-Q6", "score": 1, "note": "Zero test coverage — supporting"}
+      ],
+      "detail": {
+        "aws_services": ["Terraform", "AWS CodePipeline", "AWS CodeBuild", "ArgoCD", "Amazon ECR"],
+        "toolchain": "Terraform for IaC, GitHub Actions/CodePipeline for CI, ArgoCD for GitOps CD",
+        "immediate_actions": ["Define VPC/EKS/Aurora in Terraform", "Create CI pipeline (build/test/image)", "Implement GitOps deployment via ArgoCD"]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context. Signal terms (agentic, LLM, Bedrock, generative AI, etc.) not found.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. The context mentions 'agent' generically (referring to software agents consuming APIs) but does not contain AI-specific signal terms."
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Conditional / Adaptive → Strangler Fig",
+    "rationale": "Start by containerizing the monolith on EKS (establish deployment infrastructure), then apply Strangler Fig to extract services incrementally. Zero test coverage and zero CI/CD mandate infrastructure-first before decomposition.",
+    "extraction_priority": ["Basket/Order Service", "User Service", "Product Catalog Service"],
+    "patterns": ["Anti-corruption Layer", "Saga Pattern", "Event Sourcing", "Hexagonal Architecture"],
+    "effort_factors": {
+      "module_boundaries": "Moderate — layered architecture exists but boundaries are implicit",
+      "data_coupling": "Moderate — domain-specific tables but shared schema",
+      "stored_procedures": "Low effort (favorable) — none exist",
+      "communication_patterns": "High effort — need to introduce async",
+      "ci_cd_maturity": "High effort — need to build from scratch",
+      "test_coverage": "High risk — no regression safety net"
+    }
+  },
+  "filter_vocab": {
+    "categories": ["Infrastructure & DevOps", "Application Architecture", "Data Platform", "Security Baseline", "Operations & Observability"]
+  }
+}

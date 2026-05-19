@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>monolith - Modernization Readiness Analysis Report</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1a202c; line-height: 1.6; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+header { background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%); color: white; padding: 32px; border-radius: 12px; margin-bottom: 24px; }
+header h1 { font-size: 24px; margin-bottom: 8px; }
+header .subtitle { opacity: 0.8; font-size: 14px; }
+.executive-summary { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.executive-summary h2 { font-size: 18px; margin-bottom: 16px; color: #2d3748; }
+.tier-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; }
+.tier-remediation { background: #fed7aa; color: #c2410c; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.stat-card .number { font-size: 32px; font-weight: 700; }
+.stat-card .label { font-size: 12px; text-transform: uppercase; color: #718096; margin-top: 4px; }
+.stat-high .number { color: #dc2626; }
+.stat-medium .number { color: #d97706; }
+.stat-low .number { color: #2563eb; }
+.stat-total .number { color: #4a5568; }
+.section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.section h2 { font-size: 18px; margin-bottom: 16px; color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+th { background: #f7fafc; font-weight: 600; color: #4a5568; }
+.status-ready { color: #059669; font-weight: 600; }
+.status-needs-work { color: #d97706; font-weight: 600; }
+.status-critical { color: #dc2626; font-weight: 600; }
+.finding-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.finding-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.finding-title { font-weight: 600; font-size: 14px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.badge-high { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.badge-medium { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.badge-low { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.finding-category { font-size: 12px; color: #718096; margin-bottom: 8px; }
+.finding-section { margin-bottom: 8px; }
+.finding-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #718096; margin-bottom: 4px; }
+.finding-section-content { font-size: 13px; color: #4a5568; }
+.footer { text-align: center; padding: 24px; color: #718096; font-size: 12px; }
+.recommendation-block { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-top: 16px; }
+.recommendation-block h3 { font-size: 14px; color: #166534; margin-bottom: 8px; }
+.recommendation-block li { font-size: 13px; margin-bottom: 4px; color: #166534; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>monolith - Modernization Readiness Analysis Report</h1>
+<div class="subtitle">2026-05-18 &middot; PHP &middot; 3192 LOC &middot; Priority: P0</div>
+</header>
+
+<div class="executive-summary">
+<h2>Executive Summary</h2>
+<p><strong>Repository Status:</strong> <span class="tier-badge tier-remediation">&#x1F7E0; Remediation Required</span></p>
+<p style="margin-top:12px"><strong>Overall Score:</strong> 1.82 / 4.0 (Needs Work)</p>
+<p style="margin-top:12px"><strong>Key Findings:</strong> This PHP monolith has strong infrastructure foundations (App Runner, RDS Multi-AZ, VPC isolation, WAF) but critical gaps in application architecture (tightly-coupled monolith), DevOps practices (no CI/CD), security (plaintext credentials), and operations (no testing, no observability).</p>
+<p style="margin-top:12px"><strong>Remediation Plan:</strong> Two modernization pathways triggered: Move to Cloud Native (decompose monolith via Strangler Fig) and Move to Modern DevOps (build CI/CD pipeline, add testing). Priority actions: remove hardcoded credentials, build CI/CD pipeline, add integration tests, begin inventory service extraction.</p>
+<p style="margin-top:12px"><strong>Recommended Actions:</strong></p>
+<ol style="margin-left:20px;margin-top:8px;font-size:14px">
+<li>Remove plaintext credentials from source code and migrate to AWS Secrets Manager</li>
+<li>Build CI/CD pipeline with automated testing and security scanning</li>
+<li>Begin Strangler Fig decomposition — extract inventory service to EKS with API Gateway</li>
+</ol>
+</div>
+
+<div class="stats-row">
+<div class="stat-card stat-total"><div class="number">32</div><div class="label">Total Findings</div></div>
+<div class="stat-card stat-high"><div class="number">5</div><div class="label">High Severity</div></div>
+<div class="stat-card stat-medium"><div class="number">22</div><div class="label">Medium Severity</div></div>
+<div class="stat-card stat-low"><div class="number">5</div><div class="label">Low Severity</div></div>
+</div>
+
+<div class="section">
+<h2>Technology Stack</h2>
+<table>
+<tr><th>Field</th><th>Value</th></tr>
+<tr><td>Language</td><td>PHP 8.2</td></tr>
+<tr><td>Lines of Code</td><td>3,192</td></tr>
+<tr><td>Framework</td><td>None (raw PHP with PDO)</td></tr>
+<tr><td>Priority</td><td>P0</td></tr>
+<tr><td>Archetype</td><td>stateful-crud (auto-detected)</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Category-by-Category Breakdown</h2>
+<table>
+<tr><th>Category</th><th>Score</th><th>Rating</th><th>Status</th></tr>
+<tr><td>Infrastructure &amp; DevOps (INF)</td><td>2.64 / 4.0</td><td>Partial</td><td class="status-critical">Critical</td></tr>
+<tr><td>Application Architecture (APP)</td><td>1.33 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+<tr><td>Data Platform (DATA)</td><td>2.25 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Security Baseline (SEC)</td><td>1.67 / 4.0</td><td>Needs Work</td><td class="status-critical">Critical</td></tr>
+<tr><td>Operations &amp; Observability (OPS)</td><td>1.22 / 4.0</td><td>Not Ready</td><td class="status-critical">Critical</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>Detailed Findings</h2>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-high">HIGH</span><span class="finding-title">APP-Q2: Tightly-coupled monolith with no module boundaries</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">Single 3192-line PHP file containing all business domains. No module boundaries, no separation of concerns. 9 database tables accessed directly throughout. All business logic, data access, routing, authentication, and UI in one file.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Begin Strangler Fig decomposition starting with inventory domain. Extract to EKS with own Aurora database. Implement Anti-corruption Layer between monolith and new services.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-high">HIGH</span><span class="finding-title">INF-Q11: No CI/CD pipeline — all deployments manual</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">No CI/CD pipeline exists. Deployment is a manual bash script (deploy.sh). AWS deployment follows manual CLI instructions documented in CloudFormation outputs.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Implement CI/CD with GitHub Actions. Add Terraform CI with plan/apply workflow. Integrate ArgoCD for EKS deployments as services are extracted.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-high">HIGH</span><span class="finding-title">SEC-Q5: Plaintext credentials in source code</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">Hardcoded fallback password in get_db() function ('ecommerce_pass'). Seed passwords in plaintext ('customer123', 'admin123'). DB credentials passed as plain environment variables without Secrets Manager.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Remove hardcoded credentials immediately. Move database credentials to AWS Secrets Manager with automated rotation. Update App Runner to pull secrets at runtime.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-high">HIGH</span><span class="finding-title">OPS-Q6: Zero automated testing</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">No test files found anywhere in the repository. No unit tests, integration tests, API tests, or contract tests. Zero automated test coverage.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Add integration tests for critical API endpoints immediately. Add contract tests for the API surface. Gate deployments on test passage.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-high">HIGH</span><span class="finding-title">DATA-Q1: No managed object storage for unstructured data</span></div>
+<div class="finding-category">Category: Data Platform</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">No S3 bucket. Product images referenced as filesystem paths in database. No document parsing pipeline or managed object storage.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Create S3 bucket for product images and static assets. Serve via CloudFront. Store metadata in DynamoDB or Aurora.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-medium">MEDIUM</span><span class="finding-title">INF-Q4: No async messaging or streaming infrastructure</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">No messaging or streaming infrastructure. All operations synchronous. No SQS, SNS, EventBridge, or message broker.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Introduce Amazon EventBridge for domain event publishing when decomposing the monolith.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-medium">MEDIUM</span><span class="finding-title">APP-Q3: All communication synchronous with no async patterns</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">All domain interactions are synchronous in-process calls. No event publishing, no message queues. Cross-domain state changes have no async path.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Introduce EventBridge for domain events as services are extracted. Start with inventory.stock-level-changed events.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-medium">MEDIUM</span><span class="finding-title">APP-Q5: No API versioning strategy</span></div>
+<div class="finding-category">Category: Application Architecture</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">No versioning. Routes are unversioned (/api/products, /api/orders). Breaking changes deployed directly to all consumers.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Implement URL-path versioning (/v1/) when extracting the inventory service. API Gateway supports stage-based versioning.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-medium">MEDIUM</span><span class="finding-title">SEC-Q4: No centralized identity integration</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">Application manages own authentication with local users table and PHP sessions. No external IdP, no SSO, no OIDC/SAML.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Integrate with Amazon Cognito for centralized identity, OAuth2/OIDC tokens, and federation.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-medium">MEDIUM</span><span class="finding-title">SEC-Q7: No application security scanning</span></div>
+<div class="finding-category">Category: Security Baseline</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">No CI/CD pipeline, so no SAST, DAST, or dependency scanning. ECR scan-on-push is the only security scanning (manually triggered).</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Add SAST (Semgrep), container scanning gate, and dependency scanning to CI/CD pipeline.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-medium">MEDIUM</span><span class="finding-title">OPS-Q5: Rolling deployments with no canary or traffic shifting</span></div>
+<div class="finding-category">Category: Operations &amp; Observability</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">App Runner rolling deployments with basic health checks. No canary, blue/green, or automated rollback.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Implement canary deployments with Argo Rollouts on EKS with automated rollback on error rate degradation.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-low">LOW</span><span class="finding-title">INF-Q5: Network security lacks managed networking services</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">VPC with private subnets, least-privilege security groups, VPC Flow Logs. Missing VPC endpoints and managed networking services.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Add VPC endpoints for AWS services. Consider VPC Lattice for service-to-service communication.</div></div>
+</div>
+
+<div class="finding-card">
+<div class="finding-header"><span class="badge badge-low">LOW</span><span class="finding-title">INF-Q10: IaC covers primary resources but lacks operational resources</span></div>
+<div class="finding-category">Category: Infrastructure &amp; DevOps</div>
+<div class="finding-section"><div class="finding-section-title">Finding</div><div class="finding-section-content">CloudFormation covers VPC, RDS, App Runner, WAF, ECR, IAM, KMS. Missing monitoring alarms, Secrets Manager, Backup plans.</div></div>
+<div class="finding-section"><div class="finding-section-title">Recommendation</div><div class="finding-section-content">Migrate to Terraform. Extend coverage to CloudWatch alarms, Secrets Manager, AWS Backup. Adopt GitOps workflow.</div></div>
+</div>
+
+</div>
+
+<div class="section">
+<h2>Modernization Pathways</h2>
+<table>
+<tr><th>#</th><th>Pathway</th><th>Status</th><th>Priority</th><th>Effort</th></tr>
+<tr><td>1</td><td>Move to Cloud Native</td><td><strong style="color:#dc2626">Triggered</strong></td><td>High</td><td>High</td></tr>
+<tr><td>2</td><td>Move to Containers</td><td>Not Triggered</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>3</td><td>Move to Open Source</td><td>Not Triggered</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>4</td><td>Move to Managed Databases</td><td>Not Triggered</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>5</td><td>Move to Managed Analytics</td><td>Not Triggered</td><td>&mdash;</td><td>&mdash;</td></tr>
+<tr><td>6</td><td>Move to Modern DevOps</td><td><strong style="color:#dc2626">Triggered</strong></td><td>High</td><td>Medium</td></tr>
+<tr><td>7</td><td>Move to AI</td><td>Not Triggered</td><td>&mdash;</td><td>&mdash;</td></tr>
+</table>
+</div>
+
+<div class="recommendation-block">
+<h3>&#x1F7E0; Significant Modernization Required — Top Recommendations</h3>
+<ol>
+<li><strong>SEC-Q5:</strong> Remove plaintext credentials from source code and migrate to AWS Secrets Manager with rotation</li>
+<li><strong>INF-Q11:</strong> Build CI/CD pipeline with GitHub Actions — automated build, test, security scan, and deploy stages</li>
+<li><strong>APP-Q2:</strong> Begin Strangler Fig decomposition — extract inventory service to EKS with API Gateway and EventBridge</li>
+</ol>
+</div>
+
+<div class="footer">
+Generated by AWS Transform &middot; Modernization Readiness Analysis Report
+</div>
+</div>
+</body>
+</html>

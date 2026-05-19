@@ -1,0 +1,740 @@
+{
+  "analysis_type": "mod",
+  "metadata": {
+    "repository": "aws-microservices",
+    "analysis_date": "2026-05-18",
+    "td_version": "modernization-readiness-analysis",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Three microservices (product, basket, ordering) each own DynamoDB tables and expose CRUD endpoints via API Gateway. The dominant pattern is stateful CRUD operations on business entities. Classified as stateful-crud.",
+    "priority": "P0",
+    "tags": ["microservices", "serverless", "event-driven"],
+    "context": "Event-driven serverless microservices (product, basket, ordering) with Lambda, DynamoDB, EventBridge, SQS. The agent will invoke these as tools for order status lookups and return processing.",
+    "preferences": {
+      "prefer": ["eks", "aurora", "dynamodb", "api-gateway", "eventbridge", "bedrock", "terraform", "gitops"],
+      "avoid": ["self-managed-kafka", "self-managed-kubernetes", "oracle", "manual-deployments"]
+    },
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": true,
+      "has_iac_provisioning_aws_resources": true
+    }
+  },
+  "overall_score": 2.40,
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 3,
+    "medium_count": 18,
+    "low_count": 4,
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 2.82,
+      "score_rating": "Partial",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.83,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 3.50,
+      "score_rating": "Mature",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.83,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.00,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q11",
+      "title": "CI/CD Automation",
+      "score": 1,
+      "gap": "No CI/CD pipeline — all deployments manual",
+      "impact": "Blocks automated delivery; triggers Modern DevOps pathway"
+    },
+    {
+      "rank": 2,
+      "question_id": "OPS-Q5",
+      "title": "Deployment Strategy",
+      "score": 1,
+      "gap": "No deployment strategy — direct manual cdk deploy",
+      "impact": "No safety net for production releases; risk of outages"
+    },
+    {
+      "rank": 3,
+      "question_id": "OPS-Q6",
+      "title": "Integration Testing",
+      "score": 1,
+      "gap": "No automated tests — test file is placeholder",
+      "impact": "Cannot validate system behavior; regression risk on changes"
+    },
+    {
+      "rank": 4,
+      "question_id": "SEC-Q3",
+      "title": "API Authentication",
+      "score": 1,
+      "gap": "API Gateway endpoints completely open — no auth",
+      "impact": "Security vulnerability; unauthorized access to all APIs"
+    },
+    {
+      "rank": 5,
+      "question_id": "INF-Q8",
+      "title": "Backup and Recovery",
+      "score": 1,
+      "gap": "No backups on DynamoDB; RemovalPolicy.DESTROY set",
+      "impact": "Data loss risk; no recovery capability"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Workflow Orchestration — checkout flow lacks orchestration",
+      "description": "The checkout flow is a multi-step business operation (validate basket → publish event → delete basket) implemented directly in the basket Lambda handler with no dedicated workflow orchestration service.",
+      "gap": "No error handling for partial failures in checkout. If EventBridge publish succeeds but basket delete fails, there is no compensation logic.",
+      "recommendation": "Implement the checkout flow as a Step Functions state machine with error handling and compensation at each step.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/basket/index.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Network Security — API Gateway publicly exposed without WAF",
+      "description": "API Gateway endpoints are publicly accessible without WAF protection or resource policies. Lambda uses IAM for service access (correct for serverless) but the edge layer lacks protection.",
+      "gap": "No WAF, no resource policies, no IP restrictions on API Gateway. No managed networking services layered on.",
+      "recommendation": "Add AWS WAF to API Gateway stages. Configure resource policies. Consider API Gateway usage plans with throttling.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/apigateway.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "API Entry Point — no request validation or explicit throttling",
+      "description": "API Gateway REST APIs serve as entry points with route-based configuration and default throttling, but lack explicit throttling config, request validation, and authentication.",
+      "gap": "No request validators/models. No usage plans. No authentication on gateway.",
+      "recommendation": "Configure API Gateway request validators and models. Add usage plans with API keys for throttling. Add authorizers.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/apigateway.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Auto-Scaling — no Lambda concurrency controls",
+      "description": "Lambda and DynamoDB on-demand provide inherent auto-scaling, but no explicit concurrency controls or capacity alarms are configured.",
+      "gap": "No Lambda reserved concurrency (runaway invocation risk). No DynamoDB consumed-capacity alarms. No provisioned concurrency for cold starts.",
+      "recommendation": "Configure reserved concurrency on Lambda functions. Add CloudWatch alarms on DynamoDB consumed capacity. Consider provisioned concurrency for latency-sensitive endpoints.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/microservice.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Backup and Recovery — no backups, RemovalPolicy.DESTROY",
+      "description": "No backup configuration on any DynamoDB table. Tables use RemovalPolicy.DESTROY. No PITR enabled. No AWS Backup plans.",
+      "gap": "All three DynamoDB tables have no PITR, no backup plans, and RemovalPolicy.DESTROY — production data loss risk.",
+      "recommendation": "Enable DynamoDB PITR. Change removalPolicy to RETAIN. Consider AWS Backup for scheduled backups.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/database.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "IaC Coverage — no operational resources in IaC",
+      "description": "All primary resources in CDK but no operational/DR resources: no CloudWatch alarms, dashboards, backup plans, health checks, or DLQs.",
+      "gap": "Operational resources (monitoring, alerting, backups) are not codified.",
+      "recommendation": "Extend CDK to include CloudWatch alarms, dashboards, DynamoDB PITR, and Lambda DLQs.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "lib/aws-microservices-stack.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation — no pipeline exists",
+      "description": "No CI/CD pipeline in the repository. No .github/workflows, buildspec.yml, Jenkinsfile, or CodePipeline. All deployments are manual cdk deploy.",
+      "gap": "All deployments manual. No automated build, test, or deploy stages. No quality gates. No rollback.",
+      "recommendation": "Implement CI/CD pipeline with CDK Pipelines or GitHub Actions. Include lint, build, test, synth, deploy-staging, integration-test, deploy-production stages.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Programming Languages — EOL Node.js 14.x runtime",
+      "description": "Node.js 14.x (EOL Nov 2023), TypeScript 3.9.7, CDK 2.17.0. AWS SDK v3 is current but runtime and framework versions create compound legacy signals.",
+      "gap": "EOL runtime (no security patches). Outdated CDK and TypeScript versions.",
+      "recommendation": "Upgrade Lambda runtime to Node.js 20.x+. Upgrade CDK to latest 2.x. Upgrade TypeScript to 5.x.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "package.json", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "API Versioning — no versioning strategy",
+      "description": "No API versioning. Routes are /product, /basket, /order with no version prefix, headers, or annotations.",
+      "gap": "No versioning mechanism. Breaking changes affect all consumers simultaneously.",
+      "recommendation": "Implement URL-based versioning (/v1/product, /v1/basket, /v1/order). Critical for agent tool invocation stability.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/apigateway.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Service Discovery — hardcoded configuration via env vars",
+      "description": "Table names and EventBridge bus name passed via environment variables set at deploy time. No dynamic discovery or service registry.",
+      "gap": "Configuration hardcoded in CDK. No API catalog. No dynamic service discovery.",
+      "recommendation": "Use SSM Parameter Store or AppConfig for service configuration. Consider EventBridge schema registry for event contract discovery.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {"file": "lib/microservice.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Data Access Layer — no repository/DAO pattern",
+      "description": "DynamoDB commands constructed inline in handler functions. ddbClient.js only initializes the client instance — no abstraction over data operations.",
+      "gap": "Data access logic scattered in handlers. No repository pattern for testability or maintainability.",
+      "recommendation": "Extract data access into repository modules per service (productRepository.js, basketRepository.js, orderRepository.js).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {"file": "src/product/index.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption at Rest — AWS-owned keys only, no CMK",
+      "description": "DynamoDB uses default AWS-owned encryption. No customer-managed KMS keys. SQS queue uses default encryption.",
+      "gap": "No customer-managed KMS keys. Cannot control key rotation or audit key access.",
+      "recommendation": "Add customer-managed KMS keys for DynamoDB tables and SQS queue. Configure key rotation.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/database.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Authentication — endpoints completely open",
+      "description": "No authentication on any API Gateway endpoint. All REST APIs open to the public internet. No authorizers, API keys, or usage plans.",
+      "gap": "All API endpoints unauthenticated. Unauthorized access to all CRUD operations.",
+      "recommendation": "Add Cognito User Pool or Lambda authorizer to all API Gateway methods. Configure API keys with usage plans.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/apigateway.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Centralized Identity — no identity provider",
+      "description": "No identity provider integration. No Cognito, OIDC, or SAML. The application has no authentication at all.",
+      "gap": "No identity management. Cannot attribute actions to users or enforce access policies.",
+      "recommendation": "Integrate Amazon Cognito as centralized IdP. Create User Pool with OAuth2/OIDC flows. Configure API Gateway Cognito authorizers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Compute Hardening — EOL runtime, no scanning",
+      "description": "Lambda runtime Node.js 14.x is EOL (no security patches). No vulnerability scanning. No dependency scanning. AWS SDK packages outdated.",
+      "gap": "EOL runtime. No vulnerability or dependency scanning. Outdated SDK packages.",
+      "recommendation": "Upgrade to Node.js 20.x+. Add Dependabot or Snyk. Update AWS SDK packages. Consider Lambda runtime management controls.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "lib/microservice.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Security Pipeline — no security scanning",
+      "description": "No CI/CD pipeline, therefore no security scanning. No SAST, no dependency scanning, no Dependabot.",
+      "gap": "No security validation in development workflow. Vulnerabilities reach production undetected.",
+      "recommendation": "Integrate npm audit/Snyk for dependencies, Semgrep/CodeGuru for SAST, and CDK-nag for IaC security when CI/CD is implemented.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Distributed Tracing — not instrumented",
+      "description": "No X-Ray active tracing on Lambda. No OpenTelemetry. No trace propagation across EventBridge→SQS→Lambda flow.",
+      "gap": "Cannot trace requests across microservices. Cross-service debugging is guesswork.",
+      "recommendation": "Enable X-Ray active tracing on all Lambda functions and API Gateway stages. Consider ADOT Lambda layer.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/microservice.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "SLO Definitions — none defined",
+      "description": "No SLO definitions. No CloudWatch alarms on latency or error rates. No error budget tracking.",
+      "gap": "No formal SLOs for critical user journeys.",
+      "recommendation": "Define SLOs: Product API p99 < 200ms, Checkout success > 99.5%, Order query p99 < 500ms. Implement as CloudWatch alarms.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Business Metrics — none published",
+      "description": "No custom business metrics. No CloudWatch putMetricData calls. Only default Lambda metrics available.",
+      "gap": "No visibility into business outcomes (orders placed, checkout rates, product catalog health).",
+      "recommendation": "Add custom metrics using CloudWatch Embedded Metric Format: orders-placed, checkout-success/failure, products-created.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "src/basket/index.js", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Anomaly Detection — no alerting configured",
+      "description": "No CloudWatch alarms. No anomaly detection. No PagerDuty/OpsGenie/SNS integration.",
+      "gap": "No automated failure detection. Incidents discovered by users.",
+      "recommendation": "Add alarms: Lambda error rate, duration p99, DynamoDB throttles, SQS DLQ count. Add SNS notification topic.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Deployment Strategy — direct manual deploy",
+      "description": "No deployment strategy. Manual cdk deploy directly to production. No canary, blue/green, or traffic shifting.",
+      "gap": "Bad deployments affect all users immediately with no rollback.",
+      "recommendation": "Implement Lambda canary deployments with AutoPublishAlias and DeploymentPreference. Add CloudFormation rollback triggers.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "lib/microservice.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing — no tests implemented",
+      "description": "Only test file is a placeholder with all assertions commented out. No integration, API, or contract tests.",
+      "gap": "No automated testing. Cannot validate infrastructure, API behavior, or event flows.",
+      "recommendation": "Implement CDK assertion tests, API integration tests, and EventBridge flow tests using Jest.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "test/aws-microservices.test.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Incident Response — entirely ad hoc",
+      "description": "No runbooks, no SSM Automation, no self-healing. No DLQs on Lambda functions.",
+      "gap": "No documented or automated incident response procedures.",
+      "recommendation": "Create runbooks for common scenarios. Add Lambda DLQs. Consider SSM Automation for remediation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Ownership — no ownership defined",
+      "description": "No per-service dashboards, no named alarm owners, no CODEOWNERS, no team attribution.",
+      "gap": "No clear ownership of service health.",
+      "recommendation": "Add CODEOWNERS. Create per-service CloudWatch dashboards in CDK. Tag resources with team ownership.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Resource Tagging — no tags on any resources",
+      "description": "No tags on DynamoDB tables, Lambda functions, API Gateways, EventBridge, or SQS. No cost allocation or ownership tags.",
+      "gap": "Cannot track costs per service, identify ownership, or distinguish environments.",
+      "recommendation": "Add CDK stack-level tags (Environment, Service, Team, CostCenter) using Tags.of(). Use CDK Aspects for enforcement.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "lib/database.ts", "lines": null},
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {"question_id": "INF-Q1", "category_id": "INF", "title": "Managed Compute", "status": "pass", "score": 4, "reason": "All compute on Lambda (serverless). No EC2."},
+    {"question_id": "INF-Q2", "category_id": "INF", "title": "Managed Databases", "status": "pass", "score": 4, "reason": "All databases DynamoDB (fully managed, multi-AZ)."},
+    {"question_id": "INF-Q4", "category_id": "INF", "title": "Async Messaging and Streaming", "status": "pass", "score": 4, "reason": "EventBridge + SQS for cross-service async; sync reads via API Gateway appropriate for stateful-crud."},
+    {"question_id": "INF-Q9", "category_id": "INF", "title": "High Availability and Fault Isolation", "status": "pass", "score": 4, "reason": "All services (Lambda, DynamoDB, API GW, EventBridge, SQS) are inherently multi-AZ."},
+    {"question_id": "APP-Q2", "category_id": "APP", "title": "Monolith vs Microservices", "status": "pass", "score": 4, "reason": "Three independently deployable microservices with separate databases and async communication."},
+    {"question_id": "APP-Q3", "category_id": "APP", "title": "Async vs Sync Communication", "status": "pass", "score": 4, "reason": "Cross-service communication 100% async via EventBridge+SQS. Sync for client-facing CRUD (correct)."},
+    {"question_id": "APP-Q4", "category_id": "APP", "title": "Long-Running Process Handling", "status": "pass", "score": 4, "reason": "No operations exceed 30s. All DynamoDB calls sub-second. Checkout async by design."},
+    {"question_id": "DATA-Q1", "category_id": "DATA", "title": "Unstructured Data Storage", "status": "pass", "score": 4, "reason": "System handles only structured data in DynamoDB. No unstructured data requirements."},
+    {"question_id": "DATA-Q3", "category_id": "DATA", "title": "Database Engine Version and EOL", "status": "pass", "score": 4, "reason": "DynamoDB is serverless with no user-managed engine versions. No EOL risk."},
+    {"question_id": "DATA-Q4", "category_id": "DATA", "title": "Stored Procedures and Schema Complexity", "status": "pass", "score": 4, "reason": "DynamoDB has no stored procedures. All logic in application layer."},
+    {"question_id": "SEC-Q1", "category_id": "SEC", "title": "Audit Logging", "status": "not_evaluated_surface_flag", "score": null, "reason": "Application-level IaC only. CloudTrail is account-level, belongs in foundation repo."},
+    {"question_id": "SEC-Q5", "category_id": "SEC", "title": "Secrets Management", "status": "pass", "score": 4, "reason": "No secrets needed. All AWS access via IAM roles. Environment vars contain only non-secret config."}
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "APP-Q2 = 4 — already microservices with well-defined boundaries. Primary trigger (APP-Q2 < 3) not met.",
+      "triggering_questions": [
+        {"question_id": "APP-Q2", "score": 4, "note": "Already microservices; threshold not met"}
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1 = 4 — compute already on Lambda (serverless). Contextual guard: workload is Lambda/serverless, not EC2/VM.",
+      "triggering_questions": [
+        {"question_id": "INF-Q1", "score": 4, "note": "Compute is serverless (Lambda); threshold not met and guard blocks"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "Workload already runs on Lambda (serverless). Container pathway does not apply to serverless-first architectures."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4 = 4 — no stored procedures or proprietary SQL. No commercial database engines detected.",
+      "triggering_questions": [
+        {"question_id": "DATA-Q4", "score": 4, "note": "No proprietary SQL; threshold not met"}
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q2 = 4 — all databases fully managed (DynamoDB).",
+      "triggering_questions": [
+        {"question_id": "INF-Q2", "score": 4, "note": "All databases managed; threshold not met"}
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q4 = 4 — managed messaging (EventBridge, SQS) in use. No data processing workloads exist.",
+      "triggering_questions": [
+        {"question_id": "INF-Q4", "score": 4, "note": "Managed messaging in use; threshold not met"}
+      ],
+      "detail": null,
+      "not_triggered_reason": "No streaming, ETL, or data processing workloads found. Managed analytics not applicable."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q11 = 1 (no CI/CD automation). Supporting: OPS-Q5 = 1, OPS-Q6 = 1.",
+      "triggering_questions": [
+        {"question_id": "INF-Q11", "score": 1, "note": "No CI/CD pipeline — primary trigger met"},
+        {"question_id": "INF-Q10", "score": 3, "note": "IaC coverage partial — threshold met (score >= 3)"},
+        {"question_id": "OPS-Q5", "score": 1, "note": "No deployment strategy — supporting trigger met"},
+        {"question_id": "OPS-Q6", "score": 1, "note": "No integration tests — supporting trigger met"}
+      ],
+      "detail": {
+        "current_state": "No CI/CD pipeline. Manual cdk deploy. No deployment strategy. No automated tests.",
+        "recommended_services": ["CodePipeline", "CodeBuild", "CDK Pipelines", "CloudWatch", "X-Ray"],
+        "immediate_actions": [
+          "Implement GitHub Actions or CDK Pipelines CI/CD",
+          "Add CDK assertion tests and API integration tests",
+          "Configure Lambda deployment preferences (canary)",
+          "Add CloudWatch alarms and dashboards to CDK"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
+        ]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context. AI signal terms not found in context field.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. Context mentions 'agent' but not AI-specific signal terms (agentic, LLM, Bedrock, generative AI, etc.)."
+    }
+  ],
+  "decomposition_strategy": null,
+  "filter_vocab": {
+    "categories": ["Infrastructure & DevOps", "Application Architecture", "Data Platform", "Security Baseline", "Operations & Observability"],
+    "severities": ["High", "Medium", "Low"],
+    "priorities": ["P1", "P2"]
+  }
+}
