@@ -1,8 +1,29 @@
 # Portfolio Analysis Orchestrator
 
-> Automated analysis of your service portfolio for agentic AI readiness and cloud-native modernization -- two dedicated analyses (ARA + MOD) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, and consolidated reports.
+Scans a portfolio of code repositories and grades each service on two things:
 
-This project provides a [Kiro](https://kiro.dev) Power that orchestrates [AWS Transform](https://docs.aws.amazon.com/transform/) managed transformation definitions across multiple repositories, plus example reports and interactive dashboards.
+1. **Agentic Readiness (ARA)**: Is this service safe for an AI agent to call autonomously? Checks API design, auth scoping, idempotency, state management, human-in-the-loop controls, and observability.
+2. **Modernization Readiness (MOD)**: How cloud-native is this service today, and what's the migration path?
+
+The orchestrator runs both analyses in parallel across your repos, then merges per-repo results into a portfolio-level summary with a prioritized roadmap.
+
+### How it works
+
+A [Kiro](https://kiro.dev) Power reads your `portfolio-config.yaml`, classifies each repo, then calls `atx custom def exec` (the [AWS Transform](https://docs.aws.amazon.com/transform/) CLI) once per repo per analysis type. Results are consolidated into markdown, JSON, and HTML reports.
+
+There's no application code here. The orchestrator is a Kiro Power (a structured prompt in `orchestrator/POWER.md`) that coordinates CLI invocations and enforces ordering constraints: ARA runs before MOD per-repo, and portfolio-level reports run after all per-repo analyses finish.
+
+### What "agentic readiness" means concretely
+
+If you're building AI agents that call your services as tools (MCP servers, Bedrock agents, etc.), those services need specific properties:
+
+- Clean, documented APIs (not just a UI)
+- Scoped auth tokens so a confused agent can't escalate
+- Idempotent operations so retries don't corrupt state
+- Audit trails so you can see what the agent did
+- Graceful failure modes and rollback paths
+
+ARA evaluates your code against these criteria and flags gaps.
 
 ## Architecture
 
