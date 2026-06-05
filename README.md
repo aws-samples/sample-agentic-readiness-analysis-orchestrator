@@ -29,33 +29,15 @@ Zero question overlap between ARA and MOD. The `analysis_type` field routes whic
 
 ```mermaid
 flowchart TB
-    CONFIG[portfolio-config.yaml] --> POWER[Power]
-    
-    POWER --> CLASSIFY[Classify Repos]
-    CLASSIFY --> ROUTE{analysis_type?}
-    
-    ROUTE -->|agentic-readiness| A_GEN[Generate ARA configs]
-    ROUTE -->|modernization| M_GEN[Generate MOD configs]
-    ROUTE -->|full| ALL[All paths]
-    ALL --> A_GEN
-    ALL --> M_GEN
-
-    A_GEN --> A_RUN[ARA TD per repo<br/>parallel across repos]
-    M_GEN --> M_RUN[MOD TD per repo<br/>parallel across repos<br/>after ARA in full mode]
-
-    A_RUN --> GATE1[Reconciliation Gate]
-    M_RUN --> GATE1
-
-    GATE1 --> A_PORT[Portfolio ARA TD]
-    A_PORT --> GATE2[Reconciliation Gate]
-    GATE2 --> M_PORT[Portfolio MOD TD]
-
-    A_PORT --> A_OUT[ARA Portfolio Report]
-    M_PORT --> M_OUT[MOD Portfolio Report]
-
-    A_OUT --> DONE[Done]
-    M_OUT --> DONE
+    CONFIG[portfolio-config.yaml] --> CLASSIFY[Classify Repos]
+    CLASSIFY --> PARALLEL[Per-Repo Analyses<br/>parallel across repos]
+    PARALLEL --> PORT_ARA[Portfolio ARA]
+    PARALLEL --> PORT_MOD[Portfolio MOD]
+    PORT_ARA --> REPORTS[Reports]
+    PORT_MOD --> REPORTS
 ```
+
+The `analysis_type` field controls which path runs: `agentic-readiness` (ARA only), `modernization` (MOD only), or `full` (both). Per-repo TDs run in parallel across repos. Portfolio-level TDs only run for the selected analysis type(s).
 
 ### Repo Classification
 
