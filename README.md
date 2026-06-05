@@ -28,34 +28,16 @@ Zero question overlap between ARA and MOD. The `analysis_type` field routes whic
 > **Per-repo execution model.** Subagents run **in parallel across repositories** but TDs are sequenced **within each repository** in `full` mode (ARA → MOD). Concurrent ATX runs against the same repo path fork divergent staging branches and lose artifacts. Portfolio TDs (Portfolio ARA → Portfolio MOD) run **strictly serially** with a Reconciliation Gate between each. See `orchestrator/POWER.md` for the full safety contracts.
 
 ```mermaid
-flowchart TB
-    CONFIG[portfolio-config.yaml] --> POWER[Power]
-    
-    POWER --> CLASSIFY[Classify Repos]
-    CLASSIFY --> ROUTE{analysis_type?}
-    
-    ROUTE -->|agentic-readiness| A_GEN[Generate ARA configs]
-    ROUTE -->|modernization| M_GEN[Generate MOD configs]
-    ROUTE -->|full| ALL[All paths]
-    ALL --> A_GEN
-    ALL --> M_GEN
-
-    A_GEN --> A_RUN[ARA TD per repo<br/>parallel across repos]
-    M_GEN --> M_RUN[MOD TD per repo<br/>parallel across repos<br/>after ARA in full mode]
-
-    A_RUN --> GATE1[Reconciliation Gate]
-    M_RUN --> GATE1
-
-    GATE1 --> A_PORT[Portfolio ARA TD]
-    A_PORT --> GATE2[Reconciliation Gate]
-    GATE2 --> M_PORT[Portfolio MOD TD]
-
-    A_PORT --> A_OUT[ARA Portfolio Report]
-    M_PORT --> M_OUT[MOD Portfolio Report]
-
-    A_OUT --> DONE[Done]
-    M_OUT --> DONE
+flowchart LR
+    CONFIG[portfolio-config.yaml] --> CLASSIFY[Classify Repos]
+    CLASSIFY --> PARALLEL[Per-Repo Analyses<br/>ARA + MOD in parallel]
+    PARALLEL --> GATE[Reconciliation Gate]
+    GATE --> PORT_ARA[Portfolio ARA]
+    PORT_ARA --> PORT_MOD[Portfolio MOD]
+    PORT_MOD --> REPORTS[Reports]
 ```
+
+The `analysis_type` field controls which analyses run: `agentic-readiness` (ARA only), `modernization` (MOD only), or `full` (both). In `full` mode, per-repo TDs run ARA → MOD sequentially within each repo but in parallel across repos. Portfolio TDs always run serially with a reconciliation gate between each.
 
 ### Repo Classification
 
