@@ -1,6 +1,6 @@
 # Portfolio Analysis Orchestrator
 
-> Automated analysis of your service portfolio for agentic AI readiness and cloud-native modernization -- two dedicated analyses (ARA + MOD) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, and consolidated reports.
+> Automated analysis of your service portfolio for agentic AI readiness and cloud-native modernization -- two dedicated analyses (ARA + MOD) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, consolidated reports, and execution plan generation.
 
 This project provides a [Kiro](https://kiro.dev) Power that orchestrates [AWS Transform](https://docs.aws.amazon.com/transform/) managed transformation definitions across multiple repositories, plus example reports and interactive dashboards.
 
@@ -11,17 +11,19 @@ There are two layers:
 1. **AWS Transform Managed Transformation Definitions** — published analysis logic available via `atx tp list` (early access)
 2. **Kiro Power** — an orchestrator that reads `portfolio-config.yaml`, classifies repos, generates ATX configs, spawns parallel subagents, and consolidates reports
 
-### Two-Analysis Architecture
+### Analysis Architecture
 
 | Analysis | Description |
 |---|---|
 | **Modernization Readiness Analysis (MOD)** | Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
 | **Agentic Readiness Analysis (ARA)** | Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
+| **Portfolio Execution Plan (EXEC)** | MODA-only. Consumes the portfolio MODA report (runs last in MODA chain — no ARA dependency) and produces a holistic engagement-level roadmap with work streams, phased timelines, cost estimates, and risk registers. |
 
 Zero question overlap between ARA and MOD. The `analysis_type` field routes which analyses run:
 - `agentic-readiness` -> ARA only
 - `modernization` -> MOD only
 - `full` -> both analyses
+- `execution-plan` -> Portfolio Execution Plan (hard dependency: requires `portfolio-modernization-readiness-analysis` to have completed first)
 
 ### Analysis Flow
 
@@ -210,17 +212,68 @@ atx custom def exec -n AWS/portfolio-modernization-readiness-analysis -p . -g fi
 
 Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution.
 
+### Step 6: Generate Execution Plan (After Portfolio MODA Completes)
+
+> **Hard dependency (MODA-only — no ARA dependency):** The execution plan TD consumes the portfolio MODA report as its sole input. It cannot run standalone — it always runs last in the MODA pipeline:
+>
+> `Per-service MOD (×N) → Portfolio MODA → Portfolio Execution Plan`
+>
+> If the portfolio MODA report does not exist at `./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json`, the TD will fail. ARA (Agentic Readiness Analysis) is a separate dimension and is not consumed by this TD.
+
+The execution plan TD converts your portfolio MODA report into actionable work streams, timelines, and cost estimates.
+
+**Publish the TD** (first time only):
+
+```bash
+atx custom def publish \
+  -n portfolio-execution-plan-generation \
+  --sd ./definitions/portfolio-execution-plan-generation \
+  --description "Generate portfolio-level modernization execution plan from aggregated MODA report"
+```
+
+**Run the TD:**
+
+```bash
+atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
+```
+
+The ATX config file (`atx-config-exec-plan.yaml`) provides engagement parameters — team size, timeline, budget, compliance requirements, and risk tolerance. See `examples/atx-config-exec-plan.yaml` for a working example.
+
+**Output** lands in `./portfolio-execution-plan/`:
+- `{portfolio-name}-portfolio-exec-plan.md` — narrative execution plan
+- `{portfolio-name}-portfolio-exec-plan.json` — machine-readable contract
+- `{portfolio-name}-portfolio-exec-plan.html` — self-contained HTML visualization
+- `{portfolio-name}-portfolio-exec-plan.metadata.json` — version sidecar
+
+### Transformation Definitions
+
+TD source files live in `definitions/`. Each subfolder contains a `SKILL.md` that defines the transformation logic.
+
+| TD | Source | Registry Name |
+|---|---|---|
+| Portfolio Execution Plan | `definitions/portfolio-execution-plan-generation/SKILL.md` | `portfolio-execution-plan-generation` |
+
+To publish a TD to your AWS Transform registry:
+
+```bash
+atx custom def publish -n <registry-name> --sd ./definitions/<td-folder> --description "<description>"
+```
+
 ## Project Structure
 
 ```
+├── definitions/                        # Transformation definition source files
+│   └── portfolio-execution-plan-generation/
+│       └── SKILL.md                    # Execution plan TD source (publish via atx)
 ├── orchestrator/                       # Kiro Power (orchestration logic)
 │   ├── POWER.md                        # Main power file with safety contracts
 │   └── steering/                       # Runbook-level steering files
 ├── examples/
+│   ├── atx-config-exec-plan.yaml       # Example execution plan ATX config
 │   ├── fixtures/
 │   │   └── monolith/                   # PHP test fixture (out-of-box testing)
 │   └── reports/                        # Generated example reports
-│       └── full-analysis/           # Full analysis across 6 repos
+│       └── full-analysis/              # Full analysis across 6 repos
 ├── portfolio-config.schema.json        # Input contract (JSON schema)
 └── README.md
 ```

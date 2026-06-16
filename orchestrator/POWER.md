@@ -1,7 +1,7 @@
 ---
 name: "orchestrator"
 displayName: "Portfolio Analysis Orchestrator"
-description: "Orchestrate agentic readiness and modernization analyses across a service portfolio with reconciliation gates and dependency-aware roadmaps."
+description: "Orchestrate agentic readiness and modernization analyses across a service portfolio with reconciliation gates, dependency-aware roadmaps, and execution plan generation."
 keywords: ["agentic-readiness", "modernization-readiness-analysis", "portfolio-analysis", "ara", "mod", "aws-transform"]
 author: "AWS"
 ---
@@ -10,20 +10,22 @@ author: "AWS"
 
 ## Overview
 
-This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive analyses across your service portfolio. Kiro reads `portfolio-config.yaml`, classifies repositories, spawns one subagent per repo, runs the appropriate AWS Transform transformations, and aggregates results into portfolio-level reports.
+This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive analyses across your service portfolio. Kiro reads `portfolio-config.yaml`, classifies repositories, spawns one subagent per repo, runs the appropriate AWS Transform transformations, aggregates results into portfolio-level reports, and optionally generates a portfolio-level execution plan.
 
-Two analyses are supported. The `analysis_type` field in `portfolio-config.yaml` controls which run:
+Two analyses plus an execution plan TD are supported. The `analysis_type` field in `portfolio-config.yaml` controls which analyses run:
 
 | Analysis | What it evaluates |
 |---|---|
 | **Modernization Readiness Analysis (MOD)** | 37 questions, 5 sections, 1-4 scale. Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
 | **Agentic Readiness Analysis (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
+| **Portfolio Execution Plan (EXEC)** | MODA-only. Consumes the portfolio MODA report (hard dependency — cannot run until Portfolio MODA completes; no ARA dependency) and produces a holistic engagement-level roadmap with deduplicated work streams, phased timelines, cost estimates, risk registers, and decision points. |
 
 | `analysis_type` | What runs |
 |---|---|
 | `agentic-readiness` | Per-repo ARA + Portfolio ARA |
 | `modernization` | Per-repo MOD + Portfolio MOD |
 | `full` | Both analyses |
+| `execution-plan` | Portfolio Execution Plan — **requires:** `portfolio-modernization-readiness-analysis` complete. MODA-only dependency chain: per-service MOD ×N → Portfolio MODA → Exec Plan. No ARA dependency. |
 
 Per-repo subagents run **in parallel across repos**. In `full` mode, each subagent runs its assigned TDs **sequentially within its repo** (ARA → MOD). After per-repo execution, a Reconciliation Gate verifies workspace state, then portfolio TDs run **strictly serially** with a gate between each.
 
@@ -34,6 +36,7 @@ Per-repo subagents run **in parallel across repos**. In `full` mode, each subage
 - Prioritizing modernization based on dependencies
 - Tracking portfolio-wide readiness progress
 - Generating executive-level portfolio reports
+- Producing phased execution plans with cost estimates, risk registers, and work stream decomposition
 
 ---
 
@@ -49,6 +52,7 @@ Read on demand based on what the user is asking. **Do not load all of these proa
 | `reconciliation-gate.md` | The mandatory gate between per-repo and portfolio TDs — Checks A (branch consolidation), B (path standardization), C (bundle completeness) |
 | `manual-execution.md` | Running individual TDs by hand without the orchestrator (single-repo runs, debugging, partial reruns) |
 | `troubleshooting.md` | Errors, missing reports, timeouts, subagent panic recovery, configuration validation issues |
+| `execution-plan.md` | Generating a portfolio execution plan — engagement parameters, ATX config generation, TD invocation, output verification |
 | `atx-cli-reference.md` | Quick reference for `atx` flags, configuration file format, common invocation patterns, recommended timeouts |
 
 To load a steering file: `Call action "readSteering" with powerName="orchestrator", steeringFile="<filename>"`
