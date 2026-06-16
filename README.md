@@ -173,6 +173,7 @@ transformation_definitions:
   modernization: "AWS/modernization-readiness-analysis"
   portfolio_agentic_readiness: "AWS/portfolio-agentic-readiness-analysis"
   portfolio_modernization: "AWS/portfolio-modernization-readiness-analysis"
+  execution_plan: "portfolio-execution-plan-generation"
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
