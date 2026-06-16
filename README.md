@@ -17,13 +17,13 @@ There are two layers:
 |---|---|
 | **Modernization Readiness Analysis (MOD)** | Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
 | **Agentic Readiness Analysis (ARA)** | Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
-| **Portfolio Execution Plan (EXEC)** | MODA-only. Consumes the portfolio MODA report (runs last in MODA chain — no ARA dependency) and produces a holistic engagement-level roadmap with work streams, phased timelines, cost estimates, and risk registers. |
+| **Portfolio Execution Plan (EXEC)** | Unified. Consumes the portfolio MODA report AND/OR portfolio ARA report (at least one required) and produces a holistic engagement-level roadmap with modernization work streams, agent-readiness work streams, cross-dimension dependencies, phased timelines, cost estimates, and risk registers. |
 
 Zero question overlap between ARA and MOD. The `analysis_type` field routes which analyses run:
 - `agentic-readiness` -> ARA only
 - `modernization` -> MOD only
 - `full` -> both analyses
-- `execution-plan` -> Portfolio Execution Plan (hard dependency: requires `portfolio-modernization-readiness-analysis` to have completed first)
+- `execution-plan` -> Portfolio Execution Plan (requires at least one of: `portfolio-modernization-readiness-analysis` or `portfolio-agentic-readiness-analysis` to have completed first)
 
 ### Analysis Flow
 
@@ -212,15 +212,22 @@ atx custom def exec -n AWS/portfolio-modernization-readiness-analysis -p . -g fi
 
 Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution.
 
-### Step 6: Generate Execution Plan (After Portfolio MODA Completes)
+### Step 6: Generate Execution Plan (After Portfolio Reports Complete)
 
-> **Hard dependency (MODA-only — no ARA dependency):** The execution plan TD consumes the portfolio MODA report as its sole input. It cannot run standalone — it always runs last in the MODA pipeline:
+> **Dependency (at least one required):** The execution plan TD consumes the portfolio MODA report AND/OR the portfolio ARA report. At least one must exist. When both are available, it produces a unified plan with:
 >
-> `Per-service MOD (×N) → Portfolio MODA → Portfolio Execution Plan`
+> - **Modernization work streams** (from MODA pathways)
+> - **Agent-readiness work streams** (from ARA BLOCKERs/RISKs)
+> - **Cross-dimension dependencies** (MODA work enables ARA readiness)
+> - **Unified timeline and cost estimation**
 >
-> If the portfolio MODA report does not exist at `./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json`, the TD will fail. ARA (Agentic Readiness Analysis) is a separate dimension and is not consumed by this TD.
+> ```
+> Per-service MOD (×N) → Portfolio MODA ─┐
+>                                         ├→ Portfolio Execution Plan
+> Per-service ARA (×N) → Portfolio ARA ──┘
+> ```
 
-The execution plan TD converts your portfolio MODA report into actionable work streams, timelines, and cost estimates.
+The execution plan TD converts your portfolio reports into actionable work streams, timelines, and cost estimates.
 
 **Publish the TD** (first time only):
 
@@ -228,7 +235,7 @@ The execution plan TD converts your portfolio MODA report into actionable work s
 atx custom def publish \
   -n portfolio-execution-plan-generation \
   --sd ./definitions/portfolio-execution-plan-generation \
-  --description "Generate portfolio-level modernization execution plan from aggregated MODA report"
+  --description "Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports"
 ```
 
 **Run the TD:**
@@ -251,7 +258,7 @@ TD source files live in `definitions/`. Each subfolder contains a `SKILL.md` tha
 
 | TD | Source | Registry Name |
 |---|---|---|
-| Portfolio Execution Plan | `definitions/portfolio-execution-plan-generation/SKILL.md` | `portfolio-execution-plan-generation` |
+| Portfolio Execution Plan (Unified) | `definitions/portfolio-execution-plan-generation/SKILL.md` | `portfolio-execution-plan-generation` |
 
 To publish a TD to your AWS Transform registry:
 

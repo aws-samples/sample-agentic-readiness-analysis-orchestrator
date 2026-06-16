@@ -1,7 +1,7 @@
 ---
 name: portfolio-execution-plan-generation
-description: Generate portfolio-level modernization execution plan from aggregated MODA report
-version: 0.1.0
+description: Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports
+version: 0.2.0
 ---
 
 ## Name
@@ -10,22 +10,33 @@ Portfolio Execution Plan Generation
 
 ## Objective
 
-Generate a comprehensive portfolio-level modernization execution plan by consuming the portfolio MODA report (the aggregated output of the `portfolio-modernization-readiness-analysis` TD) and producing ONE holistic engagement-level roadmap. The portfolio MODA report already aggregates per-service scores, triggered pathways, dependency maps, and remediation roadmaps — this TD focuses purely on **planning**: converting that aggregated analysis into deduplicated work streams, cross-service dependency ordering, phased timelines, risk registers, cost estimations, and success metrics — enabling coordinated execution planning across the entire service estate.
+Generate a comprehensive portfolio-level execution plan by consuming the portfolio MODA report (modernization pathways) AND/OR the portfolio ARA report (agent-readiness BLOCKERs/RISKs) and producing ONE unified engagement-level roadmap. At least one report must exist; when both exist the plan covers both dimensions with cross-dependency detection.
+
+The portfolio MODA report provides triggered modernization pathways (containers, DevOps, cloud native, managed DBs). The portfolio ARA report provides agent-readiness findings (BLOCKERs that must be fixed before agents can safely call services, and RISKs that are recommended improvements). This TD focuses purely on **planning**: converting those aggregated analyses into deduplicated work streams, cross-service dependency ordering, phased timelines, risk registers, cost estimations, and success metrics — enabling coordinated execution planning across the entire service estate.
 
 ## Summary
 
-This transformation uses a **layered input approach**: the portfolio MODA report (`{portfolio-name}-mod-portfolio-report.json`) as its primary input, with optional drill-down into individual per-service MODA reports only when deeper granularity is needed for a specific work stream. It does NOT re-evaluate codebases or re-aggregate per-service data — that work is already done by the portfolio MODA TD. Instead, it:
+This transformation uses a **layered input approach** with TWO optional primary inputs (at least one required):
 
-1. **Reads the portfolio MODA report** (primary) from `./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json` — sufficient for 90% of planning
-2. **Optionally reads per-service MODA reports** (secondary) from `./services/{name}/modernization-readiness-analysis/{slug}-mod-report.json` — only for decomposition strategy details, specific question scores, or evidence file references
-3. **Extracts triggered pathways** from the portfolio report's `pathways[]` array (already aggregated with `contributing_repos` per pathway)
-3. **Generates deduplicated work streams** — ONE work stream per unique triggered pathway (not per service), listing all affected services within each stream
-4. **Establishes shared infrastructure tasks** for pathways affecting multiple services
-5. **Maps cross-service dependencies** between work streams (e.g., DevOps foundation before Cloud Native decomposition)
-6. **Produces a phased timeline** with parallelization strategy based on risk tolerance and dependency ordering
-7. **Identifies risks** at the engagement level (cross-service integration complexity, team capacity spread, timeline feasibility)
-8. **Estimates effort and cost** at the engagement level with three-point estimates (optimistic / expected / pessimistic)
-9. **Defines decision points** where customer input is required before proceeding
+1. **Portfolio MODA report** (`{portfolio-name}-mod-portfolio-report.json`) — modernization pathways, per-service scores, triggered pathways, dependency maps
+2. **Portfolio ARA report** (`{portfolio-name}-ara-portfolio-report.json`) — agent-readiness findings, BLOCKERs, RISKs, cross-cutting themes, remediation roadmap
+
+With optional drill-down into individual per-service reports only when deeper granularity is needed. It does NOT re-evaluate codebases or re-aggregate per-service data — that work is already done by the portfolio MODA/ARA TDs. Instead, it:
+
+1. **Reads the portfolio MODA report** (if exists) from `./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json`
+2. **Reads the portfolio ARA report** (if exists) from `./portfolio-agentic-readiness-analysis/{portfolio-name}-ara-portfolio-report.json`
+3. **Validates at least one exists** — terminates with error if neither is found
+4. **Optionally reads per-service MODA reports** from `./services/{name}/modernization-readiness-analysis/{slug}-mod-report.json` — only for decomposition strategy details
+5. **Optionally reads per-service ARA reports** from `./services/{name}/agentic-readiness-analysis/{slug}-ara-report.json` — only for detailed evidence and remediation specifics
+6. **Generates Modernization Work Streams** (from MODA) — ONE work stream per unique triggered pathway, listing all affected services
+7. **Generates Agent-Readiness Work Streams** (from ARA) — ONE work stream per ARA category with BLOCKERs/RISKs, with BLOCKERs mapped to mandatory tasks and RISKs to recommended tasks
+8. **Detects cross-dimension dependencies** — where MODA work enables ARA readiness (e.g., "Move to Modern DevOps" enables "Add Agent Observability")
+9. **Establishes shared infrastructure tasks** for work streams affecting multiple services
+10. **Maps cross-service dependencies** between work streams
+11. **Produces a phased timeline** with parallelization strategy based on risk tolerance and dependency ordering
+12. **Identifies risks** at the engagement level
+13. **Estimates effort and cost** at the engagement level with three-point estimates (optimistic / expected / pessimistic)
+14. **Defines decision points** where customer input is required before proceeding
 
 The output is a **four-artifact bundle**:
 - `{portfolio-name}-portfolio-exec-plan.md` — narrative execution plan
@@ -34,22 +45,27 @@ The output is a **four-artifact bundle**:
 - `{portfolio-name}-portfolio-exec-plan.metadata.json` — version sidecar
 
 **What this TD does NOT do:**
-- Re-run MODA scoring (consumes portfolio MODA output as-is)
-- Re-aggregate per-service reports (the portfolio MODA report already does this — per-service reports are only used for optional enrichment)
+- Re-run MODA scoring or ARA evaluation (consumes portfolio outputs as-is)
+- Re-aggregate per-service reports (the portfolio TDs already do this — per-service reports are only used for optional enrichment)
 - Ask interactive questions (all context provided upfront via `additionalPlanContext`)
 - Generate Word documents or CSV files (uses standard four-artifact contract)
 - Execute or modify source code
 - Make technology decisions — it recommends options with tradeoffs, customer decides
 - Produce per-service execution plans — it produces ONE portfolio-level plan covering ALL services
 
-**Key differentiator from per-service execution plan TD:** This TD operates at the portfolio level with a layered input model. It uses the already-aggregated portfolio MODA report as its primary input (90% of planning needs) and only drills into individual per-service reports for enrichment when deeper detail is needed. It focuses purely on planning — deduplicating shared modernization work (e.g., "Move to Modern DevOps" triggered by 3 services becomes ONE work stream with shared infrastructure tasks plus per-service implementation tasks), identifying cross-service dependencies, and estimating engagement-level cost rather than per-service cost.
+**Key differentiator from per-service execution plan TD:** This TD operates at the portfolio level with a layered input model. It uses the already-aggregated portfolio MODA and/or ARA reports as its primary inputs and only drills into individual per-service reports for enrichment when deeper detail is needed. It focuses purely on planning — deduplicating shared work (e.g., "Move to Modern DevOps" triggered by 3 services becomes ONE work stream; "Implement Machine Identity" BLOCKERing 4 services becomes ONE agent-readiness work stream), identifying cross-service AND cross-dimension dependencies, and estimating engagement-level cost rather than per-service cost.
 
 ## Entry Criteria
 
-- **Required:** A portfolio MODA report JSON exists at `./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json`
-- The portfolio report follows the expected schema: `metadata` with `portfolio_name`, `assessment_date`, `services_assessed`; `pathways[]` array with `portfolio_status`; `repositories[]` array with per-service scores and triggered pathways
-- The portfolio report was produced by the `portfolio-modernization-readiness-analysis` TD and contains at least 2 assessed services
-- **Optional:** Individual per-service MODA reports at `./services/{name}/modernization-readiness-analysis/{slug}-mod-report.json` — used for enrichment only; the TD degrades gracefully if these are unavailable
+- **Required (at least one):**
+  - Portfolio MODA report JSON at `./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json` — AND/OR —
+  - Portfolio ARA report JSON at `./portfolio-agentic-readiness-analysis/{portfolio-name}-ara-portfolio-report.json`
+- At least ONE of the above must exist. Both are consumed when available for a unified plan.
+- If MODA report exists: must follow expected schema — `metadata` with `portfolio_name`, `assessment_date`, `services_assessed`; `pathways[]` array with `portfolio_status`; `repositories[]` array with per-service scores and triggered pathways; produced by `portfolio-modernization-readiness-analysis` TD with at least 2 assessed services
+- If ARA report exists: must follow expected schema — `assessment_type: "portfolio-ara"`, `metadata` with `portfolio_name`, `assessment_date`, `services_assessed`; `findings[]` array with `native_severity` (BLOCKER/RISK-SAFETY/RISK-QUALITY/INFO); `repositories[]` array; `remediation_roadmap` with phased items; produced by `portfolio-agentic-readiness-analysis` TD with at least 2 assessed services
+- **Optional:** Individual per-service MODA reports at `./services/{name}/modernization-readiness-analysis/{slug}-mod-report.json` — used for enrichment only
+- **Optional:** Individual per-service ARA reports at `./services/{name}/agentic-readiness-analysis/{slug}-ara-report.json` — used for enrichment only
+- The TD degrades gracefully if per-service reports are unavailable
 - Write permissions exist to create the output directory and portfolio artifact bundle (MD, JSON, HTML, and metadata.json)
 - The analysis operates in **read-only mode** — it will not modify any source code, configuration, or infrastructure
 - Stay on the current branch — do not create, switch, or checkout any git branches
@@ -123,18 +139,19 @@ additionalPlanContext: |
 - **`existing_capabilities`** → When absent or indicating gaps, generates training decision points. When team has strong capabilities, reduces effort multipliers.
 
 
-### Step 1: Discover and Load MODA Reports (Layered Input)
+### Step 1: Discover and Load Reports (Layered Input)
 
-This TD uses a **layered input approach**:
+This TD uses a **layered input approach** with two optional primary inputs (at least one required):
 
 | Layer | Source | Purpose | When Used |
 |-------|--------|---------|-----------|
-| **Primary** | Portfolio MODA report | Aggregated pathways, service tiers, cross-cutting themes, priority weighting | Always — sufficient for 90% of planning |
-| **Secondary** | Individual per-service MODA reports | Detailed evidence files, specific question scores, decomposition strategy details | Only when a work stream needs deeper granularity |
+| **Primary A** | Portfolio MODA report | Aggregated pathways, service tiers, cross-cutting themes, priority weighting | When exists — provides modernization work streams |
+| **Primary B** | Portfolio ARA report | Agent-readiness BLOCKERs, RISKs, cross-cutting findings, remediation roadmap | When exists — provides agent-readiness work streams |
+| **Secondary** | Individual per-service reports (MODA + ARA) | Detailed evidence files, specific question scores, decomposition strategy details | Only when a work stream needs deeper granularity |
 
-The TD does NOT re-aggregate pathways across services — that work is already done in the portfolio MODA report.
+The TD does NOT re-aggregate data across services — that work is already done in the portfolio reports.
 
-#### 1.1 Load Portfolio MODA Report (Primary Input)
+#### 1.1 Load Portfolio MODA Report (Primary Input A — Optional)
 
 Read the portfolio MODA report from the expected path:
 
@@ -144,15 +161,15 @@ Read the portfolio MODA report from the expected path:
 
 If `portfolio_name` is specified in `additionalPlanContext`, use it to construct the filename. Otherwise, look for the single `*-mod-portfolio-report.json` file in the directory.
 
-**Validation:**
+**Validation (if file exists):**
 - Is a valid JSON document
 - Has `metadata` with `portfolio_name`, `assessment_date`, `services_assessed` (integer >= 2)
 - Has `pathways[]` array with entries containing `id` and `portfolio_status`
 - Has `repositories[]` array with entries containing `repo_name`, `overall_score`, `classification`
 
-**Terminate with a clear error if the portfolio MODA report is missing or invalid.**
+**If the file does not exist, note MODA is unavailable and continue to Step 1.2.**
 
-**Extract from the portfolio report:**
+**Extract from the portfolio MODA report (when available):**
 
 - **Portfolio metadata** — `metadata.portfolio_name`, `metadata.assessment_date`, `metadata.services_assessed`
 - **Triggered pathways** — entries in `pathways[]` where `portfolio_status == "Triggered"`, collecting `id`, `contributing_repos[]`, `priority`, and `effort`
@@ -160,57 +177,112 @@ If `portfolio_name` is specified in `additionalPlanContext`, use it to construct
 - **Dependency map** — from `dependency_map` if present (cross-service relationships already identified by portfolio MODA)
 - **Remediation roadmap** — from `remediation_roadmap` if present (pre-computed phasing from portfolio MODA)
 
-#### 1.2 Load Per-Service MODA Reports (Secondary/Enrichment Input)
+#### 1.2 Load Portfolio ARA Report (Primary Input B — Optional)
 
-Only drill into individual per-service reports when a work stream requires deeper granularity that the portfolio report does not provide. Per-service reports are located at:
+Read the portfolio ARA report from the expected path:
 
+```
+./portfolio-agentic-readiness-analysis/{portfolio-name}-ara-portfolio-report.json
+```
+
+If `portfolio_name` is specified in `additionalPlanContext`, use it to construct the filename. Otherwise, look for the single `*-ara-portfolio-report.json` file in the directory.
+
+**Validation (if file exists):**
+- Is a valid JSON document
+- Has `assessment_type: "portfolio-ara"`
+- Has `metadata` with `portfolio_name`, `assessment_date`, `services_assessed` (integer >= 2)
+- Has `findings[]` array with entries containing `question_id`, `repo_name`, `native_severity`, `category_id`
+- Has `repositories[]` array with entries containing `repo_name`, `classification.tier`, `classification.blocker_count`
+- Has `remediation_roadmap` with phased items
+
+**If the file does not exist, note ARA is unavailable and continue to Step 1.3.**
+
+**Extract from the portfolio ARA report (when available):**
+
+- **Portfolio metadata** — `metadata.portfolio_name`, `metadata.assessment_date`, `metadata.services_assessed`
+- **BLOCKERs** — findings where `native_severity == "BLOCKER"`, grouped by `category_id` and collecting `repo_name`, `question_id`, `title`, `recommendation`, `effort`, `phase`
+- **RISKs (Safety)** — findings where `native_severity == "RISK-SAFETY"`, grouped by `category_id`
+- **RISKs (Quality)** — findings where `native_severity == "RISK-QUALITY"`, grouped by `category_id`
+- **Per-service readiness** — from `repositories[]`: `repo_name`, `classification.tier`, `classification.blocker_count`, `classification.risk_safety_count`
+- **Remediation roadmap** — from `remediation_roadmap.items[]`: phased remediation actions already computed by portfolio ARA
+- **Cross-cutting findings** — from `cross_cutting_findings[]` if present (issues affecting multiple services in the same category)
+- **Dependency map** — from `dependency_map` if present
+
+#### 1.3 Validate At Least One Report Exists
+
+**Terminate with a clear error if NEITHER the portfolio MODA report NOR the portfolio ARA report was found:**
+
+```
+Portfolio execution plan generation failed: neither portfolio MODA report nor portfolio ARA report 
+found at expected paths. At least one must exist.
+Expected MODA: ./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json
+Expected ARA: ./portfolio-agentic-readiness-analysis/{portfolio-name}-ara-portfolio-report.json
+```
+
+Set availability flags:
+- `has_moda = true/false`
+- `has_ara = true/false`
+- `mode = "unified"` (both) | `"moda-only"` | `"ara-only"`
+
+#### 1.4 Load Per-Service Reports (Secondary/Enrichment Input)
+
+Only drill into individual per-service reports when a work stream requires deeper granularity that the portfolio reports do not provide.
+
+**Per-service MODA reports** at:
 ```
 ./services/{service-name}/modernization-readiness-analysis/{slug}-mod-report.json
 ```
 
-**When to read a per-service report:**
-- The work stream involves Cloud Native decomposition and needs detailed `decomposition_strategy` (strangler-fig patterns, bounded contexts, migration sequence)
-- Effort estimation requires specific question scores (e.g., INF-Q11 score to determine DevOps maturity baseline)
+**Per-service ARA reports** at:
+```
+./services/{service-name}/agentic-readiness-analysis/{slug}-ara-report.json
+```
+
+**When to read a per-service MODA report:**
+- The work stream involves Cloud Native decomposition and needs detailed `decomposition_strategy`
+- Effort estimation requires specific question scores
 - A task's `moda_trace` needs precise evidence file references for acceptance criteria
-- The portfolio report's `repositories[].pathways_triggered[]` lacks detail on triggering questions or gap severity
+
+**When to read a per-service ARA report:**
+- The work stream needs detailed evidence for a specific BLOCKER remediation
+- Task acceptance criteria require specific file/line references from ARA findings
+- Effort estimation needs question-level detail on the severity or scope of a finding
 
 **What NOT to do with per-service reports:**
-- Do NOT re-aggregate pathways (the portfolio report already has the canonical `pathways[]` with `contributing_repos`)
-- Do NOT use per-service reports to override portfolio-level pathway status or priority
-- Do NOT fail if a per-service report is unavailable — degrade gracefully using portfolio-level data only
+- Do NOT re-aggregate (the portfolio reports already have canonical aggregated data)
+- Do NOT use per-service reports to override portfolio-level status or priority
+- Do NOT fail if a per-service report is unavailable — degrade gracefully
 
-**Extract from per-service reports (when loaded):**
-- `decomposition_strategy` — detailed migration approach for Cloud Native pathway
-- `categories[].questions[]` — specific question IDs and scores for effort calibration
-- `evidence_files[]` — concrete file references for task acceptance criteria
-- `top_gaps[]` — detailed gap descriptions for task decomposition
+#### 1.5 Report Currency Check
 
-#### 1.3 MODA Currency Check
-
-Calculate age from portfolio report's `metadata.assessment_date`. If the portfolio report is older than 90 days, note this in the plan's assumptions: "All MODA reports reflect current state (within 90 days)" — with a caveat if stale. Also check per-repository analysis dates if available in `repositories[].metadata.analysis_date`.
+For each available portfolio report, calculate age from `metadata.assessment_date`. If a report is older than 90 days, note this in the plan's assumptions with a staleness caveat. Also check per-repository analysis dates if available.
 
 
-### Step 2: Extract Pathway-to-Services Map
+### Step 2: Extract Pathway-to-Services Map (MODA)
+
+**Skip this step if `has_moda == false`.**
 
 #### 2.1 Build Pathway-to-Services Map
 
-From the portfolio report's `pathways[]` array (already aggregated by the portfolio MODA TD):
+From the portfolio MODA report's `pathways[]` array (already aggregated by the portfolio MODA TD):
 - For each pathway where `portfolio_status == "Triggered"`, extract `contributing_repos[].repo_name` as the list of affected services
 - Identify shared pathways (contributing_repos length >= 2)
 - Identify single-service pathways (contributing_repos length == 1)
 
-#### 2.2 Identify Services Without Work
+#### 2.2 Identify Services Without Modernization Work
 
-Services in `repositories[]` with empty `pathways_triggered[]` are noted in the executive summary as "services_no_action" and excluded from work stream generation.
+Services in `repositories[]` with empty `pathways_triggered[]` are noted in the executive summary as "services_no_moda_action" and excluded from modernization work stream generation.
 
 #### 2.3 Deduplication Principle
 
-**Critical rule:** Each unique triggered pathway produces exactly ONE work stream, regardless of how many services trigger it. A pathway triggered by 3 services produces one work stream with 3 services listed — NOT 3 separate work streams. The portfolio MODA report already enforces this deduplication at the pathway level.
+**Critical rule:** Each unique triggered pathway produces exactly ONE modernization work stream, regardless of how many services trigger it. A pathway triggered by 3 services produces one work stream with 3 services listed — NOT 3 separate work streams. The portfolio MODA report already enforces this deduplication at the pathway level.
 
 
-### Step 3: Generate Work Streams
+### Step 3: Generate Modernization Work Streams (MODA)
 
-For each unique triggered pathway (filtered by `priority_pathways` / `excluded_pathways`), generate a single work stream.
+**Skip this step if `has_moda == false`.**
+
+For each unique triggered pathway (filtered by `priority_pathways` / `excluded_pathways`), generate a single modernization work stream.
 
 #### 3.1 Work Stream Structure
 
@@ -264,100 +336,242 @@ Base effort per work stream depends on:
 Present as three-point estimate satisfying: optimistic <= expected <= pessimistic.
 
 
-### Step 4: Generate Timeline
+### Step 4: Generate Agent-Readiness Work Streams (ARA)
 
-#### 4.1 Timeline Phases
+**Skip this step if `has_ara == false`.**
 
-Divide the engagement into 3 phases:
+For each ARA category that contains BLOCKERs or RISKs (RISK-SAFETY, RISK-QUALITY) affecting services in the portfolio, generate an agent-readiness work stream. ARA categories map to work streams as follows:
+
+| ARA Category ID | Work Stream Name | Focus |
+|-----------------|-----------------|-------|
+| `AUTH` | Implement Agent Identity & Authorization | Machine identity, scoped permissions, action-level auth, identity propagation, credential rotation, suspension capability |
+| `API` | Harden API Surface | Machine-readable specs, structured errors, idempotency, pagination, versioning |
+| `STATE` | Ensure Transactional Integrity | Idempotent mutations, compensating transactions, circuit breakers, rate limiting, graceful degradation |
+| `HITL` | Add Human-in-the-Loop Controls | Confirmation flows, approval queues, undo/cancel, escalation paths, blast-radius limits |
+| `DATA` | Improve Data Accessibility | PII filtering, data residency, pagination, input validation, temporal metadata |
+| `DISC` | Enhance Discoverability | Schema versioning, API contracts, service registry, capability advertisement |
+| `OBS` | Add Agent Observability | Distributed tracing, structured logging, agent-specific metrics, anomaly detection, audit trails |
+| `ENG` | Strengthen Engineering Maturity | Test coverage, deployment automation, rollback capability, environment parity |
+
+#### 4.1 ARA Work Stream Structure
+
+Each agent-readiness work stream contains:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Sequential identifier continuing from MODA work streams (e.g., WS-05, WS-06, ...) |
+| `name` | Maps to ARA category (e.g., "Implement Agent Identity & Authorization") |
+| `dimension` | `"agent-readiness"` |
+| `ara_category` | Category ID (e.g., "AUTH") |
+| `services` | All service IDs affected by BLOCKERs/RISKs in this category |
+| `blockers` | Count of BLOCKER findings in this category — these produce MANDATORY tasks |
+| `risks` | Count of RISK findings — these produce RECOMMENDED tasks |
+| `objective` | Concrete outcome when complete |
+| `prerequisites` | Other work stream IDs (may include MODA work streams) |
+| `effort_weeks` | Three-point estimate: optimistic, expected, pessimistic |
+| `risk_level` | High (has BLOCKERs) / Medium (RISKs only) / Low |
+| `phases` | Ordered execution phases with tasks |
+| `success_criteria` | Measurable outcomes confirming completion |
+
+#### 4.2 Severity-to-Priority Mapping
+
+ARA findings map to task priority:
+
+| ARA Native Severity | Task Priority | Requirement Level |
+|---------------------|---------------|-------------------|
+| `BLOCKER` | Mandatory (P0) | Must be completed before agents can safely call the service |
+| `RISK-SAFETY` | Strongly Recommended (P1) | Safety impact — should be completed before production agent deployment |
+| `RISK-QUALITY` | Recommended (P2) | Quality improvement — improves agent integration quality |
+| `INFO` | Optional (P3) | Not included in work streams unless it enables a BLOCKER/RISK fix |
+
+#### 4.3 Task Decomposition (ARA)
+
+Within each ARA work stream, decompose into tasks at 1-2 week (1-10 day) granularity:
+
+- Each task has: `id`, `description`, `effort_days` (1-10), `service` (which service or "shared"), `dependencies` (other task IDs), `acceptance_criteria`, `ara_trace` (traceability to source ARA finding — `question_id` + `repo_name`)
+- BLOCKER tasks are ordered first within each phase
+- Tasks from `cross_cutting_findings` produce shared infrastructure tasks
+- When multiple services have the same BLOCKER (e.g., AUTH-Q1 across 4 services), generate ONE shared pattern task + per-service implementation tasks
+
+#### 4.4 Shared Infrastructure Tasks (ARA)
+
+For categories where the same finding affects multiple services:
+- Generate a "shared" pattern/infrastructure task establishing the common approach
+- Example: "Design shared machine identity authentication pattern (OAuth2 client credentials + API Gateway authorizers) for all services"
+- Per-service implementation tasks depend on the shared pattern task
+
+#### 4.5 Effort Estimation (ARA)
+
+Base effort per ARA work stream depends on:
+- Number of BLOCKERs (each BLOCKER adds 1-2 weeks depending on effort rating in ARA report)
+- Number of RISKs (each RISK adds 0.5-1 week)
+- Number of affected services (multiplier for per-service implementation)
+- Existing capability adjustment (if team has auth/security experience, reduce AUTH/STATE effort)
+- Risk tolerance adjustment: same as MODA work streams
+
+Present as three-point estimate satisfying: optimistic <= expected <= pessimistic.
+
+
+### Step 5: Detect Cross-Dimension Dependencies
+
+**Skip this step if `mode != "unified"` (only one report available).**
+
+Identify where MODA modernization work enables or is required by ARA agent-readiness work, and vice versa. These cross-dimension dependencies create ordering constraints in the unified timeline.
+
+#### 5.1 Common Cross-Dimension Dependencies
+
+| MODA Work Stream | Enables ARA Work Stream | Rationale |
+|------------------|------------------------|-----------|
+| Move to Modern DevOps | Add Agent Observability | Modern CI/CD provides the deployment pipeline for observability instrumentation |
+| Move to Modern DevOps | Strengthen Engineering Maturity | DevOps automation is prerequisite for deployment automation and rollback |
+| Move to Containers | Harden API Surface | Containerized services enable API gateway patterns and service mesh |
+| Move to Containers | Ensure Transactional Integrity | Container orchestration provides circuit breaker and rate limiting infrastructure |
+| Move to Cloud Native | Enhance Discoverability | Cloud-native architectures support service registry and API versioning |
+| Move to Managed Databases | Improve Data Accessibility | Managed databases provide built-in pagination, encryption, access controls |
+
+#### 5.2 Dependency Detection Logic
+
+For each ARA work stream:
+1. Check if any MODA work stream provides infrastructure that the ARA work stream needs
+2. If the ARA work stream's tasks reference infrastructure provided by a MODA pathway (e.g., "API Gateway" when containers/cloud-native provides it), add a prerequisite
+3. Record the dependency as: `{ source_ws: "WS-XX", target_ws: "WS-YY", type: "enables", rationale: "..." }`
+
+For each MODA work stream:
+1. Check if any ARA BLOCKER must be resolved BEFORE the modernization can proceed safely
+2. Example: If AUTH BLOCKERs exist and the service is being migrated to a public-facing container, the auth fix should precede the migration
+3. Record reverse dependencies where safety requires ARA-first ordering
+
+#### 5.3 Cross-Dependency Output
+
+Store detected cross-dimension dependencies in:
+```json
+{
+  "cross_dimension_dependencies": [
+    {
+      "source_ws": "WS-01",
+      "source_dimension": "modernization",
+      "target_ws": "WS-05",
+      "target_dimension": "agent-readiness",
+      "type": "enables",
+      "rationale": "Modern DevOps CI/CD pipeline required for deploying observability instrumentation"
+    }
+  ]
+}
+```
+
+These dependencies are surfaced in both the timeline phasing and the narrative report's cross-dependency section.
+
+
+### Step 6: Generate Timeline
+
+#### 6.1 Timeline Phases
+
+Divide the engagement into phases based on available dimensions:
 
 | Phase | Name | Coverage |
 |-------|------|----------|
-| Foundation & DevOps | Weeks 0-4 | DevOps pathway work streams |
-| Core Migration | Weeks 4-70% | All work streams in parallel/sequential per risk tolerance |
-| Optimization & Validation | 70%-100% | Final validation, optimization, handover |
+| Foundation & Safety | Weeks 0-4 | DevOps pathway work streams + ARA BLOCKER remediation (AUTH, STATE) |
+| Core Execution | Weeks 4-70% | All work streams (MODA + ARA) in parallel/sequential per risk tolerance |
+| Optimization & Validation | 70%-100% | Final validation, optimization, handover, agent readiness verification |
 
-#### 4.2 Milestones
+When only MODA is available, Phase 1 focuses on DevOps. When only ARA is available, Phase 1 focuses on BLOCKER remediation. When both are present, Phase 1 combines DevOps foundation with critical BLOCKER fixes (AUTH/STATE) since both are foundational.
 
-Define gate milestones:
+#### 6.2 Milestones
+
+Define gate milestones (adapted to available dimensions):
+
+**MODA milestones (when `has_moda`):**
 - **DevOps Foundation Complete** (Week 4) — CI/CD pipelines operational, IaC coverage > 80%
 - **Pilot Service Migrated** (40% mark) — First service fully migrated, integration tests passing
-- **Portfolio Migration Complete** (100%) — All work streams complete, exit criteria met
 
-#### 4.3 Critical Path
+**ARA milestones (when `has_ara`):**
+- **Critical BLOCKERs Resolved** (Week 4-6) — All BLOCKER findings remediated, agents can authenticate
+- **Agent Pilot Ready** (60% mark) — First service passes full ARA re-evaluation with no BLOCKERs
 
-Identify the longest dependency chain through work streams. The critical path determines minimum calendar duration.
+**Unified milestone (always):**
+- **Portfolio Execution Complete** (100%) — All work streams complete, exit criteria met
 
-#### 4.4 Parallelization Strategy
+#### 6.3 Critical Path
+
+Identify the longest dependency chain through ALL work streams (MODA + ARA + cross-dimension dependencies). The critical path determines minimum calendar duration. Cross-dimension dependencies may extend the critical path beyond what either dimension alone would produce.
+
+#### 6.4 Parallelization Strategy
 
 Based on `risk_tolerance`:
 - **Conservative** — No parallel work stream groups. All sequential.
 - **Moderate** — Independent streams (those with no prerequisites and not depended upon by others) run in parallel. Dependent streams run sequentially.
 - **Aggressive** — Maximum parallelism. All independent streams in parallel groups.
 
-Validate: work streams with prerequisite relationships must NOT appear in the same parallel group.
+Validate: work streams with prerequisite relationships (including cross-dimension dependencies) must NOT appear in the same parallel group.
 
 
-### Step 5: Risk Register
+### Step 7: Risk Register
 
 Generate engagement-level risks with sequential IDs (RISK-001, RISK-002, ...):
 
-#### 5.1 Standard Risks (Always Generated)
+#### 7.1 Standard Risks (Always Generated)
 
 | ID | Category | Description |
 |----|----------|-------------|
-| RISK-001 | Technical | Cross-service dependency complexity creates integration failures during parallel modernization |
-| RISK-002 | Organizational | Team spread across multiple pathways reduces velocity per work stream |
+| RISK-001 | Technical | Cross-service dependency complexity creates integration failures during parallel execution |
+| RISK-002 | Organizational | Team spread across multiple work streams reduces velocity per stream |
 | RISK-003 | Timeline | Timeline constraint may be infeasible given scope |
 
-#### 5.2 Conditional Risks
+#### 7.2 Conditional Risks
 
-- **Compliance** — If `compliance_requirements` is non-empty, add compliance risk about maintaining compliance during migration transition periods
+- **Compliance** — If `compliance_requirements` is non-empty, add compliance risk about maintaining compliance during transition periods
 - **Budget** — If `budget_constraint` is specified and tight relative to estimated cost
 - **Capability** — If `existing_capabilities` indicates gaps
+- **Agent Safety** (when `has_ara`) — If BLOCKERs exist and agents are already calling services, add risk: "Unresolved BLOCKERs create safety exposure if agents are deployed before remediation completes"
+- **Cross-Dimension** (when `mode == "unified"`) — Add risk: "Cross-dimension dependencies between modernization and agent-readiness may extend critical path beyond single-dimension estimates"
 
-Each risk has: `id`, `category` (Technical/Organizational/Timeline/Cost/Compliance), `description`, `likelihood`, `impact`, `mitigation`, `contingency`, `affected_services`, `owner` (role), `trigger` (observable signal).
+Each risk has: `id`, `category` (Technical/Organizational/Timeline/Cost/Compliance/AgentSafety), `description`, `likelihood`, `impact`, `mitigation`, `contingency`, `affected_services`, `owner` (role), `trigger` (observable signal).
 
 
-### Step 6: Cost Estimation
+### Step 8: Cost Estimation
 
-#### 6.1 Engagement-Level Cost
+#### 8.1 Engagement-Level Cost
 
-Cost estimation is at the engagement level (`engagement_level: true`), not per-service:
+Cost estimation is at the engagement level (`engagement_level: true`), not per-service. Covers BOTH dimensions when available:
 
-- **People cost** — total_effort_weeks x team_size x hourly_rate ($250) x weekly_hours (40)
+- **People cost** — total_effort_weeks (MODA + ARA combined) x team_size x hourly_rate ($250) x weekly_hours (40)
 - **Infrastructure delta** — estimated monthly AWS spend change during migration ($2000/month per service with work)
-- **Training** — $15,000 per pathway if capabilities are lacking, $5,000 if team has existing capabilities
+- **Training** — $15,000 per MODA pathway if capabilities are lacking, $5,000 if team has existing capabilities; $10,000 for agent-readiness patterns (auth, observability) if team lacks experience
 - **Total** — Sum of people + training (three-point: optimistic/expected/pessimistic)
 
-#### 6.2 Consistency Rules
+#### 8.2 Consistency Rules
 
 All cost categories must satisfy: optimistic <= expected <= pessimistic.
 
 
-### Step 7: Decision Points
+### Step 9: Decision Points
 
 Generate decision points (DP-001, DP-002, ...) where customer input is required:
 
-- One per work stream: implementation approach (incremental vs big-bang vs phased)
+- One per MODA work stream: implementation approach (incremental vs big-bang vs phased)
+- One per ARA BLOCKER category: remediation approach (shared pattern vs per-service, timeline priority)
 - Training approach (if team capabilities gap exists or team is small)
+- Agent deployment timing (when `has_ara`): at what point in the plan can agents begin calling services?
 - Each decision point has: `id`, `question`, `options` (>= 2), `recommendation`, `deadline`, `affected_services`
 
 
-### Step 8: Success Metrics
+### Step 10: Success Metrics
 
 Define:
 - **Leading indicators** — Sprint velocity, test coverage, integration test pass rate
-- **Lagging indicators** — Deployment frequency, MTTR, MODA re-score
-- **Exit criteria** — All triggered pathways addressed, no High-severity gaps remaining, portfolio MODA re-score improvement
+- **Lagging indicators (MODA)** — Deployment frequency, MTTR, MODA re-score improvement
+- **Lagging indicators (ARA)** — BLOCKER count reduction, ARA re-score improvement, agent authentication success rate, agent error rate
+- **Exit criteria** — All triggered pathways addressed (MODA), all BLOCKERs resolved (ARA), no High-severity gaps remaining, portfolio re-score improvement on both dimensions
 
 
-### Step 9: Assumptions
+### Step 11: Assumptions
 
 Document engagement assumptions including:
-- Team availability (70% capacity for modernization)
+- Team availability (70% capacity for execution)
 - No major production incidents requiring sustained attention
-- MODA report currency (within 90 days)
+- Report currency (MODA and/or ARA reports within 90 days)
 - Infrastructure and tooling budget approved
+- Agent deployment does not proceed until BLOCKER remediation completes (when `has_ara`)
 
 
 ## Report Template
@@ -366,23 +580,29 @@ The analysis emits a four-artifact bundle: `{portfolio-name}-portfolio-exec-plan
 
 ### MD Report Required Sections
 
-The markdown report MUST contain the following 13 sections as H1/H2 headings:
+The markdown report MUST contain the following sections as H1/H2 headings. Sections marked with dimension indicators are only included when that dimension's report is available:
 
-1. **Portfolio Modernization Execution Plan** (H1 title)
+1. **Portfolio Execution Plan** (H1 title)
 2. **Executive Summary**
-3. **Portfolio MODA Summary**
-4. **Work Stream Overview**
-5. **Detailed Work Streams**
-6. **Cross-Service Dependencies**
-7. **Portfolio Timeline and Phasing**
-8. **Critical Path Analysis**
-9. **Risk Register**
-10. **Engagement Cost Estimation**
-11. **Success Metrics and Phase Gates**
-12. **Assumptions and Constraints**
-13. **Recommendations and Decision Points**
+3. **Portfolio Analysis Summary** — includes MODA summary (if available) and ARA summary (if available)
+4. **Modernization Work Streams** (MODA) — only when `has_moda`
+5. **Agent-Readiness Work Streams** (ARA) — only when `has_ara`
+6. **Cross-Dimension Dependencies** — only when `mode == "unified"`
+7. **Cross-Service Dependencies**
+8. **Unified Timeline and Phasing**
+9. **Critical Path Analysis**
+10. **Risk Register**
+11. **Engagement Cost Estimation**
+12. **Success Metrics and Phase Gates**
+13. **Assumptions and Constraints**
+14. **Recommendations and Decision Points**
 
-The report MUST include a portfolio-level metadata table at the top containing `| **Portfolio** |` and `| **Services Assessed** |` rows.
+The report MUST include a portfolio-level metadata table at the top containing:
+- `| **Portfolio** |` row
+- `| **Services Assessed** |` row
+- `| **Dimensions** |` row — value is "MODA + ARA" or "MODA only" or "ARA only"
+- `| **MODA Pathways Planned** |` row (when `has_moda`)
+- `| **ARA BLOCKERs Addressed** |` row (when `has_ara`)
 
 
 ## Four-Artifact Output Contract (Portfolio EXEC)
@@ -403,7 +623,15 @@ The report MUST include a portfolio-level metadata table at the top containing `
   "td_version": "portfolio-execution-plan-generation",
   "portfolio_name": "{portfolio_name}",
   "services_count": N,
+  "dimensions": ["moda", "ara"],
+  "mode": "unified | moda-only | ara-only",
+  "moda_report_date": "YYYY-MM-DD or null",
+  "ara_report_date": "YYYY-MM-DD or null",
   "moda_report_dates": {
+    "service-id-1": "YYYY-MM-DD",
+    "service-id-2": "YYYY-MM-DD"
+  },
+  "ara_report_dates": {
     "service-id-1": "YYYY-MM-DD",
     "service-id-2": "YYYY-MM-DD"
   }
@@ -416,59 +644,67 @@ The portfolio execution plan JSON artifact MUST emit these top-level keys:
 
 | Key | Description |
 |-----|-------------|
-| `metadata` | Analysis type, date, TD version, portfolio name, services count, team size, risk tolerance, MODA sources |
-| `executive_summary` | Feasibility, total effort, calendar duration, top risks, pathways planned, services in/out of scope, decision point count |
-| `portfolio_input` | Per-service input data (scores, triggered pathways, classification) and pathway summary (deduplication map) |
-| `work_streams` | ONE per unique triggered pathway. Each contains: id, name, pathway, services, objective, prerequisites, effort_weeks, risk_level, phases with tasks, success_criteria |
-| `timeline` | Phases (start/end week, work streams), milestones (name, week, gate criteria), critical path, parallelization strategy |
-| `risk_register` | Sequential risks (RISK-001...) with category, description, likelihood, impact, mitigation, contingency, affected services, owner, trigger |
-| `cost_estimation` | Engagement-level flag, people/infrastructure/training/total with three-point estimates |
-| `success_metrics` | Leading indicators, lagging indicators, exit criteria |
+| `metadata` | Analysis type, date, TD version, portfolio name, services count, dimensions, mode, team size, risk tolerance, report sources |
+| `executive_summary` | Feasibility, total effort, calendar duration, top risks, pathways planned (MODA), blockers addressed (ARA), services in/out of scope, decision point count |
+| `portfolio_input` | Per-service input data from both dimensions. MODA: scores, triggered pathways, classification. ARA: classification tier, blocker count, risk counts |
+| `modernization_work_streams` | (when `has_moda`) ONE per unique triggered pathway. Each contains: id, name, dimension:"modernization", pathway, services, objective, prerequisites, effort_weeks, risk_level, phases with tasks, success_criteria |
+| `agent_readiness_work_streams` | (when `has_ara`) ONE per ARA category with BLOCKERs/RISKs. Each contains: id, name, dimension:"agent-readiness", ara_category, services, blockers, risks, objective, prerequisites, effort_weeks, risk_level, phases with tasks, success_criteria |
+| `cross_dimension_dependencies` | (when `mode == "unified"`) Array of dependencies between MODA and ARA work streams with source_ws, target_ws, type, rationale |
+| `timeline` | Phases (start/end week, work streams from both dimensions), milestones, critical path (spanning both dimensions), parallelization strategy |
+| `risk_register` | Sequential risks (RISK-001...) with category (including AgentSafety), description, likelihood, impact, mitigation, contingency, affected services, owner, trigger |
+| `cost_estimation` | Engagement-level flag, people/infrastructure/training/total with three-point estimates covering both dimensions |
+| `success_metrics` | Leading indicators, lagging indicators (MODA + ARA), exit criteria |
 | `assumptions` | Array of assumption strings |
 | `decision_points` | Sequential DPs (DP-001...) with question, options (>=2), recommendation, deadline, affected services |
 
 ### Key Structural Invariants
 
-1. **One work stream per pathway** — `work_streams[].pathway` values are unique (no duplicates)
-2. **Task IDs globally unique** — no two tasks across any work stream share an ID
+1. **One work stream per pathway/category** — MODA: `modernization_work_streams[].pathway` values are unique. ARA: `agent_readiness_work_streams[].ara_category` values are unique.
+2. **Task IDs globally unique** — no two tasks across any work stream (MODA or ARA) share an ID
 3. **Effort ordering** — all three-point estimates satisfy optimistic <= expected <= pessimistic
-4. **No phantom services** — every service referenced in work streams must have a corresponding MODA report
-5. **No phantom pathways** — every pathway in work streams must be triggered in at least one consumed MODA report
-6. **Prerequisites are acyclic** — work stream prerequisites must not form circular dependencies
+4. **No phantom services** — every service referenced in work streams must have a corresponding report in the consumed portfolio report(s)
+5. **No phantom pathways/categories** — every pathway in MODA work streams must be triggered in the portfolio MODA report; every ARA category in agent-readiness work streams must have findings in the portfolio ARA report
+6. **Prerequisites are acyclic** — work stream prerequisites (including cross-dimension) must not form circular dependencies
 7. **Shared tasks are dependencies** — in multi-service work streams, shared infrastructure tasks are listed as dependencies of per-service tasks
 8. **Cost is engagement-level** — `cost_estimation.engagement_level` is always `true`
-9. **MODA traceability** — every task has `moda_trace` linking to source service and question
+9. **Traceability** — MODA tasks have `moda_trace` linking to source service and question; ARA tasks have `ara_trace` linking to `question_id` and `repo_name`
+10. **Severity-to-priority** — ARA BLOCKERs produce mandatory (P0) tasks; RISK-SAFETY produces P1; RISK-QUALITY produces P2
 
 
 ## Constraints and Guardrails
 
 - **Read-only analysis**: Do not modify any source code, configuration, or infrastructure. Only create the output portfolio artifact bundle (MD, JSON, HTML, and metadata.json).
 - **Stay on the current branch**: Do not create, switch, or checkout any git branches. Remain on whatever branch is currently checked out.
-- **Layered input**: Primary input is the portfolio MODA report (aggregated). Per-service MODA reports are secondary/enrichment only — never re-aggregate from them. The portfolio MODA TD handles aggregation; this TD handles planning.
-- **Graceful degradation**: If per-service reports are unavailable, produce the plan using portfolio-level data only. Never fail because a per-service report is missing.
-- **Minimum 2 services**: Terminate with a clear error if the portfolio MODA report assessed fewer than 2 services.
-- **Deduplication**: Each triggered pathway across the portfolio produces exactly one work stream. Never create per-service work streams for the same pathway.
+- **At least one report required**: The TD requires at least one of: portfolio MODA report OR portfolio ARA report. Terminate with error if neither exists.
+- **Layered input**: Primary inputs are the portfolio MODA and/or ARA reports (aggregated). Per-service reports are secondary/enrichment only — never re-aggregate from them. The portfolio TDs handle aggregation; this TD handles planning.
+- **Graceful degradation**: If only one dimension is available, produce the plan for that dimension only. If per-service reports are unavailable, produce the plan using portfolio-level data only. Never fail because a per-service report is missing or because one dimension's portfolio report is absent.
+- **Minimum 2 services**: Terminate with a clear error if any available portfolio report assessed fewer than 2 services.
+- **Deduplication**: Each triggered MODA pathway produces exactly one modernization work stream. Each ARA category with findings produces exactly one agent-readiness work stream. Never create per-service work streams for the same pathway/category.
 - **Engagement-level scope**: Cost, effort, timeline, and risk are all at the portfolio/engagement level — not per-service.
-- **Evidence-based**: All work streams trace to specific MODA pathway triggers and service IDs. Do not generate work streams for pathways nobody triggered.
-- **No hallucination**: Only reference services that have MODA reports. Only reference pathways that exist in the MODA pathway vocabulary. Do not invent services, pathways, or findings.
+- **Evidence-based**: All work streams trace to specific MODA pathway triggers or ARA findings and service IDs. Do not generate work streams for untriggered pathways or categories without findings.
+- **No hallucination**: Only reference services that have reports. Only reference pathways/categories that exist in the consumed reports. Do not invent services, pathways, findings, or ARA categories.
 - **Preferences for framing only**: Technology preferences influence recommendation language but do not change pathway logic, effort estimates, or feasibility assessments.
 - **Task granularity**: All tasks must be 1-10 days of effort (1-2 week tasks). If larger, decompose further.
-- **Sequential IDs**: Work stream IDs (WS-01, WS-02), risk IDs (RISK-001, RISK-002), decision point IDs (DP-001, DP-002) are sequential with no gaps.
+- **Sequential IDs**: Work stream IDs (WS-01, WS-02), risk IDs (RISK-001, RISK-002), decision point IDs (DP-001, DP-002) are sequential with no gaps. MODA work streams are numbered first, then ARA work streams continue the sequence.
 
 
 ## Error Handling
 
-### Missing or Invalid Portfolio MODA Report
+### No Reports Found
 
-IF the portfolio MODA report is not found at the expected path or is invalid JSON, THEN terminate with: "Portfolio execution plan generation failed: portfolio MODA report not found or invalid at expected path."
+IF neither the portfolio MODA report nor the portfolio ARA report is found at the expected paths, THEN terminate with: "Portfolio execution plan generation failed: neither portfolio MODA report nor portfolio ARA report found. At least one must exist."
+
+### Invalid Report
+
+IF a found report is invalid JSON or missing required schema fields, THEN terminate with: "Portfolio execution plan generation failed: {report_type} report found but invalid at {path}."
 
 ### Insufficient Services
 
-IF the portfolio MODA report's `metadata.services_assessed` is fewer than 2, THEN terminate with: "Portfolio execution plan generation failed: requires portfolio MODA report covering at least 2 services. Found {N}."
+IF any available portfolio report's `metadata.services_assessed` is fewer than 2, THEN terminate with: "Portfolio execution plan generation failed: requires portfolio report covering at least 2 services. Found {N} in {report_type}."
 
-### No Triggered Pathways
+### No Actionable Findings
 
-IF all pathways in the portfolio report have `portfolio_status` != "Triggered" (all services are already mature), emit a minimal plan: "MODA identified no modernization pathways requiring action across {N} services. Current portfolio average score is {X}/4.0. Recommend periodic re-evaluation."
+IF MODA has no triggered pathways AND ARA has no BLOCKERs or RISKs, emit a minimal plan: "Analysis identified no actionable work across {N} services. Portfolio is either already mature (MODA) and agent-ready (ARA), or no findings met threshold. Recommend periodic re-evaluation."
 
 ### Infeasible Timeline
 
