@@ -358,6 +358,25 @@ All effort estimates MUST include TWO perspectives: **Traditional** (manual engi
 | Team training & knowledge transfer | Minimal | 0-10% | Learning requires human cognitive effort; AI assists with materials only |
 | Data migration & validation | Low-Medium | 15-30% | Scripts are AI-generatable but validation requires domain knowledge |
 
+**Acceleration Benchmarks (Field-Calibrated)**
+
+These acceleration factors are calibrated against observed results from production EBA engagements using AWS Transform Custom + AI-assisted tooling:
+
+| Activity | Traditional | AI-Accelerated (Observed) | Acceleration Factor |
+|----------|-------------|--------------------------|---------------------|
+| Code analysis & readiness assessment | 4-8 weeks | ~90 minutes | ~200x |
+| Architecture decomposition design (668K+ LOC monolith → microservices) | 2-4 months | ~2 days | ~10-20x |
+| Service extraction + containerization + DB migration (per service) | 2-4 weeks | ~1 day | ~5-10x |
+| Infrastructure migration execution (DB, networking, IAM) | 2-3 weeks | 3-5 days | ~3-5x |
+
+These benchmarks represent the upper end of achievable acceleration with experienced practitioners using mature AI tooling. Actual acceleration varies by:
+- Codebase complexity and documentation quality
+- Team proficiency with AI-assisted workflows
+- Degree of technical debt and coupling
+- Regulatory/compliance validation requirements (which remain human-paced)
+
+When generating estimates, use the **task-level acceleration table above** (40-60% reduction ranges) as the conservative planning default. The field benchmarks demonstrate that skilled teams can achieve significantly higher acceleration in practice, particularly for assessment and design phases.
+
 **Calculating AI-accelerated effort:**
 1. For each task, assign the appropriate acceleration category
 2. Apply the reduction percentage to `effort_days_traditional` to get `effort_days_ai_accelerated`
