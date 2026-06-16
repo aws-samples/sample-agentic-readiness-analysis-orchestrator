@@ -64,9 +64,21 @@ Key field routing: `agent_scope` and `service_archetype` are ARA-only. `preferen
 
 ### Report Output
 
-Every analysis emits a **four-artifact bundle**: `.md` (narrative), `.json` (machine-readable — authoritative), `.html` (self-contained visualization), `.metadata.json` (version sidecar).
+Every analysis emits a **four-artifact bundle** per report: `.md` (narrative), `.json` (machine-readable — authoritative), `.html` (self-contained visualization), `.metadata.json` (version sidecar).
 
-Reports land in subdirectories by analysis type: `agentic-readiness-analysis/`, `modernization-readiness-analysis/`, and `portfolio-execution-plan/`.
+```
+reports/
+├── agentic-readiness-analysis/
+│   └── {service}-ara-report.{md,json,html,metadata.json}
+├── modernization-readiness-analysis/
+│   └── {service}-mod-report.{md,json,html,metadata.json}
+├── portfolio-agentic-readiness-analysis/
+│   └── {portfolio}-portfolio-ara-report.{md,json,html,metadata.json}
+├── portfolio-modernization-readiness-analysis/
+│   └── {portfolio}-portfolio-mod-report.{md,json,html,metadata.json}
+└── portfolio-execution-plan/
+    └── {portfolio}-portfolio-exec-plan.{md,json,html,metadata.json}
+```
 
 ## Getting Started
 
@@ -157,9 +169,7 @@ In Kiro chat:
 Run the portfolio analysis orchestrator on portfolio-config.yaml
 ```
 
-Kiro handles cloning, classification, config generation, parallel execution, and report consolidation.
-
-**What Kiro does for you, beyond the obvious.** The orchestrator enforces three safety contracts that prevent silent data loss in long-running ATX runs: a no-polling contract for subagents, per-repo serialization within `full` mode, and strictly serial portfolio TDs gated by a reconciliation step. Read [`orchestrator/POWER.md`](orchestrator/POWER.md) for the full contracts and the seven steering files for runbook-level depth.
+Kiro handles cloning, classification, config generation, parallel execution, and report consolidation. The orchestrator enforces safety contracts (no-polling, per-repo serialization, serial portfolio TDs) that prevent silent data loss — see [`orchestrator/POWER.md`](orchestrator/POWER.md) for details.
 
 ### Step 5 (Alternative): Run Manually Without Kiro
 
@@ -179,22 +189,9 @@ atx custom def exec -n AWS/portfolio-modernization-readiness-analysis -p . -g fi
 
 Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution.
 
-### Step 6: Generate Execution Plan (After Portfolio Reports Complete)
+### Step 6: Generate Execution Plan
 
-> **Dependency (at least one required):** The execution plan TD consumes the portfolio MODA report AND/OR the portfolio ARA report. At least one must exist. When both are available, it produces a unified plan with:
->
-> - **Modernization work streams** (from MODA pathways)
-> - **Agent-readiness work streams** (from ARA BLOCKERs/RISKs)
-> - **Cross-dimension dependencies** (MODA work enables ARA readiness)
-> - **Unified timeline and cost estimation**
->
-> ```
-> Per-service MOD (×N) → Portfolio MODA ─┐
->                                         ├→ Portfolio Execution Plan
-> Per-service ARA (×N) → Portfolio ARA ──┘
-> ```
-
-The execution plan TD converts your portfolio reports into actionable work streams, timelines, and cost estimates.
+Requires at least one portfolio report (MODA or ARA) to exist. When both are available, the plan unifies modernization and agent-readiness work streams with cross-dimension dependencies.
 
 **Publish the TD** (first time only):
 
@@ -205,57 +202,19 @@ atx custom def publish \
   --description "Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports"
 ```
 
-Add the execution plan parameters to the `execution_plan` section of your `portfolio-config.yaml`:
-
-```yaml
-execution_plan:
-  team_size: 8
-  timeline_constraint: "12 months"
-  budget_constraint: "$1.2M including training and infrastructure"
-  compliance_requirements: ["SOC2", "PCI-DSS"]
-  availability_requirement: "99.95%"
-  risk_tolerance: "moderate"
-  existing_capabilities: "Strong Java/Spring, basic Docker, CI/CD with Jenkins, no Kubernetes experience"
-```
-
-All fields are optional — defaults are applied if omitted. In Kiro chat, simply run:
+**With Kiro:** Add an `execution_plan` section to `portfolio-config.yaml` (all fields optional), then:
 
 ```
 Generate an execution plan for my portfolio
 ```
 
-Kiro reads the `execution_plan` section from `portfolio-config.yaml`, uses any fields already present, and only prompts you for missing ones. If everything is already defined, it generates `atx-config-exec-plan.yaml` and proceeds directly to ATX invocation.
-
-**Run manually (without Kiro):**
-
-Create `atx-config-exec-plan.yaml` in ATX's expected format (see `examples/atx-config-exec-plan.yaml` for a working example):
-
-```yaml
-additionalPlanContext: |
-  portfolio_name: "my-platform"
-  team_size: 8
-  timeline_constraint: "12 months"
-  budget_constraint: "$1.2M"
-  compliance_requirements: ["SOC2", "PCI-DSS"]
-  risk_tolerance: "moderate"
-  existing_capabilities: "Java/Spring, basic Docker, no K8s"
-```
-
-Then invoke ATX directly:
+**Without Kiro:** Create `atx-config-exec-plan.yaml` (see `examples/atx-config-exec-plan.yaml`) and run:
 
 ```bash
 atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
 
-> **Note:** ATX only understands the `additionalPlanContext:` format. It cannot consume `portfolio-config.yaml` directly. In orchestrated mode, Kiro handles the translation automatically. For manual runs, create `atx-config-exec-plan.yaml` yourself.
-
-#### Output
-
-Output lands in `./portfolio-execution-plan/`:
-- `{portfolio-name}-portfolio-exec-plan.md` — narrative execution plan
-- `{portfolio-name}-portfolio-exec-plan.json` — machine-readable contract
-- `{portfolio-name}-portfolio-exec-plan.html` — self-contained HTML visualization
-- `{portfolio-name}-portfolio-exec-plan.metadata.json` — version sidecar
+ATX only understands `additionalPlanContext:` format — it cannot consume `portfolio-config.yaml` directly.
 
 ### Transformation Definitions
 
@@ -292,27 +251,17 @@ atx custom def publish -n <registry-name> --sd ./definitions/<td-folder> --descr
 
 ## Example Reports
 
-The `examples/reports/` directory contains a complete set of generated reports from a real full-analysis run across 6 repos:
-
-```
-examples/reports/full-analysis/
-├── portfolio-config.yaml
-├── agentic-readiness-analysis/         # Per-repo + portfolio ARA reports
-├── modernization-readiness-analysis/   # Per-repo + portfolio MOD reports
-└── portfolio-execution-plan/           # Unified execution plan output
-```
-
-Each report is a four-file bundle: `.md` (narrative), `.json` (machine-readable), `.html` (self-contained visualization), `.metadata.json` (version sidecar).
+The `examples/reports/full-analysis/` directory contains a complete set of generated reports from a real analysis run across 6 repos — including per-service reports, portfolio roll-ups, and the unified execution plan.
 
 ## Live Dashboard
 
-See the interactive portfolio dashboards (ARA + MOD) deployed at: **https://d2fplme21ym2t.cloudfront.net**
+Interactive portfolio dashboards (ARA + MOD): **https://d2fplme21ym2t.cloudfront.net**
 
-Each analysis also generates a self-contained `.html` report per repo and at portfolio level — see the examples in `examples/reports/full-analysis/`.
+Each analysis also generates a self-contained `.html` report per repo and at portfolio level.
 
-## Local Monolith (Test Fixture)
+## Test Fixture
 
-The `examples/fixtures/monolith/` directory contains a simple PHP application used as a test fixture so you can run analyses out of the box without cloning external repos.
+`examples/fixtures/monolith/` contains a PHP app you can use to run analyses out of the box without cloning external repos.
 
 ## Contributing
 
