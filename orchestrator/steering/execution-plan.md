@@ -30,9 +30,11 @@ How to generate a portfolio-level unified execution plan from completed MODA and
 
 ## Gathering Engagement Parameters
 
-Before generating the ATX configuration, ask the user for the following engagement parameters. Each is optional — defaults are applied if omitted.
+Execution plan parameters live in the `execution_plan` section of `portfolio-config.yaml` — the same file the orchestrator uses for ARA/MODA. Each field is optional — defaults are applied if omitted.
 
-| Parameter | Question to ask | Default |
+**Read `portfolio-config.yaml` first.** If the `execution_plan` section already contains fields (`team_size`, `timeline_constraint`, `budget_constraint`, `compliance_requirements`, `availability_requirement`, `risk_tolerance`, `existing_capabilities`), use them directly. Only prompt the user for fields that are **missing or undefined** in the config. If all fields are already present, skip questions entirely and proceed straight to invocation.
+
+| Parameter | Question to ask (only if missing) | Default |
 |---|---|---|
 | `team_size` | How many engineers are available for modernization work? | 5 |
 | `timeline_constraint` | Is there a hard deadline or desired completion window? (e.g., "6 months", "Q4 2026") | unconstrained |
@@ -41,51 +43,66 @@ Before generating the ATX configuration, ask the user for the following engageme
 | `availability_requirement` | What uptime SLA must be maintained during migration? (e.g., "99.9%", "zero-downtime") | — |
 | `risk_tolerance` | What is the team's risk tolerance? (`conservative`, `moderate`, `aggressive`) | moderate |
 | `existing_capabilities` | What does the team already have? (e.g., "Strong K8s, Terraform, CI/CD") | — |
-| `preferences` | Technology preferences — what to prefer and what to avoid? | from portfolio-config.yaml |
+| `preferences` | Technology preferences — what to prefer and what to avoid? | from portfolio-config.yaml global preferences |
 | `priority_pathways` | Should we plan for all triggered pathways, or only a subset? | all triggered |
 
 **Workflow:**
 
-1. Present these parameters to the user in a structured list
-2. Accept answers (partial answers are fine — defaults fill gaps)
-3. Build the ATX configuration file from the answers
-4. Execute the TD
+1. Read `portfolio-config.yaml` and inspect the `execution_plan` section
+2. Identify which fields are already defined vs. missing
+3. If all required context is present → skip to step 5
+4. Prompt the user ONLY for missing fields (partial answers are fine — defaults fill gaps). Add answers to `portfolio-config.yaml`.
+5. Execute the TD (passing `portfolio-config.yaml` as `-g`)
 
 ---
 
-## Building the ATX Configuration
+## Configuration in portfolio-config.yaml
 
-Generate `atx-config-exec-plan.yaml` with the user's answers merged into `additionalPlanContext`:
+The execution plan parameters are stored in the `execution_plan` section of `portfolio-config.yaml`. The orchestrator reads this section and generates the ATX `additionalPlanContext` automatically.
+
+```yaml
+# In portfolio-config.yaml:
+execution_plan:
+  team_size: 8
+  timeline_constraint: "12 months"
+  budget_constraint: "$1.2M including training and infrastructure"
+  compliance_requirements: ["SOC2", "PCI-DSS"]
+  availability_requirement: "99.95%"
+  risk_tolerance: "moderate"
+  existing_capabilities: "Strong Java/Spring, basic Docker, CI/CD with Jenkins, no Kubernetes experience"
+```
+
+The orchestrator generates the following `additionalPlanContext` from these fields:
 
 ```yaml
 additionalPlanContext: |
-  portfolio_name: "{from portfolio-config.yaml}"
-  team_size: {user answer or 5}
-  timeline_constraint: "{user answer}"
-  budget_constraint: "{user answer}"
-  compliance_requirements: [{user answers as array}]
-  availability_requirement: "{user answer}"
-  risk_tolerance: "{user answer or moderate}"
-  existing_capabilities: "{user answer}"
+  portfolio_name: "{from portfolio-config.yaml portfolio_name}"
+  team_size: {from execution_plan.team_size or 5}
+  timeline_constraint: "{from execution_plan.timeline_constraint}"
+  budget_constraint: "{from execution_plan.budget_constraint}"
+  compliance_requirements: [{from execution_plan.compliance_requirements}]
+  availability_requirement: "{from execution_plan.availability_requirement}"
+  risk_tolerance: "{from execution_plan.risk_tolerance or moderate}"
+  existing_capabilities: "{from execution_plan.existing_capabilities}"
   preferences:
-    prefer: [{merged from portfolio-config.yaml + user overrides}]
-    avoid: [{merged from portfolio-config.yaml + user overrides}]
+    prefer: [{merged from portfolio-config.yaml global preferences}]
+    avoid: [{merged from portfolio-config.yaml global preferences}]
 ```
 
 **Generation rules:**
 
-1. `portfolio_name` — from `portfolio-config.yaml` (same value used for MODA runs)
-2. `team_size` — user answer, default 5
-3. `timeline_constraint` — user answer, omit if not provided
-4. `budget_constraint` — user answer, omit if not provided
-5. `compliance_requirements` — user answer as YAML array, omit if empty
-6. `availability_requirement` — user answer, omit if not provided
-7. `risk_tolerance` — user answer, default "moderate". Must be one of: `conservative`, `moderate`, `aggressive`
-8. `existing_capabilities` — user answer as free-text string, omit if not provided
-9. `preferences` — merge: start with global `preferences` from `portfolio-config.yaml`, then override with any user-provided preferences. Same merge rules as MOD configs (see `steering/portfolio-config.md`).
-10. `priority_pathways` — user answer as YAML array, omit if user wants all triggered pathways planned
+1. `portfolio_name` — from `portfolio-config.yaml` top-level `portfolio_name` (same value used for MODA runs)
+2. `team_size` — from `execution_plan.team_size`, default 5
+3. `timeline_constraint` — from `execution_plan.timeline_constraint`, omit if not provided
+4. `budget_constraint` — from `execution_plan.budget_constraint`, omit if not provided
+5. `compliance_requirements` — from `execution_plan.compliance_requirements` as YAML array, omit if empty
+6. `availability_requirement` — from `execution_plan.availability_requirement`, omit if not provided
+7. `risk_tolerance` — from `execution_plan.risk_tolerance`, default "moderate". Must be one of: `conservative`, `moderate`, `aggressive`
+8. `existing_capabilities` — from `execution_plan.existing_capabilities` as free-text string, omit if not provided
+9. `preferences` — from global `preferences` in `portfolio-config.yaml`. Same merge rules as MOD configs (see `steering/portfolio-config.md`).
+10. `priority_pathways` — from `execution_plan.priority_pathways` as YAML array, omit if user wants all triggered pathways planned
 
-**Omit fields entirely if the user did not provide a value and there is no default.** Do not emit empty strings or empty arrays for omitted fields.
+**Omit fields entirely if the value is not present in `portfolio-config.yaml` and there is no default.** Do not emit empty strings or empty arrays for omitted fields.
 
 ---
 
@@ -154,13 +171,14 @@ atx custom def publish \
 atx custom def exec \
   -n portfolio-execution-plan-generation \
   -p . \
-  -g file://atx-config-exec-plan.yaml \
+  -g file://portfolio-config.yaml \
   -x \
   -t
 ```
 
 Always use:
 - `-p .` — the TD operates at the portfolio root (reads from `./portfolio-modernization-readiness-analysis/`)
+- `-g file://portfolio-config.yaml` — the same config file used for all other TDs (orchestrator extracts execution_plan section)
 - `-x` — non-interactive
 - `-t` — trust all tools
 - Absolute paths for `-p` and `-g` in subagent flows (see `steering/atx-cli-reference.md`)
@@ -201,8 +219,8 @@ The execution plan TD produces a four-artifact bundle in `./portfolio-execution-
 | Steering file | Relationship |
 |---|---|
 | `orchestration-workflow.md` | The orchestrator can chain execution plan generation after portfolio MOD and/or ARA completes |
-| `portfolio-config.md` | `portfolio_name` and `preferences` are sourced from the same config |
-| `manual-execution.md` | Execution plan can be run manually without the orchestrator |
+| `portfolio-config.md` | All parameters (`portfolio_name`, `preferences`, `execution_plan`) live in the same `portfolio-config.yaml` |
+| `manual-execution.md` | Execution plan can be run manually without the orchestrator — same `-g file://portfolio-config.yaml` |
 | `reconciliation-gate.md` | The reconciliation gate does NOT gate the execution plan TD — it gates portfolio ARA/MOD TDs only. The exec plan TD depends solely on at least one portfolio report existing. |
 
 ---
@@ -211,7 +229,7 @@ The execution plan TD produces a four-artifact bundle in `./portfolio-execution-
 
 ### Full pipeline (orchestrator-driven)
 
-When `analysis_type: full` completes, the orchestrator can prompt the user: "Both MODA and ARA reports are ready. Would you like to generate a unified execution plan?" If yes, gather engagement parameters and run the execution plan TD. The TD will automatically consume both reports and produce a unified plan with cross-dimension dependencies.
+When `analysis_type: full` completes, the orchestrator checks `portfolio-config.yaml` for the `execution_plan` section. If all parameters are present, it proceeds directly to TD invocation. If parameters are missing, it prompts the user only for the undefined fields. The TD will automatically consume both reports and produce a unified plan with cross-dimension dependencies.
 
 ### MODA-only pipeline
 
@@ -228,10 +246,10 @@ When only `analysis_type: agentic-readiness` has been run, the execution plan TD
 ls ./portfolio-modernization-readiness-analysis/*-mod-portfolio-report.json 2>/dev/null
 ls ./portfolio-agentic-readiness-analysis/*-ara-portfolio-report.json 2>/dev/null
 
-# 2. Create atx-config-exec-plan.yaml with engagement parameters
+# 2. Ensure execution_plan section exists in portfolio-config.yaml
 
 # 3. Run the TD
-atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
+atx custom def exec -n portfolio-execution-plan-generation -p . -g file://portfolio-config.yaml -x -t
 
 # 4. Verify output
 ls ./portfolio-execution-plan/*-portfolio-exec-plan.md
@@ -239,4 +257,4 @@ ls ./portfolio-execution-plan/*-portfolio-exec-plan.md
 
 ### Re-running with different parameters
 
-The execution plan TD is safe to re-run — it reads reports but does not modify them. To generate an alternative plan (e.g., different risk tolerance or team size), update `atx-config-exec-plan.yaml` and re-run. Previous output is overwritten.
+The execution plan TD is safe to re-run — it reads reports but does not modify them. To generate an alternative plan (e.g., different risk tolerance or team size), update the `execution_plan` section in `portfolio-config.yaml` and re-run. Previous output is overwritten.
