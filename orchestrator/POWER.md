@@ -124,7 +124,7 @@ Detailed step-by-step flow lives in `steering/orchestration-workflow.md`. Summar
 2. **Parse and validate `portfolio-config.yaml`:** analysis_type, repos, preferences, dependency_overrides, TD names.
 3. **Classify each repo:** Apply the decision tree (or honor user-provided `repo_type` override).
 4. **Clone missing repos:** For entries with `repository_url` and a non-existent `path`.
-5. **Generate ATX configs:** Per-repo ARA (no preferences), per-repo MOD (no agent_scope, merged preferences). Portfolio configs include structured `service_inventory[]` and `dependency_overrides[]`.
+5. **Generate ATX configs:** Per-repo ARA (no preferences), per-repo MOD (no agent_scope, merged preferences), Exec Plan (`atx-config-exec-plan.yaml` with `additionalPlanContext`). Portfolio configs include structured `service_inventory[]` and `dependency_overrides[]`. ATX only understands the `additionalPlanContext:` format — it cannot consume `portfolio-config.yaml` directly.
 6. **Per-repo execution (Contract 2):** One subagent per repo. Subagent runs its assigned TDs sequentially within the repo. All subagents in parallel across repos.
 7. **Reconciliation Gate (Step 1.5):** Check A (branch consolidation), Check B (canonical paths — auto-rename and auto-move strays since Contract 2 makes their attribution unambiguous, ABORT only when >=2 strays exist for the same TD in one repo), Check C (four-artifact bundle completeness, `.json` mandatory). Abort before any portfolio TD if any check fails.
 8. **Portfolio TDs (Contract 3):** Strictly serial — Portfolio ARA → Portfolio MOD — with a Reconciliation Gate between each.
