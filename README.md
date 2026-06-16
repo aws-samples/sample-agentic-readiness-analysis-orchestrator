@@ -43,17 +43,15 @@ flowchart TB
     GATE_ARA --> PORT_ARA[Portfolio ARA]
     GATE_MOD --> PORT_MOD[Portfolio MODA]
 
-    PORT_ARA --> KIRO[Kiro Steering File]
-    PORT_MOD --> KIRO
-
-    KIRO -->|asks engagement questions| USER[User Answers<br/>team size, timeline, budget,<br/>compliance, risk tolerance]
-    USER -->|builds config| EXEC_CFG[atx-config-exec-plan.yaml]
-    EXEC_CFG --> EXEC[Portfolio Execution Plan]
+    PORT_ARA --> EXEC[Portfolio Execution Plan]
+    PORT_MOD --> EXEC
+    CONFIG -->|execution_plan params| EXEC
+    EXEC --> REPORTS[Reports]
 ```
 
-The `analysis_type` field controls which path runs: `agentic-readiness` (ARA only), `modernization` (MOD only), `full` (both), or `execution-plan` (generates the unified execution plan from existing portfolio reports). Per-repo TDs run in parallel across repos. Portfolio-level TDs only run for the selected analysis type(s). The execution plan consumes whichever portfolio reports are available (at least one required).
+All configuration lives in one file (`portfolio-config.yaml`). The `analysis_type` field controls which path runs: `agentic-readiness` (ARA only), `modernization` (MOD only), `full` (both), or `execution-plan` (generates the unified execution plan from existing portfolio reports). The `execution_plan` section provides engagement parameters for the execution plan TD. Per-repo TDs run in parallel across repos. Portfolio-level TDs only run for the selected analysis type(s).
 
-In orchestrated mode, Kiro's steering file prompts the user for engagement parameters and automatically generates the ATX config before invoking the execution plan TD.
+In orchestrated mode, Kiro reads the `execution_plan` section from `portfolio-config.yaml` and only prompts the user for fields that are missing — if all parameters are already defined, it proceeds directly to invocation.
 
 ### Repo Classification
 
@@ -87,6 +85,7 @@ flowchart TB
     
     POWER -->|ARA config| ARA_CFG
     POWER -->|MOD config| MOD_CFG
+    POWER -->|Exec Plan config| EXEC_CFG
 
     subgraph ARA_CFG [ARA additionalPlanContext]
         A1[repo_type]
@@ -104,9 +103,21 @@ flowchart TB
         M4[tags]
         M5[preferences — prefer/avoid]
     end
+
+    subgraph EXEC_CFG [Exec Plan additionalPlanContext]
+        E1[portfolio_name]
+        E2[team_size]
+        E3[timeline_constraint]
+        E4[budget_constraint]
+        E5[compliance_requirements]
+        E6[availability_requirement]
+        E7[risk_tolerance]
+        E8[existing_capabilities]
+        E9[preferences — prefer/avoid]
+    end
 ```
 
-> `agent_scope` is ARA-only (drives conditional BLOCKERs). `service_archetype` is ARA-only (determines core/extended question tiers). `preferences` is MOD-only (frames recommendations). `repo_type`, `context`, `priority`, and `tags` are shared.
+> `agent_scope` is ARA-only (drives conditional BLOCKERs). `service_archetype` is ARA-only (determines core/extended question tiers). `preferences` is MOD-only and Exec Plan (frames recommendations). `repo_type`, `context`, `priority`, and `tags` are shared across ARA/MOD. The `execution_plan` section fields map directly to the Exec Plan TD's `additionalPlanContext`.
 
 ### Report Output
 
@@ -162,6 +173,8 @@ To install:
 
 ### Step 3: Create Your Portfolio Configuration
 
+All configuration — analysis settings, repo definitions, and execution plan parameters — lives in a single `portfolio-config.yaml`:
+
 ```yaml
 portfolio_name: "my-platform"
 analysis_type: "full"
@@ -193,6 +206,16 @@ dependency_overrides:
     target: "service-b"
     type: "sync"
     description: "REST API calls"
+
+# Execution plan parameters (optional — used when generating the portfolio execution plan)
+execution_plan:
+  team_size: 8
+  timeline_constraint: "12 months"
+  budget_constraint: "$1.2M including training and infrastructure"
+  compliance_requirements: ["SOC2", "PCI-DSS"]
+  availability_requirement: "99.95%"
+  risk_tolerance: "moderate"
+  existing_capabilities: "Strong Java/Spring, basic Docker, CI/CD with Jenkins"
 ```
 
 See `portfolio-config.schema.json` for the full schema.
@@ -253,33 +276,10 @@ atx custom def publish \
   --description "Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports"
 ```
 
-#### Option A: Orchestrated Mode (Recommended)
-
-When using the Kiro Power, you don't create the config file manually. The orchestrator's steering file handles it:
-
-```mermaid
-flowchart LR
-    KIRO[Kiro Power] --> ASK[Asks engagement questions<br/>team size, timeline, budget,<br/>compliance, risk tolerance, etc.]
-    ASK --> BUILD[Builds atx-config-exec-plan.yaml]
-    BUILD --> EXEC["atx custom def exec<br/>-n portfolio-execution-plan-generation"]
-```
-
-In Kiro chat, simply run:
-
-```
-Generate an execution plan for my portfolio
-```
-
-Kiro prompts you for each engagement parameter (team size, timeline, budget, compliance requirements, availability, risk tolerance, existing capabilities, and preferences), assembles the `atx-config-exec-plan.yaml` automatically, and invokes the TD. No manual YAML editing required.
-
-#### Option B: Manual Mode (Without Orchestrator)
-
-If running ATX directly (without Kiro), you must create the config file yourself. The `additionalPlanContext` block provides all engagement parameters the TD needs to generate a plan tailored to your constraints.
+Add the execution plan parameters to the `execution_plan` section of your `portfolio-config.yaml`:
 
 ```yaml
-# atx-config-exec-plan.yaml — copy and customize for your engagement
-additionalPlanContext: |
-  portfolio_name: "my-platform"
+execution_plan:
   team_size: 8
   timeline_constraint: "12 months"
   budget_constraint: "$1.2M including training and infrastructure"
@@ -287,31 +287,23 @@ additionalPlanContext: |
   availability_requirement: "99.95%"
   risk_tolerance: "moderate"
   existing_capabilities: "Strong Java/Spring, basic Docker, CI/CD with Jenkins, no Kubernetes experience"
-  preferences:
-    prefer: ["eks", "aurora-postgresql", "graviton", "cdk"]
-    avoid: ["self-managed-kafka", "lambda-for-core-services"]
 ```
 
-| Field | Description | Example |
-|---|---|---|
-| `portfolio_name` | Must match your `portfolio-config.yaml` name | `"my-platform"` |
-| `team_size` | Number of engineers available for the transformation | `8` |
-| `timeline_constraint` | Target duration for the engagement | `"12 months"` |
-| `budget_constraint` | Total budget including training, infra, and people | `"$1.2M including training and infrastructure"` |
-| `compliance_requirements` | Regulatory frameworks the plan must respect | `["SOC2", "PCI-DSS", "HIPAA"]` |
-| `availability_requirement` | Target SLA during and after transformation | `"99.95%"` |
-| `risk_tolerance` | `"low"`, `"moderate"`, or `"high"` — drives phasing aggressiveness | `"moderate"` |
-| `existing_capabilities` | Team's current skills (informs training work streams) | `"Strong Java/Spring, basic Docker"` |
-| `preferences.prefer` | AWS services/patterns to favor in recommendations | `["eks", "aurora-postgresql"]` |
-| `preferences.avoid` | Technologies to steer away from | `["self-managed-kafka"]` |
+All fields are optional — defaults are applied if omitted. In Kiro chat, simply run:
 
-See [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml) for a complete working example.
+```
+Generate an execution plan for my portfolio
+```
 
-Then run:
+Kiro reads the `execution_plan` section from `portfolio-config.yaml`, uses any fields already present, and only prompts you for missing ones. If everything is already defined, it proceeds directly to invocation.
+
+**Run manually (without Kiro):**
 
 ```bash
-atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
+atx custom def exec -n portfolio-execution-plan-generation -p . -g file://portfolio-config.yaml -x -t
 ```
+
+The orchestrator reads the `execution_plan` section from `portfolio-config.yaml` and generates the ATX `additionalPlanContext` automatically. No separate config file needed.
 
 #### Output
 
@@ -345,7 +337,6 @@ atx custom def publish -n <registry-name> --sd ./definitions/<td-folder> --descr
 │   ├── POWER.md                        # Main power file with safety contracts
 │   └── steering/                       # Runbook-level steering files
 ├── examples/
-│   ├── atx-config-exec-plan.yaml       # Example execution plan ATX config
 │   ├── fixtures/
 │   │   └── monolith/                   # PHP test fixture (out-of-box testing)
 │   └── reports/                        # Generated example reports

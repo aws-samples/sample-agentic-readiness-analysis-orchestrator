@@ -1,15 +1,24 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Portfolio Analysis Configuration Schema (V2)",
-  "description": "Configuration schema for the V2 two-analysis architecture. Supports agentic-readiness (ARA), modernization (MOD), or full (both) analysis types. Breaking change from V1 — old configs require migration (goal → analysis_type, goal_context → context, deployment-cicd → deployment-config).",
+  "description": "Configuration schema for the V2 two-analysis architecture. Supports agentic-readiness (ARA), modernization (MOD), or full (both) analysis types. Breaking change from V1 \u2014 old configs require migration (goal \u2192 analysis_type, goal_context \u2192 context, deployment-cicd \u2192 deployment-config).",
   "type": "object",
-  "required": ["portfolio_name", "analysis_type", "transformation_definitions", "repositories"],
+  "required": [
+    "portfolio_name",
+    "analysis_type",
+    "transformation_definitions",
+    "repositories"
+  ],
   "additionalProperties": false,
   "properties": {
     "portfolio_name": {
       "type": "string",
       "description": "Name of the portfolio being analyzed",
-      "examples": ["ecommerce-platform", "payment-services", "customer-portal"]
+      "examples": [
+        "ecommerce-platform",
+        "payment-services",
+        "customer-portal"
+      ]
     },
     "analysis_type": {
       "type": "string",
@@ -32,7 +41,7 @@
     },
     "agent_scope": {
       "type": "string",
-      "description": "Scope of agent integration — affects conditional BLOCKER evaluation in ARA. ARA-only: the Power passes this only to ARA ATX configs and ignores it for MOD configs. Defaults to 'read-only' if not provided.",
+      "description": "Scope of agent integration \u2014 affects conditional BLOCKER evaluation in ARA. ARA-only: the Power passes this only to ARA ATX configs and ignores it for MOD configs. Defaults to 'read-only' if not provided.",
       "enum": [
         "read-only",
         "write-enabled"
@@ -41,32 +50,47 @@
     "transformation_definitions": {
       "type": "object",
       "description": "Names of the AWS Transform managed transformation definitions. The four analysis TDs are required; execution_plan is optional.",
-      "required": ["agentic_readiness", "modernization", "portfolio_agentic_readiness", "portfolio_modernization"],
+      "required": [
+        "agentic_readiness",
+        "modernization",
+        "portfolio_agentic_readiness",
+        "portfolio_modernization"
+      ],
       "properties": {
         "agentic_readiness": {
           "type": "string",
           "description": "Transformation definition name for individual ARA (Agentic Readiness Analysis) per repo",
-          "examples": ["AWS/agentic-readiness-analysis"]
+          "examples": [
+            "AWS/agentic-readiness-analysis"
+          ]
         },
         "modernization": {
           "type": "string",
           "description": "Transformation definition name for individual MOD (Modernization Readiness Analysis) per repo",
-          "examples": ["AWS/modernization-readiness-analysis"]
+          "examples": [
+            "AWS/modernization-readiness-analysis"
+          ]
         },
         "portfolio_agentic_readiness": {
           "type": "string",
           "description": "Transformation definition name for portfolio-level ARA aggregation",
-          "examples": ["AWS/portfolio-agentic-readiness-analysis"]
+          "examples": [
+            "AWS/portfolio-agentic-readiness-analysis"
+          ]
         },
         "portfolio_modernization": {
           "type": "string",
           "description": "Transformation definition name for portfolio-level MOD aggregation",
-          "examples": ["AWS/portfolio-modernization-readiness-analysis"]
+          "examples": [
+            "AWS/portfolio-modernization-readiness-analysis"
+          ]
         },
         "execution_plan": {
           "type": "string",
           "description": "Transformation definition name for portfolio execution plan generation",
-          "examples": ["portfolio-execution-plan-generation"]
+          "examples": [
+            "portfolio-execution-plan-generation"
+          ]
         }
       }
     },
@@ -80,7 +104,17 @@
           "items": {
             "type": "string"
           },
-          "examples": [["eks", "aurora", "bedrock"], ["ecs", "fargate"]]
+          "examples": [
+            [
+              "eks",
+              "aurora",
+              "bedrock"
+            ],
+            [
+              "ecs",
+              "fargate"
+            ]
+          ]
         },
         "avoid": {
           "type": "array",
@@ -88,7 +122,15 @@
           "items": {
             "type": "string"
           },
-          "examples": [["self-managed-kafka", "serverless"], ["kubernetes"]]
+          "examples": [
+            [
+              "self-managed-kafka",
+              "serverless"
+            ],
+            [
+              "kubernetes"
+            ]
+          ]
         }
       }
     },
@@ -98,7 +140,10 @@
       "minItems": 2,
       "items": {
         "type": "object",
-        "required": ["name", "path"],
+        "required": [
+          "name",
+          "path"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -111,7 +156,11 @@
           "priority": {
             "type": "string",
             "description": "Business priority for this service (P0=Critical, P1=High, P2=Medium)",
-            "enum": ["P0", "P1", "P2"],
+            "enum": [
+              "P0",
+              "P1",
+              "P2"
+            ],
             "default": "P2"
           },
           "context": {
@@ -120,7 +169,7 @@
           },
           "preferences": {
             "type": "object",
-            "description": "Per-repo transformation preferences. MOD-only. Merged with global preferences — per-repo avoid overrides global prefer for conflicts.",
+            "description": "Per-repo transformation preferences. MOD-only. Merged with global preferences \u2014 per-repo avoid overrides global prefer for conflicts.",
             "properties": {
               "prefer": {
                 "type": "array",
@@ -141,12 +190,24 @@
           "repo_type": {
             "type": "string",
             "description": "Optional override for repository type classification. If not provided, the agent auto-detects during discovery.",
-            "enum": ["application", "infrastructure-only", "deployment-config", "monorepo", "library"]
+            "enum": [
+              "application",
+              "infrastructure-only",
+              "deployment-config",
+              "monorepo",
+              "library"
+            ]
           },
           "service_archetype": {
             "type": "string",
             "description": "Optional override for service archetype classification. MOD-only: calibrates scoring on architecture-sensitive questions (INF-Q3, INF-Q4, APP-Q3, APP-Q4) so services whose correct design is synchronous and stateless are not penalized for lacking async infrastructure they do not need. Only applies when repo_type is 'application'. If not provided, the MOD TD auto-detects during discovery.",
-            "enum": ["stateless-utility", "stateful-crud", "orchestrator", "data-gateway", "event-processor"]
+            "enum": [
+              "stateless-utility",
+              "stateful-crud",
+              "orchestrator",
+              "data-gateway",
+              "event-processor"
+            ]
           },
           "tags": {
             "type": "array",
@@ -171,7 +232,10 @@
           "agent_scope": {
             "type": "string",
             "description": "Optional per-repo override for agent scope. ARA-only. If set, overrides the portfolio-level agent_scope for this repo. Use to set infrastructure-only repos to read-only while application repos are write-enabled.",
-            "enum": ["read-only", "write-enabled"]
+            "enum": [
+              "read-only",
+              "write-enabled"
+            ]
           }
         }
       }
@@ -181,7 +245,11 @@
       "description": "Optional manual dependency declarations (for cases where auto-detection fails)",
       "items": {
         "type": "object",
-        "required": ["source", "target", "type"],
+        "required": [
+          "source",
+          "target",
+          "type"
+        ],
         "properties": {
           "source": {
             "type": "string",
@@ -194,12 +262,95 @@
           "type": {
             "type": "string",
             "description": "Type of dependency",
-            "enum": ["sync", "async", "shared_db", "shared_infra"]
+            "enum": [
+              "sync",
+              "async",
+              "shared_db",
+              "shared_infra"
+            ]
           },
           "description": {
             "type": "string",
             "description": "Optional description of the dependency relationship"
           }
+        }
+      }
+    },
+    "execution_plan": {
+      "type": "object",
+      "description": "Engagement parameters for the Portfolio Execution Plan TD. The orchestrator reads these from portfolio-config.yaml and passes them as additionalPlanContext to the execution plan TD. All fields are optional \u2014 defaults are applied if omitted. Kiro only prompts the user for fields not already defined here.",
+      "properties": {
+        "team_size": {
+          "type": "integer",
+          "description": "Number of engineers available for modernization work",
+          "default": 5,
+          "minimum": 1,
+          "examples": [
+            5,
+            8,
+            12
+          ]
+        },
+        "timeline_constraint": {
+          "type": "string",
+          "description": "Hard deadline or desired completion window (e.g., '6 months', 'Q4 2026')",
+          "examples": [
+            "6 months",
+            "12 months",
+            "Q4 2026"
+          ]
+        },
+        "budget_constraint": {
+          "type": "string",
+          "description": "Budget envelope for the engagement (e.g., '$500K total', 'minimize cost')",
+          "examples": [
+            "$1.2M including training and infrastructure",
+            "$500K total",
+            "minimize cost"
+          ]
+        },
+        "compliance_requirements": {
+          "type": "array",
+          "description": "Regulatory frameworks that must be maintained during migration",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            [
+              "SOC2",
+              "PCI-DSS"
+            ],
+            [
+              "HIPAA",
+              "SOC2"
+            ]
+          ]
+        },
+        "availability_requirement": {
+          "type": "string",
+          "description": "Uptime SLA that must be maintained during migration",
+          "examples": [
+            "99.95%",
+            "99.9%",
+            "zero-downtime"
+          ]
+        },
+        "risk_tolerance": {
+          "type": "string",
+          "description": "Team's risk tolerance for the engagement",
+          "enum": [
+            "conservative",
+            "moderate",
+            "aggressive"
+          ],
+          "default": "moderate"
+        },
+        "existing_capabilities": {
+          "type": "string",
+          "description": "Free-text description of what the team already has (skills, tools, infrastructure)",
+          "examples": [
+            "Strong Java/Spring, basic Docker, CI/CD with Jenkins, no Kubernetes experience"
+          ]
         }
       }
     }
