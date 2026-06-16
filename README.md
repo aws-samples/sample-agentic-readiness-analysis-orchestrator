@@ -51,7 +51,7 @@ flowchart TB
 
 All configuration lives in one file (`portfolio-config.yaml`). The `analysis_type` field controls which path runs: `agentic-readiness` (ARA only), `modernization` (MOD only), `full` (both), or `execution-plan` (generates the unified execution plan from existing portfolio reports). The `execution_plan` section provides engagement parameters for the execution plan TD. Per-repo TDs run in parallel across repos. Portfolio-level TDs only run for the selected analysis type(s).
 
-In orchestrated mode, Kiro reads the `execution_plan` section from `portfolio-config.yaml` and only prompts the user for fields that are missing — if all parameters are already defined, it proceeds directly to invocation.
+In orchestrated mode, Kiro reads the `execution_plan` section from `portfolio-config.yaml`, generates `atx-config-exec-plan.yaml` in ATX's native format (`additionalPlanContext:` block), and invokes ATX with that generated file. ATX cannot read `portfolio-config.yaml` directly — it only understands its own config format. Kiro only prompts the user for fields that are missing — if all parameters are already defined, it proceeds directly to generation and invocation.
 
 ### Repo Classification
 
@@ -79,13 +79,19 @@ flowchart TB
 
 ### Config -> ATX Config Generation
 
+Kiro reads `portfolio-config.yaml` and generates ATX-native config files (`additionalPlanContext:` format) for each TD. ATX cannot consume `portfolio-config.yaml` directly.
+
 ```mermaid
 flowchart TB
-    YAML[portfolio-config.yaml] --> POWER[Power]
+    YAML[portfolio-config.yaml] --> POWER[Kiro Power]
     
-    POWER -->|ARA config| ARA_CFG
-    POWER -->|MOD config| MOD_CFG
-    POWER -->|Exec Plan config| EXEC_CFG
+    POWER -->|generates| ARA_FILE[".atx-config-*-ara.yaml"]
+    POWER -->|generates| MOD_FILE[".atx-config-*-mod.yaml"]
+    POWER -->|generates| EXEC_FILE["atx-config-exec-plan.yaml"]
+
+    ARA_FILE -->|"-g file://..."| ATX_ARA["ATX: ARA TD"]
+    MOD_FILE -->|"-g file://..."| ATX_MOD["ATX: MOD TD"]
+    EXEC_FILE -->|"-g file://..."| ATX_EXEC["ATX: Exec Plan TD"]
 
     subgraph ARA_CFG [ARA additionalPlanContext]
         A1[repo_type]
@@ -117,7 +123,7 @@ flowchart TB
     end
 ```
 
-> `agent_scope` is ARA-only (drives conditional BLOCKERs). `service_archetype` is ARA-only (determines core/extended question tiers). `preferences` is MOD-only and Exec Plan (frames recommendations). `repo_type`, `context`, `priority`, and `tags` are shared across ARA/MOD. The `execution_plan` section fields map directly to the Exec Plan TD's `additionalPlanContext`.
+> `agent_scope` is ARA-only (drives conditional BLOCKERs). `service_archetype` is ARA-only (determines core/extended question tiers). `preferences` is MOD-only and Exec Plan (frames recommendations). `repo_type`, `context`, `priority`, and `tags` are shared across ARA/MOD. The `execution_plan` section fields map directly to the Exec Plan TD's `additionalPlanContext` in the generated `atx-config-exec-plan.yaml`.
 
 ### Report Output
 
@@ -295,15 +301,30 @@ All fields are optional — defaults are applied if omitted. In Kiro chat, simpl
 Generate an execution plan for my portfolio
 ```
 
-Kiro reads the `execution_plan` section from `portfolio-config.yaml`, uses any fields already present, and only prompts you for missing ones. If everything is already defined, it proceeds directly to invocation.
+Kiro reads the `execution_plan` section from `portfolio-config.yaml`, uses any fields already present, and only prompts you for missing ones. If everything is already defined, it generates `atx-config-exec-plan.yaml` and proceeds directly to ATX invocation.
 
 **Run manually (without Kiro):**
 
-```bash
-atx custom def exec -n portfolio-execution-plan-generation -p . -g file://portfolio-config.yaml -x -t
+Create `atx-config-exec-plan.yaml` in ATX's expected format (see `examples/atx-config-exec-plan.yaml` for a working example):
+
+```yaml
+additionalPlanContext: |
+  portfolio_name: "my-platform"
+  team_size: 8
+  timeline_constraint: "12 months"
+  budget_constraint: "$1.2M"
+  compliance_requirements: ["SOC2", "PCI-DSS"]
+  risk_tolerance: "moderate"
+  existing_capabilities: "Java/Spring, basic Docker, no K8s"
 ```
 
-The orchestrator reads the `execution_plan` section from `portfolio-config.yaml` and generates the ATX `additionalPlanContext` automatically. No separate config file needed.
+Then invoke ATX directly:
+
+```bash
+atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
+```
+
+> **Note:** ATX only understands the `additionalPlanContext:` format. It cannot consume `portfolio-config.yaml` directly. In orchestrated mode, Kiro handles the translation automatically. For manual runs, create `atx-config-exec-plan.yaml` yourself.
 
 #### Output
 
@@ -337,6 +358,7 @@ atx custom def publish -n <registry-name> --sd ./definitions/<td-folder> --descr
 │   ├── POWER.md                        # Main power file with safety contracts
 │   └── steering/                       # Runbook-level steering files
 ├── examples/
+│   ├── atx-config-exec-plan.yaml       # ATX-native config example for exec plan (additionalPlanContext format)
 │   ├── fixtures/
 │   │   └── monolith/                   # PHP test fixture (out-of-box testing)
 │   └── reports/                        # Generated example reports
