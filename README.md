@@ -43,11 +43,17 @@ flowchart TB
     GATE_ARA --> PORT_ARA[Portfolio ARA]
     GATE_MOD --> PORT_MOD[Portfolio MODA]
 
-    PORT_ARA --> EXEC[Portfolio Execution Plan]
-    PORT_MOD --> EXEC
+    PORT_ARA --> KIRO[Kiro Steering File]
+    PORT_MOD --> KIRO
+
+    KIRO -->|asks engagement questions| USER[User Answers<br/>team size, timeline, budget,<br/>compliance, risk tolerance]
+    USER -->|builds config| EXEC_CFG[atx-config-exec-plan.yaml]
+    EXEC_CFG --> EXEC[Portfolio Execution Plan]
 ```
 
 The `analysis_type` field controls which path runs: `agentic-readiness` (ARA only), `modernization` (MOD only), `full` (both), or `execution-plan` (generates the unified execution plan from existing portfolio reports). Per-repo TDs run in parallel across repos. Portfolio-level TDs only run for the selected analysis type(s). The execution plan consumes whichever portfolio reports are available (at least one required).
+
+In orchestrated mode, Kiro's steering file prompts the user for engagement parameters and automatically generates the ATX config before invoking the execution plan TD.
 
 ### Repo Classification
 
@@ -246,9 +252,28 @@ atx custom def publish \
   --description "Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports"
 ```
 
-**Create your ATX config** (`atx-config-exec-plan.yaml`):
+#### Option A: Orchestrated Mode (Recommended)
 
-The `additionalPlanContext` block provides engagement parameters so the TD can generate a plan tailored to your constraints. Without this file, Kiro or ATX will prompt for each parameter interactively.
+When using the Kiro Power, you don't create the config file manually. The orchestrator's steering file handles it:
+
+```mermaid
+flowchart LR
+    KIRO[Kiro Power] --> ASK[Asks engagement questions<br/>team size, timeline, budget,<br/>compliance, risk tolerance, etc.]
+    ASK --> BUILD[Builds atx-config-exec-plan.yaml]
+    BUILD --> EXEC["atx custom def exec<br/>-n portfolio-execution-plan-generation"]
+```
+
+In Kiro chat, simply run:
+
+```
+Generate an execution plan for my portfolio
+```
+
+Kiro prompts you for each engagement parameter (team size, timeline, budget, compliance requirements, availability, risk tolerance, existing capabilities, and preferences), assembles the `atx-config-exec-plan.yaml` automatically, and invokes the TD. No manual YAML editing required.
+
+#### Option B: Manual Mode (Without Orchestrator)
+
+If running ATX directly (without Kiro), you must create the config file yourself. The `additionalPlanContext` block provides all engagement parameters the TD needs to generate a plan tailored to your constraints.
 
 ```yaml
 # atx-config-exec-plan.yaml — copy and customize for your engagement
@@ -281,13 +306,15 @@ additionalPlanContext: |
 
 See [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml) for a complete working example.
 
-**Run the TD:**
+Then run:
 
 ```bash
 atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
 
-**Output** lands in `./portfolio-execution-plan/`:
+#### Output
+
+Output lands in `./portfolio-execution-plan/`:
 - `{portfolio-name}-portfolio-exec-plan.md` — narrative execution plan
 - `{portfolio-name}-portfolio-exec-plan.json` — machine-readable contract
 - `{portfolio-name}-portfolio-exec-plan.html` — self-contained HTML visualization
