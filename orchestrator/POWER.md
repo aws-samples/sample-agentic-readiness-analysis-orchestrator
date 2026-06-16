@@ -18,14 +18,14 @@ Two analyses plus an execution plan TD are supported. The `analysis_type` field 
 |---|---|
 | **Modernization Readiness Analysis (MOD)** | 37 questions, 5 sections, 1-4 scale. Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
 | **Agentic Readiness Analysis (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
-| **Portfolio Execution Plan (EXEC)** | MODA-only. Consumes the portfolio MODA report (hard dependency — cannot run until Portfolio MODA completes; no ARA dependency) and produces a holistic engagement-level roadmap with deduplicated work streams, phased timelines, cost estimates, risk registers, and decision points. |
+| **Portfolio Execution Plan (EXEC)** | Unified. Consumes the portfolio MODA report AND/OR portfolio ARA report (at least one required) and produces a holistic engagement-level roadmap with modernization work streams (from MODA), agent-readiness work streams (from ARA), cross-dimension dependencies, phased timelines, cost estimates, risk registers, and decision points. |
 
 | `analysis_type` | What runs |
 |---|---|
 | `agentic-readiness` | Per-repo ARA + Portfolio ARA |
 | `modernization` | Per-repo MOD + Portfolio MOD |
 | `full` | Both analyses |
-| `execution-plan` | Portfolio Execution Plan — **requires:** `portfolio-modernization-readiness-analysis` complete. MODA-only dependency chain: per-service MOD ×N → Portfolio MODA → Exec Plan. No ARA dependency. |
+| `execution-plan` | Portfolio Execution Plan — **requires:** at least one of `portfolio-modernization-readiness-analysis` OR `portfolio-agentic-readiness-analysis` complete. Consumes both when available for a unified plan with cross-dimension dependencies. |
 
 Per-repo subagents run **in parallel across repos**. In `full` mode, each subagent runs its assigned TDs **sequentially within its repo** (ARA → MOD). After per-repo execution, a Reconciliation Gate verifies workspace state, then portfolio TDs run **strictly serially** with a gate between each.
 

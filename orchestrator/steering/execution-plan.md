@@ -1,28 +1,30 @@
 # Execution Plan Generation
 
-How to generate a portfolio-level modernization execution plan from completed MODA reports. Read this when the user wants to produce an execution plan, or when `analysis_type` includes execution planning.
+How to generate a portfolio-level unified execution plan from completed MODA and/or ARA reports. Read this when the user wants to produce an execution plan, or when `analysis_type` includes execution planning.
 
-> **HARD DEPENDENCY (MODA-only):** The execution plan TD consumes the portfolio MODA report (`{portfolio-name}-mod-portfolio-report.json`) as its sole analytical input. It has no dependency on ARA (Agentic Readiness Analysis) — ARA is a separate analysis dimension. The execution plan cannot run standalone — it MUST run last in the MODA pipeline, after the portfolio MODA report has been successfully generated. The dependency chain is:
+> **DEPENDENCY (at least one required):** The execution plan TD consumes the portfolio MODA report AND/OR the portfolio ARA report as its analytical inputs. At least one must exist. When both exist, the TD produces a unified plan covering modernization work streams (from MODA) and agent-readiness work streams (from ARA) with cross-dimension dependency detection.
 >
 > ```
-> Per-service MODA (×N, parallel) → Portfolio MODA → Portfolio Execution Plan
+> Per-service MODA (×N, parallel) → Portfolio MODA ─┐
+>                                                    ├→ Portfolio Execution Plan
+> Per-service ARA (×N, parallel) → Portfolio ARA ───┘
 > ```
 >
-> If the portfolio MODA report does not exist, the execution plan TD will terminate with an error. Do NOT attempt to run it before the MODA pipeline completes.
+> If neither report exists, the execution plan TD will terminate with an error. At least one pipeline must complete first.
 
 ---
 
 ## When to Use
 
-- After a MOD or `full` analysis has completed **and** the portfolio MODA report exists at the expected path
+- After a MOD, ARA, or `full` analysis has completed **and** at least one portfolio-level report exists
 - The user wants an execution roadmap with phased timelines, cost estimates, and risk analysis
-- The user needs work stream decomposition for cross-team planning
-- The user wants decision points and success metrics for a modernization engagement
+- The user needs work stream decomposition for cross-team planning (modernization AND/OR agent-readiness)
+- The user wants decision points and success metrics for an engagement
+- The user wants a unified view of both modernization and agent-readiness work
 
 **When NOT to use:**
-- The portfolio MODA report does not yet exist — run `modernization` or `full` analysis first
-- Only ARA analysis has been run (ARA reports are not consumed by this TD)
-- Individual per-service MODA reports exist but the portfolio aggregation has not run
+- Neither portfolio MODA report nor portfolio ARA report exists — run analysis first
+- Individual per-service reports exist but no portfolio aggregation has run
 
 ---
 
@@ -91,33 +93,36 @@ additionalPlanContext: |
 
 ### Prerequisites (Mandatory — Fail Fast)
 
-The execution plan TD has a hard dependency on the portfolio MODA report. **Check for its existence before proceeding — do NOT invoke the TD without it.**
+The execution plan TD requires at least one portfolio-level report. **Check for existence before proceeding.**
 
 ```
-Dependency chain (MODA-only — no ARA dependency):
-  1. Per-service MOD analyses (×N, parallel across repos)
-  2. Portfolio MODA TD (generates the portfolio-level aggregation)
-  3. ← YOU ARE HERE → Portfolio Execution Plan TD
+Dependency chain (at least one path required):
+  Path A: Per-service MOD (×N) → Portfolio MODA → ┐
+                                                   ├→ Portfolio Execution Plan TD
+  Path B: Per-service ARA (×N) → Portfolio ARA → ─┘
 ```
 
 Before running the execution plan TD:
 
-1. **Portfolio MODA report MUST exist** at `./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json`
-2. **Verify presence — abort if missing:**
+1. **At least one portfolio report MUST exist:**
+   - Portfolio MODA report at `./portfolio-modernization-readiness-analysis/{portfolio-name}-mod-portfolio-report.json` — AND/OR —
+   - Portfolio ARA report at `./portfolio-agentic-readiness-analysis/{portfolio-name}-ara-portfolio-report.json`
+2. **Verify presence — abort if NEITHER exists:**
    ```bash
-   ls ./portfolio-modernization-readiness-analysis/*-mod-portfolio-report.json 2>/dev/null
+   MODA=$(ls ./portfolio-modernization-readiness-analysis/*-mod-portfolio-report.json 2>/dev/null)
+   ARA=$(ls ./portfolio-agentic-readiness-analysis/*-ara-portfolio-report.json 2>/dev/null)
+   if [ -z "$MODA" ] && [ -z "$ARA" ]; then
+     echo "ERROR: Neither portfolio MODA report nor portfolio ARA report found."
+     echo "The execution plan TD requires at least one. Run 'modernization', 'agentic-readiness', or 'full' analysis first."
+     exit 1
+   fi
+   echo "Found: MODA=${MODA:-none} ARA=${ARA:-none}"
    ```
-   If this returns nothing:
-   ```
-   ERROR: Portfolio MODA report not found. The execution plan TD requires the portfolio
-   MODA report as input. Run a 'modernization' or 'full' analysis first to generate it.
-   See steering/orchestration-workflow.md for the full pipeline.
-   ```
-   **Do NOT proceed. Do NOT attempt to run the execution plan TD without this file.**
-3. **Validate the report** contains at least 2 assessed services:
+   **Do NOT proceed if both are missing.**
+3. **Validate report(s)** contain at least 2 assessed services:
    ```bash
-   # Quick validation — check services_assessed count
-   grep -o '"services_assessed":[0-9]*' ./portfolio-modernization-readiness-analysis/*-mod-portfolio-report.json
+   grep -o '"services_assessed":[0-9]*' ./portfolio-modernization-readiness-analysis/*-mod-portfolio-report.json 2>/dev/null
+   grep -o '"services_assessed":[0-9]*' ./portfolio-agentic-readiness-analysis/*-ara-portfolio-report.json 2>/dev/null
    ```
 
 ### TD Name
@@ -140,7 +145,7 @@ If missing, publish it from the definitions directory:
 atx custom def publish \
   -n portfolio-execution-plan-generation \
   --sd ./definitions/portfolio-execution-plan-generation \
-  --description "Generate portfolio-level modernization execution plan from aggregated MODA report"
+  --description "Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports"
 ```
 
 ### Invocation
@@ -195,10 +200,10 @@ The execution plan TD produces a four-artifact bundle in `./portfolio-execution-
 
 | Steering file | Relationship |
 |---|---|
-| `orchestration-workflow.md` | The orchestrator can chain execution plan generation after portfolio MOD completes |
+| `orchestration-workflow.md` | The orchestrator can chain execution plan generation after portfolio MOD and/or ARA completes |
 | `portfolio-config.md` | `portfolio_name` and `preferences` are sourced from the same config |
 | `manual-execution.md` | Execution plan can be run manually without the orchestrator |
-| `reconciliation-gate.md` | The reconciliation gate does NOT gate the execution plan TD — it gates portfolio ARA/MOD TDs only. The exec plan TD depends solely on the portfolio MODA report existing. |
+| `reconciliation-gate.md` | The reconciliation gate does NOT gate the execution plan TD — it gates portfolio ARA/MOD TDs only. The exec plan TD depends solely on at least one portfolio report existing. |
 
 ---
 
@@ -206,13 +211,22 @@ The execution plan TD produces a four-artifact bundle in `./portfolio-execution-
 
 ### Full pipeline (orchestrator-driven)
 
-When `analysis_type: full` completes, the orchestrator can prompt the user: "MODA reports are ready. Would you like to generate an execution plan?" If yes, gather engagement parameters and run the execution plan TD.
+When `analysis_type: full` completes, the orchestrator can prompt the user: "Both MODA and ARA reports are ready. Would you like to generate a unified execution plan?" If yes, gather engagement parameters and run the execution plan TD. The TD will automatically consume both reports and produce a unified plan with cross-dimension dependencies.
+
+### MODA-only pipeline
+
+When only `analysis_type: modernization` has been run, the execution plan TD produces modernization work streams only. ARA sections are omitted.
+
+### ARA-only pipeline
+
+When only `analysis_type: agentic-readiness` has been run, the execution plan TD produces agent-readiness work streams only. Modernization sections are omitted.
 
 ### Standalone execution (manual)
 
 ```bash
-# 1. Verify portfolio MODA report exists
-ls ./portfolio-modernization-readiness-analysis/*-mod-portfolio-report.json
+# 1. Verify at least one portfolio report exists
+ls ./portfolio-modernization-readiness-analysis/*-mod-portfolio-report.json 2>/dev/null
+ls ./portfolio-agentic-readiness-analysis/*-ara-portfolio-report.json 2>/dev/null
 
 # 2. Create atx-config-exec-plan.yaml with engagement parameters
 
