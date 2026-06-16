@@ -15,6 +15,7 @@ transformation_definitions:
   modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  execution_plan: "portfolio-execution-plan-generation"
 
 repositories:
   - name: "service-a"
@@ -32,7 +33,7 @@ The full schema is in `portfolio-config.schema.json` at the repo root. Key field
 | Field | Required | Type | Notes |
 |---|---|---|---|
 | `portfolio_name` | yes | string | Identifier for the portfolio |
-| `analysis_type` | yes | enum | One of `agentic-readiness`, `modernization`, `full` |
+| `analysis_type` | yes | enum | One of `agentic-readiness`, `modernization`, `full`, `execution-plan` |
 | `context` | no | string | Free-text context that frames recommendations |
 | `agent_scope` | no | enum | `read-only` or `write-enabled`. ARA-only — controls conditional BLOCKER severity. |
 | `transformation_definitions` | yes | object | Names of the TDs in your AWS Transform registry |
@@ -48,6 +49,7 @@ The full schema is in `portfolio-config.schema.json` at the repo root. Key field
 | `modernization` | yes | Per-repo MOD TD name |
 | `portfolio_agentic_readiness` | yes | Portfolio ARA aggregator |
 | `portfolio_modernization` | yes | Portfolio MOD aggregator |
+| `execution_plan` | no | Portfolio execution plan generation (user-published TD, no `AWS/` prefix) |
 
 ### Per-repo fields
 
@@ -253,6 +255,7 @@ transformation_definitions:
   modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  execution_plan: "portfolio-execution-plan-generation"
 
 repositories:
   - name: "payment-gateway"
@@ -278,6 +281,7 @@ transformation_definitions:
   modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  execution_plan: "portfolio-execution-plan-generation"
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
@@ -330,6 +334,7 @@ transformation_definitions:
   modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  execution_plan: "portfolio-execution-plan-generation"
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]

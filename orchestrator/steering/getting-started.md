@@ -26,6 +26,7 @@ Kiro orchestrates the analysis workflow, but relies on **AWS Transform CLI** to 
      modernization: "AWS/modernization-readiness-analysis"
      portfolio_agentic_readiness: "AWS/portfolio-agentic-readiness-analysis"
      portfolio_modernization: "AWS/portfolio-modernization-readiness-analysis"
+     execution_plan: "portfolio-execution-plan-generation"
    ```
    Verify they exist:
    ```bash
@@ -107,6 +108,7 @@ transformation_definitions:
   modernization: "modernization-readiness-analysis"
   portfolio_agentic_readiness: "portfolio-agentic-readiness"
   portfolio_modernization: "portfolio-modernization"
+  execution_plan: "portfolio-execution-plan-generation"
 
 repositories:
   - name: "service-a"

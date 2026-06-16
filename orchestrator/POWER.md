@@ -1,7 +1,7 @@
 ---
 name: "orchestrator"
 displayName: "Portfolio Analysis Orchestrator"
-description: "Orchestrate agentic readiness and modernization analyses across a service portfolio with reconciliation gates and dependency-aware roadmaps."
+description: "Orchestrate agentic readiness and modernization analyses across a service portfolio with reconciliation gates, dependency-aware roadmaps, and execution plan generation."
 keywords: ["agentic-readiness", "modernization-readiness-analysis", "portfolio-analysis", "ara", "mod", "aws-transform"]
 author: "AWS"
 ---
@@ -10,20 +10,22 @@ author: "AWS"
 
 ## Overview
 
-This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive analyses across your service portfolio. Kiro reads `portfolio-config.yaml`, classifies repositories, spawns one subagent per repo, runs the appropriate AWS Transform transformations, and aggregates results into portfolio-level reports.
+This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive analyses across your service portfolio. Kiro reads `portfolio-config.yaml`, classifies repositories, spawns one subagent per repo, runs the appropriate AWS Transform transformations, aggregates results into portfolio-level reports, and optionally generates a portfolio-level execution plan.
 
-Two analyses are supported. The `analysis_type` field in `portfolio-config.yaml` controls which run:
+Two analyses plus an execution plan TD are supported. The `analysis_type` field in `portfolio-config.yaml` controls which analyses run:
 
 | Analysis | What it evaluates |
 |---|---|
 | **Modernization Readiness Analysis (MOD)** | 37 questions, 5 sections, 1-4 scale. Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
 | **Agentic Readiness Analysis (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
+| **Portfolio Execution Plan (EXEC)** | Unified. Consumes the portfolio MODA report AND/OR portfolio ARA report (at least one required) and produces a holistic engagement-level roadmap with modernization work streams (from MODA), agent-readiness work streams (from ARA), cross-dimension dependencies, phased timelines, cost estimates, risk registers, and decision points. |
 
 | `analysis_type` | What runs |
 |---|---|
 | `agentic-readiness` | Per-repo ARA + Portfolio ARA |
 | `modernization` | Per-repo MOD + Portfolio MOD |
 | `full` | Both analyses |
+| `execution-plan` | Portfolio Execution Plan — **requires:** at least one of `portfolio-modernization-readiness-analysis` OR `portfolio-agentic-readiness-analysis` complete. Consumes both when available for a unified plan with cross-dimension dependencies. |
 
 Per-repo subagents run **in parallel across repos**. In `full` mode, each subagent runs its assigned TDs **sequentially within its repo** (ARA → MOD). After per-repo execution, a Reconciliation Gate verifies workspace state, then portfolio TDs run **strictly serially** with a gate between each.
 
@@ -34,6 +36,7 @@ Per-repo subagents run **in parallel across repos**. In `full` mode, each subage
 - Prioritizing modernization based on dependencies
 - Tracking portfolio-wide readiness progress
 - Generating executive-level portfolio reports
+- Producing phased execution plans with cost estimates, risk registers, and work stream decomposition
 
 ---
 
@@ -49,6 +52,7 @@ Read on demand based on what the user is asking. **Do not load all of these proa
 | `reconciliation-gate.md` | The mandatory gate between per-repo and portfolio TDs — Checks A (branch consolidation), B (path standardization), C (bundle completeness) |
 | `manual-execution.md` | Running individual TDs by hand without the orchestrator (single-repo runs, debugging, partial reruns) |
 | `troubleshooting.md` | Errors, missing reports, timeouts, subagent panic recovery, configuration validation issues |
+| `execution-plan.md` | Generating a portfolio execution plan — engagement parameters, ATX config generation, TD invocation, output verification |
 | `atx-cli-reference.md` | Quick reference for `atx` flags, configuration file format, common invocation patterns, recommended timeouts |
 
 To load a steering file: `Call action "readSteering" with powerName="orchestrator", steeringFile="<filename>"`
@@ -120,7 +124,7 @@ Detailed step-by-step flow lives in `steering/orchestration-workflow.md`. Summar
 2. **Parse and validate `portfolio-config.yaml`:** analysis_type, repos, preferences, dependency_overrides, TD names.
 3. **Classify each repo:** Apply the decision tree (or honor user-provided `repo_type` override).
 4. **Clone missing repos:** For entries with `repository_url` and a non-existent `path`.
-5. **Generate ATX configs:** Per-repo ARA (no preferences), per-repo MOD (no agent_scope, merged preferences). Portfolio configs include structured `service_inventory[]` and `dependency_overrides[]`.
+5. **Generate ATX configs:** Per-repo ARA (no preferences), per-repo MOD (no agent_scope, merged preferences), Exec Plan (`atx-config-exec-plan.yaml` with `additionalPlanContext`). Portfolio configs include structured `service_inventory[]` and `dependency_overrides[]`. ATX only understands the `additionalPlanContext:` format — it cannot consume `portfolio-config.yaml` directly.
 6. **Per-repo execution (Contract 2):** One subagent per repo. Subagent runs its assigned TDs sequentially within the repo. All subagents in parallel across repos.
 7. **Reconciliation Gate (Step 1.5):** Check A (branch consolidation), Check B (canonical paths — auto-rename and auto-move strays since Contract 2 makes their attribution unambiguous, ABORT only when >=2 strays exist for the same TD in one repo), Check C (four-artifact bundle completeness, `.json` mandatory). Abort before any portfolio TD if any check fails.
 8. **Portfolio TDs (Contract 3):** Strictly serial — Portfolio ARA → Portfolio MOD — with a Reconciliation Gate between each.
@@ -147,6 +151,7 @@ transformation_definitions:
   modernization: "AWS/modernization-readiness-analysis"
   portfolio_agentic_readiness: "AWS/portfolio-agentic-readiness-analysis"
   portfolio_modernization: "AWS/portfolio-modernization-readiness-analysis"
+  execution_plan: "portfolio-execution-plan-generation"
 
 preferences:
   prefer: ["eks", "aurora", "bedrock"]
