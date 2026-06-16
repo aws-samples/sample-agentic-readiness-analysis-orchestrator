@@ -93,6 +93,8 @@ Extract the following fields from `additionalPlanContext`:
 | `priority_pathways` | string[] | No | all triggered | Subset of MODA pathways to plan for. If omitted, plans for ALL triggered pathways across all services. |
 | `excluded_pathways` | string[] | No | — | MODA pathways to explicitly exclude from planning. |
 | `preferences` | object | No | — | Technology preferences (same format as MODA: `prefer` and `avoid` arrays). Steers recommendations but does not change pathway logic. |
+| `ai_acceleration` | enum | No | `"enabled"` | One of: `enabled`, `disabled`, `custom`. Controls whether AI-accelerated effort estimates are generated. `enabled` = standard acceleration factors (40-60% for code tasks, 0-10% for design). `disabled` = only traditional estimates shown. `custom` = use `ai_acceleration_overrides` for per-category factors. |
+| `ai_acceleration_overrides` | object | No | — | Override default acceleration percentages per task category. Keys are category names from the acceleration table (e.g., `code_migration: 50`, `iac_generation: 55`). Values are percentage reductions (0-80). Only used when `ai_acceleration: "custom"`. |
 | `service_inventory` | object[] | No | — | List of services with metadata (name, path, priority, classification_tier). Used to enrich service context. |
 | `dependency_overrides` | object[] | No | — | Explicit cross-service dependency declarations. Each entry: `source`, `target`, `type`, `description`. |
 
@@ -134,9 +136,10 @@ additionalPlanContext: |
 
 - **`team_size`** → Effort-to-calendar conversion (person-weeks / team_size x 0.7 allocation = calendar weeks). Also scales cost estimation.
 - **`risk_tolerance`** → Controls parallelization strategy: `conservative` = sequential execution, no parallel groups; `moderate` = parallel independent streams, sequential dependent ones; `aggressive` = maximum parallelism, compressed timelines, reduced effort multipliers.
-- **`timeline_constraint`** → Compared against calculated timeline to determine feasibility (Green/Yellow/Red). If infeasible, recommendations include scope reduction or team expansion.
+- **`timeline_constraint`** → Compared against AI-accelerated timeline to determine feasibility (Green/Yellow/Red). If infeasible, recommendations include scope reduction or team expansion.
 - **`compliance_requirements`** → Generates additional risks in the Compliance category. Adds validation gates and dual-running requirements to affected work streams.
 - **`existing_capabilities`** → When absent or indicating gaps, generates training decision points. When team has strong capabilities, reduces effort multipliers.
+- **`ai_acceleration`** → When `enabled` (default), produces dual-perspective effort estimates on every task and work stream. Timeline and cost default to AI-accelerated values. When `disabled`, only traditional estimates are produced. When `custom`, uses `ai_acceleration_overrides` factors instead of defaults.
 
 
 ### Step 1: Discover and Load Reports (Layered Input)
@@ -296,7 +299,9 @@ Each work stream contains:
 | `services` | All service IDs that trigger this pathway |
 | `objective` | Concrete outcome when complete — includes all affected services |
 | `prerequisites` | Other work stream IDs that must complete first |
-| `effort_weeks` | Three-point estimate: optimistic, expected, pessimistic |
+| `effort_weeks_traditional` | Three-point estimate (optimistic, expected, pessimistic) — manual engineering effort without AI tooling |
+| `effort_weeks_ai_accelerated` | Three-point estimate (optimistic, expected, pessimistic) — with AI-assisted code generation, automated testing, IaC generation |
+| `ai_acceleration_pct` | Percentage reduction from traditional to AI-accelerated (weighted average across tasks) |
 | `risk_level` | High / Medium / Low |
 | `phases` | Ordered execution phases with tasks |
 | `success_criteria` | Measurable outcomes confirming completion |
@@ -305,9 +310,10 @@ Each work stream contains:
 
 Within each work stream, decompose into tasks at 1-2 week (1-10 day) granularity:
 
-- Each task has: `id`, `description`, `effort_days` (1-10), `service` (which service or "shared"), `dependencies` (other task IDs), `acceptance_criteria`, `moda_trace` (traceability to source MODA finding)
+- Each task has: `id`, `description`, `effort_days_traditional` (1-10), `effort_days_ai_accelerated` (1-10), `ai_acceleration_factor` (percentage reduction), `service` (which service or "shared"), `dependencies` (other task IDs), `acceptance_criteria`, `moda_trace` (traceability to source MODA finding)
 - Task IDs are globally unique across all work streams
 - Every task must specify which service it applies to (or "shared" for cross-cutting infrastructure)
+- Every task must classify its AI acceleration potential based on task type (see Step 3.5)
 
 #### 3.3 Shared Infrastructure Tasks
 
@@ -325,15 +331,41 @@ Map dependencies between work streams based on pathway ordering:
 - "Move to Managed Databases" can often run in parallel with containers work
 - These prerequisites must not form cycles
 
-#### 3.5 Effort Estimation
+#### 3.5 Effort Estimation (Dual-Perspective)
 
-Base effort per work stream depends on:
+All effort estimates MUST include TWO perspectives: **Traditional** (manual engineering) and **AI-Accelerated** (with agent-assisted tooling).
+
+**Traditional effort** (base) per work stream depends on:
 - Pathway complexity (Cloud Native = higher base effort than DevOps)
 - Number of affected services (more services = multiplier on effort)
 - Risk tolerance adjustment: `aggressive` reduces by 20%, `conservative` increases by 30%
 - Team size adjustment: small teams (< 4) increase by 20%
 
-Present as three-point estimate satisfying: optimistic <= expected <= pessimistic.
+**AI-Accelerated effort** applies a per-task acceleration factor based on task type:
+
+| Task Category | AI Acceleration | Reduction | Rationale |
+|---------------|----------------|-----------|-----------|
+| Code migration/refactoring | High | 40-60% | Agent-assisted code transformation, pattern application, automated refactoring |
+| IaC generation (CDK, Terraform, CloudFormation) | High | 40-60% | AI generates infrastructure code from requirements, handles boilerplate |
+| Test suite creation | High | 40-60% | AI generates unit tests, integration tests, test fixtures from existing code |
+| Documentation generation | High | 50-60% | API specs, runbooks, architecture docs generated from code analysis |
+| Boilerplate/scaffolding | Very High | 50-70% | Project setup, configuration templates, CI/CD pipeline definitions |
+| API specification writing (OpenAPI, Smithy) | High | 40-50% | AI generates specs from existing endpoint implementations |
+| Architecture decisions & design | Minimal | 0-10% | Requires human judgment, stakeholder alignment, trade-off evaluation |
+| Production cutover & validation | Minimal | 0-10% | Requires careful human oversight, rollback readiness, real traffic |
+| Performance/load testing | Minimal | 5-15% | Test execution is automated but design and analysis are human-driven |
+| Compliance audits & reviews | Minimal | 0-10% | Requires human attestation, regulatory understanding, organizational context |
+| Team training & knowledge transfer | Minimal | 0-10% | Learning requires human cognitive effort; AI assists with materials only |
+| Data migration & validation | Low-Medium | 15-30% | Scripts are AI-generatable but validation requires domain knowledge |
+
+**Calculating AI-accelerated effort:**
+1. For each task, assign the appropriate acceleration category
+2. Apply the reduction percentage to `effort_days_traditional` to get `effort_days_ai_accelerated`
+3. Round up to nearest half-day (minimum 0.5 days per task)
+4. Sum across tasks for work stream `effort_weeks_ai_accelerated`
+5. Calculate `ai_acceleration_pct` as: `(1 - ai_accelerated / traditional) * 100`
+
+Present BOTH estimates as three-point estimates satisfying: optimistic <= expected <= pessimistic.
 
 
 ### Step 4: Generate Agent-Readiness Work Streams (ARA)
@@ -368,7 +400,9 @@ Each agent-readiness work stream contains:
 | `risks` | Count of RISK findings — these produce RECOMMENDED tasks |
 | `objective` | Concrete outcome when complete |
 | `prerequisites` | Other work stream IDs (may include MODA work streams) |
-| `effort_weeks` | Three-point estimate: optimistic, expected, pessimistic |
+| `effort_weeks_traditional` | Three-point estimate (optimistic, expected, pessimistic) — manual engineering |
+| `effort_weeks_ai_accelerated` | Three-point estimate (optimistic, expected, pessimistic) — with AI tooling |
+| `ai_acceleration_pct` | Percentage reduction from traditional to AI-accelerated |
 | `risk_level` | High (has BLOCKERs) / Medium (RISKs only) / Low |
 | `phases` | Ordered execution phases with tasks |
 | `success_criteria` | Measurable outcomes confirming completion |
@@ -388,10 +422,11 @@ ARA findings map to task priority:
 
 Within each ARA work stream, decompose into tasks at 1-2 week (1-10 day) granularity:
 
-- Each task has: `id`, `description`, `effort_days` (1-10), `service` (which service or "shared"), `dependencies` (other task IDs), `acceptance_criteria`, `ara_trace` (traceability to source ARA finding — `question_id` + `repo_name`)
+- Each task has: `id`, `description`, `effort_days_traditional` (1-10), `effort_days_ai_accelerated` (1-10), `ai_acceleration_factor` (percentage reduction), `service` (which service or "shared"), `dependencies` (other task IDs), `acceptance_criteria`, `ara_trace` (traceability to source ARA finding — `question_id` + `repo_name`)
 - BLOCKER tasks are ordered first within each phase
 - Tasks from `cross_cutting_findings` produce shared infrastructure tasks
 - When multiple services have the same BLOCKER (e.g., AUTH-Q1 across 4 services), generate ONE shared pattern task + per-service implementation tasks
+- Apply the same AI acceleration categories from Step 3.5 (e.g., implementing OAuth2 patterns = code migration/refactoring = 40-60% acceleration; compliance review of auth changes = minimal acceleration)
 
 #### 4.4 Shared Infrastructure Tasks (ARA)
 
@@ -400,16 +435,23 @@ For categories where the same finding affects multiple services:
 - Example: "Design shared machine identity authentication pattern (OAuth2 client credentials + API Gateway authorizers) for all services"
 - Per-service implementation tasks depend on the shared pattern task
 
-#### 4.5 Effort Estimation (ARA)
+#### 4.5 Effort Estimation (ARA — Dual-Perspective)
 
-Base effort per ARA work stream depends on:
+**Traditional effort** (base) per ARA work stream depends on:
 - Number of BLOCKERs (each BLOCKER adds 1-2 weeks depending on effort rating in ARA report)
 - Number of RISKs (each RISK adds 0.5-1 week)
 - Number of affected services (multiplier for per-service implementation)
 - Existing capability adjustment (if team has auth/security experience, reduce AUTH/STATE effort)
 - Risk tolerance adjustment: same as MODA work streams
 
-Present as three-point estimate satisfying: optimistic <= expected <= pessimistic.
+**AI-Accelerated effort** applies the same per-task acceleration framework from Step 3.5. ARA tasks typically break down as:
+- Implementing auth patterns, API specs, observability instrumentation → High acceleration (40-60%)
+- Writing IaC for API gateways, rate limiters, circuit breakers → High acceleration (40-60%)
+- Generating test suites for auth flows, error handling → High acceleration (40-60%)
+- Security architecture design, threat modeling → Minimal acceleration (0-10%)
+- Compliance validation of auth/HITL implementations → Minimal acceleration (0-10%)
+
+Present BOTH estimates as three-point estimates satisfying: optimistic <= expected <= pessimistic.
 
 
 ### Step 5: Detect Cross-Dimension Dependencies
@@ -463,6 +505,8 @@ These dependencies are surfaced in both the timeline phasing and the narrative r
 
 
 ### Step 6: Generate Timeline
+
+The timeline defaults to **AI-accelerated effort estimates**. Traditional estimates are shown as a reference column to quantify the acceleration benefit. Feasibility assessment uses the AI-accelerated timeline.
 
 #### 6.1 Timeline Phases
 
@@ -530,18 +574,33 @@ Each risk has: `id`, `category` (Technical/Organizational/Timeline/Cost/Complian
 
 ### Step 8: Cost Estimation
 
-#### 8.1 Engagement-Level Cost
+#### 8.1 Engagement-Level Cost (Dual-Perspective)
 
-Cost estimation is at the engagement level (`engagement_level: true`), not per-service. Covers BOTH dimensions when available:
+Cost estimation is at the engagement level (`engagement_level: true`), not per-service. Covers BOTH dimensions when available. Produce TWO cost projections:
 
-- **People cost** — total_effort_weeks (MODA + ARA combined) x team_size x hourly_rate ($250) x weekly_hours (40)
-- **Infrastructure delta** — estimated monthly AWS spend change during migration ($2000/month per service with work)
+**Traditional Cost (reference baseline):**
+- **People cost** — total_effort_weeks_traditional (MODA + ARA combined) x team_size x hourly_rate ($250) x weekly_hours (40)
+- **Infrastructure delta** — estimated monthly AWS spend change during engagement ($2000/month per service with work) x calendar_months_traditional
 - **Training** — $15,000 per MODA pathway if capabilities are lacking, $5,000 if team has existing capabilities; $10,000 for agent-readiness patterns (auth, observability) if team lacks experience
-- **Total** — Sum of people + training (three-point: optimistic/expected/pessimistic)
+- **Total Traditional** — Sum of people + infrastructure + training (three-point: optimistic/expected/pessimistic)
+
+**AI-Accelerated Cost (primary/default projection):**
+- **People cost** — total_effort_weeks_ai_accelerated x team_size x hourly_rate ($250) x weekly_hours (40)
+- **AI tooling cost** — $500/month per engineer for AI coding assistants and agent tooling (included in AI-accelerated projection)
+- **Infrastructure delta** — same monthly rate but fewer months: $2000/month x calendar_months_ai_accelerated
+- **Training** — same as traditional (AI acceleration does not reduce training needs)
+- **Total AI-Accelerated** — Sum of people + AI tooling + infrastructure + training (three-point: optimistic/expected/pessimistic)
+
+**Cost savings summary:**
+- `cost_savings_absolute` = Total Traditional - Total AI-Accelerated
+- `cost_savings_pct` = (1 - AI-Accelerated / Traditional) * 100
+- `calendar_time_saved_weeks` = calendar_weeks_traditional - calendar_weeks_ai_accelerated
+
+The AI-accelerated projection is the **default** used for timeline planning and feasibility assessment. Traditional is presented as a reference baseline to quantify the value of AI tooling.
 
 #### 8.2 Consistency Rules
 
-All cost categories must satisfy: optimistic <= expected <= pessimistic.
+All cost categories must satisfy: optimistic <= expected <= pessimistic. This applies independently to both Traditional and AI-Accelerated projections.
 
 
 ### Step 9: Decision Points
@@ -572,6 +631,8 @@ Document engagement assumptions including:
 - Report currency (MODA and/or ARA reports within 90 days)
 - Infrastructure and tooling budget approved
 - Agent deployment does not proceed until BLOCKER remediation completes (when `has_ara`)
+- AI tooling available to engineers (coding assistants, agent-based code generation, automated test generation) — AI-accelerated estimates assume this tooling is provisioned and team is proficient
+- AI acceleration estimates are based on 2025-2026 tooling capabilities; actual acceleration may vary by team proficiency and task complexity
 
 
 ## Report Template
@@ -583,19 +644,20 @@ The analysis emits a four-artifact bundle: `{portfolio-name}-portfolio-exec-plan
 The markdown report MUST contain the following sections as H1/H2 headings. Sections marked with dimension indicators are only included when that dimension's report is available:
 
 1. **Portfolio Execution Plan** (H1 title)
-2. **Executive Summary**
+2. **Executive Summary** — includes AI acceleration benefit summary (total weeks saved, cost savings percentage)
 3. **Portfolio Analysis Summary** — includes MODA summary (if available) and ARA summary (if available)
 4. **Modernization Work Streams** (MODA) — only when `has_moda`
 5. **Agent-Readiness Work Streams** (ARA) — only when `has_ara`
-6. **Cross-Dimension Dependencies** — only when `mode == "unified"`
-7. **Cross-Service Dependencies**
-8. **Unified Timeline and Phasing**
-9. **Critical Path Analysis**
-10. **Risk Register**
-11. **Engagement Cost Estimation**
-12. **Success Metrics and Phase Gates**
-13. **Assumptions and Constraints**
-14. **Recommendations and Decision Points**
+6. **AI Acceleration Analysis** — shows per-work-stream acceleration breakdown, which tasks benefit most, total savings
+7. **Cross-Dimension Dependencies** — only when `mode == "unified"`
+8. **Cross-Service Dependencies**
+9. **Unified Timeline and Phasing** — uses AI-accelerated estimates as default; traditional shown as reference
+10. **Critical Path Analysis**
+11. **Risk Register**
+12. **Engagement Cost Estimation** — dual columns: Traditional vs AI-Accelerated, with savings summary
+13. **Success Metrics and Phase Gates**
+14. **Assumptions and Constraints**
+15. **Recommendations and Decision Points**
 
 The report MUST include a portfolio-level metadata table at the top containing:
 - `| **Portfolio** |` row
@@ -603,6 +665,22 @@ The report MUST include a portfolio-level metadata table at the top containing:
 - `| **Dimensions** |` row — value is "MODA + ARA" or "MODA only" or "ARA only"
 - `| **MODA Pathways Planned** |` row (when `has_moda`)
 - `| **ARA BLOCKERs Addressed** |` row (when `has_ara`)
+- `| **Total Effort (Traditional)** |` row — e.g., "42-56 weeks"
+- `| **Total Effort (AI-Accelerated)** |` row — e.g., "24-34 weeks"
+- `| **AI Acceleration Benefit** |` row — e.g., "43% effort reduction, 18 weeks saved"
+
+### Work Stream Table Format
+
+Work stream overview tables in the markdown report MUST use dual-column effort format:
+
+```markdown
+| ID | Work Stream | Services | Traditional (wks) | AI-Accelerated (wks) | Savings | Risk |
+|----|-------------|----------|-------------------|---------------------|---------|------|
+| WS-01 | Move to Modern DevOps | 3 | 8-12 | 4-7 | 45% | Medium |
+| WS-02 | Implement Agent Identity | 4 | 6-10 | 3-5 | 50% | High |
+```
+
+This format enables stakeholders to see both the baseline effort and the AI-accelerated projection at a glance, quantifying the value of AI tooling investment.
 
 
 ## Four-Artifact Output Contract (Portfolio EXEC)
@@ -647,12 +725,13 @@ The portfolio execution plan JSON artifact MUST emit these top-level keys:
 | `metadata` | Analysis type, date, TD version, portfolio name, services count, dimensions, mode, team size, risk tolerance, report sources |
 | `executive_summary` | Feasibility, total effort, calendar duration, top risks, pathways planned (MODA), blockers addressed (ARA), services in/out of scope, decision point count |
 | `portfolio_input` | Per-service input data from both dimensions. MODA: scores, triggered pathways, classification. ARA: classification tier, blocker count, risk counts |
-| `modernization_work_streams` | (when `has_moda`) ONE per unique triggered pathway. Each contains: id, name, dimension:"modernization", pathway, services, objective, prerequisites, effort_weeks, risk_level, phases with tasks, success_criteria |
-| `agent_readiness_work_streams` | (when `has_ara`) ONE per ARA category with BLOCKERs/RISKs. Each contains: id, name, dimension:"agent-readiness", ara_category, services, blockers, risks, objective, prerequisites, effort_weeks, risk_level, phases with tasks, success_criteria |
+| `modernization_work_streams` | (when `has_moda`) ONE per unique triggered pathway. Each contains: id, name, dimension:"modernization", pathway, services, objective, prerequisites, effort_weeks_traditional, effort_weeks_ai_accelerated, ai_acceleration_pct, risk_level, phases with tasks (each task has effort_days_traditional + effort_days_ai_accelerated), success_criteria |
+| `agent_readiness_work_streams` | (when `has_ara`) ONE per ARA category with BLOCKERs/RISKs. Each contains: id, name, dimension:"agent-readiness", ara_category, services, blockers, risks, objective, prerequisites, effort_weeks_traditional, effort_weeks_ai_accelerated, ai_acceleration_pct, risk_level, phases with tasks, success_criteria |
 | `cross_dimension_dependencies` | (when `mode == "unified"`) Array of dependencies between MODA and ARA work streams with source_ws, target_ws, type, rationale |
-| `timeline` | Phases (start/end week, work streams from both dimensions), milestones, critical path (spanning both dimensions), parallelization strategy |
+| `timeline` | Phases (start/end week using AI-accelerated estimates), milestones, critical path (spanning both dimensions), parallelization strategy. Includes `timeline_traditional` as reference. |
 | `risk_register` | Sequential risks (RISK-001...) with category (including AgentSafety), description, likelihood, impact, mitigation, contingency, affected services, owner, trigger |
-| `cost_estimation` | Engagement-level flag, people/infrastructure/training/total with three-point estimates covering both dimensions |
+| `cost_estimation` | Engagement-level flag, dual projections: `traditional` and `ai_accelerated` (each with people/infrastructure/training/total three-point estimates). Includes `savings_summary` with absolute and percentage savings. |
+| `ai_acceleration_summary` | Portfolio-wide acceleration stats: total_traditional_weeks, total_ai_accelerated_weeks, overall_acceleration_pct, weeks_saved, per_work_stream breakdown, task_category_distribution (how much effort falls in high/medium/minimal acceleration buckets) |
 | `success_metrics` | Leading indicators, lagging indicators (MODA + ARA), exit criteria |
 | `assumptions` | Array of assumption strings |
 | `decision_points` | Sequential DPs (DP-001...) with question, options (>=2), recommendation, deadline, affected services |
