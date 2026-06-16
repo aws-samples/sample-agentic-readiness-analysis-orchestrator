@@ -33,13 +33,21 @@ Zero question overlap between ARA and MOD. The `analysis_type` field routes whic
 flowchart TB
     CONFIG[portfolio-config.yaml] --> CLASSIFY[Classify Repos]
     CLASSIFY --> PARALLEL[Per-Repo Analyses<br/>parallel across repos]
-    PARALLEL --> PORT_ARA[Portfolio ARA]
-    PARALLEL --> PORT_MOD[Portfolio MOD]
-    PORT_ARA --> REPORTS[Reports]
-    PORT_MOD --> REPORTS
+
+    PARALLEL --> ARA_N["Per-service ARA (×N)"]
+    PARALLEL --> MOD_N["Per-service MODA (×N)"]
+
+    ARA_N --> GATE_ARA[Reconciliation Gate]
+    MOD_N --> GATE_MOD[Reconciliation Gate]
+
+    GATE_ARA --> PORT_ARA[Portfolio ARA]
+    GATE_MOD --> PORT_MOD[Portfolio MODA]
+
+    PORT_ARA --> EXEC[Portfolio Execution Plan]
+    PORT_MOD --> EXEC
 ```
 
-The `analysis_type` field controls which path runs: `agentic-readiness` (ARA only), `modernization` (MOD only), or `full` (both). Per-repo TDs run in parallel across repos. Portfolio-level TDs only run for the selected analysis type(s).
+The `analysis_type` field controls which path runs: `agentic-readiness` (ARA only), `modernization` (MOD only), `full` (both), or `execution-plan` (generates the unified execution plan from existing portfolio reports). Per-repo TDs run in parallel across repos. Portfolio-level TDs only run for the selected analysis type(s). The execution plan consumes whichever portfolio reports are available (at least one required).
 
 ### Repo Classification
 
@@ -238,13 +246,46 @@ atx custom def publish \
   --description "Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports"
 ```
 
+**Create your ATX config** (`atx-config-exec-plan.yaml`):
+
+The `additionalPlanContext` block provides engagement parameters so the TD can generate a plan tailored to your constraints. Without this file, Kiro or ATX will prompt for each parameter interactively.
+
+```yaml
+# atx-config-exec-plan.yaml — copy and customize for your engagement
+additionalPlanContext: |
+  portfolio_name: "my-platform"
+  team_size: 8
+  timeline_constraint: "12 months"
+  budget_constraint: "$1.2M including training and infrastructure"
+  compliance_requirements: ["SOC2", "PCI-DSS"]
+  availability_requirement: "99.95%"
+  risk_tolerance: "moderate"
+  existing_capabilities: "Strong Java/Spring, basic Docker, CI/CD with Jenkins, no Kubernetes experience"
+  preferences:
+    prefer: ["eks", "aurora-postgresql", "graviton", "cdk"]
+    avoid: ["self-managed-kafka", "lambda-for-core-services"]
+```
+
+| Field | Description | Example |
+|---|---|---|
+| `portfolio_name` | Must match your `portfolio-config.yaml` name | `"my-platform"` |
+| `team_size` | Number of engineers available for the transformation | `8` |
+| `timeline_constraint` | Target duration for the engagement | `"12 months"` |
+| `budget_constraint` | Total budget including training, infra, and people | `"$1.2M including training and infrastructure"` |
+| `compliance_requirements` | Regulatory frameworks the plan must respect | `["SOC2", "PCI-DSS", "HIPAA"]` |
+| `availability_requirement` | Target SLA during and after transformation | `"99.95%"` |
+| `risk_tolerance` | `"low"`, `"moderate"`, or `"high"` — drives phasing aggressiveness | `"moderate"` |
+| `existing_capabilities` | Team's current skills (informs training work streams) | `"Strong Java/Spring, basic Docker"` |
+| `preferences.prefer` | AWS services/patterns to favor in recommendations | `["eks", "aurora-postgresql"]` |
+| `preferences.avoid` | Technologies to steer away from | `["self-managed-kafka"]` |
+
+See [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml) for a complete working example.
+
 **Run the TD:**
 
 ```bash
 atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
-
-The ATX config file (`atx-config-exec-plan.yaml`) provides engagement parameters — team size, timeline, budget, compliance requirements, and risk tolerance. See `examples/atx-config-exec-plan.yaml` for a working example.
 
 **Output** lands in `./portfolio-execution-plan/`:
 - `{portfolio-name}-portfolio-exec-plan.md` — narrative execution plan
