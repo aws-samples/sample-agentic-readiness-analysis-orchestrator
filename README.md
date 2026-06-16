@@ -27,123 +27,46 @@ Zero question overlap between ARA and MOD. The `analysis_type` field routes whic
 
 ### Analysis Flow
 
-> **Per-repo execution model.** Subagents run **in parallel across repositories** but TDs are sequenced **within each repository** in `full` mode (ARA → MOD). Concurrent ATX runs against the same repo path fork divergent staging branches and lose artifacts. Portfolio TDs (Portfolio ARA → Portfolio MOD) run **strictly serially** with a Reconciliation Gate between each. See `orchestrator/POWER.md` for the full safety contracts.
-
 ```mermaid
-flowchart TB
-    CONFIG[portfolio-config.yaml] --> CLASSIFY[Classify Repos]
-    CLASSIFY --> PARALLEL[Per-Repo Analyses<br/>parallel across repos]
-
-    PARALLEL --> ARA_N["Per-service ARA (×N)"]
-    PARALLEL --> MOD_N["Per-service MODA (×N)"]
-
-    ARA_N --> GATE_ARA[Reconciliation Gate]
-    MOD_N --> GATE_MOD[Reconciliation Gate]
-
-    GATE_ARA --> PORT_ARA[Portfolio ARA]
-    GATE_MOD --> PORT_MOD[Portfolio MODA]
-
-    PORT_ARA --> EXEC[Portfolio Execution Plan]
-    PORT_MOD --> EXEC
-    CONFIG -->|execution_plan params| EXEC
-    EXEC --> REPORTS[Reports]
+flowchart LR
+    CONFIG[portfolio-config.yaml] --> PARALLEL["Per-Repo (×N parallel)"]
+    PARALLEL --> PORTFOLIO[Portfolio Reports]
+    PORTFOLIO --> EXEC[Execution Plan]
 ```
 
-All configuration lives in one file (`portfolio-config.yaml`). The `analysis_type` field controls which path runs: `agentic-readiness` (ARA only), `modernization` (MOD only), `full` (both), or `execution-plan` (generates the unified execution plan from existing portfolio reports). The `execution_plan` section provides engagement parameters for the execution plan TD. Per-repo TDs run in parallel across repos. Portfolio-level TDs only run for the selected analysis type(s).
-
-In orchestrated mode, Kiro reads the `execution_plan` section from `portfolio-config.yaml`, generates `atx-config-exec-plan.yaml` in ATX's native format (`additionalPlanContext:` block), and invokes ATX with that generated file. ATX cannot read `portfolio-config.yaml` directly — it only understands its own config format. Kiro only prompts the user for fields that are missing — if all parameters are already defined, it proceeds directly to generation and invocation.
+Per-repo analyses run in parallel; portfolio TDs run serially with reconciliation gates. The `analysis_type` field controls which path runs: `agentic-readiness`, `modernization`, `full`, or `execution-plan`. See `orchestrator/POWER.md` for safety contracts.
 
 ### Repo Classification
 
-The Power classifies each repo before spawning subagents. Classification determines N/A question mappings in both TDs. User override via `repo_type` in config always takes precedence.
+The Power classifies each repo before analysis. User override via `repo_type` in config takes precedence.
 
-```mermaid
-flowchart TB
-    SCAN[Scan Repo] --> CODE{Source code?}
-    
-    CODE -->|Yes| MULTI{Multiple services?}
-    CODE -->|No| IAC{IaC only?}
-    
-    MULTI -->|Yes| T1[monorepo]
-    MULTI -->|No| ENTRY{Has entry point?}
-    
-    ENTRY -->|Yes| T2[application]
-    ENTRY -->|No| T3[library]
-    
-    IAC -->|Yes| T4[infrastructure-only]
-    IAC -->|No| DEPLOY{Deploy configs?}
-    
-    DEPLOY -->|Yes| T5[deployment-config]
-    DEPLOY -->|No| T6[application — default]
-```
+| Detection | Type |
+|---|---|
+| Multiple services | `monorepo` |
+| Has entry point | `application` |
+| No entry point | `library` |
+| IaC only | `infrastructure-only` |
+| Deploy configs only | `deployment-config` |
 
-### Config -> ATX Config Generation
+### Config Generation
 
 Kiro reads `portfolio-config.yaml` and generates ATX-native config files (`additionalPlanContext:` format) for each TD. ATX cannot consume `portfolio-config.yaml` directly.
 
 ```mermaid
-flowchart TB
+flowchart LR
     YAML[portfolio-config.yaml] --> POWER[Kiro Power]
-    
-    POWER -->|generates| ARA_FILE[".atx-config-*-ara.yaml"]
-    POWER -->|generates| MOD_FILE[".atx-config-*-mod.yaml"]
-    POWER -->|generates| EXEC_FILE["atx-config-exec-plan.yaml"]
-
-    ARA_FILE -->|"-g file://..."| ATX_ARA["ATX: ARA TD"]
-    MOD_FILE -->|"-g file://..."| ATX_MOD["ATX: MOD TD"]
-    EXEC_FILE -->|"-g file://..."| ATX_EXEC["ATX: Exec Plan TD"]
-
-    subgraph ARA_CFG [ARA additionalPlanContext]
-        A1[repo_type]
-        A2[service_archetype]
-        A3[agent_scope]
-        A4[context]
-        A5[priority]
-        A6[tags]
-    end
-
-    subgraph MOD_CFG [MOD additionalPlanContext]
-        M1[repo_type]
-        M2[context]
-        M3[priority]
-        M4[tags]
-        M5[preferences — prefer/avoid]
-    end
-
-    subgraph EXEC_CFG [Exec Plan additionalPlanContext]
-        E1[portfolio_name]
-        E2[team_size]
-        E3[timeline_constraint]
-        E4[budget_constraint]
-        E5[compliance_requirements]
-        E6[availability_requirement]
-        E7[risk_tolerance]
-        E8[existing_capabilities]
-        E9[preferences — prefer/avoid]
-    end
+    POWER --> ARA[".atx-config-*-ara.yaml"]
+    POWER --> MOD[".atx-config-*-mod.yaml"]
+    POWER --> EXEC["atx-config-exec-plan.yaml"]
 ```
 
-> `agent_scope` is ARA-only (drives conditional BLOCKERs). `service_archetype` is ARA-only (determines core/extended question tiers). `preferences` is MOD-only and Exec Plan (frames recommendations). `repo_type`, `context`, `priority`, and `tags` are shared across ARA/MOD. The `execution_plan` section fields map directly to the Exec Plan TD's `additionalPlanContext` in the generated `atx-config-exec-plan.yaml`.
+Key field routing: `agent_scope` and `service_archetype` are ARA-only. `preferences` is MOD and Exec Plan only. `repo_type`, `context`, `priority`, and `tags` are shared across ARA/MOD.
 
 ### Report Output
 
-Every per-repo and portfolio analysis emits a **four-artifact bundle**: `.md` (richest narrative), `.json` (canonical machine-readable contract for the dashboard and downstream TDs), `.html` (single self-contained visualization), and `.metadata.json` (version compatibility sidecar). The `.json` artifact is authoritative if the four ever disagree.
+Every analysis emits a **four-artifact bundle**: `.md` (narrative), `.json` (machine-readable — authoritative), `.html` (self-contained visualization), `.metadata.json` (version sidecar).
 
-```mermaid
-flowchart LR
-    subgraph ARA [agentic-readiness-analysis/]
-        AR1[repo-a-ara-report<br/>md - json - html - metadata.json]
-        AR2[repo-b-ara-report<br/>md - json - html - metadata.json]
-        AR3[portfolio-ara-report<br/>md - json - html - metadata.json]
-    end
-
-    subgraph MOD [modernization-readiness-analysis/]
-        MR1[repo-a-mod-report<br/>md - json - html - metadata.json]
-        MR2[repo-b-mod-report<br/>md - json - html - metadata.json]
-        MR3[portfolio-mod-report<br/>md - json - html - metadata.json]
-    end
-
-```
+Reports land in subdirectories by analysis type: `agentic-readiness-analysis/`, `modernization-readiness-analysis/`, and `portfolio-execution-plan/`.
 
 ## Getting Started
 
@@ -369,25 +292,14 @@ atx custom def publish -n <registry-name> --sd ./definitions/<td-folder> --descr
 
 ## Example Reports
 
-The `examples/reports/` directory contains a complete set of generated reports:
+The `examples/reports/` directory contains a complete set of generated reports from a real full-analysis run across 6 repos:
 
 ```
 examples/reports/full-analysis/
 ├── portfolio-config.yaml
-├── agentic-readiness-analysis/
-│   ├── aws-microservices-ara-report.{md,json,html,metadata.json}
-│   ├── books-api-ara-report.{md,json,html,metadata.json}
-│   ├── eks-saas-gitops-ara-report.{md,json,html,metadata.json}
-│   ├── local-monolith-ara-report.{md,json,html,metadata.json}
-│   ├── unishop-monolith-ara-report.{md,json,html,metadata.json}
-│   └── ecommerce-platform-v2-portfolio-ara-report.{md,json,html,metadata.json}
-└── modernization-readiness-analysis/
-    ├── aws-microservices-mod-report.{md,json,html,metadata.json}
-    ├── books-api-mod-report.{md,json,html,metadata.json}
-    ├── eks-saas-gitops-mod-report.{md,json,html,metadata.json}
-    ├── local-monolith-mod-report.{md,json,html,metadata.json}
-    ├── unishop-monolith-mod-report.{md,json,html,metadata.json}
-    └── ecommerce-platform-v2-portfolio-mod-report.{md,json,html,metadata.json}
+├── agentic-readiness-analysis/         # Per-repo + portfolio ARA reports
+├── modernization-readiness-analysis/   # Per-repo + portfolio MOD reports
+└── portfolio-execution-plan/           # Unified execution plan output
 ```
 
 Each report is a four-file bundle: `.md` (narrative), `.json` (machine-readable), `.html` (self-contained visualization), `.metadata.json` (version sidecar).
