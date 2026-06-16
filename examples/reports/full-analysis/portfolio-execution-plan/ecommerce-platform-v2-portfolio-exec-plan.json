@@ -1,0 +1,656 @@
+{
+  "metadata": {
+    "analysis_type": "portfolio-exec-plan",
+    "analysis_date": "2026-06-16",
+    "td_version": "portfolio-execution-plan-generation",
+    "portfolio_name": "ecommerce-platform-v2",
+    "services_count": 5,
+    "dimensions": ["moda", "ara"],
+    "mode": "unified",
+    "team_size": 8,
+    "risk_tolerance": "moderate",
+    "report_sources": {
+      "moda_report": "reports/full-analysis/modernization-readiness-analysis/ecommerce-platform-v2-portfolio-mod-report.json",
+      "ara_report": "reports/full-analysis/agentic-readiness-analysis/ecommerce-platform-v2-portfolio-ara-report.json"
+    }
+  },
+  "executive_summary": {
+    "feasibility": "Yellow",
+    "feasibility_rationale": "4 triggered MODA pathways and 4 AUTH BLOCKERs across 5 services with a 12-month constraint is achievable with an 8-person team using AI-accelerated tooling, but tight given the Cloud Native pathway complexity and no Kubernetes experience.",
+    "total_effort_traditional": {
+      "optimistic": 56,
+      "expected": 72,
+      "pessimistic": 92
+    },
+    "total_effort_ai_accelerated": {
+      "optimistic": 30,
+      "expected": 40,
+      "pessimistic": 52
+    },
+    "calendar_duration_ai_accelerated": {
+      "optimistic_weeks": 32,
+      "expected_weeks": 42,
+      "pessimistic_weeks": 52
+    },
+    "ai_acceleration_benefit": "44% effort reduction, 32 weeks saved (expected)",
+    "top_risks": [
+      "No Kubernetes experience — EKS adoption requires significant training",
+      "AUTH-Q1 BLOCKER across 4 services — agents cannot be deployed until resolved",
+      "Cross-dimension dependencies extend critical path",
+      "SOC2 and PCI-DSS compliance gates add validation overhead"
+    ],
+    "pathways_planned": 4,
+    "blockers_addressed": 4,
+    "services_in_scope": ["local-monolith", "unishop-monolith", "aws-microservices", "books-api", "eks-saas-gitops"],
+    "services_no_moda_action": ["eks-saas-gitops", "books-api"],
+    "decision_point_count": 8
+  },
+  "portfolio_input": {
+    "local-monolith": {
+      "moda_score": 1.82,
+      "moda_tier": "Remediation Required",
+      "moda_pathways_triggered": ["move-to-cloud-native", "move-to-modern-devops"],
+      "ara_tier": "Remediation Required",
+      "ara_blocker_count": 1,
+      "ara_risk_safety_count": 9,
+      "ara_risk_quality_count": 13
+    },
+    "unishop-monolith": {
+      "moda_score": 1.4,
+      "moda_tier": "Not Ready",
+      "moda_pathways_triggered": ["move-to-cloud-native", "move-to-containers", "move-to-managed-databases", "move-to-modern-devops"],
+      "ara_tier": "Remediation Required",
+      "ara_blocker_count": 1,
+      "ara_risk_safety_count": 11,
+      "ara_risk_quality_count": 15
+    },
+    "eks-saas-gitops": {
+      "moda_score": 2.93,
+      "moda_tier": "Pilot-Ready",
+      "moda_pathways_triggered": [],
+      "ara_tier": "Pilot-Ready (Safety Concerns)",
+      "ara_blocker_count": 0,
+      "ara_risk_safety_count": 3,
+      "ara_risk_quality_count": 5
+    },
+    "books-api": {
+      "moda_score": 3.0,
+      "moda_tier": "Pilot-Ready",
+      "moda_pathways_triggered": [],
+      "ara_tier": "Remediation Required",
+      "ara_blocker_count": 1,
+      "ara_risk_safety_count": 5,
+      "ara_risk_quality_count": 11
+    },
+    "aws-microservices": {
+      "moda_score": 2.4,
+      "moda_tier": "Remediation Required",
+      "moda_pathways_triggered": ["move-to-modern-devops"],
+      "ara_tier": "Remediation Required",
+      "ara_blocker_count": 1,
+      "ara_risk_safety_count": 9,
+      "ara_risk_quality_count": 13
+    }
+  },
+  "modernization_work_streams": [
+    {
+      "id": "WS-01",
+      "name": "Move to Modern DevOps",
+      "dimension": "modernization",
+      "pathway": "move-to-modern-devops",
+      "services": ["local-monolith", "unishop-monolith", "aws-microservices"],
+      "objective": "Implement CI/CD pipelines, IaC with CDK, automated testing, and progressive delivery for all 3 services",
+      "prerequisites": [],
+      "effort_weeks_traditional": {"optimistic": 10, "expected": 14, "pessimistic": 18},
+      "effort_weeks_ai_accelerated": {"optimistic": 5, "expected": 7, "pessimistic": 10},
+      "ai_acceleration_pct": 50,
+      "risk_level": "Medium",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Foundation",
+          "tasks": [
+            {"id": "T-001", "description": "Establish shared CI/CD pipeline templates using CDK Pipelines pattern", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "shared", "dependencies": [], "acceptance_criteria": "CDK Pipeline construct library with reusable stages deployed", "moda_trace": {"question_id": "INF-Q11", "services": ["local-monolith", "unishop-monolith", "aws-microservices"]}},
+            {"id": "T-002", "description": "Create CI/CD pipeline for aws-microservices with CDK synth, test, and deploy stages", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "aws-microservices", "dependencies": ["T-001"], "acceptance_criteria": "Pipeline deploys on push with integration tests gate", "moda_trace": {"question_id": "INF-Q11", "services": ["aws-microservices"]}},
+            {"id": "T-003", "description": "Create CI/CD pipeline for local-monolith with container build and deploy", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "local-monolith", "dependencies": ["T-001"], "acceptance_criteria": "Pipeline builds container and deploys to App Runner on push", "moda_trace": {"question_id": "INF-Q11", "services": ["local-monolith"]}},
+            {"id": "T-004", "description": "Create CI/CD pipeline for unishop-monolith with build, test, and deploy", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "unishop-monolith", "dependencies": ["T-001"], "acceptance_criteria": "Pipeline builds JAR and deploys with health check validation", "moda_trace": {"question_id": "INF-Q11", "services": ["unishop-monolith"]}}
+          ]
+        },
+        {
+          "phase": 2,
+          "name": "IaC and Testing",
+          "tasks": [
+            {"id": "T-005", "description": "Define unishop-monolith infrastructure in CDK (VPC, EC2/ECS, RDS, ALB)", "effort_days_traditional": 8, "effort_days_ai_accelerated": 4, "ai_acceleration_factor": 50, "service": "unishop-monolith", "dependencies": ["T-004"], "acceptance_criteria": "CDK stack deploys all existing infra, drift-free", "moda_trace": {"question_id": "INF-Q10", "services": ["unishop-monolith"]}},
+            {"id": "T-006", "description": "Add integration test suites for all 3 services", "effort_days_traditional": 10, "effort_days_ai_accelerated": 5, "ai_acceleration_factor": 50, "service": "shared", "dependencies": ["T-002", "T-003", "T-004"], "acceptance_criteria": "Each service has integration tests running in CI, >70% API coverage", "moda_trace": {"question_id": "OPS-Q6", "services": ["local-monolith", "unishop-monolith", "aws-microservices"]}},
+            {"id": "T-007", "description": "Implement progressive delivery (canary/blue-green) for each pipeline", "effort_days_traditional": 8, "effort_days_ai_accelerated": 4, "ai_acceleration_factor": 50, "service": "shared", "dependencies": ["T-006"], "acceptance_criteria": "Canary deployments with automatic rollback on alarm triggers", "moda_trace": {"question_id": "OPS-Q5", "services": ["local-monolith", "unishop-monolith", "aws-microservices"]}}
+          ]
+        }
+      ],
+      "success_criteria": ["All 3 services have automated CI/CD pipelines", "IaC coverage > 80% for unishop-monolith", "Integration tests pass in CI for all services", "Progressive delivery operational with auto-rollback"]
+    },
+    {
+      "id": "WS-02",
+      "name": "Move to Cloud Native",
+      "dimension": "modernization",
+      "pathway": "move-to-cloud-native",
+      "services": ["local-monolith", "unishop-monolith"],
+      "objective": "Decompose monoliths into microservices deployed on EKS with event-driven architecture",
+      "prerequisites": ["WS-01", "WS-03"],
+      "effort_weeks_traditional": {"optimistic": 22, "expected": 28, "pessimistic": 36},
+      "effort_weeks_ai_accelerated": {"optimistic": 12, "expected": 16, "pessimistic": 20},
+      "ai_acceleration_pct": 43,
+      "risk_level": "High",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Architecture Design",
+          "tasks": [
+            {"id": "T-008", "description": "Design microservice decomposition strategy for unishop-monolith (domain boundaries, data ownership, API contracts)", "effort_days_traditional": 10, "effort_days_ai_accelerated": 8, "ai_acceleration_factor": 20, "service": "unishop-monolith", "dependencies": [], "acceptance_criteria": "Documented decomposition plan with service boundaries, data ownership, and migration sequence", "moda_trace": {"question_id": "APP-Q2", "services": ["unishop-monolith"]}},
+            {"id": "T-009", "description": "Design microservice decomposition strategy for local-monolith (domain boundaries, API contracts)", "effort_days_traditional": 10, "effort_days_ai_accelerated": 8, "ai_acceleration_factor": 20, "service": "local-monolith", "dependencies": [], "acceptance_criteria": "Documented decomposition plan with service boundaries and migration sequence", "moda_trace": {"question_id": "APP-Q2", "services": ["local-monolith"]}}
+          ]
+        },
+        {
+          "phase": 2,
+          "name": "Service Extraction",
+          "tasks": [
+            {"id": "T-010", "description": "Extract first service from unishop-monolith (user/auth domain) with EKS deployment", "effort_days_traditional": 10, "effort_days_ai_accelerated": 5, "ai_acceleration_factor": 50, "service": "unishop-monolith", "dependencies": ["T-008", "T-014"], "acceptance_criteria": "User service deployed on EKS, API parity verified, traffic routing operational", "moda_trace": {"question_id": "APP-Q2", "services": ["unishop-monolith"]}},
+            {"id": "T-011", "description": "Extract second service from unishop-monolith (product catalog) with EKS deployment", "effort_days_traditional": 10, "effort_days_ai_accelerated": 5, "ai_acceleration_factor": 50, "service": "unishop-monolith", "dependencies": ["T-010"], "acceptance_criteria": "Product service on EKS, data migrated, integration tests pass", "moda_trace": {"question_id": "APP-Q2", "services": ["unishop-monolith"]}},
+            {"id": "T-012", "description": "Extract order/basket services from unishop-monolith with event-driven patterns", "effort_days_traditional": 10, "effort_days_ai_accelerated": 5, "ai_acceleration_factor": 50, "service": "unishop-monolith", "dependencies": ["T-011"], "acceptance_criteria": "Order service on EKS using EventBridge for async workflows", "moda_trace": {"question_id": "APP-Q3", "services": ["unishop-monolith"]}},
+            {"id": "T-013", "description": "Modernize local-monolith: extract services and deploy on EKS with async patterns", "effort_days_traditional": 10, "effort_days_ai_accelerated": 5, "ai_acceleration_factor": 50, "service": "local-monolith", "dependencies": ["T-009", "T-014"], "acceptance_criteria": "Core services extracted and running on EKS with EventBridge integration", "moda_trace": {"question_id": "APP-Q2", "services": ["local-monolith"]}}
+          ]
+        }
+      ],
+      "success_criteria": ["Both monoliths decomposed into independently deployable services", "Services deployed on EKS with Graviton instances", "Event-driven communication via EventBridge", "API Gateway managing external traffic", "Zero-downtime cutover completed"]
+    },
+    {
+      "id": "WS-03",
+      "name": "Move to Containers",
+      "dimension": "modernization",
+      "pathway": "move-to-containers",
+      "services": ["unishop-monolith"],
+      "objective": "Containerize unishop-monolith and deploy on EKS with Graviton instances",
+      "prerequisites": ["WS-01"],
+      "effort_weeks_traditional": {"optimistic": 8, "expected": 10, "pessimistic": 14},
+      "effort_weeks_ai_accelerated": {"optimistic": 4, "expected": 6, "pessimistic": 8},
+      "ai_acceleration_pct": 40,
+      "risk_level": "Medium",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Containerization and EKS Setup",
+          "tasks": [
+            {"id": "T-014", "description": "Provision EKS cluster with Graviton node groups, VPC, and CDK definitions", "effort_days_traditional": 8, "effort_days_ai_accelerated": 4, "ai_acceleration_factor": 50, "service": "shared", "dependencies": [], "acceptance_criteria": "EKS cluster running with Graviton nodes, GitOps (Flux) configured, monitoring baseline deployed", "moda_trace": {"question_id": "INF-Q1", "services": ["unishop-monolith"]}},
+            {"id": "T-015", "description": "Create multi-arch Dockerfile for unishop-monolith (Java/Spring Boot)", "effort_days_traditional": 3, "effort_days_ai_accelerated": 1, "ai_acceleration_factor": 67, "service": "unishop-monolith", "dependencies": [], "acceptance_criteria": "Docker image builds for arm64, passes health checks, starts in < 30s", "moda_trace": {"question_id": "INF-Q1", "services": ["unishop-monolith"]}},
+            {"id": "T-016", "description": "Create Helm charts and Kubernetes manifests for unishop-monolith deployment", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "unishop-monolith", "dependencies": ["T-014", "T-015"], "acceptance_criteria": "Helm chart deploys successfully on EKS, HPA configured, health checks passing", "moda_trace": {"question_id": "INF-Q1", "services": ["unishop-monolith"]}},
+            {"id": "T-017", "description": "Migrate unishop-monolith traffic from EC2 to EKS with blue-green cutover", "effort_days_traditional": 5, "effort_days_ai_accelerated": 4, "ai_acceleration_factor": 20, "service": "unishop-monolith", "dependencies": ["T-016"], "acceptance_criteria": "100% traffic on EKS, EC2 instances decommissioned, latency within 10% of baseline", "moda_trace": {"question_id": "INF-Q1", "services": ["unishop-monolith"]}}
+          ]
+        }
+      ],
+      "success_criteria": ["unishop-monolith running on EKS with Graviton", "Container image < 500MB, starts in < 30s", "HPA scaling validated under load", "Zero-downtime cutover from EC2 completed"]
+    },
+    {
+      "id": "WS-04",
+      "name": "Move to Managed Databases",
+      "dimension": "modernization",
+      "pathway": "move-to-managed-databases",
+      "services": ["unishop-monolith"],
+      "objective": "Migrate self-managed MySQL to Aurora PostgreSQL with automatic failover",
+      "prerequisites": [],
+      "effort_weeks_traditional": {"optimistic": 6, "expected": 8, "pessimistic": 10},
+      "effort_weeks_ai_accelerated": {"optimistic": 3, "expected": 5, "pessimistic": 7},
+      "ai_acceleration_pct": 38,
+      "risk_level": "Medium",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Database Migration",
+          "tasks": [
+            {"id": "T-018", "description": "Provision Aurora PostgreSQL cluster with CDK (Multi-AZ, Graviton, encryption with CMK)", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "unishop-monolith", "dependencies": [], "acceptance_criteria": "Aurora cluster deployed with Multi-AZ, KMS CMK encryption, automated backups", "moda_trace": {"question_id": "INF-Q2", "services": ["unishop-monolith"]}},
+            {"id": "T-019", "description": "Convert MySQL schema and queries to PostgreSQL, update data access layer", "effort_days_traditional": 8, "effort_days_ai_accelerated": 4, "ai_acceleration_factor": 50, "service": "unishop-monolith", "dependencies": ["T-018"], "acceptance_criteria": "All queries converted, MyBatis mappers updated, integration tests pass against Aurora", "moda_trace": {"question_id": "INF-Q2", "services": ["unishop-monolith"]}},
+            {"id": "T-020", "description": "Execute data migration using DMS with validation and cutover", "effort_days_traditional": 5, "effort_days_ai_accelerated": 4, "ai_acceleration_factor": 20, "service": "unishop-monolith", "dependencies": ["T-019"], "acceptance_criteria": "Data migrated with zero loss validated, application pointing to Aurora, old MySQL decommissioned", "moda_trace": {"question_id": "INF-Q2", "services": ["unishop-monolith"]}}
+          ]
+        }
+      ],
+      "success_criteria": ["unishop-monolith using Aurora PostgreSQL", "Multi-AZ failover tested successfully", "PITR enabled with 7-day retention", "Data integrity validated post-migration"]
+    }
+  ],
+  "agent_readiness_work_streams": [
+    {
+      "id": "WS-05",
+      "name": "Implement Agent Identity & Authorization",
+      "dimension": "agent-readiness",
+      "ara_category": "AUTH",
+      "services": ["local-monolith", "unishop-monolith", "books-api", "aws-microservices", "eks-saas-gitops"],
+      "blockers": 4,
+      "risks": 22,
+      "objective": "Implement machine identity authentication, scoped permissions, audit logging, and identity suspension across all services",
+      "prerequisites": [],
+      "effort_weeks_traditional": {"optimistic": 10, "expected": 14, "pessimistic": 18},
+      "effort_weeks_ai_accelerated": {"optimistic": 5, "expected": 7, "pessimistic": 10},
+      "ai_acceleration_pct": 50,
+      "risk_level": "High",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Machine Identity Foundation (BLOCKER Resolution)",
+          "tasks": [
+            {"id": "T-021", "description": "Design shared machine identity pattern: Cognito resource server with client_credentials and API Gateway IAM authorization", "effort_days_traditional": 5, "effort_days_ai_accelerated": 4, "ai_acceleration_factor": 20, "service": "shared", "dependencies": [], "acceptance_criteria": "Architecture decision record documenting chosen auth pattern, Cognito resource server with scopes defined", "ara_trace": {"question_id": "AUTH-Q1", "repo_name": "shared"}},
+            {"id": "T-022", "description": "Implement machine identity for aws-microservices (API Gateway IAM authorizer + Cognito)", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "aws-microservices", "dependencies": ["T-021"], "acceptance_criteria": "All API Gateway methods require authentication, agent calls attributed to principal", "ara_trace": {"question_id": "AUTH-Q1", "repo_name": "aws-microservices"}},
+            {"id": "T-023", "description": "Implement machine identity for books-api (Cognito client_credentials + API key)", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "books-api", "dependencies": ["T-021"], "acceptance_criteria": "All endpoints require authentication, GET /books secured with API key", "ara_trace": {"question_id": "AUTH-Q1", "repo_name": "books-api"}},
+            {"id": "T-024", "description": "Implement machine identity for local-monolith (API key with principal attribution)", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "local-monolith", "dependencies": ["T-021"], "acceptance_criteria": "Bearer token auth alongside session auth, API calls logged with principal", "ara_trace": {"question_id": "AUTH-Q1", "repo_name": "local-monolith"}},
+            {"id": "T-025", "description": "Implement machine identity for unishop-monolith (OAuth2 client credentials via Spring Security)", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "unishop-monolith", "dependencies": ["T-021"], "acceptance_criteria": "Spring Security enforces auth on all endpoints, agent identities scoped", "ara_trace": {"question_id": "AUTH-Q1", "repo_name": "unishop-monolith"}}
+          ]
+        },
+        {
+          "phase": 2,
+          "name": "Authorization and Audit",
+          "tasks": [
+            {"id": "T-026", "description": "Implement scoped permissions (read-only vs read-write) across all services", "effort_days_traditional": 8, "effort_days_ai_accelerated": 4, "ai_acceleration_factor": 50, "service": "shared", "dependencies": ["T-022", "T-023", "T-024", "T-025"], "acceptance_criteria": "Agent identities have configurable scope, read-only by default", "ara_trace": {"question_id": "AUTH-Q2", "repo_name": "shared"}},
+            {"id": "T-027", "description": "Deploy CloudTrail with immutable S3 storage and log file validation for audit", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "shared", "dependencies": ["T-021"], "acceptance_criteria": "CloudTrail trail active, S3 Object Lock enabled, log validation passing", "ara_trace": {"question_id": "AUTH-Q6", "repo_name": "shared"}},
+            {"id": "T-028", "description": "Implement agent identity suspension mechanism (emergency revocation Lambda)", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "shared", "dependencies": ["T-026"], "acceptance_criteria": "Lambda can disable any agent identity within 30 seconds, EventBridge trigger on anomaly", "ara_trace": {"question_id": "AUTH-Q7", "repo_name": "shared"}}
+          ]
+        }
+      ],
+      "success_criteria": ["All 4 BLOCKER services have machine identity authentication", "Scoped permissions enforce read-only by default", "Immutable audit trail operational", "Identity suspension tested and documented"]
+    },
+    {
+      "id": "WS-06",
+      "name": "Ensure Transactional Integrity",
+      "dimension": "agent-readiness",
+      "ara_category": "STATE",
+      "services": ["local-monolith", "unishop-monolith", "books-api", "aws-microservices"],
+      "blockers": 0,
+      "risks": 11,
+      "objective": "Implement rate limiting, circuit breakers, and compensation patterns across services",
+      "prerequisites": [],
+      "effort_weeks_traditional": {"optimistic": 6, "expected": 8, "pessimistic": 12},
+      "effort_weeks_ai_accelerated": {"optimistic": 3, "expected": 5, "pessimistic": 7},
+      "ai_acceleration_pct": 38,
+      "risk_level": "Medium",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Rate Limiting",
+          "tasks": [
+            {"id": "T-029", "description": "Implement API Gateway usage plans with per-key rate limits for aws-microservices and books-api", "effort_days_traditional": 3, "effort_days_ai_accelerated": 1, "ai_acceleration_factor": 67, "service": "shared", "dependencies": [], "acceptance_criteria": "Usage plans configured, 429 responses on threshold breach", "ara_trace": {"question_id": "STATE-Q5", "repo_name": "aws-microservices"}},
+            {"id": "T-030", "description": "Add WAF rate-based rules for local-monolith and unishop-monolith", "effort_days_traditional": 3, "effort_days_ai_accelerated": 1, "ai_acceleration_factor": 67, "service": "shared", "dependencies": [], "acceptance_criteria": "WAF rate rules active, blocking runaway request patterns", "ara_trace": {"question_id": "STATE-Q5", "repo_name": "local-monolith"}},
+            {"id": "T-031", "description": "Add DLQ to aws-microservices SQS queue and configure Lambda timeouts", "effort_days_traditional": 2, "effort_days_ai_accelerated": 1, "ai_acceleration_factor": 50, "service": "aws-microservices", "dependencies": [], "acceptance_criteria": "DLQ configured, failed messages captured, Lambda timeouts set", "ara_trace": {"question_id": "STATE-Q4", "repo_name": "aws-microservices"}}
+          ]
+        },
+        {
+          "phase": 2,
+          "name": "Compensation Patterns",
+          "tasks": [
+            {"id": "T-032", "description": "Implement saga pattern for local-monolith fulfillment workflow", "effort_days_traditional": 10, "effort_days_ai_accelerated": 6, "ai_acceleration_factor": 40, "service": "local-monolith", "dependencies": ["T-029"], "acceptance_criteria": "Each fulfillment step has compensating action, partial failures roll back cleanly", "ara_trace": {"question_id": "STATE-Q1", "repo_name": "local-monolith"}},
+            {"id": "T-033", "description": "Add compensation endpoints for unishop-monolith basket operations", "effort_days_traditional": 5, "effort_days_ai_accelerated": 3, "ai_acceleration_factor": 40, "service": "unishop-monolith", "dependencies": ["T-030"], "acceptance_criteria": "Undo/cancel operations available, multi-step failures handled gracefully", "ara_trace": {"question_id": "STATE-Q1", "repo_name": "unishop-monolith"}},
+            {"id": "T-034", "description": "Add DELETE /books/{isbn} endpoint with soft-delete for books-api", "effort_days_traditional": 3, "effort_days_ai_accelerated": 1, "ai_acceleration_factor": 67, "service": "books-api", "dependencies": [], "acceptance_criteria": "DELETE endpoint operational, soft-delete with status field", "ara_trace": {"question_id": "STATE-Q1", "repo_name": "books-api"}}
+          ]
+        }
+      ],
+      "success_criteria": ["Rate limiting active on all 4 services", "Compensation patterns implemented for write workflows", "DLQ capturing failed messages", "Circuit breaker patterns operational"]
+    },
+    {
+      "id": "WS-07",
+      "name": "Improve Data Accessibility",
+      "dimension": "agent-readiness",
+      "ara_category": "DATA",
+      "services": ["local-monolith", "unishop-monolith", "books-api", "aws-microservices"],
+      "blockers": 0,
+      "risks": 17,
+      "objective": "Implement PII filtering, pagination, input validation, and data residency controls",
+      "prerequisites": ["WS-05"],
+      "effort_weeks_traditional": {"optimistic": 6, "expected": 8, "pessimistic": 10},
+      "effort_weeks_ai_accelerated": {"optimistic": 3, "expected": 4, "pessimistic": 6},
+      "ai_acceleration_pct": 50,
+      "risk_level": "Medium",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "PII Protection and Pagination",
+          "tasks": [
+            {"id": "T-035", "description": "Implement agent-specific response DTOs excluding PII for all 3 application services", "effort_days_traditional": 6, "effort_days_ai_accelerated": 3, "ai_acceleration_factor": 50, "service": "shared", "dependencies": [], "acceptance_criteria": "Agent-scoped endpoints return only non-PII fields", "ara_trace": {"question_id": "DATA-Q1", "repo_name": "shared"}},
+            {"id": "T-036", "description": "Add cursor-based pagination to all list endpoints across 4 services", "effort_days_traditional": 6, "effort_days_ai_accelerated": 3, "ai_acceleration_factor": 50, "service": "shared", "dependencies": [], "acceptance_criteria": "All list endpoints support ?limit=&cursor= parameters, default limit 50", "ara_trace": {"question_id": "DATA-Q3", "repo_name": "shared"}},
+            {"id": "T-037", "description": "Implement structured input validation with field-level error responses", "effort_days_traditional": 6, "effort_days_ai_accelerated": 3, "ai_acceleration_factor": 50, "service": "shared", "dependencies": [], "acceptance_criteria": "400 responses include field name, constraint, and structured error code", "ara_trace": {"question_id": "DATA-Q4", "repo_name": "shared"}},
+            {"id": "T-038", "description": "Implement PII redaction in CloudWatch Logs (data protection policies)", "effort_days_traditional": 3, "effort_days_ai_accelerated": 1, "ai_acceleration_factor": 67, "service": "shared", "dependencies": [], "acceptance_criteria": "CloudWatch Logs data protection active, PII masked in logs", "ara_trace": {"question_id": "DATA-Q6", "repo_name": "shared"}},
+            {"id": "T-039", "description": "Document data residency requirements and pin services to specific regions", "effort_days_traditional": 3, "effort_days_ai_accelerated": 3, "ai_acceleration_factor": 0, "service": "shared", "dependencies": [], "acceptance_criteria": "Data residency policy documented, CDK stacks pinned to region", "ara_trace": {"question_id": "DATA-Q2", "repo_name": "shared"}}
+          ]
+        }
+      ],
+      "success_criteria": ["PII excluded from agent-facing responses", "All list endpoints paginated", "Input validation with structured errors", "PII redacted from logs", "Data residency documented"]
+    },
+    {
+      "id": "WS-08",
+      "name": "Add Agent Observability",
+      "dimension": "agent-readiness",
+      "ara_category": "OBS",
+      "services": ["local-monolith", "unishop-monolith", "books-api", "aws-microservices", "eks-saas-gitops"],
+      "blockers": 0,
+      "risks": 10,
+      "objective": "Implement distributed tracing, structured logging, and alerting across all services",
+      "prerequisites": ["WS-01"],
+      "effort_weeks_traditional": {"optimistic": 4, "expected": 6, "pessimistic": 8},
+      "effort_weeks_ai_accelerated": {"optimistic": 2, "expected": 3, "pessimistic": 5},
+      "ai_acceleration_pct": 50,
+      "risk_level": "Low",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Tracing and Logging",
+          "tasks": [
+            {"id": "T-040", "description": "Enable X-Ray tracing and structured JSON logging across all Lambda services", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "shared", "dependencies": [], "acceptance_criteria": "X-Ray traces end-to-end, structured logs with correlation_id", "ara_trace": {"question_id": "OBS-Q1", "repo_name": "shared"}},
+            {"id": "T-041", "description": "Deploy OpenTelemetry Collector on EKS for container services", "effort_days_traditional": 5, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 60, "service": "eks-saas-gitops", "dependencies": [], "acceptance_criteria": "ADOT DaemonSet running, traces flowing to X-Ray", "ara_trace": {"question_id": "OBS-Q1", "repo_name": "eks-saas-gitops"}},
+            {"id": "T-042", "description": "Add CloudWatch Alarms for error rates, P99 latency, and agent-specific metrics", "effort_days_traditional": 4, "effort_days_ai_accelerated": 2, "ai_acceleration_factor": 50, "service": "shared", "dependencies": ["T-040"], "acceptance_criteria": "Alarms for 5xx rate > 1%, P99 > 2s, SNS notifications configured", "ara_trace": {"question_id": "OBS-Q2", "repo_name": "shared"}}
+          ]
+        }
+      ],
+      "success_criteria": ["Distributed tracing operational across all services", "Structured logging with correlation IDs", "Alerting on error rates and latency", "Agent-initiated requests traceable end-to-end"]
+    }
+  ],
+  "cross_dimension_dependencies": [
+    {
+      "source_ws": "WS-01",
+      "source_dimension": "modernization",
+      "target_ws": "WS-08",
+      "target_dimension": "agent-readiness",
+      "type": "enables",
+      "rationale": "Modern DevOps CI/CD pipeline required for deploying observability instrumentation reliably"
+    },
+    {
+      "source_ws": "WS-03",
+      "source_dimension": "modernization",
+      "target_ws": "WS-02",
+      "target_dimension": "modernization",
+      "type": "enables",
+      "rationale": "Container infrastructure (EKS) must be established before cloud-native decomposition can deploy services"
+    },
+    {
+      "source_ws": "WS-05",
+      "source_dimension": "agent-readiness",
+      "target_ws": "WS-07",
+      "target_dimension": "agent-readiness",
+      "type": "enables",
+      "rationale": "Machine identity must exist before agent-specific data access controls can scope responses by caller identity"
+    }
+  ],
+  "timeline": {
+    "total_calendar_weeks_ai_accelerated": {"optimistic": 32, "expected": 42, "pessimistic": 52},
+    "total_calendar_weeks_traditional": {"optimistic": 48, "expected": 62, "pessimistic": 78},
+    "phases": [
+      {
+        "name": "Foundation & Safety",
+        "start_week": 0,
+        "end_week": 8,
+        "work_streams": ["WS-01", "WS-04", "WS-05", "WS-06"],
+        "description": "DevOps foundation, managed database migration, agent identity (BLOCKER resolution), rate limiting"
+      },
+      {
+        "name": "Core Execution",
+        "start_week": 8,
+        "end_week": 34,
+        "work_streams": ["WS-02", "WS-03", "WS-07", "WS-08"],
+        "description": "Containerization, cloud-native decomposition, data accessibility, observability"
+      },
+      {
+        "name": "Optimization & Validation",
+        "start_week": 34,
+        "end_week": 42,
+        "work_streams": [],
+        "description": "Final validation, compliance audit, agent pilot testing, handover documentation"
+      }
+    ],
+    "milestones": [
+      {"name": "DevOps Foundation Complete", "week": 8, "criteria": "CI/CD pipelines operational for all 3 services"},
+      {"name": "Critical BLOCKERs Resolved", "week": 8, "criteria": "All AUTH-Q1 BLOCKERs remediated, agents can authenticate"},
+      {"name": "Database Migration Complete", "week": 10, "criteria": "Aurora PostgreSQL operational, old MySQL decommissioned"},
+      {"name": "EKS Platform Ready", "week": 14, "criteria": "EKS cluster running with Graviton, first service deployed"},
+      {"name": "Agent Pilot Ready", "week": 24, "criteria": "First service passes full ARA re-evaluation with no BLOCKERs"},
+      {"name": "Cloud Native Decomposition Complete", "week": 34, "criteria": "Both monoliths decomposed, all services on EKS"},
+      {"name": "Portfolio Execution Complete", "week": 42, "criteria": "All work streams complete, exit criteria met"}
+    ],
+    "critical_path": ["WS-01", "WS-03", "WS-02"],
+    "critical_path_weeks": 42,
+    "parallelization_strategy": "moderate — independent streams (WS-04, WS-05, WS-06) run in parallel with WS-01; dependent streams (WS-02 depends on WS-01+WS-03) run sequentially"
+  },
+  "risk_register": [
+    {
+      "id": "RISK-001",
+      "category": "Technical",
+      "description": "No Kubernetes experience on the team creates steep learning curve for EKS adoption",
+      "likelihood": "High",
+      "impact": "High",
+      "mitigation": "Allocate 2 weeks for EKS/K8s training before WS-03 begins. Consider AWS EKS Blueprints for accelerated setup.",
+      "contingency": "Use ECS Fargate as a simpler container orchestrator if EKS adoption stalls",
+      "affected_services": ["unishop-monolith", "local-monolith"],
+      "owner": "Engineering Lead",
+      "trigger": "Team velocity on EKS tasks falls below 50% of estimates"
+    },
+    {
+      "id": "RISK-002",
+      "category": "AgentSafety",
+      "description": "AUTH-Q1 BLOCKERs across 4 services mean agents cannot be safely deployed until identity is implemented",
+      "likelihood": "High",
+      "impact": "High",
+      "mitigation": "Prioritize WS-05 Phase 1 in Foundation phase. No agent deployment until machine identity operational.",
+      "contingency": "Deploy read-only agent proxy with hardcoded API keys as interim measure",
+      "affected_services": ["local-monolith", "unishop-monolith", "books-api", "aws-microservices"],
+      "owner": "Security Lead",
+      "trigger": "WS-05 Phase 1 not complete by week 8"
+    },
+    {
+      "id": "RISK-003",
+      "category": "Timeline",
+      "description": "12-month constraint may be tight given 42-week expected AI-accelerated timeline plus compliance overhead",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Monitor velocity weekly. Identify scope reduction candidates (defer WS-02 Phase 2 if behind).",
+      "contingency": "Reduce cloud-native scope to single monolith decomposition, defer second monolith",
+      "affected_services": ["local-monolith", "unishop-monolith"],
+      "owner": "Program Manager",
+      "trigger": "Behind schedule by >2 weeks at week 16 checkpoint"
+    },
+    {
+      "id": "RISK-004",
+      "category": "Compliance",
+      "description": "SOC2 and PCI-DSS compliance requirements add validation gates during container and database migrations",
+      "likelihood": "High",
+      "impact": "Medium",
+      "mitigation": "Engage compliance team early. Maintain dual-running during cutovers for audit continuity.",
+      "contingency": "Extend dual-running periods with automated compliance validation scripts",
+      "affected_services": ["unishop-monolith", "local-monolith", "aws-microservices"],
+      "owner": "Compliance Lead",
+      "trigger": "Compliance review identifies blocking findings during migration"
+    },
+    {
+      "id": "RISK-005",
+      "category": "Organizational",
+      "description": "8-person team spread across 8 work streams may reduce velocity per stream",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Assign dedicated pairs per work stream phase. Use moderate parallelization — max 3 concurrent streams.",
+      "contingency": "Serialize work streams more aggressively if context-switching overhead exceeds 20%",
+      "affected_services": ["all"],
+      "owner": "Engineering Lead",
+      "trigger": "Sprint velocity drops below 70% of initial velocity for 2 consecutive sprints"
+    },
+    {
+      "id": "RISK-006",
+      "category": "Cost",
+      "description": "Budget of $1.2M may be tight given dual-running costs during migration and EKS infrastructure",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Use Graviton instances (20% cost reduction). Minimize dual-running periods. Track burn rate monthly.",
+      "contingency": "Reduce EKS node groups, use Spot instances for non-production workloads",
+      "affected_services": ["all"],
+      "owner": "Finance/Program Manager",
+      "trigger": "Monthly burn rate exceeds budget projection by >15%"
+    },
+    {
+      "id": "RISK-007",
+      "category": "Technical",
+      "description": "Cross-dimension dependencies between MODA and ARA may extend critical path beyond single-dimension estimates",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Track cross-dimension dependency resolution in weekly sync. Identify parallel paths within dependent streams.",
+      "contingency": "Decouple ARA work from MODA by implementing auth patterns on existing architecture first",
+      "affected_services": ["all"],
+      "owner": "Technical Lead",
+      "trigger": "Cross-dimension dependency blocks a work stream for >1 week"
+    }
+  ],
+  "cost_estimation": {
+    "engagement_level": true,
+    "traditional": {
+      "people": {"optimistic": 560000, "expected": 720000, "pessimistic": 920000},
+      "infrastructure": {"optimistic": 96000, "expected": 124000, "pessimistic": 156000},
+      "training": {"optimistic": 55000, "expected": 65000, "pessimistic": 75000},
+      "total": {"optimistic": 711000, "expected": 909000, "pessimistic": 1151000}
+    },
+    "ai_accelerated": {
+      "people": {"optimistic": 300000, "expected": 400000, "pessimistic": 520000},
+      "ai_tooling": {"optimistic": 32000, "expected": 42000, "pessimistic": 52000},
+      "infrastructure": {"optimistic": 64000, "expected": 84000, "pessimistic": 104000},
+      "training": {"optimistic": 55000, "expected": 65000, "pessimistic": 75000},
+      "total": {"optimistic": 451000, "expected": 591000, "pessimistic": 751000}
+    },
+    "savings_summary": {
+      "cost_savings_absolute": {"optimistic": 260000, "expected": 318000, "pessimistic": 400000},
+      "cost_savings_pct": 35,
+      "calendar_time_saved_weeks": {"optimistic": 16, "expected": 20, "pessimistic": 26}
+    },
+    "notes": {
+      "people_rate": "$250/hr x 40 hrs/week",
+      "infrastructure_delta": "$2000/month per active service with work",
+      "ai_tooling": "$500/month per engineer for AI coding assistants",
+      "training_breakdown": "$15K EKS/K8s training + $15K CDK/IaC training + $15K DevOps practices + $10K agent-readiness patterns + $10K compliance training"
+    }
+  },
+  "ai_acceleration_summary": {
+    "total_traditional_weeks": 72,
+    "total_ai_accelerated_weeks": 40,
+    "overall_acceleration_pct": 44,
+    "weeks_saved": 32,
+    "per_work_stream": [
+      {"id": "WS-01", "traditional": 14, "ai_accelerated": 7, "pct": 50},
+      {"id": "WS-02", "traditional": 28, "ai_accelerated": 16, "pct": 43},
+      {"id": "WS-03", "traditional": 10, "ai_accelerated": 6, "pct": 40},
+      {"id": "WS-04", "traditional": 8, "ai_accelerated": 5, "pct": 38},
+      {"id": "WS-05", "traditional": 14, "ai_accelerated": 7, "pct": 50},
+      {"id": "WS-06", "traditional": 8, "ai_accelerated": 5, "pct": 38},
+      {"id": "WS-07", "traditional": 8, "ai_accelerated": 4, "pct": 50},
+      {"id": "WS-08", "traditional": 6, "ai_accelerated": 3, "pct": 50}
+    ],
+    "task_category_distribution": {
+      "high_acceleration_40_60_pct": "65% of total effort (IaC, CI/CD, code migration, test generation, API specs)",
+      "medium_acceleration_15_30_pct": "15% of total effort (data migration validation, security implementation)",
+      "minimal_acceleration_0_10_pct": "20% of total effort (architecture design, production cutover, compliance review, training)"
+    }
+  },
+  "success_metrics": {
+    "leading_indicators": [
+      "Sprint velocity (story points/week per engineer)",
+      "Test coverage increase per sprint",
+      "Integration test pass rate",
+      "CI/CD pipeline success rate"
+    ],
+    "lagging_indicators_moda": [
+      "Deployment frequency (target: daily for each service)",
+      "Mean time to recovery (target: < 30 minutes)",
+      "MODA re-score improvement (target: all services > 3.0)",
+      "Change failure rate (target: < 15%)"
+    ],
+    "lagging_indicators_ara": [
+      "BLOCKER count reduction (target: 0)",
+      "ARA re-score improvement (target: all services Pilot-Ready or better)",
+      "Agent authentication success rate (target: > 99.9%)",
+      "Agent error rate (target: < 1% of requests)",
+      "Mean time to agent identity suspension (target: < 60 seconds)"
+    ],
+    "exit_criteria": [
+      "All 4 triggered MODA pathways addressed",
+      "All 4 AUTH-Q1 BLOCKERs resolved",
+      "No High-severity gaps remaining in MODA or ARA re-evaluation",
+      "All services have CI/CD pipelines with integration tests",
+      "Portfolio MODA re-score > 3.0 average",
+      "All services achieve Pilot-Ready or better on ARA re-evaluation"
+    ]
+  },
+  "assumptions": [
+    "Team availability at 70% capacity for execution (30% for BAU, on-call, meetings)",
+    "No major production incidents requiring sustained attention during migration",
+    "MODA and ARA reports are current (assessed 2026-05-18, within 90-day freshness window)",
+    "Infrastructure and tooling budget of $1.2M approved and available",
+    "Agent deployment does not proceed until BLOCKER remediation completes (WS-05 Phase 1)",
+    "AI tooling available to engineers (coding assistants, agent-based code generation, automated test generation)",
+    "AI acceleration estimates based on 2025-2026 tooling capabilities; actual acceleration varies by team proficiency",
+    "AWS account permissions and sandbox environments available for team",
+    "Compliance team available for SOC2/PCI-DSS review within 2-week SLA",
+    "EKS cluster costs covered by existing AWS commitment or included in $1.2M budget",
+    "Existing Jenkins CI/CD will be replaced (not maintained in parallel long-term)"
+  ],
+  "decision_points": [
+    {
+      "id": "DP-001",
+      "question": "What container orchestrator should be used for modernized services?",
+      "options": ["EKS with Graviton (preferred)", "ECS Fargate (simpler, no K8s experience needed)", "EKS with x86 (familiar architecture)"],
+      "recommendation": "EKS with Graviton — aligns with preferences, 20% cost savings, team training included in plan",
+      "deadline": "Week 2",
+      "affected_services": ["unishop-monolith", "local-monolith"]
+    },
+    {
+      "id": "DP-002",
+      "question": "What database engine should replace self-managed MySQL for unishop-monolith?",
+      "options": ["Aurora PostgreSQL (preferred)", "Aurora MySQL (minimal code changes)", "RDS PostgreSQL (non-Aurora)"],
+      "recommendation": "Aurora PostgreSQL — better cloud-native ecosystem, aligns with preferences, superior performance for complex queries",
+      "deadline": "Week 2",
+      "affected_services": ["unishop-monolith"]
+    },
+    {
+      "id": "DP-003",
+      "question": "What machine identity approach should be used for agent authentication?",
+      "options": ["Cognito with client_credentials + API Gateway authorizer", "API Gateway IAM authorization with SigV4", "Custom JWT with shared signing key"],
+      "recommendation": "Cognito with client_credentials — provides identity lifecycle management, scopes, and revocation out of the box",
+      "deadline": "Week 1",
+      "affected_services": ["local-monolith", "unishop-monolith", "books-api", "aws-microservices"]
+    },
+    {
+      "id": "DP-004",
+      "question": "Should cloud-native decomposition be incremental (strangler fig) or big-bang?",
+      "options": ["Incremental strangler fig pattern (recommended)", "Big-bang rewrite to microservices", "Phased: containerize first, decompose later"],
+      "recommendation": "Phased approach: containerize monolith first (WS-03), then incrementally extract services (WS-02). Reduces risk and maintains availability.",
+      "deadline": "Week 6",
+      "affected_services": ["unishop-monolith", "local-monolith"]
+    },
+    {
+      "id": "DP-005",
+      "question": "What IaC tool should be standardized across the portfolio?",
+      "options": ["AWS CDK (TypeScript) — preferred", "Terraform", "CDK for Terraform (cdktf)"],
+      "recommendation": "AWS CDK (TypeScript) — aligns with preferences, team has TypeScript experience from aws-microservices, native AWS constructs",
+      "deadline": "Week 1",
+      "affected_services": ["all"]
+    },
+    {
+      "id": "DP-006",
+      "question": "When can agents begin calling services?",
+      "options": ["After WS-05 Phase 1 (week 8) — read-only with machine identity", "After WS-05 + WS-06 complete (week 14) — with rate limiting", "After full remediation (week 34) — all RISK-SAFETY addressed"],
+      "recommendation": "After WS-05 Phase 1 + WS-06 Phase 1 (week 10) — machine identity + rate limiting provides minimum safety for read-only agents",
+      "deadline": "Week 8",
+      "affected_services": ["local-monolith", "unishop-monolith", "books-api", "aws-microservices"]
+    },
+    {
+      "id": "DP-007",
+      "question": "What training approach should be used for the team's Kubernetes gap?",
+      "options": ["AWS EKS Workshop (self-paced)", "Instructor-led 5-day K8s + EKS training", "Embedded AWS SA support during first EKS deployment"],
+      "recommendation": "Combination: 3-day instructor-led training + embedded AWS SA for first 4 weeks of EKS work",
+      "deadline": "Week 3",
+      "affected_services": ["unishop-monolith", "local-monolith"]
+    },
+    {
+      "id": "DP-008",
+      "question": "Should local-monolith be rewritten in Java/Spring or kept as PHP for cloud-native?",
+      "options": ["Keep PHP with modern framework (Laravel/Symfony) on containers", "Rewrite in Java/Spring Boot (team strength)", "Rewrite in TypeScript/NestJS"],
+      "recommendation": "Keep PHP on containers initially (WS-03 scope), then evaluate rewrite as part of WS-02 decomposition based on velocity and maintainability",
+      "deadline": "Week 10",
+      "affected_services": ["local-monolith"]
+    }
+  ]
+}
