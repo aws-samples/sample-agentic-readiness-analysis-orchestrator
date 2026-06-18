@@ -1,47 +1,37 @@
 # Getting Started
 
-First-time setup for running portfolio analyses. Read this when a user is setting up the orchestrator for the first time, or when prerequisites need to be verified.
+First-time setup for running portfolio analyses with AWS Transform Continuous Modernization. Read this when a user is setting up the orchestrator for the first time, or when prerequisites need to be verified.
 
 ---
 
 ## Prerequisites
 
-Kiro orchestrates the analysis workflow, but relies on **AWS Transform CLI** to execute the actual transformations. You need:
-
-1. **Valid AWS credentials** — The orchestrator checks credentials before doing anything else. If credentials are expired or missing, it fails immediately with an actionable error.
+1. **Valid AWS credentials** — The orchestrator checks credentials before doing anything else.
    ```bash
    aws sts get-caller-identity
    ```
 
-2. **AWS Transform CLI** installed and configured
+2. **AWS Transform CLI** installed and up-to-date
    ```bash
    atx --version
    # If not installed: https://docs.aws.amazon.com/transform/
    ```
 
-3. **Transformation definitions** published to your AWS Transform registry. The names are configured in `portfolio-config.yaml`:
-   ```yaml
-   transformation_definitions:
-     agentic_readiness: "AWS/agentic-readiness-analysis"
-     modernization: "AWS/modernization-readiness-analysis"
-     portfolio_agentic_readiness: "AWS/portfolio-agentic-readiness-analysis"
-     portfolio_modernization: "AWS/portfolio-modernization-readiness-analysis"
-     execution_plan: "portfolio-execution-plan-generation"
-   ```
-   Verify they exist:
+3. **ct server running** — Required for all `atx ct` commands
    ```bash
-   atx custom def list | grep your-analysis-name
+   atx ct server &
+   atx ct status --health
    ```
 
 4. **Repository access** — Repositories can be:
-   - Already cloned locally (just set `path` in the config)
-   - Auto-cloned by Kiro (set `repository_url` and `path` — Kiro clones if `path` doesn't exist)
+   - Already cloned locally (use `--provider local --path <parent-dir>`)
+   - In a GitHub/GitLab/Bitbucket org (use the appropriate provider with token)
 
 ---
 
 ## Pre-flight Sequence
 
-When the user asks to run the orchestrator, perform these checks in order. Fail fast on any failure.
+When the user asks to run an analysis, perform these checks in order. Fail fast on any failure.
 
 ### Step 0: AWS Credentials
 
@@ -69,55 +59,102 @@ atx --version
 
 If `atx: command not found`, point the user to https://docs.aws.amazon.com/transform/ for installation.
 
-### Step 0.2: Transformation Definitions Exist
-
-For each TD name configured in `portfolio-config.yaml`'s `transformation_definitions` block:
+### Step 0.2: Start ct Server
 
 ```bash
-atx custom def list | grep <td_name>
+atx ct server &
 ```
 
-If any required TD is missing, abort with the specific TD name and instruct the operator to publish it:
+Wait a few seconds, then verify:
 
 ```bash
-atx custom def publish -n <td_name> --sd ./<td_source_directory> --description "..."
+atx ct status --health
 ```
 
-> **Parallel publishes will fail** — the atx CLI uses a shared tar staging path (`~/tmp/transformation.tar`). Always publish TDs serially, not in parallel.
+If you get "Connection refused" → server didn't start. Check for port conflicts or re-run.
 
-### Step 0.3: Repositories Available
+The server listens on `http://localhost:8081` by default. Use `--port <port>` for a custom port.
 
-For each repo in `repositories[]`:
+### Step 0.3: Verify Source Connectivity
 
-- If `path` exists locally → skip
-- If `path` does not exist AND `repository_url` is set → clone it: `git clone <repository_url> <path>`
-- If `path` does not exist AND no `repository_url` → abort with: `Repository {name} has no repository_url and {path} does not exist locally.`
+```bash
+atx ct source list
+```
+
+If no sources are configured, guide the user through `atx ct source add` (see POWER.md "Source Providers").
+
+If a source shows `SETUP_REQUIRED` → credentials are not configured on this machine. Re-add the source.
+If a source shows `AUTH_REQUIRED` → token is invalid or expired. Re-add with a fresh token.
 
 ---
 
-## First Run Walkthrough
+## First Run Walkthrough (Local Source)
 
-For users running the orchestrator for the first time, recommend this minimal config to validate the toolchain end-to-end:
+For users running the orchestrator for the first time with local repos:
 
-```yaml
-portfolio_name: "smoke-test"
-analysis_type: "agentic-readiness"  # Single TD path = simplest
+```bash
+# 1. Start the server
+atx ct server &
 
-transformation_definitions:
-  agentic_readiness: "agentic-readiness-analysis"
-  modernization: "modernization-readiness-analysis"
-  portfolio_agentic_readiness: "portfolio-agentic-readiness"
-  portfolio_modernization: "portfolio-modernization"
-  execution_plan: "portfolio-execution-plan-generation"
+# 2. Add local source pointing to parent directory of repos
+atx ct source add --name my-portfolio --provider local --path ./services
 
-repositories:
-  - name: "service-a"
-    path: "./services/service-a"
-  - name: "service-b"
-    path: "./services/service-b"
+# 3. Discover repos (scans for .git subdirectories)
+atx ct discovery scan --source my-portfolio
+
+# 4. Verify repos were discovered
+atx ct repository list
+
+# 5. Run ARA analysis
+atx ct analysis run --type agentic-readiness --source my-portfolio --wait
+
+# 6. Check findings
+atx ct findings list --json
 ```
 
-Two repos is the minimum for a portfolio analysis. Single-repo analyses should run a per-repo TD directly via `atx custom def exec` (see `manual-execution.md`).
+### Important: Local Source Path
+
+The `--path` for local sources must be a **parent directory** containing repositories as subdirectories. The scanner looks for child directories with a `.git` folder.
+
+```
+✅ --path ./services          (services/repo-a/.git, services/repo-b/.git)
+❌ --path ./services/repo-a   (this is a repo itself, not a parent of repos)
+```
+
+---
+
+## First Run Walkthrough (GitHub Source)
+
+```bash
+# 1. Start the server
+atx ct server &
+
+# 2. Add GitHub source with PAT (needs 'repo' scope)
+atx ct source add --name my-github --provider github --org my-org --token ghp_xxxxxxxxxxxx
+
+# 3. Discover repos
+atx ct discovery scan --source my-github
+
+# 4. Verify repos
+atx ct repository list
+
+# 5. Run analysis
+atx ct analysis run --type agentic-readiness --source my-github --wait
+```
+
+---
+
+## Compute Options
+
+The ct server supports three compute options:
+
+| Option | Description | Best for |
+|---|---|---|
+| **Local** (default) | Runs on your machine, no extra infra | Trying out, small repos, individual use |
+| **Amazon EC2** | Persistent instance in your AWS account | Larger analyses, scheduled recurring runs |
+| **AWS Batch (Fargate)** | Serverless containers | Burst workloads, cost-effective at scale |
+
+For EC2 or Batch setup, ask the agent: "Set up an EC2 instance for continuous modernization" or "Set up Batch execution for continuous modernization."
 
 ---
 
@@ -125,8 +162,10 @@ Two repos is the minimum for a portfolio analysis. Single-repo analyses should r
 
 | Concern | Component | Owns |
 |---|---|---|
-| Workflow orchestration | This power | Subagent spawning, sequencing, reconciliation |
-| Per-repo evaluation | ARA / MOD TDs (AWS-managed, early access) | Question scoring, finding generation, report rendering |
-| Portfolio aggregation | Portfolio ARA / MOD TDs | Cross-cutting analysis, dependency-aware roadmap |
+| Server lifecycle | `atx ct server` | Source management, discovery, analysis scheduling, findings store |
+| Analysis execution | ct analysis engine | Per-repo analysis, portfolio aggregation, parallel execution, git state |
+| Findings & remediation | ct findings/remediation | Finding storage, severity, status, PR/MR generation |
+| Report artifacts | ct artifact store | Per-repo and portfolio reports (accessed via `list-artifacts` / `get-artifact`) |
+| Execution Plan (EBA) | `atx custom def exec` | Reads report artifacts, generates execution roadmap |
 
-The Power is a thin orchestrator. All evaluation logic lives in the TDs, which are versioned independently in your AWS Transform registry.
+The Power is a thin orchestrator. All analysis logic lives in the ct server and the transformation definitions it executes.
