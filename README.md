@@ -1,284 +1,133 @@
 # Portfolio Analysis Orchestrator
 
-> Automated analysis of your service portfolio for agentic AI readiness and cloud-native modernization -- two dedicated analyses (ARA + MOD) with portfolio-level cross-cutting analysis, dependency-aware roadmaps, consolidated reports, and execution plan generation.
+A [Kiro](https://kiro.dev) Power that orchestrates **Agentic Readiness Analysis (ARA)** and **Modernization Readiness Analysis (MODA)** using [AWS Transform Continuous Modernization](https://docs.aws.amazon.com/transform/) (`atx ct`), with optional **Execution Plan** generation via `atx custom def exec`.
 
-This project provides a [Kiro](https://kiro.dev) Power that orchestrates [AWS Transform](https://docs.aws.amazon.com/transform/) managed transformation definitions across multiple repositories, plus example reports and interactive dashboards.
+## Prerequisites
 
-## Architecture
-
-There are two layers:
-
-1. **AWS Transform Managed Transformation Definitions** — published analysis logic available via `atx tp list` (early access)
-2. **Kiro Power** — an orchestrator that reads `portfolio-config.yaml`, classifies repos, generates ATX configs, spawns parallel subagents, and consolidates reports
-
-### Analysis Architecture
-
-| Analysis | Description |
+| Requirement | Verification |
 |---|---|
-| **Modernization Readiness Analysis (MOD)** | Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
-| **Agentic Readiness Analysis (ARA)** | Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
-| **Portfolio Execution Plan (EXEC)** | Unified. Consumes the portfolio MODA report AND/OR portfolio ARA report (at least one required) and produces a holistic engagement-level roadmap with modernization work streams, agent-readiness work streams, cross-dimension dependencies, phased timelines, cost estimates, and risk registers. |
+| AWS credentials | `aws sts get-caller-identity` |
+| AWS Transform CLI | `atx --version` ([install](https://docs.aws.amazon.com/transform/): `curl -fsSL https://transform-cli.awsstatic.com/install.sh \| bash`) |
+| Node.js 22+ | `node --version` |
+| `AWSTransformCustomFullAccess` managed policy | Attached to your IAM user/role |
+| [Kiro IDE](https://kiro.dev) | For using the Power (optional for CLI-only use) |
 
-Zero question overlap between ARA and MOD. The `analysis_type` field routes which analyses run:
-- `agentic-readiness` -> ARA only
-- `modernization` -> MOD only
-- `full` -> both analyses
-- `execution-plan` -> Portfolio Execution Plan (requires at least one of: `portfolio-modernization-readiness-analysis` or `portfolio-agentic-readiness-analysis` to have completed first)
+## Quick Start
 
-### Analysis Flow
+```bash
+# Start the ct server (runs on localhost:8081)
+atx ct server &
 
-```mermaid
-flowchart LR
-    CONFIG[portfolio-config.yaml] --> PARALLEL["Per-Repo (×N parallel)"]
-    PARALLEL --> PORTFOLIO[Portfolio Reports]
-    PORTFOLIO --> EXEC[Execution Plan]
+# Add a local source (absolute path to parent directory containing repos)
+atx ct source add --name my-portfolio --provider local --path $(pwd)/services
+
+# Discover repositories
+atx ct discovery scan --source my-portfolio
+
+# Run ARA
+atx ct analysis run --type agentic-readiness --source my-portfolio --wait
+
+# Run MODA
+atx ct analysis run --type modernization-readiness --source my-portfolio --wait
+
+# Inspect findings
+atx ct findings list --json
 ```
 
-Per-repo analyses run in parallel; portfolio TDs run serially with reconciliation gates. The `analysis_type` field controls which path runs: `agentic-readiness`, `modernization`, `full`, or `execution-plan`. See `orchestrator/POWER.md` for safety contracts.
+## Source Providers
 
-### Repo Classification
+| Provider | Key flags | Example |
+|---|---|---|
+| `local` | `--path <parent-dir>` | `--provider local --path /home/user/services` |
+| `github` | `--org <org> --token <PAT>` | `--provider github --org my-org --token ghp_xxx` |
+| `gitlab` | `--org <group> --token <PAT>` | `--provider gitlab --org my-group --token glpat-xxx` |
+| `bitbucket` | `--org <workspace> --token <token>` | `--provider bitbucket --org my-ws --token xxx` |
 
-The Power classifies each repo before analysis. User override via `repo_type` in config takes precedence.
+Local sources require an **absolute path** to a parent directory containing repos as subdirectories (each with a `.git` folder).
 
-| Detection | Type |
+## Analysis Types
+
+| Type | Description |
 |---|---|
-| Multiple services | `monorepo` |
-| Has entry point | `application` |
-| No entry point | `library` |
-| IaC only | `infrastructure-only` |
-| Deploy configs only | `deployment-config` |
+| `agentic-readiness` | Evaluates whether systems are ready to be safely called by AI agents |
+| `modernization-readiness` | Scans for cloud-native maturity gaps and maps to AWS modernization pathways |
+| `custom` | Run custom transformation definitions (supports `-g`/`--configuration` flag) |
 
-### Config Generation
+Additional built-in types: `tech-debt-quick`, `tech-debt-comprehensive`, `security`.
 
-Kiro reads `portfolio-config.yaml` and generates ATX-native config files (`additionalPlanContext:` format) for each TD. ATX cannot consume `portfolio-config.yaml` directly.
+## Integration Paths
 
-```mermaid
-flowchart LR
-    YAML[portfolio-config.yaml] --> POWER[Kiro Power]
-    POWER --> ARA[".atx-config-*-ara.yaml"]
-    POWER --> MOD[".atx-config-*-mod.yaml"]
-    POWER --> EXEC["atx-config-exec-plan.yaml"]
-```
+### 1. Kiro Power (recommended)
 
-Key field routing: `agent_scope` and `service_archetype` are ARA-only. `preferences` is MOD and Exec Plan only. `repo_type`, `context`, `priority`, and `tags` are shared across ARA/MOD.
-
-### Report Output
-
-Every analysis emits a **four-artifact bundle** per report: `.md` (narrative), `.json` (machine-readable — authoritative), `.html` (self-contained visualization), `.metadata.json` (version sidecar).
+The Power reads [`orchestrator/POWER.md`](orchestrator/POWER.md), guides you through the full workflow (source setup → discovery → analysis → findings → execution plan), handles long-running analyses with polling, and suggests next steps.
 
 ```
-reports/
-├── agentic-readiness-analysis/
-│   └── {service}-ara-report.{md,json,html,metadata.json}
-├── modernization-readiness-analysis/
-│   └── {service}-mod-report.{md,json,html,metadata.json}
-├── portfolio-agentic-readiness-analysis/
-│   └── {portfolio}-portfolio-ara-report.{md,json,html,metadata.json}
-├── portfolio-modernization-readiness-analysis/
-│   └── {portfolio}-portfolio-mod-report.{md,json,html,metadata.json}
-└── portfolio-execution-plan/
-    └── {portfolio}-portfolio-exec-plan.{md,json,html,metadata.json}
+Run the portfolio analysis orchestrator on my services
 ```
 
-## Getting Started
-
-### Prerequisites
-
-- Valid AWS credentials (`aws sts get-caller-identity` -- the orchestrator checks this first and fails fast if expired)
-- [AWS Transform CLI](https://docs.aws.amazon.com/transform/) installed (`atx --version`)
-- [Kiro IDE](https://kiro.dev) with the Portfolio Analysis Orchestrator power installed
-
-### Step 1: Verify Managed Transformation Definitions
-
-The analyses use AWS-managed transformation definitions (early access). Verify they are available:
+### 2. MCP Server (agent integrations)
 
 ```bash
-atx tp list
+atx ct mcp
 ```
 
-You should see:
-- `AWS/agentic-readiness-analysis` — Evaluates whether systems are ready to be safely called by AI agents
-- `AWS/modernization-readiness-analysis` — Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways
-- `AWS/portfolio-agentic-readiness-analysis` — Aggregates individual ARA reports into portfolio-level cross-cutting analysis
-- `AWS/portfolio-modernization-readiness-analysis` — Aggregates individual MOD reports into portfolio-level roadmap and analysis
+Exposes 41 tools over stdio (default) or HTTP. Implements MCP protocol `2024-11-05`. Suitable for embedding in agent frameworks, IDE extensions, or custom toolchains.
 
-### Step 2: Install the Kiro Power
+### 3. CLI (scripts and CI/CD)
 
-The Kiro Power lives at [`orchestrator/POWER.md`](orchestrator/POWER.md) and registers in Kiro as the `orchestrator` power (display name: **Portfolio Analysis Orchestrator**).
+Use `atx ct` commands directly as shown in Quick Start. Add `--json` for machine-readable output.
 
-To install:
+## Execution Plan
 
-1. Open Kiro IDE
-2. Open the Powers panel
-3. Add a custom power from local directory and point Kiro at the `orchestrator/` directory of this repository
-
-### Step 3: Create Your Portfolio Configuration
-
-All configuration — analysis settings, repo definitions, and execution plan parameters — lives in a single `portfolio-config.yaml`:
-
-```yaml
-portfolio_name: "my-platform"
-analysis_type: "full"
-context: "Building customer-facing AI agents while modernizing infrastructure"
-agent_scope: "write-enabled"
-
-transformation_definitions:
-  agentic_readiness: "AWS/agentic-readiness-analysis"
-  modernization: "AWS/modernization-readiness-analysis"
-  portfolio_agentic_readiness: "AWS/portfolio-agentic-readiness-analysis"
-  portfolio_modernization: "AWS/portfolio-modernization-readiness-analysis"
-  execution_plan: "portfolio-execution-plan-generation"
-
-preferences:
-  prefer: ["eks", "aurora", "bedrock"]
-  avoid: ["self-managed-kafka", "oracle"]
-
-repositories:
-  - name: "service-a"
-    repository_url: "https://github.com/org/service-a.git"
-    path: "./services/service-a"
-    priority: "P0"
-  - name: "service-b"
-    path: "./services/service-b"
-    priority: "P1"
-
-dependency_overrides:
-  - source: "service-a"
-    target: "service-b"
-    type: "sync"
-    description: "REST API calls"
-
-# Execution plan parameters (optional — used when generating the portfolio execution plan)
-execution_plan:
-  team_size: 8
-  timeline_constraint: "12 months"
-  budget_constraint: "$1.2M including training and infrastructure"
-  compliance_requirements: ["SOC2", "PCI-DSS"]
-  availability_requirement: "99.95%"
-  risk_tolerance: "moderate"
-  existing_capabilities: "Strong Java/Spring, basic Docker, CI/CD with Jenkins"
-```
-
-See `portfolio-config.schema.json` for the full schema.
-
-### Step 4: Run the Analysis
-
-In Kiro chat:
-
-```
-Run the portfolio analysis orchestrator on portfolio-config.yaml
-```
-
-Kiro handles cloning, classification, config generation, parallel execution, and report consolidation. The orchestrator enforces safety contracts (no-polling, per-repo serialization, serial portfolio TDs) that prevent silent data loss — see [`orchestrator/POWER.md`](orchestrator/POWER.md) for details.
-
-### Step 5 (Alternative): Run Manually Without Kiro
-
-```bash
-# Individual ARA (per repo)
-atx custom def exec -n AWS/agentic-readiness-analysis -p ./services/my-service -g file://atx-config-ara.yaml -x -t
-
-# Individual MOD (per repo)
-atx custom def exec -n AWS/modernization-readiness-analysis -p ./services/my-service -g file://atx-config-mod.yaml -x -t
-
-# Portfolio ARA (after all individual ARA analyses)
-atx custom def exec -n AWS/portfolio-agentic-readiness-analysis -p . -g file://atx-portfolio-ara-config.yaml -x -t
-
-# Portfolio MOD (after all individual MOD analyses)
-atx custom def exec -n AWS/portfolio-modernization-readiness-analysis -p . -g file://atx-portfolio-mod-config.yaml -x -t
-```
-
-Always use `-x` (non-interactive) and `-t` (trust all tools) for batch execution.
-
-### Step 6: Generate Execution Plan
-
-Requires at least one portfolio report (MODA or ARA) to exist. When both are available, the plan unifies modernization and agent-readiness work streams with cross-dimension dependencies.
-
-**Publish the TD** (first time only):
-
-```bash
-atx custom def publish \
-  -n portfolio-execution-plan-generation \
-  --sd ./definitions/portfolio-execution-plan-generation \
-  --description "Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports"
-```
-
-**With Kiro:** Add an `execution_plan` section to `portfolio-config.yaml` (all fields optional), then:
-
-```
-Generate an execution plan for my portfolio
-```
-
-**Without Kiro:** Create `atx-config-exec-plan.yaml` (see `examples/atx-config-exec-plan.yaml`) and run:
+The Execution Plan (EBA) generates a dependency-aware modernization roadmap from ARA and MODA report artifacts. It still runs via `atx custom def exec` (not `atx ct analysis run`) because it consumes exported JSON artifacts and produces a roadmap document rather than findings.
 
 ```bash
 atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
 
-ATX only understands `additionalPlanContext:` format — it cannot consume `portfolio-config.yaml` directly.
+See [`orchestrator/steering/execution-plan.md`](orchestrator/steering/execution-plan.md) for full details.
 
-### Transformation Definitions
-
-TD source files live in `definitions/`. Each subfolder contains a `SKILL.md` that defines the transformation logic.
-
-| TD | Source | Registry Name |
-|---|---|---|
-| Portfolio Execution Plan (Unified) | `definitions/portfolio-execution-plan-generation/SKILL.md` | `portfolio-execution-plan-generation` |
-
-To publish a TD to your AWS Transform registry:
-
-```bash
-atx custom def publish -n <registry-name> --sd ./definitions/<td-folder> --description "<description>"
-```
-
-## Project Structure
+## Repository Structure
 
 ```
-├── definitions/                        # Transformation definition source files
+├── orchestrator/
+│   ├── POWER.md                    # Main Kiro Power (workflow, safety contracts, UX)
+│   └── steering/
+│       ├── getting-started.md      # Prerequisites and first-run walkthroughs
+│       ├── ct-workflow.md          # End-to-end ct workflow reference
+│       ├── execution-plan.md       # EBA generation guide
+│       └── troubleshooting.md      # Common errors and fixes
+├── definitions/
 │   └── portfolio-execution-plan-generation/
-│       └── SKILL.md                    # Execution plan TD source (publish via atx)
-├── orchestrator/                       # Kiro Power (orchestration logic)
-│   ├── POWER.md                        # Main power file with safety contracts
-│   └── steering/                       # Runbook-level steering files
+│       └── SKILL.md                # Execution Plan TD source
 ├── examples/
-│   ├── atx-config-exec-plan.yaml       # ATX-native config example for exec plan (additionalPlanContext format)
-│   ├── fixtures/
-│   │   └── monolith/                   # PHP test fixture (out-of-box testing)
-│   └── reports/                        # Generated example reports
-│       └── full-analysis/              # Full analysis across 6 repos
-├── portfolio-config.schema.json        # Input contract (JSON schema)
+│   ├── atx-config-exec-plan.yaml   # Example EBA config
+│   ├── fixtures/monolith/          # PHP test fixture
+│   └── reports/full-analysis/      # Example generated reports
+├── services/                       # Sample repos for analysis
 └── README.md
 ```
 
 ## Example Reports
 
-The `examples/reports/full-analysis/` directory contains a complete set of generated reports from a real analysis run across 6 repos — including per-service reports, portfolio roll-ups, and the unified execution plan.
+The `examples/reports/full-analysis/` directory contains a complete set of generated reports from a real analysis run — including per-service reports, portfolio roll-ups, and the unified execution plan.
 
 ## Live Dashboard
 
-Interactive portfolio dashboards (ARA + MOD): **https://d2fplme21ym2t.cloudfront.net**
-
-Each analysis also generates a self-contained `.html` report per repo and at portfolio level.
-
-## Test Fixture
-
-`examples/fixtures/monolith/` contains a PHP app you can use to run analyses out of the box without cloning external repos.
+Interactive portfolio dashboards (ARA + MODA): **https://d2fplme21ym2t.cloudfront.net**
 
 ## Contributing
 
-We welcome contributions that improve the orchestration workflow or documentation. Use the GitHub issue templates to report bugs or suggest enhancements.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for general guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Use the GitHub issue templates to report bugs or suggest enhancements.
 
 ## Security
 
-See [SECURITY.md](SECURITY.md) for security guidelines and [THREAT_MODEL.docx](THREAT_MODEL.docx) for the threat analysis. Treat analysis reports as confidential — they contain architecture details.
+See [SECURITY.md](SECURITY.md) for security guidelines. Treat analysis reports as confidential — they contain architecture details.
 
 ## Related Resources
 
 - [AWS Transform Documentation](https://docs.aws.amazon.com/transform/)
-- [AWS Transform CLI Reference](https://docs.aws.amazon.com/transform/latest/userguide/custom-command-reference.html)
-- [AWS Modernization Pathways](https://skillbuilder.aws/learning-plan)
-- [Cloud Design Patterns](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/)
+- [Kiro IDE](https://kiro.dev)
 - [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)
 
 ## License
