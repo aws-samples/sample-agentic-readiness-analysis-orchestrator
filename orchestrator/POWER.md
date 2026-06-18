@@ -1,8 +1,8 @@
 ---
 name: "orchestrator"
 displayName: "Portfolio Analysis Orchestrator"
-description: "Orchestrate agentic readiness and modernization analyses across a service portfolio with reconciliation gates, dependency-aware roadmaps, and execution plan generation."
-keywords: ["agentic-readiness", "modernization-readiness-analysis", "portfolio-analysis", "ara", "mod", "aws-transform"]
+description: "Orchestrate agentic readiness and modernization analyses across a service portfolio using AWS Transform Continuous Modernization (atx ct), with execution plan generation via atx custom."
+keywords: ["agentic-readiness", "modernization-readiness-analysis", "portfolio-analysis", "ara", "mod", "aws-transform", "continuous-modernization"]
 author: "AWS"
 ---
 
@@ -10,33 +10,30 @@ author: "AWS"
 
 ## Overview
 
-This Knowledge Base Power turns Kiro into an orchestrator for running comprehensive analyses across your service portfolio. Kiro reads `portfolio-config.yaml`, classifies repositories, spawns one subagent per repo, runs the appropriate AWS Transform transformations, aggregates results into portfolio-level reports, and optionally generates a portfolio-level execution plan.
+This Power turns Kiro into an orchestrator for running comprehensive analyses across your service portfolio using **AWS Transform Continuous Modernization** (`atx ct`). The ct server handles repository discovery, parallel execution, portfolio-level aggregation, findings management, and remediation natively — this Power provides the orchestration layer that connects ct's capabilities with execution plan generation.
 
-Two analyses plus an execution plan TD are supported. The `analysis_type` field in `portfolio-config.yaml` controls which analyses run:
+### Supported Analyses
 
-| Analysis | What it evaluates |
-|---|---|
-| **Modernization Readiness Analysis (MOD)** | 37 questions, 5 sections, 1-4 scale. Scans portfolios for cloud-native maturity gaps and maps findings to AWS modernization pathways. |
-| **Agentic Readiness Analysis (ARA)** | 43 questions, 8 sections, BLOCKER/RISK/INFO scoring. Evaluates whether systems are ready to be safely called by AI agents — covering APIs, identity, state management, human-in-the-loop, and observability. |
-| **Portfolio Execution Plan (EXEC)** | Unified. Consumes the portfolio MODA report AND/OR portfolio ARA report (at least one required) and produces a holistic engagement-level roadmap with modernization work streams (from MODA), agent-readiness work streams (from ARA), cross-dimension dependencies, phased timelines, cost estimates, risk registers, and decision points. |
+| Analysis | `atx ct` type | What it evaluates |
+|---|---|---|
+| **Agentic Readiness Analysis (ARA)** | `agentic-readiness` | 56 criteria across 5 categories: Infrastructure & Platform, Application Architecture, Data Foundations, Identity/Security/Governance, and Operations & Observability. Evaluates whether systems are ready to be safely called by AI agents. |
+| **Modernization Readiness Analysis (MODA)** | `modernization-readiness` | Cloud modernization opportunity assessment. Evaluates readiness across infrastructure, application, data, security, and operations dimensions. Identifies candidates for containerization, serverless migration, and platform upgrades. |
+| **Execution Plan (EBA)** | N/A — uses `atx custom def exec` | Generates a dependency-aware execution roadmap from ARA+MODA findings. Runs via the custom execution path using report artifacts as input. |
 
 | `analysis_type` | What runs |
 |---|---|
-| `agentic-readiness` | Per-repo ARA + Portfolio ARA |
-| `modernization` | Per-repo MOD + Portfolio MOD |
-| `full` | Both analyses |
-| `execution-plan` | Portfolio Execution Plan — **requires:** at least one of `portfolio-modernization-readiness-analysis` OR `portfolio-agentic-readiness-analysis` complete. Consumes both when available for a unified plan with cross-dimension dependencies. |
-
-Per-repo subagents run **in parallel across repos**. In `full` mode, each subagent runs its assigned TDs **sequentially within its repo** (ARA → MOD). After per-repo execution, a Reconciliation Gate verifies workspace state, then portfolio TDs run **strictly serially** with a gate between each.
+| `agentic-readiness` | ARA across all discovered repos (per-repo + portfolio aggregation) |
+| `modernization` | MODA across all discovered repos (per-repo + portfolio aggregation) |
+| `full` | ARA + MODA + Execution Plan |
 
 ### When to Use
 
 - Planning agentic AI adoption across microservices
-- Identifying shared infrastructure gaps
+- Identifying shared infrastructure gaps and modernization opportunities
 - Prioritizing modernization based on dependencies
-- Tracking portfolio-wide readiness progress
-- Generating executive-level portfolio reports
-- Producing phased execution plans with cost estimates, risk registers, and work stream decomposition
+- Tracking portfolio-wide readiness progress over time
+- Generating execution roadmaps from analysis findings
+- Continuous monitoring of tech debt and readiness regressions
 
 ---
 
@@ -46,229 +43,428 @@ Read on demand based on what the user is asking. **Do not load all of these proa
 
 | Steering file | When to read |
 |---|---|
-| `getting-started.md` | First-time setup, AWS credentials, ATX CLI installation, prerequisite checks |
-| `portfolio-config.md` | Building or editing `portfolio-config.yaml`, understanding the schema, repo classification, preferences merging |
-| `orchestration-workflow.md` | Actually running an analysis — Step 0 through Step 3, ATX config generation, subagent contract |
-| `reconciliation-gate.md` | The mandatory gate between per-repo and portfolio TDs — Checks A (branch consolidation), B (path standardization), C (bundle completeness) |
-| `manual-execution.md` | Running individual TDs by hand without the orchestrator (single-repo runs, debugging, partial reruns) |
-| `troubleshooting.md` | Errors, missing reports, timeouts, subagent panic recovery, configuration validation issues |
-| `execution-plan.md` | Generating a portfolio execution plan — engagement parameters, ATX config generation, TD invocation, output verification |
-| `atx-cli-reference.md` | Quick reference for `atx` flags, configuration file format, common invocation patterns, recommended timeouts |
+| `getting-started.md` | First-time setup: AWS credentials, ATX CLI installation, ct server lifecycle, source configuration |
+| `ct-workflow.md` | Running analyses end-to-end: sources, discovery, analysis execution, findings management, artifact retrieval |
+| `execution-plan.md` | Running the Execution Plan TD via `atx custom def exec` after ARA+MODA analyses are complete |
+| `troubleshooting.md` | Errors, ct server issues, analysis failures, discovery problems, remediation errors |
 
 To load a steering file: `Call action "readSteering" with powerName="orchestrator", steeringFile="<filename>"`
 
 ---
 
-## Three Critical Safety Contracts
+## Architecture
 
-> **These contracts apply to every run and MUST be followed. They are stated in this always-loaded file — not in steering files — because violating them produces silent data loss and corrupt reports. Every contract is a fix for a specific failure mode observed in production runs.**
-
-### Contract 1: No-Polling Contract (subagents must not panic during long ATX runs)
-
-`atx custom def exec` is long-running: 5-15 minutes for per-repo TDs, 15-30 minutes for portfolio TDs. Subagents have repeatedly broken correctness by becoming impatient mid-run, inspecting filesystem state before ATX has finished writing, then panicking and retrying. The retry corrupts state because two ATX processes against the same repo path produce divergent staging branches.
-
-**The contract:**
-
-1. **Issue exactly one `executeBash` call** for the ATX command, with the configured timeout (1200000 ms per-repo, 1800000 ms portfolio). Do not pre-launch, do not background, do not split.
-2. **Do NOT call `ls`, `find`, `cat`, `grep`, or any filesystem inspection tool against the repo's analysis folders while ATX is running.** The agent's executeBash call IS the wait. There is no work to do until it returns.
-3. **Do NOT read ATX log files or `~/.aws/atx/custom/...` paths during the run.** ATX writes incrementally; partial reads produce misleading state.
-4. **Do NOT spawn a second subagent or a parallel executeBash to "check on" the first one.**
-5. **Do NOT interpret stdout buffering pauses, "Thinking..." spinners, or quiet periods as failure.** ATX runs with no stdout output for minutes at a time; this is normal.
-6. **Do exactly one filesystem check after executeBash returns** (success, error, or timeout). The `.md` presence is the authoritative success signal — all four artifacts are produced together or none are:
-   ```bash
-   ls {repo}/agentic-readiness-analysis/{slug}-ara-report.md 2>/dev/null     # ARA
-   ls {repo}/modernization-readiness-analysis/{slug}-mod-report.md 2>/dev/null # MOD
-   ```
-7. If the `.md` file exists -> **SUCCESS**, regardless of executeBash exit code or timeout status.
-8. If the `.md` file is missing AND executeBash returned a clear error -> **FAILURE** with the error.
-9. If the `.md` file is missing AND executeBash timed out with no error -> **TIMEOUT**. Recommend manual re-run with extended timeout. Do NOT retry inside the subagent.
-10. **Never retry a transformation that may still be running.**
-
-**Recovery from panicked subagent:** If you observe a subagent making multiple filesystem inspections during what should be a single ATX wait, the run is compromised. Stop that subagent and re-launch the TD freshly. Do not try to salvage partial state from the panicked run.
-
-### Contract 2: Per-Repo Serialization Rule (`full` mode)
-
-Each ATX execution forks a per-execution staging branch (`atx-result-staging-<timestamp>-<id>`) by stashing+committing local changes onto that branch and then restoring the original branch. **Two ATX executions against the same repo path concurrently each fork their own staging branch from the same starting HEAD**, never see each other's commits, and produce divergent histories.
-
-**The contract:**
-
-- Within a single repository, analyses MUST run sequentially: ARA → MOD
-- Across repositories, run subagents fully in parallel (one subagent per repo)
-- **One subagent per repo, never more.** The subagent sequences its assigned TDs.
-
-The serialization adds at most one TD's runtime to each repo (~10-15 minutes) but eliminates the entire class of staging-branch race conditions: lost artifacts, reports written to wrong nested paths (e.g., `monolith/services/monolith/...`), and merge conflicts on regenerated files.
-
-**Per-portfolio branch isolation (recommended):** Before invoking the orchestrator on operator-owned repos, create a dedicated branch (`git checkout -b portfolio-run-<date>`). All ATX staging branches will fork from this branch. At the end you have a single isolated branch you can merge or delete as a unit.
-
-### Contract 3: Portfolio TD Serialization
-
-All portfolio TDs (Portfolio ARA, Portfolio MOD) execute against the same workspace root with `-p .`. They share a single git HEAD. Running two portfolio TDs concurrently triggers the same staging-branch divergence that Contract 2 prevents at the repo level.
-
-**The contract:**
-
-- Run portfolio TDs strictly serially in this order: **Portfolio ARA → Portfolio MOD**
-- A **Reconciliation Gate** runs between each invocation (see `steering/reconciliation-gate.md` for Checks A/B/C)
-- Abort the chain if any gate fails — do not proceed to the next portfolio TD with a corrupted workspace
-
-The portfolio phase typically takes ~30 minutes for a full analysis with both portfolio TDs. This is the cost of correctness; do not optimize it away by parallelizing.
-
-**Cross-repo per-repo subagents remain parallel** — only the portfolio aggregation step is serialized.
-
----
-
-## How Kiro Orchestrates (High-Level)
-
-Detailed step-by-step flow lives in `steering/orchestration-workflow.md`. Summary:
-
-1. **Pre-flight (Step 0):** Verify AWS credentials, ATX CLI, TD existence in registry. Fail fast on any failure.
-2. **Parse and validate `portfolio-config.yaml`:** analysis_type, repos, preferences, dependency_overrides, TD names.
-3. **Classify each repo:** Apply the decision tree (or honor user-provided `repo_type` override).
-4. **Clone missing repos:** For entries with `repository_url` and a non-existent `path`.
-5. **Generate ATX configs:** Per-repo ARA (no preferences), per-repo MOD (no agent_scope, merged preferences), Exec Plan (`atx-config-exec-plan.yaml` with `additionalPlanContext`). Portfolio configs include structured `service_inventory[]` and `dependency_overrides[]`. ATX only understands the `additionalPlanContext:` format — it cannot consume `portfolio-config.yaml` directly.
-6. **Per-repo execution (Contract 2):** One subagent per repo. Subagent runs its assigned TDs sequentially within the repo. All subagents in parallel across repos.
-7. **Reconciliation Gate (Step 1.5):** Check A (branch consolidation), Check B (canonical paths — auto-rename and auto-move strays since Contract 2 makes their attribution unambiguous, ABORT only when >=2 strays exist for the same TD in one repo), Check C (four-artifact bundle completeness, `.json` mandatory). Abort before any portfolio TD if any check fails.
-8. **Portfolio TDs (Contract 3):** Strictly serial — Portfolio ARA → Portfolio MOD — with a Reconciliation Gate between each.
-9. **Consolidate reports:** Copy per-repo reports into top-level `agentic-readiness-analysis/`, `modernization-readiness-analysis/` folders. Clean up `.atx-config-*.yaml`.
-
-> All `atx` commands MUST use `-x` (non-interactive) and `-t` (trust all tools) — analyses run at scale without human intervention. Always pass **absolute paths** to `-p` and `-g`; relative paths silently break across `executeBash` boundaries because each call starts a fresh shell. See `steering/atx-cli-reference.md` for full flag details and `steering/troubleshooting.md` for the path-corruption failure mode.
-
----
-
-## Quick Start
-
-### 1. Create `portfolio-config.yaml`
-
-Minimum config to validate the toolchain:
-
-```yaml
-portfolio_name: "my-platform"
-analysis_type: "full"
-context: "Building customer-facing AI agents while modernizing legacy services"
-agent_scope: "read-only"
-
-transformation_definitions:
-  agentic_readiness: "AWS/agentic-readiness-analysis"
-  modernization: "AWS/modernization-readiness-analysis"
-  portfolio_agentic_readiness: "AWS/portfolio-agentic-readiness-analysis"
-  portfolio_modernization: "AWS/portfolio-modernization-readiness-analysis"
-  execution_plan: "portfolio-execution-plan-generation"
-
-preferences:
-  prefer: ["eks", "aurora", "bedrock"]
-  avoid: ["self-managed-kafka"]
-
-repositories:
-  - name: "service-a"
-    repository_url: "https://github.com/org/service-a.git"
-    path: "./services/service-a"
-    priority: "P0"
-  - name: "service-b"
-    path: "./services/service-b"
-    priority: "P1"
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  atx ct server (local, EC2, or Batch)                              │
+│                                                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐  │
+│  │ Source Mgmt  │  │  Discovery   │  │   Analysis Engine       │  │
+│  │ github       │  │  repo scan   │  │   parallel execution    │  │
+│  │ gitlab       │  │  .git detect │  │   portfolio aggregation │  │
+│  │ bitbucket    │  │              │  │   artifact generation   │  │
+│  │ local        │  │              │  │                         │  │
+│  └──────────────┘  └──────────────┘  └─────────────────────────┘  │
+│                                                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐  │
+│  │   Findings   │  │  Remediation │  │  Reporting & Scheduling │  │
+│  │   (results)  │  │  (PRs/MRs)   │  │  (HTML, EventBridge)    │  │
+│  └──────────────┘  └──────────────┘  └─────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ (report artifacts feed into)
+┌────────────────────────────────────────────────────────────────────┐
+│  atx custom def exec (Execution Plan generation only)              │
+│  Reads report artifacts → produces dependency-aware roadmap        │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-For full schema and more examples, read `steering/portfolio-config.md`.
+---
 
-### 2. Create a Portfolio-Run Branch (recommended)
-
-For each repo under your control:
+## Core Workflow (High-Level)
 
 ```bash
-git -C <repo_path> checkout -b portfolio-run-$(date +%Y%m%d)
+# 1. Start the ct server
+atx ct server &
+
+# 2. Add a source (see "Source Providers" below for all options)
+#    Local: uses --path (absolute)    Remote: uses --org
+atx ct source add --name my-portfolio --provider local --path "$(pwd)/services"
+
+# 3. Discover repositories
+atx ct discovery scan --source my-portfolio
+
+# 4. Run ARA analysis (per-repo + portfolio — handled by ct)
+atx ct analysis run --type agentic-readiness --source my-portfolio --wait
+
+# 5. Run MODA analysis (per-repo + portfolio — handled by ct)
+atx ct analysis run --type modernization-readiness --source my-portfolio --wait
+
+# 6. Inspect findings
+atx ct findings list --json
+
+# 7. (Optional) Retrieve report artifacts for EBA
+atx ct analysis list-artifacts --id <analysis-id> --json
+atx ct analysis get-artifact --id <analysis-id> --repo <repo-slug> --name ara
+
+# 8. (Optional) Generate execution plan from report artifacts
+atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
-
-ATX staging branches fork from this isolation branch. Cleanup is then a single merge or delete.
-
-### 3. Ask Kiro to Run the Orchestrator
-
-```
-"Run the portfolio analysis orchestrator on portfolio-config.yaml"
-```
-
-Kiro will work through the orchestration workflow in `steering/orchestration-workflow.md`, enforcing all three safety contracts above.
-
-For manual execution without the orchestrator, read `steering/manual-execution.md`.
 
 ---
 
-## Output Structure
+## Source Providers
 
-After a `full` run, the workspace contains:
+The ct server supports four source providers. Each tells ct where your repositories live.
 
-```
-agentic-readiness-analysis/
-├── service-a-ara-report.{md,json,html,metadata.json}
-├── service-b-ara-report.{md,json,html,metadata.json}
-└── my-platform-portfolio-ara-report.{md,json,html,metadata.json}
+### Local (for local directories)
 
-modernization-readiness-analysis/
-├── service-a-mod-report.{md,json,html,metadata.json}
-├── service-b-mod-report.{md,json,html,metadata.json}
-└── my-platform-portfolio-mod-report.{md,json,html,metadata.json}
-
+```bash
+atx ct source add --name my-local --provider local --path /absolute/path/to/parent-dir
 ```
 
-### Four-Artifact Bundle
+- **`--path`** must point to a **parent directory** containing git repos as subdirectories
+- **Always use absolute paths.** Relative paths may not resolve correctly depending on the server's working directory.
+- Scanner looks for child directories that contain a `.git` folder
+- Do NOT point to a single repo directly — point to the directory containing repos
+- Example: if repos are at `/home/user/services/repo-a/`, `/home/user/services/repo-b/`, then `--path /home/user/services`
 
-Every per-repo and portfolio analysis emits four files. JSON is authoritative on conflict.
+> **Important:** Local sources use `--path`, NOT `--org`. The `--org` flag is only for remote providers (github, gitlab, bitbucket).
 
-| Artifact | Purpose |
+### GitHub (organizations)
+
+```bash
+atx ct source add --name my-github --provider github --org my-org --token ghp_xxxxxxxxxxxx
+```
+
+- Token needs `repo` scope (classic PAT)
+- `--org` is the GitHub organization name
+- Discovers all repos in the org
+
+### GitLab (groups or users)
+
+```bash
+atx ct source add --name my-gitlab --provider gitlab --org my-group --token glpat-xxxxxxxxxxxx
+```
+
+- Token needs `api` scope
+- `--org` is the GitLab group or username
+- Supports self-hosted GitLab instances (pass `--url https://gitlab.example.com`)
+
+### Bitbucket (workspaces or projects)
+
+```bash
+atx ct source add --name my-bitbucket --provider bitbucket --org my-workspace --token xxxxxxxxxxxx
+```
+
+- Cloud: `--org` is the workspace name
+- Data Center: `--org` is the project key
+- `--username` and `--email` flags available for Bitbucket auth
+- Token needs read access to repos; write access for remediation PRs
+
+### Managing Sources
+
+```bash
+atx ct source list              # List all configured sources (add --json for JSON)
+atx ct source remove --name x   # Remove a source
+```
+
+---
+
+## Analysis Types Reference
+
+| Type | Description |
 |---|---|
-| `{name}-report.md` | Richest-prose narrative (rubric quotes, BLOCKER remediation blocks, score tables, top gaps, decomposition strategy, pathway details, execution roadmap, risk register) |
-| `{name}-report.json` | **Canonical machine-readable contract.** Consumed by the webapp dashboard and by portfolio TDs. |
-| `{name}-report.html` | Single self-contained HTML — no external asset fetches at render time. Every value originates from the JSON. |
-| `{name}-report.metadata.json` | Tiny sidecar carrying `{analysis_type, analysis_date, td_version}`. Same fields are also at the root of the main JSON under `metadata`. |
+| `agentic-readiness` | AI agent integration readiness — 56 criteria, 5 categories |
+| `modernization-readiness` | Cloud modernization opportunity assessment |
+| `tech-debt-quick` | Fast metadata-only scan of package manifests |
+| `tech-debt-comprehensive` | Deep code-level technical debt analysis |
+| `security` | Security vulnerability and CVE detection (requires security agent setup) |
+| `custom` | Run any transformation definition as an analysis: `--type custom --transformation-name <name>` |
 
-The Reconciliation Gate (Check C) treats `.json` as mandatory — portfolio TDs cannot aggregate without it.
+### Configuration Limitation
 
----
-
-## Best Practices
-
-1. **Choose the right `analysis_type`** — ARA for agent safety, MOD for cloud maturity, `full` for both.
-2. **Provide `context`** — Free-text portfolio context frames recommendations far better than letting the TD reason from code alone.
-3. **Set `agent_scope` for ARA** — `write-enabled` for agents that modify data, `read-only` for observation-only. Affects conditional BLOCKER severity.
-4. **Use `preferences` to steer MOD** — Global `prefer`/`avoid` arrays plus per-repo overrides. See `steering/portfolio-config.md` for merge rules.
-5. **Specify `repo_type` when obvious** — Skip auto-detection for clearly-infrastructure repos (`infrastructure-only`) or libraries (`library`).
-6. **Document dependencies** — Use `dependency_overrides[]` for implicit dependencies the orchestrator cannot infer from code analysis.
-7. **Set priorities where helpful** — `P0` for critical services, `P1` for high priority, `P2` for medium. Optional but improves portfolio roadmap sequencing.
-8. **Run individual analyses first** — Portfolio analyses require completed individual reports. The reconciliation gate enforces this, but configuring `analysis_type: full` is the simplest path.
-9. **Create a portfolio-run branch first** — Prevents ATX staging branches from polluting `main`. Cleanup is one merge instead of many.
-10. **Run the Reconciliation Gate manually if running TDs by hand** — Same Checks A/B/C apply. See `steering/reconciliation-gate.md`.
-11. **Leverage cross-repo parallelism** — Kiro spawns one subagent per repository so larger portfolios scale near-linearly. Per-repo serialization within `full` mode is mandatory but adds at most one TD's runtime per repo.
-12. **Address cross-cutting concerns first** — Portfolio reports surface gaps that affect multiple services. Fix those before per-service work.
-13. **Follow dependency order in modernization** — Modernize upstream services before their downstream dependents.
-14. **Validate config against the JSON schema** — `ajv validate -s portfolio-config.schema.json -d portfolio-config.yaml` before running.
+The `-g`/`--configuration` flag on `atx ct analysis run` is **ONLY valid with `--type custom`**. Built-in analysis types (agentic-readiness, modernization-readiness, tech-debt-*, security) do not accept custom configuration — they use their own defaults.
 
 ---
 
-## Troubleshooting
+## Report Artifacts
 
-For all error scenarios — missing reports, ATX timeouts, panicked subagents, configuration errors, branch hygiene issues — read `steering/troubleshooting.md`.
+After analysis completes, report artifacts are stored in the ct server's artifact store — NOT written directly to the local filesystem.
 
-Most common issues:
-- **Reports missing -> Reconciliation Gate failure.** Reports may be at non-canonical paths or stranded on staging branches.
-- **`.json` missing but `.md` exists -> mandatory abort.** Re-run that per-repo TD.
-- **ATX timeout but report exists -> SUCCESS.** No-Polling Contract treats this as success regardless of executeBash exit status.
-- **Subagent panic -> kill and re-launch.** Don't try to salvage partial state.
+### Listing artifacts
+
+```bash
+atx ct analysis list-artifacts --id <analysis-id> --json
+```
+
+### Retrieving artifact content
+
+```bash
+atx ct analysis get-artifact --id <analysis-id> --repo <repo-slug> --name ara
+```
+
+### Artifact names by analysis type
+
+| Analysis type | Per-repo artifact name | Portfolio artifact repo key | Portfolio artifact name |
+|---|---|---|---|
+| `agentic-readiness` | `ara` | `_portfolio_ara` | `report` |
+| `modernization-readiness` | `mod` | `_portfolio_mod` | `report` |
+
+All artifacts have `"format": "markdown"` in the listing.
+
+### Using artifacts for EBA
+
+To feed report artifacts into the Execution Plan TD, retrieve them via `get-artifact` and save to files, or reference the analysis ID in your EBA config.
 
 ---
 
-## Limitations
+## Safety Contract: Execution Plan (EBA)
 
-- Minimum 2 services for portfolio analysis
-- Per-repo analyses must succeed before portfolio aggregation
-- Dependency detection is code-analysis-based — declare implicit dependencies via `dependency_overrides[]`
-- Preferences are guidance, not guarantees
-- Preferences are MOD-only (silently ignored by ARA)
-- Analysis quality depends on code completeness and documentation availability
+> The ct server handles all parallelism, git state, and portfolio aggregation for ARA/MODA. The following contract applies ONLY to the Execution Plan TD which runs via `atx custom def exec`.
+
+1. **EBA runs only AFTER both ARA and MODA analyses show status `complete`** (confirmed by `atx ct analysis list` or `--wait` returning success).
+2. **Verify report artifacts exist** via `atx ct analysis list-artifacts` before launching EBA.
+3. **Issue exactly one `executeBash` call** for the EBA command with timeout 1800000 ms. Do not poll, background, or split.
+4. **Do NOT run EBA concurrently with any `atx ct analysis run`** — the ct server and custom exec may conflict on git state.
+5. After executeBash returns, verify the execution plan artifact exists before reporting success.
 
 ---
 
-## Related Resources
+## Full CLI Reference
 
-- [AWS Transform Documentation](https://docs.aws.amazon.com/transform/)
-- [AWS Transform CLI Reference](https://docs.aws.amazon.com/transform/latest/userguide/custom-command-reference.html)
-- [AWS Modernization Pathways](https://skillbuilder.aws/learning-plan)
-- [Cloud Design Patterns](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/)
-- [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)
+### Server & Status
+
+| Command | Description |
+|---|---|
+| `atx ct server` | Start the continuous modernization server (default port 8081) |
+| `atx ct server --port <port>` | Start on a custom port |
+| `atx ct status` | View system status (sources, repos, analyses, findings, remediations) |
+| `atx ct status --health` | Health check — prints "healthy" or "unhealthy" |
+
+### Sources
+
+| Command | Description |
+|---|---|
+| `atx ct source add --name <n> --provider local --path <p>` | Add local source |
+| `atx ct source add --name <n> --provider github --org <o> --token <t>` | Add GitHub source |
+| `atx ct source add --name <n> --provider gitlab --org <o> --token <t> [--url <u>]` | Add GitLab source |
+| `atx ct source add --name <n> --provider bitbucket --org <o> --token <t> [--username <u>] [--email <e>]` | Add Bitbucket source |
+| `atx ct source list [--json]` | List configured sources |
+| `atx ct source remove --name <n>` | Remove a source |
+
+### Discovery
+
+| Command | Description |
+|---|---|
+| `atx ct discovery scan --source <name> [--path <override>]` | Discover repositories from a source |
+
+### Repositories
+
+| Command | Description |
+|---|---|
+| `atx ct repository list [--source <s>] [--language <l>] [--labels <l>] [--has-workflow <bool>] [--json]` | List repos |
+| `atx ct repository get --id <id>` | Get single repo details |
+| `atx ct repository update --id <id> --labels <l>` | Update repo labels |
+| `atx ct repository delete --repo <slug> --source <s>` | Delete a repository |
+
+### Analysis
+
+| Command | Description |
+|---|---|
+| `atx ct analysis run --type <type> --source <name> [--repo <slug>] [--wait] [--telemetry <kv>]` | Run analysis |
+| `atx ct analysis run --type custom --transformation-name <td> --source <name> [-g <config>] [--wait]` | Run custom TD as analysis |
+| `atx ct analysis get --id <id>` | Get analysis details |
+| `atx ct analysis list [--json] [--status <s>] [--type <t>] [--category <c>]` | List analyses |
+| `atx ct analysis cancel --id <id>` | Cancel running analysis |
+| `atx ct analysis delete --id <id>` | Delete an analysis |
+| `atx ct analysis list-artifacts --id <id> [--json]` | List report artifacts for an analysis |
+| `atx ct analysis get-artifact --id <id> --repo <repo> --name <name>` | Get artifact content |
+
+### Findings
+
+| Command | Description |
+|---|---|
+| `atx ct findings list [--json] [--source <s>] [--type <t>] [--severity <sev>] [--min-severity <sev>] [--status <s>] [--repo <r>] [--analysis-id <id>] [--fix-transform <name>]` | List findings |
+| `atx ct findings get --id <id>` | Get single finding |
+| `atx ct findings update --id <id> --status <s> [--reason "..."] [--notes "..."]` | Update a finding |
+| `atx ct findings batch-update --ids <id1>,<id2> --status <s> [--reason "..."]` | Batch update |
+| `atx ct findings delete --id <id>` | Delete dismissed/obsolete finding |
+
+### Remediation
+
+| Command | Description |
+|---|---|
+| `atx ct remediation create --ids <id1>,<id2> [--transformation-name <td>] [--name "..."] [--local] [--telemetry <kv>]` | Create remediation from findings |
+| `atx ct remediation create --repo <slug> --source <s> --transformation-name <td> [-g <config>] [--name "..."] [--local]` | Create remediation for repo |
+| `atx ct remediation list [--status <s>]` | List remediations |
+| `atx ct remediation status --id <id>` | Check remediation status + PR/MR links |
+| `atx ct remediation retry --id <id>` | Retry failed remediation |
+| `atx ct remediation cancel --id <id>` | Cancel a remediation |
+| `atx ct remediation delete --id <id>` | Delete a remediation |
+
+### Setup
+
+| Command | Description |
+|---|---|
+| `atx ct setup security-agent` | Provision security agent infrastructure |
+| `atx ct setup security-agent --status` | Check security agent status |
+
+### MCP Server
+
+| Command | Description |
+|---|---|
+| `atx ct mcp` | Start MCP server (stdio transport, default) |
+| `atx ct mcp --transport http --port 3100` | Start MCP server on HTTP |
+
+---
+
+## MCP Server Integration (Alternative to CLI)
+
+The ct server exposes a full **Model Context Protocol (MCP)** server that agents (Kiro, Claude Code, IDE extensions) can connect to directly. This is the preferred integration path for agent workflows — instead of spawning bash commands, the agent loads MCP tools dynamically and calls them as structured tool invocations.
+
+### Starting the MCP Server
+
+```bash
+# stdio transport (for local agent integration via spawn)
+atx ct mcp
+
+# HTTP transport (for remote/shared access)
+atx ct mcp --transport http --port 3100
+```
+
+Server info: `name: "atxct"`, `version: "0.1.0"`, protocol `2024-11-05`.
+
+### Kiro/Claude Code Configuration
+
+Add to your MCP server config (`.kiro/settings.json`, `.claude/settings.json`, or equivalent):
+
+```json
+{
+  "mcpServers": {
+    "atxct": {
+      "command": "atx",
+      "args": ["ct", "mcp"],
+      "env": {
+        "AWS_PROFILE": "your-profile",
+        "AWS_REGION": "us-east-1"
+      }
+    }
+  }
+}
+```
+
+For HTTP transport:
+```json
+{
+  "mcpServers": {
+    "atxct": {
+      "url": "http://localhost:3100"
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+The MCP server exposes 41 tools covering all ct functionality:
+
+#### Source Management
+
+| Tool | Description |
+|---|---|
+| `source/add` | Register a source (github, gitlab, bitbucket, brazil, local) |
+| `source/list` | List all sources with repo counts |
+| `source/remove` | Remove a source (supports `force: true`) |
+| `source/update` | Update source configuration |
+| `source/set-org-variable` | Set GitHub org-level Actions variable |
+| `source/check-org-variable` | Check if org variable/secret exists |
+
+#### Discovery
+
+| Tool | Description |
+|---|---|
+| `discovery/scan` | Scan a source for repositories |
+| `discovery/status` | Aggregated repo status across sources |
+| `discovery/remove_repo` | Remove a repo from index |
+| `discovery/cancel_scan` | Cancel an active scan |
+| `discovery/get_scan` | Get scan status |
+| `discovery/list_scans` | List all scans |
+
+#### Analysis
+
+| Tool | Description |
+|---|---|
+| `analysis/run` | Start an analysis (all types supported) |
+| `analysis/get` | Get analysis details |
+| `analysis/list` | List analyses with filters |
+| `analysis/cancel` | Cancel running analysis |
+| `analysis/delete` | Delete analysis record |
+| `analysis/get_report` | Get markdown report for a repo |
+| `analysis/get_dashboard` | Generate HTML dashboard |
+| `analysis/list_artifacts` | List report artifacts |
+| `analysis/get_artifact` | Get artifact content |
+
+#### Findings
+
+| Tool | Description |
+|---|---|
+| `findings/list` | List findings with filters |
+| `findings/groups` | Group auto-remediable findings by transform |
+| `findings/get` | Get single finding |
+| `findings/update` | Update status/notes/dismiss |
+| `findings/delete` | Delete finding |
+
+#### Remediation
+
+| Tool | Description |
+|---|---|
+| `remediation/create` | Create remediation campaign |
+| `remediation/status` | Get campaign status |
+| `remediation/list` | List campaigns |
+| `remediation/cancel` | Cancel campaign |
+| `remediation/retry` | Retry failed repos |
+| `remediation/delete` | Delete campaign |
+
+#### Tags (Portfolios)
+
+| Tool | Description |
+|---|---|
+| `tag/create` | Create a tag (repo grouping) |
+| `tag/get` | Get tag by name |
+| `tag/update` | Rename or add/remove repos |
+| `tag/list` | List all tags |
+| `tag/delete` | Delete a tag |
+
+#### Scheduling
+
+| Tool | Description |
+|---|---|
+| `schedule/create` | Create cron-based recurring analysis |
+| `schedule/list` | List schedules |
+| `schedule/delete` | Delete a schedule |
+
+#### System
+
+| Tool | Description |
+|---|---|
+| `setup/configure` | Configure components (e.g., security-agent) |
+| `status/overview` | System overview (sources, repos, analyses, findings) |
+
+### MCP vs CLI: Key Differences
+
+| Aspect | CLI (`atx ct ...`) | MCP (`atx ct mcp`) |
+|---|---|---|
+| **Local source** | `--path <dir>` | `provider_config: { rootPath: "/path" }` |
+| **Remote source** | `--org <org> --token <t>` | `identifier: "<org>"`, `token: "<t>"` |
+| **Repo filter** | `--repo <slug>` | `repos: ["slug1", "slug2"]` (array) |
+| **Analysis type** | `--type <type>` | `assessment_type: "<type>"` |
+| **Config** | `-g file://path` or `-g key=value` | `inputs.configuration: "file:///path"` |
+| **Extra features** | — | Tags, schedules, dashboard generation, findings grouping |
+| **Polling** | `--wait` flag blocks | Agent polls via `analysis/get` |
+
+### When to Use MCP vs CLI
+
+- **Use MCP** when: an agent (Kiro, Claude Code) is orchestrating — structured tool calls, no shell parsing, richer API surface (tags, schedules, dashboards)
+- **Use CLI** when: running from scripts, CI/CD pipelines, or human-in-terminal workflows
+- **EBA still requires CLI**: The Execution Plan TD runs via `atx custom def exec` which is not exposed through the ct MCP server
