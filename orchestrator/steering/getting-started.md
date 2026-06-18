@@ -96,8 +96,8 @@ For users running the orchestrator for the first time with local repos:
 # 1. Start the server
 atx ct server &
 
-# 2. Add local source pointing to parent directory of repos
-atx ct source add --name my-portfolio --provider local --path ./services
+# 2. Add local source pointing to parent directory of repos (use absolute path)
+atx ct source add --name my-portfolio --provider local --path "$(pwd)/services"
 
 # 3. Discover repos (scans for .git subdirectories)
 atx ct discovery scan --source my-portfolio
@@ -116,9 +116,12 @@ atx ct findings list --json
 
 The `--path` for local sources must be a **parent directory** containing repositories as subdirectories. The scanner looks for child directories with a `.git` folder.
 
+**Always use absolute paths.** Relative paths may not resolve correctly depending on the server's working directory.
+
 ```
-✅ --path ./services          (services/repo-a/.git, services/repo-b/.git)
-❌ --path ./services/repo-a   (this is a repo itself, not a parent of repos)
+✅ --path /home/user/services          (services/repo-a/.git, services/repo-b/.git)
+❌ --path ./services                   (relative — may break if server CWD differs)
+❌ --path /home/user/services/repo-a   (this is a repo itself, not a parent of repos)
 ```
 
 ---

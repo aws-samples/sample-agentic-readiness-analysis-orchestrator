@@ -88,8 +88,8 @@ To load a steering file: `Call action "readSteering" with powerName="orchestrato
 atx ct server &
 
 # 2. Add a source (see "Source Providers" below for all options)
-#    Local: uses --path    Remote: uses --org
-atx ct source add --name my-portfolio --provider local --path ./services
+#    Local: uses --path (absolute)    Remote: uses --org
+atx ct source add --name my-portfolio --provider local --path "$(pwd)/services"
 
 # 3. Discover repositories
 atx ct discovery scan --source my-portfolio
@@ -124,9 +124,10 @@ atx ct source add --name my-local --provider local --path /absolute/path/to/pare
 ```
 
 - **`--path`** must point to a **parent directory** containing git repos as subdirectories
+- **Always use absolute paths.** Relative paths may not resolve correctly depending on the server's working directory.
 - Scanner looks for child directories that contain a `.git` folder
 - Do NOT point to a single repo directly — point to the directory containing repos
-- Example: if repos are at `./services/repo-a/`, `./services/repo-b/`, then `--path ./services`
+- Example: if repos are at `/home/user/services/repo-a/`, `/home/user/services/repo-b/`, then `--path /home/user/services`
 
 > **Important:** Local sources use `--path`, NOT `--org`. The `--org` flag is only for remote providers (github, gitlab, bitbucket).
 
@@ -313,4 +314,157 @@ To feed report artifacts into the Execution Plan TD, retrieve them via `get-arti
 
 | Command | Description |
 |---|---|
-| `atx ct mcp` | Start MCP server exposing ATX Control Tower tools |
+| `atx ct mcp` | Start MCP server (stdio transport, default) |
+| `atx ct mcp --transport http --port 3100` | Start MCP server on HTTP |
+
+---
+
+## MCP Server Integration (Alternative to CLI)
+
+The ct server exposes a full **Model Context Protocol (MCP)** server that agents (Kiro, Claude Code, IDE extensions) can connect to directly. This is the preferred integration path for agent workflows — instead of spawning bash commands, the agent loads MCP tools dynamically and calls them as structured tool invocations.
+
+### Starting the MCP Server
+
+```bash
+# stdio transport (for local agent integration via spawn)
+atx ct mcp
+
+# HTTP transport (for remote/shared access)
+atx ct mcp --transport http --port 3100
+```
+
+Server info: `name: "atxct"`, `version: "0.1.0"`, protocol `2024-11-05`.
+
+### Kiro/Claude Code Configuration
+
+Add to your MCP server config (`.kiro/settings.json`, `.claude/settings.json`, or equivalent):
+
+```json
+{
+  "mcpServers": {
+    "atxct": {
+      "command": "atx",
+      "args": ["ct", "mcp"],
+      "env": {
+        "AWS_PROFILE": "your-profile",
+        "AWS_REGION": "us-east-1"
+      }
+    }
+  }
+}
+```
+
+For HTTP transport:
+```json
+{
+  "mcpServers": {
+    "atxct": {
+      "url": "http://localhost:3100"
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+The MCP server exposes 41 tools covering all ct functionality:
+
+#### Source Management
+
+| Tool | Description |
+|---|---|
+| `source/add` | Register a source (github, gitlab, bitbucket, brazil, local) |
+| `source/list` | List all sources with repo counts |
+| `source/remove` | Remove a source (supports `force: true`) |
+| `source/update` | Update source configuration |
+| `source/set-org-variable` | Set GitHub org-level Actions variable |
+| `source/check-org-variable` | Check if org variable/secret exists |
+
+#### Discovery
+
+| Tool | Description |
+|---|---|
+| `discovery/scan` | Scan a source for repositories |
+| `discovery/status` | Aggregated repo status across sources |
+| `discovery/remove_repo` | Remove a repo from index |
+| `discovery/cancel_scan` | Cancel an active scan |
+| `discovery/get_scan` | Get scan status |
+| `discovery/list_scans` | List all scans |
+
+#### Analysis
+
+| Tool | Description |
+|---|---|
+| `analysis/run` | Start an analysis (all types supported) |
+| `analysis/get` | Get analysis details |
+| `analysis/list` | List analyses with filters |
+| `analysis/cancel` | Cancel running analysis |
+| `analysis/delete` | Delete analysis record |
+| `analysis/get_report` | Get markdown report for a repo |
+| `analysis/get_dashboard` | Generate HTML dashboard |
+| `analysis/list_artifacts` | List report artifacts |
+| `analysis/get_artifact` | Get artifact content |
+
+#### Findings
+
+| Tool | Description |
+|---|---|
+| `findings/list` | List findings with filters |
+| `findings/groups` | Group auto-remediable findings by transform |
+| `findings/get` | Get single finding |
+| `findings/update` | Update status/notes/dismiss |
+| `findings/delete` | Delete finding |
+
+#### Remediation
+
+| Tool | Description |
+|---|---|
+| `remediation/create` | Create remediation campaign |
+| `remediation/status` | Get campaign status |
+| `remediation/list` | List campaigns |
+| `remediation/cancel` | Cancel campaign |
+| `remediation/retry` | Retry failed repos |
+| `remediation/delete` | Delete campaign |
+
+#### Tags (Portfolios)
+
+| Tool | Description |
+|---|---|
+| `tag/create` | Create a tag (repo grouping) |
+| `tag/get` | Get tag by name |
+| `tag/update` | Rename or add/remove repos |
+| `tag/list` | List all tags |
+| `tag/delete` | Delete a tag |
+
+#### Scheduling
+
+| Tool | Description |
+|---|---|
+| `schedule/create` | Create cron-based recurring analysis |
+| `schedule/list` | List schedules |
+| `schedule/delete` | Delete a schedule |
+
+#### System
+
+| Tool | Description |
+|---|---|
+| `setup/configure` | Configure components (e.g., security-agent) |
+| `status/overview` | System overview (sources, repos, analyses, findings) |
+
+### MCP vs CLI: Key Differences
+
+| Aspect | CLI (`atx ct ...`) | MCP (`atx ct mcp`) |
+|---|---|---|
+| **Local source** | `--path <dir>` | `provider_config: { rootPath: "/path" }` |
+| **Remote source** | `--org <org> --token <t>` | `identifier: "<org>"`, `token: "<t>"` |
+| **Repo filter** | `--repo <slug>` | `repos: ["slug1", "slug2"]` (array) |
+| **Analysis type** | `--type <type>` | `assessment_type: "<type>"` |
+| **Config** | `-g file://path` or `-g key=value` | `inputs.configuration: "file:///path"` |
+| **Extra features** | — | Tags, schedules, dashboard generation, findings grouping |
+| **Polling** | `--wait` flag blocks | Agent polls via `analysis/get` |
+
+### When to Use MCP vs CLI
+
+- **Use MCP** when: an agent (Kiro, Claude Code) is orchestrating — structured tool calls, no shell parsing, richer API surface (tags, schedules, dashboards)
+- **Use CLI** when: running from scripts, CI/CD pipelines, or human-in-terminal workflows
+- **EBA still requires CLI**: The Execution Plan TD runs via `atx custom def exec` which is not exposed through the ct MCP server
