@@ -27,13 +27,13 @@ The end-to-end workflow for running analyses using AWS Transform Continuous Mode
           ▼
 ┌─────────────────────┐
 │  3. Run ARA         │  atx ct analysis run --type agentic-readiness
-│                     │  --source <name> --wait
+│                     │  --source <name>  (poll until complete)
 └─────────┬───────────┘
           │
           ▼
 ┌─────────────────────┐
 │  4. Run MODA        │  atx ct analysis run --type modernization-readiness
-│                     │  --source <name> --wait
+│                     │  --source <name>  (poll until complete)
 └─────────┬───────────┘
           │
           ▼
@@ -61,7 +61,7 @@ The end-to-end workflow for running analyses using AWS Transform Continuous Mode
 
 Choose the appropriate provider.
 
-**Local repos:**
+**Local repos (always use absolute paths — relative paths may not resolve correctly):**
 ```bash
 atx ct source add --name my-portfolio --provider local --path /absolute/path/to/services
 ```
@@ -124,21 +124,35 @@ Each discovered repo gets a slug in the format `<source>::<repo-name>`. This slu
 
 ## Step 3: Run ARA Analysis
 
+### Recommended: Launch + Poll (agent workflows)
+
+```bash
+# Launch without --wait (returns immediately with analysis ID)
+atx ct analysis run --type agentic-readiness --source my-portfolio
+# → "Analysis 01KV... (agentic-readiness) started on N repo(s)"
+
+# Tell the user: "Running ARA — this takes 5-15 minutes per repo. I'll check back."
+
+# Poll every 30-60 seconds
+atx ct analysis get --id <analysis-id>
+# → Status: running | complete | failed
+
+# On complete — summarize for the user
+atx ct findings list --analysis-id <id> --json
+```
+
+### Alternative: Blocking wait (scripts/CI)
+
 ```bash
 atx ct analysis run --type agentic-readiness --source my-portfolio --wait
 ```
 
-The `--wait` flag blocks until the analysis completes (or fails). Without `--wait`, the command returns immediately and you poll with:
-
-```bash
-atx ct analysis list --status running
-atx ct analysis get --id <analysis-id>
-```
+The `--wait` flag blocks until the analysis completes (or fails). Suitable for scripts but NOT recommended for agent workflows — it holds the execution slot for 5–30 minutes with no intermediate feedback.
 
 ### Targeting specific repos
 
 ```bash
-atx ct analysis run --type agentic-readiness --repo my-portfolio::my-app --source my-portfolio --wait
+atx ct analysis run --type agentic-readiness --repo my-portfolio::my-app --source my-portfolio
 ```
 
 ### What happens internally
@@ -159,19 +173,39 @@ atx ct analysis list --json  # Status should show 'complete'
 
 ## Step 4: Run MODA Analysis
 
+### Recommended: Launch + Poll (agent workflows)
+
+```bash
+# Launch without --wait
+atx ct analysis run --type modernization-readiness --source my-portfolio
+# → "Analysis 01KW... (modernization-readiness) started on N repo(s)"
+
+# Tell the user: "Running MODA — this takes 5-15 minutes per repo. I'll check back."
+
+# Poll every 30-60 seconds
+atx ct analysis get --id <analysis-id>
+
+# On complete — summarize for the user
+atx ct findings list --analysis-id <id> --json
+```
+
+### Alternative: Blocking wait (scripts/CI)
+
 ```bash
 atx ct analysis run --type modernization-readiness --source my-portfolio --wait
 ```
-
-Same behavior as ARA — parallel per-repo execution, portfolio aggregation, findings generation.
 
 ### Running both (full analysis)
 
-Run them sequentially:
+Launch both sequentially, polling each:
 ```bash
-atx ct analysis run --type agentic-readiness --source my-portfolio --wait
-atx ct analysis run --type modernization-readiness --source my-portfolio --wait
+atx ct analysis run --type agentic-readiness --source my-portfolio
+# Poll until complete...
+atx ct analysis run --type modernization-readiness --source my-portfolio
+# Poll until complete...
 ```
+
+Do NOT run both simultaneously — ct handles internal parallelism, but launching two analysis types concurrently on the same source can cause resource contention.
 
 ---
 
