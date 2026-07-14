@@ -44,8 +44,7 @@ Do NOT load all of these proactively. Pick the one relevant to the current task 
 
 ## Demo harness (tested end-to-end 2026-07-10; local-first)
 
-A full reset-and-rebuild harness lives at the project root (also published to
-`gitlab.aws.dev/agentic-readiness-assessment/agentic-test-harness-moda-ara`).
+A full reset-and-rebuild harness lives at the project root.
 All scripts default to **LOCAL mode** (no GitHub, no Code Defender); pass `--remote` for GitHub mode.
 
 ```
