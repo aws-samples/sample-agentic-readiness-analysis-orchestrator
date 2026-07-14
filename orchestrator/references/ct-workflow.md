@@ -50,7 +50,7 @@ The end-to-end workflow for running analyses using AWS Transform Continuous Mode
           │
           ▼
 ┌─────────────────────┐
-│  7. (Optional)      │  atx custom def exec -n portfolio-execution-plan-generation
+│  7. (Optional)      │  atx custom def exec -n eba-execution-plan-generator
 │     Execution Plan  │  Requires report artifacts from steps 3-4
 └─────────────────────┘
 ```

@@ -17,7 +17,7 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 │   │   └── portfolio-modernization-readiness-analysis/
 │   │       └── references/program-library.md
 │   └── custom/
-│       └── portfolio-execution-plan-generation/   # EBA execution plan TD (atx custom def exec)
+│       └── eba-execution-plan-generator/   # EBA execution plan TD (atx custom def exec)
 ├── orchestrator/
 │   ├── SKILL.md                    # Claude/agent skill: full ARA/MODA/EBA workflow
 │   └── references/                 # getting-started, ct-workflow, execution-plan, troubleshooting
@@ -38,10 +38,10 @@ The AWS-managed definitions that run **inside** `atx ct` — you never invoke th
 
 ### `definitions/custom/` — the Execution Plan TD
 
-`portfolio-execution-plan-generation` generates a dependency-aware modernization roadmap (EBA) from the portfolio ARA/MODA report artifacts. It runs via `atx custom def exec` (not `atx ct analysis run`) because it consumes exported JSON artifacts and produces a roadmap document rather than findings:
+`eba-execution-plan-generator` generates a dependency-aware modernization roadmap (EBA) from the portfolio ARA/MODA report artifacts. It runs via `atx custom def exec` (not `atx ct analysis run`) because it consumes exported JSON artifacts and produces a roadmap document rather than findings:
 
 ```bash
-atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
+atx custom def exec -n eba-execution-plan-generator -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
 
 ### `orchestrator/` — the agent skill
@@ -54,7 +54,7 @@ Publishes a TD folder to the ATX registry. The TD name is derived from the folde
 
 ```bash
 # Publish
-./scripts/publish-td.sh definitions/custom/portfolio-execution-plan-generation
+./scripts/publish-td.sh definitions/custom/eba-execution-plan-generator
 
 # Save as draft
 ./scripts/publish-td.sh definitions/managed/portfolio-agentic-readiness-analysis --draft
