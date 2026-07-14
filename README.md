@@ -38,11 +38,40 @@ The AWS-managed definitions that run **inside** `atx ct` — you never invoke th
 
 ### `definitions/custom/` — the Execution Plan TD
 
-`eba-execution-plan-generator` generates a dependency-aware modernization roadmap (EBA) from the portfolio ARA/MODA report artifacts. It runs via `atx custom def exec` (not `atx ct analysis run`) because it consumes exported JSON artifacts and produces a roadmap document rather than findings:
+`eba-execution-plan-generator` generates a dependency-aware modernization roadmap from the **output of ARA + MODA analyses**. It runs via `atx custom def exec` (not `atx ct analysis run`) because it consumes the report artifacts as input and produces a phased roadmap rather than findings.
+
+**Input requirements (the EBA TD needs these to exist before it runs):**
+
+```
+<workspace>/
+├── portfolio-agentic-readiness-analysis/
+│   └── <portfolio>-ara-portfolio-report.json     ← from ct portfolio ARA analysis
+├── portfolio-modernization-readiness-analysis/
+│   └── <portfolio>-mod-portfolio-report.json     ← from ct portfolio MODA analysis
+└── services/<repo-name>/
+    ├── agentic-readiness-analysis/<repo>-ara-report.json       ← per-repo ARA
+    └── modernization-readiness-analysis/<repo>-mod-report.json ← per-repo MODA
+```
+
+On **local sources**, `ct` writes these artifacts directly into the repo working trees during analysis. On **remote sources**, you must export them from the artifact store first:
+
+```bash
+# Export per-repo reports
+atx ct analysis get-artifact --id <ara-id> --repo <slug> --name ara > services/<repo>/agentic-readiness-analysis/<repo>-ara-report.json
+atx ct analysis get-artifact --id <moda-id> --repo <slug> --name mod > services/<repo>/modernization-readiness-analysis/<repo>-mod-report.json
+
+# Export portfolio reports
+atx ct analysis get-artifact --id <ara-id> --repo _portfolio_ara --name report > portfolio-agentic-readiness-analysis/<portfolio>-ara-portfolio-report.json
+atx ct analysis get-artifact --id <moda-id> --repo _portfolio_mod --name report > portfolio-modernization-readiness-analysis/<portfolio>-mod-portfolio-report.json
+```
+
+**Running the EBA TD** (requires both ARA + MODA to be complete):
 
 ```bash
 atx custom def exec -n eba-execution-plan-generator -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
+
+The `-g` config provides execution constraints (team size, timeline, budget, parallelism) that shape the phased roadmap. See [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml) and [`orchestrator/references/execution-plan.md`](orchestrator/references/execution-plan.md) for the full interactive config-generation flow.
 
 ### `orchestrator/` — the agent skill
 
