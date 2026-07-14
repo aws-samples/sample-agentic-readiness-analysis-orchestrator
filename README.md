@@ -159,7 +159,7 @@ atx ct analysis run --type modernization-readiness --source my-portfolio --wait
 atx ct findings list --json
 ```
 
-For the full demo (reset-and-rebuild scripts, sample portfolio, local-first and GitHub modes), see the GitLab harness repo: `gitlab.aws.dev/agentic-readiness-assessment/agentic-test-harness-moda-ara`. The [`orchestrator/SKILL.md`](orchestrator/SKILL.md) skill walks an agent through the same workflow interactively.
+The [`orchestrator/SKILL.md`](orchestrator/SKILL.md) skill walks an agent through the same workflow interactively.
 
 ## Contributing
 
