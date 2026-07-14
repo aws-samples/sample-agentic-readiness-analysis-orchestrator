@@ -404,4 +404,4 @@ The longest dependency chain runs through:
 
 ---
 
-*Generated: 2026-06-16 | TD Version: portfolio-execution-plan-generation | Mode: Unified (MODA + ARA)*
+*Generated: 2026-06-16 | TD Version: eba-execution-plan-generator | Mode: Unified (MODA + ARA)*

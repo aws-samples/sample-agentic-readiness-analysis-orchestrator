@@ -1,5 +1,5 @@
 ---
-name: portfolio-execution-plan-generation
+name: eba-execution-plan-generator
 description: Generate portfolio-level unified execution plan from aggregated MODA and/or ARA reports
 version: 0.2.0
 ---
@@ -717,7 +717,7 @@ This format enables stakeholders to see both the baseline effort and the AI-acce
 {
   "analysis_type": "portfolio-exec-plan",
   "analysis_date": "YYYY-MM-DD",
-  "td_version": "portfolio-execution-plan-generation",
+  "td_version": "eba-execution-plan-generator",
   "portfolio_name": "{portfolio_name}",
   "services_count": N,
   "dimensions": ["moda", "ara"],

@@ -30,6 +30,15 @@ The two portfolio TDs each carry a `references/program-library.md` — the **AWS
 
 Engagement-program recommendations are produced **only** by the portfolio TDs — never by the per-repo TDs, which lack the cross-repo and customer-segment context to qualify programs.
 
+> **⚠️ The program-library is intentionally duplicated** in both portfolio TD folders (`portfolio-agentic-readiness-analysis/references/` and `portfolio-modernization-readiness-analysis/references/`). This is because each folder is a **self-contained publishable package** — when you publish a TD to the ATX registry via `--sd <folder>`, only the files inside that folder are included. There is no cross-package reference mechanism at runtime; the agent loads `references/program-library.md` from within its own package.
+>
+> **If you update the program library, you must update it in both places.** The two copies must stay identical. A quick check:
+> ```bash
+> diff definitions/managed/portfolio-agentic-readiness-analysis/references/program-library.md \
+>      definitions/managed/portfolio-modernization-readiness-analysis/references/program-library.md
+> ```
+> If this produces output, one copy is stale — sync before publishing.
+
 ## Directory structure
 
 ```
