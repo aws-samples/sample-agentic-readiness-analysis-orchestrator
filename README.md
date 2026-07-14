@@ -23,6 +23,12 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 │   └── references/                 # getting-started, ct-workflow, execution-plan, troubleshooting
 ├── scripts/
 │   └── publish-td.sh               # Publish a TD folder to the ATX registry
+├── demo-scripts/                    # Full demo harness (setup, reset, live-discovery)
+│   ├── 00-full-setup.sh            # Bake env: server + source + discovery + ARA + MODA (~45 min)
+│   ├── 01-live-discovery-push.sh   # Live beat: new repo appears (3 → 4)
+│   ├── 02-reset-live-discovery.sh  # Reset for rehearsal
+│   └── 99-full-reset.sh            # Nuke everything
+├── sample-legacy-portfolio/         # 10 synthetic legacy repos for demo/testing
 ├── examples/
 │   ├── atx-config-exec-plan.yaml   # Example EBA config
 │   ├── fixtures/monolith/          # PHP test fixture
