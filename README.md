@@ -38,20 +38,22 @@ The AWS-managed definitions that run **inside** `atx ct` — you never invoke th
 
 ### `definitions/custom/` — the Execution Plan TD
 
-`eba-execution-plan-generator` generates a dependency-aware modernization roadmap from the **output of ARA + MODA analyses**. It runs via `atx custom def exec` (not `atx ct analysis run`) because it consumes the report artifacts as input and produces a phased roadmap rather than findings.
+`eba-execution-plan-generator` generates a dependency-aware modernization roadmap from the **output of ARA and/or MODA analyses**. It runs via `atx custom def exec` (not `atx ct analysis run`) because it consumes the report artifacts as input and produces a phased roadmap rather than findings.
 
-**Input requirements (the EBA TD needs these to exist before it runs):**
+**Input requirements — at least ONE portfolio report must exist** (ARA-only, MODA-only, or both; when both exist the plan covers both dimensions with cross-dependency detection):
 
 ```
 <workspace>/
 ├── portfolio-agentic-readiness-analysis/
-│   └── <portfolio>-ara-portfolio-report.json     ← from ct portfolio ARA analysis
+│   └── <portfolio>-ara-portfolio-report.json     ← from ct portfolio ARA analysis (optional*)
 ├── portfolio-modernization-readiness-analysis/
-│   └── <portfolio>-mod-portfolio-report.json     ← from ct portfolio MODA analysis
+│   └── <portfolio>-mod-portfolio-report.json     ← from ct portfolio MODA analysis (optional*)
 └── services/<repo-name>/
-    ├── agentic-readiness-analysis/<repo>-ara-report.json       ← per-repo ARA
-    └── modernization-readiness-analysis/<repo>-mod-report.json ← per-repo MODA
+    ├── agentic-readiness-analysis/<repo>-ara-report.json       ← per-repo ARA (optional drill-down)
+    └── modernization-readiness-analysis/<repo>-mod-report.json ← per-repo MODA (optional drill-down)
 ```
+
+_*At least one of the two portfolio reports is required — the TD terminates with an error if neither is found. Per-repo reports are read only when deeper granularity is needed._
 
 On **local sources**, `ct` writes these artifacts directly into the repo working trees during analysis. On **remote sources**, you must export them from the artifact store first:
 
@@ -65,13 +67,51 @@ atx ct analysis get-artifact --id <ara-id> --repo _portfolio_ara --name report >
 atx ct analysis get-artifact --id <moda-id> --repo _portfolio_mod --name report > portfolio-modernization-readiness-analysis/<portfolio>-mod-portfolio-report.json
 ```
 
-**Running the EBA TD** (requires both ARA + MODA to be complete):
+**Running the EBA TD** (requires at least one portfolio report — ARA and/or MODA):
 
 ```bash
 atx custom def exec -n eba-execution-plan-generator -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
 
-The `-g` config provides execution constraints (team size, timeline, budget, parallelism) that shape the phased roadmap. See [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml) and [`orchestrator/references/execution-plan.md`](orchestrator/references/execution-plan.md) for the full interactive config-generation flow.
+**The `-g` config (`additionalPlanContext`)** provides the execution constraints that shape how the roadmap is sequenced and phased. These are human inputs the TD cannot infer from code:
+
+```yaml
+# atx-config-exec-plan.yaml
+additionalPlanContext: |
+  portfolio_name: "my-platform"
+  team_size: 8                          # engineers/teams available
+  timeline_constraint: "12 months"      # total modernization timeline
+  budget_constraint: "$1.2M"            # including training + infra
+  parallel_capacity: 3                  # how many services modernized simultaneously
+  compliance_requirements:              # hard deadlines (optional)
+    - "SOC2 audit by 2026-03"
+    - "PCI-DSS renewal Q4"
+  sequencing_overrides:                 # business-priority ordering (optional)
+    - "payments-service must complete first"
+  service_inventory:                    # auto-populated from ct data
+    - name: "payments-service"
+      path: "/path/to/payments-service"
+      priority: "P0"
+      tags: ["java", "spring-boot"]
+      findings_summary: {high: 4, medium: 12, low: 3}
+  dependency_overrides:                 # inferred from cross-service findings
+    - source: "payments-service"
+      target: "user-service"
+      type: "sync"
+```
+
+| Field | Required | Source |
+|---|---|---|
+| `team_size` | Yes | Human input |
+| `timeline_constraint` | Yes | Human input |
+| `budget_constraint` | No | Human input |
+| `parallel_capacity` | No | Human input |
+| `compliance_requirements` | No | Human input |
+| `sequencing_overrides` | No | Human input |
+| `service_inventory[]` | Yes | Auto-populated from `atx ct repository list` + `findings list` |
+| `dependency_overrides[]` | No | Auto-inferred from cross-service findings |
+
+The orchestrator skill ([`orchestrator/references/execution-plan.md`](orchestrator/references/execution-plan.md)) has the full interactive flow for generating this config with an agent. See also [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml).
 
 ### `orchestrator/` — the agent skill
 
