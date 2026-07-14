@@ -101,7 +101,7 @@ atx ct analysis list-artifacts --id <analysis-id> --json
 atx ct analysis get-artifact --id <analysis-id> --repo <repo-slug> --name ara
 
 # 7. (Optional) Generate execution plan (see references/execution-plan.md)
-atx custom def exec -n portfolio-execution-plan-generation -p . -g file://atx-config-exec-plan.yaml -x -t
+atx custom def exec -n eba-execution-plan-generator -p . -g file://atx-config-exec-plan.yaml -x -t
 ```
 
 ## Source providers
