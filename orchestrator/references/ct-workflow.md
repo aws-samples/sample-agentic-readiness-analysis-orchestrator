@@ -345,15 +345,15 @@ atx ct analysis run --type custom --transformation-name my-custom-td \
 
 ## Remediation (Optional)
 
-After identifying findings, you can auto-remediate:
+There are two remediation modes. **Which one applies depends on whether findings carry a fix transform — and ARA/MODA findings currently do NOT.**
 
 ```bash
-# Create remediation from specific findings
-atx ct remediation create --ids finding-id-1,finding-id-2 --name "fix-tech-debt-batch-1"
+# (a) Finding-bound — ct maps each finding to its own fix-transform
+atx ct remediation create --ids finding-id-1,finding-id-2 --name "fix-batch-1"
 
-# Create remediation with a specific TD
+# (b) Explicit-transform — run a chosen TD across a repo (findings just motivate it)
 atx ct remediation create --repo my-portfolio::my-app --source my-portfolio \
-  --transformation-name my-fix-td --name "upgrade-java" --local
+  --transformation-name my-fix-td --name "containerize" [--local]
 
 # Check status (includes PR/MR links)
 atx ct remediation status --id <remediation-id>
@@ -362,11 +362,46 @@ atx ct remediation status --id <remediation-id>
 atx ct remediation retry --id <remediation-id>
 ```
 
+> **Verified 2026-07: ARA and MODA findings are assessment-only.** Every finding has `fix: null` and no `fix-transform` field — so mode (a) `--ids` has nothing to bind to for ARA/MODA findings. To auto-remediate an assessment finding (e.g. "not containerized"), author your own TD and use mode (b) `--transformation-name`. See **"Authoring a custom remediation TD"** in `SKILL.md`. Mode (a) is for analysis types whose findings ship a bound fix transform (e.g. certain tech-debt/upgrade transforms).
+
+`--local` runs the ATX transform on the ct server rather than delegating; useful for local sources. `-g/--configuration` is valid only alongside `--transformation-name`.
+
 Remediation creates branches and PRs/MRs depending on source provider:
 - GitHub → Pull Request
 - GitLab → Merge Request
 - Bitbucket → Pull Request
 - Local → local branch (no PR)
+
+This PR-opening happens **server-side** and is independent of any local `git push` (relevant on Amazon-managed machines where Code Defender blocks pushes to unapproved public repos).
+
+## Teardown / fresh environment (reverse-order deletion)
+
+Resetting the account for a clean demo requires deleting in **reverse dependency order** — verified 2026-07:
+
+```bash
+# 1. Delete analyses (optionally cascade their findings)
+for id in $(atx ct analysis list --json | jq -r '.[].id'); do
+  atx ct analysis delete --id "$id" --cascade-findings
+done
+
+# 2. Delete repositories UNDER each source (sources can't be removed while repos reference them → HTTP 409)
+atx ct repository list --json | jq -r '.items[] | "\(.slug)\t\(.source)"' | while IFS=$'\t' read slug src; do
+  atx ct repository delete --repo "$slug" --source "$src"
+done
+
+# 3. Purge residual findings — must be dismissed/obsolete before delete (no batch delete)
+open=$(atx ct findings list --status open --json | jq -r '.[].id' | paste -sd, -)
+[ -n "$open" ] && atx ct findings batch-update --ids "$open" --status dismissed --reason "env reset"
+for id in $(atx ct findings list --json | jq -r '.[].id'); do atx ct findings delete --id "$id"; done
+
+# 4. NOW remove sources (field is .source, not .name)
+for name in $(atx ct source list --json | jq -r '.[].source'); do atx ct source remove --name "$name"; done
+
+# 5. Verify — deletes exit 0 even on no-op; trust the counts, not the exit code
+echo "repos=$(atx ct repository list --json | jq .total) sources=$(atx ct source list --json | jq length) analyses=$(atx ct analysis list --json | jq length) findings=$(atx ct findings list --json | jq length)"
+```
+
+Run large teardowns as a background task (per-item API calls are slow). `atx ct status` gives a quick account-wide count of sources/repos/analyses/findings/remediations.
 
 ---
 
@@ -376,7 +411,7 @@ Pass telemetry metadata to track analysis runs:
 
 ```bash
 atx ct analysis run --type agentic-readiness --source my-portfolio \
-  --telemetry "agent=kiro,executionMode=local" --wait
+  --telemetry "agent=claude-code,executionMode=local" --wait
 ```
 
 `client=zerodebt` is always included automatically.
