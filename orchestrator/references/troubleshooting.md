@@ -148,16 +148,31 @@ atx ct analysis get-artifact --id <analysis-id> --repo <repo-slug> --name ara
 
 **Symptom:** `get-artifact` returns "artifact not found."
 
-**Fix:** First list available artifacts to see valid names:
+**Fix:** First list available artifacts to see valid names — and don't assume the names/formats below still hold; the service is changing:
 ```bash
 atx ct analysis list-artifacts --id <analysis-id> --json
+# → [ { "repo": "...", "name": "ara", "format": "markdown" }, ... ]
 ```
 
-Artifact names by type:
+Artifact names by type (historical — verify against the live index):
 - ARA per-repo: `ara`
 - MODA per-repo: `mod`
 - Portfolio ARA: repo=`_portfolio_ara`, name=`report`
 - Portfolio MODA: repo=`_portfolio_mod`, name=`report`
+
+### Only markdown artifacts / no portfolio / no HTML
+
+**Symptom:** `list-artifacts` returns only per-repo `ara`/`mod` in `markdown` format — no HTML, no JSON, no `_portfolio_*` artifact.
+
+**Cause (verified 2026-07, ATX CLI 2.1.x / atx 3.2.0):** the current TD version emits per-repo markdown only; portfolio aggregation and HTML did not appear. This may change between versions.
+
+**Fix:** Drive off the live index (don't hardcode). If the user needs HTML to open in a browser, render the exported markdown locally (e.g. `pandoc report.md -s -o report.html`) rather than expecting `ct` to produce it.
+
+### Reports not found in the git repos (remote sources)
+
+**Symptom:** After ARA/MODA on a GitHub/GitLab source, there are no report files or branches in the repos.
+
+**Expected (verified 2026-07):** For remote sources, reports live ONLY in the ct artifact store — nothing is committed or pushed to the repos. `ct` touches repo git only during a **remediation** (branch + PR). Export with `get-artifact`. (Local sources may differ — reports can land in the working tree.)
 
 ---
 
@@ -261,6 +276,77 @@ atx ct source add --name <name> --provider <provider> --org <org> --token <new-t
 git -C <repo-path> branch --list 'remediation-*'
 git -C <repo-path> merge <branch-name>
 ```
+
+### `remediation create --ids` does nothing useful for ARA/MODA findings
+
+**Symptom:** You try to remediate an ARA/MODA finding with `--ids <finding-id>` and there's no fix to apply.
+
+**Cause (verified 2026-07):** ARA and MODA findings are **assessment-only** — `fix` is `null` and there is no bound fix-transform. The `--ids` mode only works for findings that ship a fix transform.
+
+**Fix:** Author your own TD and use the explicit-transform mode:
+```bash
+atx ct remediation create --repo <src>::<repo> --source <src> \
+  --transformation-name <your-td> --name "..."
+```
+See "Authoring a custom remediation TD" in `SKILL.md`.
+
+---
+
+## Custom TD (`atx custom def`) Issues
+
+### "AWS Transform is not available in region 'us-west-2'"
+
+**Symptom:** `atx custom def save-draft|publish|get|exec` errors on region, even though `atx ct` commands work.
+
+**Cause:** `atx custom def *` does not read the region from AWS config the way `atx ct` does.
+
+**Fix:** Set `AWS_REGION` explicitly:
+```bash
+AWS_REGION=us-east-1 atx custom def publish -n my-td --sd ./my-td --description "..."
+```
+
+### `atx custom def get` dumped files into my working directory
+
+**Expected behavior:** `custom def get` writes the fetched TD files (`transformation_definition.md`, etc.) into the CWD. Run it from a scratch directory, or clean up after.
+
+### Draft TD disappeared
+
+**Cause:** `save-draft` entries are temporary (~30-day `expiresAt`). Use `publish` for a permanent registry entry that `remediation create --transformation-name` can reference.
+
+---
+
+## Teardown / Environment Reset Issues
+
+### `source remove` returns 409 (has repositories) — and exits 0 in a loop
+
+**Symptom:** A cleanup loop "succeeds" but sources remain. Running `source remove` directly shows `API 409: Source '<x>' has repositories that still reference it.`
+
+**Cause:** Sources can't be removed while repos reference them, and the CLI may exit 0 on the swallowed error inside a loop.
+
+**Fix:** Delete in reverse order — repositories → findings → source. See the "Teardown" section in `references/ct-workflow.md`. Always re-list and verify counts; don't trust exit codes.
+
+### `findings delete` refuses to delete
+
+**Cause:** Only `dismissed` or `obsolete` findings can be deleted. Dismiss first:
+```bash
+atx ct findings batch-update --ids <csv> --status dismissed --reason "..."
+```
+
+### Cleanup loop fails with "read-only variable: status"
+
+**Cause:** The shell is zsh, where `$status` is reserved/read-only.
+
+**Fix:** Use a different variable name in polling loops (`st=$(...)` not `status=$(...)`).
+
+---
+
+## Publishing to Public GitHub Blocked (Amazon-managed machines)
+
+**Symptom:** `git push` / `gh repo create --push` to a public GitHub repo is blocked: "Code Defender detected a push to an unapproved public repository." The empty repo is created but the push is rejected.
+
+**Cause:** Amazon Code Defender DLP control on managed machines.
+
+**Fix:** Do NOT attempt to bypass it. Options: have the user push from their own approved terminal, use a private/approved repo, or keep the ct source local. Note `ct remediation` opens PRs server-side — that path is independent of a local push.
 
 ---
 
