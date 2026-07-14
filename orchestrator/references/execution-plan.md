@@ -187,7 +187,7 @@ Only proceed to the execution command after user confirms.
 
 ```bash
 atx custom def exec \
-  -n portfolio-execution-plan-generation \
+  -n eba-execution-plan-generator \
   -p . \
   -g file://atx-config-exec-plan.yaml \
   -x \
@@ -212,7 +212,7 @@ In subagent/automated flows, compute absolute paths:
 workspace_abs=$(pwd)
 config_abs="$workspace_abs/atx-config-exec-plan.yaml"
 atx custom def exec \
-  -n portfolio-execution-plan-generation \
+  -n eba-execution-plan-generator \
   -p "$workspace_abs" \
   -g "file://$config_abs" \
   -x -t
