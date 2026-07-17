@@ -103,7 +103,7 @@ This library is consumed by two different analyses with different finding vocabu
 - **Signal patterns:** MOD findings indicate on-prem workloads needing migration; customer hasn't quantified savings; VMware or Microsoft licensing referenced in portfolio `context`.
 - **DO NOT recommend when:** Customer already has business case data; workloads already on AWS; customer only has cloud-native workloads.
 - **Qualification:** Customer has on-prem workloads; willing to share infrastructure data.
-- **What the customer gets:** Comprehensive analysis of current compute, storage, and licensing costs with modeled AWS savings (avg 36% compute savings, 45% licensing reduction).
+- **What the customer gets:** Comprehensive analysis of current compute, storage, and licensing costs with modeled AWS savings.
 - **How to engage:** Talk to your AWS account team about an Optimization & Licensing Assessment. This no-cost assessment analyzes your current infrastructure and licensing, showing projected savings on AWS.
 - **Time to value:** 2–3 weeks.
 - **Prerequisite:** None (entry point).
@@ -165,7 +165,7 @@ This library is consumed by two different analyses with different finding vocabu
 - **Signal patterns:** ARA shows `Pilot-Ready` or `Agent-Ready`; customer wants to define AI/agentic strategy but hasn't started; needs ROI justification.
 - **DO NOT recommend when:** Customer already has AI strategy defined; findings are all about modernization not AI.
 - **Qualification:** Any customer considering AI adoption.
-- **Funding:** Up to $15K (SMB) / $30K (Enterprise).
+- **Funding:** Funded assessment (amount varies by segment).
 - **What the customer gets:** Funded AI strategy assessment including use case discovery, feasibility analysis, and ROI modeling.
 - **How to engage:** Talk to your AWS account team about the AI Assessment Program.
 - **Time to value:** 2–3 weeks.
@@ -174,9 +174,9 @@ This library is consumed by two different analyses with different finding vocabu
 
 ### MAP (Migration Acceleration Program) `[ARA+MOD]` `Active`
 - **Signal patterns:** 3+ High-severity findings across any ARA dimension; MOD shows multiple pathways requiring significant investment; portfolio-scale modernization needed; customer has migration-scale workload referenced in `context`.
-- **DO NOT recommend when:** Single-app modernization only (recommend AppMod PoC); customer only needs assessment (recommend OLA); opportunity <$500K ARR; workload already running on AWS with no net-new migration.
-- **Qualification:** $500K+ ARR opportunity; committed migration/modernization plan; partner engaged; workloads identified.
-- **Funding:** Credits + partner cash (up to 30% ARR via SPI).
+- **DO NOT recommend when:** Single-app modernization only (recommend AppMod PoC); customer only needs assessment (recommend OLA); small-scale opportunity; workload already running on AWS with no net-new migration.
+- **Qualification:** Migration-scale opportunity; committed migration/modernization plan; partner engaged; workloads identified.
+- **Funding:** AWS credits + partner cash (talk to your account team for details).
 - **What the customer gets:** AWS credits, partner funding, tools, automation, training, and expert support to accelerate migration and modernization.
 - **How to engage:** Talk to your AWS account team about the Migration Acceleration Program (MAP).
 - **Time to value:** 3–6 months.
@@ -197,7 +197,7 @@ This library is consumed by two different analyses with different finding vocabu
 - **Signal patterns:** MOD pathway detected (`Move to Containers` or `Move to Cloud Native`) and customer wants to validate approach on a specific application before scaling.
 - **DO NOT recommend when:** Customer needs full business case first (recommend DBC or OLA); scope is portfolio-wide (recommend MAP).
 - **Qualification:** Identified modernization target; technical team available; needs feasibility proof.
-- **Funding:** Up to $100K in co-funding for partner-led engagements.
+- **Funding:** Partner co-funding available (talk to your account team for details).
 - **What the customer gets:** Funded proof-of-concept to validate containers/serverless modernization on a real application.
 - **How to engage:** Ask your AWS account team about AppMod PoC funding.
 - **Time to value:** 2–4 weeks.
@@ -222,9 +222,9 @@ This library is consumed by two different analyses with different finding vocabu
 
 ### AWS Modernization Assurance (AMA) `[MOD]` `Active`
 - **Signal patterns:** Large VMware estate (2000+ VMs) referenced in `context`; competitive risk; urgent migration timeline.
-- **DO NOT recommend when:** <2000 VMs; opportunity <$2M; no competitive pressure; timeline >12 months.
-- **Qualification:** 2,000+ VMs; $2M+ scope; migration within 12 months; executive commitment.
-- **What the customer gets:** Funding covering migration costs, up to 50% of first-year run costs, training, and licensing support.
+- **DO NOT recommend when:** Small VMware estate (<2000 VMs); no competitive pressure; timeline >12 months.
+- **Qualification:** Large VMware estate (2,000+ VMs); enterprise-scale scope; migration within 12 months; executive commitment.
+- **What the customer gets:** Funding covering migration costs, a portion of first-year run costs, training, and licensing support.
 - **How to engage:** Ask your AWS account team about enterprise VMware migration funding.
 - **Time to value:** 6–12 months.
 - **Prerequisite:** OLA completed; MAP qualified.
@@ -244,7 +244,7 @@ This library is consumed by two different analyses with different finding vocabu
 - **Signal patterns:** Customer is an early-stage startup (pre-Series B); needs credits to fund modernization or build agentic applications.
 - **DO NOT recommend when:** Customer is an established enterprise; customer already has significant AWS spend.
 - **Qualification:** Self-funded or pre-Series B; funded within last 12 months; founded in past 10 years.
-- **What the customer gets:** Tiered AWS credits: Bootstrapped ($1K), Pre-Seed ($5–25K), Seed ($100K), Series A ($200K). Covers AWS services including Bedrock 3rd-party models.
+- **What the customer gets:** Tiered AWS credits scaled to funding stage (Bootstrapped → Series A). Covers AWS services including Bedrock 3rd-party models.
 - **How to engage:** Apply at https://aws.amazon.com/activate/ or through your accelerator/incubator program.
 - **Prerequisite:** None.
 - **Pairs with:** IW Programs.
@@ -253,7 +253,7 @@ This library is consumed by two different analyses with different finding vocabu
 - **Signal patterns:** Startup customer with findings indicating migration from competitive platform, or needing AI/ML assessment, or adopting new AWS services strategically.
 - **DO NOT recommend when:** Customer is not in startup segment; enterprise customer (use MAP instead).
 - **Qualification:** Startup company.
-- **What the customer gets:** Funded programs tailored for startups: IW Assess ($5K flat for AI/ML assessments; up to 8% ARR capped at $10K for migration assessments), IW Build (up to 25% of incremental ARR), IW Migrate (up to 25% of ARR for migrating from competitive platforms).
+- **What the customer gets:** Funded programs tailored for startups: IW Assess (funded AI/ML and migration assessments), IW Build (funding for incremental workloads), IW Migrate (funding for migrating from competitive platforms).
 - **How to engage:** Talk to your AWS startup account team about Incremental Workloads funding.
 - **Time to value:** Weeks.
 - **Prerequisite:** Active startup.
@@ -277,7 +277,7 @@ This library is consumed by two different analyses with different finding vocabu
 ### EBA (Experience-Based Acceleration) `[ARA+MOD]` `Active`
 - **Signal patterns:** Multiple `High` effort remediation items in findings; customer team lacks hands-on experience with target architecture; deal stalled on technical validation. (MOD: 2+ services with a triggered pathway AND `Partial`/`Needs Work`/`Not Ready` classification.)
 - **DO NOT recommend when:** Customer has strong internal engineering team; findings are mostly Low effort; customer just needs assessment; customer needs training not execution (recommend AML).
-- **Qualification:** Customer commits team for immersive multi-day engagement; executive sponsor; >$500K ARR.
+- **Qualification:** Customer commits team for immersive multi-day engagement; executive sponsor; enterprise-scale opportunity.
 - **What the customer gets:** Structured, immersive engagement where your team and AWS/partner experts migrate real workloads together, building skills while delivering results.
 - **How to engage:** Talk to your AWS account team about Experience-Based Acceleration.
 - **Time to value:** 4–8 weeks.
@@ -348,7 +348,7 @@ This library is consumed by two different analyses with different finding vocabu
 
 ### MMA Workshop (Migration and Modernization Acceleration) `[MOD]` `Active`
 - **Signal patterns:** MOD `Move to Managed Databases` pathway with SQL Server, Oracle, or Sybase detected; customer team needs hands-on migration experience before committing; customer wants to understand GenAI-accelerated migration approach.
-- **DO NOT recommend when:** Customer has no database migration need; customer already experienced with AWS DMS/SCT and Aurora PostgreSQL; opportunity <$100K ARR.
+- **DO NOT recommend when:** Customer has no database migration need; customer already experienced with AWS DMS/SCT and Aurora PostgreSQL; sub-scale opportunity.
 - **Qualification:** Customer with identified database modernization opportunity; technical team available (Cloud Architects, DBAs, App Developers); targets SQL Server, Oracle, or Sybase to Aurora PostgreSQL.
 - **What the customer gets:** Full-day immersive workshop covering end-to-end database migration to Aurora PostgreSQL using GenAI-powered tools. Hands-on labs with real applications: schema conversion, stored procedure migration with GenAI, application SQL conversion, data migration with AWS DMS, and automated test generation.
 - **How to engage:** Talk to your AWS account team about the MMA Workshop.
@@ -437,7 +437,7 @@ This library is consumed by two different analyses with different finding vocabu
 | Program | Tag | Status | When to Surface | What Customer Gets |
 |---------|-----|--------|----------------|-------------------|
 | ISV Accelerate | `[ARA]` | Active | Customer is ISV wanting to co-sell with AWS | Joint go-to-market support, co-sell incentives, Marketplace integration |
-| ISV Booster Program | `[ARA]` | Active | ISV with $1M–$50M ARR experiencing slow growth | Accelerated growth through Agentic Catalyst + Enhanced Passport + Valuation Readiness |
+| ISV Booster Program | `[ARA]` | Active | Growth-stage ISV experiencing slow growth | Accelerated growth through Agentic Catalyst + Enhanced Passport + Valuation Readiness |
 | AWS SaaS Factory | `[MOD]` | Active | ISV building multi-tenant SaaS; MOD shows SaaS architecture gaps | Architecture guidance and reference implementations for multi-tenant SaaS |
 
 ---
