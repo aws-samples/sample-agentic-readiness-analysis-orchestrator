@@ -8,26 +8,6 @@ version: 0.1.0
 
 BPMN Agentic Opportunity Analysis
 
-## Running
-
-This is a custom TD — invoke it by name with `atx custom def exec`. It consumes the JSON produced by the deterministic BPMN preprocessor, so **run the analyzer first**:
-
-```bash
-# 1. Produce the analysis JSON from a BPMN file
-python tools/bpmn-analyzer/run_analysis.py --bpmn path/to/process.bpmn --output analysis.json
-
-# 2. Run the TD, pointing at that JSON via additionalPlanContext
-atx custom def exec -n bpmn-opportunity-analysis -p . -g file://bao-config.yaml -x -t
-```
-
-```yaml
-# bao-config.yaml
-additionalPlanContext: |
-  analysis_report_path: "analysis.json"   # REQUIRED — output of tools/bpmn-analyzer/run_analysis.py
-  context: "Loan origination process"     # optional — frames findings
-  daily_volume: 500                        # optional (default 100) — cost projection
-```
-
 ## Objective
 
 Analyze BPMN 2.0 process models in a repository to identify which process steps are candidates for agentic AI, classify each opportunity by reasoning complexity and data readiness, assign an autonomy level, estimate implementation costs, and produce a prioritized opportunity map with dependency discovery.

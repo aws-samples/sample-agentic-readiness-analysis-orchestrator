@@ -49,7 +49,7 @@ The AWS-managed definitions that run **inside** `atx ct` — you never invoke th
 
 ### `definitions/custom/` — the custom TDs
 
-Custom TDs run via `atx custom def exec` (not `atx ct analysis run`) because they consume report/model artifacts as input and produce planning or opportunity outputs rather than per-repo findings. You invoke each by name. Each TD's own `SKILL.md` has a **`## Running`** section with its exact invocation and `additionalPlanContext` fields — the table below is the pointer; the SKILL.md is the detail.
+Custom TDs run via `atx custom def exec` (not `atx ct analysis run`) because they consume report/model artifacts as input and produce planning or opportunity outputs rather than per-repo findings. You invoke each by name. The table below is the pointer — each TD's `SKILL.md` holds the full `additionalPlanContext` field reference in its Step 0.
 
 | TD | What it does | Required input | How to run |
 |---|---|---|---|

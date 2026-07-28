@@ -8,21 +8,6 @@ version: 0.1.0
 
 Portfolio BPMN Agentic Opportunity (BAO) Analysis
 
-## Running
-
-This is a custom TD — invoke it by name with `atx custom def exec`. It **auto-discovers** per-repo BAO reports (`*-bpmn-opportunity-report.md`) by scanning the workspace, so it requires no `additionalPlanContext`. Run the per-repo `bpmn-opportunity-analysis` TD first so those reports exist.
-
-```bash
-# Aggregate all per-repo BAO reports found in the workspace (no config required)
-atx custom def exec -n portfolio-bpmn-opportunity-analysis -p . -x -t
-```
-
-```yaml
-# optional-config.yaml — enrichment only, not required
-additionalPlanContext: |
-  context: "E-commerce platform modernization"   # optional — frames portfolio findings
-```
-
 ## Objective
 
 Aggregate individual repository BAO reports into a portfolio-level analysis that identifies cross-repo agent opportunity patterns, total Bedrock consumption forecast, dependency coverage across the portfolio, and a consolidated implementation roadmap.
