@@ -77,6 +77,35 @@ default:
     - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
 
 # -----------------------------------------------------------------------------
+# Entry 0 — harness:auth-check   (manual; one-time wiring verification)
+# Cheap smoke test that proves ONLY that the AWS Credential Vendor vended usable
+# creds — no atx, no fixtures, no baselines. Overrides before_script so it does
+# not install the atx CLI. Run it from CI/CD → Run pipeline, or add ?var to a push.
+# Delete this job once the first real pipeline is green.
+# -----------------------------------------------------------------------------
+harness:auth-check:
+  stage: gate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
+    - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
+  script:
+    - |
+      if [ -z "${AWS_CREDS_TARGET_ROLE:-}" ]; then
+        echo "FAIL: AWS_CREDS_TARGET_ROLE is unset — the variable is not reaching this job." >&2
+        echo "      (Is it Protected while the branch is not? Is the branch tag/name matched?)" >&2
+        exit 1
+      fi
+      echo "AWS_CREDS_TARGET_ROLE = ${AWS_CREDS_TARGET_ROLE}"
+      echo "AWS_REGION            = ${AWS_REGION:-us-east-1}"
+      echo "--- aws sts get-caller-identity ---"
+      aws sts get-caller-identity
+      echo "OK: Credential Vendor vended usable credentials."
+  allow_failure: true   # advisory — a red auth-check must not block anything
+
+# -----------------------------------------------------------------------------
 # Entry 1 — harness:impact   (automatic on every merge request)
 # Gate -> run changed fixtures -> diff vs golden -> judge vs MR intent -> comment.
 # -----------------------------------------------------------------------------
