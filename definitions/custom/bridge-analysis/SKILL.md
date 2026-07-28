@@ -8,6 +8,23 @@ version: 0.1.0
 
 Portfolio Agentic Readiness — Modernization Bridge Analysis
 
+## Running
+
+This is a custom TD — invoke it by name with `atx custom def exec`. It cross-references the **portfolio ARA and portfolio MOD reports**, so both must already exist (run a full analysis first).
+
+```bash
+atx custom def exec -n bridge-analysis -p . -g file://bridge-config.yaml -x -t
+```
+
+```yaml
+# bridge-config.yaml
+additionalPlanContext: |
+  portfolio_ara_report_path: "agentic-readiness-analysis/my-platform-portfolio-ara-report.md"       # REQUIRED
+  portfolio_mod_report_path: "modernization-readiness-analysis/my-platform-portfolio-mod-report.md"  # REQUIRED
+  portfolio_name: "my-platform"                                                                       # REQUIRED
+  portfolio_bao_report_path: "bpmn-opportunity-analysis/my-platform-portfolio-bao-report.md"          # optional — adds Section 6
+```
+
 ## Objective
 
 Cross-reference the portfolio-level Agentic Readiness Analysis (ARA) report and the portfolio-level Modernization Readiness Analysis (MOD) report to produce a unified bridge report that maps shared findings, quantifies the agentic readiness impact of modernization work, identifies foundational gaps that block ARA remediation, and deduplicates overlapping remediation items — enabling coordinated planning across both analyses.

@@ -49,12 +49,16 @@ The AWS-managed definitions that run **inside** `atx ct` — you never invoke th
 
 ### `definitions/custom/` — the custom TDs
 
-Custom TDs run via `atx custom def exec` (not `atx ct analysis run`) because they consume report/model artifacts as input and produce planning or opportunity outputs rather than per-repo findings. You invoke each by name.
+Custom TDs run via `atx custom def exec` (not `atx ct analysis run`) because they consume report/model artifacts as input and produce planning or opportunity outputs rather than per-repo findings. You invoke each by name. Each TD's own `SKILL.md` has a **`## Running`** section with its exact invocation and `additionalPlanContext` fields — the table below is the pointer; the SKILL.md is the detail.
 
-- **`eba-execution-plan-generator`** generates a dependency-aware modernization roadmap from the **output of ARA and/or MODA analyses** (details below).
-- **`bpmn-opportunity-analysis`** (BAO) analyzes BPMN 2.0 process models to identify agentic-AI opportunities. It consumes the JSON produced by the deterministic preprocessor in [`tools/bpmn-analyzer/`](tools/bpmn-analyzer/) (`run_analysis.py`) and adds an opportunity-classification layer (category + autonomy).
-- **`portfolio-bpmn-opportunity-analysis`** aggregates per-repo BAO reports into a portfolio-level opportunity view.
-- **`bridge-analysis`** cross-references the portfolio ARA and MOD reports into a unified bridge report — mapping shared remediation, quantifying how many ARA BLOCKERs are resolved as a modernization dividend, and deduplicating overlapping work. Runs only when both portfolio reports exist.
+| TD | What it does | Required input | How to run |
+|---|---|---|---|
+| [`eba-execution-plan-generator`](definitions/custom/eba-execution-plan-generator/SKILL.md) | Dependency-aware modernization roadmap from ARA and/or MODA output | ≥1 portfolio report + human planning context (team size, timeline) | `atx custom def exec -n eba-execution-plan-generator -p . -g file://atx-config-exec-plan.yaml -x -t` (details below) |
+| [`bpmn-opportunity-analysis`](definitions/custom/bpmn-opportunity-analysis/SKILL.md) | BAO — classifies BPMN 2.0 process steps as agentic-AI opportunities (category + autonomy) | JSON from `tools/bpmn-analyzer/run_analysis.py` (`analysis_report_path`) | Run the analyzer first, then `atx custom def exec -n bpmn-opportunity-analysis -p . -g file://bao-config.yaml -x -t` |
+| [`portfolio-bpmn-opportunity-analysis`](definitions/custom/portfolio-bpmn-opportunity-analysis/SKILL.md) | Aggregates per-repo BAO reports into a portfolio opportunity view | Auto-discovers per-repo BAO reports (no config required) | `atx custom def exec -n portfolio-bpmn-opportunity-analysis -p . -x -t` |
+| [`bridge-analysis`](definitions/custom/bridge-analysis/SKILL.md) | Cross-references portfolio ARA + MOD — shared remediation, modernization dividend, dedup | Portfolio ARA report + portfolio MOD report paths + `portfolio_name` | `atx custom def exec -n bridge-analysis -p . -g file://bridge-config.yaml -x -t` |
+
+The EBA TD is the richest — it needs human planning inputs the agent can't infer from code (team size, timeline, budget), documented in full below. The other three take only file-path pointers (or auto-discover their inputs).
 
 **Input requirements — at least ONE portfolio report must exist** (ARA-only, MODA-only, or both; when both exist the plan covers both dimensions with cross-dependency detection):
 
