@@ -64,8 +64,9 @@ default:
     paths:
       - .cache/pip
   before_script:
-    # The slim image ships without curl/git — install the minimum the harness needs.
-    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl git ca-certificates
+    # The slim image ships without curl/git/unzip — install what the harness needs.
+    # unzip is REQUIRED: the atx CLI installer unpacks a zip and hard-fails without it.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl git unzip ca-certificates
     # AWS CLI (to sanity-check the vended identity) + atx CLI (drives the managed TDs).
     - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
     - curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash
@@ -73,14 +74,15 @@ default:
     # Region falls back to us-east-1 if the AWS_REGION CI variable is unset.
     - export AWS_REGION="${AWS_REGION:-us-east-1}"
     # --- AWS Credential Vendor -------------------------------------------------
-    # No token exchange here. When AWS_CREDS_TARGET_ROLE is set, the shared runner
-    # has ALREADY vended temporary creds into AWS_ACCESS_KEY_ID / _SECRET_ACCESS_KEY /
-    # _SESSION_TOKEN before this script runs. We just confirm the identity so a
-    # missing/empty role fails loudly with a useful message instead of deep in atx.
+    # No token exchange here. When AWS_CREDS_TARGET_ROLE + AWS_DEFAULT_REGION are set,
+    # the shared runner's pre-clone script has ALREADY vended temporary creds into the
+    # default AWS profile (~/.aws/credentials — NOT env vars) before this script runs.
+    # We just confirm the identity so a missing/rejected role fails loudly with a
+    # useful message instead of deep inside atx.
     - |
       if [ -z "${AWS_CREDS_TARGET_ROLE:-}" ]; then
         echo "WARN: AWS_CREDS_TARGET_ROLE is unset — no AWS creds were vended." >&2
-        echo "      Set it under Settings → CI/CD → Variables (see harness/README.md)." >&2
+        echo "      Set it in .gitlab-ci.yml variables: (see harness/README.md)." >&2
       else
         aws sts get-caller-identity >/dev/null 2>&1 \
           && echo "AWS Credential Vendor: creds vended for role ${AWS_CREDS_TARGET_ROLE}" \
