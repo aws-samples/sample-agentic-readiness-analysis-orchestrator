@@ -99,11 +99,38 @@ harness:auth-check:
         echo "      (Is it Protected while the branch is not? Is the branch tag/name matched?)" >&2
         exit 1
       fi
-      echo "AWS_CREDS_TARGET_ROLE = ${AWS_CREDS_TARGET_ROLE}"
-      echo "AWS_REGION            = ${AWS_REGION:-us-east-1}"
+      # Print only the LENGTH of the role var — masked/hidden vars print as [MASKED],
+      # so length confirms it resolved to a real (non-empty) ARN inside the job.
+      echo "AWS_CREDS_TARGET_ROLE length = ${#AWS_CREDS_TARGET_ROLE} chars"
+      echo "AWS_REGION                   = ${AWS_REGION:-us-east-1}"
+      # Did the runner's Credential Vendor actually inject creds *before* this script?
+      # If these are empty, the VEND never happened (usually: the var is masked/hidden,
+      # or this isn't the shared fleet). If they're set but get-caller-identity fails,
+      # the vend ran but the target role's trust policy rejected the AssumeRole.
+      echo "--- vended credential env (presence only, never the secret) ---"
+      echo "AWS_ACCESS_KEY_ID set?     $([ -n "${AWS_ACCESS_KEY_ID:-}" ] && echo yes || echo NO)"
+      echo "AWS_SESSION_TOKEN set?     $([ -n "${AWS_SESSION_TOKEN:-}" ] && echo yes || echo NO)"
+      echo "AWS_ROLE_ARN set?          $([ -n "${AWS_ROLE_ARN:-}" ] && echo yes || echo NO)"
       echo "--- aws sts get-caller-identity ---"
-      aws sts get-caller-identity
-      echo "OK: Credential Vendor vended usable credentials."
+      if aws sts get-caller-identity; then
+        echo "OK: Credential Vendor vended usable credentials."
+      else
+        echo "" >&2
+        echo "DIAGNOSIS:" >&2
+        if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+          echo "  No creds were injected -> the VEND did not run. Most likely the" >&2
+          echo "  AWS_CREDS_TARGET_ROLE variable is Masked/Hidden. Re-create it as a" >&2
+          echo "  PLAIN (unmasked, unhidden, unprotected) variable — an ARN is not a" >&2
+          echo "  secret and every working example sets it in plaintext." >&2
+        else
+          echo "  Creds WERE injected but STS rejected them -> the target role's trust" >&2
+          echo "  policy did not allow the vendor's AssumeRole. Confirm the trust policy" >&2
+          echo "  on ${AWS_CREDS_TARGET_ROLE} has principal" >&2
+          echo "  arn:aws:iam::979517299116:role/gitlab-runners-prod and conditions" >&2
+          echo "  GitLab:Project=agentic-readiness-assessment, GitLab:Group=agentic-readiness-assessment." >&2
+        fi
+        exit 1
+      fi
   allow_failure: true   # advisory — a red auth-check must not block anything
 
 # -----------------------------------------------------------------------------
