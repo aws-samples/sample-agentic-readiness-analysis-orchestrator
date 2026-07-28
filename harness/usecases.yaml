@@ -1,0 +1,244 @@
+# Change-Impact Harness — use-case matrix
+#
+# Each fixture is a real repo the managed TDs are exercised against. `axes` drive the
+# coverage heatmap (coverage-heatmap.py); `expectations` are the baseline the judge
+# scores the observed delta against (diff-reports.py + judge.py). See harness/DESIGN.md §4.
+#
+# Axis vocab (keep these closed so the heatmap can flag gaps):
+#   language:     vb6 | coldfusion | python | java | cobol | cpp | nodejs | ruby | vbnet | php
+#   era:          legacy | modern
+#   has_iac:      true | false
+#   has_api:      none | rest | soap | graphql | rpc
+#   architecture: monolith | service | desktop | batch | script | serverless
+#   auth_present: true | false | partial
+#   persistence:  none | sql | nosql | file | mainframe-dataset
+#
+# expectations are per applicable TD. ARA applies to every fixture; MOD applies to every
+# fixture. Tiers/pathways/scores use the exact vocab emitted by the reports (DESIGN.md §2-3).
+# These are INTENT baselines for the judge, not asserted equalities — the differ reports the
+# real delta and the judge weighs it against these + the contributor's stated intent.
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Axis definitions — the closed vocab the heatmap checks coverage against.
+# Adding a value here without a fixture that uses it => the heatmap flags a gap.
+# ---------------------------------------------------------------------------
+axes:
+  language:     [vb6, coldfusion, python, java, cobol, cpp, nodejs, ruby, vbnet, php]
+  era:          [legacy, modern]
+  has_iac:      [true, false]
+  has_api:      [none, rest, soap, graphql, rpc]
+  architecture: [monolith, service, desktop, batch, script, serverless]
+  auth_present: [true, false, partial]
+  persistence:  [none, sql, nosql, file, mainframe-dataset]
+
+# ---------------------------------------------------------------------------
+# Fixtures — the actual repos analysis runs against.
+# ---------------------------------------------------------------------------
+fixtures:
+  - id: legacy-crm-desktop
+    path: sample-legacy-portfolio/legacy-crm-desktop
+    axes: { language: vb6, era: legacy, has_iac: false, has_api: none,
+            architecture: desktop, auth_present: false, persistence: file }
+    notes: >-
+      VB6 thick-client with MS Access backend. Hardcoded DB password, string-concat SQL,
+      On Error Resume Next. Hard to containerize — not a server app.
+    expectations:
+      ara:
+        tier: Not Agent-Integrable        # desktop, no machine interface
+        must_have_categories: [AUTH, API, DISC]
+      mod:
+        tier: Not Ready
+        must_have_categories: [APP, SEC]
+        pathways_triggered: [move-to-cloud-native]
+        overall_score_band: Not Ready
+
+  - id: legacy-document-portal
+    path: sample-legacy-portfolio/legacy-document-portal
+    axes: { language: coldfusion, era: legacy, has_iac: false, has_api: none,
+            architecture: monolith, auth_present: true, persistence: sql }
+    notes: >-
+      ColdFusion 8 intranet. Session auth present but SQL injection + documented path
+      traversal in download.cfm.
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [AUTH, DATA, DISC]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, SEC]
+        pathways_triggered: [move-to-cloud-native, move-to-open-source]
+        overall_score_band: Needs Work
+
+  - id: legacy-helpdesk-tickets
+    path: sample-legacy-portfolio/legacy-helpdesk-tickets
+    axes: { language: python, era: legacy, has_iac: false, has_api: rest,
+            architecture: monolith, auth_present: true, persistence: sql }
+    notes: >-
+      Django 1.4 / Python 2.7 (EOL). Raw SQL string-formatting, DEBUG=True in prod,
+      committed SECRET_KEY + plaintext DB password.
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [AUTH, API, OBS]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, SEC, OPS]
+        pathways_triggered: [move-to-cloud-native, move-to-open-source]
+        overall_score_band: Needs Work
+
+  - id: legacy-loan-calculator
+    path: sample-legacy-portfolio/legacy-loan-calculator
+    axes: { language: java, era: legacy, has_iac: false, has_api: rest,
+            architecture: service, auth_present: partial, persistence: sql }
+    notes: >-
+      Struts 1.3 (EOL framework), Java 5. Container-managed auth (getRemoteUser),
+      hardcoded Oracle creds, string-built INSERT.
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [AUTH, STATE, API]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, SEC]
+        pathways_triggered: [move-to-open-source, move-to-cloud-native]
+        overall_score_band: Needs Work
+
+  - id: legacy-partner-soap
+    path: sample-legacy-portfolio/legacy-partner-soap
+    axes: { language: java, era: legacy, has_iac: false, has_api: soap,
+            architecture: service, auth_present: false, persistence: sql }
+    notes: >-
+      JAX-WS SOAP, WSDL drifts from impl. XXE, SQL injection from parsed XML, raw
+      exceptions returned, no real authN (partnerId only).
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [AUTH, API, DATA]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, SEC, DATA]
+        pathways_triggered: [move-to-cloud-native, move-to-open-source]
+        overall_score_band: Needs Work
+
+  - id: legacy-payroll-system
+    path: sample-legacy-portfolio/legacy-payroll-system
+    axes: { language: cobol, era: legacy, has_iac: false, has_api: none,
+            architecture: batch, auth_present: false, persistence: mainframe-dataset }
+    notes: >-
+      COBOL + JCL on z/OS, CA-7 scheduled. Hardcoded FTP creds, plaintext transfer,
+      handles SSN/bank data. Hardest modernization target.
+    expectations:
+      ara:
+        tier: Not Agent-Integrable        # batch mainframe, no machine interface
+        must_have_categories: [API, DISC, OBS]
+      mod:
+        tier: Not Ready
+        must_have_categories: [APP, INF, SEC]
+        pathways_triggered: [move-to-cloud-native]
+        overall_score_band: Not Ready
+
+  - id: legacy-pricing-cgi
+    path: sample-legacy-portfolio/legacy-pricing-cgi
+    axes: { language: cpp, era: legacy, has_iac: true, has_api: rest,
+            architecture: script, auth_present: false, persistence: file }
+    notes: >-
+      C++ CGI with k8s + Dockerfile wrapper (only C++ + IaC fixture). Buffer overflow
+      via strcpy, reflected XSS, requires GCC 3.4.
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [AUTH, API, OBS]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, SEC, INF]
+        pathways_triggered: [move-to-containers, move-to-cloud-native]
+        overall_score_band: Needs Work
+
+  - id: legacy-shipping-api
+    path: sample-legacy-portfolio/legacy-shipping-api
+    axes: { language: nodejs, era: legacy, has_iac: true, has_api: rest,
+            architecture: service, auth_present: true, persistence: nosql }
+    notes: >-
+      Node 0.10 / Express 3 (EOL) with k8s + Dockerfile. Static API key, Mongo w/ no
+      auth, NoSQL injection. Also the Dependabot fixture.
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [AUTH, API, DATA]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, SEC, INF]
+        pathways_triggered: [move-to-containers, move-to-managed-databases]
+        overall_score_band: Needs Work
+
+  - id: legacy-storefront-rails
+    path: sample-legacy-portfolio/legacy-storefront-rails
+    axes: { language: ruby, era: legacy, has_iac: false, has_api: rest,
+            architecture: monolith, auth_present: partial, persistence: sql }
+    notes: >-
+      Rails 2.3 / Ruby 1.8.7 (EOL). SQL injection, mass-assignment, PCI concern (card
+      data from checked-in config), auth missing on some actions.
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [AUTH, DATA, STATE]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, SEC]
+        pathways_triggered: [move-to-open-source, move-to-cloud-native]
+        overall_score_band: Needs Work
+
+  - id: legacy-timesheet-webforms
+    path: sample-legacy-portfolio/legacy-timesheet-webforms
+    axes: { language: vbnet, era: legacy, has_iac: false, has_api: none,
+            architecture: monolith, auth_present: true, persistence: sql }
+    notes: >-
+      ASP.NET WebForms 2.0 / VB.NET. Plaintext connection string, debug=true in prod,
+      Forms auth without SSL, string-concat SQL.
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [AUTH, API, DISC]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, SEC]
+        pathways_triggered: [move-to-cloud-native, move-to-open-source]
+        overall_score_band: Needs Work
+
+  - id: monolith-php
+    path: examples/fixtures/monolith
+    axes: { language: php, era: legacy, has_iac: true, has_api: rest,
+            architecture: monolith, auth_present: true, persistence: sql }
+    notes: >-
+      Single 3,192-line index.php, ~20 /api routes via preg_match. Real bcrypt auth but
+      seeded default creds. docker-compose + CloudFormation App Runner. Prime
+      decompose-the-monolith candidate. No README.
+    expectations:
+      ara:
+        tier: Remediation Required
+        must_have_categories: [API, STATE, DISC]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [APP, INF, OPS]
+        pathways_triggered: [move-to-cloud-native, move-to-modern-devops]
+        overall_score_band: Needs Work
+
+# ---------------------------------------------------------------------------
+# Portfolio-level expectations — programs (D4) are PORTFOLIO-only, on BOTH ARA and MOD.
+# Pathways/scores at portfolio level are MOD-only. See DESIGN.md §3.
+# The portfolio is the union of all fixtures above.
+# ---------------------------------------------------------------------------
+portfolio_expectations:
+  ara:
+    # D4: ARA portfolio recommended_actions[] (acronym/type/status)
+    programs_expected: [AI DLC, AXE, EBA]
+  mod:
+    # D3: portfolio pathways[].portfolio_status == Triggered
+    pathways_triggered: [move-to-cloud-native, move-to-open-source, move-to-containers,
+                         move-to-managed-databases, move-to-modern-devops]
+    # D4: MOD portfolio recommended_actions[] + pathways[].recommended_aws_programs
+    programs_expected: [EBA, MAP, OLA]
+    # D5: portfolio_overall_score band
+    portfolio_score_band: Needs Work

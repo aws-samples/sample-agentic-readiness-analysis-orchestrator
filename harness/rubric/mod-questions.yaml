@@ -1,0 +1,262 @@
+# =============================================================================
+# MOD Question Bank  —  PROPOSAL MIRROR (not the authoritative rubric)
+# =============================================================================
+#
+# WHAT THIS IS
+#   A git-visible, machine-parseable mirror of the Modernization Readiness
+#   Analysis (MOD) rubric questions, so that proposing a new question or
+#   re-scoring an existing one is a reviewable Merge Request the change-impact
+#   harness runs against. See harness/rubric/README.md and harness/DESIGN.md
+#   (§2, §3, §8.1).
+#
+# WHAT THIS IS NOT
+#   The source of truth. The live MOD rubric — the full question set, 0–4
+#   scoring model, category weights, score bands, and the 7 modernization
+#   pathways — is maintained in the AWS Transform managed service and versioned
+#   independently. This file is a PROPOSAL MIRROR only. Editing it does NOT
+#   change production behavior; a maintainer manually syncs an approved MR into
+#   the service.
+#
+# HOW TO ADD A NEW QUESTION
+#   1. Find the category block below (APP, DATA, INF, OPS, SEC).
+#   2. Append an entry using the NEXT free Q number for that category
+#      (e.g. if INF-Q11 is the highest here, add INF-Q12). Do not renumber or
+#      delete existing entries — an `id` maps directly to emitted findings and
+#      evaluations, so changing it breaks the harness diff.
+#   3. Keep the schema identical to the entries below.
+#   4. Open a Merge Request with the `rubric-change` template and state your
+#      intent (what / why / expected D1–D5 impact).
+#
+# SCHEMA (per question entry)
+#   id                : "<CATEGORY>-Q<n>"  e.g. INF-Q11   (matches report question_id)
+#   category_id       : one of APP|DATA|INF|OPS|SEC
+#   title             : short human-readable name of what the question checks
+#   intent            : what the question evaluates / what maturity it measures
+#   scoring_guidance  : how the observed state maps to the 0–4 numeric score and
+#                       its score_rating band. Bands (per DESIGN.md §3, D5):
+#                         0.00–1.49  -> Not Ready
+#                         1.50–2.49  -> Needs Work
+#                         2.50–3.49  -> Partial
+#                         3.50–4.00  -> Mature
+#                       Each entry lists anchor rows:
+#                         score        : integer 0–4 anchor
+#                         score_rating : Not Ready | Needs Work | Partial | Mature
+#                         means        : plain-language state at that anchor
+#
+# NOTE: MOD readiness is measured BOTH categorically (tier / D2, severity-count
+# driven) AND numerically (0–4 score / D5). The harness flags D5 drift only on
+# a score_rating BAND crossing, not on raw numeric wobble.
+#
+# schema_version: 1
+# analysis: modernization-readiness-analysis
+# categories: [APP, DATA, INF, OPS, SEC]
+# =============================================================================
+
+questions:
+
+  # ---- APP — Application Architecture -----------------------------------------
+  - id: APP-Q1
+    category_id: APP
+    title: Programming Languages & Runtime Currency
+    intent: >-
+      Application runtimes and language versions are supported and current (no
+      end-of-life runtimes) so the workload can be modernized safely.
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: EOL runtime/language with no upgrade path in progress.
+      - score: 2
+        score_rating: Needs Work
+        means: Supported-but-dated runtime (e.g. EOL-soon), no upgrade plan.
+      - score: 3
+        score_rating: Partial
+        means: Current runtime, minor version drift or inconsistent pinning.
+      - score: 4
+        score_rating: Mature
+        means: Current, consistently pinned, actively maintained runtimes.
+
+  - id: APP-Q5
+    category_id: APP
+    title: API Versioning Strategy
+    intent: >-
+      Services expose an explicit API versioning strategy so interfaces can
+      evolve without breaking consumers during modernization.
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: No versioning; breaking changes shipped in place.
+      - score: 2
+        score_rating: Needs Work
+        means: Ad hoc/implicit versioning, undocumented.
+      - score: 3
+        score_rating: Partial
+        means: Versioning present on most surfaces, applied inconsistently.
+      - score: 4
+        score_rating: Mature
+        means: Consistent, documented versioning with deprecation policy.
+
+  # ---- DATA — Data Platform ---------------------------------------------------
+  - id: DATA-Q2
+    category_id: DATA
+    title: Data Access Layer
+    intent: >-
+      Data access is abstracted through a repository/DAO layer rather than
+      scattered inline queries, easing migration to managed data services.
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: Raw queries scattered across handlers, no abstraction.
+      - score: 2
+        score_rating: Needs Work
+        means: Partial abstraction; data access mixed into business logic.
+      - score: 3
+        score_rating: Partial
+        means: Repository/DAO pattern in most modules, some leakage.
+      - score: 4
+        score_rating: Mature
+        means: Clean, consistent data access layer isolating persistence.
+
+  - id: DATA-Q4
+    category_id: DATA
+    title: Managed Database Fit
+    intent: >-
+      Data stores are (or can be) mapped to AWS managed database services,
+      reducing self-managed operational burden. Signals the Move to Managed
+      Databases pathway (D3).
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: Self-managed/EOL engine, heavy proprietary features, no plan.
+      - score: 2
+        score_rating: Needs Work
+        means: Self-managed engine with migration blockers (licensing, procs).
+      - score: 3
+        score_rating: Partial
+        means: Managed-service-compatible engine, some refactoring needed.
+      - score: 4
+        score_rating: Mature
+        means: Already on a managed service or trivially portable to one.
+
+  # ---- INF — Infrastructure & DevOps ------------------------------------------
+  - id: INF-Q8
+    category_id: INF
+    title: Backup and Recovery
+    intent: >-
+      Data stores have backups and a tested recovery path; infrastructure is
+      not disposable-by-default (e.g. no destructive removal policies on stateful
+      resources).
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: No backups; stateful resources set to destroy on teardown.
+      - score: 2
+        score_rating: Needs Work
+        means: Backups exist but untested / no defined RPO/RTO.
+      - score: 3
+        score_rating: Partial
+        means: Automated backups with partial recovery testing.
+      - score: 4
+        score_rating: Mature
+        means: Automated backups, defined RPO/RTO, regularly tested restores.
+
+  - id: INF-Q11
+    category_id: INF
+    title: CI/CD Automation
+    intent: >-
+      A deployment pipeline automates build, test, and release so modernization
+      changes ship repeatably rather than by manual deploy.
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: No pipeline; manual/direct deploys only.
+      - score: 2
+        score_rating: Needs Work
+        means: Partial automation (build only), manual release steps remain.
+      - score: 3
+        score_rating: Partial
+        means: Pipeline builds/tests/deploys, gaps in gating or environments.
+      - score: 4
+        score_rating: Mature
+        means: Full CI/CD with automated gates across environments.
+
+  # ---- OPS — Operations & Observability ---------------------------------------
+  - id: OPS-Q1
+    category_id: OPS
+    title: Distributed Tracing
+    intent: >-
+      Services are instrumented for distributed tracing so requests can be
+      followed across components in the modernized architecture.
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: No tracing instrumentation at all.
+      - score: 2
+        score_rating: Needs Work
+        means: Ad hoc logging only; no correlation across services.
+      - score: 3
+        score_rating: Partial
+        means: Tracing on some services, not consistently propagated.
+      - score: 4
+        score_rating: Mature
+        means: End-to-end tracing with consistent context propagation.
+
+  - id: OPS-Q9
+    category_id: OPS
+    title: Resource Tagging
+    intent: >-
+      Cloud resources carry a consistent tagging scheme enabling cost,
+      ownership, and environment tracking through modernization.
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: No tags on any resources.
+      - score: 2
+        score_rating: Needs Work
+        means: Sparse/inconsistent tags, no enforced scheme.
+      - score: 3
+        score_rating: Partial
+        means: Tagging scheme defined, applied to most resources.
+      - score: 4
+        score_rating: Mature
+        means: Enforced tagging (policy/guardrail) across all resources.
+
+  # ---- SEC — Security Baseline ------------------------------------------------
+  - id: SEC-Q2
+    category_id: SEC
+    title: Encryption at Rest
+    intent: >-
+      Data at rest is encrypted, ideally with customer-managed keys (CMK) rather
+      than only AWS-owned defaults.
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: No encryption at rest on sensitive stores.
+      - score: 2
+        score_rating: Needs Work
+        means: Default/AWS-owned keys only, no CMK, no key policy.
+      - score: 3
+        score_rating: Partial
+        means: CMK on some stores, inconsistent coverage.
+      - score: 4
+        score_rating: Mature
+        means: CMK with rotation and scoped key policies across stores.
+
+  - id: SEC-Q3
+    category_id: SEC
+    title: API Authentication
+    intent: >-
+      Service endpoints require authentication rather than being open, forming
+      the security baseline the modernized workload builds on.
+    scoring_guidance:
+      - score: 1
+        score_rating: Not Ready
+        means: Endpoints completely open / no authentication.
+      - score: 2
+        score_rating: Needs Work
+        means: Partial auth; some endpoints unprotected or shared secrets.
+      - score: 3
+        score_rating: Partial
+        means: Auth on most endpoints, gaps in coverage or token hygiene.
+      - score: 4
+        score_rating: Mature
+        means: Consistent auth (IdP-backed) across all endpoints.

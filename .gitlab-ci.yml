@@ -1,0 +1,130 @@
+# =============================================================================
+# Change-Impact Harness — GitLab CI   (see harness/DESIGN.md §5, §6, §8)
+#
+# AUTOMATION IS GITLAB-ONLY. GitHub carries NO Actions/workflows — it stays open
+# for issues/PRs and mirrors content both ways, but runs nothing. All analysis
+# runs here on gitlab.aws.dev.
+#
+# AWS AUTH = AWS CREDENTIAL VENDOR (no long-lived credentials, no OIDC).
+# OIDC is NOT available on the internal gitlab.aws.dev: AWS IAM cannot reach the
+# private instance to verify an id_token, so the OIDC provider trust model does
+# not work here. Instead the SHARED RUNNER FLEET vends temporary credentials via
+# the AWS Credential Vendor: the runners' jump role
+#   arn:aws:iam::979517299116:role/gitlab-runners-prod
+# assumes a role that YOU create in your Isengard account, gated by GitLab
+# principal tags (aws:PrincipalTag/GitLab:Project + :Group). You set ONE CI
+# variable, AWS_CREDS_TARGET_ROLE = that role's ARN, and the shared runner
+# injects AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN into the
+# job automatically — there is NOTHING to exchange in before_script. See
+# harness/README.md for the one-time role setup.
+#
+# Requirements (both already in place):
+#   - SHARED runners enabled (the Credential Vendor only works on shared runners).
+#   - The role is created PER-PROJECT (it cannot be reused across projects).
+#
+# Both jobs are ADVISORY (allow_failure: true) — the harness NEVER blocks a merge.
+# The only LLM call is the judge step, spent at the very end (§6). The run|skip
+# decision is a deterministic git-diff gate (should-run.sh), not a model (§5).
+# =============================================================================
+
+stages:
+  - gate      # deterministic run|skip decision (harness/should-run.sh) — no LLM
+  - analyze   # atx re-run of changed fixtures + D1–D5 delta -> impact.json
+  - judge     # LLM-as-judge advisory verdict -> verdict.json, posted to the MR
+# NOTE: harness:impact and harness:full each run the gate -> analyze -> judge
+# phases INLINE as a single advisory job. The stage list above names those
+# phases and reserves structure for a future per-stage split.
+
+variables:
+  # Where run-fixtures.sh writes the freshly-generated "after" reports (§7).
+  AFTER_DIR: "harness/after"
+  # pip cache location (see cache: block below).
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+default:
+  image: python:3.13-slim
+  # The Credential Vendor only works on the shared fleet — pin to it explicitly.
+  tags:
+    - shared
+  cache:
+    key: "harness-pip-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/pip
+  before_script:
+    # The slim image ships without curl/git — install the minimum the harness needs.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl git ca-certificates
+    # AWS CLI (to sanity-check the vended identity) + atx CLI (drives the managed TDs).
+    - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
+    - curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+    # Region falls back to us-east-1 if the AWS_REGION CI variable is unset.
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    # --- AWS Credential Vendor -------------------------------------------------
+    # No token exchange here. When AWS_CREDS_TARGET_ROLE is set, the shared runner
+    # has ALREADY vended temporary creds into AWS_ACCESS_KEY_ID / _SECRET_ACCESS_KEY /
+    # _SESSION_TOKEN before this script runs. We just confirm the identity so a
+    # missing/empty role fails loudly with a useful message instead of deep in atx.
+    - |
+      if [ -z "${AWS_CREDS_TARGET_ROLE:-}" ]; then
+        echo "WARN: AWS_CREDS_TARGET_ROLE is unset — no AWS creds were vended." >&2
+        echo "      Set it under Settings → CI/CD → Variables (see harness/README.md)." >&2
+      else
+        aws sts get-caller-identity >/dev/null 2>&1 \
+          && echo "AWS Credential Vendor: creds vended for role ${AWS_CREDS_TARGET_ROLE}" \
+          || echo "WARN: creds not usable yet (check the role trust policy / project tags)." >&2
+      fi
+    # Python deps for the differ / judge (guarded — file is optional).
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+
+# -----------------------------------------------------------------------------
+# Entry 1 — harness:impact   (automatic on every merge request)
+# Gate -> run changed fixtures -> diff vs golden -> judge vs MR intent -> comment.
+# -----------------------------------------------------------------------------
+harness:impact:
+  stage: analyze
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  script:
+    # GATE (deterministic, no LLM): exit cleanly as a SKIP when the whole diff is
+    # denylisted (docs / license / images / DESIGN.md). Permissive by default (§5).
+    - harness/should-run.sh || { echo "skip: no analysis-affecting change"; exit 0; }
+    # ANALYZE: re-run only the changed TD's fixtures, then compute the D1–D5 delta.
+    - harness/run-fixtures.sh --changed-only
+    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
+    # JUDGE: LLM scores the delta against the contributor's INTENT (MR description, §6/§8.1).
+    - harness/judge.py --impact impact.json --intent "$CI_MERGE_REQUEST_DESCRIPTION" > verdict.json
+    # REPORT: advisory MR comment (never blocks).
+    - harness/post-mr-comment.sh verdict.json
+  artifacts:
+    when: always
+    paths:
+      - impact.json
+      - verdict.json
+    expire_in: 30 days
+  allow_failure: true   # advisory — never blocks the MR
+
+# -----------------------------------------------------------------------------
+# Entry 2 — harness:full   (manual "Run pipeline" button; web-triggered only)
+# For a rubric edited directly in the AWS Transform service, or a forced re-run.
+# -----------------------------------------------------------------------------
+harness:full:
+  stage: analyze
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  variables:
+    CHANGED_TD: ""       # operator names the TD edited in-service (optional)
+    RUN_SCOPE: "all"     # "all", or a narrower scope understood by run-fixtures.sh
+    RUN_INTENT: ""       # free-text intent handed to the judge (§6)
+  script:
+    - harness/run-fixtures.sh --scope "$RUN_SCOPE" --td "$CHANGED_TD"
+    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
+    - harness/judge.py --impact impact.json --intent "$RUN_INTENT" > verdict.json
+    # No MR exists on a web pipeline -> fall back to printing the verdict.
+    - harness/post-mr-comment.sh verdict.json || cat verdict.json
+  artifacts:
+    when: always
+    paths:
+      - impact.json
+      - verdict.json
+    expire_in: 30 days
+  allow_failure: true   # advisory — never blocks

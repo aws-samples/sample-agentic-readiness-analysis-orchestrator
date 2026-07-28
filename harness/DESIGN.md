@@ -12,7 +12,11 @@
 | D5 drift check | Band-crossing only — flag on `score_rating` band change, not raw numeric wobble |
 | Before/after mechanism | **Committed golden reports** — baseline JSON per fixture; MR re-runs only the changed TD's fixtures and diffs vs golden |
 | Judge gate | **Advisory MR comment only** — never blocks the pipeline |
-| CI platform | **GitLab first**, then sync to GitHub (harness dev flow is GitLab → GitHub) |
+| Judge intent input | Judge scores delta **against contributor intent** captured in a GitLab MR-template field (§8.1) |
+| Trigger model | **Default-run, deterministic gate** (`should-run.sh`, NOT an LLM). Runs for *any* change that could plausibly move output; **skips only an explicit denylist** (LICENSE, README, docs, images, DESIGN.md). Permissive by design — never boxes contributors in. Manual `harness:full` for in-service rubric edits. LLM is spent only at the *end* (judge). |
+| Rubric contributions | Rubric (questions/scores) is authored in a **git-visible contribution surface** (`harness/rubric/`) so adding/editing a question is a reviewable MR the harness runs against. The AWS Transform service stays authoritative; **the maintainer syncs approved rubric MRs into the service** (that step is intentionally human-owned). Contributions are open (mainly internal). |
+| CI platform | **Runs on GitLab ONLY** — AWS access via the **AWS Credential Vendor** on the shared runner fleet (OIDC does NOT work on internal `gitlab.aws.dev` — IAM can't reach it to verify tokens). One CI var `AWS_CREDS_TARGET_ROLE` points at a per-project IAM role in the Isengard account; the runner auto-vends temp creds. GitHub stays **open for contributions** (issue/PR templates kept) but runs **no** automation; content mirrors both ways. |
+| Templates | GitHub `.github/ISSUE_TEMPLATE/` kept (contributions welcome there); GitLab adds `.gitlab/` templates that also capture judge **intent** (§8.1). |
 
 ## 1. Purpose
 
@@ -152,14 +156,31 @@ portfolio_expectations:
 
 The **coverage heatmap** is generated from the `axes` across all fixtures: it renders a matrix (language × has_iac × has_api × architecture) and flags gaps — e.g. "no Go fixture," "only 2 IaC fixtures," "no serverless architecture." This is what lets a reviewer see *which use-case types a TD is (and isn't) exercised against.*
 
-## 5. Change → impact flow (per PR/MR)
+## 5. Change → impact flow (per MR)
+
+> **Reality check (verified 2026-07-28):** the managed rubric — questions (`AUTH-Q9`…), categories, MOD score bands, and the 7 pathways — is **not** stored in this repo. Every managed `SKILL.md` states the full definition is *"maintained in the AWS Transform service and versioned independently."* A `git diff` of `definitions/managed/**` therefore **cannot** see a rubric edit. The only git-visible thing that changes managed *output* is `references/program-library.md` (the D4 program triggers), which exists as **two identical copies** that must stay in sync. This drives the trigger model below.
+
+**Trigger model — default-run, deterministic gate (GitLab only for now):** the gate is a **deterministic path check, not an LLM**, and it is **permissive by default.** `should-run.sh` runs `git diff --name-only` against the base and **runs unless *every* changed path matches a skip denylist** (`LICENSE`, `*.md` docs, `CONTRIBUTING`, `SECURITY`, images, `harness/DESIGN.md`, `.github/**`). Anything that could plausibly move output — a rubric edit under `harness/rubric/`, a `program-library.md` change, a new/edited fixture, a config change — runs. This deliberately does **not** box contributors in: if in doubt, it runs. No model decides whether to run (that would be slow, non-deterministic, costly per MR); the LLM is spent **only at the judge step (§6)**. Entry points:
+1. **MR pipeline (GitLab)** — default-run gate as above. The primary contribution path.
+2. **Manual `harness:full` run** — a maintainer edited the rubric *in the AWS Transform service* and wants a full re-baseline, or wants to force a full run. Fired from the GitLab "Run pipeline" button with a TD variable.
+3. **Skip** — only when the whole diff is denylisted (docs/license/etc). Job stops cleanly, no `atx`, no cost.
 
 ```
-1. Detect changed managed TD(s)      git diff --name-only vs base → which definitions/managed/* changed
-2. Select applicable fixtures        from usecases.yaml (all, or a --changed-only subset)
-3. Produce after-reports             run the changed TD via atx on selected fixtures  [see §7]
-4. Diff vs baseline                   compute per-dimension delta (D1–D5)
-5. Judge                              LLM-as-judge consumes {delta, expectations, changed-TD diff}
+should-run.sh   ── deterministic git-diff; run UNLESS all-denylisted ──▶  run │ skip   (no LLM)
+      │ run
+      ▼
+run-fixtures ─▶ diff-reports.py ─▶ judge.py                            ◀── the ONLY LLM, at the end
+```
+
+> **Rubric-as-contribution:** the rubric (questions/scores) is authored under `harness/rubric/` so "add `AUTH-Q9`" or "re-score `INF-Q11`" is a normal reviewable MR the harness runs against. The AWS Transform service remains authoritative; the **maintainer syncs an approved rubric MR into the service by hand** — that human step is intentional (the repo is the *proposal + test* surface, the service is the *deploy* surface). All of this runs on **GitLab only** for now; GitHub stays open for issues/PRs but triggers nothing.
+
+```
+0. Gate                              should-run.sh → run | skip (see trigger model above)
+1. Resolve scope                     git diff (program-library / harness) OR manual TD var → which TD(s) + fixtures
+2. Select applicable fixtures        from usecases.yaml (--changed-only subset, or --all on manual full run)
+3. Produce after-reports             run the affected TD via atx on selected fixtures  [see §7]
+4. Diff vs baseline                   compute per-dimension delta (D1–D5) → impact.json
+5. Judge                              LLM-as-judge consumes {delta, expectations, diff, INTENT from MR}  [§6]
 6. Report                            post advisory verdict as MR comment (never blocks — §6)
 ```
 
@@ -198,16 +219,18 @@ The **coverage heatmap** is generated from the `axes` across all fixtures: it re
 
 ## 6. LLM-as-judge agent
 
-- **Input:** `impact.json` (the delta) + the fixture `expectations` + the raw diff of the changed TD(s).
-- **Prompt shape:** "You are reviewing a change to a managed Transformation Definition. Here is the change, the use cases it was run against, the expected behavior, and the observed delta. Score the change and decide LGTM / needs-work." Rubric explicitly instructs it to cite `question_id`s / `pathway.id`s.
+- **Input:** `impact.json` (the delta) + the fixture `expectations` + the raw diff of the changed file(s) **+ the contributor's INTENT** (see below).
+- **Intent is a first-class input.** The judge scores the delta *against what the contributor said they were trying to do* — not just against raw baseline. A change that adds 40 findings is "good" if intent was "tighten AUTH scoring" and "bad" if intent was "fix a typo in a recommendation string." Intent is captured in a **structured MR-template field** (§8.1) and passed to the judge as `intent: {what, why, expected_impact}`.
+- **Prompt shape:** "You are reviewing a change to the analysis rubric/config. The contributor's stated intent is: {intent}. Here is the change, the use cases it was run against, the expected behavior, and the observed delta. Does the delta match the stated intent? Score it and decide LGTM / needs-work." Rubric explicitly instructs it to cite `question_id`s / `pathway.id`s and to flag **intent mismatch** (delta doesn't match what they said they'd do) and **no-op** (they intended a change but delta is empty).
 - **Output (structured):**
   ```jsonc
   {
     "score": 0-100,
     "verdict": "LGTM" | "needs-work",
+    "intent_match": "aligned" | "partial" | "mismatch",   // delta vs stated intent
     "rationale": "…cites AUTH-Q5, move-to-cloud-native, etc.…",
     "concerns": [ { "dimension": "D3", "detail": "…" } ],
-    "no_op_warning": false
+    "no_op_warning": false        // true if intent claimed a change but delta is empty
   }
   ```
 - **Gate policy:** **advisory only.** The judge posts the verdict + score as an MR comment; it **never fails the pipeline.** Humans decide. (Chosen this session; can tighten to regression-blocking later.)
@@ -218,30 +241,63 @@ The **coverage heatmap** is generated from the `axes` across all fixtures: it re
 **Chosen:** committed golden reports.
 
 - `harness/golden/` holds one baseline report JSON per fixture, per applicable TD (the "before").
-- On MR: `detect-changed-tds.sh` finds which managed TD(s) changed → `run-fixtures.sh --changed-only` re-runs **only that TD's** applicable fixtures via `atx` (the "after") → `diff-reports.py` diffs after vs golden → `impact.json`.
-- Most fixtures are **not** re-analyzed each MR — only the ones the change touches — so MR pipelines stay fast.
+- On a triggered run: `should-run.sh` decides run/skip and resolves scope → `run-fixtures.sh` re-runs the affected fixtures via `atx` (the "after") → `diff-reports.py` diffs after vs golden → `impact.json`.
+- Most fixtures are **not** re-analyzed each run — only the ones in scope — so pipelines stay fast.
 - Golden files double as **regression fixtures**: an unexpected diff vs golden is itself a signal.
-- **Refreshing goldens:** intentional rubric changes will legitimately move the baseline. Refresh via a dedicated "baseline update" MR (`run-fixtures.sh --all --write-golden`), reviewed on its own so baseline churn never hides inside a feature MR.
+- **Refreshing goldens:** intentional rubric changes will legitimately move the baseline. Refresh via a dedicated "baseline update" MR (`run-fixtures.sh --all --write-golden`), reviewed on its own so baseline churn never hides inside a feature MR. This is also the mechanism for capturing an in-service rubric edit: run full, review the delta, commit the new golden.
 
 Rejected: *live baseline + rerun* (every MR runs full ATX twice — too slow, double AWS cost); *judge-only, no rerun* (no true delta — weakest signal).
 
-## 8. GitLab CI wiring (`.gitlab-ci.yml`, MR pipeline)
+## 8. GitLab CI wiring (`.gitlab-ci.yml`) — **GitLab-only automation**
 
-Per Track B, automation lands on GitLab first (GitLab = mirror of GitHub, both at the same `main`). Sketch:
+**Automation lives ONLY on GitLab.** GitHub stays open for contributions — the `.github/` dir keeps issue/PR templates so people can file and propose there — but carries **no** GitHub Actions/workflows. All analysis runs on GitLab, where the AWS credentials live. This keeps a single source of CI truth and avoids double AWS cost. Content mirrors between the two remotes; automation does not.
+
+Two entry points, both advisory (`allow_failure: true` — never blocks):
 
 ```yaml
+stages: [harness]
+
+# Entry 1: MR pipeline — auto-gates on git-visible, output-affecting changes
 harness:impact:
-  rules: [ { if: '$CI_PIPELINE_SOURCE == "merge_request_event"' } ]
+  stage: harness
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   script:
-    - harness/detect-changed-tds.sh                    # → changed_tds
-    - harness/run-fixtures.sh --changed-only           # atx runs → after-reports  [§7]
-    - harness/diff-reports.py --baseline golden/ ...    # → impact.json
-    - harness/judge.py impact.json > verdict.json      # LLM-as-judge
+    - harness/should-run.sh || exit 0                  # gate: skip docs-only / unrelated MRs (§5)
+    - harness/run-fixtures.sh --changed-only           # atx → after-reports  [§7]
+    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
+    - harness/judge.py --impact impact.json --intent "$CI_MERGE_REQUEST_DESCRIPTION" > verdict.json
     - harness/post-mr-comment.sh verdict.json          # advisory comment, non-blocking
-  allow_failure: true                                   # advisory: never blocks the MR
+  allow_failure: true
+
+# Entry 2: manual/web run — the rubric-changed-in-service path (§5, trigger model)
+harness:full:
+  stage: harness
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'               # "Run pipeline" button
+  variables:
+    CHANGED_TD: ""                                      # operator names the TD edited in-service
+    RUN_SCOPE: "all"
+  script:
+    - harness/run-fixtures.sh --scope "$RUN_SCOPE" --td "$CHANGED_TD"
+    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
+    - harness/judge.py --impact impact.json --intent "$RUN_INTENT" > verdict.json
+    - harness/post-mr-comment.sh verdict.json || cat verdict.json
+  allow_failure: true
 ```
 
-Requires AWS creds available to the GitLab runner for the `atx` step (scoped to analysis only).
+Requires AWS access on the GitLab runner for the `atx` step (analysis-scoped; personal Isengard account for now). Auth is the **AWS Credential Vendor** on the shared fleet — set the single CI var `AWS_CREDS_TARGET_ROLE` to a per-project IAM role whose trust policy allows `arn:aws:iam::979517299116:role/gitlab-runners-prod` to assume it, gated by `aws:PrincipalTag/GitLab:{Project,Group}`. The runner injects temp `AWS_ACCESS_KEY_ID/_SECRET_ACCESS_KEY/_SESSION_TOKEN` automatically — no OIDC, no static keys. See `harness/README.md` for the role setup.
+
+### 8.1 MR template — captures INTENT for the judge (§6)
+
+`.gitlab/merge_request_templates/rubric-change.md` gives contributors a structured intent block the judge consumes:
+```markdown
+## What are you changing?  <!-- e.g. "Tightened AUTH-Q5 scoring; added AUTH-Q9 for token rotation" -->
+## Why?                    <!-- the problem this fixes -->
+## Expected impact         <!-- which dimension(s) should move: more AUTH findings? tier drop on X? -->
+## Was the rubric edited in the AWS Transform service?  [ ] yes → fire `harness:full` manually  [ ] no
+```
+The judge reads these as `intent.{what, why, expected_impact}` and scores the observed delta **against** them.
 
 ## 9. Proposed directory layout
 
@@ -249,26 +305,43 @@ Requires AWS creds available to the GitLab runner for the `atx` step (scoped to 
 harness/
 ├── DESIGN.md                 # this file
 ├── usecases.yaml             # fixture matrix + axes + expectations (§4)
-├── golden/                   # committed baseline reports per fixture (§7, if approved)
-├── detect-changed-tds.sh     # which managed TDs a diff touched
+├── golden/                   # committed baseline reports per fixture (§7)
+├── should-run.sh             # gate: run|skip + resolve scope (git-visible or manual) (§5)
 ├── run-fixtures.sh           # drive atx over selected fixtures
 ├── diff-reports.py           # D1–D5 delta → impact.json (§5)
-├── judge.py                  # LLM-as-judge → verdict.json (§6)
+├── judge.py                  # LLM-as-judge (+ intent) → verdict.json (§6)
 ├── coverage-heatmap.py       # render the use-case heatmap from usecases.yaml axes
-└── post-mr-comment.sh        # advisory MR comment
+├── post-mr-comment.sh        # advisory MR comment
+└── tests/                    # differ unit tests against synthetic before/after pairs
+
+.gitlab/
+├── merge_request_templates/rubric-change.md   # intent capture (§8.1)
+└── issue_templates/rubric-change.md           # mirror for issues
+.gitlab-ci.yml                # GitLab-only automation (§8)
 ```
 
-## 10. Build order (next sessions)
+## 10. Build order
 
 1. **`usecases.yaml`** for all 10 fixtures + `coverage-heatmap.py` (proves the matrix; no ATX needed).
-2. **`diff-reports.py`** (D1–D5) against the existing `examples/reports/` as test input (no ATX needed).
-3. **`golden/`** baselines + `run-fixtures.sh` + `detect-changed-tds.sh` (§7).
-4. **`judge.py`** + prompt, validated on hand-made before/after pairs.
-5. **`.gitlab-ci.yml`** MR job, advisory.
+2. **`diff-reports.py`** (D1–D5) + `tests/` against the existing `examples/reports/` as test input (no ATX needed).
+3. **`golden/`** baselines + `run-fixtures.sh` + `should-run.sh` (§7).
+4. **`judge.py`** + prompt (intent-aware), validated on hand-made before/after pairs.
+5. **`.gitlab-ci.yml`** + `.gitlab/` templates (§8), advisory.
 
-All work is committed and pushed to **GitLab `main` first**; GitHub `origin/main` is fast-forwarded to match once a batch is stable.
+All work lands on **GitLab `feat/harness`**; GitHub receives mirrored content once a batch is stable (no GitHub automation).
 
 ## 11. Non-goals / deferred
 - Scoring the custom TDs (out of scope this cycle).
 - Blocking gates (advisory-only for now).
 - Auto-refreshing golden baselines (manual "baseline update" MR).
+- GitHub Actions / any non-GitLab automation.
+
+## 12. Verified report field paths (differ contract)
+
+The differ (`diff-reports.py`) must handle these real-artifact quirks (deep scan of `examples/reports/full-analysis/`, 2026-07-28):
+- **Findings array key differs by scope:** portfolio findings add `repo_name`; **portfolio MOD drops `description`/`gap`/`recommendation`** (leaner than per-repo MOD); per-repo ARA nests `native_severity`/`safety_impact` under `ara_metadata`, while portfolio ARA promotes them to top level. Match on `(repo_name, question_id)`.
+- **Pathways:** per-repo uses `status`; portfolio uses `portfolio_status`. `triggering_questions[]` is top-level per-repo but nested under each `contributing_repos[]` element in portfolio.
+- **Distributions differ in shape:** ARA `readiness_distribution` = `{count, percentage}` objects; MOD `tier_distribution` and `score_band_distribution` = flat integers.
+- **D5 category field name differs:** per-repo MOD `categories[].numeric_score`; portfolio MOD `category_score_averages[].average`. Per-repo score band lives in `categories[].score_rating`; per-finding score in `mod_metadata.internal_score`/`score_label`.
+- `evidence` may be `null` or `{file, lines}`, and `lines` itself may be `null`.
+- **Filenames:** `<repo>-ara-report.json`, `<repo>-mod-report.json`, `<portfolio>-portfolio-ara-report.json`, `<portfolio>-portfolio-mod-report.json`. Portfolio also identifiable by top-level `assessment_type` + `repositories[]`; per-repo by `repo_name`.
