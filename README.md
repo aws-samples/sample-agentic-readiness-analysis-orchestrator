@@ -16,11 +16,16 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 │   │   │   └── references/program-library.md      # AWS Program & GTM Library (runtime-loaded)
 │   │   └── portfolio-modernization-readiness-analysis/
 │   │       └── references/program-library.md
-│   └── custom/
-│       └── eba-execution-plan-generator/   # EBA execution plan TD (atx custom def exec)
+│   └── custom/                     # custom TDs (atx custom def exec) — you invoke these by name
+│       ├── eba-execution-plan-generator/          # EBA execution plan TD
+│       ├── bpmn-opportunity-analysis/             # BAO: per-repo BPMN agentic opportunity analysis
+│       ├── portfolio-bpmn-opportunity-analysis/   # portfolio BAO aggregation
+│       └── bridge-analysis/                        # ARA↔MOD bridge (agentic-readiness dividend)
 ├── orchestrator/
 │   ├── SKILL.md                    # Claude/agent skill: full ARA/MODA/EBA workflow
 │   └── references/                 # getting-started, ct-workflow, execution-plan, troubleshooting
+├── tools/
+│   └── bpmn-analyzer/              # deterministic BPMN preprocessor (BAO input; Python)
 ├── scripts/
 │   └── publish-td.sh               # Publish a TD folder to the ATX registry
 ├── demo-scripts/                    # Full demo harness (setup, reset, live-discovery)
@@ -42,9 +47,14 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 
 The AWS-managed definitions that run **inside** `atx ct` — you never invoke them by name. `atx ct analysis run --type agentic-readiness` runs the per-repo ARA TD across every discovered repo, then the portfolio ARA TD aggregates the results (same pattern for `--type modernization-readiness`). The two portfolio TDs load `references/program-library.md` (the AWS Program & GTM Library) at runtime to produce engagement-program recommendations. See [`definitions/managed/README.md`](definitions/managed/README.md).
 
-### `definitions/custom/` — the Execution Plan TD
+### `definitions/custom/` — the custom TDs
 
-`eba-execution-plan-generator` generates a dependency-aware modernization roadmap from the **output of ARA and/or MODA analyses**. It runs via `atx custom def exec` (not `atx ct analysis run`) because it consumes the report artifacts as input and produces a phased roadmap rather than findings.
+Custom TDs run via `atx custom def exec` (not `atx ct analysis run`) because they consume report/model artifacts as input and produce planning or opportunity outputs rather than per-repo findings. You invoke each by name.
+
+- **`eba-execution-plan-generator`** generates a dependency-aware modernization roadmap from the **output of ARA and/or MODA analyses** (details below).
+- **`bpmn-opportunity-analysis`** (BAO) analyzes BPMN 2.0 process models to identify agentic-AI opportunities. It consumes the JSON produced by the deterministic preprocessor in [`tools/bpmn-analyzer/`](tools/bpmn-analyzer/) (`run_analysis.py`) and adds an opportunity-classification layer (category + autonomy).
+- **`portfolio-bpmn-opportunity-analysis`** aggregates per-repo BAO reports into a portfolio-level opportunity view.
+- **`bridge-analysis`** cross-references the portfolio ARA and MOD reports into a unified bridge report — mapping shared remediation, quantifying how many ARA BLOCKERs are resolved as a modernization dividend, and deduplicating overlapping work. Runs only when both portfolio reports exist.
 
 **Input requirements — at least ONE portfolio report must exist** (ARA-only, MODA-only, or both; when both exist the plan covers both dimensions with cross-dependency detection):
 

@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+    xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+    id="kyc_definitions"
+    targetNamespace="http://www.example.com/kyc"
+    exporter="BPMN Analyzer"
+    exporterVersion="1.0">
+
+  <bpmn2:process id="kyc_onboarding" name="KYC Customer Onboarding" isExecutable="true">
+
+    <!-- ── Start ──────────────────────────────────────────── -->
+    <bpmn2:startEvent id="start" name="New Customer Application">
+      <bpmn2:outgoing>flow_start</bpmn2:outgoing>
+    </bpmn2:startEvent>
+
+    <!-- ── Data Collection ────────────────────────────────── -->
+    <bpmn2:task id="collect_customer_data" name="Collect Customer Data">
+      <bpmn2:incoming>flow_start</bpmn2:incoming>
+      <bpmn2:outgoing>flow_collect</bpmn2:outgoing>
+    </bpmn2:task>
+
+    <bpmn2:serviceTask id="verify_identity" name="Verify Identity Documents">
+      <bpmn2:incoming>flow_collect</bpmn2:incoming>
+      <bpmn2:outgoing>flow_verify_id</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <!-- ── Identity Check Decision ────────────────────────── -->
+    <bpmn2:exclusiveGateway id="id_check_decision" name="Identity Verified?" gatewayDirection="Diverging">
+      <bpmn2:incoming>flow_verify_id</bpmn2:incoming>
+      <bpmn2:outgoing>flow_id_pass</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_id_fail</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <!-- ── Parallel Screening ─────────────────────────────── -->
+    <bpmn2:parallelGateway id="screening_fork" name="Start Parallel Screening" gatewayDirection="Diverging">
+      <bpmn2:incoming>flow_id_pass</bpmn2:incoming>
+      <bpmn2:outgoing>flow_to_sanctions</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_to_pep</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_to_adverse</bpmn2:outgoing>
+    </bpmn2:parallelGateway>
+
+    <bpmn2:serviceTask id="sanctions_screening" name="Sanctions List Screening">
+      <bpmn2:incoming>flow_to_sanctions</bpmn2:incoming>
+      <bpmn2:outgoing>flow_sanctions_done</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <bpmn2:serviceTask id="pep_screening" name="PEP Screening">
+      <bpmn2:incoming>flow_to_pep</bpmn2:incoming>
+      <bpmn2:outgoing>flow_pep_done</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <bpmn2:serviceTask id="adverse_media_check" name="Adverse Media Check">
+      <bpmn2:incoming>flow_to_adverse</bpmn2:incoming>
+      <bpmn2:outgoing>flow_adverse_done</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+
+    <bpmn2:parallelGateway id="screening_join" name="All Screening Complete" gatewayDirection="Converging">
+      <bpmn2:incoming>flow_sanctions_done</bpmn2:incoming>
+      <bpmn2:incoming>flow_pep_done</bpmn2:incoming>
+      <bpmn2:incoming>flow_adverse_done</bpmn2:incoming>
+      <bpmn2:outgoing>flow_screening_done</bpmn2:outgoing>
+    </bpmn2:parallelGateway>
+
+    <!-- ── Risk Assessment ────────────────────────────────── -->
+    <bpmn2:task id="calculate_risk_score" name="Calculate Customer Risk Score">
+      <bpmn2:incoming>flow_screening_done</bpmn2:incoming>
+      <bpmn2:outgoing>flow_risk_calc</bpmn2:outgoing>
+    </bpmn2:task>
+
+    <bpmn2:exclusiveGateway id="risk_decision" name="Risk Level?" gatewayDirection="Diverging">
+      <bpmn2:incoming>flow_risk_calc</bpmn2:incoming>
+      <bpmn2:outgoing>flow_low_risk</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_medium_risk</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_high_risk</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <!-- ── Low Risk Path ──────────────────────────────────── -->
+    <bpmn2:task id="auto_approve" name="Auto-Approve Customer">
+      <bpmn2:incoming>flow_low_risk</bpmn2:incoming>
+      <bpmn2:outgoing>flow_auto_approved</bpmn2:outgoing>
+    </bpmn2:task>
+
+    <!-- ── Medium Risk Path ───────────────────────────────── -->
+    <bpmn2:userTask id="enhanced_due_diligence" name="Enhanced Due Diligence Review">
+      <bpmn2:incoming>flow_medium_risk</bpmn2:incoming>
+      <bpmn2:outgoing>flow_edd_done</bpmn2:outgoing>
+    </bpmn2:userTask>
+
+    <bpmn2:exclusiveGateway id="edd_decision" name="EDD Approved?" gatewayDirection="Diverging">
+      <bpmn2:incoming>flow_edd_done</bpmn2:incoming>
+      <bpmn2:outgoing>flow_edd_pass</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_edd_reject</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <!-- ── High Risk Path ─────────────────────────────────── -->
+    <bpmn2:userTask id="compliance_review" name="Compliance Officer Review">
+      <bpmn2:incoming>flow_high_risk</bpmn2:incoming>
+      <bpmn2:outgoing>flow_compliance_done</bpmn2:outgoing>
+    </bpmn2:userTask>
+
+    <bpmn2:exclusiveGateway id="compliance_decision" name="Compliance Approved?" gatewayDirection="Diverging">
+      <bpmn2:incoming>flow_compliance_done</bpmn2:incoming>
+      <bpmn2:outgoing>flow_compliance_pass</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_compliance_reject</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <!-- ── Onboarding ─────────────────────────────────────── -->
+    <bpmn2:task id="create_account" name="Create Customer Account">
+      <bpmn2:incoming>flow_auto_approved</bpmn2:incoming>
+      <bpmn2:incoming>flow_edd_pass</bpmn2:incoming>
+      <bpmn2:incoming>flow_compliance_pass</bpmn2:incoming>
+      <bpmn2:outgoing>flow_account_created</bpmn2:outgoing>
+    </bpmn2:task>
+
+    <bpmn2:task id="send_welcome" name="Send Welcome Package">
+      <bpmn2:incoming>flow_account_created</bpmn2:incoming>
+      <bpmn2:outgoing>flow_welcome_sent</bpmn2:outgoing>
+    </bpmn2:task>
+
+    <!-- ── Rejection ──────────────────────────────────────── -->
+    <bpmn2:task id="send_rejection" name="Send Rejection Notice">
+      <bpmn2:incoming>flow_id_fail</bpmn2:incoming>
+      <bpmn2:incoming>flow_edd_reject</bpmn2:incoming>
+      <bpmn2:incoming>flow_compliance_reject</bpmn2:incoming>
+      <bpmn2:outgoing>flow_rejection_sent</bpmn2:outgoing>
+    </bpmn2:task>
+
+    <bpmn2:task id="file_sar" name="File Suspicious Activity Report">
+      <bpmn2:incoming>flow_compliance_reject</bpmn2:incoming>
+      <bpmn2:outgoing>flow_sar_filed</bpmn2:outgoing>
+    </bpmn2:task>
+
+    <!-- ── End Events ─────────────────────────────────────── -->
+    <bpmn2:endEvent id="end_onboarded" name="Customer Onboarded">
+      <bpmn2:incoming>flow_welcome_sent</bpmn2:incoming>
+    </bpmn2:endEvent>
+
+    <bpmn2:endEvent id="end_rejected" name="Application Rejected">
+      <bpmn2:incoming>flow_rejection_sent</bpmn2:incoming>
+    </bpmn2:endEvent>
+
+    <bpmn2:endEvent id="end_sar" name="SAR Filed">
+      <bpmn2:incoming>flow_sar_filed</bpmn2:incoming>
+    </bpmn2:endEvent>
+
+    <!-- ── Sequence Flows ─────────────────────────────────── -->
+    <bpmn2:sequenceFlow id="flow_start" sourceRef="start" targetRef="collect_customer_data"/>
+    <bpmn2:sequenceFlow id="flow_collect" sourceRef="collect_customer_data" targetRef="verify_identity"/>
+    <bpmn2:sequenceFlow id="flow_verify_id" sourceRef="verify_identity" targetRef="id_check_decision"/>
+
+    <bpmn2:sequenceFlow id="flow_id_pass" name="Verified" sourceRef="id_check_decision" targetRef="screening_fork">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${identityVerified == true}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_id_fail" name="Not Verified" sourceRef="id_check_decision" targetRef="send_rejection">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${identityVerified == false}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="flow_to_sanctions" sourceRef="screening_fork" targetRef="sanctions_screening"/>
+    <bpmn2:sequenceFlow id="flow_to_pep" sourceRef="screening_fork" targetRef="pep_screening"/>
+    <bpmn2:sequenceFlow id="flow_to_adverse" sourceRef="screening_fork" targetRef="adverse_media_check"/>
+
+    <bpmn2:sequenceFlow id="flow_sanctions_done" sourceRef="sanctions_screening" targetRef="screening_join"/>
+    <bpmn2:sequenceFlow id="flow_pep_done" sourceRef="pep_screening" targetRef="screening_join"/>
+    <bpmn2:sequenceFlow id="flow_adverse_done" sourceRef="adverse_media_check" targetRef="screening_join"/>
+
+    <bpmn2:sequenceFlow id="flow_screening_done" sourceRef="screening_join" targetRef="calculate_risk_score"/>
+    <bpmn2:sequenceFlow id="flow_risk_calc" sourceRef="calculate_risk_score" targetRef="risk_decision"/>
+
+    <bpmn2:sequenceFlow id="flow_low_risk" name="Low Risk" sourceRef="risk_decision" targetRef="auto_approve">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${riskLevel == 'LOW'}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_medium_risk" name="Medium Risk" sourceRef="risk_decision" targetRef="enhanced_due_diligence">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${riskLevel == 'MEDIUM'}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_high_risk" name="High Risk" sourceRef="risk_decision" targetRef="compliance_review">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${riskLevel == 'HIGH'}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="flow_auto_approved" sourceRef="auto_approve" targetRef="create_account"/>
+
+    <bpmn2:sequenceFlow id="flow_edd_done" sourceRef="enhanced_due_diligence" targetRef="edd_decision"/>
+    <bpmn2:sequenceFlow id="flow_edd_pass" name="Approved" sourceRef="edd_decision" targetRef="create_account">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${eddDecision == 'APPROVED'}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_edd_reject" name="Rejected" sourceRef="edd_decision" targetRef="send_rejection">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${eddDecision == 'REJECTED'}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="flow_compliance_done" sourceRef="compliance_review" targetRef="compliance_decision"/>
+    <bpmn2:sequenceFlow id="flow_compliance_pass" name="Approved" sourceRef="compliance_decision" targetRef="create_account">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${complianceDecision == 'APPROVED'}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_compliance_reject" name="Rejected + SAR" sourceRef="compliance_decision" targetRef="send_rejection">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression">${complianceDecision == 'REJECTED'}</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="flow_account_created" sourceRef="create_account" targetRef="send_welcome"/>
+    <bpmn2:sequenceFlow id="flow_welcome_sent" sourceRef="send_welcome" targetRef="end_onboarded"/>
+    <bpmn2:sequenceFlow id="flow_rejection_sent" sourceRef="send_rejection" targetRef="end_rejected"/>
+    <bpmn2:sequenceFlow id="flow_sar_filed" sourceRef="file_sar" targetRef="end_sar"/>
+
+  </bpmn2:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="kyc_onboarding">
+      <bpmndi:BPMNShape id="shape_start" bpmnElement="start">
+        <dc:Bounds x="80" y="282" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_collect" bpmnElement="collect_customer_data">
+        <dc:Bounds x="170" y="260" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_verify" bpmnElement="verify_identity">
+        <dc:Bounds x="320" y="260" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_id_check" bpmnElement="id_check_decision">
+        <dc:Bounds x="475" y="275" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_screening_fork" bpmnElement="screening_fork">
+        <dc:Bounds x="585" y="275" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_sanctions" bpmnElement="sanctions_screening">
+        <dc:Bounds x="700" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_pep" bpmnElement="pep_screening">
+        <dc:Bounds x="700" y="260" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_adverse" bpmnElement="adverse_media_check">
+        <dc:Bounds x="700" y="360" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_screening_join" bpmnElement="screening_join">
+        <dc:Bounds x="865" y="275" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_risk_calc" bpmnElement="calculate_risk_score">
+        <dc:Bounds x="970" y="260" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_risk_decision" bpmnElement="risk_decision">
+        <dc:Bounds x="1125" y="275" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_auto_approve" bpmnElement="auto_approve">
+        <dc:Bounds x="1240" y="140" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_edd" bpmnElement="enhanced_due_diligence">
+        <dc:Bounds x="1240" y="260" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_compliance" bpmnElement="compliance_review">
+        <dc:Bounds x="1240" y="400" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_edd_decision" bpmnElement="edd_decision">
+        <dc:Bounds x="1400" y="275" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_compliance_decision" bpmnElement="compliance_decision">
+        <dc:Bounds x="1400" y="415" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_create_account" bpmnElement="create_account">
+        <dc:Bounds x="1520" y="200" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_send_welcome" bpmnElement="send_welcome">
+        <dc:Bounds x="1670" y="200" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_send_rejection" bpmnElement="send_rejection">
+        <dc:Bounds x="1520" y="500" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_file_sar" bpmnElement="file_sar">
+        <dc:Bounds x="1520" y="620" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end_onboarded" bpmnElement="end_onboarded">
+        <dc:Bounds x="1822" y="222" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end_rejected" bpmnElement="end_rejected">
+        <dc:Bounds x="1682" y="522" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end_sar" bpmnElement="end_sar">
+        <dc:Bounds x="1682" y="642" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_flow_start" bpmnElement="flow_start">
+        <di:waypoint x="116" y="300"/>
+        <di:waypoint x="170" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_collect" bpmnElement="flow_collect">
+        <di:waypoint x="270" y="300"/>
+        <di:waypoint x="320" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_verify_id" bpmnElement="flow_verify_id">
+        <di:waypoint x="420" y="300"/>
+        <di:waypoint x="475" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_id_pass" bpmnElement="flow_id_pass">
+        <di:waypoint x="525" y="300"/>
+        <di:waypoint x="585" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_id_fail" bpmnElement="flow_id_fail">
+        <di:waypoint x="500" y="325"/>
+        <di:waypoint x="500" y="540"/>
+        <di:waypoint x="1520" y="540"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_to_sanctions" bpmnElement="flow_to_sanctions">
+        <di:waypoint x="610" y="275"/>
+        <di:waypoint x="610" y="200"/>
+        <di:waypoint x="700" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_to_pep" bpmnElement="flow_to_pep">
+        <di:waypoint x="635" y="300"/>
+        <di:waypoint x="700" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_to_adverse" bpmnElement="flow_to_adverse">
+        <di:waypoint x="610" y="325"/>
+        <di:waypoint x="610" y="400"/>
+        <di:waypoint x="700" y="400"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_sanctions_done" bpmnElement="flow_sanctions_done">
+        <di:waypoint x="800" y="200"/>
+        <di:waypoint x="890" y="200"/>
+        <di:waypoint x="890" y="275"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_pep_done" bpmnElement="flow_pep_done">
+        <di:waypoint x="800" y="300"/>
+        <di:waypoint x="865" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_adverse_done" bpmnElement="flow_adverse_done">
+        <di:waypoint x="800" y="400"/>
+        <di:waypoint x="890" y="400"/>
+        <di:waypoint x="890" y="325"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_screening_done" bpmnElement="flow_screening_done">
+        <di:waypoint x="915" y="300"/>
+        <di:waypoint x="970" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_risk_calc" bpmnElement="flow_risk_calc">
+        <di:waypoint x="1070" y="300"/>
+        <di:waypoint x="1125" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_low_risk" bpmnElement="flow_low_risk">
+        <di:waypoint x="1150" y="275"/>
+        <di:waypoint x="1150" y="180"/>
+        <di:waypoint x="1240" y="180"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_medium_risk" bpmnElement="flow_medium_risk">
+        <di:waypoint x="1175" y="300"/>
+        <di:waypoint x="1240" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_high_risk" bpmnElement="flow_high_risk">
+        <di:waypoint x="1150" y="325"/>
+        <di:waypoint x="1150" y="440"/>
+        <di:waypoint x="1240" y="440"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_auto_approved" bpmnElement="flow_auto_approved">
+        <di:waypoint x="1340" y="180"/>
+        <di:waypoint x="1570" y="180"/>
+        <di:waypoint x="1570" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_edd_done" bpmnElement="flow_edd_done">
+        <di:waypoint x="1340" y="300"/>
+        <di:waypoint x="1400" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_edd_pass" bpmnElement="flow_edd_pass">
+        <di:waypoint x="1425" y="275"/>
+        <di:waypoint x="1425" y="240"/>
+        <di:waypoint x="1520" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_edd_reject" bpmnElement="flow_edd_reject">
+        <di:waypoint x="1425" y="325"/>
+        <di:waypoint x="1425" y="540"/>
+        <di:waypoint x="1520" y="540"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_compliance_done" bpmnElement="flow_compliance_done">
+        <di:waypoint x="1340" y="440"/>
+        <di:waypoint x="1400" y="440"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_compliance_pass" bpmnElement="flow_compliance_pass">
+        <di:waypoint x="1425" y="415"/>
+        <di:waypoint x="1425" y="260"/>
+        <di:waypoint x="1520" y="260"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_compliance_reject" bpmnElement="flow_compliance_reject">
+        <di:waypoint x="1425" y="465"/>
+        <di:waypoint x="1425" y="540"/>
+        <di:waypoint x="1520" y="540"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_account_created" bpmnElement="flow_account_created">
+        <di:waypoint x="1620" y="240"/>
+        <di:waypoint x="1670" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_welcome_sent" bpmnElement="flow_welcome_sent">
+        <di:waypoint x="1770" y="240"/>
+        <di:waypoint x="1822" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_rejection_sent" bpmnElement="flow_rejection_sent">
+        <di:waypoint x="1620" y="540"/>
+        <di:waypoint x="1682" y="540"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_flow_sar_filed" bpmnElement="flow_sar_filed">
+        <di:waypoint x="1620" y="660"/>
+        <di:waypoint x="1682" y="660"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>

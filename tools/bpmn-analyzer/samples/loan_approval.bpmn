@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:bpsim="http://www.bpsim.org/schemas/1.0" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_6TWpoQdpED-nueYNBL00mw" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd http://www.bpsim.org/schemas/1.0 bpsim.xsd http://www.omg.org/spec/DD/20100524/DC DC.xsd http://www.omg.org/spec/DD/20100524/DI DI.xsd " exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
+  <bpmn2:itemDefinition id="_manual_review_SkippableInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_PriorityInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_CommentInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_DescriptionInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_CreatedByInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_TaskNameInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_GroupIdInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_ContentInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_NotStartedReassignInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_NotCompletedReassignInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_NotStartedNotifyInputXItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_manual_review_NotCompletedNotifyInputXItem" structureRef="Object"/>
+  <bpmn2:collaboration id="_D5DE3F99-5ED4-4316-80DC-56F5EA0CEAA5" name="Default Collaboration">
+    <bpmn2:participant id="_1DAC67FD-6FF1-470F-A3BC-FF2A693C6598" name="Pool Participant" processRef="loan_approval"/>
+  </bpmn2:collaboration>
+  <bpmn2:process id="loan_approval" drools:packageName="com.example" drools:version="1.0" drools:adHoc="false" name="loan_approval" isExecutable="true" processType="Public">
+    <bpmn2:sequenceFlow id="flow_start" sourceRef="start" targetRef="validate_application"/>
+    <bpmn2:sequenceFlow id="flow_validate" sourceRef="validate_application" targetRef="credit_check"/>
+    <bpmn2:sequenceFlow id="flow_credit" sourceRef="credit_check" targetRef="credit_decision"/>
+    <bpmn2:sequenceFlow id="flow_credit_pass" name="Score &gt;= 600" sourceRef="credit_decision" targetRef="calculate_risk">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Score >= 600]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[${creditScore >= 600}]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_risk" sourceRef="calculate_risk" targetRef="risk_decision"/>
+    <bpmn2:sequenceFlow id="flow_high_risk" name="Medium/High Risk" sourceRef="risk_decision" targetRef="manual_review">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Medium/High Risk]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[${riskLevel != 'LOW'}]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_review" sourceRef="manual_review" targetRef="underwriter_decision"/>
+    <bpmn2:sequenceFlow id="flow_low_risk" name="Low Risk" sourceRef="risk_decision" targetRef="auto_approve">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Low Risk]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[${riskLevel == 'LOW'}]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_uw_reject" name="Rejected" sourceRef="underwriter_decision" targetRef="send_rejection">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Rejected]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[${underwriterDecision == 'REJECTED'}]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_credit_fail" name="Score &lt; 600" sourceRef="credit_decision" targetRef="send_rejection">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Score < 600]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[${creditScore < 600}]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_auto_approve" sourceRef="auto_approve" targetRef="send_approval"/>
+    <bpmn2:sequenceFlow id="flow_uw_approve" name="Approved" sourceRef="underwriter_decision" targetRef="send_approval">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Approved]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[${underwriterDecision == 'APPROVED'}]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="flow_approval_end" sourceRef="send_approval" targetRef="end_approved"/>
+    <bpmn2:sequenceFlow id="flow_rejection_end" sourceRef="send_rejection" targetRef="end_rejected"/>
+    <bpmn2:startEvent id="start" name="Loan Application Received">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Loan Application Received]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:outgoing>flow_start</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:task id="validate_application" name="Validate Application Data">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Validate Application Data]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_start</bpmn2:incoming>
+      <bpmn2:outgoing>flow_validate</bpmn2:outgoing>
+    </bpmn2:task>
+    <bpmn2:task id="credit_check" name="Run Credit Check">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Run Credit Check]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_validate</bpmn2:incoming>
+      <bpmn2:outgoing>flow_credit</bpmn2:outgoing>
+    </bpmn2:task>
+    <bpmn2:exclusiveGateway id="credit_decision" name="Credit Score Acceptable?" gatewayDirection="Diverging">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Credit Score Acceptable?]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_credit</bpmn2:incoming>
+      <bpmn2:outgoing>flow_credit_fail</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_credit_pass</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:task id="calculate_risk" name="Calculate Risk Score">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Calculate Risk Score]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_credit_pass</bpmn2:incoming>
+      <bpmn2:outgoing>flow_risk</bpmn2:outgoing>
+    </bpmn2:task>
+    <bpmn2:exclusiveGateway id="risk_decision" name="Risk Level Assessment" gatewayDirection="Diverging">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Risk Level Assessment]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_risk</bpmn2:incoming>
+      <bpmn2:outgoing>flow_low_risk</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_high_risk</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:userTask id="manual_review" name="Manual Underwriter Review">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Manual Underwriter Review]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_high_risk</bpmn2:incoming>
+      <bpmn2:outgoing>flow_review</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="manual_review_TaskNameInputX" drools:dtype="Object" itemSubjectRef="_manual_review_TaskNameInputXItem" name="TaskName"/>
+        <bpmn2:dataInput id="manual_review_SkippableInputX" drools:dtype="Object" itemSubjectRef="_manual_review_SkippableInputXItem" name="Skippable"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>manual_review_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>manual_review_SkippableInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>manual_review_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Task]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression"><![CDATA[manual_review_TaskNameInputX]]></bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>manual_review_SkippableInputX</bpmn2:targetRef>
+        <bpmn2:assignment>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[false]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression"><![CDATA[manual_review_SkippableInputX]]></bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+    </bpmn2:userTask>
+    <bpmn2:exclusiveGateway id="underwriter_decision" name="Underwriter Approved?" gatewayDirection="Diverging">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Underwriter Approved?]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_review</bpmn2:incoming>
+      <bpmn2:outgoing>flow_uw_approve</bpmn2:outgoing>
+      <bpmn2:outgoing>flow_uw_reject</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:task id="auto_approve" name="Auto-Approve Loan">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Auto-Approve Loan]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_low_risk</bpmn2:incoming>
+      <bpmn2:outgoing>flow_auto_approve</bpmn2:outgoing>
+    </bpmn2:task>
+    <bpmn2:task id="send_rejection" name="Send Rejection Notice">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Send Rejection Notice]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_credit_fail</bpmn2:incoming>
+      <bpmn2:incoming>flow_uw_reject</bpmn2:incoming>
+      <bpmn2:outgoing>flow_rejection_end</bpmn2:outgoing>
+    </bpmn2:task>
+    <bpmn2:task id="send_approval" name="Send Approval Notice">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Send Approval Notice]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_uw_approve</bpmn2:incoming>
+      <bpmn2:incoming>flow_auto_approve</bpmn2:incoming>
+      <bpmn2:outgoing>flow_approval_end</bpmn2:outgoing>
+    </bpmn2:task>
+    <bpmn2:endEvent id="end_approved" name="Loan Approved">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Loan Approved]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_approval_end</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:endEvent id="end_rejected" name="Loan Rejected">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Loan Rejected]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>flow_rejection_end</bpmn2:incoming>
+    </bpmn2:endEvent>
+  </bpmn2:process>
+  <bpmndi:BPMNDiagram>
+    <bpmndi:BPMNPlane bpmnElement="loan_approval">
+      <bpmndi:BPMNShape id="shape_end_rejected" bpmnElement="end_rejected">
+        <dc:Bounds height="56" width="56" x="1420" y="460"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_end_approved" bpmnElement="end_approved">
+        <dc:Bounds height="56" width="56" x="1420" y="170"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_send_approval" bpmnElement="send_approval">
+        <dc:Bounds height="80" width="100" x="1260" y="148"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_send_rejection" bpmnElement="send_rejection">
+        <dc:Bounds height="80" width="100" x="1260" y="438"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_auto_approve" bpmnElement="auto_approve">
+        <dc:Bounds height="80" width="100" x="980" y="148"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_underwriter_decision" bpmnElement="underwriter_decision">
+        <dc:Bounds height="56" width="56" x="1140" y="353"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_manual_review" bpmnElement="manual_review">
+        <dc:Bounds height="80" width="100" x="980" y="338"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_risk_decision" bpmnElement="risk_decision">
+        <dc:Bounds height="56" width="56" x="860" y="253"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_calculate_risk" bpmnElement="calculate_risk">
+        <dc:Bounds height="80" width="100" x="700" y="238"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_credit_decision" bpmnElement="credit_decision">
+        <dc:Bounds height="56" width="56" x="580" y="253"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_credit_check" bpmnElement="credit_check">
+        <dc:Bounds height="80" width="100" x="420" y="216"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_validate_application" bpmnElement="validate_application">
+        <dc:Bounds height="80" width="100" x="260" y="238"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_start" bpmnElement="start">
+        <dc:Bounds height="56" width="56" x="160" y="260"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_shape_send_rejection_to_shape_end_rejected" bpmnElement="flow_rejection_end">
+        <di:waypoint x="1360" y="478"/>
+        <di:waypoint x="1420" y="478"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_send_approval_to_shape_end_approved" bpmnElement="flow_approval_end">
+        <di:waypoint x="1360" y="188"/>
+        <di:waypoint x="1420" y="188"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_underwriter_decision_to_shape_send_approval" bpmnElement="flow_uw_approve">
+        <di:waypoint x="1165" y="353"/>
+        <di:waypoint x="1165" y="188"/>
+        <di:waypoint x="1260" y="188"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_auto_approve_to_shape_send_approval" bpmnElement="flow_auto_approve">
+        <di:waypoint x="1080" y="188"/>
+        <di:waypoint x="1260" y="188"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_credit_decision_to_shape_send_rejection" bpmnElement="flow_credit_fail">
+        <di:waypoint x="605" y="303"/>
+        <di:waypoint x="605" y="478"/>
+        <di:waypoint x="1260" y="478"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_underwriter_decision_to_shape_send_rejection" bpmnElement="flow_uw_reject">
+        <di:waypoint x="1165" y="403"/>
+        <di:waypoint x="1165" y="478"/>
+        <di:waypoint x="1260" y="478"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_risk_decision_to_shape_auto_approve" bpmnElement="flow_low_risk">
+        <di:waypoint x="885" y="253"/>
+        <di:waypoint x="885" y="188"/>
+        <di:waypoint x="980" y="188"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_manual_review_to_shape_underwriter_decision" bpmnElement="flow_review">
+        <di:waypoint x="1080" y="378"/>
+        <di:waypoint x="1140" y="378"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_risk_decision_to_shape_manual_review" bpmnElement="flow_high_risk">
+        <di:waypoint x="885" y="303"/>
+        <di:waypoint x="885" y="378"/>
+        <di:waypoint x="980" y="378"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_calculate_risk_to_shape_risk_decision" bpmnElement="flow_risk">
+        <di:waypoint x="800" y="278"/>
+        <di:waypoint x="860" y="278"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_credit_decision_to_shape_calculate_risk" bpmnElement="flow_credit_pass">
+        <di:waypoint x="630" y="278"/>
+        <di:waypoint x="700" y="278"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_credit_check_to_shape_credit_decision" bpmnElement="flow_credit">
+        <di:waypoint x="520" y="256"/>
+        <di:waypoint x="580" y="278"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_validate_application_to_shape_credit_check" bpmnElement="flow_validate">
+        <di:waypoint x="360" y="278"/>
+        <di:waypoint x="420" y="256"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape_start_to_shape_validate_application" bpmnElement="flow_start">
+        <di:waypoint x="196" y="278"/>
+        <di:waypoint x="260" y="278"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmn2:relationship type="BPSimData">
+    <bpmn2:extensionElements>
+      <bpsim:BPSimData>
+        <bpsim:Scenario id="default" name="Simulationscenario">
+          <bpsim:ScenarioParameters/>
+          <bpsim:ElementParameters elementRef="send_approval">
+            <bpsim:TimeParameters>
+              <bpsim:ProcessingTime>
+                <bpsim:NormalDistribution mean="0" standardDeviation="0"/>
+              </bpsim:ProcessingTime>
+            </bpsim:TimeParameters>
+            <bpsim:ResourceParameters>
+              <bpsim:Availability>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Availability>
+              <bpsim:Quantity>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Quantity>
+            </bpsim:ResourceParameters>
+            <bpsim:CostParameters>
+              <bpsim:UnitCost>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:UnitCost>
+            </bpsim:CostParameters>
+          </bpsim:ElementParameters>
+          <bpsim:ElementParameters elementRef="send_rejection">
+            <bpsim:TimeParameters>
+              <bpsim:ProcessingTime>
+                <bpsim:NormalDistribution mean="0" standardDeviation="0"/>
+              </bpsim:ProcessingTime>
+            </bpsim:TimeParameters>
+            <bpsim:ResourceParameters>
+              <bpsim:Availability>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Availability>
+              <bpsim:Quantity>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Quantity>
+            </bpsim:ResourceParameters>
+            <bpsim:CostParameters>
+              <bpsim:UnitCost>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:UnitCost>
+            </bpsim:CostParameters>
+          </bpsim:ElementParameters>
+          <bpsim:ElementParameters elementRef="auto_approve">
+            <bpsim:TimeParameters>
+              <bpsim:ProcessingTime>
+                <bpsim:NormalDistribution mean="0" standardDeviation="0"/>
+              </bpsim:ProcessingTime>
+            </bpsim:TimeParameters>
+            <bpsim:ResourceParameters>
+              <bpsim:Availability>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Availability>
+              <bpsim:Quantity>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Quantity>
+            </bpsim:ResourceParameters>
+            <bpsim:CostParameters>
+              <bpsim:UnitCost>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:UnitCost>
+            </bpsim:CostParameters>
+          </bpsim:ElementParameters>
+          <bpsim:ElementParameters elementRef="manual_review">
+            <bpsim:TimeParameters>
+              <bpsim:ProcessingTime>
+                <bpsim:NormalDistribution mean="0" standardDeviation="0"/>
+              </bpsim:ProcessingTime>
+            </bpsim:TimeParameters>
+            <bpsim:ResourceParameters>
+              <bpsim:Availability>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Availability>
+              <bpsim:Quantity>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Quantity>
+            </bpsim:ResourceParameters>
+            <bpsim:CostParameters>
+              <bpsim:UnitCost>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:UnitCost>
+            </bpsim:CostParameters>
+          </bpsim:ElementParameters>
+          <bpsim:ElementParameters elementRef="calculate_risk">
+            <bpsim:TimeParameters>
+              <bpsim:ProcessingTime>
+                <bpsim:NormalDistribution mean="0" standardDeviation="0"/>
+              </bpsim:ProcessingTime>
+            </bpsim:TimeParameters>
+            <bpsim:ResourceParameters>
+              <bpsim:Availability>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Availability>
+              <bpsim:Quantity>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Quantity>
+            </bpsim:ResourceParameters>
+            <bpsim:CostParameters>
+              <bpsim:UnitCost>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:UnitCost>
+            </bpsim:CostParameters>
+          </bpsim:ElementParameters>
+          <bpsim:ElementParameters elementRef="credit_check">
+            <bpsim:TimeParameters>
+              <bpsim:ProcessingTime>
+                <bpsim:NormalDistribution mean="0" standardDeviation="0"/>
+              </bpsim:ProcessingTime>
+            </bpsim:TimeParameters>
+            <bpsim:ResourceParameters>
+              <bpsim:Availability>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Availability>
+              <bpsim:Quantity>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Quantity>
+            </bpsim:ResourceParameters>
+            <bpsim:CostParameters>
+              <bpsim:UnitCost>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:UnitCost>
+            </bpsim:CostParameters>
+          </bpsim:ElementParameters>
+          <bpsim:ElementParameters elementRef="validate_application">
+            <bpsim:TimeParameters>
+              <bpsim:ProcessingTime>
+                <bpsim:NormalDistribution mean="0" standardDeviation="0"/>
+              </bpsim:ProcessingTime>
+            </bpsim:TimeParameters>
+            <bpsim:ResourceParameters>
+              <bpsim:Availability>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Availability>
+              <bpsim:Quantity>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:Quantity>
+            </bpsim:ResourceParameters>
+            <bpsim:CostParameters>
+              <bpsim:UnitCost>
+                <bpsim:FloatingParameter value="0"/>
+              </bpsim:UnitCost>
+            </bpsim:CostParameters>
+          </bpsim:ElementParameters>
+          <bpsim:ElementParameters elementRef="start">
+            <bpsim:TimeParameters>
+              <bpsim:ProcessingTime>
+                <bpsim:NormalDistribution mean="0" standardDeviation="0"/>
+              </bpsim:ProcessingTime>
+            </bpsim:TimeParameters>
+          </bpsim:ElementParameters>
+        </bpsim:Scenario>
+      </bpsim:BPSimData>
+    </bpmn2:extensionElements>
+    <bpmn2:source>_6TWpoQdpED-nueYNBL00mw</bpmn2:source>
+    <bpmn2:target>_6TWpoQdpED-nueYNBL00mw</bpmn2:target>
+  </bpmn2:relationship>
+</bpmn2:definitions>
