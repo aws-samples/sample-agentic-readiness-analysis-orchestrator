@@ -29,7 +29,10 @@ USECASES="${HARNESS_DIR}/usecases.yaml"
 SCOPE="changed"          # changed | all
 TD_FILTER=""             # "", ara, mod, or a managed TD folder name
 WRITE_GOLDEN="false"
-AFTER_DIR="${HARNESS_DIR}/_after"
+# Honor an inherited AFTER_DIR (the CI job sets it) so the reports we write here land
+# exactly where diff-reports.py reads them. Fall back to a local default otherwise.
+# The --after-dir flag still overrides both.
+AFTER_DIR="${AFTER_DIR:-${HARNESS_DIR}/_after}"
 SOURCE_NAME="harness-portfolio"
 DRY_RUN="false"
 
