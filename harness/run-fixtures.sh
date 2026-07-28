@@ -125,18 +125,50 @@ run() {
 }
 
 # --- build a local ct source pointing at the selected fixtures -----------------------
-# ct's local provider takes a parent dir of repos. Our fixtures live in two trees
-# (sample-legacy-portfolio/ and examples/fixtures/), so we stage symlinks into one dir.
+# ct's local provider takes a parent dir of repos, but its discovery scan only counts a
+# subdirectory as a repo when it is an actual GIT repository (a bare symlink to a plain
+# fixture dir yields "Found 0 repos"). Our fixtures live in two trees
+# (sample-legacy-portfolio/ and examples/fixtures/) and are NOT independent git repos, so
+# we COPY each into the staging dir and `git init` + commit it, giving discovery a real repo.
 STAGE="${AFTER_DIR}/_src"
+rm -rf "${STAGE}"
 mkdir -p "${STAGE}" "${AFTER_DIR}"
 for fx in "${selected[@]}"; do
   name="$(basename "${fx}")"
   target="${REPO_ROOT}/${fx}"
   [[ -e "${target}" ]] || { echo "warn: fixture path missing: ${fx}" >&2; continue; }
-  ln -sfn "${target}" "${STAGE}/${name}"
+  dest="${STAGE}/${name}"
+  # Copy the fixture contents (deref: -L) into a fresh dir, then make it a git repo.
+  mkdir -p "${dest}"
+  cp -RL "${target}/." "${dest}/" 2>/dev/null || cp -R "${target}/." "${dest}/"
+  if [[ "${DRY_RUN}" != "true" ]]; then
+    git -C "${dest}" init -q 2>/dev/null || true
+    git -C "${dest}" add -A 2>/dev/null || true
+    git -C "${dest}" -c user.email=harness@local -c user.name=harness \
+      commit -qm "harness fixture snapshot: ${name}" 2>/dev/null || true
+  fi
 done
 
+# --- ensure the atx ct API server is up ----------------------------------------------
+# `atx ct` is a thin client to a local API server (default :8081). Without it every
+# call dies with "Is the server running? Start with: atxct server". CI starts fresh
+# each job, so bootstrap the server here if it isn't already healthy, then wait for it.
+if [[ "${DRY_RUN}" != "true" ]]; then
+  if ! atx ct status --health 2>/dev/null | grep -q healthy; then
+    echo "run-fixtures: atx ct server not healthy — starting it in the background" >&2
+    atx ct server >"${AFTER_DIR}/atxct-server.log" 2>&1 &
+    for _ in $(seq 1 30); do
+      atx ct status --health 2>/dev/null | grep -q healthy && break
+      sleep 2
+    done
+    atx ct status --health 2>/dev/null | grep -q healthy \
+      || { echo "error: atx ct server did not become healthy; see ${AFTER_DIR}/atxct-server.log" >&2; exit 1; }
+  fi
+fi
+
 run atx ct status --health || echo "warn: atx health check failed (creds?)" >&2
+# source add is idempotent-ish: a re-run hits 409 (already exists) which is fine — the
+# discovery scan below re-scans the same path regardless.
 run atx ct source add --name "${SOURCE_NAME}" --provider local --path "${STAGE}" || true
 run atx ct discovery scan --source "${SOURCE_NAME}"
 
