@@ -1,0 +1,122 @@
+{
+  "repository": "legacy-document-portal",
+  "analysis_type": "agentic-readiness",
+  "assessment_date": "2026-07-28",
+  "readiness_profile": "Not Agent-Integrable",
+  "overall_risk": "CRITICAL",
+  "technology_stack": {
+    "language": "CFML (ColdFusion Markup Language)",
+    "runtime": "Adobe ColdFusion 8",
+    "web_server": "IIS 7",
+    "os": "Windows Server 2008",
+    "database": "SQL Server 2005",
+    "file_storage": "Local disk (D:\\docroot\\files)"
+  },
+  "category_scores": {
+    "apis_and_machine_readable_interfaces": {
+      "score": 0,
+      "max": 5,
+      "findings": {
+        "blockers": [
+          "No REST, GraphQL, or any programmatic API exists",
+          "No OpenAPI/Swagger specification or machine-readable interface documentation",
+          "No structured response formats (JSON/XML) - all output is raw HTML"
+        ],
+        "risks": [],
+        "info": [
+          "Two user-facing endpoints exist: index.cfm (search/listing) and download.cfm (file retrieval), accessed via GET parameters"
+        ]
+      }
+    },
+    "identity_and_authentication": {
+      "score": 0,
+      "max": 5,
+      "findings": {
+        "blockers": [
+          "No standard authentication protocol (OAuth 2.0, OIDC, JWT, API keys, IAM)",
+          "No machine-to-machine authentication capability"
+        ],
+        "risks": [
+          "Session fixation vulnerability - no token rotation on login",
+          "No HTTPS - credentials transmitted in cleartext",
+          "ColdFusion Administrator password hardcoded in documentation"
+        ],
+        "info": [
+          "No authorization model - any authenticated user can access all documents"
+        ]
+      }
+    },
+    "state_management_and_idempotency": {
+      "score": 0,
+      "max": 5,
+      "findings": {
+        "blockers": [
+          "No idempotency keys or tokens on any operation"
+        ],
+        "risks": [
+          "No transaction management visible in code",
+          "State stored in ColdFusion server-side sessions tied to single instance"
+        ],
+        "info": [
+          "Single SQL Server instance - no distributed state concerns but no redundancy"
+        ]
+      }
+    },
+    "human_in_the_loop_controls": {
+      "score": 0,
+      "max": 5,
+      "findings": {
+        "blockers": [
+          "No approval workflows exist",
+          "No confirmation steps before destructive or high-impact actions",
+          "No rate limiting or throttling"
+        ],
+        "risks": [
+          "No audit trail - document access and downloads are not logged"
+        ],
+        "info": [
+          "No content moderation or review processes"
+        ]
+      }
+    },
+    "observability": {
+      "score": 0,
+      "max": 5,
+      "findings": {
+        "blockers": [
+          "No application logging in the codebase",
+          "No distributed tracing or correlation IDs",
+          "No health check endpoint"
+        ],
+        "risks": [
+          "No metrics collection (request counts, error rates, latency)",
+          "No application performance monitoring (APM)"
+        ],
+        "info": [
+          ".gitignore excludes *.log files suggesting runtime logs may exist, but no instrumentation in application code"
+        ]
+      }
+    }
+  },
+  "security_findings": {
+    "blockers": [
+      "SQL Injection in index.cfm - url.q concatenated directly into SQL",
+      "SQL Injection in download.cfm - url.id used without parameterization",
+      "Path Traversal in download.cfm - file paths constructed from DB values without sanitization",
+      "XSS in index.cfm - url.q rendered in HTML without encoding"
+    ],
+    "risks": [
+      "All infrastructure components are EOL with known unpatched CVEs",
+      "No input validation anywhere in the application"
+    ]
+  },
+  "remediation_path": [
+    "Expose a structured API (REST/GraphQL) with OpenAPI documentation",
+    "Implement standard authentication (OAuth 2.0/OIDC) with M2M support",
+    "Add idempotency keys for mutating operations",
+    "Add human-in-the-loop controls (approval workflows, rate limiting, confirmation steps)",
+    "Instrument observability (structured logging, distributed tracing, health checks, metrics)",
+    "Fix security vulnerabilities (parameterize SQL, validate inputs, enforce HTTPS)",
+    "Modernize platform off EOL software stack"
+  ]
+}

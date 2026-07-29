@@ -1,0 +1,118 @@
+{
+  "repository": "monolith",
+  "application": "E-Commerce Order Fulfillment System (PHP Monolith)",
+  "assessment_date": "2026-07-28",
+  "readiness_profile": "Remediation Required",
+  "summary": "Single-file PHP monolith with 25+ JSON API endpoints. Critical blockers in authentication (session-only), idempotency (absent), and observability (no structured logging). Positive attributes include well-structured JSON APIs, decision-support scoring, and audit trails.",
+  "categories": {
+    "apis_and_machine_readable_interfaces": {
+      "status": "Needs Work",
+      "blockers": 1,
+      "risks": 3,
+      "info": 2,
+      "findings": [
+        {"id": "API-1", "severity": "INFO", "finding": "All 25+ API endpoints return well-structured JSON with consistent patterns"},
+        {"id": "API-2", "severity": "INFO", "finding": "Decision-support endpoints provide scored recommendations suitable for agent consumption"},
+        {"id": "API-3", "severity": "RISK", "finding": "No OpenAPI/Swagger specification — agents cannot self-discover operations"},
+        {"id": "API-4", "severity": "RISK", "finding": "No API versioning"},
+        {"id": "API-5", "severity": "RISK", "finding": "No pagination on list endpoints — unbounded result sets"},
+        {"id": "API-6", "severity": "BLOCKER", "finding": "No webhooks or event-driven notification mechanism"}
+      ]
+    },
+    "identity_and_authentication": {
+      "status": "Blocked",
+      "blockers": 1,
+      "risks": 3,
+      "info": 2,
+      "findings": [
+        {"id": "AUTH-1", "severity": "BLOCKER", "finding": "Session/cookie-based auth only — no API key, OAuth 2.0, JWT, or service account for M2M communication"},
+        {"id": "AUTH-2", "severity": "INFO", "finding": "Role-based access control implemented with proper 401/403 enforcement"},
+        {"id": "AUTH-3", "severity": "INFO", "finding": "Passwords hashed with bcrypt"},
+        {"id": "AUTH-4", "severity": "RISK", "finding": "No token scoping or least-privilege mechanism for agents"},
+        {"id": "AUTH-5", "severity": "RISK", "finding": "No audit differentiation between human and agent actions"},
+        {"id": "AUTH-6", "severity": "RISK", "finding": "Fallback credentials in database connection code"}
+      ]
+    },
+    "state_management_and_idempotency": {
+      "status": "Blocked",
+      "blockers": 3,
+      "risks": 2,
+      "info": 3,
+      "findings": [
+        {"id": "STATE-1", "severity": "BLOCKER", "finding": "No idempotency keys on any mutating endpoint"},
+        {"id": "STATE-2", "severity": "BLOCKER", "finding": "Order IDs generated with uniqid() — not collision-resistant under concurrent workloads"},
+        {"id": "STATE-3", "severity": "RISK", "finding": "No optimistic concurrency control (no version fields or ETags)"},
+        {"id": "STATE-4", "severity": "INFO", "finding": "Database transactions with rollback used for multi-step operations"},
+        {"id": "STATE-5", "severity": "INFO", "finding": "Well-defined order state machine"},
+        {"id": "STATE-6", "severity": "INFO", "finding": "Full audit trail in order_status_history table"},
+        {"id": "STATE-7", "severity": "RISK", "finding": "No state transition validation at API layer"},
+        {"id": "STATE-8", "severity": "BLOCKER", "finding": "No request deduplication mechanism"}
+      ]
+    },
+    "human_in_the_loop_controls": {
+      "status": "Needs Work",
+      "blockers": 0,
+      "risks": 3,
+      "info": 4,
+      "findings": [
+        {"id": "HITL-1", "severity": "INFO", "finding": "Fulfillment workflow is inherently human-in-the-loop — each step requires explicit admin action"},
+        {"id": "HITL-2", "severity": "INFO", "finding": "Decision-support endpoints present scored recommendations without auto-executing"},
+        {"id": "HITL-3", "severity": "INFO", "finding": "Returns require manual CS review before processing"},
+        {"id": "HITL-4", "severity": "RISK", "finding": "No configurable automation boundaries for agent vs human decisions"},
+        {"id": "HITL-5", "severity": "RISK", "finding": "No approval workflow or escalation path for uncertain decisions"},
+        {"id": "HITL-6", "severity": "INFO", "finding": "AI Control Panel provides parameter adjustment that could serve as agent guardrails"},
+        {"id": "HITL-7", "severity": "RISK", "finding": "No spend limits or action rate limits"}
+      ]
+    },
+    "observability": {
+      "status": "Blocked",
+      "blockers": 2,
+      "risks": 3,
+      "info": 2,
+      "findings": [
+        {"id": "OBS-1", "severity": "BLOCKER", "finding": "No structured logging — only PHP error_log()"},
+        {"id": "OBS-2", "severity": "BLOCKER", "finding": "No correlation IDs or request tracing"},
+        {"id": "OBS-3", "severity": "RISK", "finding": "No application-level metrics"},
+        {"id": "OBS-4", "severity": "RISK", "finding": "No alerting on unusual patterns or agent misbehavior"},
+        {"id": "OBS-5", "severity": "INFO", "finding": "Infrastructure observability exists: VPC Flow Logs, RDS Enhanced Monitoring, WAF metrics"},
+        {"id": "OBS-6", "severity": "INFO", "finding": "Order status history provides basic application audit trail"},
+        {"id": "OBS-7", "severity": "RISK", "finding": "No lightweight JSON health check endpoint"}
+      ]
+    }
+  },
+  "totals": {
+    "blockers": 7,
+    "risks": 14,
+    "info": 13
+  },
+  "remediation_priorities": {
+    "critical": [
+      "Add machine-to-machine authentication (API key or OAuth 2.0 client credentials)",
+      "Implement idempotency keys on all mutating endpoints",
+      "Add structured logging with correlation IDs",
+      "Replace uniqid() with UUIDv4 for collision resistance",
+      "Add event notifications (webhooks or event streams)"
+    ],
+    "high": [
+      "Publish OpenAPI specification",
+      "Add state transition validation",
+      "Implement rate limiting",
+      "Add optimistic concurrency control",
+      "Define automation boundaries"
+    ],
+    "recommended": [
+      "Add API versioning",
+      "Implement pagination on list endpoints",
+      "Add lightweight JSON health check endpoint",
+      "Implement application-level metrics and alerting",
+      "Separate agent audit entries from human audit entries"
+    ]
+  },
+  "technology_stack": {
+    "language": "PHP 8.2",
+    "framework": "None (vanilla PHP)",
+    "database": "MySQL 8.4",
+    "deployment": "Docker on AWS App Runner",
+    "infrastructure": "CloudFormation (VPC, RDS, WAF, App Runner)"
+  }
+}

@@ -1,0 +1,360 @@
+{
+  "repository": "legacy-pricing-cgi",
+  "assessmentDate": "2026-07-28",
+  "language": "C++",
+  "runtime": "Apache httpd 2.4 (CGI)",
+  "primaryFunction": "Product pricing lookup",
+  "summary": "Legacy 2004-era CGI binary with critical gaps across most modernization pathways. Containerization artifacts exist (Partial), but cloud-native architecture, open-source frameworks, managed databases, DevOps practices, analytics, and AI readiness are all critically deficient.",
+  "pathways": {
+    "moveToCloudNative": {
+      "severityStatus": "Critical",
+      "scoreRating": "Not Ready",
+      "findings": [
+        {
+          "severity": "High",
+          "description": "Monolithic CGI architecture — single binary handles all logic with no separation of concerns. Cannot scale components independently.",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No structured API — returns HTML only. No RESTful design, no content negotiation, no versioned endpoints.",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "Hardcoded file path dependency (/etc/pricing/rules.dat) — tight coupling to filesystem prevents 12-factor compliance.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No proper health semantics — healthcheck endpoint returns pricing HTML rather than structured health status.",
+          "effort": "Low"
+        },
+        {
+          "severity": "Low",
+          "description": "Stateless request handling (new CGI process per request) is a positive cloud-native trait.",
+          "effort": null
+        }
+      ],
+      "recommendedActions": [
+        "Rewrite as a microservice with structured JSON API using a modern language/framework",
+        "Externalize configuration via environment variables or AWS AppConfig/Parameter Store",
+        "Implement proper health and readiness endpoints returning structured status responses"
+      ],
+      "learningMaterials": [
+        {
+          "title": "AWS Well-Architected Framework — Cloud-Native Lens",
+          "url": "https://docs.aws.amazon.com/wellarchitected/latest/cloud-native-lens/cloud-native-lens.html"
+        },
+        {
+          "title": "Twelve-Factor App Methodology",
+          "url": "https://12factor.net/"
+        },
+        {
+          "title": "Decomposing Monoliths into Microservices (AWS Prescriptive Guidance)",
+          "url": "https://docs.aws.amazon.com/prescriptive-guidance/latest/modernization-decomposing-monoliths/welcome.html"
+        }
+      ]
+    },
+    "moveToContainers": {
+      "severityStatus": "Needs Work",
+      "scoreRating": "Partial",
+      "findings": [
+        {
+          "severity": "Medium",
+          "description": "Multi-stage Dockerfile exists and builds successfully with GCC 12 on Alpine. Basic containerization is complete.",
+          "effort": null
+        },
+        {
+          "severity": "Medium",
+          "description": "Kubernetes manifests present with security context hardening (non-root, drop all capabilities).",
+          "effort": null
+        },
+        {
+          "severity": "Medium",
+          "description": "No container image scanning or vulnerability management integrated into the build process.",
+          "effort": "Low"
+        },
+        {
+          "severity": "Medium",
+          "description": "No resource tuning validation — CGI fork-per-request model may not behave predictably under K8s resource constraints.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Low",
+          "description": "No Horizontal Pod Autoscaler configured — static 2-replica deployment cannot respond to traffic spikes.",
+          "effort": "Low"
+        }
+      ],
+      "recommendedActions": [
+        "Integrate container image scanning (Amazon ECR image scanning, Trivy, or Snyk)",
+        "Add Horizontal Pod Autoscaler based on CPU/request metrics",
+        "Validate resource limits under realistic load; consider replacing CGI fork model with long-running process"
+      ],
+      "learningMaterials": [
+        {
+          "title": "Amazon ECS Best Practices Guide",
+          "url": "https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/intro.html"
+        },
+        {
+          "title": "Amazon EKS Best Practices Guide",
+          "url": "https://aws.github.io/aws-eks-best-practices/"
+        },
+        {
+          "title": "Amazon ECR Image Scanning",
+          "url": "https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-scanning.html"
+        }
+      ]
+    },
+    "moveToOpenSource": {
+      "severityStatus": "Critical",
+      "scoreRating": "Not Ready",
+      "findings": [
+        {
+          "severity": "High",
+          "description": "No modern open-source framework adopted. Raw C++ with stdio — no web framework, no HTTP library, no structured logging library.",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "Build system is a hand-written Makefile with no dependency management (no Conan, vcpkg, CMake with FetchContent).",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "Runtime uses Apache httpd (open source) but via legacy CGI execution model rather than modern alternatives.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Low",
+          "description": "GCC 12 used in Dockerfile (open-source compiler) is a positive starting point.",
+          "effort": null
+        }
+      ],
+      "recommendedActions": [
+        "Adopt a modern open-source web framework (Express.js, FastAPI, Spring Boot, or Rust Actix)",
+        "Use a proper build system with dependency management",
+        "Replace Apache CGI with an embedded HTTP server or modern application server"
+      ],
+      "learningMaterials": [
+        {
+          "title": "AWS Open Source Blog",
+          "url": "https://aws.amazon.com/blogs/opensource/"
+        },
+        {
+          "title": "Modernizing with Open Source on AWS",
+          "url": "https://aws.amazon.com/open-source/"
+        }
+      ]
+    },
+    "moveToManagedDatabases": {
+      "severityStatus": "Critical",
+      "scoreRating": "Not Ready",
+      "findings": [
+        {
+          "severity": "High",
+          "description": "Data stored in flat pipe-delimited text file on local filesystem. No database, no query capabilities, no transactional integrity.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "High",
+          "description": "No data versioning or change tracking. Rules edited in-place on prod with no source of truth.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "Read-only key-value lookup pattern maps well to DynamoDB or ElastiCache.",
+          "effort": null
+        },
+        {
+          "severity": "Low",
+          "description": "Small data volume — migration to managed store would be straightforward.",
+          "effort": "Low"
+        }
+      ],
+      "recommendedActions": [
+        "Migrate pricing data to Amazon DynamoDB (key-value lookup) or Amazon ElastiCache (Redis)",
+        "Consider AWS AppConfig or Parameter Store for configuration-style pricing rules",
+        "Implement data migration pipeline with validation"
+      ],
+      "learningMaterials": [
+        {
+          "title": "Amazon DynamoDB Developer Guide",
+          "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html"
+        },
+        {
+          "title": "Choosing the Right Database (AWS Database Blog)",
+          "url": "https://aws.amazon.com/blogs/database/"
+        },
+        {
+          "title": "AWS Database Migration Service",
+          "url": "https://docs.aws.amazon.com/dms/latest/userguide/Welcome.html"
+        }
+      ]
+    },
+    "moveToManagedAnalytics": {
+      "severityStatus": "Needs Work",
+      "scoreRating": "Not Ready",
+      "findings": [
+        {
+          "severity": "Medium",
+          "description": "No analytics capabilities exist. Pricing queries are not logged — no data to analyze.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No event streaming or data pipeline infrastructure for demand forecasting or dynamic pricing.",
+          "effort": "High"
+        },
+        {
+          "severity": "Low",
+          "description": "Pricing domain is well-suited to analytics — query patterns, volume trends, and price sensitivity analysis could drive business value.",
+          "effort": null
+        }
+      ],
+      "recommendedActions": [
+        "Instrument application to emit pricing query events to Amazon Kinesis or EventBridge",
+        "Build analytics pipeline using Amazon Athena or QuickSight",
+        "Consider Amazon OpenSearch Service for real-time pricing query analytics"
+      ],
+      "learningMaterials": [
+        {
+          "title": "Amazon Kinesis Data Streams Developer Guide",
+          "url": "https://docs.aws.amazon.com/streams/latest/dev/introduction.html"
+        },
+        {
+          "title": "Amazon Athena User Guide",
+          "url": "https://docs.aws.amazon.com/athena/latest/ug/what-is.html"
+        },
+        {
+          "title": "Building Analytics Pipelines on AWS",
+          "url": "https://aws.amazon.com/big-data/datalakes-and-analytics/"
+        }
+      ]
+    },
+    "moveToModernDevOps": {
+      "severityStatus": "Critical",
+      "scoreRating": "Not Ready",
+      "findings": [
+        {
+          "severity": "High",
+          "description": "No CI/CD pipeline. Deployment via manual scp or kubectl apply with no automation, gates, or rollback.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "High",
+          "description": "No test suite — zero unit, integration, or end-to-end tests. Correctness validated by spot-checking.",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No observability stack — no structured logging, metrics collection, distributed tracing, or alerting.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "High",
+          "description": "No Infrastructure as Code. K8s manifests exist but no Terraform, CDK, or CloudFormation for surrounding infrastructure.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No secrets management — no integration with AWS Secrets Manager or Parameter Store.",
+          "effort": "Low"
+        },
+        {
+          "severity": "Medium",
+          "description": "No GitOps or progressive deployment strategy (blue/green, canary). Updates are all-at-once.",
+          "effort": "Medium"
+        }
+      ],
+      "recommendedActions": [
+        "Establish CI/CD pipeline using AWS CodePipeline/CodeBuild or GitHub Actions",
+        "Write unit and integration tests before further code changes",
+        "Implement structured logging (JSON to stdout) with Amazon CloudWatch Logs",
+        "Add metrics with Amazon CloudWatch or Prometheus with alarms",
+        "Adopt Infrastructure as Code (AWS CDK or Terraform)",
+        "Implement progressive deployment strategy with automated rollback"
+      ],
+      "learningMaterials": [
+        {
+          "title": "AWS DevOps Guidance",
+          "url": "https://aws.amazon.com/devops/"
+        },
+        {
+          "title": "AWS CodePipeline User Guide",
+          "url": "https://docs.aws.amazon.com/codepipeline/latest/userguide/welcome.html"
+        },
+        {
+          "title": "Amazon CloudWatch Observability",
+          "url": "https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Unified-Observability.html"
+        }
+      ]
+    },
+    "moveToAI": {
+      "severityStatus": "Critical",
+      "scoreRating": "Not Ready",
+      "findings": [
+        {
+          "severity": "High",
+          "description": "No machine-readable API for AI/ML integration. AI agents cannot consume HTML output.",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No data pipeline to feed ML models. Pricing queries not captured — no training data for dynamic pricing.",
+          "effort": "High"
+        },
+        {
+          "severity": "Medium",
+          "description": "No feature store or model serving infrastructure. Static lookup cannot incorporate ML predictions.",
+          "effort": "High"
+        },
+        {
+          "severity": "Medium",
+          "description": "Critical security vulnerabilities make the system unsafe for AI agent interaction.",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Low",
+          "description": "Pricing domain has strong AI/ML potential — demand forecasting, dynamic pricing, personalized pricing.",
+          "effort": null
+        }
+      ],
+      "recommendedActions": [
+        "Expose pricing as structured JSON API consumable by AI agents and ML pipelines",
+        "Capture pricing query data for training dynamic pricing models",
+        "Evaluate Amazon SageMaker for pricing optimization models",
+        "Consider Amazon Bedrock for AI-powered pricing analysis",
+        "Fix security vulnerabilities before any AI agent integration"
+      ],
+      "learningMaterials": [
+        {
+          "title": "Amazon SageMaker Developer Guide",
+          "url": "https://docs.aws.amazon.com/sagemaker/latest/dg/whatis.html"
+        },
+        {
+          "title": "Amazon Bedrock User Guide",
+          "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-bedrock.html"
+        }
+      ]
+    }
+  },
+  "overallSummary": {
+    "pathwayStatuses": {
+      "moveToCloudNative": {"severityStatus": "Critical", "scoreRating": "Not Ready"},
+      "moveToContainers": {"severityStatus": "Needs Work", "scoreRating": "Partial"},
+      "moveToOpenSource": {"severityStatus": "Critical", "scoreRating": "Not Ready"},
+      "moveToManagedDatabases": {"severityStatus": "Critical", "scoreRating": "Not Ready"},
+      "moveToManagedAnalytics": {"severityStatus": "Needs Work", "scoreRating": "Not Ready"},
+      "moveToModernDevOps": {"severityStatus": "Critical", "scoreRating": "Not Ready"},
+      "moveToAI": {"severityStatus": "Critical", "scoreRating": "Not Ready"}
+    }
+  },
+  "prioritizedRoadmap": [
+    "Security remediation — fix buffer overflow and XSS vulnerabilities (prerequisite for all pathways)",
+    "Modern DevOps foundation — CI/CD pipeline, tests, observability",
+    "Cloud-native rewrite — replace CGI with modern microservice exposing JSON API",
+    "Managed database migration — move flat file to DynamoDB or ElastiCache",
+    "Analytics and AI enablement — instrument for analytics, evaluate ML-driven dynamic pricing"
+  ]
+}

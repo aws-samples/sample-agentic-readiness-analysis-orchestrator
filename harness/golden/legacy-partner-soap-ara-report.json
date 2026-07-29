@@ -1,0 +1,148 @@
+{
+  "repository": "legacy-partner-soap",
+  "readiness_profile": "Not Agent-Integrable",
+  "application_type": "Legacy SOAP Web Service (JAX-WS, Java 6, JBoss AS 5.1)",
+  "purpose": "Partner purchase order submission",
+  "analysis_date": "2026-07-28",
+  "findings_summary": {
+    "blockers": 9,
+    "risks": 3,
+    "infos": 2
+  },
+  "findings": [
+    {
+      "id": "BLOCKER-1.1",
+      "severity": "BLOCKER",
+      "category": "APIs and Machine-Readable Interfaces",
+      "title": "SOAP RPC/Encoded Interface Not Agent-Consumable",
+      "description": "The service exposes a single SOAP 1.1 endpoint using deprecated RPC/encoded style. Modern AI agent frameworks cannot natively consume RPC/encoded SOAP. No REST or OpenAPI interface exists.",
+      "remediation": "Expose functionality as a REST/JSON API with an OpenAPI 3.x specification."
+    },
+    {
+      "id": "BLOCKER-1.2",
+      "severity": "BLOCKER",
+      "category": "APIs and Machine-Readable Interfaces",
+      "title": "Hand-Maintained WSDL Drifts from Implementation",
+      "description": "The WSDL is manually maintained and acknowledged to drift from the implementation. An agent relying on the WSDL contract cannot trust it reflects actual service behavior.",
+      "remediation": "Auto-generate the interface contract from code, or migrate to OpenAPI with contract testing."
+    },
+    {
+      "id": "BLOCKER-2.1",
+      "severity": "BLOCKER",
+      "category": "Identity and Authentication",
+      "title": "No Programmatic Authentication Implemented",
+      "description": "No authentication logic exists in the source code. The service accepts all requests without verifying caller identity.",
+      "remediation": "Implement OAuth 2.0 client credentials or API keys with per-agent identity and scoped permissions."
+    },
+    {
+      "id": "BLOCKER-2.2",
+      "severity": "BLOCKER",
+      "category": "Identity and Authentication",
+      "title": "Hardcoded Database Credentials in Source Code",
+      "description": "Database connection credentials are hardcoded as string constants in the Java source, exposed in version control.",
+      "remediation": "Move credentials to a secrets manager (e.g., AWS Secrets Manager) and inject at runtime."
+    },
+    {
+      "id": "BLOCKER-3.1",
+      "severity": "BLOCKER",
+      "category": "State Management and Idempotency",
+      "title": "No Idempotency or Duplicate Detection",
+      "description": "The submitOrder operation performs a direct SQL INSERT with no duplicate detection. Re-submitting the same order creates duplicate records.",
+      "remediation": "Implement idempotency keys with server-side dedup or enforce a unique constraint on (partner_id, po_number)."
+    },
+    {
+      "id": "BLOCKER-4.1",
+      "severity": "BLOCKER",
+      "category": "Human-in-the-Loop Controls",
+      "title": "No Approval Workflow or Rate Limiting",
+      "description": "The service immediately executes the database insert on any submitOrder call with no approval step, spending limit, rate limiting, or circuit breaker.",
+      "remediation": "Implement order amount thresholds requiring human approval, rate limiting per partner/agent, and a review queue."
+    },
+    {
+      "id": "BLOCKER-5.1",
+      "severity": "BLOCKER",
+      "category": "Observability",
+      "title": "No Logging, Monitoring, or Tracing",
+      "description": "The service has zero observability instrumentation. No logging framework, no metrics, no distributed tracing, no health check endpoint.",
+      "remediation": "Add structured logging with correlation IDs, health endpoints, request metrics, and distributed tracing."
+    },
+    {
+      "id": "RISK-2.1",
+      "severity": "RISK",
+      "category": "Identity and Authentication",
+      "title": "Plaintext Credentials Over Unencrypted HTTP",
+      "description": "The service endpoint uses plain HTTP (no TLS). Any authentication tokens transmitted would be interceptable.",
+      "remediation": "Enforce TLS (HTTPS) for all service communication."
+    },
+    {
+      "id": "RISK-3.1",
+      "severity": "RISK",
+      "category": "State Management and Idempotency",
+      "title": "No Transaction Management",
+      "description": "No explicit transaction boundaries, commit, or rollback logic. Connection is opened and closed per request without error handling.",
+      "remediation": "Use proper transaction management with commit/rollback and connection pooling."
+    },
+    {
+      "id": "RISK-4.1",
+      "severity": "RISK",
+      "category": "Human-in-the-Loop Controls",
+      "title": "No Input Validation",
+      "description": "No validation of partnerId, poNumber, or amount values. Any string is accepted and written to the database.",
+      "remediation": "Add type checking, range validation, and business rule enforcement at the service boundary."
+    },
+    {
+      "id": "INFO-1.1",
+      "severity": "INFO",
+      "category": "APIs and Machine-Readable Interfaces",
+      "title": "No Structured Error Responses",
+      "description": "Errors are returned as unstructured strings. No SOAP faults, error codes, or machine-parseable error structures.",
+      "remediation": "Define structured error response schemas with error codes agents can programmatically handle."
+    },
+    {
+      "id": "INFO-5.1",
+      "severity": "INFO",
+      "category": "Observability",
+      "title": "Exception Messages Leaked to Callers",
+      "description": "Raw Java exception messages including internal details are returned to the caller.",
+      "remediation": "Return generic error messages to callers; log details server-side."
+    },
+    {
+      "id": "BLOCKER-SEC.1",
+      "severity": "BLOCKER",
+      "category": "Security (Agent-Safety Critical)",
+      "title": "XML External Entity (XXE) Injection",
+      "description": "XML parsing uses default DocumentBuilderFactory settings with no XXE protections. An agent passing XML with external entity references could trigger SSRF, read local files, or cause denial of service.",
+      "remediation": "Disable external entities and DTD processing in DocumentBuilderFactory."
+    },
+    {
+      "id": "BLOCKER-SEC.2",
+      "severity": "BLOCKER",
+      "category": "Security (Agent-Safety Critical)",
+      "title": "SQL Injection",
+      "description": "User-supplied values from parsed XML are directly concatenated into SQL statements. An agent or attacker can execute arbitrary SQL against the database.",
+      "remediation": "Use PreparedStatement with parameterized queries."
+    }
+  ],
+  "security_vulnerabilities": [
+    {
+      "id": "BLOCKER-SEC.1",
+      "title": "XML External Entity (XXE) Injection",
+      "description": "XML parsing uses default DocumentBuilderFactory settings with no XXE protections.",
+      "impact": "Server-side request forgery, local file read, denial of service."
+    },
+    {
+      "id": "BLOCKER-SEC.2",
+      "title": "SQL Injection",
+      "description": "User-supplied values from parsed XML are directly concatenated into SQL statements.",
+      "impact": "Arbitrary SQL execution, data exfiltration, modification, or deletion."
+    }
+  ],
+  "remediation_priorities": [
+    "Critical Security Fixes (XXE, SQL injection, hardcoded credentials, TLS)",
+    "API Modernization (REST/JSON with OpenAPI specification)",
+    "Authentication and Authorization (OAuth 2.0, per-agent accounts)",
+    "Idempotency and State Safety (idempotency keys, transaction management)",
+    "Human-in-the-Loop Controls (approval thresholds, rate limiting)",
+    "Observability (structured logging, metrics, tracing)"
+  ]
+}

@@ -1,0 +1,376 @@
+{
+  "repository": "monolith",
+  "assessment_date": "2026-07-28",
+  "application_type": "PHP 8.2 Monolithic E-Commerce Application",
+  "infrastructure": "Docker container on AWS App Runner with RDS MySQL",
+  "pathways": [
+    {
+      "name": "Move to Cloud Native",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": 1,
+          "description": "Single-file monolith (3,193 lines) with all domains tightly coupled — orders, inventory, payments, shipping, returns, customer service, and UI in one file",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 2,
+          "description": "No separation of concerns — business logic, data access, routing, and presentation all interleaved",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 3,
+          "description": "Synchronous request processing with no event-driven patterns",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 4,
+          "description": "Hardcoded business configuration (warehouse coordinates, carrier rates, tax rates) embedded in source code",
+          "severity": "Medium",
+          "effort": "Low"
+        },
+        {
+          "id": 5,
+          "description": "Database schema initialization and seeding at application startup creates coupling to the deployment lifecycle",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 6,
+          "description": "No API versioning or contract separation — internal and external consumers share the same endpoints",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 7,
+          "description": "Session/state managed implicitly via database queries with no caching layer",
+          "severity": "Low",
+          "effort": "Medium"
+        }
+      ],
+      "recommended_actions": [
+        "Decompose into bounded contexts: Order Management, Inventory, Payments, Shipping, Returns, Customer Service",
+        "Introduce an API gateway pattern to manage routing and cross-cutting concerns",
+        "Externalize configuration using AWS Systems Manager Parameter Store or AWS AppConfig",
+        "Adopt event-driven communication (Amazon EventBridge or Amazon SQS) between domains"
+      ]
+    },
+    {
+      "name": "Move to Containers",
+      "severity_status": "Needs Work",
+      "score_rating": "Partial",
+      "findings": [
+        {
+          "id": 1,
+          "description": "Working Dockerfile with PHP 8.2-apache base, non-root user, and healthcheck already exists",
+          "severity": "Low",
+          "effort": "None"
+        },
+        {
+          "id": 2,
+          "description": "docker-compose.yml provides local orchestration with health checks and security options (read-only filesystem, no-new-privileges)",
+          "severity": "Low",
+          "effort": "None"
+        },
+        {
+          "id": 3,
+          "description": "No multi-stage build — image includes build tools (apt packages) in the runtime layer",
+          "severity": "Medium",
+          "effort": "Low"
+        },
+        {
+          "id": 4,
+          "description": "Single container runs entire application — no opportunity for independent scaling of domains",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 5,
+          "description": "No container orchestration beyond App Runner — no Kubernetes manifests, ECS task definitions, or service mesh",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 6,
+          "description": "Container image not optimized for size — uses full apache base rather than lightweight alternatives",
+          "severity": "Low",
+          "effort": "Low"
+        }
+      ],
+      "recommended_actions": [
+        "Implement multi-stage Docker build to reduce image size and attack surface",
+        "After decomposition, create individual container images per service for independent scaling",
+        "Consider Amazon ECS with AWS Fargate for container orchestration if more control than App Runner is needed",
+        "Implement container image scanning in the build pipeline"
+      ]
+    },
+    {
+      "name": "Move to Open Source",
+      "severity_status": "Ready",
+      "score_rating": "Mature",
+      "findings": [
+        {
+          "id": 1,
+          "description": "Entire stack is open source: PHP 8.2, Apache HTTP Server, MySQL 8.0",
+          "severity": "Low",
+          "effort": "None"
+        },
+        {
+          "id": 2,
+          "description": "No proprietary runtime dependencies or vendor lock-in on application tier",
+          "severity": "Low",
+          "effort": "None"
+        },
+        {
+          "id": 3,
+          "description": "No dependency management tool (Composer) — all code is hand-written with no third-party packages",
+          "severity": "Low",
+          "effort": "Low"
+        },
+        {
+          "id": 4,
+          "description": "No framework adoption — vanilla PHP limits productivity and community ecosystem leverage",
+          "severity": "Medium",
+          "effort": "High"
+        }
+      ],
+      "recommended_actions": [
+        "Adopt a modern PHP framework (Laravel, Symfony) or consider migration to a more cloud-native language/framework",
+        "Introduce Composer for dependency management to leverage community packages"
+      ]
+    },
+    {
+      "name": "Move to Managed Databases",
+      "severity_status": "Needs Work",
+      "score_rating": "Partial",
+      "findings": [
+        {
+          "id": 1,
+          "description": "CloudFormation IaC already provisions Amazon RDS MySQL with Multi-AZ, encryption, automated backups, and enhanced monitoring",
+          "severity": "Low",
+          "effort": "None"
+        },
+        {
+          "id": 2,
+          "description": "IAM database authentication enabled in the IaC template",
+          "severity": "Low",
+          "effort": "None"
+        },
+        {
+          "id": 3,
+          "description": "Single shared database with 9 tables serving all domains — no domain-level data isolation",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 4,
+          "description": "Application uses direct SQL with no ORM or abstraction layer — schema changes require code changes throughout",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 5,
+          "description": "No read replicas configured for read-heavy workloads (product catalog queries)",
+          "severity": "Medium",
+          "effort": "Low"
+        },
+        {
+          "id": 6,
+          "description": "No database migration tooling — schema created imperatively at app startup",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 7,
+          "description": "Hardcoded fallback credentials in application code",
+          "severity": "High",
+          "effort": "Low"
+        }
+      ],
+      "recommended_actions": [
+        "Implement database-per-service pattern after decomposition",
+        "Introduce a migration tool (Flyway, Liquibase, or Phinx) for schema management",
+        "Add read replicas for the product catalog domain",
+        "Remove hardcoded fallback credentials; use AWS Secrets Manager",
+        "Consider Amazon Aurora MySQL for improved performance and availability"
+      ]
+    },
+    {
+      "name": "Move to Managed Analytics",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": 1,
+          "description": "No analytics or reporting infrastructure — all data access is direct SQL against the operational database",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 2,
+          "description": "No data pipeline for ETL/ELT of transactional data into analytics-optimized stores",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 3,
+          "description": "Business metrics (order counts, revenue, inventory levels) computed on-demand via application queries",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 4,
+          "description": "No event streaming or change data capture for real-time analytics",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 5,
+          "description": "Customer interaction data and order history stored in operational tables with no archival strategy",
+          "severity": "Low",
+          "effort": "Medium"
+        }
+      ],
+      "recommended_actions": [
+        "Implement change data capture (CDC) from RDS using AWS DMS",
+        "Adopt Amazon Redshift or Amazon Athena for analytical queries",
+        "Use Amazon Kinesis Data Streams for real-time event streaming",
+        "Build dashboards with Amazon QuickSight"
+      ]
+    },
+    {
+      "name": "Move to Modern DevOps",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": 1,
+          "description": "No CI/CD pipeline — deployment is manual via deploy.sh (docker-compose build/up)",
+          "severity": "High",
+          "effort": "Medium"
+        },
+        {
+          "id": 2,
+          "description": "No automated testing whatsoever — no unit tests, integration tests, or end-to-end tests",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 3,
+          "description": "No code quality tooling (linters, static analysis, security scanning)",
+          "severity": "Medium",
+          "effort": "Low"
+        },
+        {
+          "id": 4,
+          "description": "CloudFormation IaC exists for production infrastructure but has no pipeline to deploy it",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 5,
+          "description": "No environment promotion strategy (dev → staging → production)",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 6,
+          "description": "No structured logging or observability integration — errors logged to Apache error log only",
+          "severity": "High",
+          "effort": "Medium"
+        },
+        {
+          "id": 7,
+          "description": "ECR image scanning configured but no pipeline to act on scan results",
+          "severity": "Low",
+          "effort": "Low"
+        },
+        {
+          "id": 8,
+          "description": "No rollback strategy — deployment is fire-and-forget",
+          "severity": "Medium",
+          "effort": "Medium"
+        }
+      ],
+      "recommended_actions": [
+        "Implement CI/CD pipeline using AWS CodePipeline + CodeBuild or GitHub Actions",
+        "Add automated testing: start with API integration tests, then unit tests",
+        "Introduce PHP static analysis (PHPStan, Psalm) and linting in CI pipeline",
+        "Implement structured logging with correlation IDs; ship to CloudWatch",
+        "Add application performance monitoring with AWS X-Ray",
+        "Implement blue/green or canary deployment strategy"
+      ]
+    },
+    {
+      "name": "Move to AI",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": 1,
+          "description": "No AI/ML integration — product recommendations, search, and pricing are all static or rule-based",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 2,
+          "description": "No data pipeline to support ML model training (customer behavior, purchase patterns)",
+          "severity": "High",
+          "effort": "High"
+        },
+        {
+          "id": 3,
+          "description": "Customer sentiment field exists in interactions table but is never populated by automated analysis",
+          "severity": "Medium",
+          "effort": "Medium"
+        },
+        {
+          "id": 4,
+          "description": "No chatbot or AI-assisted customer service capabilities",
+          "severity": "Low",
+          "effort": "Medium"
+        },
+        {
+          "id": 5,
+          "description": "No personalization engine for product discovery or marketing",
+          "severity": "Medium",
+          "effort": "High"
+        }
+      ],
+      "recommended_actions": [
+        "Implement product recommendations using Amazon Personalize",
+        "Add natural language search with Amazon Kendra or OpenSearch semantic capabilities",
+        "Use Amazon Comprehend for automated sentiment analysis",
+        "Integrate Amazon Bedrock for AI-powered customer service chatbot",
+        "Build ML pipelines with Amazon SageMaker for demand forecasting"
+      ]
+    }
+  ],
+  "summary": {
+    "total_findings": 42,
+    "high_severity_count": 12,
+    "medium_severity_count": 18,
+    "low_severity_count": 12,
+    "critical_pathways": ["Move to Cloud Native", "Move to Managed Analytics", "Move to Modern DevOps", "Move to AI"],
+    "needs_work_pathways": ["Move to Containers", "Move to Managed Databases"],
+    "ready_pathways": ["Move to Open Source"]
+  },
+  "technical_details": {
+    "language": "PHP 8.2",
+    "web_server": "Apache",
+    "database": "MySQL 8.0",
+    "container_runtime": "Docker",
+    "orchestration": "docker-compose (local), AWS App Runner (production)",
+    "iac": "AWS CloudFormation",
+    "lines_of_code": 3193,
+    "tables": 9,
+    "api_endpoints": 25,
+    "external_dependencies": 0,
+    "test_coverage_percent": 0,
+    "ci_cd": "None"
+  }
+}

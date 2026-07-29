@@ -1,0 +1,353 @@
+{
+  "repository": "legacy-shipping-api",
+  "analysis_type": "modernization-readiness",
+  "analysis_date": "2026-07-28",
+  "language": "Node.js",
+  "framework": "Express 3.4.8",
+  "runtime_version": "Node.js 0.10.x",
+  "database": "MongoDB 2.4 (driver 1.4.7)",
+  "pathways": [
+    {
+      "name": "Move to Cloud Native",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": "CN-01",
+          "severity": "High",
+          "effort": "Medium",
+          "finding": "Application has no 12-factor compliance: configuration is hardcoded (MongoDB URL, API key, port), not sourced from environment variables."
+        },
+        {
+          "id": "CN-02",
+          "severity": "High",
+          "effort": "Low",
+          "finding": "No graceful shutdown handling. The process has no SIGTERM handler, risking in-flight request loss during container restarts."
+        },
+        {
+          "id": "CN-03",
+          "severity": "High",
+          "effort": "Medium",
+          "finding": "No health check endpoint exists in application code. K8s uses TCP socket probes only."
+        },
+        {
+          "id": "CN-04",
+          "severity": "Medium",
+          "effort": "Low",
+          "finding": "Single-file architecture with no separation of concerns."
+        },
+        {
+          "id": "CN-05",
+          "severity": "Medium",
+          "effort": "Medium",
+          "finding": "No stateless design validation or session externalization."
+        },
+        {
+          "id": "CN-06",
+          "severity": "Low",
+          "effort": "Low",
+          "finding": "Application listens on hardcoded port 8080 instead of reading from PORT environment variable."
+        }
+      ],
+      "recommended_actions": [
+        "Externalize all configuration to environment variables and consume from K8s ConfigMap/Secret",
+        "Add a /health endpoint for liveness/readiness probes",
+        "Implement graceful shutdown with connection draining",
+        "Refactor into modular structure (routes, services, config modules)"
+      ]
+    },
+    {
+      "name": "Move to Containers",
+      "severity_status": "Needs Work",
+      "score_rating": "Partial",
+      "findings": [
+        {
+          "id": "CTR-01",
+          "severity": "Medium",
+          "effort": "Low",
+          "finding": "Dockerfile uses node:18-alpine but package.json declares engines node 0.10.x. The --ignore-engines flag papers over incompatibility."
+        },
+        {
+          "id": "CTR-02",
+          "severity": "Medium",
+          "effort": "Low",
+          "finding": "Dockerfile HEALTHCHECK uses wget against /rates which requires API key authentication."
+        },
+        {
+          "id": "CTR-03",
+          "severity": "Low",
+          "effort": "Low",
+          "finding": "Container security hardening is well-implemented: non-root user, read-only filesystem, dropped capabilities."
+        },
+        {
+          "id": "CTR-04",
+          "severity": "Low",
+          "effort": "Low",
+          "finding": "K8s manifests follow best practices: resource limits, security contexts, namespace isolation."
+        },
+        {
+          "id": "CTR-05",
+          "severity": "Medium",
+          "effort": "Medium",
+          "finding": "No container image scanning or CI/CD pipeline exists."
+        },
+        {
+          "id": "CTR-06",
+          "severity": "Low",
+          "effort": "Low",
+          "finding": "Image references use latest tag instead of immutable image digests."
+        }
+      ],
+      "recommended_actions": [
+        "Update package.json engines field to match container runtime (Node 18+)",
+        "Fix Dockerfile HEALTHCHECK to target an unauthenticated health endpoint",
+        "Use immutable image tags or digests in K8s deployment manifests",
+        "Add container image scanning to a CI/CD pipeline"
+      ]
+    },
+    {
+      "name": "Move to Open Source",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": "OSS-01",
+          "severity": "High",
+          "effort": "High",
+          "finding": "Node.js 0.10 is critically EOL (since October 2016). No security patches available. Multiple known CVEs."
+        },
+        {
+          "id": "OSS-02",
+          "severity": "High",
+          "effort": "Medium",
+          "finding": "Express 3.4.8 is EOL. Uses deprecated express.bodyParser() middleware with known vulnerabilities."
+        },
+        {
+          "id": "OSS-03",
+          "severity": "High",
+          "effort": "Medium",
+          "finding": "MongoDB native driver 1.4.7 is EOL. Lacks connection pooling, modern auth, and security patches."
+        },
+        {
+          "id": "OSS-04",
+          "severity": "High",
+          "effort": "Low",
+          "finding": "No package-lock.json. Dependency resolution is non-deterministic across installs."
+        },
+        {
+          "id": "OSS-05",
+          "severity": "Medium",
+          "effort": "Low",
+          "finding": "Only 2 production dependencies but both have known critical vulnerabilities."
+        },
+        {
+          "id": "OSS-06",
+          "severity": "Medium",
+          "effort": "Low",
+          "finding": "No dependency vulnerability scanning configured."
+        }
+      ],
+      "recommended_actions": [
+        "Upgrade Node.js runtime to current LTS (Node 20 or 22)",
+        "Upgrade Express to version 4.x or 5.x with modern middleware",
+        "Upgrade MongoDB driver to 6.x with connection pooling and modern auth",
+        "Generate and commit package-lock.json for deterministic builds",
+        "Integrate dependency vulnerability scanning"
+      ]
+    },
+    {
+      "name": "Move to Managed Databases",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": "DB-01",
+          "severity": "High",
+          "effort": "Medium",
+          "finding": "MongoDB connection string hardcoded to private IP with no authentication. Incompatible with managed services."
+        },
+        {
+          "id": "DB-02",
+          "severity": "High",
+          "effort": "Medium",
+          "finding": "No connection pooling. New connection opened and closed for every request."
+        },
+        {
+          "id": "DB-03",
+          "severity": "High",
+          "effort": "Low",
+          "finding": "No database authentication configured. Managed services require credentials."
+        },
+        {
+          "id": "DB-04",
+          "severity": "Medium",
+          "effort": "Medium",
+          "finding": "No TLS/SSL configuration for database connections."
+        },
+        {
+          "id": "DB-05",
+          "severity": "Medium",
+          "effort": "Low",
+          "finding": "No retry logic or connection error handling beyond generic 500 responses."
+        },
+        {
+          "id": "DB-06",
+          "severity": "Low",
+          "effort": "Low",
+          "finding": "Simple query patterns are compatible with DocumentDB MongoDB API compatibility."
+        }
+      ],
+      "recommended_actions": [
+        "Externalize database connection string to environment variable",
+        "Implement connection pooling with modern MongoDB driver",
+        "Add TLS/SSL configuration for encrypted connections",
+        "Add IAM-based or credential-based authentication compatible with Amazon DocumentDB",
+        "Implement connection retry logic with exponential backoff",
+        "Evaluate Amazon DocumentDB compatibility for existing query patterns"
+      ]
+    },
+    {
+      "name": "Move to Managed Analytics",
+      "severity_status": "Needs Work",
+      "score_rating": "Needs Work",
+      "findings": [
+        {
+          "id": "ANA-01",
+          "severity": "Medium",
+          "effort": "Medium",
+          "finding": "No structured logging. No queryable data produced for analytics pipelines."
+        },
+        {
+          "id": "ANA-02",
+          "severity": "Medium",
+          "effort": "Medium",
+          "finding": "No event streaming or message publishing for analytics consumption."
+        },
+        {
+          "id": "ANA-03",
+          "severity": "Low",
+          "effort": "Low",
+          "finding": "Data could be replicated to analytics layer but no integration exists."
+        },
+        {
+          "id": "ANA-04",
+          "severity": "Low",
+          "effort": "Medium",
+          "finding": "No data pipeline integration. Data locked in MongoDB with no export or CDC mechanism."
+        }
+      ],
+      "recommended_actions": [
+        "Implement structured JSON logging with business-relevant fields",
+        "Consider publishing API events to Amazon EventBridge or Kinesis",
+        "Evaluate CDC from MongoDB/DocumentDB for analytics pipelines",
+        "Add application metrics for operational analytics"
+      ]
+    },
+    {
+      "name": "Move to Modern DevOps",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": "DEVOPS-01",
+          "severity": "High",
+          "effort": "High",
+          "finding": "No CI/CD pipeline exists. Deployment is manual (git pull + forever restart)."
+        },
+        {
+          "id": "DEVOPS-02",
+          "severity": "High",
+          "effort": "Medium",
+          "finding": "No automated testing of any kind. Zero test coverage."
+        },
+        {
+          "id": "DEVOPS-03",
+          "severity": "High",
+          "effort": "Low",
+          "finding": "No infrastructure as code beyond K8s manifests."
+        },
+        {
+          "id": "DEVOPS-04",
+          "severity": "Medium",
+          "effort": "Low",
+          "finding": "No environment separation (dev/staging/prod) configured."
+        },
+        {
+          "id": "DEVOPS-05",
+          "severity": "Medium",
+          "effort": "Low",
+          "finding": "Start script uses forever (not in dependencies) — inappropriate for containers."
+        },
+        {
+          "id": "DEVOPS-06",
+          "severity": "Medium",
+          "effort": "Medium",
+          "finding": "No observability pipeline configured."
+        },
+        {
+          "id": "DEVOPS-07",
+          "severity": "Low",
+          "effort": "Low",
+          "finding": ".gitignore exists with basic Node.js exclusions."
+        }
+      ],
+      "recommended_actions": [
+        "Implement CI/CD pipeline with build, test, scan, and deploy stages",
+        "Add test framework with unit and integration tests",
+        "Define infrastructure as code for the runtime environment",
+        "Configure environment-specific deployments",
+        "Set up observability pipeline",
+        "Replace forever with direct node execution"
+      ]
+    },
+    {
+      "name": "Move to AI",
+      "severity_status": "Needs Work",
+      "score_rating": "Needs Work",
+      "findings": [
+        {
+          "id": "AI-01",
+          "severity": "Medium",
+          "effort": "Medium",
+          "finding": "No machine-readable API contract (OpenAPI/Swagger) for AI agent integration."
+        },
+        {
+          "id": "AI-02",
+          "severity": "Medium",
+          "effort": "Medium",
+          "finding": "No structured data output or schema documentation for automated data extraction."
+        },
+        {
+          "id": "AI-03",
+          "severity": "Low",
+          "effort": "High",
+          "finding": "Static pricing formula could be enhanced with ML-based models for dynamic rate optimization."
+        },
+        {
+          "id": "AI-04",
+          "severity": "Low",
+          "effort": "Medium",
+          "finding": "No data pipeline for historical shipping/quote data to feed ML training."
+        },
+        {
+          "id": "AI-05",
+          "severity": "Low",
+          "effort": "Low",
+          "finding": "Simple, well-defined domain suitable for AI augmentation."
+        }
+      ],
+      "recommended_actions": [
+        "Create OpenAPI 3.x specification for agent and AI tool integration",
+        "Consider ML-based pricing models via Amazon SageMaker",
+        "Implement data pipelines for model training",
+        "Evaluate Amazon Bedrock for natural-language shipping query interfaces"
+      ]
+    }
+  ],
+  "summary": {
+    "critical_pathways": ["Move to Cloud Native", "Move to Open Source", "Move to Managed Databases", "Move to Modern DevOps"],
+    "needs_work_pathways": ["Move to Containers", "Move to Managed Analytics", "Move to AI"],
+    "ready_pathways": [],
+    "top_priority": "Upgrade EOL runtime and dependencies (Node.js, Express, MongoDB driver) to establish a secure, supported foundation for all other modernization efforts."
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "repository": "legacy-payroll-system",
+  "analysisDate": "2026-07-28",
+  "readinessProfile": "Not Agent-Integrable",
+  "overallRisk": "Critical",
+  "systemOverview": {
+    "language": "Enterprise COBOL 4.2",
+    "orchestration": "JCL (Job Control Language)",
+    "platform": "IBM z/OS mainframe",
+    "database": "IBM DB2 for z/OS v10 (end of support April 2020)",
+    "scheduler": "CA-7 (biweekly)",
+    "integration": "Plaintext FTP to EC2 file gateway (10.0.7.40)",
+    "dataFormat": "Fixed-width flat files (RECFM=FB, LRECL=120)",
+    "sourceFiles": ["src/PAYRUN.cbl", "jcl/PAYRUN.jcl"]
+  },
+  "categories": [
+    {
+      "name": "APIs and Machine-Readable Interfaces",
+      "severity": "BLOCKER",
+      "findings": [
+        {
+          "id": 1,
+          "severity": "BLOCKER",
+          "title": "No APIs or machine-readable interfaces exist",
+          "detail": "System has zero REST/HTTP, SOAP/WSDL, gRPC, or message queue interfaces. Only integration is plaintext FTP of fixed-width files to EC2 gateway."
+        },
+        {
+          "id": 2,
+          "severity": "BLOCKER",
+          "title": "No schema or contract",
+          "detail": "120-byte fixed-width records with no self-describing metadata, no versioning, no OpenAPI or protobuf contract."
+        },
+        {
+          "id": 3,
+          "severity": "INFO",
+          "title": "No real-time capability",
+          "detail": "Pure batch processing with 5-7 hour execution window. No way to invoke operations on-demand."
+        }
+      ],
+      "assessment": "There is no programmatic interface an AI agent could invoke. The system operates exclusively through batch file I/O with undocumented fixed-width formats."
+    },
+    {
+      "name": "Identity and Authentication",
+      "severity": "BLOCKER",
+      "findings": [
+        {
+          "id": 4,
+          "severity": "BLOCKER",
+          "title": "Hardcoded plaintext credentials in source control",
+          "detail": "FTP credentials in jcl/PAYRUN.jcl: user 'payroll', password 'PayR0ll2003!'. DB2 credentials also hardcoded per JCL comments."
+        },
+        {
+          "id": 5,
+          "severity": "BLOCKER",
+          "title": "No standard authentication mechanism",
+          "detail": "No OAuth, OIDC, IAM, token-based auth, or secrets management. No service identity or machine-to-machine authentication."
+        },
+        {
+          "id": 6,
+          "severity": "BLOCKER",
+          "title": "PII transmitted unencrypted over plain FTP",
+          "detail": "SSN and bank account data transmitted without TLS. Active security vulnerability."
+        }
+      ],
+      "assessment": "An AI agent cannot authenticate to this system through any standard identity mechanism. The only credentials are static plaintext values embedded in job control."
+    },
+    {
+      "name": "State Management and Idempotency",
+      "severity": "BLOCKER",
+      "findings": [
+        {
+          "id": 7,
+          "severity": "BLOCKER",
+          "title": "No idempotency or deduplication",
+          "detail": "No idempotency keys, no unique transaction identifiers, no deduplication logic. Duplicate runs produce duplicate payout records."
+        },
+        {
+          "id": 8,
+          "severity": "BLOCKER",
+          "title": "No checkpoint/restart capability",
+          "detail": "Single-pass sequential processing with no recovery points. Failure requires full re-run from the beginning."
+        },
+        {
+          "id": 9,
+          "severity": "RISK",
+          "title": "No transaction boundaries",
+          "detail": "No commit points within the batch run. DISP=(NEW,CATLG,DELETE) only deletes incomplete output on failure."
+        }
+      ],
+      "assessment": "An AI agent invoking this system has no way to ensure safe retry or prevent duplicate processing. A retry would reprocess all employees, potentially generating duplicate payments."
+    },
+    {
+      "name": "Human-in-the-Loop Controls",
+      "severity": "RISK",
+      "findings": [
+        {
+          "id": 10,
+          "severity": "RISK",
+          "title": "No programmatic approval gates",
+          "detail": "No workflow engine, no electronic sign-off, no guardrails or payment thresholds, no anomaly detection."
+        },
+        {
+          "id": 11,
+          "severity": "RISK",
+          "title": "No audit trail",
+          "detail": "No record of who authorized or triggered a run. Agent actions could not be attributed or reviewed."
+        },
+        {
+          "id": 12,
+          "severity": "INFO",
+          "title": "Informal operational controls only",
+          "detail": "CA-7 biweekly schedule is the only execution gate. Manual tax table updates each January. Source code comment warns against recompilation."
+        }
+      ],
+      "assessment": "No automated controls exist that would allow an AI agent to request human approval before executing high-risk operations like payroll processing."
+    },
+    {
+      "name": "Observability",
+      "severity": "RISK",
+      "findings": [
+        {
+          "id": 13,
+          "severity": "RISK",
+          "title": "No structured logging or metrics",
+          "detail": "Only SYSOUT=* (JES2 spool output). No timestamps, severity levels, counters, gauges, or histograms."
+        },
+        {
+          "id": 14,
+          "severity": "RISK",
+          "title": "No distributed tracing or health checks",
+          "detail": "No correlation IDs, trace context, or mechanism to verify system readiness."
+        },
+        {
+          "id": 15,
+          "severity": "INFO",
+          "title": "No external monitoring integration",
+          "detail": "No CloudWatch, SNMP, or alerting integration. Only NOTIFY=&SYSUID for job completion notification."
+        }
+      ],
+      "assessment": "An AI agent would have no way to observe the system's state, verify successful completion, or detect partial failures. Only z/OS-native JES2 spool output exists."
+    }
+  ],
+  "findingsSummary": {
+    "total": 15,
+    "blockers": 7,
+    "risks": 5,
+    "info": 3
+  },
+  "profileAssignment": {
+    "profile": "Not Agent-Integrable",
+    "rationale": "The system fails all five evaluation dimensions with three BLOCKER categories. It is a batch mainframe application with no external-facing interfaces that an AI agent could invoke. The complete absence of APIs, standard authentication, and idempotency guarantees means no level of agent integration is safe or technically feasible without fundamental re-architecture.",
+    "criteria": {
+      "hasMachineCallableInterface": false,
+      "hasStandardAuthentication": false,
+      "hasIdempotentOperations": false,
+      "hasProgrammaticApprovalWorkflows": false,
+      "hasMachineReadableObservability": false
+    }
+  },
+  "remediationRoadmap": [
+    "Expose an API layer — Wrap payroll operations behind a REST or gRPC service with OpenAPI/protobuf contracts, or migrate to event-driven processing.",
+    "Implement proper identity — Replace hardcoded credentials with IAM roles, OAuth2 client credentials, or AWS Secrets Manager. Encrypt all data in transit.",
+    "Add idempotency — Introduce unique run identifiers, deduplication logic, and checkpoint/restart capabilities.",
+    "Build approval workflows — Implement programmatic human-in-the-loop gates for high-risk operations like payment execution.",
+    "Instrument observability — Add structured logging, emit CloudWatch metrics, implement health checks, and provide machine-readable job status."
+  ]
+}

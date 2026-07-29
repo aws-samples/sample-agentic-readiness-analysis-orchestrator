@@ -1,0 +1,100 @@
+{
+  "repository": "legacy-helpdesk-tickets",
+  "readinessProfile": "Not Agent-Integrable",
+  "overallRiskLevel": "Critical",
+  "assessmentDate": "2026-07-28",
+  "summary": "This legacy internal IT helpdesk ticketing application (Django 1.4 / Python 2.7) is not suitable for AI agent integration in its current state. It lacks machine-readable API interfaces, has critical security vulnerabilities (SQL injection, XSS), no authentication enforcement on endpoints, no idempotency guarantees, no human-in-the-loop controls, and zero observability infrastructure.",
+  "categories": [
+    {
+      "name": "APIs and Machine-Readable Interfaces",
+      "readiness": "Not Agent-Integrable",
+      "findings": [
+        {"severity": "BLOCKER", "finding": "No machine-readable API exists (no REST, GraphQL, or RPC endpoints with structured responses)"},
+        {"severity": "BLOCKER", "finding": "Views return rendered HTML templates or raw HTML strings — no JSON/structured data output"},
+        {"severity": "BLOCKER", "finding": "No API schema or contract (no OpenAPI/Swagger, no WSDL, no documentation of request/response formats)"},
+        {"severity": "BLOCKER", "finding": "No versioned API — endpoints are Django view functions with no version prefix or content negotiation"},
+        {"severity": "RISK", "finding": "No input validation or schema enforcement — query parameters are consumed directly without type checking"}
+      ]
+    },
+    {
+      "name": "Identity and Authentication",
+      "readiness": "Not Agent-Integrable",
+      "findings": [
+        {"severity": "BLOCKER", "finding": "No authentication enforced on any endpoint — views lack @login_required or permission checks"},
+        {"severity": "BLOCKER", "finding": "No support for machine identity (no API keys, OAuth tokens, service accounts, or mTLS)"},
+        {"severity": "BLOCKER", "finding": "SQL injection in both views allows full database access bypass regardless of any intended access controls"},
+        {"severity": "RISK", "finding": "Session-based auth only (cookie-based) — unsuitable for programmatic agent access without browser emulation"},
+        {"severity": "RISK", "finding": "SECRET_KEY committed to source control — session tokens and CSRF tokens can be forged"},
+        {"severity": "INFO", "finding": "AuthenticationMiddleware is loaded but not utilized by any view"}
+      ]
+    },
+    {
+      "name": "State Management and Idempotency",
+      "readiness": "Not Agent-Integrable",
+      "findings": [
+        {"severity": "BLOCKER", "finding": "No idempotency controls — repeated identical requests may produce different results depending on database state"},
+        {"severity": "BLOCKER", "finding": "SQL injection allows arbitrary state mutation (INSERT, UPDATE, DELETE, DROP) via GET requests"},
+        {"severity": "RISK", "finding": "All operations use GET method — no proper HTTP method semantics (no distinction between safe/unsafe operations)"},
+        {"severity": "RISK", "finding": "No transaction isolation guarantees — raw cursor queries with no explicit transaction management"},
+        {"severity": "RISK", "finding": "Single PostgreSQL instance with no replication — single point of failure for all state"},
+        {"severity": "INFO", "finding": "No caching layer — every request hits the database directly"},
+        {"severity": "INFO", "finding": "Database credentials are hardcoded plaintext in source control"}
+      ]
+    },
+    {
+      "name": "Human-in-the-Loop Controls",
+      "readiness": "Not Agent-Integrable",
+      "findings": [
+        {"severity": "BLOCKER", "finding": "No approval workflows, confirmation steps, or review gates exist anywhere in the application"},
+        {"severity": "BLOCKER", "finding": "No rate limiting or throttling — an agent could issue unlimited requests"},
+        {"severity": "BLOCKER", "finding": "No undo/rollback capability exposed to users or systems"},
+        {"severity": "RISK", "finding": "No audit trail — actions are not logged with actor identity or timestamp"},
+        {"severity": "RISK", "finding": "No escalation paths — no mechanism to flag an action for human review"},
+        {"severity": "INFO", "finding": "No webhook or callback mechanism for asynchronous human approval"}
+      ]
+    },
+    {
+      "name": "Observability",
+      "readiness": "Not Agent-Integrable",
+      "findings": [
+        {"severity": "BLOCKER", "finding": "No structured logging — only a single print statement exists in the entire codebase"},
+        {"severity": "BLOCKER", "finding": "No metrics collection (no Prometheus, CloudWatch, StatsD, or equivalent)"},
+        {"severity": "BLOCKER", "finding": "No distributed tracing (no correlation IDs, no X-Ray, no OpenTelemetry)"},
+        {"severity": "BLOCKER", "finding": "No health check endpoint — impossible to determine system availability programmatically"},
+        {"severity": "RISK", "finding": "DEBUG = True leaks full stack traces to end users but provides no operational visibility"},
+        {"severity": "RISK", "finding": "No alerting beyond Django's default email-on-500 to a single internal address"},
+        {"severity": "INFO", "finding": "No request logging (no access logs beyond Apache's default)"}
+      ]
+    }
+  ],
+  "findingsSummary": {
+    "totalBlockers": 16,
+    "totalRisks": 10,
+    "totalInfos": 5,
+    "byCategory": {
+      "APIs and Machine-Readable Interfaces": {"blockers": 4, "risks": 1, "infos": 0},
+      "Identity and Authentication": {"blockers": 3, "risks": 2, "infos": 1},
+      "State Management and Idempotency": {"blockers": 2, "risks": 3, "infos": 2},
+      "Human-in-the-Loop Controls": {"blockers": 3, "risks": 2, "infos": 1},
+      "Observability": {"blockers": 4, "risks": 2, "infos": 1}
+    }
+  },
+  "remediationPriorities": [
+    "Upgrade runtime — Migrate to supported Python 3.x and Django 4.x+ to receive security patches and modern framework features.",
+    "Fix critical security vulnerabilities — Eliminate SQL injection (use parameterized queries/ORM), fix XSS (use template engine), externalize secrets, disable DEBUG in production.",
+    "Add a machine-readable API layer — Implement a RESTful JSON API (e.g., Django REST Framework) with OpenAPI schema documentation.",
+    "Implement proper authentication — Add API key or OAuth2 client-credentials support for machine callers alongside session auth for humans.",
+    "Add idempotency controls — Use proper HTTP methods (POST for creation with idempotency keys, PUT for updates), add ETags for concurrency control.",
+    "Implement observability — Add structured logging, request tracing (correlation IDs), metrics, and a health check endpoint.",
+    "Add human-in-the-loop controls — Implement rate limiting, action audit logging, and approval workflows for destructive operations.",
+    "Add API documentation and contracts — Publish and maintain an OpenAPI specification as the agent integration contract."
+  ],
+  "technologyStack": {
+    "language": {"current": "Python 2.7", "status": "EOL (Jan 2020)"},
+    "framework": {"current": "Django 1.4", "status": "EOL (2015)"},
+    "database": {"current": "PostgreSQL 9.1", "status": "EOL"},
+    "os": {"current": "Ubuntu 12.04", "status": "EOL"},
+    "webServer": {"current": "Apache 2.2 + mod_wsgi", "status": "EOL"},
+    "deployment": {"current": "Manual git pull + restart", "status": "No CI/CD"}
+  }
+}

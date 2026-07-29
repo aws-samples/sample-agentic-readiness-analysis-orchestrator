@@ -1,0 +1,273 @@
+{
+  "schemaVersion": "1.0",
+  "analysisType": "modernization-readiness",
+  "repository": "legacy-timesheet-webforms",
+  "summary": "Legacy ASP.NET WebForms 2.0 application (VB.NET) on entirely end-of-life infrastructure. No cloud-native patterns, no containerization, no CI/CD, no managed services, and critical security vulnerabilities. Complete ground-up modernization required across all seven pathways.",
+  "technology": {
+    "framework": ".NET Framework 2.0",
+    "uiFramework": "ASP.NET WebForms",
+    "language": "VB.NET 8.0",
+    "webServer": "IIS 6.0",
+    "operatingSystem": "Windows Server 2003",
+    "database": "SQL Server 2005",
+    "allEndOfLife": true
+  },
+  "overallReadiness": "Not Ready",
+  "findings": {
+    "total": 20,
+    "high": 10,
+    "medium": 7,
+    "low": 3
+  },
+  "pathways": {
+    "moveToCloudNative": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "effort": "High",
+      "findings": [
+        {
+          "id": "CN-1",
+          "severity": "High",
+          "title": "No cloud-native architecture patterns",
+          "description": "Monolithic single-page WebForms app with tightly coupled UI, business logic, and data access in a single code-behind file. No separation of concerns, no dependency injection, no service layer.",
+          "evidence": ["Timesheet.aspx.vb: All logic in a single Page class with no abstraction layers"]
+        },
+        {
+          "id": "CN-2",
+          "severity": "High",
+          "title": "In-process session state prevents horizontal scaling",
+          "description": "Session state is configured as InProc (single-server only). The application cannot run on multiple instances without session loss.",
+          "evidence": ["web.config: sessionState mode=\"InProc\" timeout=\"60\""]
+        },
+        {
+          "id": "CN-3",
+          "severity": "High",
+          "title": "No health check or readiness endpoints",
+          "description": "No mechanism for orchestrators or load balancers to determine application health.",
+          "evidence": ["No health check endpoints in any source file"]
+        },
+        {
+          "id": "CN-4",
+          "severity": "Medium",
+          "title": "ViewState-dependent page lifecycle",
+          "description": "Multi-megabyte ViewState ties the application to server-affinity and prevents stateless operation.",
+          "evidence": ["README.md documents ViewState bloat making pages multi-megabyte"]
+        }
+      ]
+    },
+    "moveToContainers": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "effort": "High",
+      "findings": [
+        {
+          "id": "CT-1",
+          "severity": "High",
+          "title": "No Dockerfile or container configuration",
+          "description": "No container artifacts exist in the repository. The application has never been containerized.",
+          "evidence": ["No Dockerfile, docker-compose.yml, or .dockerignore in repository"]
+        },
+        {
+          "id": "CT-2",
+          "severity": "High",
+          "title": "Requires full Windows/.NET Framework runtime",
+          "description": ".NET Framework 2.0 WebForms cannot run in a Linux container. A rewrite to .NET 8+ is required before Linux containerization is viable.",
+          "evidence": ["Application targets .NET Framework 2.0 which requires Windows Server with IIS"]
+        },
+        {
+          "id": "CT-3",
+          "severity": "Medium",
+          "title": "No container orchestration manifests",
+          "description": "No Kubernetes manifests, ECS task definitions, or docker-compose files exist.",
+          "evidence": ["No k8s/, kubernetes/, or ecs/ directories in repository"]
+        }
+      ]
+    },
+    "moveToOpenSource": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "effort": "High",
+      "findings": [
+        {
+          "id": "OS-1",
+          "severity": "High",
+          "title": "Locked into proprietary Microsoft stack",
+          "description": "The application depends entirely on proprietary technologies: .NET Framework 2.0 (Windows-only), IIS 6, SQL Server 2005, VB.NET. No open-source frameworks or libraries are used.",
+          "evidence": ["web.config: System.Data.SqlClient provider", "No open-source library references"]
+        },
+        {
+          "id": "OS-2",
+          "severity": "Medium",
+          "title": "No cross-platform runtime support",
+          "description": ".NET Framework 2.0 is Windows-exclusive. The application cannot run on Linux or macOS without a complete rewrite.",
+          "evidence": ["Deployment target is IIS 6 on Windows Server 2003"]
+        }
+      ]
+    },
+    "moveToManagedDatabases": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "effort": "Medium",
+      "findings": [
+        {
+          "id": "DB-1",
+          "severity": "High",
+          "title": "Self-managed SQL Server 2005 on-premises",
+          "description": "Database runs on an internal server (10.0.6.15) with no managed service, no automated backups, no high availability, and no patching. SQL Server 2005 is end-of-life.",
+          "evidence": ["web.config: Data Source=10.0.6.15;Initial Catalog=Timesheets"]
+        },
+        {
+          "id": "DB-2",
+          "severity": "High",
+          "title": "Raw SQL with string concatenation (SQL injection)",
+          "description": "Data access uses direct SqlClient with string-concatenated queries, creating critical SQL injection vulnerabilities.",
+          "evidence": ["Timesheet.aspx.vb: \"SELECT ... WHERE employee_id = '\" & empId & \"'\"", "Timesheet.aspx.vb: \"INSERT INTO timesheets ... VALUES ('\" & Session(\"EmployeeId\") & \"'...\""]
+        },
+        {
+          "id": "DB-3",
+          "severity": "Medium",
+          "title": "Plaintext credentials in source control",
+          "description": "Database connection string with password is hardcoded in web.config and committed to the repository.",
+          "evidence": ["web.config: Password=Time2006! in connection string"]
+        }
+      ]
+    },
+    "moveToManagedAnalytics": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "effort": "Medium",
+      "findings": [
+        {
+          "id": "AN-1",
+          "severity": "Medium",
+          "title": "No analytics or reporting capabilities",
+          "description": "The application only performs basic CRUD on timesheet entries. No reporting views, dashboards, data exports, or analytical queries.",
+          "evidence": ["Timesheet.aspx.vb: Only SELECT and INSERT operations on a single table"]
+        },
+        {
+          "id": "AN-2",
+          "severity": "Low",
+          "title": "No event streaming or data pipeline",
+          "description": "No mechanism to stream timesheet data to analytics systems. All data remains locked in the operational database.",
+          "evidence": ["No event bus, message queue, or change data capture configuration"]
+        }
+      ]
+    },
+    "moveToModernDevOps": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "effort": "High",
+      "findings": [
+        {
+          "id": "DO-1",
+          "severity": "High",
+          "title": "No CI/CD pipeline",
+          "description": "Deployment is a manual Publish from Visual Studio 2005 to a network share. No automated build, test, or deployment process exists.",
+          "evidence": ["No .github/workflows/, Jenkinsfile, buildspec.yml, or CI/CD configuration", "README.md: Publish from Visual Studio 2005 to a network share"]
+        },
+        {
+          "id": "DO-2",
+          "severity": "High",
+          "title": "No automated testing",
+          "description": "No test files, no testing framework, no test configuration exists anywhere in the repository.",
+          "evidence": ["No *Test*, *_test*, *.test.*, or *Spec* files in repository"]
+        },
+        {
+          "id": "DO-3",
+          "severity": "Medium",
+          "title": "No infrastructure as code",
+          "description": "No Terraform, CDK, CloudFormation, or any IaC templates. Infrastructure is manually provisioned.",
+          "evidence": ["No terraform/, cdk/, cloudformation/, or IaC templates in repository"]
+        },
+        {
+          "id": "DO-4",
+          "severity": "Low",
+          "title": "No environment parity",
+          "description": "Development and production use the same hardcoded configuration. No environment-specific configuration or deployment stages.",
+          "evidence": ["Single web.config with hardcoded production credentials"]
+        }
+      ]
+    },
+    "moveToAI": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "effort": "Medium",
+      "findings": [
+        {
+          "id": "AI-1",
+          "severity": "Medium",
+          "title": "No AI/ML integration or readiness",
+          "description": "The application has no machine learning models, no AI-powered features, and no integration points for AI services.",
+          "evidence": ["No AI/ML libraries, SDKs, or service integrations in the codebase"]
+        },
+        {
+          "id": "AI-2",
+          "severity": "Low",
+          "title": "No structured data pipeline for ML training",
+          "description": "Timesheet data is locked in an operational database with no mechanism to extract, transform, or feed it into ML workflows.",
+          "evidence": ["No data export or ETL processes"]
+        }
+      ]
+    }
+  },
+  "securityFindings": [
+    {
+      "issue": "SQL Injection",
+      "severity": "High",
+      "detail": "String concatenation used to build SQL queries from user/session input in Timesheet.aspx.vb"
+    },
+    {
+      "issue": "Credential Exposure",
+      "severity": "High",
+      "detail": "Database password (Time2006!) hardcoded in web.config committed to source control"
+    },
+    {
+      "issue": "No Transport Security",
+      "severity": "High",
+      "detail": "Forms authentication configured with requireSSL=false, transmitting credentials over unencrypted connections"
+    },
+    {
+      "issue": "No Input Validation",
+      "severity": "Medium",
+      "detail": "User inputs (date, hours, project) used directly in SQL statements with no sanitization"
+    },
+    {
+      "issue": "Unsupported Infrastructure",
+      "severity": "Medium",
+      "detail": "All platform components (OS, web server, framework, database) are end-of-life with no security patches"
+    }
+  ],
+  "modernizationRoadmap": {
+    "phase1": {
+      "name": "Replatform Foundation",
+      "steps": [
+        "Rewrite to .NET 8+ ASP.NET Core Web API",
+        "Migrate to parameterized data access with Entity Framework Core",
+        "Implement automated testing (unit and integration)"
+      ]
+    },
+    "phase2": {
+      "name": "Cloud Infrastructure",
+      "steps": [
+        "Containerize with Docker (multi-stage, Linux)",
+        "Migrate database to Amazon RDS/Aurora",
+        "Secure credentials with AWS Secrets Manager"
+      ]
+    },
+    "phase3": {
+      "name": "Operational Excellence",
+      "steps": [
+        "Implement CI/CD pipeline with AWS CodePipeline",
+        "Deploy to Amazon ECS/EKS with auto-scaling",
+        "Add observability (structured logging, AWS X-Ray, CloudWatch)"
+      ]
+    },
+    "phase4": {
+      "name": "Advanced Capabilities",
+      "steps": [
+        "Add analytics integration with Amazon QuickSight",
+        "Enable AI capabilities with Amazon Bedrock integration"
+      ]
+    }
+  }
+}

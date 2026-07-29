@@ -1,0 +1,168 @@
+{
+  "repository": "legacy-timesheet-webforms",
+  "analysisType": "agentic-readiness",
+  "readinessProfile": "Not Agent-Integrable",
+  "summary": "Legacy ASP.NET WebForms 2.0 application with no machine-readable interfaces, critical security vulnerabilities, and entirely end-of-life infrastructure. Complete modernization required for any agentic integration.",
+  "technology": {
+    "framework": ".NET Framework 2.0",
+    "language": "VB.NET",
+    "ui": "ASP.NET WebForms",
+    "server": "IIS 6.0 / Windows Server 2003",
+    "database": "SQL Server 2005",
+    "allEndOfLife": true
+  },
+  "scores": {
+    "blockers": 6,
+    "risks": 5,
+    "info": 2
+  },
+  "categories": {
+    "apisAndInterfaces": {
+      "score": "Not Agent-Integrable",
+      "findings": [
+        {
+          "id": "API-1",
+          "severity": "BLOCKER",
+          "title": "No API endpoints exist",
+          "description": "The application is entirely browser-rendered WebForms with PostBack interactions. No REST, GraphQL, SOAP, WCF, or gRPC services are exposed.",
+          "evidence": ["Only .aspx and .aspx.vb files exist", "No controllers, service classes, or endpoint routing"]
+        },
+        {
+          "id": "API-2",
+          "severity": "BLOCKER",
+          "title": "No structured request/response contracts",
+          "description": "All data exchange occurs through HTML form fields and ViewState. No OpenAPI specs, WSDL files, or schema definitions exist.",
+          "evidence": ["No API documentation or contract files in repository"]
+        }
+      ]
+    },
+    "identityAndAuthentication": {
+      "score": "Not Agent-Integrable",
+      "findings": [
+        {
+          "id": "AUTH-1",
+          "severity": "BLOCKER",
+          "title": "No token-based or machine-to-machine authentication",
+          "description": "The system uses ASP.NET Forms Authentication with session cookies only. No OAuth2, API key, service account, or JWT support for programmatic access.",
+          "evidence": ["web.config: Forms Authentication with cookie-based sessions", "Session(\"EmployeeId\") used for identity"]
+        },
+        {
+          "id": "AUTH-2",
+          "severity": "RISK",
+          "title": "Plaintext database credentials in source control",
+          "description": "Connection string in web.config contains Password=Time2006! in cleartext.",
+          "evidence": ["web.config line 6: connection string with plaintext password"]
+        },
+        {
+          "id": "AUTH-3",
+          "severity": "RISK",
+          "title": "No SSL/TLS enforcement",
+          "description": "Forms authentication configured with requireSSL=false, transmitting auth cookies over unencrypted connections.",
+          "evidence": ["web.config: requireSSL=\"false\""]
+        }
+      ]
+    },
+    "stateManagementAndIdempotency": {
+      "score": "Not Agent-Integrable",
+      "findings": [
+        {
+          "id": "STATE-1",
+          "severity": "BLOCKER",
+          "title": "No idempotency controls",
+          "description": "The btnSave_Click handler performs a raw SQL INSERT on every invocation with no duplicate detection, idempotency keys, or optimistic concurrency checks.",
+          "evidence": ["Timesheet.aspx.vb btnSave_Click: direct INSERT INTO with no deduplication"]
+        },
+        {
+          "id": "STATE-2",
+          "severity": "RISK",
+          "title": "In-process session state with no distribution",
+          "description": "Session state is InProc (single-server, lost on app pool recycle).",
+          "evidence": ["web.config: sessionState mode=\"InProc\" timeout=\"60\""]
+        },
+        {
+          "id": "STATE-3",
+          "severity": "INFO",
+          "title": "ViewState-dependent page lifecycle",
+          "description": "Pages rely on multi-megabyte ViewState incompatible with stateless API interactions.",
+          "evidence": ["README.md documents 5-8 MB ViewState on Timesheet.aspx"]
+        }
+      ]
+    },
+    "humanInTheLoop": {
+      "score": "Not Agent-Integrable",
+      "findings": [
+        {
+          "id": "HITL-1",
+          "severity": "BLOCKER",
+          "title": "No approval workflow or confirmation gates",
+          "description": "Timesheet entries are saved directly to the database with no review step, manager approval, or confirmation dialog.",
+          "evidence": ["Timesheet.aspx.vb: btnSave_Click inserts directly into database"]
+        },
+        {
+          "id": "HITL-2",
+          "severity": "RISK",
+          "title": "No audit trail",
+          "description": "No logging of who changed what and when. No change history or rollback capability.",
+          "evidence": ["No audit tables, change logs, or event sourcing patterns"]
+        }
+      ]
+    },
+    "observability": {
+      "score": "Not Agent-Integrable",
+      "findings": [
+        {
+          "id": "OBS-1",
+          "severity": "RISK",
+          "title": "No logging, metrics, or tracing",
+          "description": "No logging framework, no health check endpoints. Agent interactions would be invisible to operators.",
+          "evidence": ["No logging imports or log statements in any source file", "No Application Insights or similar instrumentation"]
+        },
+        {
+          "id": "OBS-2",
+          "severity": "INFO",
+          "title": "Debug mode and error disclosure in production",
+          "description": "compilation debug=true and customErrors mode=Off expose stack traces but do not capture errors centrally.",
+          "evidence": ["web.config: compilation debug=\"true\"", "web.config: customErrors mode=\"Off\""]
+        }
+      ]
+    },
+    "security": {
+      "score": "Not Agent-Integrable",
+      "findings": [
+        {
+          "id": "SEC-1",
+          "severity": "BLOCKER",
+          "title": "SQL Injection vulnerability",
+          "description": "String concatenation is used to build SQL queries from user input. An agent invoking this system could inadvertently trigger injection attacks, exfiltrate data, or corrupt the database.",
+          "evidence": ["Timesheet.aspx.vb: SELECT query built with string concatenation from Session(\"EmployeeId\")", "Timesheet.aspx.vb: INSERT query built with string concatenation from user input", "No parameterized queries or ORM usage anywhere in the codebase"]
+        }
+      ]
+    }
+  },
+  "securityConcerns": [
+    {
+      "issue": "No Input Validation",
+      "severity": "HIGH",
+      "detail": "User inputs (date, hours, project) used raw with no sanitization"
+    },
+    {
+      "issue": "Credential Exposure",
+      "severity": "HIGH",
+      "detail": "Database password hardcoded in web.config committed to source control"
+    },
+    {
+      "issue": "No Transport Security",
+      "severity": "HIGH",
+      "detail": "Authentication cookies transmitted without SSL"
+    }
+  ],
+  "remediationRoadmap": [
+    "Replatform to .NET 8+ with ASP.NET Core Web API and OpenAPI documentation",
+    "Implement OAuth2/OIDC with machine-to-machine (client credentials) flows",
+    "Add idempotency keys on all write operations",
+    "Introduce configurable approval workflows with agent-respectable gates",
+    "Add structured logging, distributed tracing, and health check endpoints",
+    "Use parameterized queries, remove hardcoded credentials, enforce HTTPS",
+    "Deploy to supported infrastructure (containers or managed services)"
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "repository": "legacy-shipping-api",
+  "readinessProfile": "Not Agent-Integrable",
+  "summary": "This legacy Node.js shipping rate API (circa 2013) is not safe for AI agent integration. Critical security vulnerabilities — including NoSQL injection, a hardcoded shared credential, and an end-of-life software stack — make automated invocation dangerous. The system lacks observability, idempotency guarantees, and any human-in-the-loop safeguards.",
+  "scores": {
+    "apisAndInterfaces": "FAIL",
+    "identityAndAuthentication": "FAIL",
+    "stateManagementAndIdempotency": "PARTIAL",
+    "humanInTheLoop": "FAIL",
+    "observability": "FAIL"
+  },
+  "findings": {
+    "apisAndInterfaces": [
+      {
+        "id": "API-01",
+        "severity": "BLOCKER",
+        "title": "NoSQL Injection via unvalidated query parameters",
+        "description": "The /rates endpoint passes req.query.origin and req.query.dest directly into a MongoDB find() filter without validation or sanitization. An agent (or attacker) can inject MongoDB query operators ($gt, $ne, $regex) to exfiltrate arbitrary data from the rates collection."
+      },
+      {
+        "id": "API-02",
+        "severity": "RISK",
+        "title": "No API schema or contract definition",
+        "description": "No OpenAPI/Swagger specification, no typed request/response schemas. Agents cannot programmatically discover endpoint capabilities, parameter constraints, or response formats."
+      },
+      {
+        "id": "API-03",
+        "severity": "RISK",
+        "title": "Unbounded query results",
+        "description": "The /rates endpoint returns all matching documents with no pagination, limit, or cursor. A broad query could return excessive data, causing memory exhaustion or denial of service."
+      },
+      {
+        "id": "API-04",
+        "severity": "INFO",
+        "title": "No versioning strategy",
+        "description": "API has no version prefix (e.g., /v1/rates). Future changes risk breaking agent integrations without warning."
+      }
+    ],
+    "identityAndAuthentication": [
+      {
+        "id": "AUTH-01",
+        "severity": "BLOCKER",
+        "title": "Hardcoded shared API key in source code",
+        "description": "The single credential 'ship-2013-abc123-static' is committed to version control. All consumers share the same key with no per-caller identity, making it impossible to distinguish agent callers from human callers or revoke individual access."
+      },
+      {
+        "id": "AUTH-02",
+        "severity": "BLOCKER",
+        "title": "No authorization model",
+        "description": "Once authenticated, any caller has unrestricted access to all endpoints. There is no role-based access, scope limitation, or permission model to constrain what an agent can do."
+      },
+      {
+        "id": "AUTH-03",
+        "severity": "RISK",
+        "title": "Unauthenticated MongoDB connection",
+        "description": "The database connection (mongodb://10.0.8.20:27017/shipping) uses no credentials or TLS, exposing the data layer to network-level attacks."
+      }
+    ],
+    "stateManagementAndIdempotency": [
+      {
+        "id": "STATE-01",
+        "severity": "INFO",
+        "title": "No idempotency keys supported",
+        "description": "Neither endpoint accepts idempotency keys. However, both operations are inherently safe to retry: /rates is a read and /quote is a stateless calculation. This is informational rather than blocking in this specific case."
+      },
+      {
+        "id": "STATE-02",
+        "severity": "BLOCKER",
+        "title": "New database connection per request",
+        "description": "Each /rates request opens a new MongoDB connection and closes it after the query. Under agent-driven load this will exhaust connection limits and cause cascading failures. No connection pooling exists."
+      }
+    ],
+    "humanInTheLoop": [
+      {
+        "id": "HITL-01",
+        "severity": "BLOCKER",
+        "title": "No rate limiting or throttling",
+        "description": "No mechanism exists to limit request volume. An agent could issue unbounded requests, causing resource exhaustion or unexpected costs."
+      },
+      {
+        "id": "HITL-02",
+        "severity": "BLOCKER",
+        "title": "No audit trail",
+        "description": "No request logging, no caller identification in logs, no record of what was queried or quoted. It is impossible to review or audit agent actions after the fact."
+      }
+    ],
+    "observability": [
+      {
+        "id": "OBS-01",
+        "severity": "BLOCKER",
+        "title": "Effectively zero observability",
+        "description": "The application has a single console.log at startup. No request logging, no structured logs, no metrics emission, no distributed tracing, no health check endpoint. Agent interactions cannot be monitored, debugged, or alerted on."
+      }
+    ],
+    "crossCuttingSecurity": [
+      {
+        "id": "SEC-01",
+        "severity": "BLOCKER",
+        "title": "End-of-life software stack with known CVEs",
+        "description": "The application declares Node 0.10, Express 3.4.8, and MongoDB native driver 1.4.7. All three have multiple known security vulnerabilities (CVEs). The deprecated express.bodyParser() middleware is also vulnerable. Running this stack in production exposes the system to remote code execution and other exploits."
+      }
+    ]
+  },
+  "blockerCount": 8,
+  "riskCount": 3,
+  "infoCount": 2,
+  "recommendations": [
+    "Upgrade the runtime and dependencies — Migrate to a supported Node.js LTS, Express 4+/5, and MongoDB driver 5+/6. Address all known CVEs.",
+    "Fix NoSQL injection — Validate and sanitize all query parameters; reject non-string types or use explicit allowlists for filter fields.",
+    "Implement proper identity — Replace the hardcoded shared key with per-caller credentials (e.g., API Gateway with IAM, OAuth2 client credentials, or JWT). Enable per-agent access control.",
+    "Add observability — Implement structured request logging, a /health endpoint, metrics (latency, error rates), and distributed tracing (e.g., AWS X-Ray).",
+    "Add rate limiting — Use middleware or API Gateway throttling to bound request volume per caller.",
+    "Implement connection pooling — Reuse MongoDB connections across requests.",
+    "Publish an API contract — Create an OpenAPI specification with typed schemas, enabling agents to discover and validate interactions programmatically.",
+    "Add pagination — Limit result set sizes on the /rates endpoint."
+  ]
+}

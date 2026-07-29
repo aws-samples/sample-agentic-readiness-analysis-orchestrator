@@ -1,0 +1,372 @@
+{
+  "schema_version": "1.0",
+  "repository": "legacy-crm-desktop",
+  "assessment_date": "2026-07-28",
+  "analysis_type": "modernization-readiness",
+  "application_type": "Win32 Desktop CRM (Visual Basic 6.0)",
+  "overall_severity_status": "Critical",
+  "overall_score_rating": "Not Ready",
+  "executive_summary": "This is a 2005-era Visual Basic 6.0 desktop CRM application backed by a Microsoft Access database on an SMB file share. It has no modern software engineering practices — no CI/CD, no tests, no containerization, no APIs, no cloud services, no observability. Every technology in the stack is end-of-life or unsupported. The application requires fundamental re-architecture across all modernization pathways before it can operate in a cloud-native environment.",
+  "technology_stack": {
+    "language": "Visual Basic 6.0",
+    "framework": "Win32 Desktop (VB6 Runtime)",
+    "database_primary": "Microsoft Access 2003 (.mdb) on SMB share",
+    "database_reporting": "SQL Server 2012",
+    "reporting": "Crystal Reports 8.5",
+    "data_access": "ADO / Jet OLEDB 4.0",
+    "build_system": "None",
+    "test_framework": "None",
+    "ci_cd": "None",
+    "containerization": "None",
+    "infrastructure_as_code": "None",
+    "observability": "None"
+  },
+  "pathways": {
+    "move_to_cloud_native": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "finding_count": 7,
+      "severity_breakdown": {
+        "High": 4,
+        "Medium": 2,
+        "Low": 1
+      },
+      "findings": [
+        {
+          "severity": "High",
+          "description": "Application is a monolithic Win32 desktop executable with no service decomposition — cannot be deployed as a cloud-native service",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No API layer exists — business logic is tightly coupled to the GUI form with direct database file access over SMB",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No externalized configuration — database paths and credentials are hardcoded constants in source",
+          "effort": "Medium"
+        },
+        {
+          "severity": "High",
+          "description": "No health checks, readiness probes, or graceful shutdown — incompatible with orchestrated environments",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No stateless design — application holds a persistent ADO connection for the lifetime of the form",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No 12-factor app principles followed — environment-specific values baked into the binary",
+          "effort": "Low"
+        },
+        {
+          "severity": "Low",
+          "description": "Single-form architecture means minimal internal coupling to untangle during re-architecture",
+          "effort": null
+        }
+      ],
+      "recommended_actions": [
+        "Re-implement business logic as a web service (REST API on AWS Lambda or Amazon ECS) with externalized configuration",
+        "Adopt microservices or modular monolith architecture with defined API contracts",
+        "Use AWS Systems Manager Parameter Store or AWS Secrets Manager for configuration"
+      ]
+    },
+    "move_to_containers": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "finding_count": 6,
+      "severity_breakdown": {
+        "High": 3,
+        "Medium": 2,
+        "Low": 1
+      },
+      "findings": [
+        {
+          "severity": "High",
+          "description": "VB6 runtime requires Windows with compatibility shim — cannot run in a standard Linux container",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No Dockerfile, no container image, no container registry configuration",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "Application depends on SMB file share (mapped drive S:\\) for database access — not portable to container networking",
+          "effort": "High"
+        },
+        {
+          "severity": "Medium",
+          "description": "No build automation — application compiled manually on a single developer's machine using the VB6 IDE",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "Crystal Reports 8.5 runtime dependency requires GUI-mode Windows installation — incompatible with headless containers",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Low",
+          "description": "Small codebase (single form file) would simplify a ground-up rewrite targeting a containerizable runtime",
+          "effort": null
+        }
+      ],
+      "recommended_actions": [
+        "Rewrite in a containerizable language/framework (Python/FastAPI, Java/Spring Boot, .NET 8)",
+        "Build container images with Amazon ECR and deploy via Amazon ECS or Amazon EKS",
+        "Replace Crystal Reports with Amazon QuickSight"
+      ]
+    },
+    "move_to_open_source": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "finding_count": 5,
+      "severity_breakdown": {
+        "High": 3,
+        "Medium": 2,
+        "Low": 0
+      },
+      "findings": [
+        {
+          "severity": "High",
+          "description": "Visual Basic 6.0 is proprietary, unsupported (EOL 2008), with no open-source runtime or compiler",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "Microsoft Access 2003 (.mdb) is a proprietary closed-format database with no open-source equivalent driver support",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "Crystal Reports 8.5 is proprietary reporting software with no migration path to open source in place",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "Microsoft Jet OLEDB 4.0 data provider is Windows-only and proprietary — no cross-platform alternative",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No open-source tooling in the stack — no OSS build tools, test frameworks, or libraries",
+          "effort": "Low"
+        }
+      ],
+      "recommended_actions": [
+        "Migrate from VB6 to an open-source language and framework (Python, Node.js, Java, or .NET on Linux)",
+        "Replace Microsoft Access with PostgreSQL (Amazon RDS for PostgreSQL or Amazon Aurora PostgreSQL)",
+        "Replace Crystal Reports with open-source alternatives (Apache Superset, Metabase) or Amazon QuickSight"
+      ]
+    },
+    "move_to_managed_databases": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "finding_count": 7,
+      "severity_breakdown": {
+        "High": 3,
+        "Medium": 3,
+        "Low": 1
+      },
+      "findings": [
+        {
+          "severity": "High",
+          "description": "Primary database is Microsoft Access 2003 (.mdb) on SMB file share — file-based database with no server process, no ACID guarantees under concurrency, and monthly corruption events",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "Reporting database is SQL Server 2012, past end-of-extended-support — no longer receiving security patches",
+          "effort": "Medium"
+        },
+        {
+          "severity": "High",
+          "description": "Database credentials hardcoded in source — incompatible with managed database IAM authentication",
+          "effort": "Low"
+        },
+        {
+          "severity": "Medium",
+          "description": "No connection pooling — each application instance opens a direct persistent connection",
+          "effort": "Low"
+        },
+        {
+          "severity": "Medium",
+          "description": "Raw SQL with string concatenation (SQL injection vulnerability) — no parameterized queries or ORM",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "Nightly DTS/SSIS sync between Access and SQL Server is fragile and undocumented",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Low",
+          "description": "Simple data model (single Customers table visible) should make schema migration straightforward",
+          "effort": null
+        }
+      ],
+      "recommended_actions": [
+        "Migrate from Access .mdb to Amazon RDS (PostgreSQL or MySQL) or Amazon Aurora",
+        "Migrate SQL Server 2012 to Amazon RDS for SQL Server (current version) or Amazon Aurora PostgreSQL",
+        "Implement AWS IAM database authentication and store credentials in AWS Secrets Manager",
+        "Replace DTS/SSIS sync with AWS DMS or event-driven data replication"
+      ]
+    },
+    "move_to_managed_analytics": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "finding_count": 5,
+      "severity_breakdown": {
+        "High": 2,
+        "Medium": 2,
+        "Low": 1
+      },
+      "findings": [
+        {
+          "severity": "High",
+          "description": "Reporting relies on Crystal Reports 8.5 — unsupported software that cannot be installed on new machines",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "Analytics data pipeline is a nightly DTS/SSIS package syncing Access to SQL Server 2012 — no streaming, no real-time analytics",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No data warehouse or data lake architecture — reporting runs directly against an operational database copy",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No BI tooling beyond Crystal Reports — no dashboards, no self-service analytics",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Low",
+          "description": "Simple data model means migration to a modern analytics platform would be straightforward",
+          "effort": null
+        }
+      ],
+      "recommended_actions": [
+        "Replace Crystal Reports with Amazon QuickSight for interactive dashboards and reporting",
+        "Implement data pipelines using AWS Glue or Amazon Kinesis to feed Amazon Redshift or Amazon Athena",
+        "Establish a data lake on Amazon S3 for historical analysis and ML-ready datasets"
+      ]
+    },
+    "move_to_modern_devops": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "finding_count": 7,
+      "severity_breakdown": {
+        "High": 4,
+        "Medium": 2,
+        "Low": 1
+      },
+      "findings": [
+        {
+          "severity": "High",
+          "description": "No CI/CD pipeline — application is compiled manually on a single developer's machine",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No automated testing — zero test files, zero test frameworks, zero test coverage",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "Deployment is manual EXE copy to each laptop — no installer, no package management, no automated distribution",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No infrastructure-as-code — all infrastructure (file server, SQL Server) is manually provisioned",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No version control workflow — single developer model with no branching strategy or code review process",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No environment separation — no dev/staging/prod environments; single shared .mdb is production",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Low",
+          "description": ".gitignore present indicates some git usage, but no CI integration",
+          "effort": null
+        }
+      ],
+      "recommended_actions": [
+        "Implement CI/CD with AWS CodePipeline, AWS CodeBuild, and AWS CodeDeploy",
+        "Adopt infrastructure-as-code with AWS CloudFormation or AWS CDK",
+        "Implement automated testing at unit, integration, and end-to-end levels",
+        "Establish environment separation (dev/staging/prod) with AWS accounts or VPC isolation"
+      ]
+    },
+    "move_to_ai": {
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "finding_count": 6,
+      "severity_breakdown": {
+        "High": 2,
+        "Medium": 3,
+        "Low": 1
+      },
+      "findings": [
+        {
+          "severity": "High",
+          "description": "No API layer for AI/ML services to integrate with — no programmatic interface for inference or data exchange",
+          "effort": "High"
+        },
+        {
+          "severity": "High",
+          "description": "No structured data pipeline — data trapped in Access .mdb file format on a network share, inaccessible to ML platforms",
+          "effort": "High"
+        },
+        {
+          "severity": "Medium",
+          "description": "No event-driven architecture — cannot trigger AI workflows based on data changes or user actions",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "No feature store or ML model serving infrastructure",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Medium",
+          "description": "Data quality unknown — no validation, no schema enforcement, potential duplicates from lack of idempotency",
+          "effort": "Medium"
+        },
+        {
+          "severity": "Low",
+          "description": "CRM domain (customer records) is well-suited for AI enrichment (lead scoring, churn prediction) once data is accessible",
+          "effort": null
+        }
+      ],
+      "recommended_actions": [
+        "After establishing an API layer and managed database, integrate Amazon Bedrock for generative AI capabilities",
+        "Use Amazon SageMaker for predictive models (lead scoring, churn prediction) on CRM data",
+        "Implement Amazon Personalize for customer engagement recommendations",
+        "Build data pipelines to Amazon S3 to enable ML training on historical customer data"
+      ]
+    }
+  },
+  "modernization_priority": [
+    "Move to Modern DevOps",
+    "Move to Open Source",
+    "Move to Containers",
+    "Move to Managed Databases",
+    "Move to Cloud Native",
+    "Move to Managed Analytics",
+    "Move to AI"
+  ]
+}

@@ -1,0 +1,229 @@
+{
+  "schema_version": "1.0",
+  "report_type": "agentic-readiness-analysis",
+  "repository": "legacy-crm-desktop",
+  "assessment_date": "2026-07-28",
+  "readiness_profile": "Not Agent-Integrable",
+  "overall_risk": "CRITICAL",
+  "executive_summary": "Legacy VB6 desktop CRM with no programmatic interfaces. No APIs, no authentication, no observability, no idempotency. Requires complete architectural transformation before any agentic integration is possible.",
+  "technology_stack": {
+    "language": "Visual Basic 6.0",
+    "framework": "Win32 Desktop (VB6 Runtime)",
+    "database": "Microsoft Access 2003 (.mdb) on SMB share",
+    "reporting": "Crystal Reports 8.5",
+    "build_system": "None",
+    "test_framework": "None",
+    "ci_cd": "None"
+  },
+  "dimensions": {
+    "apis_and_interfaces": {
+      "score": 0,
+      "max_score": 10,
+      "blockers": 4,
+      "risks": 0,
+      "info": 1,
+      "assessment": "There is no machine-readable interface of any kind. The only way to interact with this system is through its Windows GUI (mouse clicks and keyboard input on the form). An AI agent cannot invoke any operation programmatically.",
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No API exists — application is a standalone Win32 desktop GUI with no network-accessible interface"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No CLI or command-line interface for scripted invocation"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No message queue, event bus, or asynchronous interface"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No webhooks, no SDK, no IPC mechanism beyond direct .mdb file access"
+        },
+        {
+          "severity": "INFO",
+          "description": "Data access is via direct ADO/Jet OLEDB connection to a shared Access file — no service layer"
+        }
+      ]
+    },
+    "identity_and_authentication": {
+      "score": 0,
+      "max_score": 10,
+      "blockers": 3,
+      "risks": 2,
+      "info": 0,
+      "assessment": "There is no identity infrastructure that could support agent authentication. No OAuth, no API keys, no service accounts, no IAM integration. The hardcoded credentials and reliance on Windows environment variables provide no basis for secure agent identity.",
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No application-level authentication — any user with network share access can run the application"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No authorization model — all users have full read/write access to all records"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "Hardcoded database credentials in source code (DB_PW = 'crm2005pw')"
+        },
+        {
+          "severity": "RISK",
+          "description": "User identity derived from Environ('USERNAME') — trivially spoofable, no verification"
+        },
+        {
+          "severity": "RISK",
+          "description": "No concept of service accounts, API keys, or machine-to-machine identity"
+        }
+      ]
+    },
+    "state_management_and_idempotency": {
+      "score": 0,
+      "max_score": 10,
+      "blockers": 2,
+      "risks": 3,
+      "info": 1,
+      "assessment": "The system has no idempotency guarantees. An agent retrying a failed operation would create duplicate records. The underlying Access database provides no reliable concurrency control, and the application performs no duplicate detection.",
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No idempotency controls — repeated INSERT operations create duplicate records"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No transaction management — single cn.Execute with On Error Resume Next"
+        },
+        {
+          "severity": "RISK",
+          "description": "Microsoft Access .mdb on SMB share corrupts under concurrent writes (documented monthly occurrence)"
+        },
+        {
+          "severity": "RISK",
+          "description": "No optimistic/pessimistic locking — record locked errors are common and silently swallowed"
+        },
+        {
+          "severity": "RISK",
+          "description": "No unique constraints or deduplication logic visible in the INSERT statement"
+        },
+        {
+          "severity": "INFO",
+          "description": "CreatedOn uses Now() server-side (Access engine time) — no client-controlled timestamps"
+        }
+      ]
+    },
+    "human_in_the_loop": {
+      "score": 0,
+      "max_score": 10,
+      "blockers": 2,
+      "risks": 2,
+      "info": 1,
+      "assessment": "There are no mechanisms to require human approval before or after an action. The application writes directly to the database with no intermediate review, staging, or approval state. There is no infrastructure to support 'agent proposes, human approves' workflows.",
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No approval workflows — records are written directly to the database on button click"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No role-based access control — cannot distinguish between human and automated actions"
+        },
+        {
+          "severity": "RISK",
+          "description": "No audit trail — no record of who approved what or when"
+        },
+        {
+          "severity": "RISK",
+          "description": "No confirmation step beyond the implicit click Save — no review gate"
+        },
+        {
+          "severity": "INFO",
+          "description": "No concept of draft/pending states — all writes are immediately committed"
+        }
+      ]
+    },
+    "observability": {
+      "score": 0,
+      "max_score": 10,
+      "blockers": 3,
+      "risks": 2,
+      "info": 1,
+      "assessment": "The system is completely opaque. There is no way to observe, monitor, or audit what the application does. An agent operating on this system would produce no observable trace, making it impossible to detect errors, track actions, or investigate incidents.",
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No logging whatsoever — no application logs, no structured events, no log files"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No metrics or telemetry — no way to monitor agent actions or system health"
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "On Error Resume Next silently swallows all errors — failures are invisible"
+        },
+        {
+          "severity": "RISK",
+          "description": "No audit log — no record of database operations beyond what Access internally tracks"
+        },
+        {
+          "severity": "RISK",
+          "description": "No distributed tracing or correlation IDs — impossible to trace agent request flows"
+        },
+        {
+          "severity": "INFO",
+          "description": "Only user-visible feedback is a MsgBox on save failure — not programmatically observable"
+        }
+      ]
+    }
+  },
+  "security_concerns": [
+    {
+      "severity": "BLOCKER",
+      "description": "SQL injection vulnerability — user input concatenated directly into SQL string with no parameterization"
+    },
+    {
+      "severity": "BLOCKER",
+      "description": "No input validation — txtName.Text passed directly to SQL without sanitization"
+    },
+    {
+      "severity": "INFO",
+      "description": "Database password exposed in source code and compiled into the EXE"
+    }
+  ],
+  "totals": {
+    "blockers": 16,
+    "risks": 9,
+    "info": 5
+  },
+  "remediation_phases": [
+    {
+      "phase": 1,
+      "title": "Service Layer",
+      "description": "Expose business logic through a web API (REST/GraphQL) with proper request/response contracts, replacing direct database file access"
+    },
+    {
+      "phase": 2,
+      "title": "Identity",
+      "description": "Implement authentication (OAuth 2.0/OIDC) and authorization (RBAC) with support for service accounts and machine-to-machine tokens"
+    },
+    {
+      "phase": 3,
+      "title": "Data Layer",
+      "description": "Migrate from Access .mdb to a proper RDBMS with transactions, locking, and idempotency keys"
+    },
+    {
+      "phase": 4,
+      "title": "Observability",
+      "description": "Add structured logging, metrics, distributed tracing, and audit logs"
+    },
+    {
+      "phase": 5,
+      "title": "Human-in-the-Loop",
+      "description": "Implement approval workflows, draft states, and agent action review gates"
+    },
+    {
+      "phase": 6,
+      "title": "Agent Integration",
+      "description": "Define agent-callable endpoints with idempotency tokens, rate limiting, and scoped permissions"
+    }
+  ]
+}

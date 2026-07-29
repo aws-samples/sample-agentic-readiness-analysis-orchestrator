@@ -1,0 +1,161 @@
+{
+  "repository": "legacy-loan-calculator",
+  "analysis_type": "agentic-readiness",
+  "readiness_profile": "Not Agent-Integrable",
+  "overall_score": 0,
+  "max_score": 5,
+  "findings_summary": {
+    "blockers": 9,
+    "risks": 4,
+    "info": 2
+  },
+  "system_overview": {
+    "purpose": "Loan origination calculator for loan officers to price and submit loan applications",
+    "technology_stack": {
+      "language": "Java 5",
+      "framework": "Apache Struts 1.3",
+      "app_server": "Oracle WebLogic 10.3",
+      "database": "Oracle 11g",
+      "os": "Solaris 10",
+      "build": "Apache Ant"
+    },
+    "interface_type": "HTML forms (server-rendered, no machine-readable API)"
+  },
+  "categories": {
+    "apis_and_interfaces": {
+      "score": 0,
+      "max_score": 5,
+      "findings": [
+        {
+          "id": "API-001",
+          "severity": "BLOCKER",
+          "description": "No machine-readable API exists. The application only serves HTML via Struts JSP forwards. An AI agent cannot programmatically invoke loan calculations or submissions."
+        },
+        {
+          "id": "API-002",
+          "severity": "BLOCKER",
+          "description": "No API documentation, schema, or contract (OpenAPI, WSDL, etc.) exists."
+        },
+        {
+          "id": "API-003",
+          "severity": "RISK",
+          "description": "No versioning strategy for any interface. The single /loan action path has no version prefix or content negotiation."
+        }
+      ]
+    },
+    "identity_and_authentication": {
+      "score": 0,
+      "max_score": 5,
+      "findings": [
+        {
+          "id": "AUTH-001",
+          "severity": "BLOCKER",
+          "description": "No application-level authentication. Identity relies entirely on container-managed auth (WebLogic) with request.getRemoteUser(). There is no mechanism for service-to-service authentication, API keys, OAuth tokens, or any credential an agent could present."
+        },
+        {
+          "id": "AUTH-002",
+          "severity": "BLOCKER",
+          "description": "Hardcoded database credentials in source code (loan_app / loanApp2010). This is a critical security vulnerability and indicates no secrets management infrastructure."
+        },
+        {
+          "id": "AUTH-003",
+          "severity": "RISK",
+          "description": "No authorization model beyond container login. No role-based access control, no permission scoping, no ability to restrict agent actions to a subset of operations."
+        }
+      ]
+    },
+    "state_management_and_idempotency": {
+      "score": 1,
+      "max_score": 5,
+      "findings": [
+        {
+          "id": "STATE-001",
+          "severity": "BLOCKER",
+          "description": "No idempotency controls on the loan submission operation. Repeated submit actions create duplicate database records. An AI agent retrying a failed/timed-out request would create duplicate loan applications with financial impact."
+        },
+        {
+          "id": "STATE-002",
+          "severity": "RISK",
+          "description": "No transaction IDs, correlation IDs, or request deduplication mechanisms. The system provides no way for a caller to detect or prevent duplicate submissions."
+        },
+        {
+          "id": "STATE-003",
+          "severity": "INFO",
+          "description": "Struts ActionForm uses request scope, so no server-side session state accumulates. Each request is self-contained."
+        }
+      ]
+    },
+    "human_in_the_loop": {
+      "score": 0,
+      "max_score": 5,
+      "findings": [
+        {
+          "id": "HITL-001",
+          "severity": "BLOCKER",
+          "description": "No approval workflow or confirmation step exists at the system level. The submit action immediately writes to the database. There is no mechanism to require human review before a loan application is committed."
+        },
+        {
+          "id": "HITL-002",
+          "severity": "INFO",
+          "description": "The two-step UI flow (calculate then submit) provides a rudimentary human checkpoint in the browser, but this is a UI concern only — there is no server-side enforcement that a human reviewed the quote before submission."
+        }
+      ]
+    },
+    "observability": {
+      "score": 0,
+      "max_score": 5,
+      "findings": [
+        {
+          "id": "OBS-001",
+          "severity": "BLOCKER",
+          "description": "No logging framework is used. The application imports no logging library and produces no structured logs. Agent-initiated actions would be completely invisible."
+        },
+        {
+          "id": "OBS-002",
+          "severity": "RISK",
+          "description": "No metrics, health checks, tracing, or audit trail. There is no way to monitor agent behavior, detect anomalies, or attribute actions to specific callers."
+        }
+      ]
+    }
+  },
+  "security_findings": [
+    {
+      "id": "SEC-001",
+      "severity": "BLOCKER",
+      "description": "SQL injection vulnerability in saveApplication() — applicant name is concatenated directly into SQL. An agent passing unvalidated input could corrupt or exfiltrate database contents."
+    },
+    {
+      "id": "SEC-002",
+      "severity": "BLOCKER",
+      "description": "Framework (Struts 1.3) has known unpatched CVEs with no available fixes."
+    }
+  ],
+  "recommendations": [
+    "Modernize the application before considering agentic integration. The EOL technology stack makes incremental improvements impractical.",
+    "Rewrite or wrap with an API layer — expose loan calculation and submission as RESTful endpoints with JSON payloads and OpenAPI documentation.",
+    "Implement OAuth 2.0 or equivalent for machine-to-machine authentication with scoped permissions.",
+    "Add idempotency keys to all mutating operations (loan submission).",
+    "Introduce an approval queue — loan submissions should enter a pending review state rather than immediately committing.",
+    "Deploy structured logging and tracing from day one of any modernization effort.",
+    "Fix SQL injection immediately, regardless of agentic readiness goals."
+  ],
+  "minimum_requirements_for_upgrade": {
+    "to_remediation_required": [
+      "Expose a REST or gRPC API with structured request/response",
+      "Implement service authentication (OAuth 2.0 / API keys minimum)",
+      "Add idempotency keys to the submission endpoint",
+      "Introduce structured logging with caller attribution",
+      "Fix the SQL injection vulnerability",
+      "Migrate off EOL framework (Struts 1.3) and runtime (Java 5)"
+    ],
+    "to_pilot_ready": [
+      "OpenAPI specification published",
+      "Role-based access control with agent-specific scopes",
+      "Approval workflow / confirmation queue for loan submissions",
+      "Distributed tracing with correlation IDs",
+      "Health check endpoints",
+      "Rate limiting and input validation",
+      "Secrets management (no hardcoded credentials)"
+    ]
+  }
+}

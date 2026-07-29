@@ -72,8 +72,19 @@ def classify_report(path: Path, data: dict) -> Optional[tuple[str, str, str]]:
     if not name.endswith(".json") or name.endswith(".metadata.json"):
         return None
 
-    # Portfolio reports carry `repositories[]` + `assessment_type`; per-repo carry `repo_name`.
-    is_portfolio = "repositories" in data and "repo_name" not in data
+    # Portfolio vs per-repo discrimination. Two schema generations seen in the wild:
+    #   old (committed example): portfolio has `repositories[]`, per-repo has `repo_name`.
+    #   atx CT 3.7.0: portfolio has `portfolio_name` + `report_type`/`services`/
+    #     `services_analyzed`/`pathway_aggregation`; per-repo has none of these and is
+    #     identified by the `-portfolio-` / `portfolio-` filename or the absence of repo keys.
+    # A per-repo report never carries `portfolio_name`, so treat any of these as portfolio.
+    _PORTFOLIO_MARKERS = ("repositories", "portfolio_name", "report_type", "services",
+                          "services_analyzed", "pathway_aggregation",
+                          "classification_tier_distribution", "portfolio_findings_summary")
+    is_portfolio = (
+        ("portfolio" in name and "repo_name" not in data)
+        or (any(k in data for k in _PORTFOLIO_MARKERS) and "repo_name" not in data)
+    )
 
     if "-ara-report" in name or _is_ara(data):
         analysis = "ara"
@@ -83,7 +94,9 @@ def classify_report(path: Path, data: dict) -> Optional[tuple[str, str, str]]:
         return None
 
     if is_portfolio:
-        key = (data.get("metadata", {}) or {}).get("portfolio_name") \
+        # 3.7.0 puts portfolio_name at top level; older reports nested it under metadata.
+        key = data.get("portfolio_name") \
+            or (data.get("metadata", {}) or {}).get("portfolio_name") \
             or _strip_suffixes(path.name)
         return analysis, "portfolio", key
     key = data.get("repo_name") or _strip_suffixes(path.name)

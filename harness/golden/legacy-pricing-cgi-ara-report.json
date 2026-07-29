@@ -1,0 +1,168 @@
+{
+  "repository": "legacy-pricing-cgi",
+  "assessmentDate": "2026-07-28",
+  "readinessProfile": "Not Agent-Integrable",
+  "language": "C++",
+  "runtime": "Apache httpd 2.4 (CGI)",
+  "primaryFunction": "Product pricing lookup",
+  "summary": "Legacy CGI pricing engine with HTML-only output, no authentication, no observability, and critical security vulnerabilities. Cannot be safely integrated with AI agents.",
+  "categories": {
+    "apisAndInterfaces": {
+      "verdict": "Fail",
+      "blockers": 3,
+      "risks": 1,
+      "info": 1,
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No machine-readable API — endpoint returns only HTML (text/html). No JSON, XML, or structured response format."
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No API specification or schema (no OpenAPI, WSDL, or contract). Agents cannot discover or validate the interface."
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No error codes or structured error responses. All requests return HTTP 200 regardless of input validity."
+        },
+        {
+          "severity": "RISK",
+          "description": "No input validation — negative quantities accepted, no feedback on malformed input."
+        },
+        {
+          "severity": "INFO",
+          "description": "Simple 2-parameter interface (sku, qty) would be straightforward to wrap in a structured API."
+        }
+      ]
+    },
+    "identityAndAuthentication": {
+      "verdict": "Fail",
+      "blockers": 3,
+      "risks": 1,
+      "info": 0,
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No authentication mechanism. Endpoint configured with 'Require all granted' — completely open."
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No authorization or access control. No roles, scopes, or permissions concept."
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No request attribution or caller identification. Audit of agent activity is impossible."
+        },
+        {
+          "severity": "RISK",
+          "description": "Network-level isolation via K8s ClusterIP is not a substitute for application-level identity."
+        }
+      ]
+    },
+    "stateManagementAndIdempotency": {
+      "verdict": "Acceptable",
+      "blockers": 0,
+      "risks": 2,
+      "info": 2,
+      "findings": [
+        {
+          "severity": "INFO",
+          "description": "Endpoint is inherently idempotent — read-only price lookup with no side effects."
+        },
+        {
+          "severity": "RISK",
+          "description": "Pricing rules in flat file with no versioning, no transactional guarantees, edited in-place on prod."
+        },
+        {
+          "severity": "RISK",
+          "description": "No caching headers or ETags — agents cannot detect pricing data changes."
+        },
+        {
+          "severity": "INFO",
+          "description": "Stateless CGI process — no persistent state modified by the endpoint."
+        }
+      ]
+    },
+    "humanInTheLoopControls": {
+      "verdict": "Fail",
+      "blockers": 1,
+      "risks": 1,
+      "info": 2,
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No human-in-the-loop controls — no approval workflows, confirmation steps, or escalation paths."
+        },
+        {
+          "severity": "RISK",
+          "description": "No rate limiting or circuit breakers. Autonomous agents can issue unlimited requests."
+        },
+        {
+          "severity": "INFO",
+          "description": "Read-only endpoint reduces HITL urgency, but lack of guardrails allows unrestricted pricing data enumeration."
+        },
+        {
+          "severity": "INFO",
+          "description": "No CI/CD pipeline or deployment approval gates — manual kubectl apply with no review."
+        }
+      ]
+    },
+    "observability": {
+      "verdict": "Fail",
+      "blockers": 3,
+      "risks": 1,
+      "info": 1,
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "No application-level logging. CGI binary produces zero log output."
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No metrics endpoint (no Prometheus, CloudWatch, or StatsD). Cannot monitor agent behavior."
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "No distributed tracing or correlation IDs. Agent requests cannot be traced."
+        },
+        {
+          "severity": "RISK",
+          "description": "Apache access/error logs exist but are unstructured and not exported to centralized systems."
+        },
+        {
+          "severity": "INFO",
+          "description": "K8s readiness/liveness probes provide basic availability signaling only."
+        }
+      ]
+    },
+    "security": {
+      "verdict": "Fail",
+      "blockers": 2,
+      "risks": 0,
+      "info": 0,
+      "findings": [
+        {
+          "severity": "BLOCKER",
+          "description": "Buffer overflow — strcpy() with attacker-controlled input into fixed-size stack buffers. Remote code execution possible."
+        },
+        {
+          "severity": "BLOCKER",
+          "description": "Reflected XSS — SKU parameter printed directly into HTML without escaping."
+        }
+      ]
+    }
+  },
+  "totals": {
+    "blockers": 12,
+    "risks": 6,
+    "info": 6
+  },
+  "remediationPriorities": [
+    "Fix critical security vulnerabilities (buffer overflow, XSS)",
+    "Add machine-readable API (JSON responses, proper HTTP status codes)",
+    "Implement authentication (API key, OAuth2, or mTLS)",
+    "Add observability (structured logging, metrics, tracing)",
+    "Add rate limiting per authenticated caller",
+    "Publish OpenAPI 3.x specification"
+  ]
+}
