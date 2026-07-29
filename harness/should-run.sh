@@ -15,17 +15,35 @@
 #   0  → RUN  (at least one changed path is not denylisted, or diff is empty/unknown)
 #   1  → SKIP (every changed path is denylisted)
 #
-# Scope resolution: prints the changed managed-relevant paths to stdout (informational),
-# and sets these outputs when run under GitLab CI (written to should-run.env for `dotenv`):
+# The harness automates a SPECIFIC, CONFIGURED set of TD directories — a change under
+# any watched TD path (its SKILL.md + references/) RUNs the harness. A TD edit is
+# inherently portfolio-wide, so it always triggers a full run. Note SKILL.md is a `.md`
+# file, so the `*.md` denylist below would otherwise SKIP it — a watched-TD match wins.
+#
+# The MECHANISM is generic (match any configured path prefix); the CONFIG is specific.
+# Today we watch the 4 managed TDs. To automate another TD — managed OR custom, wherever
+# it lives — add its directory path to HARNESS_TD_PATHS (colon-separated) or edit the
+# default list below. No other code change is needed.
+#
+# Scope resolution: prints the changed watched paths to stdout (informational), and sets
+# these outputs when run under GitLab CI (written to should-run.env for `dotenv`):
 #   HARNESS_RUN=true|false
-#   HARNESS_CHANGED_PROGRAM_LIBRARY=true|false
-#   HARNESS_CHANGED_RUBRIC=true|false
+#   HARNESS_CHANGED_TD=true|false     (a watched TD directory changed)
 #   HARNESS_CHANGED_FIXTURES=true|false
 #
 # Usage:
 #   should-run.sh [BASE_REF]        # BASE_REF defaults to the MR target or origin/main
 #
 set -euo pipefail
+
+# Watched TD directory prefixes (repo-relative). Override/extend via HARNESS_TD_PATHS
+# (colon-separated) to automate other TDs without touching this script. Default = the 4
+# managed TDs this harness currently owns.
+DEFAULT_TD_PATHS="definitions/managed/agentic-readiness-analysis:\
+definitions/managed/modernization-readiness-analysis:\
+definitions/managed/portfolio-agentic-readiness-analysis:\
+definitions/managed/portfolio-modernization-readiness-analysis"
+IFS=':' read -r -a TD_PATHS <<< "${HARNESS_TD_PATHS:-${DEFAULT_TD_PATHS}}"
 
 # --- resolve the base ref to diff against --------------------------------------------
 BASE_REF="${1:-}"
@@ -67,22 +85,34 @@ is_denylisted() {
 }
 
 # --- classify + decide ---------------------------------------------------------------
+# A path is a watched-TD change if it lives under any configured TD directory prefix.
+is_watched_td() {
+  local p="$1" prefix
+  for prefix in "${TD_PATHS[@]}"; do
+    [[ -n "${prefix}" && "${p}" == "${prefix}/"* ]] && return 0
+  done
+  return 1
+}
+
 run="false"
-changed_program_library="false"
-changed_rubric="false"
+changed_td="false"
 changed_fixtures="false"
 nondenylisted=()
 
 while IFS= read -r path; do
   [[ -z "${path}" ]] && continue
+  # A watched-TD change ALWAYS runs, even if it's a .md file (SKILL.md) the denylist
+  # would otherwise skip — the TD is exactly the thing we automate for.
+  if is_watched_td "${path}"; then
+    changed_td="true"; run="true"; nondenylisted+=("${path}")
+    continue
+  fi
   if ! is_denylisted "${path}"; then
     run="true"
     nondenylisted+=("${path}")
   fi
   case "${path}" in
-    definitions/managed/*/references/program-library.md) changed_program_library="true"; run="true" ;;
-    harness/rubric/*)                                    changed_rubric="true"; run="true" ;;
-    sample-legacy-portfolio/*|examples/fixtures/*)       changed_fixtures="true"; run="true" ;;
+    sample-legacy-portfolio/*|examples/fixtures/*) changed_fixtures="true"; run="true" ;;
   esac
 done <<< "${changed}"
 
@@ -94,8 +124,7 @@ fi
 # --- emit outputs --------------------------------------------------------------------
 {
   echo "HARNESS_RUN=${run}"
-  echo "HARNESS_CHANGED_PROGRAM_LIBRARY=${changed_program_library}"
-  echo "HARNESS_CHANGED_RUBRIC=${changed_rubric}"
+  echo "HARNESS_CHANGED_TD=${changed_td}"
   echo "HARNESS_CHANGED_FIXTURES=${changed_fixtures}"
 } > should-run.env 2>/dev/null || true
 

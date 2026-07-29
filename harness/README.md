@@ -116,18 +116,23 @@ Notes:
 Two advisory jobs, both `allow_failure: true` (they never block a merge). See
 [`.gitlab-ci.yml`](../.gitlab-ci.yml).
 
+- **`harness:contract-tests`** — offline schema guardrail (no AWS). Runs
+  `tests/test_validate_contract.py` on every MR (and web run) to prove the JSON-contract
+  validator still rejects drifted report shapes. This is the structural axis, distinct
+  from the semantic judge; it needs no creds and no fixtures.
 - **`harness:impact`** — runs automatically on every merge request. A deterministic
-  gate (`should-run.sh`) decides run vs skip: it skips only when the entire diff is
-  denylisted (docs, LICENSE, images, `DESIGN.md`); otherwise it runs. It re-runs the
-  changed TD's fixtures (`--changed-only`), diffs against `golden/`, and the judge
-  scores the delta against the **MR description** (the intent, per the
-  `rubric-change` MR template). The verdict is posted as an MR comment.
+  gate (`should-run.sh`) decides run vs skip: it RUNs when a change lands under a
+  watched TD directory (`definitions/managed/<td>/`, configurable via `HARNESS_TD_PATHS`)
+  or a fixture; otherwise it skips. It publishes the edited TD as a custom def and runs
+  it over the changed fixtures (`--changed-only --validate`), diffs against `golden/`,
+  and the judge scores the delta against the **MR description** (the intent, per the
+  TD-change MR template). The verdict is posted as an MR comment.
 - **`harness:full`** — manual only, via the **Run pipeline** button (web-triggered).
-  Use it when a rubric was edited directly in the AWS Transform service, or to force
-  a full re-baseline. Set `CHANGED_TD`, `RUN_SCOPE` (default `all`), and `RUN_INTENT`
-  when launching. With no MR, it prints the verdict instead of commenting.
+  Use it to force a full re-baseline (e.g. after publishing an approved change). Set
+  `CHANGED_TD`, `RUN_SCOPE` (default `all`), and `RUN_INTENT` when launching. With no
+  MR, it prints the verdict instead of commenting.
 
-Both jobs emit `impact.json` and `verdict.json` as artifacts.
+Both analyze jobs emit `impact.json` and `verdict.json` as artifacts.
 
 ## Local dev
 

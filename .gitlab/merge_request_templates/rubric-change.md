@@ -1,25 +1,26 @@
 <!--
-  Rubric change MR — proposing a NEW question or RE-SCORING an existing one in
-  harness/rubric/ara-questions.yaml or harness/rubric/mod-questions.yaml.
+  TD change MR — proposing an edit to a managed Transformation Definition:
+  definitions/managed/<td>/SKILL.md (or its references/). e.g. add a question,
+  re-score one, adjust a pathway trigger, or a program-recommendation rule.
 
   This template captures your INTENT. The change-impact harness runs on this MR
-  (should-run.sh -> fixtures -> diff-reports.py -> judge.py) and an LLM-as-judge
-  posts an ADVISORY verdict comparing the observed delta against what you say
-  below. The verdict is advisory only — it never blocks the MR. See
-  harness/rubric/README.md and harness/DESIGN.md (§6, §8.1).
+  (should-run.sh -> run-fixtures.sh publishes + execs your edited TD -> diff-reports.py
+  -> judge.py) and an LLM-as-judge posts an ADVISORY verdict comparing the observed
+  delta against what you say below, plus a quality-regression read and suggestions.
+  The verdict is advisory only — it never blocks the MR. See harness/DESIGN.md (§6, §8.1).
 
   Fill in every section below — the judge reads them as intent.{what, why, expected_impact}.
 -->
 
 ## What are you changing?
-<!-- Be specific: name the question_id(s) and the exact edit.
-     e.g. "Tightened AUTH-Q5 scoring: missing rate limiting now RISK-SAFETY instead of INFO."
-     e.g. "Added AUTH-Q9 for token-rotation gaps (new RISK-SAFETY question)." -->
+<!-- Be specific: name the TD, the question_id(s)/pathway/program, and the exact edit.
+     e.g. "modernization-readiness-analysis: tightened INF-Q11 scoring so missing IaC now fails."
+     e.g. "agentic-readiness-analysis: added AUTH-Q9 for token-rotation gaps (new RISK-SAFETY question)." -->
 
 
 
 ## Why?
-<!-- The problem this fixes. What does the current rubric get wrong or miss?
+<!-- The problem this fixes. What does the current TD get wrong or miss?
      e.g. "Unauthenticated write surfaces were scoring too low; they are a safety risk for agents." -->
 
 
@@ -36,19 +37,13 @@
 
 
 
-## Was the rubric edited in the AWS Transform service?
-<!-- The service is authoritative. Edits made ONLY in this repo produce a git diff the
-     harness can see automatically. Edits made directly in the AWS Transform service do NOT
-     show up in a git diff — a maintainer must run harness:full and re-baseline the goldens. -->
-
-- [ ] **Yes** — I edited the rubric in the AWS Transform service. A maintainer must run `harness:full` and sync/re-baseline.
-- [ ] **No**  — this MR only edits `harness/rubric/*.yaml`; the MR pipeline will run the harness automatically.
-
 ---
 
-<!-- After you open this MR, the GitLab pipeline runs the harness and posts an advisory judge
-     verdict as a comment (score + LGTM/needs-work + intent-match + rationale citing specific
-     question_ids / pathway ids). It never blocks the MR. A maintainer reviews and, on approval,
-     manually syncs the approved change into the AWS Transform service. -->
+<!-- After you open this MR, the GitLab pipeline publishes your edited TD as a custom def,
+     runs it over the fixtures, diffs vs the golden baseline, and posts an advisory judge
+     verdict as a comment (score + LGTM/needs-work + intent-match + quality-regression flag +
+     rationale citing specific question_ids / pathway ids / program acronyms). It never blocks
+     the MR. On approval, a maintainer publishes the change to AWS Transform Continuous
+     Modernization (the deploy surface) — this repo is the proposal + test surface. -->
 
-/label ~rubric-change
+/label ~td-change

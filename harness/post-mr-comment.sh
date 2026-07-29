@@ -40,6 +40,10 @@ lines.append(f"### {emoji} Change-Impact Harness — advisory verdict")
 lines.append("")
 lines.append(f"**Verdict:** {verdict} &nbsp;|&nbsp; **Score:** {score}/100 "
              f"&nbsp;|&nbsp; **Intent match:** {match_emoji} {match}")
+if v.get("quality_regression"):
+    lines.append("")
+    lines.append("> 🔴 **Possible quality regression:** the judge thinks this change may make "
+                 "the analysis worse. See rationale/concerns below and confirm before merging.")
 if v.get("no_op_warning"):
     lines.append("")
     lines.append("> ⛔ **No-op warning:** the intent describes a change but the delta is "
@@ -70,6 +74,13 @@ if concerns:
     lines.append("**Concerns:**")
     for c in concerns[:10]:
         lines.append(f"- `{c.get('dimension','-')}` — {c.get('detail','')}")
+
+suggestions = v.get("suggestions") or []
+if suggestions:
+    lines.append("")
+    lines.append("**Suggested improvements:**")
+    for s in suggestions[:3]:
+        lines.append(f"- {s}")
 
 lines.append("")
 lines.append(f"<sub>advisory only — never blocks the merge · judge engine: {engine}</sub>")

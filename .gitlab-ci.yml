@@ -29,6 +29,7 @@
 
 stages:
   - gate      # deterministic run|skip decision (harness/should-run.sh) — no LLM
+  - test      # offline, no-AWS: schema-guardrail contract tests (fast, always runs)
   - analyze   # atx re-run of changed fixtures + D1–D5 delta -> impact.json
   - judge     # LLM-as-judge advisory verdict -> verdict.json, posted to the MR
 # NOTE: harness:impact and harness:full each run the gate -> analyze -> judge
@@ -148,6 +149,25 @@ harness:auth-check:
   allow_failure: true   # advisory — a red auth-check must not block anything
 
 # -----------------------------------------------------------------------------
+# Schema guardrail — harness:contract-tests   (offline, no AWS, fast)
+# The STRUCTURAL axis (distinct from the semantic judge): validate-contract.py's
+# offline shape-fixture suite proves the contract validator rejects drifted JSON
+# and accepts conforming JSON. No atx, no creds, no fixtures re-run — so it runs on
+# EVERY MR regardless of the gate, and fails loudly if the contract logic breaks.
+# before_script is overridden to skip the atx/awscli install (none needed here).
+# -----------------------------------------------------------------------------
+harness:contract-tests:
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  before_script:
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+  script:
+    - python3 -m pytest harness/tests/test_validate_contract.py -q
+  allow_failure: true   # advisory — surfaces contract drift without blocking the merge
+
+# -----------------------------------------------------------------------------
 # Entry 1 — harness:impact   (automatic on every merge request)
 # Gate -> run changed fixtures -> diff vs golden -> judge vs MR intent -> comment.
 # -----------------------------------------------------------------------------
@@ -161,7 +181,8 @@ harness:impact:
     - |
       harness/should-run.sh || { echo "skip - no analysis-affecting change"; exit 0; }
     # ANALYZE: re-run only the changed TD's fixtures, then compute the D1–D5 delta.
-    - harness/run-fixtures.sh --changed-only
+    # --validate: contract-check each collected report as it lands (schema guardrail).
+    - harness/run-fixtures.sh --changed-only --validate
     - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
     # JUDGE: LLM scores the delta against the contributor's INTENT (MR description, §6/§8.1).
     - harness/judge.py --impact impact.json --intent "$CI_MERGE_REQUEST_DESCRIPTION" > verdict.json
@@ -177,18 +198,18 @@ harness:impact:
 
 # -----------------------------------------------------------------------------
 # Entry 2 — harness:full   (manual "Run pipeline" button; web-triggered only)
-# For a rubric edited directly in the AWS Transform service, or a forced re-run.
+# For a full re-baseline (e.g. after publishing an approved change), or a forced re-run.
 # -----------------------------------------------------------------------------
 harness:full:
   stage: analyze
   rules:
     - if: '$CI_PIPELINE_SOURCE == "web"'
   variables:
-    CHANGED_TD: ""       # operator names the TD edited in-service (optional)
+    CHANGED_TD: ""       # operator restricts to one TD's analysis type (optional)
     RUN_SCOPE: "all"     # "all", or a narrower scope understood by run-fixtures.sh
     RUN_INTENT: ""       # free-text intent handed to the judge (§6)
   script:
-    - harness/run-fixtures.sh --scope "$RUN_SCOPE" --td "$CHANGED_TD"
+    - harness/run-fixtures.sh --scope "$RUN_SCOPE" --td "$CHANGED_TD" --validate
     - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
     - harness/judge.py --impact impact.json --intent "$RUN_INTENT" > verdict.json
     # No MR exists on a web pipeline -> fall back to printing the verdict.

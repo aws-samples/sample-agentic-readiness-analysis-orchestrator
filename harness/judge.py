@@ -177,8 +177,11 @@ def _note_dimension(key: str, d: Any, scope: str, moved: set, highlights: list) 
 # ---------------------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """You are reviewing a proposed change to an AWS Transform analysis \
-rubric/config for a modernization-readiness assessment. Your job is to judge whether \
-the OBSERVED DELTA in analysis output matches the contributor's STATED INTENT.
+rubric/config for agentic-readiness (ARA) and modernization-readiness (MOD) assessments. \
+The change is NOT live yet — the "before" is what the service produces today, the "after" \
+is what the proposed change produces. Your job has two parts:
+1. Does the OBSERVED DELTA match the contributor's STATED INTENT?
+2. Is the change a QUALITY REGRESSION, or does it make sense — and can it be improved?
 
 You are advisory: humans make the final call. Be concrete and cite specifics \
 (question_ids like AUTH-Q5, pathway ids, program acronyms like EBA/MAP) from the delta.
@@ -191,14 +194,25 @@ Scoring rubric:
                               different dimensions.
 - no_op_warning = true       : the intent claimed a behavioural change but the delta is
                               empty (nothing moved). This is almost always a problem.
-- verdict = "LGTM" when the change is safe and intent-aligned; "needs-work" otherwise.
-- score 0-100: higher = more confident the change is good AND matches intent.
+- quality_regression = true  : the delta plausibly makes the analysis WORSE — e.g. a tier
+                              now contradicts its own blocker/severity counts, a pathway
+                              fires when the repo clearly can't trigger it (or stops firing
+                              when it should), a score crosses a band the wrong way, or
+                              findings the change should not touch move anyway. When in
+                              doubt, flag it and explain the risk.
+- verdict = "LGTM" when the change is safe, intent-aligned, and not a regression;
+            "needs-work" otherwise.
+- score 0-100: higher = more confident the change is good, matches intent, and is not a
+            regression.
+- suggestions: 0-3 concrete, actionable improvements to the change (empty if none).
 
 Respond with ONLY a JSON object, no prose, matching exactly this schema:
 {"score": <int 0-100>, "verdict": "LGTM"|"needs-work",
  "intent_match": "aligned"|"partial"|"mismatch",
  "rationale": "<2-4 sentences citing specifics>",
  "concerns": [{"dimension": "D1".."D5", "detail": "<...>"}],
+ "quality_regression": <bool>,
+ "suggestions": ["<concrete improvement>", ...],
  "no_op_warning": <bool>}"""
 
 
@@ -299,6 +313,11 @@ def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
         "intent_match": match,
         "rationale": rationale,
         "concerns": concerns,
+        # Offline heuristic can't judge correctness — leave regression unflagged and say so.
+        "quality_regression": False,
+        "suggestions": ["Run with the LLM judge (Bedrock creds) for a quality-regression "
+                        "read and improvement suggestions — offline heuristic can't assess "
+                        "correctness."] if not no_op else [],
         "no_op_warning": no_op_warning,
         "_engine": "heuristic",
     }
@@ -315,6 +334,8 @@ def _coerce_verdict(v: dict) -> dict:
         "intent_match": v.get("intent_match") if v.get("intent_match") in VALID_MATCHES else "partial",
         "rationale": str(v.get("rationale") or "").strip() or "(no rationale)",
         "concerns": [c for c in (v.get("concerns") or []) if isinstance(c, dict)],
+        "quality_regression": bool(v.get("quality_regression", False)),
+        "suggestions": [str(s).strip() for s in (v.get("suggestions") or []) if str(s).strip()][:3],
         "no_op_warning": bool(v.get("no_op_warning", False)),
     }
     return out
