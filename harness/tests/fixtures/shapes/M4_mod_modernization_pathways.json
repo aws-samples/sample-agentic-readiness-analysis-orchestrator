@@ -1,0 +1,335 @@
+{
+  "repository": "legacy-partner-soap",
+  "analysis_type": "modernization-readiness",
+  "analysis_date": "2026-07-28",
+  "application_type": "Legacy SOAP Web Service (JAX-WS, Java 6, JBoss AS 5.1)",
+  "purpose": "Partner purchase order submission via SOAP endpoint backed by Oracle database",
+  "technology_stack": {
+    "language": "Java 6",
+    "framework": "JAX-WS (SOAP 1.1 RPC/encoded)",
+    "runtime": "JBoss AS 5.1 on RHEL 6",
+    "database": "Oracle 11g",
+    "build_system": "Apache Ant (manual)",
+    "protocol": "SOAP 1.1 RPC/encoded over HTTP"
+  },
+  "modernization_pathways": [
+    {
+      "pathway": "Move to Cloud Native",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": "CN-001",
+          "title": "No Externalized Configuration",
+          "severity": "High",
+          "effort": "Low",
+          "description": "All configuration including database URLs and credentials are hardcoded as static final constants in Java source. No environment variable, config file, or secrets management support exists.",
+          "recommendation": "Externalize configuration using environment variables or AWS Systems Manager Parameter Store. Move secrets to AWS Secrets Manager.",
+          "evidence": "PurchaseOrderService.java: DB_URL, DB_USER, DB_PASS hardcoded as static final String constants"
+        },
+        {
+          "id": "CN-002",
+          "title": "No Health Check or Readiness Endpoint",
+          "severity": "High",
+          "effort": "Low",
+          "description": "The service provides no health check, liveness probe, or readiness endpoint. Cloud-native platforms require these for orchestration and traffic management.",
+          "recommendation": "Implement /health and /ready endpoints that verify database connectivity and service status.",
+          "evidence": "No endpoints beyond the single SOAP submitOrder operation"
+        },
+        {
+          "id": "CN-003",
+          "title": "Stateful Database Connection Per Request",
+          "severity": "Medium",
+          "effort": "Medium",
+          "description": "Each request creates a new JDBC connection via DriverManager with no connection pooling. This pattern does not scale horizontally and prevents effective resource management in cloud environments.",
+          "recommendation": "Implement connection pooling (e.g., HikariCP) and externalize datasource configuration for cloud-native deployment.",
+          "evidence": "DriverManager.getConnection(DB_URL, DB_USER, DB_PASS) called per request in submitOrder()"
+        },
+        {
+          "id": "CN-004",
+          "title": "Tightly Coupled to On-Premises Infrastructure",
+          "severity": "High",
+          "effort": "High",
+          "description": "The service references specific internal hostnames and ports (10.0.9.30:1521), assumes a specific network topology, and is deployed as a WAR to a specific application server version.",
+          "recommendation": "Abstract infrastructure dependencies behind service discovery or DNS. Use cloud-native deployment models (container or serverless).",
+          "evidence": "jdbc:oracle:thin:@10.0.9.30:1521:PARTDB; WSDL references http://partner-svc.acme-corp.internal:8080"
+        },
+        {
+          "id": "CN-005",
+          "title": "No Twelve-Factor App Compliance",
+          "severity": "High",
+          "effort": "High",
+          "description": "The application violates nearly all twelve-factor principles: no config externalization, no port binding, no disposability, no dev/prod parity, no log streaming, no admin processes.",
+          "recommendation": "Refactor toward twelve-factor compliance as a foundation for cloud-native deployment on AWS (ECS, EKS, or Lambda).",
+          "evidence": "Single class with hardcoded config, no build automation, manual deployment to JBoss"
+        }
+      ]
+    },
+    {
+      "pathway": "Move to Containers",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": "CT-001",
+          "title": "No Containerization Artifacts",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "No Dockerfile, docker-compose.yml, or container configuration exists. The application is deployed as a WAR to JBoss AS 5.1 which itself is not available as an official container image.",
+          "recommendation": "Create a Dockerfile based on a modern Java runtime. Migrate from JBoss AS 5.1 to a lightweight runtime (e.g., Quarkus, Spring Boot embedded, or WildFly) that is container-friendly.",
+          "evidence": "No container-related files in repository"
+        },
+        {
+          "id": "CT-002",
+          "title": "Java 6 Runtime Not Container-Ready",
+          "severity": "High",
+          "effort": "High",
+          "description": "Java 6 is EOL (since 2013) and lacks container-aware JVM features (cgroup memory/CPU limits, container-optimized GC) introduced in Java 8u131+ and improved through Java 17+.",
+          "recommendation": "Upgrade to Java 17 or 21 LTS which provide container-aware memory management, improved startup time, and long-term support.",
+          "evidence": "README states Java 6; JBoss AS 5.1 requires Java 6"
+        },
+        {
+          "id": "CT-003",
+          "title": "Application Server Dependency Prevents Lightweight Containerization",
+          "severity": "High",
+          "effort": "High",
+          "description": "The application requires JBoss AS 5.1 (released 2009, EOL), a heavyweight Java EE application server. Container best practices favor lightweight, embedded runtimes with fast startup.",
+          "recommendation": "Migrate to an embedded server model (Spring Boot, Quarkus, or Micronaut) suitable for container deployment on Amazon ECS or Amazon EKS.",
+          "evidence": "README: 'Deployed as a WAR on JBoss 5'"
+        }
+      ]
+    },
+    {
+      "pathway": "Move to Open Source",
+      "severity_status": "Needs Work",
+      "score_rating": "Needs Work",
+      "findings": [
+        {
+          "id": "OS-001",
+          "title": "Proprietary Database Dependency (Oracle 11g)",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "The application uses Oracle 11g (EOL since 2021) with Oracle-specific JDBC driver and connection string. This creates vendor lock-in and licensing cost.",
+          "recommendation": "Evaluate migration to PostgreSQL (open source) via Amazon RDS for PostgreSQL or Amazon Aurora PostgreSQL-Compatible. The simple INSERT-only data access pattern makes migration straightforward.",
+          "evidence": "oracle.jdbc.driver.OracleDriver, jdbc:oracle:thin:@ connection string"
+        },
+        {
+          "id": "OS-002",
+          "title": "Proprietary Application Server (JBoss AS 5.1)",
+          "severity": "Medium",
+          "effort": "High",
+          "description": "JBoss AS 5.1 is a legacy proprietary-era application server. While JBoss itself became open source (WildFly), version 5.1 predates modern open source Java runtime options.",
+          "recommendation": "Migrate to an open source runtime: WildFly (community JBoss), Quarkus, Spring Boot, or Micronaut.",
+          "evidence": "README: 'JBoss AS 5.1 on RHEL 6'"
+        }
+      ]
+    },
+    {
+      "pathway": "Move to Managed Databases",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": "DB-001",
+          "title": "Direct JDBC Connection to On-Premises Oracle Instance",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "The application connects directly to a specific Oracle database instance via IP address and port. No connection abstraction, no JNDI datasource, no ORM layer. This prevents migration to managed database services without code changes.",
+          "recommendation": "Migrate to Amazon RDS for Oracle, Amazon Aurora PostgreSQL-Compatible, or Amazon DynamoDB depending on access patterns. The simple key-value insert pattern is compatible with multiple managed options.",
+          "evidence": "jdbc:oracle:thin:@10.0.9.30:1521:PARTDB with raw DriverManager.getConnection()"
+        },
+        {
+          "id": "DB-002",
+          "title": "No Connection Pooling or Datasource Abstraction",
+          "severity": "Medium",
+          "effort": "Low",
+          "description": "Each request creates and destroys a new database connection. No connection pool, no JNDI lookup, no datasource abstraction exists. This prevents using managed database proxy services like Amazon RDS Proxy.",
+          "recommendation": "Introduce a connection pool (HikariCP) with datasource abstraction. This enables seamless integration with Amazon RDS Proxy for connection management and IAM authentication.",
+          "evidence": "DriverManager.getConnection() called directly per request, cn.close() with no pooling"
+        },
+        {
+          "id": "DB-003",
+          "title": "Raw SQL with No Schema Management",
+          "severity": "Medium",
+          "effort": "Medium",
+          "description": "SQL is constructed via string concatenation with no migration tool, schema versioning, or ORM. Database schema changes are untracked.",
+          "recommendation": "Adopt a schema migration tool (Flyway or Liquibase) for managed database deployments. Consider an ORM or query builder for type-safe data access.",
+          "evidence": "Inline SQL: INSERT INTO partner_orders (partner_id, po_number, amount) VALUES (...)"
+        }
+      ]
+    },
+    {
+      "pathway": "Move to Managed Analytics",
+      "severity_status": "Ready",
+      "score_rating": "Partial",
+      "findings": [
+        {
+          "id": "AN-001",
+          "title": "No Analytics or Reporting Capability",
+          "severity": "Low",
+          "effort": "Medium",
+          "description": "The service is a simple transactional insert endpoint with no analytics, reporting, or data pipeline capabilities. Order data is written to a single table with no downstream analytics integration.",
+          "recommendation": "If analytics on partner orders is needed, implement change data capture (CDC) with Amazon DMS to stream order data to Amazon Redshift or Amazon Athena for analysis.",
+          "evidence": "Single INSERT INTO partner_orders with no read paths, no reporting queries, no data export"
+        }
+      ]
+    },
+    {
+      "pathway": "Move to Modern DevOps",
+      "severity_status": "Critical",
+      "score_rating": "Not Ready",
+      "findings": [
+        {
+          "id": "DO-001",
+          "title": "No Build Automation",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "No build file exists in the repository (no pom.xml, build.gradle, or build.xml). Build and deployment are performed manually using Ant and hand-run wsgen/wsimport commands.",
+          "recommendation": "Implement a modern build system (Maven or Gradle) with reproducible builds. Integrate with AWS CodeBuild for CI.",
+          "evidence": "README: 'Ant, with wsgen/wsimport run by hand'; no build file in repository"
+        },
+        {
+          "id": "DO-002",
+          "title": "No CI/CD Pipeline",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "No CI/CD configuration exists (no Jenkinsfile, GitHub Actions, CodePipeline, etc.). Deployment is manual WAR copy to JBoss.",
+          "recommendation": "Implement CI/CD using AWS CodePipeline with CodeBuild for build/test and CodeDeploy or ECS deployment for automated releases.",
+          "evidence": "No CI/CD configuration files in repository"
+        },
+        {
+          "id": "DO-003",
+          "title": "No Automated Testing",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "Zero tests exist. No unit tests, integration tests, or contract tests. Partner onboarding validation is manual SOAP-UI sessions.",
+          "recommendation": "Implement automated test suites: unit tests (JUnit), integration tests, and API contract tests. Integrate into CI pipeline.",
+          "evidence": "README: 'No tests; partner onboarding is a manual SOAP-UI session'"
+        },
+        {
+          "id": "DO-004",
+          "title": "No Infrastructure as Code",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "No infrastructure definition exists (no CloudFormation, CDK, Terraform, or Ansible). Infrastructure is provisioned and configured manually.",
+          "recommendation": "Define infrastructure using AWS CDK or CloudFormation for repeatable, version-controlled deployments.",
+          "evidence": "No infrastructure configuration files in repository"
+        },
+        {
+          "id": "DO-005",
+          "title": "No Observability Stack",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "No logging framework, no metrics, no tracing, no alerting. When issues occur, diagnosis requires manual server access.",
+          "recommendation": "Implement structured logging (SLF4J/Logback), metrics (CloudWatch or Prometheus), and distributed tracing (AWS X-Ray). Deploy with Amazon CloudWatch for centralized observability.",
+          "evidence": "No logging imports, no metrics endpoints, no tracing configuration"
+        }
+      ]
+    },
+    {
+      "pathway": "Move to AI",
+      "severity_status": "Needs Work",
+      "score_rating": "Needs Work",
+      "findings": [
+        {
+          "id": "AI-001",
+          "title": "No Machine-Readable API for AI/Agent Integration",
+          "severity": "High",
+          "effort": "High",
+          "description": "The SOAP RPC/encoded interface with opaque XML-in-string parameters is not consumable by modern AI agents or LLM tool-use frameworks. No OpenAPI, REST, or gRPC interface exists.",
+          "recommendation": "Expose a REST/JSON API with OpenAPI 3.x specification to enable AI agent tool integration via Amazon Bedrock Agents or similar frameworks.",
+          "evidence": "Single SOAP endpoint with poXml string parameter; no REST alternative"
+        },
+        {
+          "id": "AI-002",
+          "title": "No Guardrails for Autonomous Agent Access",
+          "severity": "High",
+          "effort": "Medium",
+          "description": "The service has no rate limiting, no approval workflows, no spending limits, and no idempotency protection. An AI agent with access could create unlimited duplicate orders at any amount.",
+          "recommendation": "Implement guardrails: rate limiting, idempotency keys, approval thresholds for high-value operations, and audit logging of all agent actions.",
+          "evidence": "submitOrder() directly inserts to database with no validation, no limits, no dedup"
+        },
+        {
+          "id": "AI-003",
+          "title": "No Structured Data for AI/ML Consumption",
+          "severity": "Low",
+          "effort": "Medium",
+          "description": "Order data is stored in a single relational table with no data pipeline, no event stream, and no feature store integration for ML model training or inference.",
+          "recommendation": "Implement event streaming (Amazon Kinesis or EventBridge) for order events to enable downstream AI/ML workloads such as demand forecasting or anomaly detection.",
+          "evidence": "Simple INSERT-only data path with no event emission or data export"
+        }
+      ]
+    }
+  ],
+  "overall_summary": {
+    "total_findings": 22,
+    "high_severity": 16,
+    "medium_severity": 4,
+    "low_severity": 2,
+    "pathways_critical": ["Move to Cloud Native", "Move to Containers", "Move to Managed Databases", "Move to Modern DevOps"],
+    "pathways_needs_work": ["Move to Open Source", "Move to AI"],
+    "pathways_ready": ["Move to Managed Analytics"]
+  },
+  "recommended_actions": [
+    {
+      "priority": 1,
+      "action": "Upgrade Java Runtime and Application Server",
+      "pathway": "Move to Cloud Native",
+      "description": "Migrate from Java 6/JBoss AS 5.1 to Java 17+ with a modern lightweight framework (Spring Boot or Quarkus). This is the foundation for all other modernization efforts.",
+      "learning_resources": [
+        "AWS Prescriptive Guidance: Migrating Java applications to modern runtimes",
+        "AWS re:Invent: Modernizing Java applications on AWS"
+      ]
+    },
+    {
+      "priority": 2,
+      "action": "Containerize the Application",
+      "pathway": "Move to Containers",
+      "description": "Package the modernized application as a container image and deploy on Amazon ECS or Amazon EKS for orchestrated, scalable deployment.",
+      "learning_resources": [
+        "AWS Containers: Getting started with Amazon ECS",
+        "AWS App2Container: Containerizing Java applications"
+      ]
+    },
+    {
+      "priority": 3,
+      "action": "Migrate Database to Managed Service",
+      "pathway": "Move to Managed Databases",
+      "description": "Migrate from on-premises Oracle 11g to Amazon RDS for PostgreSQL or Amazon Aurora PostgreSQL-Compatible. The simple data access pattern makes this low-risk.",
+      "learning_resources": [
+        "AWS Database Migration Service: Oracle to PostgreSQL migration playbook",
+        "AWS Schema Conversion Tool documentation"
+      ]
+    },
+    {
+      "priority": 4,
+      "action": "Implement CI/CD Pipeline",
+      "pathway": "Move to Modern DevOps",
+      "description": "Establish automated build, test, and deployment using AWS CodePipeline, CodeBuild, and CodeDeploy or ECS deployment targets.",
+      "learning_resources": [
+        "AWS DevOps: CI/CD on AWS",
+        "AWS Prescriptive Guidance: Building a CI/CD pipeline"
+      ]
+    },
+    {
+      "priority": 5,
+      "action": "Modernize API Interface",
+      "pathway": "Move to AI",
+      "description": "Replace the SOAP RPC/encoded endpoint with a REST/JSON API and publish an OpenAPI specification to enable AI agent integration.",
+      "learning_resources": [
+        "AWS API Gateway: Building REST APIs",
+        "Amazon Bedrock Agents: Integrating with APIs via OpenAPI"
+      ]
+    },
+    {
+      "priority": 6,
+      "action": "Migrate to Open Source Database",
+      "pathway": "Move to Open Source",
+      "description": "Reduce licensing costs by migrating from Oracle to PostgreSQL using AWS DMS and Schema Conversion Tool.",
+      "learning_resources": [
+        "AWS Prescriptive Guidance: Oracle to PostgreSQL migration",
+        "Amazon Aurora PostgreSQL-Compatible Edition features"
+      ]
+    }
+  ]
+}

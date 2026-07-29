@@ -246,6 +246,90 @@ def test_build_impact_end_to_end_mod_repo_change():
     assert impact["per_repo"][repo_key]["D2_mod_tier"]["changed"] is True
 
 
+# --- shape normalizer (real ATX CT 3.7.0 reports) ------------------------------------
+#
+# ATX CT 3.7.0 emits a different JSON shape per repo. These fixtures are verbatim real
+# reports (one per observed shape) snapshotted from a portfolio run on 2026-07-29. The
+# normalizer must flatten all of them onto the canonical findings/pathways contract that
+# the D1–D5 diff functions consume. See diff-reports.py "Shape normalizer" section.
+
+SHAPES = Path(__file__).resolve().parent / "fixtures" / "shapes"
+
+# (fixture stem, analysis, expected findings floor, expected triggered-pathway count)
+# Counts are floors (>=) so content drift between re-runs doesn't make the test brittle;
+# the point is that the shape yields findings at all, where the old code returned 0.
+_SHAPE_CASES = [
+    ("A1_ara_dict_by_category",        "ara", 10, None),
+    ("A2_ara_categories_list_noid",    "ara", 10, None),
+    ("A3_ara_categories_dict",         "ara", 10, None),
+    ("A4_ara_flat_list",               "ara", 10, None),
+    ("M1_mod_pathways_list",           "mod", 20, 1),
+    ("M2_mod_pathways_dict_counts",    "mod", 0, 1),   # counts-only: 0 findings but pathways fire
+    ("M3_mod_pathways_dict_findings",  "mod", 20, 1),
+    ("M4_mod_modernization_pathways",  "mod", 15, 1),
+]
+
+
+def test_shape_fixtures_present():
+    for stem, *_ in _SHAPE_CASES:
+        assert (SHAPES / f"{stem}.json").exists(), f"missing fixture {stem}.json"
+
+
+def test_every_shape_yields_findings_or_pathways():
+    for stem, analysis, min_findings, min_triggered in _SHAPE_CASES:
+        data = _load(SHAPES / f"{stem}.json")
+        norm = dr.normalize_report(analysis, data)
+        assert len(norm["findings"]) >= min_findings, \
+            f"{stem}: expected >={min_findings} findings, got {len(norm['findings'])}"
+        if min_triggered is not None:
+            triggered = [p for p in norm["pathways"]
+                         if str(p["status"]).lower() == "triggered"]
+            assert len(triggered) >= min_triggered, \
+                f"{stem}: expected >={min_triggered} triggered pathways"
+
+
+def test_normalized_finding_ids_are_unique_and_stringy():
+    for stem, analysis, *_ in _SHAPE_CASES:
+        norm = dr.normalize_report(analysis, _load(SHAPES / f"{stem}.json"))
+        ids = [f["question_id"] for f in norm["findings"]]
+        assert all(isinstance(i, str) and i for i in ids), f"{stem}: non-string/empty id"
+        assert len(ids) == len(set(ids)), f"{stem}: duplicate question_id after normalize"
+
+
+def test_diff_across_two_real_shapes_is_stable_on_identity():
+    # Same report normalized twice must diff to a no-op (identity), proving the canonical
+    # keys are deterministic across the various source shapes.
+    for stem, analysis, *_ in _SHAPE_CASES:
+        data = _load(SHAPES / f"{stem}.json")
+        b = dr.normalize_report(analysis, data)
+        a = dr.normalize_report(analysis, copy.deepcopy(data))
+        d = dr.diff_findings(b, a)
+        assert d["added"] == [] and d["removed"] == [] and d["reseveritied"] == [], \
+            f"{stem}: identical report should diff to no-op, got {d}"
+
+
+def test_added_finding_detected_in_dict_by_category_shape():
+    # Mutate the real A1 shape (findings dict keyed by camelCase category) and confirm the
+    # normalizer + differ catch a new finding — the exact case the old flat-list code missed.
+    data = _load(SHAPES / "A1_ara_dict_by_category.json")
+    before = dr.normalize_report("ara", data)
+    mutated = copy.deepcopy(data)
+    bucket = next(iter(mutated["findings"]))          # first category bucket
+    mutated["findings"][bucket].append(
+        {"id": "SYN-99", "severity": "BLOCKER", "title": "synthetic injected finding"})
+    after = dr.normalize_report("ara", mutated)
+    d = dr.diff_findings(before, after)
+    assert "SYN-99" in d["added"]
+
+
+def test_mod_flat_findings_still_extracted():
+    # The committed-example MOD shape carries a flat top-level findings[] (not pathway-
+    # nested). Regression guard: normalization must not drop it.
+    data = _load(MOD_REPO)
+    norm = dr.normalize_report("mod", data)
+    assert len(norm["findings"]) == len(data["findings"])
+
+
 # --- fallback runner (no pytest) -----------------------------------------------------
 
 def _run_all():

@@ -9,6 +9,11 @@ Turn Claude into an orchestrator for running comprehensive analyses across a ser
 
 > Ported from the AWS "orchestrator" Kiro Power (`aws-samples/sample-agentic-readiness-analysis-orchestrator`). Where the original referenced Kiro's `readSteering` action, use the **Read** tool on the files in `references/`; where it referenced `executeBash`, use the **Bash** tool.
 
+> **⚠️ atx CT ≥ 3.7.0 — two breaking changes baked into this doc (verified 2026-07-29 on CLI 2.1.220):**
+> - **No server to start.** `atx ct server` is GONE — analyses run **in-process**. Just run `atx ct status`; there is no `localhost:8081` daemon anymore. Anywhere older docs say "start the server", skip it.
+> - **No `--wait` flag.** `atx ct analysis run` starts the run, prints its id, and returns. Poll `atx ct analysis get --id <id>` (or `analysis list`) for completion. `--wait` no longer exists on any subcommand.
+> - **Region: only `us-east-1` resolves.** A stray `AWS_REGION=us-west-2` makes the definition/credential endpoint NXDOMAIN (`transform-custom.us-west-2.api.aws`). Always `export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1`.
+
 ## Supported analyses
 
 | Analysis | `atx ct` type | What it evaluates |
@@ -76,8 +81,8 @@ Key fixes baked into the harness:
 # 0. Pre-flight — FAIL FAST (see references/getting-started.md)
 aws sts get-caller-identity
 atx --version
-atx ct server &            # starts on http://localhost:8081
-atx ct status --health
+export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1   # see region note below
+atx ct status --health     # analyses run IN-PROCESS — there is no server to start (see note)
 
 # 1. Add a source. Local uses --path (absolute); remote uses --org + --token.
 atx ct source add --name my-portfolio --provider local --path "$(pwd)/services"
@@ -165,7 +170,7 @@ atx ct analysis list-artifacts --id <id> --json | jq -r '.[] | "\(.repo)\t\(.nam
 
 ## Hosted web Console
 
-Besides the local API server, AWS Transform has a **hosted web Console — "Continuous modernization"** — with tabs **Dashboard / Sources / Analyses / Findings / Remediations**. It reads the same account-scoped data (`ct` CLI and Console show the same sources, analyses, findings, remediations live). This is the best "show the audience" surface — prefer it over exporting reports for demos. Note the **local `ct` server (`http://localhost:8081`) is API-only** — `GET /` returns "Cannot GET /"; there is no local web UI. The "dashboards" mentioned under MCP are tool calls, not a local page.
+Besides the local API server, AWS Transform has a **hosted web Console — "Continuous modernization"** — with tabs **Dashboard / Sources / Analyses / Findings / Remediations**. It reads the same account-scoped data (`ct` CLI and Console show the same sources, analyses, findings, remediations live). This is the best "show the audience" surface — prefer it over exporting reports for demos. Note that atx CT ≥ 3.7.0 runs analyses **in-process** — there is no local web UI or `localhost:8081` daemon anymore. The "dashboards" mentioned under MCP are tool calls, not a local page.
 
 ## Agent behavior: long-running analysis
 
@@ -183,7 +188,7 @@ atx ct analysis get --id <analysis-id>                               # running |
 atx ct findings list --analysis-id <id> --json | jq 'group_by(.severity) | map({(.[0].severity): length}) | add'
 ```
 
-`--wait` blocks the whole run (30+ min for large portfolios), gives no intermediate feedback, and risks tool timeout. Reserve it for scripts/CI.
+> **No `--wait` flag exists** (removed in atx CT ≥ 3.7.0). `analysis run` returns immediately with an id regardless; polling `analysis get --id <id>` / `analysis list` is the only completion mechanism. In scripts/CI, poll in a loop (the harness `run-fixtures.sh` does exactly this).
 
 **Polling in a background shell script:** the OS shell here is **zsh**, where `$status` is a **read-only reserved variable** — a loop that does `status=$(...)` fails with "read-only variable: status". Use a different name (`st=$(...)`). Verified 2026-07.
 
@@ -290,7 +295,7 @@ atx ct remediation status --id <remediation-id>   # includes PR/MR link
 
 ## Full CLI reference (condensed)
 
-**Server/status:** `atx ct server [--port <p>]` · `atx ct status [--health]`
+**Status:** `atx ct status [--health]` — *(no `server` subcommand in atx CT ≥ 3.7.0; analyses run in-process)*
 **Discovery:** `atx ct discovery scan --source <name> [--path <override>]`
 **Repositories:** `atx ct repository list|get|update|delete` (filters: `--source --language --labels --has-workflow --json`)
 **Analysis:** `atx ct analysis run|get|list|cancel|delete|list-artifacts|get-artifact`

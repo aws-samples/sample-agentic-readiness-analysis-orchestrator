@@ -149,47 +149,85 @@ for fx in "${selected[@]}"; do
   fi
 done
 
-# --- ensure the atx ct API server is up ----------------------------------------------
-# `atx ct` is a thin client to a local API server (default :8081). Without it every
-# call dies with "Is the server running? Start with: atxct server". CI starts fresh
-# each job, so bootstrap the server here if it isn't already healthy, then wait for it.
-if [[ "${DRY_RUN}" != "true" ]]; then
-  if ! atx ct status --health 2>/dev/null | grep -q healthy; then
-    echo "run-fixtures: atx ct server not healthy — starting it in the background" >&2
-    atx ct server >"${AFTER_DIR}/atxct-server.log" 2>&1 &
-    for _ in $(seq 1 30); do
-      atx ct status --health 2>/dev/null | grep -q healthy && break
-      sleep 2
-    done
-    atx ct status --health 2>/dev/null | grep -q healthy \
-      || { echo "error: atx ct server did not become healthy; see ${AFTER_DIR}/atxct-server.log" >&2; exit 1; }
-  fi
-fi
+# --- atx ct runs in-process (no server) ----------------------------------------------
+# The standalone `atx ct server` was DEPRECATED in atx CT 3.7.0 — analyses now run
+# in-process, so there is nothing to bootstrap. A stray `AWS_REGION=us-west-2` in the
+# environment makes the credential/definition endpoint fail to resolve
+# (transform-custom.us-west-2.api.aws → NXDOMAIN); only us-east-1 resolves.
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 
-run atx ct status --health || echo "warn: atx health check failed (creds?)" >&2
+run atx ct status || echo "warn: atx status check failed (creds?)" >&2
 # source add is idempotent-ish: a re-run hits 409 (already exists) which is fine — the
 # discovery scan below re-scans the same path regardless.
 run atx ct source add --name "${SOURCE_NAME}" --provider local --path "${STAGE}" || true
 run atx ct discovery scan --source "${SOURCE_NAME}"
 
 # --- run analyses --------------------------------------------------------------------
+# 3.7.0 dropped the `--wait` flag: `analysis run` starts the analysis, prints its id, and
+# returns. Capture the id and poll `analysis list` until that run reports "complete".
+wait_for_analysis() {
+  local aid="$1" tries=0 max=180   # ~30 min at 10s cadence
+  [[ -z "${aid}" ]] && { echo "warn: no analysis id to wait on" >&2; return 0; }
+  while (( tries < max )); do
+    local state
+    state="$(atx ct analysis list 2>/dev/null | awk -v id="${aid}" '$1==id{print $3}')"
+    case "${state}" in
+      complete) echo "analysis ${aid}: complete" >&2; return 0 ;;
+      failed|cancelled) echo "error: analysis ${aid}: ${state}" >&2; return 1 ;;
+      *) sleep 10; ((tries++)) ;;
+    esac
+  done
+  echo "error: analysis ${aid} did not complete within timeout" >&2; return 1
+}
+
+run_analysis() {
+  local type="$1"
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "+ atx ct analysis run --type ${type} --source ${SOURCE_NAME}" >&2
+    return 0
+  fi
+  local out aid
+  out="$(atx ct analysis run --type "${type}" --source "${SOURCE_NAME}" 2>&1)"
+  echo "${out}" >&2
+  # e.g. "Analysis 01KYQ... (agentic-readiness) started on 11 repo(s)"
+  aid="$(printf '%s\n' "${out}" | grep -oE '01[A-Z0-9]{24}' | head -1)"
+  wait_for_analysis "${aid}"
+}
+
 if [[ "${run_ara}" == "true" ]]; then
-  run atx ct analysis run --type agentic-readiness --source "${SOURCE_NAME}" --wait
+  run_analysis agentic-readiness
 fi
 if [[ "${run_mod}" == "true" ]]; then
-  run atx ct analysis run --type modernization-readiness --source "${SOURCE_NAME}" --wait
+  run_analysis modernization-readiness
 fi
 
 # --- collect artifacts into the after tree -------------------------------------------
-# On local sources ct writes report JSON into the repo working trees; for portability we
-# also pull via get-artifact. Collect everything matching our report naming into AFTER_DIR.
+# atx CT 3.7.0 writes the full report quartet (.json/.md/.html/.metadata.json) into the
+# local source working tree at:
+#     <stage>/<repo>/services/<repo>/{agentic,modernization}-readiness-analysis/
+# and the portfolio rollup (per source) under the ct source dir at:
+#     ~/.atxct/sources/<source>/agentic-readiness/runs/<runId>/portfolio-my-portfolio/
+#         portfolio-{ara,mod}-report.json
+# We collect the per-repo reports from the stage, and the newest portfolio rollup from
+# the ct source dir. Only *.json is needed downstream (diff-reports.py is JSON-only).
 if [[ "${DRY_RUN}" != "true" ]]; then
-  # Sweep any *-report.json produced under the staged sources / working trees.
+  # Per-repo reports from the staged working trees.
   find "${STAGE}" -type f \( -name '*-ara-report.json' -o -name '*-mod-report.json' \) \
     -exec cp -f {} "${AFTER_DIR}/" \; 2>/dev/null || true
-  # Portfolio reports (ct writes these to the source root or a portfolio dir).
-  find "${STAGE}" -type f -name '*-portfolio-*-report.json' \
-    -exec cp -f {} "${AFTER_DIR}/" \; 2>/dev/null || true
+
+  # Portfolio rollups: pick the NEWEST portfolio-{ara,mod}-report.json under the ct
+  # source's run tree (a fresh run appends a new runId dir; take the latest by mtime).
+  CT_SRC_DIR="${ATXCT_HOME:-${HOME}/.atxct}/sources/${SOURCE_NAME}"
+  for kind in ara mod; do
+    latest="$(find "${CT_SRC_DIR}" -type f \
+                -path '*/portfolio-my-portfolio/*' \
+                -name "portfolio-${kind}-report.json" \
+                -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+    if [[ -n "${latest}" ]]; then
+      cp -f "${latest}" "${AFTER_DIR}/portfolio-${kind}-report.json"
+    fi
+  done
   echo "collected $(find "${AFTER_DIR}" -maxdepth 1 -name '*-report.json' | wc -l | tr -d ' ') report(s) into ${AFTER_DIR}" >&2
 fi
 

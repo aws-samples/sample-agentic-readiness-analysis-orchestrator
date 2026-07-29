@@ -1,0 +1,71 @@
+{
+  "repository": "legacy-storefront-rails",
+  "assessmentDate": "2026-07-28",
+  "readinessProfile": "Not Agent-Integrable",
+  "runtime": "Ruby 1.8.7 (EOL) / Rails 2.3 (EOL)",
+  "summary": "Legacy e-commerce storefront with no programmatic interfaces, no authentication, critical security vulnerabilities, and no observability. Cannot be safely invoked by an AI agent.",
+  "categories": [
+    {
+      "name": "APIs and Machine-Readable Interfaces",
+      "findings": [
+        {"severity": "BLOCKER", "title": "No JSON/API endpoints exist", "description": "The single controller renders only HTML views. No respond_to, no JSON serialization, no API versioning, no content negotiation."},
+        {"severity": "BLOCKER", "title": "No API documentation or schema", "description": "No OpenAPI/Swagger spec or machine-readable contract exists."},
+        {"severity": "BLOCKER", "title": "No structured error responses", "description": "Errors are rendered as HTML pages with no standardized error codes or machine-parseable payloads."},
+        {"severity": "INFO", "title": "Small controller surface (3 actions)", "description": "Only index, create, and show actions exist, simplifying future API extraction."}
+      ]
+    },
+    {
+      "name": "Identity and Authentication",
+      "findings": [
+        {"severity": "BLOCKER", "title": "No authentication mechanism", "description": "No before_filter, Devise, JWT, API keys, or OAuth. Any request can access any action without credentials."},
+        {"severity": "BLOCKER", "title": "Insecure Direct Object Reference (IDOR)", "description": "The show action fetches any order by ID with no ownership check."},
+        {"severity": "BLOCKER", "title": "Hardcoded payment credentials in source control", "description": "config/payment.yml contains live merchant credentials committed to the repository."},
+        {"severity": "BLOCKER", "title": "SQL injection in index action", "description": "User-supplied params[:status] is interpolated directly into SQL, enabling full database compromise."},
+        {"severity": "RISK", "title": "Mass assignment vulnerability", "description": "Order.new(params[:order]) with no attr_accessible allows setting any model attribute."}
+      ]
+    },
+    {
+      "name": "State Management and Idempotency",
+      "findings": [
+        {"severity": "BLOCKER", "title": "No idempotency controls", "description": "No idempotency key, no duplicate-submission prevention, no request deduplication. Retries cause duplicate orders and double charges."},
+        {"severity": "BLOCKER", "title": "No transaction wrapping", "description": "Order creation and payment charging are not wrapped in a database transaction. Partial failures leave inconsistent state."},
+        {"severity": "RISK", "title": "No optimistic locking", "description": "No lock_version column; concurrent updates silently overwrite each other."},
+        {"severity": "INFO", "title": "No background job infrastructure", "description": "All processing is synchronous — no Sidekiq, Resque, or delayed_job."}
+      ]
+    },
+    {
+      "name": "Human-in-the-Loop Controls",
+      "findings": [
+        {"severity": "BLOCKER", "title": "No confirmation or approval workflow", "description": "Order creation immediately charges a credit card with no review step, spending limit, or cancellation window."},
+        {"severity": "BLOCKER", "title": "No rate limiting or throttling", "description": "No mechanism to prevent an agent from submitting unbounded orders at high velocity."},
+        {"severity": "BLOCKER", "title": "No audit trail", "description": "No logging of who performed what action. No way to review or reverse agent actions."},
+        {"severity": "RISK", "title": "No rollback or undo capability", "description": "Once charge_card executes, there is no refund or reversal path in the application."}
+      ]
+    },
+    {
+      "name": "Observability",
+      "findings": [
+        {"severity": "BLOCKER", "title": "No structured logging", "description": "No logging framework beyond Rails default. No request IDs, correlation IDs, or JSON log output."},
+        {"severity": "BLOCKER", "title": "No monitoring or alerting", "description": "No integration with any monitoring service. Failures are invisible."},
+        {"severity": "BLOCKER", "title": "No distributed tracing", "description": "No OpenTelemetry, X-Ray, or tracing instrumentation. Agent request chains cannot be traced."},
+        {"severity": "BLOCKER", "title": "No health check endpoint", "description": "No /health or /status endpoint for liveness or readiness probing."},
+        {"severity": "INFO", "title": "Legacy app server with no instrumentation middleware", "description": "Application is served via Mongrel behind Apache with no modern middleware for request instrumentation."}
+      ]
+    }
+  ],
+  "crossCuttingSecurityConcerns": [
+    {"severity": "BLOCKER", "title": "SQL injection", "description": "Direct string interpolation of user input into SQL in orders#index."},
+    {"severity": "BLOCKER", "title": "Plaintext credentials in source control", "description": "Live payment gateway password committed to repository."},
+    {"severity": "BLOCKER", "title": "EOL runtime with known CVEs", "description": "Ruby 1.8.7 and Rails 2.3 have dozens of unpatched CVEs including remote code execution."}
+  ],
+  "readinessProfileJustification": "This system fails every evaluation category with BLOCKER-severity findings. There is no programmatic interface, no authentication, no idempotency, no human-in-the-loop gates, and no observability. Critical security vulnerabilities would be directly exploitable by or through an AI agent. The application requires fundamental modernization before any form of agent integration can be considered.",
+  "recommendedRemediationPath": [
+    "Upgrade runtime to supported Ruby 3.2+ and Rails 7.x+",
+    "Extract JSON API layer with OpenAPI documentation",
+    "Implement token-based authentication (JWT/OAuth2) with scoped permissions",
+    "Add idempotency keys on mutation endpoints and wrap order+payment in transactions",
+    "Add human-in-the-loop gates: confirmation workflows, spending limits, rate limiting",
+    "Instrument observability: structured logging, distributed tracing, health checks, monitoring",
+    "Remediate vulnerabilities: fix SQL injection, remove hardcoded credentials, add input validation"
+  ]
+}

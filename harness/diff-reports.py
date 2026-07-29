@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -126,6 +127,186 @@ def load_tree(root: Path) -> dict[tuple[str, str, str], dict]:
         if ident not in tree:
             tree[ident] = data
     return tree
+
+
+# ---------------------------------------------------------------------------------------
+# Shape normalizer
+# ---------------------------------------------------------------------------------------
+#
+# ATX CT 3.7.0 report JSON has NO stable schema — the same analysis type serializes
+# differently per repo (verified against real artifacts, 2026-07-29). The differ core
+# (D1–D5) expects ONE contract: a flat `findings` list keyed on `question_id`, and a
+# flat `pathways` list of {id, status}. This layer maps every observed shape onto that
+# contract and is called once per report in build_impact(), so the diff functions stay
+# shape-agnostic. Unrecognized structure degrades to [] (logged), never raises.
+#
+# ARA `findings` shapes observed:
+#   A1  dict keyed by camelCase category -> [ {id, severity, title, description} ]   (shipping-api)
+#   A2  no `findings`; `categories` LIST of {name, findings:[{severity,title,desc}]} (storefront — findings carry NO id)
+#   A3  no `findings`; `categories` DICT of {score, findings:[{id,severity,desc}]}   (loan-calculator)
+#   A4  flat `findings` LIST of {id, severity, category, title, description}          (partner-soap)
+#   plus cross-cutting arrays (crossCuttingSecurityConcerns / security_findings /
+#        security_vulnerabilities) holding real findings NOT in the category buckets.
+#
+# MOD findings live inside pathways. Pathway shapes observed:
+#   M1  `pathways` LIST of {name, severity_status, score_rating, findings:[{id,severity,effort,finding}]}  (shipping)
+#   M2  `pathways` DICT of {finding_count, high_findings, ...} counts-only, NO nested findings            (storefront;
+#        findings surface in top-level security_findings dict of counts)
+#   M3  `pathways` DICT of {score_rating, findings:[{id,finding,severity,effort,description}]}            (loan)
+#   M4  key `modernization_pathways` LIST of {pathway, score_rating, findings:[{id,title,severity,...}]}  (partner-soap)
+
+_ARA_CROSSCUT_KEYS = ("crossCuttingSecurityConcerns", "security_findings",
+                      "security_vulnerabilities", "crossCuttingSecurity")
+_MOD_PATHWAY_KEYS = ("pathways", "modernization_pathways")
+
+
+def _slug(text: Any) -> str:
+    """Collapse a name to a case/punctuation-insensitive token for cross-shape matching.
+    'Move to Cloud Native' / 'move_to_cloud_native' -> 'movetocloudnative'."""
+    return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())
+
+
+def _canon_finding(raw: dict, *, category: Optional[str] = None,
+                   seq: Optional[int] = None) -> dict:
+    """Map a raw finding record onto the canonical contract.
+
+    Identity precedence: explicit id/question_id > title > (category, seq) fallback so
+    two id-less findings in the same bucket stay distinct and stable across before/after.
+    """
+    fid = raw.get("question_id") or raw.get("id")
+    title = raw.get("title") or raw.get("finding") or raw.get("name")
+    cat = raw.get("category") or category
+    if fid is None:
+        fid = title or (f"{_slug(cat)}#{seq}" if cat is not None and seq is not None
+                        else f"anon#{seq}")
+    return {
+        "question_id": str(fid),
+        "severity": raw.get("severity"),
+        # native_severity may be top-level, nested in ara_metadata, or absent.
+        "native_severity": _native_severity(raw),
+        "title": title,
+        "category": cat,
+        "description": raw.get("description") or raw.get("finding"),
+    }
+
+
+def _extract_ara_findings(data: dict) -> list[dict]:
+    out: list[dict] = []
+    findings = data.get("findings")
+
+    if isinstance(findings, list):                         # A4: flat list
+        out.extend(_canon_finding(f, seq=i) for i, f in enumerate(findings)
+                   if isinstance(f, dict))
+    elif isinstance(findings, dict):                       # A1: dict keyed by category
+        for cat, bucket in findings.items():
+            if isinstance(bucket, list):
+                out.extend(_canon_finding(f, category=cat, seq=i)
+                           for i, f in enumerate(bucket) if isinstance(f, dict))
+
+    cats = data.get("categories")
+    if isinstance(cats, list):                             # A2: categories LIST of {name, findings}
+        for c in cats:
+            if not isinstance(c, dict):
+                continue
+            cat = c.get("name") or c.get("category_id") or c.get("category")
+            for i, f in enumerate(c.get("findings") or []):
+                if isinstance(f, dict):
+                    out.append(_canon_finding(f, category=cat, seq=i))
+    elif isinstance(cats, dict):                           # A3: categories DICT keyed by id
+        for cat, c in cats.items():
+            if not isinstance(c, dict):
+                continue
+            for i, f in enumerate(c.get("findings") or []):
+                if isinstance(f, dict):
+                    out.append(_canon_finding(f, category=cat, seq=i))
+
+    # Cross-cutting security findings live outside the category buckets. Only lists carry
+    # real records; count-only dicts (e.g. {high_count: 7}) are summaries — skip them.
+    for k in _ARA_CROSSCUT_KEYS:
+        arr = data.get(k)
+        if isinstance(arr, list):
+            out.extend(_canon_finding(f, category=k, seq=i)
+                       for i, f in enumerate(arr) if isinstance(f, dict))
+
+    return _dedupe_findings(out)
+
+
+def _mod_pathway_entries(data: dict) -> list[tuple[str, dict]]:
+    """Return [(pathway_slug, entry_dict)] across the list/dict/alt-key shapes."""
+    for key in _MOD_PATHWAY_KEYS:
+        pw = data.get(key)
+        if isinstance(pw, list):                           # M1 / M4
+            out = []
+            for p in pw:
+                if isinstance(p, dict):
+                    name = p.get("name") or p.get("pathway") or p.get("id")
+                    out.append((_slug(name), p))
+            return out
+        if isinstance(pw, dict):                           # M2 / M3
+            return [(_slug(name), p) for name, p in pw.items() if isinstance(p, dict)]
+    return []
+
+
+def _extract_mod_findings(data: dict) -> list[dict]:
+    out: list[dict] = []
+    # M0 (committed example / portfolio): flat top-level findings list, pathways separate.
+    top = data.get("findings")
+    if isinstance(top, list):
+        out.extend(_canon_finding(f, seq=i) for i, f in enumerate(top)
+                   if isinstance(f, dict))
+    # M1/M3/M4: findings nested inside each pathway entry.
+    for slug, entry in _mod_pathway_entries(data):
+        for i, f in enumerate(entry.get("findings") or []):
+            if isinstance(f, dict):
+                out.append(_canon_finding(f, category=slug, seq=i))
+    # M2 has no nested findings anywhere (only counts) — nothing to extract; D3 still
+    # sees the pathway via _extract_pathways below.
+    return _dedupe_findings(out)
+
+
+def _extract_pathways(data: dict) -> list[dict]:
+    """Canonical pathway list of {id, status}. A pathway is 'triggered' when it carries
+    findings or a non-zero finding_count, unless an explicit status says otherwise."""
+    out = []
+    for slug, entry in _mod_pathway_entries(data):
+        explicit = entry.get("status") or entry.get("portfolio_status")
+        if explicit is not None:
+            status = str(explicit)
+        else:
+            n = entry.get("finding_count")
+            has = (n or 0) > 0 if isinstance(n, (int, float)) else bool(entry.get("findings"))
+            status = "triggered" if has else "not_triggered"
+        out.append({"id": slug, "status": status,
+                    "name": entry.get("name") or entry.get("pathway"),
+                    # passthrough for D4 (portfolio program recommendations)
+                    "recommended_aws_programs": entry.get("recommended_aws_programs", []),
+                    "portfolio_status": entry.get("portfolio_status")})
+    return out
+
+
+def _dedupe_findings(findings: list[dict]) -> list[dict]:
+    """Collapse records that share a question_id (same finding surfaced in two buckets)."""
+    seen: dict[str, dict] = {}
+    for f in findings:
+        seen.setdefault(f["question_id"], f)
+    return list(seen.values())
+
+
+def normalize_report(analysis: str, data: dict) -> dict:
+    """Return a shallow copy of `data` with canonical `findings` and (MOD) `pathways`.
+
+    Every other top-level key (classification, categories, executive_dashboard,
+    overall_score, …) is left untouched so D2/D5 keep reading them directly.
+    """
+    if not isinstance(data, dict):
+        return {}
+    norm = dict(data)
+    if analysis == "ara":
+        norm["findings"] = _extract_ara_findings(data)
+    else:
+        norm["findings"] = _extract_mod_findings(data)
+        norm["pathways"] = _extract_pathways(data)
+    return norm
 
 
 # ---------------------------------------------------------------------------------------
@@ -397,8 +578,8 @@ def build_impact(before_tree: dict, after_tree: dict) -> dict:
     changed_tds: set[str] = set()
 
     for (analysis, scope, key) in sorted(all_keys):
-        before = before_tree.get((analysis, scope, key), {})
-        after = after_tree.get((analysis, scope, key), {})
+        before = normalize_report(analysis, before_tree.get((analysis, scope, key), {}))
+        after = normalize_report(analysis, after_tree.get((analysis, scope, key), {}))
 
         if scope == "repo":
             entry = per_repo.setdefault(key, {})
