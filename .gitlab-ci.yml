@@ -378,16 +378,24 @@ harness:impact:
     # --jobs/--mr-fixtures: see the HARNESS_JOBS / HARNESS_MR_FIXTURES notes above.
     - harness/run-fixtures.sh --changed-only --validate --jobs "$HARNESS_JOBS" --mr-fixtures "$HARNESS_MR_FIXTURES"
     - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
+    # SCORE (accuracy anchor): re-score the freshly-generated reports for groundedness
+    # against the fixture SOURCE and classify each against the committed baseline
+    # (improved / regressed / within-noise, with a per-fixture noise threshold). This is
+    # the judge's only PAST DATA — without it the verdict is produced from the delta alone,
+    # blind to where accuracy stood before the change. Advisory: `|| true` so a scoring
+    # hiccup degrades the judge to delta-only rather than failing the job.
+    - harness/score-reports.py --trees "$AFTER_DIR" --compare-out compare.json || true
     # JUDGE: LLM scores the delta against the contributor's INTENT (MR description, §6/§8.1).
     # --edited-questions tells the judge WHICH rubric questions the MR touched. Without it
     # the judge cannot separate the edit's effect from the analysis agent's run-to-run
     # nondeterminism (a same-rubric re-run moves 10-20 findings), and it read a
     # one-question change as "far broader than stated" -> a false `mismatch`.
+    # --compare feeds the accuracy anchor above (absent file => judge falls back cleanly).
     - |
       EDITED=""
       [ -f "$AFTER_DIR/edited-questions.txt" ] && EDITED="$(cat "$AFTER_DIR/edited-questions.txt")"
       harness/judge.py --impact impact.json --intent "$CI_MERGE_REQUEST_DESCRIPTION" \
-        --edited-questions "$EDITED" > verdict.json
+        --edited-questions "$EDITED" --compare compare.json > verdict.json
     # REPORT: advisory MR comment (never blocks).
     - harness/post-mr-comment.sh verdict.json
   artifacts:
@@ -395,6 +403,7 @@ harness:impact:
     paths:
       - impact.json
       - verdict.json
+      - compare.json   # accuracy-vs-baseline anchor the judge scored against
       # Per-unit atx logs (spinner already stripped at write time). These are the
       # only record of what atx actually did — the job log deliberately carries just
       # our concise markers so it can't hit the 4 MB cap again.
@@ -427,7 +436,9 @@ harness:full:
   script:
     - harness/run-fixtures.sh --scope "$RUN_SCOPE" --td "$CHANGED_TD" --validate --jobs "$RUN_JOBS"
     - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
-    - harness/judge.py --impact impact.json --intent "$RUN_INTENT" > verdict.json
+    # Accuracy anchor — see the note in harness:impact.
+    - harness/score-reports.py --trees "$AFTER_DIR" --compare-out compare.json || true
+    - harness/judge.py --impact impact.json --intent "$RUN_INTENT" --compare compare.json > verdict.json
     # No MR exists on a web pipeline -> fall back to printing the verdict.
     - harness/post-mr-comment.sh verdict.json || cat verdict.json
   artifacts:
@@ -435,6 +446,7 @@ harness:full:
     paths:
       - impact.json
       - verdict.json
+      - compare.json   # accuracy-vs-baseline anchor the judge scored against
       - harness/after/_logs/   # literal — see note on harness:impact
     expire_in: 30 days
   allow_failure: true   # advisory — never blocks

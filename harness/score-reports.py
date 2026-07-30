@@ -789,6 +789,120 @@ def aggregate(rows: list[dict]) -> list[dict]:
     return sorted(agg, key=lambda r: (r["analysis"], r["repo"]))
 
 
+# Measured noise floor per analysis: the largest single-fixture move observed between two
+# scorer passes over BYTE-IDENTICAL golden reports. ARA reached 0.10; MOD did not move at all
+# (all 11 MOD fixtures floor-score on legacy code, so nothing is in doubt).
+#
+# These are FALLBACKS, used only while the baseline is a single draw and therefore carries no
+# stddev of its own. A multi-sample baseline supplies a real per-fixture `stddev`, which is
+# strictly better evidence and takes precedence in compare_to_baseline().
+#
+# n=2 makes 0.10 a FLOOR on ARA's noise, not a characterization of it. Treat a sub-threshold
+# delta as "not measured", never as "proven equal".
+NOISE_FLOOR = {"ara": 0.10, "mod": 0.02}
+
+
+def compare_to_baseline(rows: list[dict],
+                        baseline: Optional[list[dict]] = None) -> dict:
+    """Compare freshly-scored rows against the committed baseline, with a noise threshold.
+
+    This is the anchor the judge otherwise lacks: without past data a 0-100 verdict is
+    produced from nothing and cannot say whether the TD is better than it was last month.
+
+    Every delta is classified against a threshold rather than reported raw, because the
+    dominant term is NOT the TD -- it is the analysis agent, which moves 10-20 findings per
+    fixture per rerun. On ARA that reaches 0.10, which is the width of the entire observed
+    ARA range (0.72-0.82). So a raw "+0.07 improved" is indistinguishable from a different
+    roll of the dice, and reporting it as an improvement is the single easiest way to talk
+    yourself into a regression.
+
+    Threshold per fixture, best evidence first:
+      1. 2 * baseline stddev, when the baseline is multi-sample (real measured variance)
+      2. NOISE_FLOOR[analysis], while the baseline is a single draw
+    """
+    if baseline is None:
+        baseline = (json.loads(BASELINE.read_text(encoding="utf-8"))
+                    if BASELINE.exists() else [])
+    base = {(b.get("repo"), b.get("analysis")): b for b in baseline}
+
+    units, improved, regressed, noise, unscored = [], 0, 0, 0, 0
+    for r in rows:
+        key = (r.get("repo"), r.get("analysis"))
+        b = base.get(key)
+        now, was = r.get("score"), (b or {}).get("score")
+        if not isinstance(now, (int, float)) or not isinstance(was, (int, float)):
+            unscored += 1
+            units.append({**{k: r.get(k) for k in ("repo", "analysis")},
+                          "score": now, "baseline": was, "verdict": "unscored"})
+            continue
+        sd = b.get("stddev")
+        if isinstance(sd, (int, float)) and sd > 0:
+            threshold, basis = round(2 * sd, 3), f"2*stddev over {b.get('runs')} runs"
+        else:
+            threshold = NOISE_FLOOR.get(r.get("analysis"), 0.10)
+            basis = "measured noise floor (baseline is a single draw)"
+        delta = round(now - was, 3)
+        if abs(delta) < threshold:
+            verdict = "within-noise"
+            noise += 1
+        elif delta > 0:
+            verdict = "improved"
+            improved += 1
+        else:
+            verdict = "regressed"
+            regressed += 1
+        units.append({
+            "repo": r.get("repo"), "analysis": r.get("analysis"),
+            "score": now, "baseline": was, "delta": delta,
+            "threshold": threshold, "threshold_basis": basis, "verdict": verdict,
+        })
+
+    def _mean(vals):
+        return round(sum(vals) / len(vals), 3) if vals else None
+
+    now_all = [u["score"] for u in units if isinstance(u.get("score"), (int, float))]
+    was_all = [u["baseline"] for u in units if isinstance(u.get("baseline"), (int, float))]
+    return {
+        "baseline_path": _rel(BASELINE),
+        "units": sorted(units, key=lambda u: (u["analysis"] or "", u["repo"] or "")),
+        "summary": {
+            "improved": improved, "regressed": regressed,
+            "within_noise": noise, "unscored": unscored,
+            "mean_now": _mean(now_all), "mean_baseline": _mean(was_all),
+            # The mean delta is reported but deliberately NOT classified: averaging over
+            # fixtures hides direction (a +0.10 and a -0.10 read as "no change"), so the
+            # per-unit verdicts above are the answer and this is context only.
+            "mean_delta": (round(_mean(now_all) - _mean(was_all), 3)
+                           if now_all and was_all else None),
+        },
+    }
+
+
+_VERDICT_MARK = {"improved": "+", "regressed": "-", "within-noise": "~", "unscored": "?"}
+
+
+def _report_comparison(cmp: dict) -> None:
+    s = cmp["summary"]
+    print(f"\n{'=' * 78}\nACCURACY vs BASELINE ({cmp['baseline_path']})\n{'=' * 78}")
+    print(f"{'':1} {'repo':<28}{'was':>6}{'now':>7}{'delta':>8}{'thresh':>8}  verdict")
+    for u in cmp["units"]:
+        if u["verdict"] == "unscored":
+            print(f"? {u['repo']:<28}{'—':>6}{'—':>7}{'—':>8}{'—':>8}  unscored")
+            continue
+        print(f"{_VERDICT_MARK[u['verdict']]} {u['repo']:<28}"
+              f"{u['baseline']:>6.2f}{u['score']:>7.2f}{u['delta']:>+8.3f}"
+              f"{u['threshold']:>8.2f}  {u['verdict']}")
+    print(f"\n  improved {s['improved']} · regressed {s['regressed']} · "
+          f"within-noise {s['within_noise']} · unscored {s['unscored']}")
+    if s["mean_baseline"] is not None:
+        print(f"  mean {s['mean_baseline']:.3f} -> {s['mean_now']:.3f} "
+              f"({s['mean_delta']:+.3f})")
+    if s["within_noise"]:
+        print("\n  'within-noise' means NOT MEASURED, not 'equal'. The analysis agent moves\n"
+              "  10-20 findings per fixture per rerun; a sub-threshold delta is a different\n"
+              "  roll of the dice. Raise confidence with more baseline samples (--trees).")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Score report ACCURACY against fixture source")
     ap.add_argument("--only", nargs="*", help="repo names to score")
@@ -817,7 +931,14 @@ def main() -> int:
                     help=f"write results to {_rel(BASELINE)} (the committed record)")
     ap.add_argument("--show-baseline", action="store_true",
                     help="print the committed baseline scores and exit — no scoring, no cost")
+    ap.add_argument("--compare-baseline", action="store_true",
+                    help="classify each score against the committed baseline as improved / "
+                         "regressed / within-noise, and write compare.json")
+    ap.add_argument("--compare-out", type=Path, default=None,
+                    help="where to write the comparison JSON (implies --compare-baseline)")
     args = ap.parse_args()
+    if args.compare_out:
+        args.compare_baseline = True
 
     if args.show_baseline:
         if not BASELINE.exists():
@@ -901,6 +1022,13 @@ def main() -> int:
         print(json.dumps(rows, indent=2))
     else:
         _report(rows, args.checks_only)
+
+    if args.compare_baseline:
+        cmp = compare_to_baseline(rows)
+        out = args.compare_out or (REPO / "harness" / "compare.json")
+        out.write_text(json.dumps(cmp, indent=2) + "\n", encoding="utf-8")
+        _report_comparison(cmp)
+        print(f"wrote {_rel(out) if out.is_relative_to(REPO) else out}", file=sys.stderr)
     return 0
 
 

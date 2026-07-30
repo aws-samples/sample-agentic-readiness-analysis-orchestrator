@@ -58,8 +58,11 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
+# Bedrock requires the inference-profile prefix (`global.`) on the Claude 5 family; the bare
+# `anthropic.claude-sonnet-5-...` id returns ValidationException "invalid model identifier",
+# which the fallback swallows into a silent heuristic verdict. Keep the prefix.
 DEFAULT_MODEL = os.environ.get(
-    "HARNESS_JUDGE_MODEL", "anthropic.claude-sonnet-5-20250929-v1:0")
+    "HARNESS_JUDGE_MODEL", "global.anthropic.claude-sonnet-5-20250929-v1:0")
 VALID_VERDICTS = {"LGTM", "needs-work"}
 VALID_MATCHES = {"aligned", "partial", "mismatch"}
 # The primary axis the score now tracks: effect on the ANALYSIS, not on intent-match.
@@ -455,8 +458,49 @@ def _alerts_note(impact_summary: dict) -> str:
     return "\n".join(out) + "\n"
 
 
+def _accuracy_note(compare: Optional[dict]) -> str:
+    """Render the accuracy-vs-baseline comparison: the judge's only PAST DATA.
+
+    Without this the 0-100 verdict is produced from the delta alone, with no knowledge of
+    where quality stood before — so it cannot say whether the TD is better than it was, only
+    whether this diff looks sensible. The comparison supplies the anchor.
+
+    Crucially it hands over the THRESHOLD too, not just the delta, because the dominant term
+    is the analysis agent's nondeterminism rather than the TD. A sub-threshold move is NOT
+    MEASURED; treating it as an improvement is how a regression gets talked through.
+    """
+    if not compare or not compare.get("units"):
+        return ""
+    s = compare.get("summary") or {}
+    lines = [
+        "\n## ACCURACY vs BASELINE — past data, scored against the fixture SOURCE",
+        "Each report was re-scored for groundedness against the actual fixture code and",
+        "compared with the committed baseline. `threshold` is the noise floor for that",
+        "fixture; a |delta| below it is NOT MEASURED, and you MUST NOT call it an",
+        "improvement or a regression — say it is within noise.",
+        f"  totals: improved {s.get('improved')} · regressed {s.get('regressed')} · "
+        f"within-noise {s.get('within_noise')} · unscored {s.get('unscored')}",
+    ]
+    if s.get("mean_baseline") is not None:
+        lines.append(f"  mean accuracy {s['mean_baseline']} -> {s['mean_now']} "
+                     f"({s.get('mean_delta'):+})")
+    for u in compare["units"]:
+        if u.get("verdict") == "unscored":
+            continue
+        lines.append(f"  [{u['verdict']:<12}] {u['repo']} ({str(u['analysis']).upper()}) "
+                     f"{u['baseline']} -> {u['score']} (delta {u['delta']:+}, "
+                     f"threshold {u['threshold']})")
+    lines.append(
+        "Weigh a CONFIRMED accuracy regression heavily: it means the reports became less "
+        "true of the source, which is the outcome this harness exists to prevent. Weigh a "
+        "confirmed improvement as real evidence the change helped. Ignore within-noise "
+        "movement entirely — it is the agent rolling differently, not the TD changing.\n")
+    return "\n".join(lines) + "\n"
+
+
 def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
-                      edited_questions: Optional[list[str]] = None) -> str:
+                      edited_questions: Optional[list[str]] = None,
+                      compare: Optional[dict] = None) -> str:
     return (
         "## Contributor intent\n"
         f"What: {intent.get('what') or '(none stated)'}\n"
@@ -470,6 +514,7 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
         f"dimensions_moved: {impact_summary['dimensions_moved']}\n"
         + _coverage_note(impact_summary)
         + _alerts_note(impact_summary)
+        + _accuracy_note(compare)
         + "highlights:\n" + ("\n".join(f"  - {h}" for h in impact_summary['highlights']) or "  (none)")
         + "\n\n## Raw change diff (may be truncated)\n"
         + (diff_text[:4000] if diff_text else "(not provided)")
@@ -479,7 +524,8 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
 
 def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
                        model: str,
-                       edited_questions: Optional[list[str]] = None) -> Optional[dict]:
+                       edited_questions: Optional[list[str]] = None,
+                       compare: Optional[dict] = None) -> Optional[dict]:
     """Call Bedrock; return a parsed verdict dict, or None if unavailable/failed."""
     try:
         import boto3  # noqa: PLC0415
@@ -494,7 +540,7 @@ def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user",
                           "content": build_user_prompt(intent, impact_summary, diff_text,
-                                                       edited_questions)}],
+                                                       edited_questions, compare)}],
         }
         resp = client.invoke_model(modelId=model, body=json.dumps(body))
         payload = json.loads(resp["body"].read())
@@ -701,6 +747,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     # nondeterminism (noise), which for a one-question edit is the larger of the two.
     ap.add_argument("--edited-questions", default="",
                     help="comma-separated question ids the change edited (scope signal)")
+    # The accuracy-vs-baseline comparison written by `score-reports.py --compare-baseline`.
+    # This is the judge's only PAST DATA: it re-scores each report's groundedness against the
+    # fixture source and diffs it against the committed baseline, with a per-fixture noise
+    # threshold. Without it the verdict is produced from the delta alone, blind to where
+    # quality stood before the change.
+    ap.add_argument("--compare", type=Path, default=None,
+                    help="compare.json from score-reports.py --compare-baseline (accuracy anchor)")
     args = ap.parse_args(argv)
 
     try:
@@ -724,10 +777,20 @@ def main(argv: Optional[list[str]] = None) -> int:
     if edited_questions:
         impact_summary["edited_questions"] = edited_questions
 
+    compare = None
+    if args.compare and args.compare.exists():
+        try:
+            compare = json.loads(args.compare.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            # The accuracy anchor is advisory context, not a hard input: a malformed
+            # compare.json degrades the judge to delta-only reasoning rather than failing.
+            print(f"judge: cannot read --compare ({exc}); judging without accuracy anchor",
+                  file=sys.stderr)
+
     verdict = None
     if not args.no_llm:
         verdict = judge_with_bedrock(intent, impact_summary, diff_text, args.model,
-                                     edited_questions)
+                                     edited_questions, compare)
         if verdict is not None:
             verdict["_engine"] = "bedrock"
     if verdict is None:
