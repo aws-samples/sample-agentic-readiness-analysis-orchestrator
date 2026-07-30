@@ -106,11 +106,22 @@ def parse_intent(raw: str) -> dict:
 
 def summarize_impact(impact: dict) -> dict:
     """Flatten impact.json into a small dict the LLM (and heuristic) can reason over."""
+    cov = impact.get("coverage") or {}
     summary: dict[str, Any] = {
         "no_op": impact.get("no_op", True),
         "changed_tds": impact.get("changed_tds", []),
         "dimensions_moved": [],
         "highlights": [],
+        # How much of the baseline this delta actually covers. An MR analyzes only the
+        # 1-2 fixtures that exercise the edit, so "nothing moved" can mean "nothing moved
+        # in the 2 repos we ran" — materially weaker evidence than a full sweep. The judge
+        # must not report a scoped clean run with the same confidence as an exhaustive one.
+        "coverage": {
+            "compared": cov.get("compared"),
+            "baseline_total": cov.get("baseline_total"),
+            "partial": bool(cov.get("partial")),
+            "not_analyzed_count": len(cov.get("not_analyzed") or []),
+        },
     }
     moved: set[str] = set()
 
@@ -216,6 +227,22 @@ Respond with ONLY a JSON object, no prose, matching exactly this schema:
  "no_op_warning": <bool>}"""
 
 
+def _coverage_note(impact_summary: dict) -> str:
+    """One line telling the judge how much evidence this delta actually rests on."""
+    cov = impact_summary.get("coverage") or {}
+    if not cov.get("partial"):
+        return "coverage: FULL — every baseline report was re-analyzed.\n"
+    return (
+        f"coverage: PARTIAL — {cov.get('compared')} of {cov.get('baseline_total')} baseline "
+        f"reports were re-analyzed ({cov.get('not_analyzed_count')} not analyzed).\n"
+        "  The harness deliberately runs only the fixtures that exercise the edited\n"
+        "  questions, so an empty delta here means 'nothing moved in what we ran' — it is\n"
+        "  NOT proof the change is inert portfolio-wide. Temper confidence accordingly and\n"
+        "  say so in the rationale; suggest a full sweep (harness:full) if the edit looks\n"
+        "  broader than the fixtures covered.\n"
+    )
+
+
 def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str) -> str:
     return (
         "## Contributor intent\n"
@@ -227,7 +254,8 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str) -> str
         f"no_op: {impact_summary['no_op']}\n"
         f"changed_tds: {impact_summary['changed_tds']}\n"
         f"dimensions_moved: {impact_summary['dimensions_moved']}\n"
-        "highlights:\n" + ("\n".join(f"  - {h}" for h in impact_summary['highlights']) or "  (none)")
+        + _coverage_note(impact_summary)
+        + "highlights:\n" + ("\n".join(f"  - {h}" for h in impact_summary['highlights']) or "  (none)")
         + "\n\n## Raw change diff (may be truncated)\n"
         + (diff_text[:4000] if diff_text else "(not provided)")
         + "\n\nReturn the JSON verdict now."
@@ -295,6 +323,15 @@ def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
             verdict, match, score = "LGTM", "aligned", 80
             rationale = ("No analysis output moved and the intent did not claim one would — "
                          "consistent with a docs/metadata-only change.")
+            # A clean result over 2 of 26 reports is weaker evidence than a full sweep.
+            # Don't hand out an unqualified 80 for a scoped run.
+            cov = impact_summary.get("coverage") or {}
+            if cov.get("partial"):
+                score = 70
+                rationale += (
+                    f" NOTE: only {cov.get('compared')} of {cov.get('baseline_total')} baseline "
+                    "reports were re-analyzed (the MR path runs just the fixtures that exercise "
+                    "the edit), so this is not proof the change is inert portfolio-wide.")
     else:
         # Something moved. Without an LLM we can't verify it matches intent word-for-word,
         # so we report the movement and lean neutral-positive, flagging for human review.

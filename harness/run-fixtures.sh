@@ -18,6 +18,16 @@
 #
 # Modes:
 #   --changed-only        Analyze only fixtures relevant to what changed (default in MRs).
+#                         A TD edit is portfolio-wide in PRINCIPLE, but analyzing all 11
+#                         fixtures x 2 analyses = 22 units costs ~108 agent-min EACH
+#                         (measured on the runner) = ~39h serial, and atx's progress
+#                         spinner blows GitLab's 4 MB log cap after ~4 units. So a
+#                         changed TD now selects the 1-2 fixtures that best EXERCISE the
+#                         edited questions, via select-fixtures.py (category-matched off
+#                         usecases.yaml expectations). Tune with --mr-fixtures N.
+#                         The exhaustive sweep is --scope all, run locally or via
+#                         harness:full — not on an MR.
+#   --mr-fixtures <N>     How many fixtures the changed-only path selects (default 2).
 #   --scope all | --all   Analyze every fixture in usecases.yaml (full re-baseline).
 #   --td <name>           Restrict to one managed TD's analysis type (ara|mod or TD name).
 #   --write-golden        After collecting, copy reports into harness/golden/ (baseline
@@ -62,6 +72,7 @@ SKIP_PUBLISH="false"
 NO_PORTFOLIO="false"
 VALIDATE="false"
 JOBS=1
+MR_FIXTURES="${HARNESS_MR_FIXTURES:-2}"   # changed-only: how many fixtures to select
 DRY_RUN="false"
 
 # --- arg parsing ---------------------------------------------------------------------
@@ -79,6 +90,7 @@ while [[ $# -gt 0 ]]; do
     --no-portfolio)  NO_PORTFOLIO="true"; shift ;;
     --validate)      VALIDATE="true"; shift ;;
     --jobs)          JOBS="$2"; shift 2 ;;
+    --mr-fixtures)   MR_FIXTURES="$2"; shift 2 ;;
     --dry-run)       DRY_RUN="true"; shift ;;
     -h|--help)       sed -n '2,48p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
@@ -132,8 +144,64 @@ else
     changed_td="${HARNESS_CHANGED_TD:-${changed_td}}"
   fi
   if [[ "${changed_td}" == "true" ]]; then
-    echo "changed-only: a watched TD changed → analyzing all fixtures (portfolio-wide)" >&2
-    selected=("${ALL_FIXTURES[@]}")
+    # A TD edit affects every repo in principle — but "analyze all 11" costs ~108
+    # agent-min per unit x 22 units ≈ 39h serial and truncates the CI log, so it is not
+    # an MR loop. Instead pick the 1-2 fixtures whose declared expectations actually
+    # exercise the EDITED questions (select-fixtures.py matches the question-id category
+    # prefix, e.g. API-Q2 -> API, against usecases.yaml must_have_categories).
+    # The exhaustive sweep stays available as --scope all (local / harness:full).
+    sel_base="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:+origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}}"
+    sel_base="${sel_base:-origin/main}"
+    # A portfolio TD change must select >=2 fixtures: the rollup it edits aggregates
+    # per-repo reports, and aggregating one repo exercises nothing. Floor it here so the
+    # portfolio stage below isn't skipped by its own >=2 guard.
+    if [[ "${HARNESS_CHANGED_PORTFOLIO_TD:-false}" == "true" && "${MR_FIXTURES}" -lt 2 ]]; then
+      echo "changed-only: portfolio TD changed → raising --mr-fixtures ${MR_FIXTURES} → 2" >&2
+      MR_FIXTURES=2
+    fi
+    selected=()
+    # Biggest single MR saving: only run the analysis types the MR actually touched.
+    # An ARA-only rubric edit cannot move a MOD report, so running MOD fixtures for it
+    # doubles the bill for zero signal. Narrow to the TDs that really changed (per-repo
+    # OR its portfolio counterpart, since both read the same rubric). If the diff names
+    # no managed TD at all, keep whatever --td left enabled.
+    _touched="$(git -C "${REPO_ROOT}" diff --name-only "${sel_base}...HEAD" 2>/dev/null \
+                | grep '^definitions/managed/' || true)"
+    if [[ -n "${_touched}" ]]; then
+      if ! grep -q 'managed/\(portfolio-\)\?agentic-readiness-analysis/' <<< "${_touched}"; then
+        [[ "${run_ara}" == "true" ]] && echo "changed-only: ARA TD untouched → skipping ARA" >&2
+        run_ara="false"
+      fi
+      if ! grep -q 'managed/\(portfolio-\)\?modernization-readiness-analysis/' <<< "${_touched}"; then
+        [[ "${run_mod}" == "true" ]] && echo "changed-only: MOD TD untouched → skipping MOD" >&2
+        run_mod="false"
+      fi
+      if [[ "${run_ara}" != "true" && "${run_mod}" != "true" ]]; then
+        echo "changed-only: no managed TD matched a known analysis type → keeping both" >&2
+        run_ara="true"; run_mod="true"
+      fi
+    fi
+    for _analysis in ara mod; do
+      # Only select for analyses we're actually going to run.
+      [[ "${_analysis}" == "ara" && "${run_ara}" != "true" ]] && continue
+      [[ "${_analysis}" == "mod" && "${run_mod}" != "true" ]] && continue
+      _td_dir="${MANAGED}/agentic-readiness-analysis"
+      [[ "${_analysis}" == "mod" ]] && _td_dir="${MANAGED}/modernization-readiness-analysis"
+      # stdout = fixture paths, stderr = the selector's reasoning (kept in the CI log).
+      while IFS= read -r _p; do
+        [[ -z "${_p}" ]] && continue
+        # de-dupe: ARA and MOD often pick the same fixture
+        case " ${selected[*]:-} " in *" ${_p} "*) ;; *) selected+=("${_p}") ;; esac
+      done < <(python3 "${HARNESS_DIR}/select-fixtures.py" \
+                 --analysis "${_analysis}" --td "${_td_dir}" \
+                 --base "${sel_base}" --count "${MR_FIXTURES}")
+    done
+    if [[ ${#selected[@]} -eq 0 ]]; then
+      echo "changed-only: selector returned nothing → falling back to all fixtures" >&2
+      selected=("${ALL_FIXTURES[@]}")
+    else
+      echo "changed-only: a watched TD changed → ${#selected[@]} targeted fixture(s); use --scope all for the full sweep" >&2
+    fi
   else
     base="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:+origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}}"
     base="${base:-origin/main}"
@@ -245,11 +313,13 @@ fi
 #      OUR repo and hijacks HEAD — and parallel execs fight over that single `.git`. A
 #      per-unit `.git` stops discovery at the boundary, so atx stays fully contained and
 #      our repo is never touched.
-#   2. Max parallelism. ARA and MOD are independent work. Rather than run them as two
-#      barriered waves (all ARA, THEN all MOD — which idles slots at each wave's tail),
-#      we pour ALL units (11 ARA + 11 MOD = 22) into ONE throttled pool. A MOD unit
-#      backfills a slot the moment any ARA unit finishes. Giving ARA and MOD their OWN
-#      per-fixture dirs is what makes same-fixture ARA+MOD safe to run concurrently.
+#   2. Max parallelism, safely. The rule is "never two execs in ONE repo" (atx switches
+#      branches), NOT "never two execs at once". Because every unit gets its own staged
+#      copy + own .git — `_src/ara/X` and `_src/mod/X` are separate repos — ALL units are
+#      mutually independent and any of them can run concurrently. So we pour every unit
+#      into ONE throttled pool and a MOD unit backfills a slot the moment any ARA unit
+#      finishes, with no wave barrier and no per-fixture mutex.
+#      assert_unique_unit_dests() enforces the invariant that makes this sound.
 #
 # The portfolio stage (below) aggregates the per-repo reports, so it runs AFTER the pool
 # drains (one barrier). Each exec mostly waits on Bedrock, so pooling is a big win.
@@ -321,9 +391,38 @@ assert_repo_head() {
   fi
 }
 
+# atx's progress chatter, as one extended-regex. Every few hundred ms it emits a braille
+# spinner frame plus a keepalive line; on the 22-unit run that was 74,660 of 89,459 lines
+# (83.5%) and blew GitLab's 4 MB job-log cap after 4 units, truncating the differ/judge.
+# Stripped from the per-unit logs at write time (run_unit) — real atx output is kept.
+SPINNER_RE='Still here, working on it|agent min|Analyzing output|^[[:space:]]*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'
+
 # Block until fewer than JOBS background jobs are running (bash 3.2: no `wait -n`).
 wait_for_slot() {
   while [[ "$(jobs -rp | wc -l | tr -d ' ')" -ge "${JOBS}" ]]; do sleep 1; done
+}
+
+# --- concurrency invariant ------------------------------------------------------------
+# atx SWITCHES BRANCHES in the repo enclosing its -p target (it creates an
+# `atx-result-staging-*` branch and commits the report bundle). So two execs must never
+# share one repo — they would fight over its .git and HEAD.
+#
+# We satisfy that STRUCTURALLY rather than with a lock: stage_unit() gives every
+# (analysis, fixture) unit its OWN copy of the fixture at `_src/<analysis>/<fixture>`,
+# each with its own freshly-`git init`ed .git. `_src/ara/X` and `_src/mod/X` are two
+# distinct repos, so even same-fixture ARA and MOD never touch the same .git and are safe
+# to run concurrently. No mutex needed — and no lock to leak and hang the pool.
+#
+# This assert makes the invariant fail LOUDLY if the staging layout is ever changed such
+# that two units resolve to the same directory.
+assert_unique_unit_dests() {
+  local dup
+  dup="$(printf '%s\n' "${UNIT_DEST[@]}" | sort | uniq -d | head -1)"
+  if [[ -n "${dup}" ]]; then
+    echo "FATAL: two units share a stage dir (${dup}) — concurrent atx execs would" >&2
+    echo "       fight over one .git. Fix stage_unit()'s path layout." >&2
+    exit 4
+  fi
 }
 
 # run one (analysis, fixture) unit: exec the def, then collect+validate its report.
@@ -333,20 +432,34 @@ wait_for_slot() {
 run_unit() {
   local analysis="$1" name="$2" dest="$3" defname="$4" glob="$5"
   local label; label="$(echo "${analysis}" | tr '[:lower:]' '[:upper:]')"
-  echo "=== ${label}: ${name} ===" >&2
   if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "=== ${label}: ${name} ===" >&2
     echo "+ atx custom def exec -n ${defname} -p ${dest} --non-interactive --trust-all-tools --do-not-learn" >&2
     return 0
   fi
+  echo "=== ${label}: ${name} ===" >&2
+  # atx streams a progress SPINNER ("⠋ Analyzing output...", "Still here, working on
+  # it...", "~N agent min") every few hundred ms. That is 83% of the output and it blew
+  # GitLab's 4 MB job-log cap after only 4 of 22 units, which cut off the differ/judge
+  # entirely ("Job's log exceeded limit of 4194304 bytes"). So atx's full output ALWAYS
+  # goes to a per-unit file (kept as a CI artifact for debugging) and never to the job
+  # log; only our own concise markers reach stderr.
+  # The spinner is also 83% of the FILE, which would make the artifact as unreadable as
+  # the job log was (and ~4 MB per unit on disk). Filter it out as it streams, so the
+  # kept log is only real atx output. `grep --line-buffered -v` keeps this streaming
+  # (no buffering until exit) and PIPESTATUS preserves atx's own exit code.
   local ulog="${AFTER_DIR}/_logs/${name}-${analysis}.log"
-  if [[ "${JOBS}" -gt 1 ]]; then
-    atx custom def exec -n "${defname}" -p "${dest}" \
-      --non-interactive --trust-all-tools --do-not-learn > "${ulog}" 2>&1 \
-      || echo "warn: ${analysis} exec failed for ${name} (see ${ulog})" >&2
-  else
-    atx custom def exec -n "${defname}" -p "${dest}" \
-      --non-interactive --trust-all-tools --do-not-learn 2>&1 | tee "${ulog}" \
-      || echo "warn: ${analysis} exec failed for ${name} (see ${ulog})" >&2
+  set +e
+  atx custom def exec -n "${defname}" -p "${dest}" \
+    --non-interactive --trust-all-tools --do-not-learn 2>&1 \
+    | grep --line-buffered -vE "${SPINNER_RE}" > "${ulog}"
+  local rc=${PIPESTATUS[0]}
+  set -e
+  [[ ${rc} -ne 0 ]] && echo "warn: ${analysis} exec failed for ${name} (rc=${rc}, see ${ulog})" >&2
+  # Surface the tail on failure so a broken exec is still diagnosable from the job log.
+  if ! grep -q "${glob#\*}" "${ulog}" 2>/dev/null; then
+    echo "  (${analysis}/${name}: no report marker in atx output — last lines:)" >&2
+    tail -8 "${ulog}" 2>/dev/null | sed 's/^/    /' >&2 || true
   fi
   collect_report "${dest}" "${glob}" "${analysis}" || true
   return 0
@@ -354,6 +467,7 @@ run_unit() {
 
 # --- run the whole pool: ALL units (ARA+MOD interleaved), throttled to JOBS, one barrier
 echo "" >&2
+assert_unique_unit_dests
 echo "--- pool: ${#UNIT_NAME[@]} unit(s) (ARA+MOD interleaved), jobs=${JOBS} ---" >&2
 for ((u = 0; u < ${#UNIT_NAME[@]}; u++)); do
   if [[ "${JOBS}" -gt 1 ]]; then
@@ -372,7 +486,38 @@ assert_repo_head
 # The portfolio TDs aggregate the per-repo reports Stage 1 collected. Stage those into a
 # portfolio input dir (its OWN git repo, same isolation as Stage 1) and exec the portfolio
 # TD against it, passing portfolio_name via additionalPlanContext.
-if [[ "${NO_PORTFOLIO}" != "true" ]]; then
+# WHEN it runs (§ "only when needed"): the portfolio TDs aggregate per-repo reports, so
+#   (a) they need >=2 per-repo reports — a rollup over ONE repo tells you nothing about
+#       rollup behaviour, and
+#   (b) on an MR they are only worth their cost if a PORTFOLIO TD actually changed
+#       (HARNESS_CHANGED_PORTFOLIO_TD from should-run.sh). A per-repo-only rubric edit is
+#       fully judged by the per-repo delta.
+# --scope all always runs them (that's a re-baseline); --no-portfolio always skips.
+run_portfolio="${NO_PORTFOLIO:+false}"
+if [[ "${NO_PORTFOLIO}" == "true" ]]; then
+  run_portfolio="false"
+elif [[ "${SCOPE}" == "all" ]]; then
+  run_portfolio="true"
+elif [[ "${HARNESS_CHANGED_PORTFOLIO_TD:-false}" == "true" ]]; then
+  run_portfolio="true"
+else
+  run_portfolio="false"
+  echo "portfolio: SKIPPED — no portfolio TD changed (per-repo delta is sufficient);" >&2
+  echo "           use --scope all or edit a portfolio TD to exercise the rollup." >&2
+fi
+
+# Guard (a): a portfolio rollup needs at least 2 per-repo reports to be meaningful.
+if [[ "${run_portfolio}" == "true" && "${DRY_RUN}" != "true" ]]; then
+  _n_repo_reports="$(find "${AFTER_DIR}" -maxdepth 1 -name '*-report.json' \
+                       ! -name '*portfolio*' 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${_n_repo_reports}" -lt 2 ]]; then
+    run_portfolio="false"
+    echo "portfolio: SKIPPED — only ${_n_repo_reports} per-repo report(s); a rollup needs >=2." >&2
+    echo "           (raise --mr-fixtures, or use --scope all.)" >&2
+  fi
+fi
+
+if [[ "${run_portfolio}" == "true" ]]; then
   PORT_SRC="${AFTER_DIR}/_portfolio_src"
   if [[ "${DRY_RUN}" != "true" ]]; then
     rm -rf "${PORT_SRC}"; mkdir -p "${PORT_SRC}"

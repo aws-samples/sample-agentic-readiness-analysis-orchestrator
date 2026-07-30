@@ -347,6 +347,92 @@ def test_mod_flat_findings_still_extracted():
     assert len(norm["findings"]) == len(data["findings"])
 
 
+# --- partial (scoped) runs ------------------------------------------------------------
+# An MR analyzes only the 1-2 fixtures that exercise the edited questions, so `after`
+# holds a SUBSET of golden. build_impact() used to UNION the key sets, which made every
+# unanalyzed baseline diff against {} — its whole findings list read as DELETED. A
+# byte-identical 2-report run produced 540 phantom "removed" findings and flagged all four
+# TDs, i.e. a catastrophic-regression verdict on every MR. These pin the intersection
+# semantics AND that real drift is still caught inside the narrowed scope.
+
+def _subset(tree: dict, n: int, analysis: str = "ara", scope: str = "repo") -> dict:
+    keys = [k for k in sorted(tree) if k[0] == analysis and k[1] == scope][:n]
+    return {k: copy.deepcopy(tree[k]) for k in keys}
+
+
+def test_partial_run_of_unchanged_reports_is_still_a_no_op():
+    full = dr.load_tree(GOLDEN)
+    impact = dr.build_impact(full, _subset(full, 2))
+    assert impact["no_op"] is True, "identical subset must not look like a change"
+    assert impact["changed_tds"] == []
+
+
+def test_partial_run_invents_no_phantom_removals():
+    full = dr.load_tree(GOLDEN)
+    impact = dr.build_impact(full, _subset(full, 2))
+    phantom = sum(len(d.get("removed") or [])
+                  for entry in impact["per_repo"].values()
+                  for k, d in entry.items()
+                  if k.endswith("findings") and isinstance(d, dict))
+    assert phantom == 0, f"unanalyzed baselines counted as deletions ({phantom})"
+
+
+def test_partial_run_only_reports_the_repos_it_analyzed():
+    full = dr.load_tree(GOLDEN)
+    impact = dr.build_impact(full, _subset(full, 2))
+    assert len(impact["per_repo"]) == 2
+    assert impact["portfolio"] == {}, "no portfolio was analyzed -> nothing to report"
+
+
+def test_coverage_records_the_narrowing():
+    full = dr.load_tree(GOLDEN)
+    impact = dr.build_impact(full, _subset(full, 2))
+    cov = impact["coverage"]
+    assert cov["partial"] is True
+    assert cov["compared"] == 2
+    assert cov["baseline_total"] == len(full)
+    assert len(cov["not_analyzed"]) == len(full) - 2
+    assert cov["unbaselined"] == []
+
+
+def test_full_run_is_not_marked_partial():
+    full = dr.load_tree(GOLDEN)
+    cov = dr.build_impact(full, copy.deepcopy(full))["coverage"]
+    assert cov["partial"] is False
+    assert cov["not_analyzed"] == []
+    assert cov["compared"] == len(full)
+
+
+def test_real_drift_inside_a_partial_run_is_still_detected():
+    # The narrowing must not cost sensitivity: drop one finding from the ONE report we
+    # analyzed and the differ must still flag it, and only the TD it belongs to.
+    full = dr.load_tree(GOLDEN)
+    after = _subset(full, 1)
+    (key,) = after.keys()
+    findings = after[key].get("findings")
+    assert findings, "fixture precondition: golden ARA report has a flat findings list"
+    dropped = findings[0].get("question_id")
+    after[key]["findings"] = findings[1:]
+    impact = dr.build_impact(full, after)
+    assert impact["no_op"] is False
+    assert impact["changed_tds"] == ["agentic-readiness-analysis"]
+    removed = impact["per_repo"][key[2]]["D1_ara_findings"]["removed"]
+    assert dropped in removed
+
+
+def test_report_absent_from_golden_is_unbaselined_not_added():
+    # A brand-new fixture has no baseline. That's real signal (it must not be hidden),
+    # but it also isn't a diff — it belongs in `unbaselined`, not in per_repo.
+    full = dr.load_tree(GOLDEN)
+    after = _subset(full, 1)
+    (key,) = after.keys()
+    novel = (key[0], key[1], "brand-new-fixture")
+    after[novel] = copy.deepcopy(after[key])
+    impact = dr.build_impact(full, after)
+    assert impact["coverage"]["unbaselined"] == ["ara/repo/brand-new-fixture"]
+    assert "brand-new-fixture" not in impact["per_repo"]
+
+
 # --- fallback runner (no pytest) -----------------------------------------------------
 
 def _run_all():

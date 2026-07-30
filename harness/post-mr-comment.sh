@@ -53,6 +53,22 @@ lines.append("")
 lines.append(v.get("rationale", "").strip() or "_(no rationale)_")
 
 summ = v.get("_impact_summary") or {}
+
+# Scope of the run. An MR analyzes only the fixtures that exercise the edited questions,
+# so state that plainly — a reviewer must not read "no impact" over 2 of 26 reports as
+# "no impact portfolio-wide". Silence here would be the misleading option.
+cov = summ.get("coverage") or {}
+if cov.get("partial"):
+    lines.append("")
+    lines.append(f"> 🔍 **Scoped run:** {cov.get('compared')} of {cov.get('baseline_total')} "
+                 f"baseline reports re-analyzed ({cov.get('not_analyzed_count')} not analyzed). "
+                 "The harness runs only the fixtures that exercise the edited questions, so an "
+                 "empty delta is not proof the change is inert portfolio-wide — run "
+                 "`harness:full` for the exhaustive sweep.")
+elif cov.get("compared"):
+    lines.append("")
+    lines.append(f"> ✅ **Full sweep:** all {cov.get('compared')} baseline reports re-analyzed.")
+
 moved = summ.get("dimensions_moved") or []
 if moved:
     lines.append("")

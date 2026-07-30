@@ -29,6 +29,8 @@
 # these outputs when run under GitLab CI (written to should-run.env for `dotenv`):
 #   HARNESS_RUN=true|false
 #   HARNESS_CHANGED_TD=true|false     (a watched TD directory changed)
+#   HARNESS_CHANGED_PORTFOLIO_TD=...  (a PORTFOLIO TD changed -> the portfolio
+#                                      stage is worth running; needs >=2 repos)
 #   HARNESS_CHANGED_FIXTURES=true|false
 #
 # Usage:
@@ -96,6 +98,7 @@ is_watched_td() {
 
 run="false"
 changed_td="false"
+changed_portfolio_td="false"
 changed_fixtures="false"
 nondenylisted=()
 
@@ -105,6 +108,13 @@ while IFS= read -r path; do
   # would otherwise skip — the TD is exactly the thing we automate for.
   if is_watched_td "${path}"; then
     changed_td="true"; run="true"; nondenylisted+=("${path}")
+    # Distinguish the PORTFOLIO TDs from the per-repo ones. The portfolio stage
+    # aggregates per-repo reports, so it is only worth its cost when a portfolio TD
+    # actually changed — and it needs >=2 per-repo reports to aggregate anything
+    # meaningful (a rollup over one repo tells you nothing about a rollup).
+    case "${path}" in
+      definitions/managed/portfolio-*) changed_portfolio_td="true" ;;
+    esac
     continue
   fi
   if ! is_denylisted "${path}"; then
@@ -125,6 +135,7 @@ fi
 {
   echo "HARNESS_RUN=${run}"
   echo "HARNESS_CHANGED_TD=${changed_td}"
+  echo "HARNESS_CHANGED_PORTFOLIO_TD=${changed_portfolio_td}"
   echo "HARNESS_CHANGED_FIXTURES=${changed_fixtures}"
 } > should-run.env 2>/dev/null || true
 

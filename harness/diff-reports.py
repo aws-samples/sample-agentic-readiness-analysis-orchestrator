@@ -587,10 +587,33 @@ def build_impact(before_tree: dict, after_tree: dict) -> dict:
     per_repo: dict[str, dict] = {}
     portfolio: dict[str, dict] = {}
 
-    all_keys = set(before_tree) | set(after_tree)
+    # Compare only reports present on BOTH sides.
+    #
+    # This used to be a UNION, which was correct only while every run was a full sweep.
+    # An MR now analyzes just the 1-2 fixtures that exercise the edit (and only the
+    # changed analysis type, and often no portfolio), so `after` legitimately holds a
+    # SUBSET of golden's 26 reports. Under a union, every unanalyzed baseline diffed
+    # against `{}` and its entire findings list read as DELETED: a byte-identical 2-report
+    # no-op produced 540 phantom "removed" findings across 11 repos, no_op=False, and all
+    # four TDs flagged as changed — i.e. a catastrophic-regression verdict on every MR.
+    #
+    # A report we did not generate is UNKNOWN, not unchanged and not deleted. So we skip
+    # it here and record it under `not_analyzed` so the judge can see the run was scoped
+    # (silently narrowing the comparison would be its own kind of wrong).
+    compared_keys = set(before_tree) & set(after_tree)
+    not_analyzed = sorted(
+        f"{analysis}/{scope}/{key}"
+        for (analysis, scope, key) in set(before_tree) - set(after_tree)
+    )
+    # In `after` but not in golden = a genuinely NEW report (e.g. a new fixture). That is
+    # real signal and must not be hidden, but it has no baseline to diff against.
+    unbaselined = sorted(
+        f"{analysis}/{scope}/{key}"
+        for (analysis, scope, key) in set(after_tree) - set(before_tree)
+    )
     changed_tds: set[str] = set()
 
-    for (analysis, scope, key) in sorted(all_keys):
+    for (analysis, scope, key) in sorted(compared_keys):
         before = normalize_report(analysis, before_tree.get((analysis, scope, key), {}))
         after = normalize_report(analysis, after_tree.get((analysis, scope, key), {}))
 
@@ -633,6 +656,16 @@ def build_impact(before_tree: dict, after_tree: dict) -> dict:
         "changed_tds": sorted(changed_tds),
         "per_repo": per_repo,
         "portfolio": portfolio,
+        # Scope of THIS comparison. `no_op` below means "nothing moved in what we
+        # compared" — these fields say how much that was, so a clean verdict on a
+        # 2-of-26 run can't be mistaken for a clean verdict on a full sweep.
+        "coverage": {
+            "compared": len(compared_keys),
+            "baseline_total": len(before_tree),
+            "not_analyzed": not_analyzed,
+            "unbaselined": unbaselined,
+            "partial": bool(not_analyzed),
+        },
     }
     impact["no_op"] = not changed_tds
     return impact
