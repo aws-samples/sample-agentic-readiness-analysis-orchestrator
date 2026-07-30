@@ -305,6 +305,23 @@ Scoring rubric:
                               quality_regression = true and do NOT return LGTM — a system
                               being newly judged safer for agent use is the one claim that
                               must never be waved through.
+
+                              CRUCIAL DISTINCTION — a downgrade is only a degradation if the
+                              ORIGINAL severity was CORRECT. A finding can be removed or
+                              downgraded because it was WRONG: over-escalated relative to the
+                              TD's own severity table. Removing an over-escalation makes the
+                              analysis MORE accurate, not less safe. The harness marks these
+                              for you: an alert with kind "over_escalation_corrected" (or
+                              "correction": true) is a move that brings a finding INTO LINE
+                              with the documented severity — e.g. AUTH-Q5 (Credential
+                              Management) is RISK-SAFETY in the TD, so a report emitting it as
+                              BLOCKER was over-penalizing, and BLOCKER -> RISK-SAFETY is a FIX.
+                              Score such a change as an IMPROVEMENT (analysis_effect =
+                              "improves"), NOT a degradation, and do NOT set quality_regression
+                              or safety_hold on its account. The "never waved through" rule
+                              above applies to a system becoming safer than the EVIDENCE (or
+                              the rubric) supports — never to a correction that aligns the
+                              output with the rubric it is graded against.
                               A COVERAGE GAPS section means a report stopped answering part
                               of the rubric (ARA has 43 questions, MOD 37). Treat that as a
                               defect, never as noise.

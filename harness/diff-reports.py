@@ -47,6 +47,11 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
+# Shared read of the managed TDs' severity tables — the SAME parse the judge prompt uses,
+# so "was this BLOCKER correct?" is answered from the rubric, not re-transcribed here.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from skill_table import is_over_escalation_correction  # noqa: E402
+
 # --- score_rating bands, ordered low→high. Band-crossing detection uses the index. -----
 SCORE_BANDS = ["Not Ready", "Needs Work", "Partial", "Mature"]
 _BAND_INDEX = {b: i for i, b in enumerate(SCORE_BANDS)}
@@ -681,6 +686,11 @@ def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict) -> list[
     # `DATA-Q1 RISK-SAFETY -> RISK-QUALITY` as "likely run-to-run variance" while the first
     # cut of this function, keyed on BLOCKER alone, stayed silent and agreed with it.
     lost_safety: dict[str, list[str]] = {"BLOCKER": [], "RISK-SAFETY": []}
+    # Downgrades that align a finding WITH the TD's documented severity. Tracked separately
+    # so the count-fall and tier-relaxation checks below can tell a legitimate correction
+    # (blocker_count 3->2 because AUTH-Q5 should never have been a blocker) apart from a real
+    # relaxation. `corrected["BLOCKER"]` are the over-escalations whose class was BLOCKER.
+    corrected: dict[str, list[str]] = {"BLOCKER": [], "RISK-SAFETY": []}
     for r in findings.get("reseveritied") or []:
         if not isinstance(r, dict):
             continue
@@ -691,6 +701,30 @@ def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict) -> list[
         if not _severity_relaxed(nat.get("before"), nat.get("after")):
             continue
         qid = str(r.get("question_id"))
+
+        # Is this downgrade a CORRECTION toward the TD's own table, not a relaxation?
+        # A report that emitted AUTH-Q5 as BLOCKER was over-escalating — the TD documents
+        # it RISK-SAFETY unconditionally — so BLOCKER -> RISK-SAFETY makes the analysis
+        # MORE accurate. Such a move must not count toward `lost_safety` (it never fed a
+        # correct tier), must not be tier-material, and is emitted as its own `kind` so the
+        # judge reads it as an improvement rather than a hazard to explain away.
+        if is_over_escalation_correction(analysis, qid, nat.get("before"), nat.get("after")):
+            corrected[before_cls].append(qid)
+            alerts.append({
+                "kind": "over_escalation_corrected",
+                "repo": repo,
+                "question_id": r.get("question_id"),
+                "before": nat.get("before"),
+                "after": nat.get("after"),
+                "tier_material": False,
+                "correction": True,
+                "detail": (f"{qid} moved {before_cls} -> {nat.get('after')}, which MATCHES "
+                           f"the TD's documented severity for {qid}. The prior "
+                           f"{before_cls} was an over-escalation; this correction makes the "
+                           "analysis more accurate and does not relax any correct tier."),
+            })
+            continue
+
         lost_safety[before_cls].append(qid)
         if before_cls == "BLOCKER":
             tier_material = True
@@ -735,9 +769,30 @@ def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict) -> list[
             continue
         is_blocker = field == "blocker_count"
         attributed = lost_blockers if is_blocker else lost_safety["RISK-SAFETY"]
+        corrected_here = corrected["BLOCKER"] if is_blocker else corrected["RISK-SAFETY"]
+        # How much of the fall is a genuine relaxation vs an over-escalation correction? A
+        # blocker_count of 3->2 driven ENTIRELY by correcting AUTH-Q5 (which should never
+        # have been a blocker) has not made the system any more agent-ready than the rubric
+        # already said it was. Subtract the corrections; only a residual fall is a relaxation.
+        real_fall = (c_before - c_after) - len(corrected_here)
         # risk_safety_count drifts on every rerun while blockers remain, so it only holds
-        # when it is actually the tier driver. blocker_count always holds.
-        tier_material = is_blocker or blockers_clear
+        # when it is actually the tier driver. blocker_count always holds — UNLESS the whole
+        # fall is corrections, in which case there is nothing to hold on.
+        tier_material = real_fall > 0 and (is_blocker or blockers_clear)
+        if real_fall <= 0:
+            detail = (f"{label} fell {c_before} -> {c_after}, entirely from correcting "
+                      f"over-escalated findings ({', '.join(corrected_here)}). This aligns "
+                      "the count with the TD's severity table; it is not a relaxation.")
+        elif tier_material:
+            detail = (f"{label} fell {c_before} -> {c_after}"
+                      + (f" (downgraded: {', '.join(attributed)})" if attributed else "")
+                      + ". A lower tier-driving count means the analysis now considers "
+                        "this system closer to agent-ready — confirm that is intended.")
+        else:
+            detail = (f"{label} fell {c_before} -> {c_after}"
+                      + (f" (downgraded: {', '.join(attributed)})" if attributed else "")
+                      + ". blocker_count is still above 0, so this does not move the tier "
+                        "on its own; noted because it is one blocker fix away from doing so.")
         alerts.append({
             "kind": "blocker_count_fell" if is_blocker else "risk_safety_count_fell",
             "repo": repo,
@@ -745,35 +800,44 @@ def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict) -> list[
             "before": c_before,
             "after": c_after,
             "attributed_to": attributed,
+            "corrected": corrected_here,
             "tier_material": tier_material,
-            "detail": (f"{label} fell {c_before} -> {c_after}"
-                       + (f" (downgraded: {', '.join(attributed)})" if attributed else "")
-                       + (". A lower tier-driving count means the analysis now considers "
-                          "this system closer to agent-ready — confirm that is intended."
-                          if tier_material else
-                          ". blocker_count is still above 0, so this does not move the tier "
-                          "on its own; noted because it is one blocker fix away from doing "
-                          "so.")),
+            "detail": detail,
         })
 
     # --- 3. the readiness tier relaxed -------------------------------------------------
+    corrected_all = corrected["BLOCKER"] + corrected["RISK-SAFETY"]
     if tier.get("changed"):
         relaxed = _tier_relaxed(tier.get("before"), tier.get("after"))
         if relaxed is True:
+            # A tier move driven ONLY by over-escalation corrections (nothing in lost_all)
+            # is the tier being corrected, not relaxed: the TD's severity table always
+            # implied this tier — the report was simply mis-derived from an inflated count.
+            # e.g. AUTH-Q5 wrongly a BLOCKER inflated blocker_count to 3 (Not
+            # Agent-Integrable) when the two real blockers put it at Remediation Required.
+            correction_only = bool(corrected_all) and not lost_all
             alerts.append({
-                "kind": "tier_relaxed",
+                "kind": "tier_corrected" if correction_only else "tier_relaxed",
                 "repo": repo,
                 "before": tier.get("before"),
                 "after": tier.get("after"),
                 "attributed_to": lost_all,
-                # An actual tier move is always tier-material, by definition.
-                "tier_material": True,
-                "detail": (f"readiness tier moved {tier.get('before')} -> "
-                           f"{tier.get('after')}, i.e. MORE agent-ready"
-                           + (f", caused by downgrading {', '.join(lost_all)}"
-                              if lost_all else "")
-                           + ". This is a safety-material change and requires a causal "
-                             "explanation, not a noise attribution."),
+                "corrected": corrected_all,
+                # A genuine relaxation is always tier-material; a correction is not.
+                "tier_material": not correction_only,
+                "correction": correction_only,
+                "detail": ((f"readiness tier moved {tier.get('before')} -> "
+                            f"{tier.get('after')} because over-escalated findings "
+                            f"({', '.join(corrected_all)}) were corrected to their "
+                            "documented severity. The tier now matches what the TD's "
+                            "severity table always implied — a correction, not a relaxation.")
+                           if correction_only else
+                           (f"readiness tier moved {tier.get('before')} -> "
+                            f"{tier.get('after')}, i.e. MORE agent-ready"
+                            + (f", caused by downgrading {', '.join(lost_all)}"
+                               if lost_all else "")
+                            + ". This is a safety-material change and requires a causal "
+                              "explanation, not a noise attribution.")),
             })
     return alerts
 

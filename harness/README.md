@@ -163,28 +163,32 @@ python -m pytest harness/tests/
 `judge.py` is the only component that needs an LLM; the gate, differ, and coverage
 heatmap (`coverage-heatmap.py`, rendered from `usecases.yaml` axes) all run offline.
 
-## Is the analysis itself any good? (`score-reports.py`)
+## Severity is read from the TD, never transcribed (`skill_table.py`)
 
-`judge.py` scores a *change* against the committed goldens and never opens the analyzed
-repo. `score-reports.py` asks the other question — **is what this report says actually
-true of the source?** — by scoring a report against the complete fixture code. That is
-what measures TD output quality, and what tells you whether the goldens the judge trusts
-are worth trusting.
+`skill_table.py` parses the question/severity tables straight out of the two managed
+`SKILL.md` files, and both the differ and the judge reason from that one parse. A hardcoded
+copy goes stale *silently* the moment someone edits a severity — precisely the drift this
+harness exists to catch.
 
-```sh
-harness/score-reports.py --checks-only     # arithmetic only: free, instant, runs in CI
-harness/score-reports.py                   # groundedness scoring, all 22 reports
-```
+This is what lets the differ tell two very different events apart:
 
-**One report tree is a draw, not a measurement.** The analysis agent moves 10–20 findings
-per fixture per re-run, so a single tree cannot separate "the TD improved" from "the agent
-rolled differently". Pass several independent analysis runs and each row reports
-mean/stddev/spread:
+| Movement | How it reads | Holds? |
+|---|---|---|
+| `API-Q1` BLOCKER → RISK-SAFETY | genuine relaxation (API-Q1 *is* an unconditional BLOCKER) | **yes** — `tier_relaxed` |
+| `AUTH-Q5` BLOCKER → RISK-SAFETY | **correction** — the TD documents AUTH-Q5 as RISK-SAFETY, so the BLOCKER was an over-escalation | no — `over_escalation_corrected` |
 
-```sh
-harness/score-reports.py --trees harness/_run1 harness/_run2 harness/_run3
-```
+Without that distinction the harness scored a *correctness fix* as damage: correcting AUTH-Q5
+across 6 fixtures returned `40 / degrades / safety_hold`, because losing a blocker
+mechanically relaxes the tier. It now returns `88 / improves / LGTM`. A downgrade is only a
+degradation when the original severity was **right**.
 
-Read [`STABILITY.md`](./STABILITY.md) before acting on any score — it records the measured
-noise floor (ARA reaches 0.10 per fixture on identical inputs; MOD is 0.00) and the fixture
-spread gaps that currently limit what the numbers can show.
+The guard is conservative by design. A move is only excused when the TD gives the question a
+fixed severity, the "before" was strictly *more* severe than documented, and the "after"
+lands *exactly* on it. So it never excuses the 9 scope-dependent (⚡) questions, and never
+excuses an **under**-statement — the dangerous direction still alerts.
+
+**One report tree is a draw, not a measurement.** The analysis agent moves 10–20 findings per
+fixture per re-run, so a single golden tree cannot separate "the TD improved" from "the agent
+rolled differently". That is why the safety alerts above are computed from the rubric's own
+arithmetic rather than inferred from findings churn — and why the baseline is worth
+re-establishing from several independent runs rather than one.

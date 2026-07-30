@@ -443,9 +443,14 @@ def test_report_absent_from_golden_is_unbaselined_not_added():
 LOAN_ARA = ("ara", "repo", "legacy-loan-calculator")
 
 
-def _downgrade_a_blocker(tree: dict, qid: str = "AUTH-Q5",
+def _downgrade_a_blocker(tree: dict, qid: str = "API-Q1",
                          to: str = "RISK-SAFETY") -> dict:
     """Mutate an 'after' tree the way MR !14's delta did: one BLOCKER reclassified.
+
+    Defaults to API-Q1, which the TD documents as an UNCONDITIONAL BLOCKER — so downgrading
+    it is a genuine safety relaxation that MUST still hold. (AUTH-Q5, the previous default,
+    is documented RISK-SAFETY, so downgrading IT is an over-escalation correction, not a
+    relaxation — that case has its own tests below.)
 
     Also decrements the classification counters and re-applies the rubric's own tier rule,
     because in a real report those move together — a test that changed only the finding
@@ -483,8 +488,8 @@ def test_alerts_attribute_the_tier_move_to_the_lost_blocker():
     after = _downgrade_a_blocker(copy.deepcopy(full))
     impact = dr.build_impact(copy.deepcopy(full), after)
     tier_alert = [a for a in impact["safety_alerts"] if a["kind"] == "tier_relaxed"][0]
-    assert tier_alert["attributed_to"] == ["AUTH-Q5"]
-    assert "AUTH-Q5" in tier_alert["detail"]
+    assert tier_alert["attributed_to"] == ["API-Q1"]
+    assert "API-Q1" in tier_alert["detail"]
     assert tier_alert["before"] == "Not Agent-Integrable"
     assert tier_alert["after"] == "Remediation Required"
 
@@ -515,6 +520,41 @@ def test_getting_stricter_is_not_a_safety_alert():
     assert [r["question_id"] for r in res] == ["DATA-Q1"]
     assert impact["safety_alerts"] == [], \
         f"a stricter rubric must not alert: {impact['safety_alerts']}"
+
+
+def test_correcting_an_over_escalation_does_not_hold():
+    """The AUTH-Q5 regression, inverted. AUTH-Q5 is documented RISK-SAFETY (unconditional),
+    so a report emitting it as BLOCKER is over-escalating. Correcting BLOCKER -> RISK-SAFETY
+    is an IMPROVEMENT: it must raise NO tier-material alert, even though blocker_count and
+    the tier both move — the same mechanical movement that, for a real blocker, WOULD hold.
+    """
+    full = dr.load_tree(GOLDEN)
+    after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
+    impact = dr.build_impact(copy.deepcopy(full), after)
+    alerts = impact["safety_alerts"]
+    assert alerts, "the correction should still be REPORTED, just not held"
+    assert not any(a.get("tier_material") for a in alerts), \
+        f"an over-escalation correction must not be tier-material: {alerts}"
+    kinds = {a["kind"] for a in alerts}
+    assert "over_escalation_corrected" in kinds
+    assert "tier_corrected" in kinds and "tier_relaxed" not in kinds, \
+        f"the tier move is a correction, not a relaxation: {kinds}"
+
+
+def test_a_real_lost_blocker_still_holds_alongside_a_correction():
+    """A downgrade of a GENUINE blocker (API-Q1) must still hold even when an over-escalation
+    correction (AUTH-Q5) happens in the same delta — the correction must not launder the
+    real relaxation."""
+    full = dr.load_tree(GOLDEN)
+    after = copy.deepcopy(full)
+    _downgrade_a_blocker(after, qid="API-Q1")     # genuine relaxation
+    _downgrade_a_blocker(after, qid="AUTH-Q5")    # over-escalation correction
+    impact = dr.build_impact(copy.deepcopy(full), after)
+    alerts = impact["safety_alerts"]
+    assert any(a.get("tier_material") for a in alerts), \
+        "a genuine lost blocker must still force a hold"
+    downgraded = {a["question_id"] for a in alerts if a["kind"] == "blocker_downgraded"}
+    assert downgraded == {"API-Q1"}, f"only the real blocker should be a relaxation: {alerts}"
 
 
 def test_mod_is_exempt_from_safety_alerts():
@@ -612,7 +652,10 @@ def test_risk_safety_downgrade_is_tier_material_once_blockers_are_clear():
     assert "risk_safety_count_fell" in kinds and "tier_relaxed" in kinds
 
 
-def test_blocker_alerts_are_always_tier_material():
+def test_a_genuine_lost_blocker_is_always_tier_material():
+    # A downgrade of an UNCONDITIONAL blocker (API-Q1) always holds. Contrast with
+    # test_correcting_an_over_escalation_does_not_hold, where an over-escalated "blocker"
+    # (AUTH-Q5, documented RISK-SAFETY) does not.
     full = dr.load_tree(GOLDEN)
     after = _downgrade_a_blocker(copy.deepcopy(full))
     impact = dr.build_impact(copy.deepcopy(full), after)

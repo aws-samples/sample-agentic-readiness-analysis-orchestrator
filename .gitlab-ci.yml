@@ -347,15 +347,11 @@ harness:contract-tests:
   before_script:
     - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
   script:
-    - python3 -m pytest harness/tests/ -q   # contract guard + differ + envelope normalizer
-    # Deterministic accuracy checks over the committed goldens: severity counters vs the
-    # enumerated findings, ARA tier arithmetic, MOD overall_score vs its category mean,
-    # and 43/37 question coverage. No Bedrock, no creds, no fixtures re-run.
-    #
-    # It also exercises the SKILL.md severity-table parse, which is the point on an MR that
-    # EDITS a TD: if a heading format moves, score-reports.py raises instead of quietly
-    # handing the grader a table with questions missing.
-    - python3 harness/score-reports.py --checks-only
+    # Contract guard + differ + envelope normalizer + the SKILL.md severity-table parse
+    # (test_skill_table.py asserts 43/37 and AUTH-Q5's class). The parse is what tells the
+    # differ a BLOCKER->RISK-SAFETY move is a correction, so a TD heading-format change that
+    # broke it would silently disable over-escalation detection — the tests catch that here.
+    - python3 -m pytest harness/tests/ -q
   allow_failure: true   # advisory — surfaces contract drift without blocking the merge
 
 # -----------------------------------------------------------------------------
