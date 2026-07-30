@@ -884,6 +884,13 @@ def main() -> int:
             print(f"not a report tree: {t}", file=sys.stderr)
             return 2
 
+    # Parse the TDs up front, even under --checks-only, which otherwise returns before any
+    # prompt is built. This runs in CI on every MR (harness:contract-tests), so a TD edit
+    # that breaks the severity-table parse fails a pipeline instead of silently degrading
+    # the grader's prompt the next time someone scores.
+    for analysis in ("ara", "mod"):
+        (ara_context if analysis == "ara" else mod_context)()
+
     # Unit list comes from the FIRST tree; a repo absent from a later tree simply
     # contributes fewer samples (reported as `runs`) rather than failing the whole run.
     units = [(r, a) for r, a in discover(trees[0])
