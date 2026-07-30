@@ -51,6 +51,9 @@
 #                         wave barrier). The two portfolios run serially AFTER the pool
 #                         drains (they aggregate the per-repo reports). Each exec waits on
 #                         Bedrock, so pooling is a big wall-clock win.
+#   --only <name>         Restrict the run to a single fixture (its path basename). Composes
+#                         with any --scope; errors if the name matches no fixture. Use to
+#                         backfill one fixture a transient failure dropped from a batch.
 #   --dry-run             Print the atx commands without executing (offline sanity check).
 #
 # Fixture list comes from harness/usecases.yaml (the `fixtures[].path` entries).
@@ -81,6 +84,7 @@ VALIDATE="false"
 JOBS=1
 MR_FIXTURES="${HARNESS_MR_FIXTURES:-2}"   # changed-only: how many fixtures to select
 DRY_RUN="false"
+ONLY=""                  # restrict the run to one fixture (matched by path basename)
 
 # --- arg parsing ---------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -99,6 +103,7 @@ while [[ $# -gt 0 ]]; do
     --validate)      VALIDATE="true"; shift ;;
     --jobs)          JOBS="$2"; shift 2 ;;
     --mr-fixtures)   MR_FIXTURES="$2"; shift 2 ;;
+    --only)          ONLY="$2"; shift 2 ;;
     --dry-run)       DRY_RUN="true"; shift ;;
     -h|--help)       sed -n '2,48p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
@@ -276,6 +281,24 @@ fi
 # Hard ceiling on the changed-only path. Belt-and-braces over the branches above: no
 # combination of a bad base ref, a stale should-run.env, or a future edit may turn an MR
 # into an unbounded sweep. --scope all is the ONLY way to get every fixture.
+
+# --only restricts to a single fixture by path basename — used to backfill one fixture that
+# a transient failure left missing from a batch, and for fast single-fixture re-runs. It is
+# an exact match on the fixture's directory name, applied before the changed-only cap so it
+# composes with any scope. An unmatched name is a hard error, not a silent empty run.
+if [[ -n "${ONLY}" ]]; then
+  _only_sel=()
+  for _p in "${selected[@]}"; do
+    [[ "$(basename "${_p}")" == "${ONLY}" ]] && _only_sel+=("${_p}")
+  done
+  if [[ ${#_only_sel[@]} -eq 0 ]]; then
+    echo "error: --only '${ONLY}' matched no fixture in scope '${SCOPE}'" >&2
+    echo "  available: $(printf '%s ' "${selected[@]##*/}")" >&2
+    exit 2
+  fi
+  selected=("${_only_sel[@]}")
+fi
+
 if [[ "${SCOPE}" != "all" && ${#selected[@]} -gt "${MR_FIXTURES}" ]]; then
   echo "changed-only: capping ${#selected[@]} selected fixture(s) → ${MR_FIXTURES} (--mr-fixtures)." >&2
   _capped=()
