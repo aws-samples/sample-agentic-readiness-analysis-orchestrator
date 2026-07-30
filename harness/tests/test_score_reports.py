@@ -247,12 +247,13 @@ def test_portfolio_rollups_are_excluded_from_scoring():
 
 # --- the rubrics stay verbatim ---------------------------------------------------------
 
-def test_rubrics_are_the_benchmark_prompts_verbatim():
-    """The point of carrying these verbatim is comparability with the benchmarking team.
+def test_rubrics_keep_the_benchmark_structure_and_error_weighting():
+    """These began as the benchmarking team's prompts and still carry their shape.
 
-    Paraphrasing them silently decouples our scores from theirs, so pin the load-bearing
-    clauses — especially the error-weighting asymmetry, which is what makes a missed
-    blocker cost more than a spurious INFO.
+    They are no longer verbatim — see test_corrected_rubric_bugs_stay_fixed. What must
+    survive any edit is the load-bearing structure: the question counts, the output
+    contract, and the error-weighting asymmetry that makes a missed blocker cost more than
+    a spurious INFO.
     """
     assert "43 questions across the 8 sections" in sr.ARA_RUBRIC
     # Match on a single line: the prompts are carried with their original hard wraps, so a
@@ -263,6 +264,110 @@ def test_rubrics_are_the_benchmark_prompts_verbatim():
     assert "37 questions across the 5 categories" in sr.MOD_RUBRIC
     assert "missed High" in sr.MOD_RUBRIC
     assert "<score>X.X</score>" in sr.MOD_RUBRIC
+
+
+def test_corrected_rubric_bugs_stay_fixed():
+    """Two statements in the original prompts were FACTUALLY WRONG about our TDs.
+
+    Both were latent rather than harmless. The qualifier rule only misfires once a repo
+    reaches blocker_count 0 — which no fixture does yet, so it would have first appeared
+    as a mystery failure on the new Pilot-Ready fixtures. Pin them so a future re-sync
+    with the benchmarking team cannot silently reintroduce either.
+    """
+    # 1. The qualifier needs risk_safety_count >= 3 (SKILL.md 2054), not merely "RISK-SAFETY
+    #    present without a BLOCKER" — at 1-2 the correct tier is plain Pilot-Ready.
+    assert "risk_safety_count` >= 3" in sr.ARA_RUBRIC
+    assert "must appear exactly when RISK-SAFETY findings are present" not in sr.ARA_RUBRIC
+    # 2. MOD's scale is 1-4 (SKILL.md 1915), not 0-4. 1 is the floor, not a fifth of it.
+    assert "1-4, not 0-4" in sr.MOD_RUBRIC
+    assert "`overall_score` (0–4)" not in sr.MOD_RUBRIC
+
+
+def test_ara_context_carries_the_authoritative_severity_table():
+    """The omission that made the v1 scores unfair: the model was asked to grade against
+    a 43-question rubric it had never been shown, so it fell back on AppSec instinct and
+    demanded BLOCKER for 6 findings correctly filed under DATA-Q4."""
+    ctx = sr.ARA_CONTEXT
+    # Every question id must appear, or the table has a hole the model will fill by guessing.
+    for qid in ("API-Q1", "API-Q4", "AUTH-Q1", "AUTH-Q6", "STATE-Q1", "DATA-Q1", "DATA-Q2"):
+        assert qid in ctx, f"{qid} missing from the BLOCKER list"
+    assert "DATA-Q4" in ctx and "RISK-QUALITY" in ctx
+    # The specific misclassification that cost the most.
+    assert "SQL injection" in ctx
+    # The scope boundary (SKILL.md:17) — ARA is not a pentest.
+    assert "NOT a penetration test" in ctx
+    # Conditional/scope-calibrated markers, and that read-only is the DEFAULT.
+    assert "write-enabled" in ctx and "read-only" in ctx
+    assert "DEFAULT" in ctx
+
+
+def test_ara_context_names_the_rubrics_own_coverage_gaps():
+    # Reports were docked for questions the rubric does not contain. Naming them keeps
+    # them out of `misses` and in `rubric_gaps`, where they measure the TD instead.
+    ctx = sr.ARA_CONTEXT
+    assert "NOT COVERED BY ANY OF THE 43 QUESTIONS" in ctx
+    assert "session fixation" in ctx
+    assert "rubric_gaps" in ctx
+
+
+def test_mod_context_states_the_scale_and_both_ladders():
+    ctx = sr.MOD_CONTEXT
+    assert "1-4" in ctx and "There is no 0" in ctx
+    # Score-based bands and count-based tiers are DIFFERENT ladders; conflating them was
+    # my own earlier error, and a grader that conflates them mis-reads every MOD report.
+    assert "Cloud-Native Ready" in ctx      # count-based tier
+    assert "Mature" in ctx                  # score-based band
+    assert "NO sub-qualifier" in ctx        # "Safety Concerns" is ARA-only
+    assert "SOFTER than ARA" in ctx
+
+
+def test_both_contexts_are_injected_into_the_prompt():
+    rpt = {"findings": [], "evaluations": [], "classification": {}}
+    ara = sr.build_prompt("r", "ara", rpt, "src", [])
+    mod = sr.build_prompt("r", "mod", rpt, "src", [])
+    assert "Authoritative ARA severity table" in ara
+    assert "Authoritative MOD scoring context" in mod
+    # ...and are NOT crossed over: ARA instincts must not leak into MOD grading.
+    assert "Authoritative MOD scoring context" not in ara
+    assert "Authoritative ARA severity table" not in mod
+
+
+def test_deterministic_defects_are_not_charged_to_the_llm_score():
+    """One defect, one deduction.
+
+    v1 told the model to "weight each in your score" for defects already reported on the
+    checks_failed axis. The fingerprint was unmistakable: 5 of 6 ARA reports at 0.72 had a
+    failed check, none of the 5 above 0.72 did.
+    """
+    checks = [{"severity": "high", "check": "severity_counter_undercount",
+               "detail": "risk_quality_count=6 but 10 findings are natively RISK-QUALITY"}]
+    p = sr.build_prompt("r", "ara", {"findings": []}, "src", checks)
+    assert "Do NOT deduct for them again" in p
+    assert "weight it in your score" not in p
+    # The fact itself must still reach the model as context.
+    assert "severity_counter_undercount" in p
+
+
+def test_system_prompt_separates_grading_the_report_from_redoing_the_analysis():
+    sp = sr.SYSTEM_PROMPT
+    assert "NOT RE-DOING THE ASSESSMENT" in sp
+    # The three fairness rules that keep a severity disagreement from becoming a "miss".
+    # Match within a line: the prompt is hard-wrapped, so "is CORRECT" spans a break.
+    assert "at THAT question's severity, is" in sp
+    assert "RUBRIC GAP" in sp
+    assert "One root cause is ONE item" in sp
+    # A miss must be attributable to a question, else it is a rubric gap.
+    assert "question_id" in sp and "rubric_gaps" in sp
+
+
+def test_system_prompt_has_an_explicit_top_band():
+    # v1 had no calibration ladder at all, and two zero-miss reports still capped at 0.82 —
+    # the model had no signal that a clean report belongs at 0.90+.
+    sp = sr.SYSTEM_PROMPT
+    assert "0.90-1.00" in sp
+    assert "belongs at 0.90+" in sp
+    # And that a legitimately terrible repo does not mean an inaccurate report.
+    assert "not leniency" in sp
 
 
 def test_system_prompt_demands_groundedness_not_plausibility():

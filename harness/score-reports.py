@@ -16,11 +16,22 @@ So a change can score 92 on judge.py (did exactly what it claimed) while the rep
 produces are confidently wrong — judge.py has no way to notice. That gap is what this
 closes, and it is what found the counter defects below.
 
-RUBRIC: the two prompts are the benchmarking team's own ARA / MOD evaluation prompts,
-carried verbatim (ARA_RUBRIC / MOD_RUBRIC) so a score here is comparable with theirs
-rather than a private invention. They score 0.0-1.0 and weight a MISSED BLOCKER /
-missed High finding far above a spurious INFO — the asymmetry we want, since a missed
-agent-safety blocker is the expensive error.
+RUBRIC: ARA_RUBRIC / MOD_RUBRIC started as the benchmarking team's own evaluation prompts,
+carried verbatim so a score here would be comparable with theirs. They are no longer
+verbatim — we own them now, and two factual errors against our TDs were corrected (see
+the comments above each). They score 0.0-1.0 and weight a MISSED BLOCKER / missed High
+finding above a spurious INFO — the asymmetry we want, since a missed agent-safety
+blocker is the expensive error.
+
+THE RUBRIC IS NOT SELF-SUFFICIENT, and assuming it was cost us ~0.04-0.08 of ARA score.
+A ~2 KB rubric summary does not tell the model which of the 43 questions owns what, so
+handed a legacy repo full of SQL injection it fell back on general AppSec instinct and
+demanded BLOCKER for 6 findings the reports had correctly filed under DATA-Q4 (which is
+RISK-QUALITY *by definition*, and whose own "look for" list includes parameterized
+queries). It was grading against a rubric it had never been shown. ARA_CONTEXT /
+MOD_CONTEXT close that: the authoritative question->severity table, the scope boundary,
+and the tier arithmetic, extracted from SKILL.md. They are ADDITIVE context, not scoring
+policy — the rubric still decides what matters.
 
 The fixture source is small (2-12 KB per repo; shipping-api ~100 KB, monolith ~185 KB),
 so the model sees the ENTIRE repository rather than a sample. Groundedness claims here
@@ -91,8 +102,15 @@ def mod_band(score: float) -> str:
 
 
 # ---------------------------------------------------------------------------------------
-# Benchmark rubrics — VERBATIM from the benchmarking team's evaluation prompts.
-# Do not paraphrase these: the point is that a score here is comparable with theirs.
+# Evaluation rubrics. These began as the benchmarking team's prompts, carried verbatim for
+# comparability. That is no longer true and the divergence is deliberate: the originals
+# contained statements that are FACTUALLY WRONG about our TDs, so carrying them verbatim
+# bought a grader validating against a spec that does not exist. Each fix is marked
+# `[fix]` with the SKILL.md line that governs. This corrected text is what we send back to
+# the benchmarking team — their scores are affected by the same errors.
+#
+# Everything NOT marked `[fix]` is still their wording. Keep it that way: paraphrasing for
+# taste re-opens the comparability gap for no benefit.
 # ---------------------------------------------------------------------------------------
 
 ARA_RUBRIC = """\
@@ -101,7 +119,8 @@ Especially focus on **severity consistency** (is the readiness profile — Agent
 Remediation Required, or Not Agent-Integrable — consistent with the BLOCKER and RISK-SAFETY counts;
 `[+]` the tier is a *deterministic* function of those counts, so a tier that contradicts the report's
 own BLOCKER/RISK-SAFETY counts is a hard failure, and the `Pilot-Ready (Safety Concerns)` qualifier
-must appear exactly when RISK-SAFETY findings are present without a BLOCKER), **evidence quality**
+must appear exactly when `blocker_count` is 0 AND `risk_safety_count` >= 3 — at 1-2 RISK-SAFETY with
+no BLOCKER the correct tier is plain `Pilot-Ready` with NO qualifier), **evidence quality**
 (does each question cite specific files and code patterns from the repository), **service archetype
 accuracy** (is the detected archetype correct — stateless-utility, stateful-crud, orchestrator,
 data-gateway, or event-processor), **repository classification accuracy** (is the repo_type correct —
@@ -116,8 +135,12 @@ a write-enabled agent scope, so confirm their severity matches the repo's actual
 `[+]` Confirm **native-severity vocabulary** — findings use BLOCKER / RISK-SAFETY / RISK-QUALITY /
 INFO natively and map correctly to the unified High/Medium/Low. `[+]` When scoring, weight a **missed
 BLOCKER or RISK-SAFETY** far more heavily than a spurious INFO — a missed agent-safety blocker is the
-expensive error. Provide an overall score from 0.0 to 1.0 in the format `<score>X.X</score>` followed
-by a brief summary."""
+expensive error. `[fix]` But a missed BLOCKER means a question the rubric assigns BLOCKER severity that
+the report failed to resolve — NOT a finding you would personally have rated higher. If the report
+resolved the issue under the question that owns it, at that question's rubric severity, it is CORRECT
+and must not be recorded as a miss. Judge severity against the AUTHORITATIVE SEVERITY TABLE below, not
+against general application-security intuition. Provide an overall score from 0.0 to 1.0 in the format
+`<score>X.X</score>` followed by a brief summary."""
 
 MOD_RUBRIC = """\
 Evaluate the Modernization Readiness Assessment report found in the GENERATED REPORT OUTPUT section.
@@ -138,10 +161,113 @@ Not Ready) is driven by the High/Medium finding counts, so a tier that contradic
 hard failure; and the report's own `classification_consistency_check` (which compares the count-based
 tier against the score-based band) must itself be correct — a silent divergence is a defect. `[+]`
 Check **numeric-band accuracy** — the per-category `numeric_score` / `score_rating` band and the
-`overall_score` (0–4) must match the evidence; treat within-band numeric wobble as noise but a
-cross-band error (e.g. Needs Work vs Partial) as a defect. `[+]` When scoring, weight a **missed High
-finding** heavily. Provide an overall score from 0.0 to 1.0 in the format `<score>X.X</score>`
-followed by a brief summary."""
+`overall_score` must match the evidence; treat within-band numeric wobble as noise but a
+cross-band error (e.g. Needs Work vs Partial) as a defect. `[fix]` The scale is **1-4, not 0-4**: 1 is
+the floor and means "missing entirely or fundamentally inadequate", so a repo scoring 1.0-1.2 is at the
+bottom of the scale, not the bottom fifth of it. `[+]` When scoring, weight a **missed High
+finding** heavily. `[fix]` But a missed High means a question the rubric would score 1-2 that the report
+failed to resolve or scored materially too high — NOT a finding you would personally have weighted more.
+A question resolved at a defensible score, citing real evidence, is CORRECT even if you would have
+scored it one step lower; that is within-band wobble. Provide an overall score from 0.0 to 1.0 in the
+format `<score>X.X</score>` followed by a brief summary."""
+
+# ---------------------------------------------------------------------------------------
+# Authoritative TD context. NOT scoring policy — this is the spec the rubric refers to.
+# Extracted from definitions/managed/*/SKILL.md; regenerate if the TDs change (the
+# question->severity table comes from the `#### <QID>: <title> — <severity>` headings).
+# ---------------------------------------------------------------------------------------
+
+ARA_CONTEXT = """\
+## Authoritative ARA severity table (from the TD — this is the spec, not a suggestion)
+
+SCOPE BOUNDARY: ARA is a design-time architecture review. It evaluates whether controls
+exist in code and configuration. It is NOT a penetration test, a runtime security scan, or
+a CVE audit. Findings are scored by which rubric question owns them, at that question's
+assigned severity. "This is a serious vulnerability" is not by itself grounds for BLOCKER.
+
+Each question below has ONE assigned severity. A report that resolves an issue under the
+owning question at that severity is CORRECT.
+
+BLOCKER (7): API-Q1 Documented API Interface · AUTH-Q1 Machine Identity Authentication ·
+  API-Q4 Idempotent Writes [C] · AUTH-Q6 Immutable Audit Logging [C] ·
+  STATE-Q1 Compensation and Rollback [C] · DATA-Q1 Sensitive Data Classification [C] ·
+  DATA-Q2 Data Residency [C]
+RISK-SAFETY (12): AUTH-Q2 Scoped Permissions · AUTH-Q3 Action-Level Authorization ·
+  AUTH-Q4 Identity Propagation · AUTH-Q5 Credential Management ·
+  AUTH-Q7 Agent Identity Suspension · STATE-Q4 Circuit Breakers ·
+  STATE-Q5 Rate Limiting · DATA-Q6 PII Redaction in Logs ·
+  STATE-Q3 Concurrency Controls [S] · STATE-Q6 Blast Radius [S] ·
+  HITL-Q1 Draft/Pending State [S] · HITL-Q2 Approval Gates [S]
+RISK-QUALITY (17): API-Q2 · API-Q3 · API-Q6 · STATE-Q2 · STATE-Q7 · HITL-Q3 · DATA-Q3 ·
+  DATA-Q4 Input Validation and Schema Enforcement · DATA-Q5 · DISC-Q1 · OBS-Q1 · OBS-Q2 ·
+  ENG-Q1 · ENG-Q2 · ENG-Q3 · ENG-Q4 · ENG-Q5 Encryption at Rest
+INFO (7): API-Q5 · API-Q7 · API-Q8 · DATA-Q7 · DISC-Q2 · DISC-Q3 · OBS-Q3
+
+[C] = CONDITIONAL BLOCKER: resolves to BLOCKER only when `agent_scope` is "write-enabled".
+      Under "read-only" (the TD's DEFAULT, chosen deliberately to avoid false escalation)
+      these resolve to RISK-SAFETY or INFO, and that is CORRECT — not an understatement.
+[S] = SCOPE-CALIBRATED: counts as RISK-SAFETY when write-enabled, downgrades to INFO under
+      read-only scope. A report marking these not-evaluated under read-only scope is
+      following the TD.
+
+INJECTION, INPUT-HANDLING AND VALIDATION DEFECTS — READ THIS BEFORE RECORDING A MISS.
+SQL injection, NoSQL injection, XXE, command injection, path traversal and unvalidated
+input are owned by **DATA-Q4, which is RISK-QUALITY**. DATA-Q4's own evaluation criteria
+list "parameterized queries (protection against injection)" as a thing to look for. So a
+report that files SQL injection under DATA-Q4 as RISK-QUALITY has applied the rubric
+CORRECTLY. Do NOT record it as a missed BLOCKER or missed RISK-SAFETY, and do not
+double-count one root cause across several question_ids.
+
+NOT COVERED BY ANY OF THE 43 QUESTIONS — do not penalise their absence:
+transport security / TLS / HTTPS-vs-HTTP in transit (ENG-Q5 is encryption AT REST only),
+session fixation and session-token rotation, end-of-life runtime or dependency CVEs,
+and secrets committed to source control except where AUTH-Q5 Credential Management
+genuinely owns the agent-facing credential path. These are real problems and legitimate
+TD coverage gaps, but a report cannot be marked down for a question the rubric lacks. If
+you notice one, list it under `rubric_gaps`, NOT under `misses`.
+
+TIER ARITHMETIC (deterministic — already verified for you in the pre-checks):
+  blocker_count >= 3                      -> Not Agent-Integrable
+  blocker_count 1-2                       -> Remediation Required
+  blocker_count 0 AND risk_safety >= 3    -> Pilot-Ready + "Safety Concerns" qualifier
+  blocker_count 0 AND risk_safety 1-2     -> Pilot-Ready (NO qualifier)
+  blocker_count 0 AND risk_safety 0       -> Agent-Ready
+RISK-QUALITY and INFO counts are tier-INERT — they never change the tier."""
+
+MOD_CONTEXT = """\
+## Authoritative MOD scoring context (from the TD — this is the spec)
+
+SCALE: every question and category scores **1-4**. There is no 0.
+  4 Mature      — fully meets the criterion, best-practice implementation
+  3 Partial     — partially meets it, minor gaps, functional but improvable
+  2 Needs Work  — exists but significant gaps
+  1 Not Ready   — missing entirely or fundamentally inadequate
+A repo scoring 1.0-1.2 overall is at the FLOOR of the scale. That is an expected result for
+an unmodernized legacy fixture, not evidence the report is wrong.
+
+37 questions in 5 categories: INF Infrastructure/Platform/DevOps (11) ·
+APP Application Architecture (6) · DATA Data Platform (4) · SEC Security Baseline (7) ·
+OPS Operations & Observability (9).
+
+`overall_score` is the EQUALLY-weighted mean of the 5 category scores, regardless of how
+many questions each category holds. (Already verified in the pre-checks.)
+
+TWO LADDERS, and they are different things — do not conflate them:
+  * score-based BANDS from `overall_score`: >=3.5 Mature · 2.5-3.4 Partial ·
+    1.5-2.4 Needs Work · <1.5 Not Ready
+  * count-based TIERS from unified High/Medium counts: 0 High and <=1 Medium ->
+    Cloud-Native Ready · 0 High and >=2 Medium -> Pilot-Ready · 1 High -> Pilot-Ready ·
+    2-11 High -> Remediation Required · >=12 High -> Not Ready
+`classification_consistency_check` is the report comparing those two ladders against each
+other; a divergence it declares openly is the TD working as designed, not a defect.
+MOD has NO sub-qualifier — "Safety Concerns" is ARA-only.
+
+MOD classification is deliberately SOFTER than ARA on "1 High": ARA gates on agent safety
+so one High blocks deployment, whereas MOD measures modernization maturity where one High
+is typically a single modernization gap. Do not import ARA's severity instincts here.
+
+MOD measures MODERNIZATION MATURITY, not application security. Code-level vulnerabilities
+are ARA's or a SAST tool's concern except where a SEC question genuinely owns them."""
 
 SYSTEM_PROMPT = """You are a strict evaluator of automated code-assessment reports.
 
@@ -156,13 +282,40 @@ it rather than judging plausibility:
     above a spurious low-severity one.
   * Prose that restates a question without pointing at concrete evidence is WEAK EVIDENCE.
 
+YOU ARE GRADING RUBRIC APPLICATION, NOT RE-DOING THE ASSESSMENT YOURSELF. The report was
+produced by answering a FIXED question set at FIXED severities, given to you below as the
+authoritative severity table. Grade whether it applied that rubric correctly and grounded
+its answers in real code. Three consequences, and they are the difference between a fair
+score and a harsh one:
+  1. A finding resolved under the question that OWNS it, at THAT question's severity, is
+     CORRECT — even if you would personally have rated the underlying issue higher. That
+     is not a miss. It is not an understatement. Record nothing.
+  2. A real problem the rubric has NO question for is a RUBRIC GAP, not a report miss. Put
+     it in `rubric_gaps`. The report cannot answer a question it was never asked, and
+     penalising it there measures the rubric, not the report.
+  3. One root cause is ONE item. Do not count the same underlying defect once per
+     question_id it touches.
+Only record a MISS when a question the rubric DOES cover was left unresolved, resolved at
+the wrong severity per the table, or answered with evidence the source contradicts.
+
 Be skeptical and specific: cite question_ids and file paths. Do not award credit for
 confident tone, thorough formatting, or plausible-sounding generic advice. A report can be
 fluent, internally consistent, and still wrong about the code.
 
 Note the repositories are deliberately small legacy fixtures. Judge the report against what
 is ACTUALLY THERE — do not penalise it for not finding problems the source does not contain,
-and do not reward it for findings the source does not support.
+and do not reward it for findings the source does not support. A legacy fixture landing at
+the bottom of the scale is very often the CORRECT answer; scoring it that way is accuracy,
+not leniency, and a report is not more accurate for being harsher about its repo.
+
+CALIBRATION. Score how ACCURATE the report is, not how bad the repo is:
+  0.90-1.00  no fabrications, no covered-question misses, evidence is concrete and checks out
+  0.75-0.89  accurate overall; minor weak evidence or one debatable severity call
+  0.55-0.74  a real defect — a covered question missed or a demonstrably wrong severity
+  0.30-0.54  multiple real defects, or a fabrication that changes the conclusion
+  0.00-0.29  the report is substantially wrong about this repository
+A report with nothing in `fabrications` and nothing in `misses` after applying rules 1-3
+belongs at 0.90+. Do not reserve the top of the range for reports that cannot exist.
 
 Respond with ONLY a JSON object, no prose:
 {"score": <float 0.0-1.0>,
@@ -170,10 +323,16 @@ Respond with ONLY a JSON object, no prose:
  "fabrications": [{"question_id": "<id>", "claim": "<what it claimed>",
                    "why_wrong": "<what the source actually shows>"}],
  "misses":       [{"what": "<real issue in the source>", "where": "<file>",
+                   "question_id": "<the rubric question that OWNS it — required>",
                    "severity_should_be": "BLOCKER|RISK-SAFETY|High|Medium",
                    "why_it_matters": "<...>"}],
+ "rubric_gaps":  [{"what": "<real issue no rubric question covers>", "where": "<file>",
+                   "why_no_question_fits": "<...>"}],
  "weak_evidence": ["<question_id: what is missing>"],
- "strengths": ["<what the report got genuinely right, with specifics>"]}"""
+ "strengths": ["<what the report got genuinely right, with specifics>"]}
+
+Every entry in `misses` MUST name the question_id that owns it. If you cannot name one from
+the severity table, it belongs in `rubric_gaps` instead."""
 
 
 # ---------------------------------------------------------------------------------------
@@ -351,21 +510,32 @@ def load_source(repo: str, max_bytes: int = 220_000) -> str:
 
 def build_prompt(repo: str, analysis: str, rpt: dict, source: str, checks: list[dict]) -> str:
     rubric = ARA_RUBRIC if analysis == "ara" else MOD_RUBRIC
+    context = ARA_CONTEXT if analysis == "ara" else MOD_CONTEXT
     # Hand the model the deterministic findings rather than hoping it recomputes them.
     # They are FACTS; asking an LLM to verify arithmetic it can already be told is waste,
     # and a model that misses one would understate a confirmed defect.
+    #
+    # But do NOT ask it to re-weight them into its score. These defects are already
+    # reported on their own axis (`checks_failed`), so scoring them again bills one bug
+    # twice. That double charge was visible in the v1 baseline: 5 of the 6 ARA reports at
+    # 0.72 had a failed check and NONE of the 5 above 0.72 did — the counter undercount
+    # was doing the work of a groundedness defect it has nothing to do with.
     if checks:
         cnote = ("\n## Deterministic pre-checks (already computed — these are FACTS, not "
-                 "claims to re-verify)\nThese failed on this report. Treat each as "
-                 "established and weight it in your score:\n"
+                 "claims to re-verify)\nThese failed on this report:\n"
                  + "\n".join(f"  ! [{c['severity']}] {c['check']}: {c['detail']}"
-                             for c in checks) + "\n")
+                             for c in checks)
+                 + "\nThese are structural defects, ALREADY RECORDED AND REPORTED on a "
+                   "separate axis. Do NOT deduct for them again — that would bill one "
+                   "defect twice. Use them only as context. Your score measures "
+                   "GROUNDEDNESS: is the report's substance true of the source below?\n")
     else:
         cnote = ("\n## Deterministic pre-checks\nAll structural checks PASSED (question "
                  "coverage complete, counters consistent, tier/score arithmetic correct). "
                  "Judge the report on GROUNDEDNESS against the source below.\n")
     return (
         f"## Evaluation rubric\n{rubric}\n"
+        f"\n{context}\n"
         f"{cnote}"
         f"\n## COMPLETE REPOSITORY SOURCE — {repo}\n"
         f"(this is the entire repository; verify the report's claims against it)\n"
@@ -432,6 +602,10 @@ def score_report(repo: str, analysis: str, model: str, checks_only: bool) -> dic
             "summary": verdict.get("summary", ""),
             "fabrications": verdict.get("fabrications") or [],
             "misses": verdict.get("misses") or [],
+            # Real problems no rubric question covers. Kept OUT of `misses` on purpose:
+            # these measure the TD's coverage, not the report's accuracy, and conflating
+            # them is what let the rubric's own blind spots depress report scores.
+            "rubric_gaps": verdict.get("rubric_gaps") or [],
             "weak_evidence": verdict.get("weak_evidence") or [],
             "strengths": verdict.get("strengths") or [],
         })
