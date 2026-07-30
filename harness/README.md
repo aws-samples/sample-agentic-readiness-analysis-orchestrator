@@ -27,10 +27,14 @@ numbers and reasons about the **direction**:
 | `|delta| < threshold` | **within noise — NOT MEASURED**, reported as neutral |
 | `delta <= -threshold` | a measured accuracy **regression** |
 
-`threshold` is per fixture and comes from the data: `2·stddev` once the baseline has
-multiple samples, otherwise a fixed noise floor (ARA 0.10, MOD 0.02). A sub-threshold
-move is a different roll of the dice, not a result — which is why the harness re-baselines
-from several independent runs rather than one draw.
+`threshold` is per fixture and comes from the data: **`max(2·stddev, noise floor)`**, where
+the floor is ARA **0.25** / MOD **0.03** (measured by re-running the analysis, not by
+re-scoring fixed reports). Measured variance may only **raise** the bar, never lower it — an
+n=3 stddev is too weak an estimator to justify shrinking the threshold, and shrinking it
+manufactures false "improved" verdicts. A sub-threshold move is a different roll of the dice,
+not a result — which is why the harness re-baselines from several independent runs rather than
+one draw. A baseline with fewer than 2 scored runs reports `stddev` as `—` (**not measured**),
+never `0.000`, so a fake zero can never produce a zero threshold.
 
 If the regenerated report was **not** scored there is no accuracy number and no
 comparison, so the change **cannot be validated**. That is reported as a harness error to
@@ -199,7 +203,7 @@ harness/score-reports.py --show-baseline --markdown
 Add `--markdown` to any `--update-baseline` run and the doc is refreshed with the JSON,
 so the two cannot disagree. The file states its own **sample depth**, which governs how
 far the numbers can be pushed: at one run per fixture there is no measured variance, so
-ARA carries a 0.10 noise floor and its scores cannot rank fixtures against each other.
+ARA falls back to its 0.25 noise floor and its scores cannot rank fixtures against each other.
 
 ## Severity is read from the TD, never transcribed (`skill_table.py`)
 
@@ -207,6 +211,59 @@ ARA carries a 0.10 noise floor and its scores cannot rank fixtures against each 
 `SKILL.md` files, and both the differ and the judge reason from that one parse. A hardcoded
 copy goes stale *silently* the moment someone edits a severity — precisely the drift this
 harness exists to catch.
+
+### How a report gets scored
+
+The TD is the single source of truth for *both* sides: it produces the report, and the rules
+for grading that report are parsed back out of the same file on every run. Nothing about the
+rubric is transcribed by hand.
+
+```mermaid
+flowchart TD
+    TD["SKILL.md<br/>(the TD under change)"]
+
+    TD -->|"atx custom def exec"| RPT["report.json<br/>findings + severities"]
+    TD -->|"parsed every run<br/>skill_table.py"| TBL["derived rubric facts<br/>· severity table (43 ARA / 37 MOD)<br/>· ⚡ scope resolutions<br/>· calibrations (verbatim prose)<br/>· extended triggers, N/A sets"]
+
+    RPT --> DET{"deterministic pre-checks<br/><i>no LLM</i>"}
+    TBL --> DET
+    DET -->|"counters · tier arithmetic<br/>coverage · severity ceiling"| DEF["hard defects<br/>(true regardless of the model)"]
+
+    RPT --> P["grader prompt<br/>= report + full fixture source<br/>+ derived facts, pre-resolved<br/>for THIS report's agent_scope"]
+    TBL --> P
+    SRC["fixture source<br/>(entire repo, 2-185 KB)"] --> P
+
+    P --> LLM["LLM grader<br/><b>judges only what is not mechanical</b><br/>groundedness · recall · precision"]
+    LLM --> SCORE["accuracy score<br/>0.000 - 1.000"]
+    DEF --> SCORE
+
+    SCORE --> CMP{"vs golden baseline<br/>max(2·sd, noise floor)"}
+    CMP --> V["judge verdict<br/>improves / regresses /<br/>within noise = NOT MEASURED"]
+    V --> MR["advisory MR comment<br/><i>never blocks the merge</i>"]
+```
+
+**Why the derived facts are in the prompt at all.** They are *additive context, not scoring
+policy* — the rubric still decides what matters. Every fact injected is something
+**deterministic** the grader would otherwise have to re-derive, and derived *inconsistently*
+when it did: on `legacy-storefront-rails` it talked itself in and out of one call inside a
+single sentence (*"AUTH-Q6 … should be BLOCKER … which is actually correct"*). Resolving 9
+scope-dependent questions per report is mechanical work; handing it to an LLM buys only
+variance. Worse, without the rubric the grader fell back on general AppSec instinct and
+demanded BLOCKER for 6 findings correctly filed as `DATA-Q4` — which is RISK-QUALITY *by
+definition*. It was grading against a rubric it had never been shown.
+
+So the work splits three ways: **arithmetic** goes to the deterministic checks (an LLM should
+never be asked to *probably* catch a miscount), **rubric lookup** is pre-resolved into the
+prompt as authoritative, and only **judgement** — is this evidence really in the source, is
+this severity consistent with the finding text — reaches the model.
+
+One deliberate exception: `DATA-Q1`'s Stage-A/B ladder and the calibration rules are handed
+over as **prose**, not compiled into predicates. They are nested boolean conditions and a
+multi-layer ladder whose severity is the highest layer that fires; a regex that tried to
+evaluate them would be the least trustworthy part of this harness. `parse_calibrations`
+therefore returns the TD's own wording verbatim, paired with the report's actual flag values,
+keeping the deterministic part (which flags are set) separate from the judgement (does this
+rule fire).
 
 This is what lets the differ tell two very different events apart:
 
