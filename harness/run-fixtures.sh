@@ -185,8 +185,20 @@ publish_td() {
 collect_report() {
   local search="$1" glob="$2" analysis="$3" found dest
   [[ "${DRY_RUN}" == "true" ]] && return 0
-  found="$(find "${search}" -type f -name "${glob}" \
-             -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+  # Newest match. `stat` is NOT portable here and MUST NOT be used: BSD/macOS spells
+  # the format flag `stat -f '%m %N'` while on GNU/Linux `-f` means "show FILESYSTEM
+  # info", so the CI runner printed "Total: ... Free: ..." (inode stats) instead of a
+  # path — which then flowed downstream as a bogus filename:
+  #   cp: cannot stat 'Total: 104856560  Free: 104235319'
+  #   ara: CONTRACT VIOLATION           <- a portability bug, NOT real contract drift
+  # Python's os.path.getmtime is identical on both platforms, and -print0 keeps paths
+  # with spaces/newlines intact.
+  found="$(find "${search}" -type f -name "${glob}" -print0 2>/dev/null \
+           | python3 -c 'import os,sys
+paths=[p for p in sys.stdin.buffer.read().split(b"\0") if p]
+if paths:
+    newest=max(paths, key=lambda p: os.path.getmtime(os.fsdecode(p)))
+    sys.stdout.write(os.fsdecode(newest))')"
   if [[ -z "${found}" ]]; then
     echo "warn: no ${glob} emitted (${analysis})" >&2; return 1
   fi
