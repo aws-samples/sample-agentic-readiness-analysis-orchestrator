@@ -122,6 +122,17 @@ CHECK_MEANINGS = {
     "spurious_safety_qualifier": (
         "medium",
         "A \"Safety Concerns\" qualifier is set although the counts do not call for one."),
+    "severity_exceeds_td_ceiling": (
+        "high",
+        "A finding's severity is HIGHER than the severity documented in its own question "
+        "heading. Only two mechanisms move a severity and neither raises it: the 9 "
+        "conditional (⚡) questions resolve per `agent_scope`, and surface-flag/archetype "
+        "calibration only ever downgrades. So the heading is a ceiling. This is not "
+        "cosmetic — the ARA tier is arithmetic over the severity counters, so one "
+        "unauthorized escalation silently moves a repo to a STRICTER tier than the rubric "
+        "assigns. Severe evidence belongs in the finding's evidence and recommendation "
+        "text, not in the severity field. Only escalation is flagged; a downgrade can be a "
+        "legitimate calibration outcome and is left to the judge."),
     "overall_score_not_mean_of_categories": (
         "high",
         "MOD overall_score is not the equally-weighted mean of its category scores "
@@ -161,7 +172,9 @@ DEFAULT_MODEL = os.environ.get(
 # came out wrong.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from skill_table import (  # noqa: E402
-    EXPECTED_QUESTIONS, SKILLS, expected_ara_tier, mod_band, parse_questions, rel as _rel,
+    EXPECTED_QUESTIONS, SEVERITY_RANK, SKILLS, expected_ara_tier, mod_band, parse_questions,
+    rel as _rel, parse_calibrations, parse_extended, parse_mod_archetype_calibrated,
+    parse_mod_surface_gates, parse_na_map, parse_scope_severities,
 )
 
 
@@ -311,6 +324,185 @@ def _severity_block(qs: dict[str, dict[str, str]]) -> str:
     return "\n".join(out)
 
 
+def _report_flags(rpt: dict) -> dict:
+    """This report's surface_flags as a plain dict, keys lowercased. Absent -> {}."""
+    sf = (rpt.get("metadata") or {}).get("surface_flags") or {}
+    return {str(k).strip().lower(): v for k, v in sf.items()} if isinstance(sf, dict) else {}
+
+
+def ara_scope_resolution(rpt: dict) -> str:
+    """Pre-resolve every scope-dependent ARA severity for THIS report's agent_scope.
+
+    The severity table teaches the RULE ([C]/[S] resolve by agent_scope) but never told the
+    grader which scope the report under review actually used, leaving it to notice
+    `metadata.agent_scope` in the JSON and apply the rule itself 9 times. That is
+    deterministic work handed to an LLM, and it graded inconsistently: on
+    legacy-storefront-rails the grader talked itself in and out of one call inside a single
+    sentence ("AUTH-Q6 ... should be BLOCKER ... which is actually correct"). A correct
+    read-only downgrade scored as a miss is the grader's error, not the report's.
+
+    The resolved severity per scope is PARSED from the TD's own bullets, not inferred. An
+    earlier version assumed "conditional BLOCKER -> RISK-SAFETY under read-only", which is
+    wrong for API-Q4 (the TD sends it to INFO, SKILL.md:719): that over-resolved API-Q4 by a
+    full class on all 11 read-only reports AND, because this block is stated as authoritative,
+    told the grader to praise a report that over-escalated it. See parse_scope_severities.
+
+    DATA-Q1 is scope-dependent too but uses a Stage-A/B-tier ladder rather than plain bullets,
+    so it is described separately rather than reduced to one severity.
+
+    Absent scope => read-only: the TD's documented default (SKILL.md:278, "the safer
+    default", chosen to avoid false escalation). 1 of 12 golden ARA reports omits the field.
+    """
+    scope = ((rpt.get("metadata") or {}).get("agent_scope") or "").strip().lower()
+    stated = scope or "read-only (ABSENT from metadata — TD default assumed)"
+    write_enabled = scope == "write-enabled"
+    qs = parse_questions("ara")
+    lines = []
+    for qid, sev_by_scope in parse_scope_severities("ara").items():
+        # DATA-Q1 now parses (its arrow-phrased bullets were previously missed), but it is a
+        # Stage-A/B ladder, not a flat per-scope severity — collapsing it to one value here
+        # would both duplicate and misdescribe it. It gets the dedicated `data_q1` block below.
+        if qid == "DATA-Q1":
+            continue
+        if write_enabled:
+            # The ⚡ heading severity IS the escalated (write-enabled) value by TD convention,
+            # and it is the precise class: the read-only bullets write a terse "RISK" for the
+            # [S] questions where the heading says RISK-SAFETY. Trust the heading here.
+            resolved = str((qs.get(qid) or {}).get("severity") or "").strip().upper()
+        else:
+            # Read-only: the per-question bullet, NOT a blanket rule — API-Q4 is INFO here,
+            # not RISK-SAFETY, which the old assume-BLOCKER->RISK-SAFETY shortcut got wrong.
+            resolved = sev_by_scope.get("read-only")
+        if resolved:
+            lines.append(f"  - {qid} {(qs.get(qid) or {}).get('title', '')} -> {resolved}")
+    data_q1 = ("  - DATA-Q1 Sensitive Data Classification: a Stage-A/B ladder. Its B1 BLOCKER "
+               "tier fires only under write-enabled scope; under read-only B1 is RISK-SAFETY. "
+               "Stage A = No, a stateless-utility archetype, or a dev-library-application all "
+               "send the whole question to INFO; all layers clear => no finding.\n")
+    return (
+        f"\nTHIS REPORT'S `agent_scope` IS: {stated}\n"
+        f"So for these scope-dependent (⚡) questions, the CORRECT severity in THIS report is "
+        f"exactly (note API-Q4 goes to INFO, NOT RISK-SAFETY, under read-only):\n"
+        + "\n".join(lines) + "\n" + data_q1
+        + "A report that resolves these as listed has applied the TD CORRECTLY. Do NOT record "
+        f"it as a miss, an understatement, an over-escalation, or a wrong severity — this is "
+        f"the resolution the TD prescribes for this scope.\n")
+
+
+def ara_calibration_resolution(rpt: dict) -> str:
+    """The surface-flag and archetype calibrations — the downgrades the scope block does NOT
+    cover. These are the biggest remaining source of false misses: 15 surface-flag questions
+    and 8 archetype questions the grader was told keep a fixed severity "independent of scope".
+
+    The rules are handed over VERBATIM (parse_calibrations returns the TD prose), paired with
+    THIS report's actual archetype + surface_flags, so the deterministic part (which flags are
+    set) is separated from the judgement (does the rule fire). Both are named in the TD as
+    downgrade-only (SKILL.md:292, "Calibration only downgrades severity — it never upgrades"),
+    so a calibrated INFO on any of these is correct, never an understatement.
+    """
+    cal = parse_calibrations("ara")
+    if not cal:
+        return ""
+    meta = rpt.get("metadata") or {}
+    archetype = str(meta.get("service_archetype") or "unknown").strip()
+    flags = _report_flags(rpt)
+    flag_line = ", ".join(f"{k}={v}" for k, v in flags.items()) or "(none in metadata)"
+    qs = parse_questions("ara")
+    lines = []
+    for qid in sorted(cal):
+        title = (qs.get(qid) or {}).get("title", "")
+        lines.append(f"  - {qid} {title}:")
+        for c in cal[qid]:
+            lines.append(f"      [{c['kind']}] {c['rule']}")
+    return (
+        f"\nCALIBRATION DOWNGRADES (surface-flag + archetype). These OVERRIDE the fixed "
+        f"severity table for the questions below — the table is the DEFAULT, calibration is "
+        f"the exception, and it only ever DOWNGRADES (SKILL.md:292).\n"
+        f"THIS REPORT'S service_archetype = `{archetype}`; surface_flags: {flag_line}\n"
+        f"Apply each rule below against those exact values. If a rule fires, the question is "
+        f"correctly recorded as INFO and is NOT a miss or an understatement:\n"
+        + "\n".join(lines) + "\n")
+
+
+def ara_extended_resolution(rpt: dict) -> str:
+    """ARA's 18 extended questions and their triggers. An untriggered extended question is
+    recorded `not_evaluated_extended` and excluded from scoring (SKILL.md:49) — the single
+    largest false-miss source: 88 such records across the golden set, STATE-Q4 (a fixed
+    RISK-SAFETY) among them in 9 of 12 reports. Without this the grader reads every one as an
+    unresolved RISK-SAFETY question.
+    """
+    ext = parse_extended("ara")
+    if not ext:
+        return ""
+    qs = parse_questions("ara")
+    lines = [f"  - {qid} {(qs.get(qid) or {}).get('title', '')}: triggered when {cond}"
+             for qid, cond in ext.items()]
+    return (
+        f"\nEXTENDED QUESTIONS (evaluated ONLY when triggered; otherwise "
+        f"`not_evaluated_extended` and EXCLUDED from scoring — SKILL.md:49). A question below "
+        f"recorded not-evaluated because its trigger is absent is CORRECT, even if the "
+        f"severity table assigns it BLOCKER or RISK-SAFETY. Only record a miss here if the "
+        f"trigger condition IS met in the source and the report still skipped it:\n"
+        + "\n".join(lines) + "\n")
+
+
+def _na_resolution(rpt: dict, analysis: str) -> str:
+    """The repo_type N/A mapping for THIS report's repo_type. N/A questions are excluded from
+    every count and from the profile (SKILL.md ARA:617 / MOD:494). All 12 golden fixtures are
+    `application` (empty N/A set) so this fires on none of them today — but the harness exists
+    to score reruns under change, and the first `library` fixture would otherwise draw a wall
+    of ENG-Q1..Q5 misses. Parsed so it cannot silently disagree with the TD table.
+    """
+    repo_type = str((rpt.get("metadata") or {}).get("repo_type") or "application").strip()
+    na = parse_na_map(analysis).get(repo_type, [])
+    if not na:
+        return (f"\nREPO TYPE = `{repo_type}`: all questions apply (no N/A mapping). "
+                f"A finding on any question is in-scope.\n")
+    return (
+        f"\nREPO TYPE = `{repo_type}`: these questions are N/A and are recorded in the N/A "
+        f"display format, EXCLUDED from all counts and from the readiness profile "
+        f"(SKILL.md exclusion rules). A question below recorded N/A is CORRECT, not a miss, "
+        f"even if its default severity is BLOCKER; and a FINDING emitted on one is itself a "
+        f"defect: {', '.join(na)}\n")
+
+
+def mod_calibration_resolution(rpt: dict) -> str:
+    """MOD's analogue of the ARA calibration block — surface-flag gates + archetype-keyed
+    rubrics. MOD's exclusions are arithmetically load-bearing: a gated question leaves BOTH
+    the numerator and denominator of its category mean (SKILL.md:494-499), so a grader that
+    thinks a gated question should have scored 1 also flags the category mean and the overall
+    band as wrong — one unstated rule becomes three apparent defects. Archetype calibration
+    here can BOTH raise and lower a score (SKILL.md:150), unlike ARA's downgrade-only rule.
+    """
+    gates = parse_mod_surface_gates()
+    arch = parse_mod_archetype_calibrated()
+    if not gates and not arch:
+        return ""
+    meta = rpt.get("metadata") or {}
+    archetype = str(meta.get("service_archetype") or "unknown").strip()
+    flags = _report_flags(rpt)
+    flag_line = ", ".join(f"{k}={v}" for k, v in flags.items()) or "(none in metadata)"
+    qs = parse_questions("mod")
+    gate_lines = [
+        f"  - {qid} {(qs.get(qid) or {}).get('title', '')}: gate = {g['flag']}; "
+        f"when false -> {g['when_false']}"
+        for qid, g in gates.items()]
+    arch_line = ", ".join(arch)
+    return (
+        f"\nMOD SURFACE-FLAG GATES. A gated question whose flag is `false` is recorded "
+        f"`not_evaluated_surface_flag` (\"Not Evaluated (archetype-N/A)\") and EXCLUDED from "
+        f"BOTH the numerator and denominator of its category mean (SKILL.md:494) — it does "
+        f"NOT default to Score 1. So a gated-out question is correct, not a missed Score 1, "
+        f"and it does NOT drag the category or overall score down.\n"
+        f"THIS REPORT'S service_archetype = `{archetype}`; surface_flags: {flag_line}\n"
+        + "\n".join(gate_lines) + "\n"
+        f"ARCHETYPE-KEYED RUBRICS ({arch_line}): these score against an archetype-specific "
+        f"rubric that can BOTH raise and lower the score vs the default — e.g. a "
+        f"stateless-utility correctly scores 4 on INF-Q4 for sync-only HTTP where an "
+        f"orchestrator would score 1 (SKILL.md:150). Do not treat the archetype-appropriate "
+        f"score as an error.\n")
+
+
 def ara_context() -> str:
     qs = parse_questions("ara")
     # Fail LOUDLY. A parse that silently yields 41 hands the model a table with two
@@ -331,14 +523,19 @@ exist in code and configuration. It is NOT a penetration test, a runtime securit
 a CVE audit. Findings are scored by which rubric question owns them, at that question's
 assigned severity. "This is a serious vulnerability" is not by itself grounds for BLOCKER.
 
-Each question below has ONE assigned severity. A report that resolves an issue under the
-owning question at that severity is CORRECT.
+Each question below has a DEFAULT assigned severity. A report that resolves an issue under
+the owning question at that severity is CORRECT. But the default is not the whole story:
+several mechanisms below the table legitimately move a severity OFF this default for a
+particular report (agent_scope, surface-flag calibration, archetype calibration, the
+extended-question triggers, and the repo_type N/A mapping). Those per-report resolutions are
+spelled out AFTER this table and OVERRIDE it — read them before recording any miss.
 
 {_severity_block(qs)}
 
 [C] = CONDITIONAL BLOCKER: resolves to BLOCKER only when `agent_scope` is "write-enabled".
       Under "read-only" (the TD's DEFAULT, chosen deliberately to avoid false escalation)
-      these resolve to RISK-SAFETY or INFO, and that is CORRECT — not an understatement.
+      these resolve to RISK-SAFETY or INFO — see the per-report resolution below for the
+      exact class, which is NOT uniform (API-Q4 goes to INFO, not RISK-SAFETY).
 [S] = SCOPE-CALIBRATED: counts as RISK-SAFETY when write-enabled, downgrades to INFO under
       read-only scope. A report marking these not-evaluated under read-only scope is
       following the TD.
@@ -566,6 +763,52 @@ def check_ara(rpt: dict) -> list[dict]:
             out.append({"check": "spurious_safety_qualifier", "severity": "medium",
                         "detail": f"sub_qualifier={got_qual!r} set but blocker_count={b}, "
                                   f"risk_safety_count={rs} does not call for one"})
+
+    # 3. No finding may exceed the severity ceiling in its own TD heading.
+    #
+    # This is the check the harness was missing. The TD names the severity in each `####
+    # <qid>:` heading and only two documented mechanisms move it: the 9 conditional (⚡)
+    # questions resolve by `agent_scope`, and surface-flag/archetype calibration only ever
+    # DOWNGRADES. So the heading is a ceiling, and a report above it has invented severity.
+    #
+    # It matters because the ARA tier is pure arithmetic over blocker_count and
+    # risk_safety_count: one unauthorized escalation silently moves a repo to a stricter
+    # tier than the rubric assigns, and every downstream consumer reads that as the
+    # rubric's verdict. Escalation was the ACTUAL observed failure (AUTH-Q5 emitted as
+    # BLOCKER on 6 of 12 golden reports, tier-shifting several), and it was invisible until
+    # someone diffed severities by hand.
+    #
+    # Only escalation is flagged. Under-statement is left to the judge: a downgrade can be
+    # a legitimate calibration outcome, and the TD's downgrade rules are prose with nested
+    # conditions that this function deliberately does not try to evaluate (see
+    # skill_table.parse_calibrations).
+    qs, scope = parse_questions("ara"), parse_scope_severities("ara")
+    for f in findings:
+        qid, got = f.get("question_id"), _native(f)
+        q = qs.get(str(qid))
+        if not q or not got:
+            continue
+        # A conditional question's ceiling is the most severe resolution the TD permits it,
+        # across every scope — this check does not know the report's scope, and resolving it
+        # wrongly would be worse than a slightly loose ceiling.
+        allowed = [q["severity"]] + (list((scope.get(str(qid)) or {}).values())
+                                     if q.get("conditional") else [])
+        ranked = [(SEVERITY_RANK.get(str(s).upper(), -1), s) for s in allowed if s]
+        if not ranked:
+            continue
+        ceil_rank, ceiling = max(ranked)
+        if SEVERITY_RANK.get(str(got).upper(), -1) > ceil_rank:
+            tier_moving = str(got).upper() in ("BLOCKER", "RISK-SAFETY")
+            out.append({
+                "check": "severity_exceeds_td_ceiling",
+                "severity": "high" if tier_moving else "medium",
+                "detail": f"{qid} reported {got} but the TD heading documents {ceiling}"
+                          + (" (conditional ⚡ — this is the most severe scope resolution)"
+                             if q.get("conditional") else "")
+                          + ". Severity may only be DOWNGRADED (calibration) or resolved "
+                            "per agent_scope; describe severe evidence in the evidence and "
+                            "recommendation text, not the severity field",
+            })
     return out
 
 
@@ -659,8 +902,17 @@ _SKIP_NAME_RE = re.compile(r"-(ara|mod)-report\.(json|md)$")
 def load_source(repo: str, max_bytes: int = 220_000) -> str:
     """Concatenate the fixture source. Small enough to send whole — that is what makes
     groundedness checkable rather than impressionistic."""
-    root = FIXTURES / "monolith" if repo == "monolith" else FIXTURES / "portfolio" / repo
-    if not root.exists():
+    # Resolve by SEARCHING the fixture tree, not by assuming a layout. Hardcoding
+    # `portfolio/<repo>` silently returned "" for the 3 `modern/` fixtures, and an empty
+    # source does not fail — it renders as "(source unavailable)", so the judge scored the
+    # reports on plausibility alone and marked every cited file unverifiable. That reads as
+    # a report defect (0.35-0.45) when it is really a missing input.
+    root = next((c for c in (FIXTURES / repo,
+                             FIXTURES / "portfolio" / repo,
+                             FIXTURES / "modern" / repo) if c.is_dir()), None)
+    if root is None:
+        root = next((p for p in sorted(FIXTURES.glob(f"*/{repo}")) if p.is_dir()), None)
+    if root is None:
         return ""
     parts, total = [], 0
     for p in sorted(root.rglob("*")):
@@ -684,6 +936,20 @@ def load_source(repo: str, max_bytes: int = 220_000) -> str:
 def build_prompt(repo: str, analysis: str, rpt: dict, source: str, checks: list[dict]) -> str:
     rubric = ARA_RUBRIC if analysis == "ara" else MOD_RUBRIC
     context = ara_context() if analysis == "ara" else mod_context()
+    # Append the per-report resolution of every mechanism that legitimately moves a severity
+    # off the fixed table. Without these the grader is told severity is "independent of scope"
+    # and records correct downgrades as misses — the dominant false-miss source. Each block is
+    # rule (parsed from the TD) + this report's actual scope/archetype/flags/repo_type.
+    if analysis == "ara":
+        context += ara_scope_resolution(rpt)
+        context += ara_calibration_resolution(rpt)
+        context += ara_extended_resolution(rpt)
+        context += _na_resolution(rpt, "ara")
+    else:
+        # MOD has no agent_scope, but it DOES have surface-flag gates and archetype-keyed
+        # rubrics, and those move ARITHMETIC (category means), so it needs the same treatment.
+        context += mod_calibration_resolution(rpt)
+        context += _na_resolution(rpt, "mod")
     # Hand the model the deterministic findings rather than hoping it recomputes them.
     # They are FACTS; asking an LLM to verify arithmetic it can already be told is waste,
     # and a model that misses one would understate a confirmed defect.
@@ -841,27 +1107,71 @@ def aggregate(rows: list[dict]) -> list[dict]:
         row["scores"] = scores
         row["sources"] = [r.get("source_tree") for r in rs]
         row["by_tree"] = {r.get("source_tree"): r.get("score") for r in rs}
+        # `scored_runs` is NOT `runs`: a run that errored contributes a row (so the tree is
+        # listed in `sources`) but no number. Variance must be gated on the numbers, and
+        # downstream must be able to tell "we have 3 numbers" from "we have 3 attempts".
+        row["scored_runs"] = len(scores)
         if scores:
             mean = sum(scores) / len(scores)
-            var = sum((s - mean) ** 2 for s in scores) / len(scores)
             row["score"] = round(mean, 3)
-            row["stddev"] = round(var ** 0.5, 3)
             row["spread"] = round(max(scores) - min(scores), 3)
+        # stddev stays None below 2 numeric scores. A single draw would otherwise report
+        # stddev 0.0 — indistinguishable from "measured 3x, perfectly stable" — and a
+        # threshold read off that 0.0 makes ANY wobble look like a regression. None is the
+        # honest value: not measured. See compare_to_baseline, which floors on it.
+        if len(scores) >= 2:
+            var = sum((s - mean) ** 2 for s in scores) / len(scores)
+            row["stddev"] = round(var ** 0.5, 3)
+        else:
+            row["stddev"] = None
         agg.append(row)
     return sorted(agg, key=lambda r: (r["analysis"], r["repo"]))
 
 
-# Measured noise floor per analysis: the largest single-fixture move observed between two
-# scorer passes over BYTE-IDENTICAL golden reports. ARA reached 0.10; MOD did not move at all
-# (all 11 MOD fixtures floor-score on legacy code, so nothing is in doubt).
+def merge_baseline(prior: list[dict], rows: list[dict],
+                   analysis: str) -> tuple[list[dict], set[str], str]:
+    """Replace `analysis`' baseline rows with `rows`; carry the other analysis' rows through.
+
+    Returns (merged, dropped_repos, note). `dropped_repos` are fixtures that HAD a baseline
+    row for this analysis and no longer do — the failure a merge can hide, since the row
+    just stops existing and every later comparison silently skips it. Reported, not fatal:
+    retiring a fixture is legitimate.
+    """
+    keep = [b for b in prior if b.get("analysis") != analysis]
+    fresh = [r for r in rows if r.get("analysis") == analysis]
+    replaced = [b for b in prior if b.get("analysis") == analysis]
+    missing = {b["repo"] for b in replaced} - {r["repo"] for r in fresh}
+    merged = sorted(keep + fresh, key=lambda r: (r["analysis"], r["repo"]))
+    others = "/".join(sorted({b["analysis"] for b in keep})) or "other"
+    note = (f"  merged: kept {len(keep)} {others} row(s), "
+            f"replaced {len(replaced)} {analysis} row(s) with {len(fresh)}")
+    return merged, missing, note
+
+
+# Measured noise floor per analysis, from THREE INDEPENDENT ANALYSIS RUNS over the same
+# fixtures (golden + s2 + s3, 11 fixtures x 2 analyses, 2026-07-30):
 #
-# These are FALLBACKS, used only while the baseline is a single draw and therefore carries no
-# stddev of its own. A multi-sample baseline supplies a real per-fixture `stddev`, which is
-# strictly better evidence and takes precedence in compare_to_baseline().
+#            median sd   max sd   max spread   2*median_sd
+#     ARA       0.123     0.198      0.46         0.246
+#     MOD       0.014     0.123      0.26         0.028
 #
-# n=2 makes 0.10 a FLOOR on ARA's noise, not a characterization of it. Treat a sub-threshold
-# delta as "not measured", never as "proven equal".
-NOISE_FLOOR = {"ara": 0.10, "mod": 0.02}
+# The earlier values (ARA 0.10, MOD 0.02) came from RE-SCORING BYTE-IDENTICAL reports, which
+# measures only the JUDGE's jitter and holds constant the thing that actually dominates: the
+# analysis agent. Re-running the TD moves storefront-rails 0.42 -> 0.88 -> 0.52 with no code
+# change at all. So 0.10 understated ARA's real floor by ~2.5x, and every delta between 0.10
+# and 0.25 was being reported as "improved"/"regressed" when it was indistinguishable from a
+# different roll of the dice. That is the failure mode most likely to make a contributor
+# trust a number they should not.
+#
+# ARA is set to 2*median_sd. Deliberately NOT 2*max_sd (0.396) — that is so wide it would
+# call every plausible TD improvement "within-noise" and the harness would stop saying
+# anything. The per-fixture stddev path below is the real fix; these are only the fallback
+# for a single-draw baseline.
+#
+# These remain FALLBACKS: a multi-sample baseline supplies a real per-fixture `stddev`, which
+# is strictly better evidence and takes precedence in compare_to_baseline(). Treat a
+# sub-threshold delta as "NOT MEASURED", never as "proven equal".
+NOISE_FLOOR = {"ara": 0.25, "mod": 0.03}
 
 
 def compare_to_baseline(rows: list[dict],
@@ -897,12 +1207,33 @@ def compare_to_baseline(rows: list[dict],
             units.append({**{k: r.get(k) for k in ("repo", "analysis")},
                           "score": now, "baseline": was, "verdict": "unscored"})
             continue
+        # Per-fixture measured variance beats the global constant, but ONLY when it is
+        # actually measured — and only as a FLOOR-RAISING term, never a floor-lowering one.
+        #
+        # Two ways `stddev == 0` lies, both of which turn any wobble into a "regression":
+        #   - runs < 2: a single draw reports stddev 0.0 (not null), so it looks maximally
+        #     stable when in truth nothing was measured at all.
+        #   - runs >= 2 but every draw scored identically: 6 of 14 MOD fixtures do this. It
+        #     means "quiet across 3 draws", not "a 0.04 move is meaningful" — the judge
+        #     reports on a 0.01-ish grid, so the next draw can differ without anything
+        #     changing.
+        # So take the LARGER of 2*stddev and the analysis noise floor. A jittery fixture
+        # raises its own bar above the floor; a quiet one can never fall below it.
+        # `scored_runs` (numeric scores) over `runs` (attempts) — an errored run inflates
+        # `runs` without contributing to the variance.
         sd = b.get("stddev")
-        if isinstance(sd, (int, float)) and sd > 0:
-            threshold, basis = round(2 * sd, 3), f"2*stddev over {b.get('runs')} runs"
+        runs = b.get("scored_runs", b.get("runs"))
+        floor = NOISE_FLOOR.get(r.get("analysis"), 0.10)
+        if isinstance(sd, (int, float)) and sd > 0 and isinstance(runs, int) and runs >= 2:
+            if 2 * sd > floor:
+                threshold, basis = round(2 * sd, 3), f"2*stddev over {runs} runs"
+            else:
+                threshold = floor
+                basis = f"noise floor (exceeds 2*stddev={2 * sd:.3f} over {runs} runs)"
         else:
-            threshold = NOISE_FLOOR.get(r.get("analysis"), 0.10)
-            basis = "measured noise floor (baseline is a single draw)"
+            threshold = floor
+            basis = ("measured noise floor (baseline has no multi-run variance"
+                     f"{'' if runs is None else f'; runs={runs}'})")
         delta = round(now - was, 3)
         if abs(delta) < threshold:
             verdict = "within-noise"
@@ -990,7 +1321,9 @@ def main() -> int:
     # goldens are, and it is what a future re-baseline gets compared against. Naming it as a
     # flag beats `-o harness/golden-accuracy-baseline.json` from memory.
     ap.add_argument("--update-baseline", action="store_true",
-                    help=f"write results to {_rel(BASELINE)} (the committed record)")
+                    help=f"write results to {_rel(BASELINE)} (the committed record). "
+                         "With --analysis, MERGES: replaces that analysis' rows and keeps "
+                         "the other's — a TD edit only invalidates its own prior draws")
     ap.add_argument("--show-baseline", action="store_true",
                     help="print the committed baseline scores and exit — no scoring, no cost")
     ap.add_argument("--compare-baseline", action="store_true",
@@ -1038,14 +1371,35 @@ def main() -> int:
     for analysis in ("ara", "mod"):
         (ara_context if analysis == "ara" else mod_context)()
 
-    # Unit list comes from the FIRST tree; a repo absent from a later tree simply
-    # contributes fewer samples (reported as `runs`) rather than failing the whole run.
-    units = [(r, a) for r, a in discover(trees[0])
-             if (not args.only or r in args.only)
-             and (not args.analysis or a == args.analysis)]
+    # Unit list is the UNION over every tree, not trees[0]. A repo present in only some
+    # trees contributes fewer samples (reported as `runs`), which aggregate() already
+    # handles — but taking the list from trees[0] alone SILENTLY DISCARDS any unit the
+    # first tree lacks. That is not hypothetical: the 3 modern fixtures exist only in s3,
+    # so `--trees golden samples/s2 samples/s3` scored 22 units and dropped 5 without a
+    # word, and the "modern" tiers those fixtures were built to cover went unmeasured
+    # while the run still reported success.
+    seen: set[tuple[str, str]] = set()
+    units = []
+    for t in trees:
+        for r, a in discover(t):
+            if (r, a) in seen:
+                continue
+            if (args.only and r not in args.only) or (args.analysis and a != args.analysis):
+                continue
+            seen.add((r, a))
+            units.append((r, a))
     if not units:
         print("no matching reports", file=sys.stderr)
         return 2
+    # Say so when coverage is ragged. A unit scored on 1 of 3 trees has no spread, so its
+    # mean cannot be compared against a 3-tree mean — silence here reads as "all equal".
+    partial = [(r, a, n) for r, a in units
+               if (n := sum((t / f"{r}-{a}-report.json").exists() for t in trees)) < len(trees)]
+    if partial:
+        print(f"note: {len(partial)} of {len(units)} units are missing from some tree(s) "
+              f"and will have fewer runs:", file=sys.stderr)
+        for r, a, n in partial:
+            print(f"  {r} {a}: {n}/{len(trees)} tree(s)", file=sys.stderr)
 
     jobs = [(r, a, t) for t in trees for r, a in units
             if (t / f"{r}-{a}-report.json").exists()]
@@ -1082,12 +1436,35 @@ def main() -> int:
         if args.checks_only:
             print("--update-baseline needs real scores; drop --checks-only", file=sys.stderr)
             return 2
-        if args.only or args.analysis:
-            print("--update-baseline writes the WHOLE baseline; drop --only/--analysis",
+        if args.only:
+            print("--update-baseline writes every fixture of an analysis; drop --only",
                   file=sys.stderr)
             return 2
-        BASELINE.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
-        print(f"wrote {len(rows)} rows to {_rel(BASELINE)}", file=sys.stderr)
+        if args.analysis:
+            # `--analysis` MERGES: rows for this analysis are replaced, rows for the other
+            # are carried through untouched.
+            #
+            # This is not a convenience. The two analyses can legitimately have different
+            # valid sample sets, because a TD edit invalidates only ITS OWN prior draws:
+            # when the ARA severity-ceiling rule landed, every pre-existing ARA tree became
+            # stale while MOD's three draws stayed valid. Forcing one whole-baseline write
+            # would mean either re-running MOD's 3 sweeps for nothing, or baselining ARA
+            # against reports its own TD no longer produces.
+            prior = (json.loads(BASELINE.read_text(encoding="utf-8"))
+                     if BASELINE.exists() else [])
+            rows_out, missing, note = merge_baseline(prior, rows, args.analysis)
+        else:
+            rows_out, missing, note = rows, set(), ""
+        BASELINE.write_text(json.dumps(rows_out, indent=2) + "\n", encoding="utf-8")
+        print(f"wrote {len(rows_out)} rows to {_rel(BASELINE)}", file=sys.stderr)
+        if note:
+            print(note, file=sys.stderr)
+        # A fixture that vanished is the failure mode a merge can hide: the row simply stops
+        # existing and every later comparison silently skips it. Say so; do not fail, since
+        # deliberately retiring a fixture is legitimate.
+        if missing:
+            print(f"  NOTE: {len(missing)} fixture(s) had a baseline row for another "
+                  f"analysis but none here: {', '.join(sorted(missing))}", file=sys.stderr)
     if args.markdown:
         args.markdown.write_text(render_markdown(rows), encoding="utf-8")
         print(f"wrote {_rel(args.markdown)}", file=sys.stderr)
@@ -1124,8 +1501,14 @@ def _report(rows: list[dict], checks_only: bool) -> None:
                 extra += f"  ERROR: {r['error'][:60]}"
             cols = ""
             if multi:
-                cols = (f" {r.get('runs', 1):>2} {r.get('stddev', 0):>5.3f} "
-                        f"{r.get('spread', 0):>6.2f}")
+                # "—", not 0.000, when a unit was drawn once: it exists in only some of the
+                # trees (the modern fixtures live in s3 alone), and printing 0.000 there
+                # reads as rock-steady when nothing was measured at all.
+                sd = r.get("stddev")
+                sd_s = "    —" if sd is None else f"{sd:>5.3f}"
+                sp = r.get("spread")
+                sp_s = "     —" if sp is None else f"{sp:>6.2f}"
+                cols = f" {r.get('scored_runs', r.get('runs', 1)):>2} {sd_s} {sp_s}"
             print(f"{r['repo']:<28} {sc:>6}{cols} {flag:>7}  {extra}")
 
         scored = [r["score"] for r in sub if isinstance(r.get("score"), (int, float))]
@@ -1167,6 +1550,15 @@ def _report(rows: list[dict], checks_only: bool) -> None:
 
 
 _SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
+def _num(v, places: int) -> str:
+    """Format a maybe-missing statistic. None renders "—", NOT 0.
+
+    Variance statistics are None whenever they were not measured (a unit drawn once), and
+    `f"{v or 0:.3f}"` would turn "unknown" into the most reassuring value on the scale.
+    """
+    return "—" if not isinstance(v, (int, float)) else f"{v:.{places}f}"
 
 
 def _batch_label(tree: str) -> str:
@@ -1227,8 +1619,18 @@ def render_markdown(rows: list[dict]) -> str:
     if multi:
         out += [
             f"**Sample depth: up to {max_runs} independent runs per fixture.** `sd` is the "
-            "measured per-fixture standard deviation and `spread` the max−min across runs. "
-            "The judge's threshold is `2·sd`, so a delta below that is **not measured**.",
+            "measured per-fixture standard deviation and `spread` the max−min across runs; "
+            "both read `—` where a fixture was drawn only once (it exists in only some "
+            "batches), because `0.000` there would read as rock-steady when nothing was "
+            "measured at all.",
+            "",
+            "A delta counts as real only past `max(2·sd, floor)` — the noise floor "
+            f"(**ARA {NOISE_FLOOR['ara']:.2f}**, **MOD {NOISE_FLOOR['mod']:.2f}**) is a "
+            "lower bound the measured `sd` can raise but never lower. A jittery fixture is "
+            "held to a stricter bar than the floor; a quiet one is not held to a looser one, "
+            "because an n=3 `sd` is far too weak an estimator to justify shrinking the bar "
+            "and shrinking it is the direction that manufactures false improvements. "
+            "**Below the threshold means NOT MEASURED — never \"proven equal\".**",
             "",
         ]
         if len(trees) > 1:
@@ -1243,11 +1645,14 @@ def render_markdown(rows: list[dict]) -> str:
     else:
         out += [
             "**Sample depth: 1 run per fixture (single draw).** There is no measured "
-            "variance yet, so the judge falls back to the observed noise floor — "
+            "variance, so the threshold falls back to the noise floor — "
             f"**ARA {NOISE_FLOOR['ara']:.2f}**, **MOD {NOISE_FLOOR['mod']:.2f}** per "
-            "fixture. Because the entire observed ARA range is about 0.10 wide, ARA scores "
-            "here **cannot be used to rank fixtures against each other**; only the "
-            "deterministic defects below are safe to act on at this depth.",
+            "fixture. That floor was measured by RE-RUNNING the analysis three times, not "
+            "by re-scoring one report: re-scoring holds the analysis agent constant and so "
+            "measures only judge jitter, which understated ARA's real noise about 2.5×. "
+            f"Since the ARA floor ({NOISE_FLOOR['ara']:.2f}) is comparable to the whole "
+            "observed score range, ARA scores at this depth **cannot rank fixtures against "
+            "each other**; only the deterministic defects below are safe to act on.",
             "",
         ]
 
@@ -1294,7 +1699,11 @@ def render_markdown(rows: list[dict]) -> str:
                 v = (r.get("by_tree") or {}).get(t)
                 cells.append("—" if not isinstance(v, (int, float)) else f"{v:.2f}")
             if multi:
-                cells += [f"{r.get('stddev', 0):.3f}", f"{r.get('spread', 0):.2f}"]
+                # A single-draw unit publishes "—" for both. `stddev: 0.000` in a published
+                # table is the most misleading cell the harness could print: a reader takes
+                # it as "measured, never moved" and trusts a delta the harness never
+                # measured. See aggregate().
+                cells += [_num(r.get("stddev"), 3), _num(r.get("spread"), 2)]
             cells += [flag, detail]
             out.append("| " + " | ".join(cells) + " |")
         out.append("")
