@@ -112,7 +112,7 @@ while IFS= read -r path; do
     nondenylisted+=("${path}")
   fi
   case "${path}" in
-    sample-legacy-portfolio/*|examples/fixtures/*) changed_fixtures="true"; run="true" ;;
+    harness/fixtures/*) changed_fixtures="true"; run="true" ;;
   esac
 done <<< "${changed}"
 

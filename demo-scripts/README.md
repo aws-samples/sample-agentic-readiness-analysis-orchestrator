@@ -33,7 +33,7 @@ No prerequisites beyond `atx` CLI + AWS creds (us-east-1). Nothing GitHub-relate
 | Run analysis | **Claude** | "run ARA on pricing-cgi" / "run MODA on pricing-cgi" |
 | Show findings | **You** | Console → Findings tab |
 | Remediate | **Claude** | "containerize shipping-api" (uses containerize-to-eks) |
-| Show the diff | **You** | `git -C sample-legacy-portfolio/legacy-shipping-api diff main` (local branch) |
+| Show the diff | **You** | `git -C harness/fixtures/portfolio/legacy-shipping-api diff main` (local branch) |
 
 ## Rehearsal loop (just the live-discovery beat)
 
@@ -51,7 +51,7 @@ Only if you want the "PR appears in GitHub" story. Extra prerequisites:
 - GitHub org `YOUR-GITHUB-ORG` exists
 - Code Defender self-attest per repo — must run **inside a repo dir with origin set**:
   ```bash
-  cd ../sample-legacy-portfolio/legacy-shipping-api
+  cd ../harness/fixtures/portfolio/legacy-shipping-api
   git remote add origin https://github.com/YOUR-GITHUB-ORG/legacy-shipping-api.git
   git-defender self-attest --reason 1 --url "https://github.com/YOUR-GITHUB-ORG/legacy-shipping-api.git"
   # repeat per repo

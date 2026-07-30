@@ -22,7 +22,7 @@ REPO="legacy-pricing-cgi"
 SOURCE="mig-mod-demo"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PORTFOLIO_DIR="$PROJECT_DIR/sample-legacy-portfolio"
+PORTFOLIO_DIR="$PROJECT_DIR/harness/fixtures/portfolio"
 
 echo "==> Live Discovery ($MODE mode): $REPO"
 

@@ -18,7 +18,7 @@
 # Usage:
 #   exec-contract.sh [--repo <path>] [--out <dir>] [--name-suffix <s>]
 #                    [--portfolio-name <n>] [--skip-publish] [--no-portfolio] [--dry-run]
-#     --repo            repo to analyze per-repo (default: sample-legacy-portfolio/legacy-shipping-api)
+#     --repo            repo to analyze per-repo (default: harness/fixtures/portfolio/legacy-shipping-api)
 #     --out             where to collect reports (default: harness/_contract)
 #     --name-suffix     appended to published TD names so we never clobber managed names
 #                       (default: -contract-test)
@@ -35,7 +35,7 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HARNESS_DIR}/.." && pwd)"
 MANAGED="${REPO_ROOT}/definitions/managed"
 
-REPO_PATH="${REPO_ROOT}/sample-legacy-portfolio/legacy-shipping-api"
+REPO_PATH="${REPO_ROOT}/harness/fixtures/portfolio/legacy-shipping-api"
 OUT_DIR="${HARNESS_DIR}/_contract"
 NAME_SUFFIX="-contract-test"
 PORTFOLIO_NAME="contract-portfolio"

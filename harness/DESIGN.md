@@ -106,7 +106,7 @@ Tier drivers differ by analysis:
 
 ## 4. Use-case heatmap (`harness/usecases.yaml`)
 
-The 10 repos in `sample-legacy-portfolio/` are a genuinely diverse fixture set. Confirmed profiles:
+The 10 repos in `harness/fixtures/portfolio/` are a genuinely diverse fixture set. Confirmed profiles:
 
 | Fixture | Stack / era | IaC | Notes |
 |---|---|---|---|
@@ -121,12 +121,12 @@ The 10 repos in `sample-legacy-portfolio/` are a genuinely diverse fixture set. 
 | legacy-storefront-rails | Ruby on Rails (`.rb`) | no | framework monolith |
 | legacy-timesheet-webforms | VB.NET (`.vb`) | no | WebForms |
 
-Plus `examples/fixtures/monolith/` (PHP) already used in analysis runs.
+Plus `harness/fixtures/monolith/` (PHP) already used in analysis runs.
 
 **`usecases.yaml` structure (per fixture):**
 ```yaml
 - id: legacy-shipping-api
-  path: sample-legacy-portfolio/legacy-shipping-api
+  path: harness/fixtures/portfolio/legacy-shipping-api
   axes:                      # heatmap dimensions — used to prove coverage & find gaps
     language: nodejs
     era: legacy

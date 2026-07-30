@@ -24,7 +24,7 @@ ORG="YOUR-GITHUB-ORG"
 SOURCE="mig-mod-demo"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PORTFOLIO_DIR="$PROJECT_DIR/sample-legacy-portfolio"
+PORTFOLIO_DIR="$PROJECT_DIR/harness/fixtures/portfolio"
 REPORTS_DIR="$PROJECT_DIR/reports"
 
 # Pre-baked repos (analyzed) vs held-back (live discovery star)
