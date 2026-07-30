@@ -8,8 +8,15 @@
 # (e.g. the web-triggered harness:full job), it fails softly so the caller can fall
 # back to `cat verdict.json`. See DESIGN.md §6.
 #
-# Auth: uses CI_JOB_TOKEN against $CI_API_V4_URL (both injected by GitLab CI). If a
-# richer token is needed for notes, set HARNESS_MR_TOKEN and it takes precedence.
+# Auth: REQUIRES HARNESS_MR_TOKEN — a Project Access Token with `api` scope (Reporter is
+# enough), set as a project CI variable. Masked is fine; Protected is NOT (a protected
+# variable is only injected on protected branches, so MRs from feature branches would
+# silently get no comment).
+#
+# CI_JOB_TOKEN is NOT a usable fallback here even though CI injects it: GitLab limits it
+# to a fixed API allowlist (jobs, artifacts, registry, packages) which excludes the notes
+# endpoint, so it returns 401 regardless of project permissions. We still try it as a last
+# resort, but the script warns first so the 401 isn't mistaken for a misconfigured PAT.
 #
 # Usage:
 #   post-mr-comment.sh verdict.json
@@ -127,11 +134,36 @@ fi
 URL="${API}/projects/${PROJECT_ID}/merge_requests/${MR_IID}/notes"
 echo "post-mr-comment: POST ${URL}" >&2
 
+# Pick the RIGHT header for the token we have — never send both. GitLab authenticates
+# JOB-TOKEN and PRIVATE-TOKEN by different paths, and sending a Project Access Token in
+# a JOB-TOKEN header is an authentication FAILURE, not a fallback: the request is rejected
+# on that header rather than retried against the other one. Sending both is therefore a
+# 401 waiting to happen the moment HARNESS_MR_TOKEN is set.
+#
+# CI_JOB_TOKEN cannot post notes AT ALL. GitLab restricts it to a fixed API allowlist
+# (jobs, artifacts, registry, packages) that excludes /notes, so it 401s no matter what
+# permissions the project grants — unlike GitHub Actions' GITHUB_TOKEN. A Project Access
+# Token with `api` scope in HARNESS_MR_TOKEN is the only thing that works; say so clearly
+# instead of emitting a bare 401 a reader would blame on the token's role.
+if [[ -n "${HARNESS_MR_TOKEN:-}" ]]; then
+  AUTH_HEADER="PRIVATE-TOKEN: ${TOKEN}"
+else
+  AUTH_HEADER="JOB-TOKEN: ${TOKEN}"
+  echo "post-mr-comment: NOTE — falling back to CI_JOB_TOKEN, which cannot create MR" >&2
+  echo "  notes (GitLab excludes /notes from its allowlist). Expect 401; set" >&2
+  echo "  HARNESS_MR_TOKEN to a Project Access Token with 'api' scope to post." >&2
+fi
+
 # Send the body as a form field; curl handles the URL-encoding via --data-urlencode.
+# Timeouts are REQUIRED, not defensive dressing: this is the last step of a job that has
+# already spent ~130 agent-minutes, and curl left to its own devices will wait on an
+# unreachable or wedged endpoint indefinitely — burning a runner and eventually dying on
+# the job timeout with the verdict never printed. Bounded here so a network problem
+# degrades to "couldn't post, here's the verdict" within seconds.
 http_code="$(curl -sS -o /tmp/mr-note-resp.json -w '%{http_code}' \
+  --connect-timeout 10 --max-time 30 \
   --request POST "${URL}" \
-  --header "JOB-TOKEN: ${TOKEN}" \
-  --header "PRIVATE-TOKEN: ${TOKEN}" \
+  --header "${AUTH_HEADER}" \
   --data-urlencode "body=${BODY}" || echo "000")"
 
 if [[ "${http_code}" =~ ^2 ]]; then
