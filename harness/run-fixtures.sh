@@ -30,10 +30,12 @@
 #   --no-portfolio        Per-repo ARA/MOD only; skip the two portfolio stages.
 #   --validate            Also check each collected report against validate-contract.py.
 #   --jobs <N>            Run the per-repo execs in parallel, up to N at a time
-#                         (default 1 = serial). Waves: all ARA concurrently, then all
-#                         MOD concurrently, then the portfolios serially (they aggregate
-#                         the per-repo reports, so they must run after both waves). Each
-#                         exec waits on Bedrock, so parallelism is a big wall-clock win.
+#                         (default 1 = serial). ALL per-repo units (ARA + MOD for every
+#                         fixture) share ONE throttled pool — ARA and MOD interleave and a
+#                         MOD unit backfills a slot as soon as any ARA unit finishes (no
+#                         wave barrier). The two portfolios run serially AFTER the pool
+#                         drains (they aggregate the per-repo reports). Each exec waits on
+#                         Bedrock, so pooling is a big wall-clock win.
 #   --dry-run             Print the atx commands without executing (offline sanity check).
 #
 # Fixture list comes from harness/usecases.yaml (the `fixtures[].path` entries).
@@ -151,10 +153,11 @@ fi
 
 echo "run-fixtures: scope=${SCOPE} ara=${run_ara} mod=${run_mod} fixtures=${#selected[@]} after=${AFTER_DIR} (engine: atx custom def exec)" >&2
 
-# A stray AWS_REGION=us-west-2 makes the custom-def endpoint fail to resolve; only
-# us-east-1 resolves. Set it unless the caller already pinned a region.
-export AWS_REGION="${AWS_REGION:-us-east-1}"
-export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+# AWS Transform custom-def only resolves in us-east-1 — a stray AWS_REGION (e.g. a shell
+# default of us-west-2) makes the endpoint fail. Pin us-east-1 unconditionally unless the
+# operator explicitly overrides via HARNESS_AWS_REGION (escape hatch, not the shell env).
+export AWS_REGION="${HARNESS_AWS_REGION:-us-east-1}"
+export AWS_DEFAULT_REGION="${HARNESS_AWS_REGION:-us-east-1}"
 
 command -v atx >/dev/null 2>&1 || { echo "error: atx CLI not found" >&2; exit 2; }
 
@@ -190,6 +193,15 @@ collect_report() {
   dest="${AFTER_DIR}/$(basename "${found}")"
   cp -f "${found}" "${dest}"
   echo "collected ${dest}" >&2
+  # Backfill the flaky top-level envelope (analysis_type / repo_name) the TD sometimes
+  # drops — deterministically, from values the harness already knows (the analysis it ran
+  # and the fixture name). This never touches structural fields, so the strict contract
+  # check below still catches real drift; it only removes envelope-coin-flip noise.
+  # repo_name = report basename minus the trailing "-<ara|mod|...>-report.json".
+  local repo_name; repo_name="$(basename "${dest}")"
+  repo_name="${repo_name%-report.json}"; repo_name="${repo_name%-${analysis}}"
+  python3 "${HARNESS_DIR}/normalize-report.py" "${dest}" \
+    --analysis "${analysis}" --repo-name "${repo_name}" || true
   if [[ "${VALIDATE}" == "true" ]]; then
     python3 "${HARNESS_DIR}/validate-contract.py" "${dest}" --analysis "${analysis}" \
       && echo "${analysis}: CONTRACT OK" >&2 \
@@ -212,23 +224,26 @@ if [[ "${run_mod}" == "true" ]]; then
 fi
 
 # --- Stage 1: per-repo ARA + MOD over each selected fixture ---------------------------
-# We COPY each fixture into its OWN stage dir and `git init` that copy as a SELF-CONTAINED
-# git repo. This is load-bearing, not cosmetic:
+# Each analysis of each fixture is an independent UNIT — its own stage dir, its own
+# `git init`. Two reasons this is load-bearing, not cosmetic:
 #
-#   `atx custom def exec` runs git commands on whatever repo ENCLOSES its -p target
-#   (it creates an `atx-result-staging-*` branch and commits the report bundle). Git
-#   discovery walks UP the tree until it finds a `.git`. If the stage dir has no `.git`,
-#   atx climbs into OUR repo and hijacks HEAD — and N parallel execs then fight over one
-#   `.git`, corrupting the branch. Giving each stage dir its own `.git` stops discovery at
-#   that boundary: atx's git dance stays fully contained, so (a) our repo is never touched
-#   and (b) parallel execs are safe by construction (each mutates only its own nested repo).
+#   1. Isolation. `atx custom def exec` runs git on whatever repo ENCLOSES its -p target
+#      (it creates an `atx-result-staging-*` branch and commits the report bundle). Git
+#      discovery walks UP until it finds a `.git`; without a local one, atx climbs into
+#      OUR repo and hijacks HEAD — and parallel execs fight over that single `.git`. A
+#      per-unit `.git` stops discovery at the boundary, so atx stays fully contained and
+#      our repo is never touched.
+#   2. Max parallelism. ARA and MOD are independent work. Rather than run them as two
+#      barriered waves (all ARA, THEN all MOD — which idles slots at each wave's tail),
+#      we pour ALL units (11 ARA + 11 MOD = 22) into ONE throttled pool. A MOD unit
+#      backfills a slot the moment any ARA unit finishes. Giving ARA and MOD their OWN
+#      per-fixture dirs is what makes same-fixture ARA+MOD safe to run concurrently.
 #
-# Run in WAVES: all ARA concurrently, then all MOD concurrently (throttled to --jobs).
-# The portfolio stages (below) aggregate the per-repo reports, so they run AFTER both
-# waves. Each exec mostly waits on Bedrock, so wave parallelism is a large wall-clock win.
+# The portfolio stage (below) aggregates the per-repo reports, so it runs AFTER the pool
+# drains (one barrier). Each exec mostly waits on Bedrock, so pooling is a big win.
 
 # Remember our repo's branch so we can PROVE atx never moved it (belt-and-suspenders on
-# top of the per-stage .git isolation above).
+# top of the per-unit .git isolation above).
 GUARD_REPO_HEAD=""
 if [[ "${DRY_RUN}" != "true" ]]; then
   GUARD_REPO_HEAD="$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
@@ -246,14 +261,18 @@ git_init_stage() {
   git -C "${d}" commit -q -m "fixture baseline" 2>/dev/null || true
 }
 
-# Stage every fixture locally up front (fast, local copy), each as its own git repo.
-STAGE_NAMES=()
-STAGE_DIRS=()
-for fx in "${selected[@]}"; do
-  name="$(basename "${fx}")"
-  target="${REPO_ROOT}/${fx}"
-  [[ -e "${target}" ]] || { echo "warn: fixture path missing: ${fx}" >&2; continue; }
-  dest="${STAGE}/${name}"
+# Build the flat UNIT list: one entry per (fixture, enabled analysis). Parallel arrays
+# (bash 3.2 — no structs), each staged into its own git repo up front.
+UNIT_ANALYSIS=(); UNIT_NAME=(); UNIT_DEST=(); UNIT_DEFNAME=(); UNIT_GLOB=()
+
+stage_unit() {
+  local analysis="$1" name="$2" defname="$3" glob="$4" target="$5"
+  # Analysis goes in a PARENT dir, not the leaf: the TD derives both the report filename
+  # and the report's internal `repo_name` from basename(-p dir). A leaf of `${name}-ara`
+  # would produce `${name}-ara-ara-report.json` and repo_name `${name}-ara`, breaking
+  # golden filename matching AND the portfolio's per-repo rollup. `_src/<analysis>/<name>`
+  # keeps the leaf a clean fixture name while still isolating ARA and MOD into separate dirs.
+  local dest="${STAGE}/${analysis}/${name}"
   if [[ "${DRY_RUN}" != "true" ]]; then
     mkdir -p "${dest}"
     # Copy contents WITHOUT any nested .git from the source, then init a fresh one.
@@ -261,13 +280,24 @@ for fx in "${selected[@]}"; do
     rm -rf "${dest}/.git"
     git_init_stage "${dest}"
   fi
-  STAGE_NAMES+=("${name}")
-  STAGE_DIRS+=("${dest}")
+  UNIT_ANALYSIS+=("${analysis}"); UNIT_NAME+=("${name}")
+  UNIT_DEST+=("${dest}"); UNIT_DEFNAME+=("${defname}"); UNIT_GLOB+=("${glob}")
+}
+
+for fx in "${selected[@]}"; do
+  name="$(basename "${fx}")"
+  target="${REPO_ROOT}/${fx}"
+  [[ -e "${target}" ]] || { echo "warn: fixture path missing: ${fx}" >&2; continue; }
+  if [[ "${run_ara}" == "true" ]]; then
+    stage_unit ara "${name}" "agentic-readiness-analysis${NAME_SUFFIX}" '*-ara-report.json' "${target}"
+  fi
+  if [[ "${run_mod}" == "true" ]]; then
+    stage_unit mod "${name}" "modernization-readiness-analysis${NAME_SUFFIX}" '*-mod-report.json' "${target}"
+  fi
 done
 [[ "${DRY_RUN}" != "true" ]] && mkdir -p "${AFTER_DIR}/_logs"
 
-# Abort the run if our repo's HEAD ever moves (would mean the isolation failed). Called
-# after each wave and after the portfolio stage.
+# Abort the run if our repo's HEAD ever moves (would mean the isolation failed).
 assert_repo_head() {
   [[ "${DRY_RUN}" == "true" || -z "${GUARD_REPO_HEAD}" ]] && return 0
   local now; now="$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
@@ -310,30 +340,21 @@ run_unit() {
   return 0
 }
 
-# run all fixtures for one analysis as a wave, throttled to JOBS, then barrier.
-run_wave() {
-  local analysis="$1" defname="$2" glob="$3" i
-  echo "" >&2
-  echo "--- wave: ${analysis} — ${#STAGE_NAMES[@]} fixture(s), jobs=${JOBS} ---" >&2
-  for ((i = 0; i < ${#STAGE_NAMES[@]}; i++)); do
-    if [[ "${JOBS}" -gt 1 ]]; then
-      wait_for_slot
-      run_unit "${analysis}" "${STAGE_NAMES[$i]}" "${STAGE_DIRS[$i]}" "${defname}" "${glob}" &
-    else
-      run_unit "${analysis}" "${STAGE_NAMES[$i]}" "${STAGE_DIRS[$i]}" "${defname}" "${glob}"
-    fi
-  done
-  [[ "${JOBS}" -gt 1 ]] && wait || true
-}
-
-if [[ "${run_ara}" == "true" ]]; then
-  run_wave ara "agentic-readiness-analysis${NAME_SUFFIX}" '*-ara-report.json'
-  assert_repo_head
-fi
-if [[ "${run_mod}" == "true" ]]; then
-  run_wave mod "modernization-readiness-analysis${NAME_SUFFIX}" '*-mod-report.json'
-  assert_repo_head
-fi
+# --- run the whole pool: ALL units (ARA+MOD interleaved), throttled to JOBS, one barrier
+echo "" >&2
+echo "--- pool: ${#UNIT_NAME[@]} unit(s) (ARA+MOD interleaved), jobs=${JOBS} ---" >&2
+for ((u = 0; u < ${#UNIT_NAME[@]}; u++)); do
+  if [[ "${JOBS}" -gt 1 ]]; then
+    wait_for_slot
+    run_unit "${UNIT_ANALYSIS[$u]}" "${UNIT_NAME[$u]}" "${UNIT_DEST[$u]}" \
+             "${UNIT_DEFNAME[$u]}" "${UNIT_GLOB[$u]}" &
+  else
+    run_unit "${UNIT_ANALYSIS[$u]}" "${UNIT_NAME[$u]}" "${UNIT_DEST[$u]}" \
+             "${UNIT_DEFNAME[$u]}" "${UNIT_GLOB[$u]}"
+  fi
+done
+[[ "${JOBS}" -gt 1 ]] && wait || true
+assert_repo_head
 
 # --- Stage 2: portfolio ARA + MOD -----------------------------------------------------
 # The portfolio TDs aggregate the per-repo reports Stage 1 collected. Stage those into a

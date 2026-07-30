@@ -1,273 +1,1186 @@
 {
-  "schemaVersion": "1.0",
-  "analysisType": "modernization-readiness",
-  "repository": "legacy-timesheet-webforms",
-  "summary": "Legacy ASP.NET WebForms 2.0 application (VB.NET) on entirely end-of-life infrastructure. No cloud-native patterns, no containerization, no CI/CD, no managed services, and critical security vulnerabilities. Complete ground-up modernization required across all seven pathways.",
-  "technology": {
-    "framework": ".NET Framework 2.0",
-    "uiFramework": "ASP.NET WebForms",
-    "language": "VB.NET 8.0",
-    "webServer": "IIS 6.0",
-    "operatingSystem": "Windows Server 2003",
-    "database": "SQL Server 2005",
-    "allEndOfLife": true
-  },
-  "overallReadiness": "Not Ready",
-  "findings": {
-    "total": 20,
-    "high": 10,
-    "medium": 7,
-    "low": 3
-  },
-  "pathways": {
-    "moveToCloudNative": {
-      "severity_status": "Critical",
-      "score_rating": "Not Ready",
-      "effort": "High",
-      "findings": [
-        {
-          "id": "CN-1",
-          "severity": "High",
-          "title": "No cloud-native architecture patterns",
-          "description": "Monolithic single-page WebForms app with tightly coupled UI, business logic, and data access in a single code-behind file. No separation of concerns, no dependency injection, no service layer.",
-          "evidence": ["Timesheet.aspx.vb: All logic in a single Page class with no abstraction layers"]
-        },
-        {
-          "id": "CN-2",
-          "severity": "High",
-          "title": "In-process session state prevents horizontal scaling",
-          "description": "Session state is configured as InProc (single-server only). The application cannot run on multiple instances without session loss.",
-          "evidence": ["web.config: sessionState mode=\"InProc\" timeout=\"60\""]
-        },
-        {
-          "id": "CN-3",
-          "severity": "High",
-          "title": "No health check or readiness endpoints",
-          "description": "No mechanism for orchestrators or load balancers to determine application health.",
-          "evidence": ["No health check endpoints in any source file"]
-        },
-        {
-          "id": "CN-4",
-          "severity": "Medium",
-          "title": "ViewState-dependent page lifecycle",
-          "description": "Multi-megabyte ViewState ties the application to server-affinity and prevents stateless operation.",
-          "evidence": ["README.md documents ViewState bloat making pages multi-megabyte"]
-        }
-      ]
-    },
-    "moveToContainers": {
-      "severity_status": "Critical",
-      "score_rating": "Not Ready",
-      "effort": "High",
-      "findings": [
-        {
-          "id": "CT-1",
-          "severity": "High",
-          "title": "No Dockerfile or container configuration",
-          "description": "No container artifacts exist in the repository. The application has never been containerized.",
-          "evidence": ["No Dockerfile, docker-compose.yml, or .dockerignore in repository"]
-        },
-        {
-          "id": "CT-2",
-          "severity": "High",
-          "title": "Requires full Windows/.NET Framework runtime",
-          "description": ".NET Framework 2.0 WebForms cannot run in a Linux container. A rewrite to .NET 8+ is required before Linux containerization is viable.",
-          "evidence": ["Application targets .NET Framework 2.0 which requires Windows Server with IIS"]
-        },
-        {
-          "id": "CT-3",
-          "severity": "Medium",
-          "title": "No container orchestration manifests",
-          "description": "No Kubernetes manifests, ECS task definitions, or docker-compose files exist.",
-          "evidence": ["No k8s/, kubernetes/, or ecs/ directories in repository"]
-        }
-      ]
-    },
-    "moveToOpenSource": {
-      "severity_status": "Critical",
-      "score_rating": "Not Ready",
-      "effort": "High",
-      "findings": [
-        {
-          "id": "OS-1",
-          "severity": "High",
-          "title": "Locked into proprietary Microsoft stack",
-          "description": "The application depends entirely on proprietary technologies: .NET Framework 2.0 (Windows-only), IIS 6, SQL Server 2005, VB.NET. No open-source frameworks or libraries are used.",
-          "evidence": ["web.config: System.Data.SqlClient provider", "No open-source library references"]
-        },
-        {
-          "id": "OS-2",
-          "severity": "Medium",
-          "title": "No cross-platform runtime support",
-          "description": ".NET Framework 2.0 is Windows-exclusive. The application cannot run on Linux or macOS without a complete rewrite.",
-          "evidence": ["Deployment target is IIS 6 on Windows Server 2003"]
-        }
-      ]
-    },
-    "moveToManagedDatabases": {
-      "severity_status": "Critical",
-      "score_rating": "Not Ready",
-      "effort": "Medium",
-      "findings": [
-        {
-          "id": "DB-1",
-          "severity": "High",
-          "title": "Self-managed SQL Server 2005 on-premises",
-          "description": "Database runs on an internal server (10.0.6.15) with no managed service, no automated backups, no high availability, and no patching. SQL Server 2005 is end-of-life.",
-          "evidence": ["web.config: Data Source=10.0.6.15;Initial Catalog=Timesheets"]
-        },
-        {
-          "id": "DB-2",
-          "severity": "High",
-          "title": "Raw SQL with string concatenation (SQL injection)",
-          "description": "Data access uses direct SqlClient with string-concatenated queries, creating critical SQL injection vulnerabilities.",
-          "evidence": ["Timesheet.aspx.vb: \"SELECT ... WHERE employee_id = '\" & empId & \"'\"", "Timesheet.aspx.vb: \"INSERT INTO timesheets ... VALUES ('\" & Session(\"EmployeeId\") & \"'...\""]
-        },
-        {
-          "id": "DB-3",
-          "severity": "Medium",
-          "title": "Plaintext credentials in source control",
-          "description": "Database connection string with password is hardcoded in web.config and committed to the repository.",
-          "evidence": ["web.config: Password=Time2006! in connection string"]
-        }
-      ]
-    },
-    "moveToManagedAnalytics": {
-      "severity_status": "Critical",
-      "score_rating": "Not Ready",
-      "effort": "Medium",
-      "findings": [
-        {
-          "id": "AN-1",
-          "severity": "Medium",
-          "title": "No analytics or reporting capabilities",
-          "description": "The application only performs basic CRUD on timesheet entries. No reporting views, dashboards, data exports, or analytical queries.",
-          "evidence": ["Timesheet.aspx.vb: Only SELECT and INSERT operations on a single table"]
-        },
-        {
-          "id": "AN-2",
-          "severity": "Low",
-          "title": "No event streaming or data pipeline",
-          "description": "No mechanism to stream timesheet data to analytics systems. All data remains locked in the operational database.",
-          "evidence": ["No event bus, message queue, or change data capture configuration"]
-        }
-      ]
-    },
-    "moveToModernDevOps": {
-      "severity_status": "Critical",
-      "score_rating": "Not Ready",
-      "effort": "High",
-      "findings": [
-        {
-          "id": "DO-1",
-          "severity": "High",
-          "title": "No CI/CD pipeline",
-          "description": "Deployment is a manual Publish from Visual Studio 2005 to a network share. No automated build, test, or deployment process exists.",
-          "evidence": ["No .github/workflows/, Jenkinsfile, buildspec.yml, or CI/CD configuration", "README.md: Publish from Visual Studio 2005 to a network share"]
-        },
-        {
-          "id": "DO-2",
-          "severity": "High",
-          "title": "No automated testing",
-          "description": "No test files, no testing framework, no test configuration exists anywhere in the repository.",
-          "evidence": ["No *Test*, *_test*, *.test.*, or *Spec* files in repository"]
-        },
-        {
-          "id": "DO-3",
-          "severity": "Medium",
-          "title": "No infrastructure as code",
-          "description": "No Terraform, CDK, CloudFormation, or any IaC templates. Infrastructure is manually provisioned.",
-          "evidence": ["No terraform/, cdk/, cloudformation/, or IaC templates in repository"]
-        },
-        {
-          "id": "DO-4",
-          "severity": "Low",
-          "title": "No environment parity",
-          "description": "Development and production use the same hardcoded configuration. No environment-specific configuration or deployment stages.",
-          "evidence": ["Single web.config with hardcoded production credentials"]
-        }
-      ]
-    },
-    "moveToAI": {
-      "severity_status": "Critical",
-      "score_rating": "Not Ready",
-      "effort": "Medium",
-      "findings": [
-        {
-          "id": "AI-1",
-          "severity": "Medium",
-          "title": "No AI/ML integration or readiness",
-          "description": "The application has no machine learning models, no AI-powered features, and no integration points for AI services.",
-          "evidence": ["No AI/ML libraries, SDKs, or service integrations in the codebase"]
-        },
-        {
-          "id": "AI-2",
-          "severity": "Low",
-          "title": "No structured data pipeline for ML training",
-          "description": "Timesheet data is locked in an operational database with no mechanism to extract, transform, or feed it into ML workflows.",
-          "evidence": ["No data export or ETL processes"]
-        }
-      ]
+  "analysis_type": "mod",
+  "metadata": {
+    "repository": "legacy-timesheet-webforms",
+    "analysis_date": "2026-07-30",
+    "td_version": "modernization-readiness-analysis",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The application has a database connection (SQL Server via SqlConnection) with both read (SELECT) and write (INSERT) operations against a timesheets table. It manages user-specific data (employee_id-scoped entries). This matches the stateful-crud archetype.",
+    "priority": null,
+    "tags": [],
+    "context": null,
+    "preferences": null,
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": false,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": false
     }
   },
-  "securityFindings": [
+  "overall_score": 1.09,
+  "classification": {
+    "tier": "Not Ready",
+    "high_count": 8,
+    "medium_count": 9,
+    "low_count": 0,
+    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "classification_consistency_check": {
+      "status": "divergent",
+      "score_band": "Not Ready",
+      "count_tier": "Remediation Required",
+      "reason": "Score 1.09 < 1.5 yields Not Ready band but 8 High findings maps to 2-11 High \u2192 Remediation Required rule. Adopting Not Ready as authoritative because the overall score is below 1.5 and every category scores below 1.5, indicating systemic unreadiness across all dimensions rather than targeted gaps that could be remediated incrementally."
+    }
+  },
+  "categories": [
     {
-      "issue": "SQL Injection",
-      "severity": "High",
-      "detail": "String concatenation used to build SQL queries from user/session input in Timesheet.aspx.vb"
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
     },
     {
-      "issue": "Credential Exposure",
-      "severity": "High",
-      "detail": "Database password (Time2006!) hardcoded in web.config committed to source control"
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 1.17,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
     },
     {
-      "issue": "No Transport Security",
-      "severity": "High",
-      "detail": "Forms authentication configured with requireSSL=false, transmitting credentials over unencrypted connections"
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 1.25,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
     },
     {
-      "issue": "No Input Validation",
-      "severity": "Medium",
-      "detail": "User inputs (date, hours, project) used directly in SQL statements with no sanitization"
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
     },
     {
-      "issue": "Unsupported Infrastructure",
-      "severity": "Medium",
-      "detail": "All platform components (OS, web server, framework, database) are end-of-life with no security patches"
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
     }
   ],
-  "modernizationRoadmap": {
-    "phase1": {
-      "name": "Replatform Foundation",
-      "steps": [
-        "Rewrite to .NET 8+ ASP.NET Core Web API",
-        "Migrate to parameterized data access with Entity Framework Core",
-        "Implement automated testing (unit and integration)"
-      ]
+  "top_gaps": [
+    {
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "No IaC exists \u2014 all infrastructure is manually provisioned",
+      "impact": "Cannot reproduce environment; disaster recovery impossible; no audit trail for changes"
     },
-    "phase2": {
-      "name": "Cloud Infrastructure",
-      "steps": [
-        "Containerize with Docker (multi-stage, Linux)",
-        "Migrate database to Amazon RDS/Aurora",
-        "Secure credentials with AWS Secrets Manager"
-      ]
+    {
+      "question_id": "INF-Q11",
+      "title": "CI/CD Automation",
+      "score": 1,
+      "gap": "No CI/CD pipeline \u2014 deployment is manual VS publish to network share",
+      "impact": "No quality gates, no automated testing, high risk of human error on every deploy"
     },
-    "phase3": {
-      "name": "Operational Excellence",
-      "steps": [
-        "Implement CI/CD pipeline with AWS CodePipeline",
-        "Deploy to Amazon ECS/EKS with auto-scaling",
-        "Add observability (structured logging, AWS X-Ray, CloudWatch)"
-      ]
+    {
+      "question_id": "SEC-Q5",
+      "title": "Secrets Management",
+      "score": 1,
+      "gap": "Plaintext SQL Server credentials in web.config committed to git",
+      "impact": "Credential exposure; no rotation; anyone with repo access has DB credentials"
     },
-    "phase4": {
-      "name": "Advanced Capabilities",
-      "steps": [
-        "Add analytics integration with Amazon QuickSight",
-        "Enable AI capabilities with Amazon Bedrock integration"
-      ]
+    {
+      "question_id": "APP-Q2",
+      "title": "Monolith vs Microservices",
+      "score": 1,
+      "gap": "Single tightly-coupled WebForms page with no module boundaries",
+      "impact": "Cannot scale independently; no team autonomy; deployment is all-or-nothing"
+    },
+    {
+      "question_id": "INF-Q2",
+      "title": "Managed Databases",
+      "score": 1,
+      "gap": "Self-managed SQL Server 2005 on-premises with no managed services",
+      "impact": "Manual patching, no automated failover, EOL software with known vulnerabilities"
     }
-  }
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Compute \u2014 all compute on-premises IIS 6",
+      "description": "All compute is on a single on-premises IIS 6 server running Windows Server 2003. No AWS compute resources are defined.",
+      "gap": "No managed compute \u2014 application runs on end-of-life on-premises infrastructure with no cloud presence.",
+      "recommendation": "Migrate to managed compute on AWS. AWS Lambda with API Gateway or ECS Fargate are appropriate targets for this small application.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Databases \u2014 self-managed SQL Server 2005 on-premises",
+      "description": "Database is self-managed SQL Server 2005 on-premises at IP 10.0.6.15. No managed database service configured.",
+      "gap": "All database operations against a self-managed, on-premises SQL Server 2005 instance with no automated patching, backup, failover, or scaling.",
+      "recommendation": "Migrate to Amazon RDS for SQL Server or Aurora PostgreSQL. Use AWS DMS for data migration.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Workflow Orchestration \u2014 no orchestration or error handling",
+      "description": "No workflow orchestration service in use. Write operations are hardcoded in a single method with no error handling, validation, or retry logic.",
+      "gap": "No orchestration \u2014 all workflow logic hardcoded with no error handling or retry capability.",
+      "recommendation": "Implement structured error handling and validation in the application layer. For a simple CRUD service, a full orchestration service is not needed initially.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Async Messaging \u2014 no messaging infrastructure",
+      "description": "No messaging or streaming infrastructure. For a stateful-crud service, state changes cannot be propagated to downstream systems without tight synchronous coupling.",
+      "gap": "No messaging where state changes cross service boundaries \u2014 tight coupling required for any integration.",
+      "recommendation": "Implement event publishing on state changes (SNS or EventBridge) when modernizing to enable decoupled downstream integration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Network Security \u2014 no VPC or network segmentation",
+      "description": "No network security configuration. Application and database communicate over unencrypted, unsegmented network. Forms auth cookie without SSL.",
+      "gap": "No VPC, no security groups, no network segmentation. No SSL enforcement.",
+      "recommendation": "Deploy in a VPC with private subnets for database, public subnets behind ALB for application. Enforce HTTPS.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "API Entry Point \u2014 no gateway or load balancer",
+      "description": "No API Gateway, ALB, CloudFront, or managed entry point. Application served directly from IIS 6.",
+      "gap": "Services exposed directly with no gateway, throttling, or centralized auth.",
+      "recommendation": "Place an API Gateway or ALB in front of the application with throttling and authentication.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Auto-Scaling \u2014 no scaling capability",
+      "description": "No auto-scaling. Application runs on a single IIS server with no ability to scale in response to load.",
+      "gap": "No auto-scaling \u2014 all capacity statically provisioned on a single server.",
+      "recommendation": "Configure auto-scaling appropriate to the target platform (ECS service auto-scaling, Lambda concurrency).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Backup and Recovery \u2014 no backup configuration",
+      "description": "No backup configuration in the repository. No automated backups, no retention policies, no restore procedures documented.",
+      "gap": "No backup configuration found \u2014 no automated backups, no retention policy, no restore procedures.",
+      "recommendation": "Enable automated backups with defined retention on RDS/Aurora. Enable PITR. Document and test restore procedures.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Infrastructure as Code Coverage \u2014 zero IaC",
+      "description": "Zero IaC coverage. No Terraform, CloudFormation, CDK, or any IaC tool present. All infrastructure manually provisioned.",
+      "gap": "No IaC \u2014 100% of infrastructure manually created. Environment cannot be reproduced.",
+      "recommendation": "Define all infrastructure in IaC (CDK or Terraform). Start with target-state architecture: VPC, compute, database, monitoring.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation \u2014 no pipeline exists",
+      "description": "No CI/CD pipeline. Deployment is manual publish from Visual Studio 2005 to a network share.",
+      "gap": "No CI/CD \u2014 all deployments manual with no quality gates or automated testing.",
+      "recommendation": "Implement CI/CD pipeline: source trigger \u2192 build \u2192 test \u2192 deploy staging \u2192 integration test \u2192 deploy production.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Programming Languages \u2014 VB.NET on .NET Framework 2.0 (EOL)",
+      "description": "VB.NET targeting .NET Framework 2.0 with ASP.NET WebForms. All three axes (language version, framework, SDK) are end-of-life or deprecated.",
+      "gap": "Compound legacy: VB.NET + .NET Framework 2.0 + WebForms \u2014 no AWS SDK support, no cloud-native tooling at this version.",
+      "recommendation": "Rewrite in C# targeting .NET 8+ with ASP.NET Core. Provides full AWS SDK v3 support and cloud-native tooling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith vs Microservices \u2014 tightly-coupled single-page monolith",
+      "description": "Tightly-coupled monolith with no module boundaries. Single WebForms page with inline SQL, InProc session, ViewState. No separation of concerns.",
+      "gap": "Tightly-coupled monolith with pervasive shared state and no architectural boundaries.",
+      "recommendation": "Rewrite with clear architectural boundaries: repository pattern, service layer, API/presentation separation. See Decomposition Strategy.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Async vs Sync Communication \u2014 primarily synchronous",
+      "description": "All communication is synchronous WebForms postback. For stateful-crud, some async for cross-service state propagation is expected. No async capability exists.",
+      "gap": "Primarily synchronous with no async patterns for future integration.",
+      "recommendation": "Implement event publishing on state changes (EventBridge) when modernizing for decoupled downstream integration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-Running Process Handling \u2014 all operations synchronous",
+      "description": "All operations synchronous with no timeout or async handling. No command timeouts, no async patterns, no background work capability.",
+      "gap": "All operations synchronous regardless of duration \u2014 no protection against long-running queries.",
+      "recommendation": "Set command timeouts. Implement async/await in the modernized version. Use async jobs with status polling for batch operations.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "API Versioning \u2014 no API or versioning",
+      "description": "No API versioning. Application is a WebForms page with postback, not a versioned API. No mechanism for backward-compatible evolution.",
+      "gap": "No versioning \u2014 no structured API exists. Changes affect all users immediately.",
+      "recommendation": "Implement URL-path versioning (e.g., /api/v1/timesheets) from day one in the rewrite. Define API contracts with OpenAPI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Service Discovery \u2014 hard-coded IP address",
+      "description": "No service discovery. Database endpoint is hard-coded as IP 10.0.6.15 in web.config. No DNS abstraction or dynamic discovery.",
+      "gap": "All service endpoints hard-coded as literal IP addresses.",
+      "recommendation": "Use RDS endpoints (DNS) instead of IPs. For inter-service communication, use AWS Cloud Map or environment variables with parameter store.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unstructured Data Storage \u2014 no managed object storage",
+      "description": "No unstructured data storage configured. No S3 buckets, no document storage, no file handling capabilities.",
+      "gap": "No managed object storage for unstructured data.",
+      "recommendation": "If timesheet documents are needed, implement S3 storage with lifecycle policies. Consider Textract for paper timesheet digitization.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unified Data Access Layer \u2014 queries scattered in UI code",
+      "description": "Database queries scattered directly in UI event handlers. SqlConnection and raw SQL used in Page_Load and button click handlers with no abstraction.",
+      "gap": "Database imports and queries scattered in UI code with no pattern. Business logic and data access interleaved.",
+      "recommendation": "Implement repository/service layer pattern. Use ORM (EF Core, Dapper) or dedicated data access class with parameterized queries.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Database Engine Version \u2014 SQL Server 2005 (EOL 10+ years)",
+      "description": "SQL Server 2005, end of extended support April 2016. Unsupported for over 10 years. No security patches available.",
+      "gap": "Database engine past EOL by 10+ years. No version pinning in IaC. Critical security risk.",
+      "recommendation": "Migrate to supported engine immediately: RDS SQL Server 2019/2022 or Aurora PostgreSQL. Use AWS DMS.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Stored Procedures \u2014 inline SQL with string concatenation",
+      "description": "No stored procedures visible in repo. All SQL is inline with string concatenation. SQL is simple ANSI-compatible but creates injection risk and engine coupling.",
+      "gap": "Inline SQL with string concatenation creates SQL injection risk. Database may have server-side objects not visible in repo.",
+      "recommendation": "Convert all inline SQL to parameterized queries. Audit SQL Server instance for stored procedures/triggers. Plan extraction if found.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption at Rest \u2014 no encryption configured",
+      "description": "No encryption at rest. SQL Server 2005 does not support TDE. Employee data stored unencrypted.",
+      "gap": "No encryption at rest. Sensitive employee data unencrypted on EOL engine without TDE support.",
+      "recommendation": "Enable encryption at rest with KMS when migrating to RDS/Aurora.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Authentication \u2014 forms auth without SSL",
+      "description": "Forms authentication with requireSSL=false. Auth cookie transmitted in cleartext. No token-based auth (OAuth2/JWT).",
+      "gap": "No token-based authentication. Forms auth cookie without SSL. Vulnerable to session hijacking.",
+      "recommendation": "Implement OAuth2/JWT with managed IdP (Cognito). Enforce HTTPS. Use API Gateway authorizers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Centralized Identity \u2014 local forms auth only",
+      "description": "Application manages own authentication via ASP.NET Forms auth. No external IdP, no OIDC/SAML, no SSO.",
+      "gap": "Application manages own authentication with no external IdP integration or SSO.",
+      "recommendation": "Integrate with centralized IdP (Amazon Cognito or corporate IdP via OIDC/SAML). Enable SSO.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets Management \u2014 plaintext credentials in git",
+      "description": "Plaintext database credentials committed to repository: User ID=ts_app;Password=Time2006! in web.config.",
+      "gap": "Plaintext credentials in version-controlled source. Critical security risk \u2014 all repo readers have DB credentials.",
+      "recommendation": "Immediately remove plaintext credentials and rotate password. Store all secrets in AWS Secrets Manager with automated rotation.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Compute Hardening \u2014 EOL OS, no patching possible",
+      "description": "Windows Server 2003 and IIS 6 are EOL and cannot receive security patches. Debug mode enabled in production.",
+      "gap": "Running on EOL OS that cannot be patched. No vulnerability scanning. Debug mode enabled.",
+      "recommendation": "Migrate to supported OS. Use managed compute (Fargate/Lambda) to eliminate OS patching. Disable debug in production.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Application Security Pipeline \u2014 no scanning tools",
+      "description": "No SAST, DAST, or dependency scanning. No CI/CD pipeline to integrate into. Known SQL injection vulnerability undetected.",
+      "gap": "No security scanning tools. Known vulnerabilities (SQL injection) remain undetected by automated tooling.",
+      "recommendation": "Integrate SAST (SonarQube, Semgrep) and dependency scanning into CI/CD from day one.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Distributed Tracing \u2014 no tracing instrumented",
+      "description": "No distributed tracing. No X-Ray, OpenTelemetry, or trace propagation. No request-level visibility.",
+      "gap": "No tracing \u2014 no request-level visibility, no database call timing, no error correlation.",
+      "recommendation": "Instrument with OpenTelemetry or AWS X-Ray. Trace HTTP requests and database calls.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "SLO Definitions \u2014 no SLOs defined",
+      "description": "No SLOs defined. No CloudWatch alarms, no latency targets, no error rate thresholds, no availability targets.",
+      "gap": "No SLOs \u2014 no formal definition of acceptable service levels.",
+      "recommendation": "Define SLOs: availability (99.9%), latency p99 (<500ms), error rate (<0.1%). Implement CloudWatch alarms.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Business Metrics \u2014 no custom metrics",
+      "description": "No custom metrics published. No business event tracking or metrics instrumentation.",
+      "gap": "No custom metrics \u2014 no business outcome measurement capability.",
+      "recommendation": "Publish business metrics: timesheet submissions/hour, unique employees/day, peak submission windows.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Anomaly Detection \u2014 no alerting configured",
+      "description": "No alerting. No CloudWatch alarms, no anomaly detection, no on-call integration.",
+      "gap": "No alerting \u2014 no way to detect degradation or failures without manual checking.",
+      "recommendation": "Configure CloudWatch alarms on error rates and latency. Enable anomaly detection. Integrate with on-call system.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing \u2014 no tests exist",
+      "description": "No tests of any kind \u2014 no unit tests, no integration tests, no test framework. Zero automated test coverage.",
+      "gap": "No integration tests \u2014 no automated tests at all. Changes cannot be validated without manual testing.",
+      "recommendation": "Implement integration tests from day one in the rewrite. Test CRUD operations, auth flows. Use xUnit for .NET.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Incident Response \u2014 no runbooks or automation",
+      "description": "No incident response automation. No runbooks, no SSM Automation, no self-healing patterns.",
+      "gap": "No runbooks \u2014 incident response is entirely ad hoc.",
+      "recommendation": "Create runbooks for common failure scenarios. Start with documented procedures, progress to SSM Automation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Ownership \u2014 no observability exists",
+      "description": "No observability ownership. No CODEOWNERS, no dashboards, no alarms with owners, no SLO attribution.",
+      "gap": "No observability ownership \u2014 no monitoring exists to own.",
+      "recommendation": "Define clear ownership: team-attributed dashboards, named alarm owners, SLO definitions with responsible teams.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Resource Tagging \u2014 no AWS resources defined",
+      "description": "No resource tagging. No AWS resources defined in IaC. No tagging standard or enforcement.",
+      "gap": "No tags \u2014 no AWS resources defined. No tagging standard.",
+      "recommendation": "Implement tagging standard from day one: Environment, Team, CostCenter, Application, Service. Use Terraform default_tags or CDK Aspects.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "INF-Q9",
+      "category_id": "INF",
+      "title": "High Availability and Fault Isolation",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_deployed_workload=false \u2014 no deployed workload in IaC or deployment manifests. HA cannot be assessed from source code alone."
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category_id": "SEC",
+      "title": "Audit Logging",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no IaC exists. CloudTrail is an account-level concern belonging in foundation infrastructure repo."
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category_id": "OPS",
+      "title": "Deployment Strategy",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_deployed_workload=false \u2014 no deployment artifacts (Dockerfile, Kubernetes manifests, CodeDeploy config) in repository."
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2 < 3 (primary, score=1) AND supporting: INF-Q1=1 (<3), APP-Q3=2 (<3), APP-Q4=1 (<3)",
+      "triggering_questions": [
+        {
+          "question_id": "APP-Q2",
+          "score": 1,
+          "note": "Tightly-coupled monolith with no module boundaries"
+        },
+        {
+          "question_id": "INF-Q1",
+          "score": 1,
+          "note": "All compute on-premises, no managed services"
+        },
+        {
+          "question_id": "APP-Q3",
+          "score": 2,
+          "note": "Primarily synchronous, no async capability"
+        },
+        {
+          "question_id": "APP-Q4",
+          "score": 1,
+          "note": "All operations synchronous regardless of duration"
+        }
+      ],
+      "detail": {
+        "current_state": "Tightly-coupled single-page ASP.NET WebForms monolith on IIS 6 with synchronous-only communication",
+        "recommended_services": [
+          "Lambda",
+          "API Gateway",
+          "Step Functions",
+          "EventBridge",
+          "ECS",
+          "Fargate"
+        ],
+        "recommended_patterns": [
+          "Strangler Fig",
+          "Hexagonal Architecture"
+        ],
+        "immediate_actions": [
+          "Rewrite as modern API with clear architectural boundaries",
+          "Deploy on managed compute"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN",
+          "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"
+        ]
+      }
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q1 < 3 (score=1) AND no container definitions found. Compute is on-premises IIS, not Lambda/Fargate/ECS.",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q1",
+          "score": 1,
+          "note": "All compute on on-premises IIS 6, no container orchestration"
+        }
+      ],
+      "detail": {
+        "current_state": "IIS 6 on Windows Server 2003, .NET Framework 2.0 \u2014 cannot containerize directly without runtime upgrade",
+        "recommended_services": [
+          "ECS",
+          "Fargate",
+          "ECR",
+          "App Runner"
+        ],
+        "migration_approach": "Refactor-then-containerize \u2014 .NET Framework 2.0 requires upgrade to .NET 8+ before containerization",
+        "immediate_actions": [
+          "Upgrade runtime to .NET 8",
+          "Create Dockerfile",
+          "Deploy to ECS Fargate"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR",
+          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM"
+        ]
+      }
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "High",
+      "key_trigger_criteria": "DATA-Q4 < 3 (score=2) AND SQL Server (commercial engine) detected in connection string",
+      "triggering_questions": [
+        {
+          "question_id": "DATA-Q4",
+          "score": 2,
+          "note": "Inline SQL with string concatenation tied to SQL Server dialect"
+        }
+      ],
+      "detail": {
+        "current_state": "SQL Server 2005 (commercial, licensed) with simple ANSI-compatible inline SQL",
+        "recommended_services": [
+          "RDS PostgreSQL",
+          "Aurora PostgreSQL",
+          "RDS MySQL"
+        ],
+        "migration_tools": [
+          "AWS SCT",
+          "AWS DMS"
+        ],
+        "immediate_actions": [
+          "Assess SQL Server for server-side objects (stored procs, triggers)",
+          "Plan schema conversion with AWS SCT"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC"
+        ]
+      }
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2 < 3 (score=1, self-managed SQL Server on-premises); DATA-Q3=1 (supporting, SQL Server 2005 EOL)",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q2",
+          "score": 1,
+          "note": "Self-managed SQL Server 2005 on-premises"
+        },
+        {
+          "question_id": "DATA-Q3",
+          "score": 1,
+          "note": "SQL Server 2005 EOL since 2016"
+        }
+      ],
+      "detail": {
+        "current_state": "Self-managed SQL Server 2005 on-premises at IP 10.0.6.15, 10+ years past EOL",
+        "recommended_services": [
+          "Aurora PostgreSQL",
+          "RDS SQL Server",
+          "RDS PostgreSQL"
+        ],
+        "migration_tools": [
+          "AWS DMS",
+          "AWS SCT"
+        ],
+        "immediate_actions": [
+          "Migrate to RDS SQL Server 2022 for minimal change, or Aurora PostgreSQL for open source"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
+          "https://skillbuilder.aws/learn/ND246G8Y3W"
+        ]
+      }
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No data processing workloads, streaming, or ETL artifacts found. Contextual guard prevents trigger.",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q4",
+          "score": 1,
+          "note": "INF-Q4 < 3 but no data processing workloads exist \u2014 contextual guard blocks"
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found during discovery. The application is a simple CRUD timesheet entry with no data processing responsibilities."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10 < 3 (score=1) AND INF-Q11 < 3 (score=1); OPS-Q6=1 (supporting)",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q10",
+          "score": 1,
+          "note": "Zero IaC coverage \u2014 all infrastructure manual"
+        },
+        {
+          "question_id": "INF-Q11",
+          "score": 1,
+          "note": "No CI/CD pipeline \u2014 manual VS publish deployment"
+        },
+        {
+          "question_id": "OPS-Q6",
+          "score": 1,
+          "note": "No tests of any kind exist"
+        }
+      ],
+      "detail": {
+        "current_state": "Zero IaC, zero CI/CD, zero tests. Deployment is manual publish from Visual Studio 2005.",
+        "recommended_services": [
+          "CodePipeline",
+          "CodeBuild",
+          "CodeDeploy",
+          "CDK",
+          "CloudFormation"
+        ],
+        "immediate_actions": [
+          "Establish CI/CD pipeline",
+          "Define infrastructure in CDK/Terraform",
+          "Add automated tests"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
+        ]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. No additionalPlanContext provided with AI-related signal terms."
+    }
+  ],
+  "decomposition_strategy": {
+    "condition": "APP-Q2 = 1 (< 3)",
+    "recommended_approach": "Conditional / Adaptive (effectively a rewrite given the tiny codebase)",
+    "approaches": [
+      {
+        "name": "Strengthen as Modular Monolith",
+        "applicability": "Not applicable \u2014 single page, no internal modules to strengthen",
+        "effort": "N/A",
+        "recommended": false
+      },
+      {
+        "name": "Strangler Fig (Parallel Track)",
+        "applicability": "Applicable if part of larger legacy suite",
+        "effort": "Medium to High",
+        "recommended": true
+      },
+      {
+        "name": "Conditional / Adaptive",
+        "applicability": "Recommended \u2014 rewrite as modern API, deploy on managed compute",
+        "effort": "Low to Medium",
+        "recommended": true
+      },
+      {
+        "name": "Big-Bang Rewrite",
+        "applicability": "Acceptable given tiny scope (single file)",
+        "effort": "Low to Medium",
+        "recommended": true
+      }
+    ],
+    "patterns": [
+      "Hexagonal Architecture",
+      "Anti-corruption Layer"
+    ],
+    "effort_factors": {
+      "module_boundaries": "Low effort \u2014 nothing to untangle (single file)",
+      "data_coupling": "Low effort \u2014 single table, simple schema",
+      "stored_procedures": "Low effort \u2014 none visible in repo",
+      "communication_patterns": "Low effort \u2014 simple HTTP replacement",
+      "cicd_maturity": "Medium effort \u2014 must build from scratch",
+      "test_coverage": "Medium effort \u2014 must create test suite"
+    }
+  },
+  "filter_vocab": {
+    "categories": [
+      "Infrastructure & DevOps",
+      "Application Architecture",
+      "Data Platform",
+      "Security Baseline",
+      "Operations & Observability"
+    ],
+    "severities": [
+      "High",
+      "Medium",
+      "Low"
+    ],
+    "priorities": [
+      "P1",
+      "P2"
+    ],
+    "phases": [
+      1,
+      2,
+      3
+    ]
+  },
+  "repo_name": "legacy-timesheet-webforms"
 }
