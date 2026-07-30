@@ -142,10 +142,11 @@ The short code `DATA` is shared between ARA and the Modernization analysis (MOD)
 
 Each RISK-severity question is assigned to exactly one tier. The assignment is static — it does not depend on service characteristics. Scope-calibrated RISK questions (HITL-Q1, HITL-Q2, STATE-Q3, STATE-Q6) only count toward totals when agent_scope is write-enabled (they downgrade to INFO under read-only scope).
 
-**RISK-SAFETY (16 questions):**
+**RISK-SAFETY (17 questions):**
 
 | Question ID | Topic | Safety Rationale |
 |-------------|-------|------------------|
+| API-Q2 | Machine-readable spec | Spec drift makes agents call operations with stale shapes/semantics |
 | AUTH-Q2 | Scoped permissions | Overly broad agent permissions create blast radius risk |
 | AUTH-Q3 | Action-level authorization | Agent could delete when only read is intended |
 | AUTH-Q4 | Identity propagation | Agent-on-behalf-of-user privilege escalation risk |
@@ -163,11 +164,10 @@ Each RISK-severity question is assigned to exactly one tier. The assignment is s
 | HITL-Q1 | Draft/pending state | No draft state for reversible agent-proposed writes |
 | HITL-Q2 | Approval gates | No human approval option for high-risk agent actions |
 
-**RISK-QUALITY (17 questions):**
+**RISK-QUALITY (16 questions):**
 
 | Question ID | Topic | Quality Rationale |
 |-------------|-------|-------------------|
-| API-Q2 | Machine-readable spec | Agent tool generation requires manual work |
 | API-Q3 | Structured errors | Agent cannot distinguish retriable vs terminal errors |
 | API-Q6 | Async operation support | Long-running ops fail against agent timeouts |
 | STATE-Q2 | Queryable current state | Agent cannot inspect state before action |
@@ -676,11 +676,11 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 
 ---
 
-#### API-Q2: Machine-Readable API Specification — RISK-QUALITY
+#### API-Q2: Machine-Readable API Specification — RISK-SAFETY
 
 **Question:** Is there an OpenAPI, AsyncAPI, GraphQL schema, or equivalent machine-readable specification available and kept current with the implementation?
 
-**Why it matters:** Agent frameworks use machine-readable specs to generate tool definitions automatically. Without one, every integration requires manual tool authoring that drifts from actual behavior. Classified as RISK-QUALITY (not BLOCKER) because GraphQL schemas, Smithy models, and well-documented SDKs serve the same purpose — the real blocker is no machine-readable interface at all (API-Q1).
+**Why it matters:** Agent frameworks use machine-readable specs to generate tool definitions automatically. Without one, every integration requires manual tool authoring that drifts from actual behavior — and drift between the spec an agent was generated from and the live surface can cause the agent to call operations with wrong shapes or stale semantics, a safety hazard, not just a quality gap. Classified as RISK-SAFETY (not BLOCKER) because GraphQL schemas, Smithy models, and well-documented SDKs serve the same purpose — the real blocker is no machine-readable interface at all (API-Q1).
 
 **Surface-flag calibration:** If `has_http_rpc_surface` is `false`, the system exposes no callable API surface — there is nothing for a machine-readable spec to describe. Record as INFO with the rationale `"No HTTP/RPC surface — machine-readable spec is not applicable."` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. For libraries, API contracts are expressed via package manifests and typed exports (TypeScript declarations, Python type hints, Go interfaces), which DISC-Q1 evaluates — not as OpenAPI specs.
 
