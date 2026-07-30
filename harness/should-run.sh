@@ -64,9 +64,9 @@ fi
 # origin/<target-branch> is normally ABSENT in the job. Without this fetch the diff
 # below silently fell through to `HEAD~1...HEAD` — one commit — which reported the wrong
 # changed-path set entirely: on MR !14 it missed the SKILL.md edit, so HARNESS_CHANGED_TD
-# came out false and run-fixtures.sh took its "analyze everything" fallback: 22 units,
-# ~39h, ~2,400 agent-min. Fetching the base is the difference between a scoped run and a
-# runaway one, so do it before diffing.
+# came out false and run-fixtures.sh took its "analyze everything" fallback: 22 units
+# instead of 2. Fetching the base is the difference between a scoped run and a runaway
+# one, so do it before diffing.
 if ! git rev-parse --verify --quiet "${BASE_REF}" >/dev/null 2>&1; then
   _branch="${BASE_REF#origin/}"
   echo "should-run: ${BASE_REF} not present locally (shallow CI clone) — fetching it" >&2

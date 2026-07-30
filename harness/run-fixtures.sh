@@ -19,9 +19,10 @@
 # Modes:
 #   --changed-only        Analyze only fixtures relevant to what changed (default in MRs).
 #                         A TD edit is portfolio-wide in PRINCIPLE, but analyzing all 11
-#                         fixtures x 2 analyses = 22 units costs ~108 agent-min EACH
-#                         (measured on the runner) = ~39h serial, and atx's progress
-#                         spinner blows GitLab's 4 MB log cap after ~4 units. So a
+#                         fixtures x 2 analyses = 22 units, each billing ~110-130 AGENT-
+#                         minutes (internal compute; wall-clock per unit is ~10-20 min,
+#                         measured), and atx's progress spinner blows GitLab's 4 MB log
+#                         cap after ~4 units. So a
 #                         changed TD now selects the 1-2 fixtures that best EXERCISE the
 #                         edited questions, via select-fixtures.py (category-matched off
 #                         usecases.yaml expectations). Tune with --mr-fixtures N.
@@ -131,6 +132,11 @@ PY
 )
 
 selected=()
+# Accumulates the question ids the rubric edit touched (see the selector loop below). Written
+# to ${AFTER_DIR}/edited-questions.txt for the judge step; empty on a full sweep (nothing was
+# "edited" in particular) or when no TD changed.
+_edited_q_file="$(mktemp "${TMPDIR:-/tmp}/harness-edited-q.XXXXXX")"
+trap 'rm -f "${_edited_q_file}"' EXIT
 if [[ "${SCOPE}" == "all" ]]; then
   selected=("${ALL_FIXTURES[@]}")
 else
@@ -144,9 +150,9 @@ else
     changed_td="${HARNESS_CHANGED_TD:-${changed_td}}"
   fi
   if [[ "${changed_td}" == "true" ]]; then
-    # A TD edit affects every repo in principle — but "analyze all 11" costs ~108
-    # agent-min per unit x 22 units ≈ 39h serial and truncates the CI log, so it is not
-    # an MR loop. Instead pick the 1-2 fixtures whose declared expectations actually
+    # A TD edit affects every repo in principle — but "analyze all 11" is 22 units of
+    # ~110-130 agent-min each, and it truncated the CI log, so it is not an MR feedback
+    # loop. Instead pick the 1-2 fixtures whose declared expectations actually
     # exercise the EDITED questions (select-fixtures.py matches the question-id category
     # prefix, e.g. API-Q2 -> API, against usecases.yaml must_have_categories).
     # The exhaustive sweep stays available as --scope all (local / harness:full).
@@ -206,6 +212,16 @@ else
       done < <(python3 "${HARNESS_DIR}/select-fixtures.py" \
                  --analysis "${_analysis}" --td "${_td_dir}" \
                  --base "${sel_base}" --count "${MR_FIXTURES}")
+      # Record WHICH questions the edit touched. The judge needs this to tell in-scope
+      # movement (signal) from the analysis agent's run-to-run nondeterminism (noise) —
+      # a same-rubric re-run moves 10-20 findings, so on a one-question edit the noise is
+      # larger than the signal and the judge otherwise reads it as "far broader than stated".
+      python3 "${HARNESS_DIR}/select-fixtures.py" \
+        --analysis "${_analysis}" --td "${_td_dir}" --base "${sel_base}" \
+        --count "${MR_FIXTURES}" --format json 2>/dev/null \
+        | python3 -c 'import json,sys
+try: print("\n".join(json.load(sys.stdin).get("changed_questions") or []))
+except Exception: pass' >> "${_edited_q_file}" || true
     done
     if [[ ${#selected[@]} -eq 0 ]]; then
       echo "changed-only: selector returned nothing → using the broadest fixture per analysis" >&2
@@ -522,7 +538,13 @@ run_unit() {
 # --- run the whole pool: ALL units (ARA+MOD interleaved), throttled to JOBS, one barrier
 echo "" >&2
 assert_unique_unit_dests
-echo "--- pool: ${#UNIT_NAME[@]} unit(s) (ARA+MOD interleaved), jobs=${JOBS} ---" >&2
+# Name the analyses actually in the pool. The label used to be a hardcoded "ARA+MOD
+# interleaved" even when one analysis had been skipped — misleading in exactly the line an
+# operator reads to confirm the run was scoped correctly.
+_pool_kinds=""
+[[ "${run_ara}" == "true" ]] && _pool_kinds="ARA"
+[[ "${run_mod}" == "true" ]] && _pool_kinds="${_pool_kinds:+${_pool_kinds}+}MOD"
+echo "--- pool: ${#UNIT_NAME[@]} unit(s) (${_pool_kinds:-none}), jobs=${JOBS} ---" >&2
 for ((u = 0; u < ${#UNIT_NAME[@]}; u++)); do
   if [[ "${JOBS}" -gt 1 ]]; then
     wait_for_slot
@@ -611,6 +633,15 @@ if [[ "${WRITE_GOLDEN}" == "true" ]]; then
   else
     echo "+ cp ${AFTER_DIR}/*-report.json ${GOLDEN}/" >&2
   fi
+fi
+
+# --- hand the edit scope to the judge ------------------------------------------------
+# The judge weighs movement on these questions as signal and everything else as run-to-run
+# noise. Written as a file (not stdout) because stdout here is human-facing progress.
+if [[ -s "${_edited_q_file}" ]]; then
+  mkdir -p "${AFTER_DIR}"
+  sort -u "${_edited_q_file}" | paste -sd, - > "${AFTER_DIR}/edited-questions.txt"
+  echo "edit scope: $(cat "${AFTER_DIR}/edited-questions.txt") → ${AFTER_DIR}/edited-questions.txt" >&2
 fi
 
 echo "done." >&2

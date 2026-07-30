@@ -4,10 +4,11 @@ select-fixtures.py — pick the 1-2 fixtures that best exercise a rubric change.
 
 WHY THIS EXISTS
 A TD edit is portfolio-wide in principle, so run-fixtures.sh's changed-only path used to
-analyze every fixture: 11 fixtures x 2 analyses = 22 units. Measured cost on the GitLab
-runner is ~108 agent-min per unit, i.e. ~39 HOURS serial for one MR. That is not an MR
-feedback loop. Worse, atx's progress spinner blew GitLab's 4 MB log limit after only 4
-units, so the differ/judge never even reported.
+analyze every fixture: 11 fixtures x 2 analyses = 22 units. Each unit bills ~110-130
+AGENT-minutes (internal compute, parallelized inside atx; wall-clock is ~10-20 min per
+unit as measured on the runner), so 22 units is a large multiple of the cost needed to
+observe a single rubric edit. Worse, atx's progress spinner blew GitLab's 4 MB log limit
+after only 4 units, so the differ/judge never even reported.
 
 So: the FULL sweep is a local / harness:full concern, and an MR runs the SMALLEST set of
 fixtures that can actually observe the edited questions.

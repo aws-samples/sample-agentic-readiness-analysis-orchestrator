@@ -68,8 +68,9 @@ variables:
   # pip cache location (see cache: block below).
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   # --- COST / WALL-CLOCK CONTROLS (see harness/run-fixtures.sh header) ---------
-  # Each (fixture, analysis) unit costs ~108 agent-min, measured on this runner.
-  # Two knobs keep an MR to minutes instead of the ~39h a full 22-unit sweep took:
+  # Each (fixture, analysis) unit bills ~110-130 AGENT-minutes (internal compute; the
+  # observed WALL-CLOCK is ~10-20 min per unit, and units run concurrently). Two knobs
+  # keep an MR at ~20 min instead of a 22-unit sweep:
   #
   # HARNESS_MR_FIXTURES — how many fixtures the changed-only path selects. The
   # selector (select-fixtures.py) picks the ones whose declared expectations
@@ -251,7 +252,15 @@ harness:impact:
     - harness/run-fixtures.sh --changed-only --validate --jobs "$HARNESS_JOBS" --mr-fixtures "$HARNESS_MR_FIXTURES"
     - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
     # JUDGE: LLM scores the delta against the contributor's INTENT (MR description, §6/§8.1).
-    - harness/judge.py --impact impact.json --intent "$CI_MERGE_REQUEST_DESCRIPTION" > verdict.json
+    # --edited-questions tells the judge WHICH rubric questions the MR touched. Without it
+    # the judge cannot separate the edit's effect from the analysis agent's run-to-run
+    # nondeterminism (a same-rubric re-run moves 10-20 findings), and it read a
+    # one-question change as "far broader than stated" -> a false `mismatch`.
+    - |
+      EDITED=""
+      [ -f "$AFTER_DIR/edited-questions.txt" ] && EDITED="$(cat "$AFTER_DIR/edited-questions.txt")"
+      harness/judge.py --impact impact.json --intent "$CI_MERGE_REQUEST_DESCRIPTION" \
+        --edited-questions "$EDITED" > verdict.json
     # REPORT: advisory MR comment (never blocks).
     - harness/post-mr-comment.sh verdict.json
   artifacts:
@@ -273,10 +282,10 @@ harness:impact:
 # For a full re-baseline (e.g. after publishing an approved change), or a forced re-run.
 #
 # THIS is the exhaustive sweep an MR deliberately does NOT do: 11 fixtures x 2
-# analyses = 22 units. At ~108 agent-min each that is ~2,366 agent-min, so it MUST
-# be parallel — serial it ran ~39h and exceeded the job timeout. RUN_JOBS defaults
-# higher than the MR's HARNESS_JOBS because wall-clock is the whole point here, and
-# `timeout` is raised to match. Narrow with CHANGED_TD (ara|mod) to halve the work.
+# analyses = 22 units, ~110-130 agent-min each. A scoped 2-unit MR run measured 19 min
+# wall-clock end to end, so 22 units at RUN_JOBS=6 is a few hours — hence the raised
+# timeout. RUN_JOBS is higher than the MR's HARNESS_JOBS because wall-clock is the whole
+# point here. Narrow with CHANGED_TD (ara|mod) to halve the work.
 # -----------------------------------------------------------------------------
 harness:full:
   stage: analyze

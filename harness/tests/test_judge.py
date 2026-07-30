@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""
+Tests for judge.py — the summarisation layer that decides WHAT THE LLM GETS TO SEE.
+
+These tests deliberately do NOT exercise the Bedrock call. The judge's failure mode in
+practice was not a bad model response — it was a good model reasoning correctly over an
+incomplete digest. On MR !14 (reclassify API-Q2 RISK-QUALITY -> RISK-SAFETY) the delta
+contained exactly one reseveritied finding per repo, but summarize_impact() passed only
+a COUNT ("1 reseveritied"). The judge could not see WHICH question moved, so it ruled
+`intent_match: mismatch` on precisely the change the intent described, and told the
+contributor their edit hadn't taken effect.
+
+So what's pinned here is the CONTRACT BETWEEN THE DIFFER AND THE PROMPT: every fact the
+judge needs in order to match a delta against an intent must survive summarisation.
+
+Run:  python3 -m pytest harness/tests/ -q
+  or: python3 harness/tests/test_judge.py
+"""
+
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+
+_spec = importlib.util.spec_from_file_location("judge", REPO / "harness" / "judge.py")
+judge = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(judge)  # type: ignore
+
+
+def _impact_with_reseverity(qid: str = "API-Q2",
+                            native_before: str = "RISK-QUALITY",
+                            native_after: str = "RISK-SAFETY") -> dict:
+    """An impact.json shaped like the real MR !14 delta: one reseverity, some additions."""
+    return {
+        "no_op": False,
+        "changed_tds": ["agentic-readiness-analysis"],
+        "per_repo": {
+            "legacy-helpdesk-tickets": {
+                "D1_ara_findings": {
+                    "added": ["DATA-Q2", "DATA-Q3"],
+                    "removed": [],
+                    "reseveritied": [{
+                        "question_id": qid,
+                        "severity": {"before": "High", "after": "High"},
+                        "native_severity": {"before": native_before, "after": native_after},
+                    }],
+                },
+            },
+        },
+        "portfolio": {},
+        "coverage": {"compared": 2, "baseline_total": 24, "partial": True,
+                     "not_analyzed": ["x"] * 22, "unbaselined": []},
+    }
+
+
+# --- the regression that produced a false `mismatch` ---------------------------------
+
+def test_reseveritied_question_id_reaches_the_judge():
+    """The edited question must be NAMED in the digest, not just counted.
+
+    This is the bug: with only "1 reseveritied" in the highlights, the LLM has no way to
+    tell an intent about API-Q2 from an intent about AUTH-Q5.
+    """
+    summ = judge.summarize_impact(_impact_with_reseverity())
+    blob = "\n".join(summ["highlights"])
+    assert "API-Q2" in blob, (
+        "the reseveritied question_id was dropped during summarisation — the judge "
+        f"cannot match intent against it. highlights={summ['highlights']}")
+
+
+def test_reseverity_before_and_after_classes_reach_the_judge():
+    # Naming the question isn't enough: "API-Q2 moved" doesn't say which DIRECTION, and
+    # RISK-QUALITY -> RISK-SAFETY vs the reverse are opposite intents.
+    summ = judge.summarize_impact(_impact_with_reseverity())
+    blob = "\n".join(summ["highlights"])
+    assert "RISK-QUALITY" in blob and "RISK-SAFETY" in blob, \
+        f"before/after severity classes missing from digest: {summ['highlights']}"
+
+
+def test_reseverity_prefers_native_class_but_falls_back_to_normalized():
+    # When only the normalized severity moves (no native class change), report THAT —
+    # otherwise the highlight would read "None -> None" and tell the judge nothing.
+    impact = _impact_with_reseverity(native_before="RISK-SAFETY", native_after="RISK-SAFETY")
+    entry = impact["per_repo"]["legacy-helpdesk-tickets"]["D1_ara_findings"]
+    entry["reseveritied"][0]["severity"] = {"before": "Medium", "after": "High"}
+    blob = "\n".join(judge.summarize_impact(impact)["highlights"])
+    assert "Medium -> High" in blob, f"normalized severity fallback missing: {blob}"
+    assert "None" not in blob, f"emitted a None-valued transition: {blob}"
+
+
+def test_d1_still_reports_counts_and_additions():
+    # The naming fix must not displace the existing count/added summary.
+    summ = judge.summarize_impact(_impact_with_reseverity())
+    blob = "\n".join(summ["highlights"])
+    assert "+2 / -0 / 1 reseveritied" in blob
+    assert "DATA-Q2" in blob
+    assert "D1" in summ["dimensions_moved"]
+
+
+def test_many_reseverities_are_capped_but_present():
+    # A broad rubric edit can move dozens; the digest must stay prompt-sized without
+    # silently emitting nothing.
+    impact = _impact_with_reseverity()
+    entry = impact["per_repo"]["legacy-helpdesk-tickets"]["D1_ara_findings"]
+    entry["reseveritied"] = [
+        {"question_id": f"API-Q{i}",
+         "severity": {"before": "Low", "after": "High"},
+         "native_severity": {"before": "RISK-QUALITY", "after": "RISK-SAFETY"}}
+        for i in range(20)
+    ]
+    named = [h for h in judge.summarize_impact(impact)["highlights"]
+             if "reseveritied:" in h]
+    assert 1 <= len(named) <= 8, f"expected a capped but non-empty list, got {len(named)}"
+
+
+def test_malformed_reseverity_entry_does_not_crash():
+    # impact.json is machine-generated, but the judge is the last stage before a human
+    # sees a verdict — it must degrade rather than traceback.
+    impact = _impact_with_reseverity()
+    impact["per_repo"]["legacy-helpdesk-tickets"]["D1_ara_findings"]["reseveritied"] = [
+        "API-Q2", None, {"question_id": "AUTH-Q5"},
+    ]
+    summ = judge.summarize_impact(impact)          # must not raise
+    assert "D1" in summ["dimensions_moved"]
+    assert "AUTH-Q5" in "\n".join(summ["highlights"])
+
+
+# --- coverage plumbing (scoped runs must not read as full sweeps) ---------------------
+
+def test_partial_coverage_is_flagged_for_the_judge():
+    summ = judge.summarize_impact(_impact_with_reseverity())
+    assert summ["coverage"]["partial"] is True
+    assert summ["coverage"]["compared"] == 2
+    assert summ["coverage"]["baseline_total"] == 24
+    assert summ["coverage"]["not_analyzed_count"] == 22
+    note = judge._coverage_note(summ)
+    assert "PARTIAL" in note and "2 of 24" in note
+
+
+def test_full_coverage_note_says_full():
+    impact = _impact_with_reseverity()
+    impact["coverage"] = {"compared": 24, "baseline_total": 24, "partial": False,
+                          "not_analyzed": [], "unbaselined": []}
+    note = judge._coverage_note(judge.summarize_impact(impact))
+    assert "FULL" in note
+
+
+# --- edit-scope signal (signal vs. nondeterminism noise) -----------------------------
+# The analysis agent is NONDETERMINISTIC: re-running the byte-identical rubric on the same
+# fixture moves ~10-20 findings (measured across two golden refreshes of an unedited
+# rubric). So on a one-question edit the delta is mostly noise. The judge must be told
+# which questions were actually edited or it reads the noise as "the change is far broader
+# than stated" — which is exactly the false `mismatch` MR !14 produced.
+
+def test_scope_note_names_the_edited_questions():
+    note = judge._scope_note(["API-Q2"])
+    assert "API-Q2" in note
+
+
+def test_scope_note_warns_that_out_of_scope_movement_is_noise():
+    note = judge._scope_note(["API-Q2"]).lower()
+    assert "nondeterministic" in note
+    assert "noise" in note
+    # It must explicitly tell the judge not to hang a mismatch on out-of-scope movement.
+    assert "mismatch" in note
+
+
+def test_scope_note_explains_reclassification_shows_as_reseverity():
+    # Otherwise the judge expects added/removed findings from a severity change and calls
+    # the (correct) absence of them a failure to take effect.
+    note = judge._scope_note(["API-Q2"]).lower()
+    assert "reseveritied" in note or "severity" in note
+
+
+def test_scope_note_absent_when_scope_unknown():
+    # A full sweep / non-TD change has no "edited questions"; stay silent rather than
+    # asserting an empty scope, which would read as "nothing was edited".
+    assert judge._scope_note([]) == ""
+
+
+def test_prompt_carries_scope_and_reseverity_together():
+    impact = _impact_with_reseverity()
+    prompt = judge.build_user_prompt(
+        {"what": "reclassify API-Q2 to RISK-SAFETY"},
+        judge.summarize_impact(impact), "", ["API-Q2"])
+    assert "questions actually edited: API-Q2" in prompt
+    # and the delta evidence the judge needs to match it against
+    assert "API-Q2 RISK-QUALITY -> RISK-SAFETY" in prompt
+
+
+def test_prompt_is_valid_without_scope():
+    # Back-compat: the arg is optional and omitting it must not break the prompt.
+    prompt = judge.build_user_prompt({"what": "x"},
+                                     judge.summarize_impact(_impact_with_reseverity()), "")
+    assert "## Observed delta" in prompt
+    assert "questions actually edited" not in prompt
+
+
+def test_system_prompt_requires_causal_story_for_regression():
+    # Guard the prompt rule that stops out-of-scope churn being labelled a regression.
+    sp = judge.SYSTEM_PROMPT.lower()
+    assert "nondeterministic" in sp
+    assert "causal" in sp
+
+
+# --- intent parsing ------------------------------------------------------------------
+
+def test_intent_freeform_becomes_what():
+    intent = judge.parse_intent("reclassify API-Q2 from RISK-QUALITY to RISK-SAFETY")
+    assert "API-Q2" in intent["what"]
+
+
+def test_empty_intent_is_safe():
+    intent = judge.parse_intent("")
+    assert intent["what"] == ""
+    assert intent["raw"] == ""
+
+
+# --- fallback runner (no pytest) -----------------------------------------------------
+
+def _run_all():
+    fns = [v for k, v in sorted(globals().items())
+           if k.startswith("test_") and callable(v)]
+    passed = failed = 0
+    for fn in fns:
+        try:
+            fn()
+            passed += 1
+            print(f"  PASS  {fn.__name__}")
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            print(f"  FAIL  {fn.__name__}: {exc}")
+    print(f"\n{passed} passed, {failed} failed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_run_all())

@@ -156,6 +156,27 @@ def _note_dimension(key: str, d: Any, scope: str, moved: set, highlights: list) 
                 f"[{scope}] D1 findings: +{len(added)} / -{len(removed)} / "
                 f"{len(res)} reseveritied"
                 + (f" (added: {', '.join(added[:5])})" if added else ""))
+            # A RESEVERITY is usually the whole point of a rubric edit (e.g. "reclassify
+            # API-Q2 RISK-QUALITY -> RISK-SAFETY"), so it must be named, not just counted.
+            # Passing only a count made the judge rule `mismatch` on exactly the change the
+            # intent described: it could see "1 reseveritied" but not WHICH question, so it
+            # concluded the edited question never moved. The differ already records
+            # question_id + before/after severity — surface it.
+            for r in res[:8]:
+                if not isinstance(r, dict):
+                    continue
+                sev = r.get("severity") or {}
+                nat = r.get("native_severity") or {}
+                # native_severity carries the rubric-level class (RISK-SAFETY /
+                # RISK-QUALITY / BLOCKER); `severity` is the normalized High/Med/Low.
+                # Show whichever actually moved, preferring the native class.
+                if nat.get("before") != nat.get("after"):
+                    before, after = nat.get("before"), nat.get("after")
+                else:
+                    before, after = sev.get("before"), sev.get("after")
+                highlights.append(
+                    f"[{scope}] D1 reseveritied: {r.get('question_id')} "
+                    f"{before} -> {after}")
     elif dim == "D2":
         if d.get("changed"):
             hit = True
@@ -208,9 +229,12 @@ Scoring rubric:
 - quality_regression = true  : the delta plausibly makes the analysis WORSE — e.g. a tier
                               now contradicts its own blocker/severity counts, a pathway
                               fires when the repo clearly can't trigger it (or stops firing
-                              when it should), a score crosses a band the wrong way, or
-                              findings the change should not touch move anyway. When in
-                              doubt, flag it and explain the risk.
+                              when it should), or a score crosses a band the wrong way.
+                              Requires a CAUSAL story linking the EDITED rubric text to the
+                              bad output. Do NOT flag this merely because findings outside
+                              the edit scope moved — the analysis agent is nondeterministic
+                              and that movement is expected noise (see "Edit scope" below,
+                              when present).
 - verdict = "LGTM" when the change is safe, intent-aligned, and not a regression;
             "needs-work" otherwise.
 - score 0-100: higher = more confident the change is good, matches intent, and is not a
@@ -243,14 +267,49 @@ def _coverage_note(impact_summary: dict) -> str:
     )
 
 
-def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str) -> str:
+def _scope_note(edited_questions: list[str]) -> str:
+    """Tell the judge which questions the MR actually edited, and that the rest is noise.
+
+    WHY THIS IS ESSENTIAL: the underlying analysis agent is NONDETERMINISTIC. Two runs of
+    the byte-identical rubric on the same fixture differ by ~10-20 findings (measured
+    across two golden refreshes of an unedited rubric). So a delta is always
+    `signal + run-to-run noise`, and for a one-question edit the noise DWARFS the signal.
+
+    Without this note the judge sees "+13 findings" next to an intent about one question
+    and correctly-but-uselessly concludes `mismatch: the change is far broader than
+    stated`. Naming the edited questions lets it weigh movement IN scope as evidence and
+    movement OUT of scope as suspected noise — which is the only way a verdict on a
+    narrow edit can mean anything.
+    """
+    if not edited_questions:
+        return ""
+    return (
+        "\n## Edit scope (from the rubric diff — authoritative)\n"
+        f"questions actually edited: {', '.join(edited_questions)}\n"
+        "IMPORTANT — how to weigh the delta against this scope:\n"
+        "  * The analysis agent is NONDETERMINISTIC. Re-running the SAME rubric on the same\n"
+        "    fixture moves roughly 10-20 findings purely from run-to-run variance.\n"
+        "  * Therefore movement on questions OUTSIDE the edited set is EXPECTED NOISE. Do\n"
+        "    NOT treat it as a regression or as evidence the change is broader than stated,\n"
+        "    and do NOT ground a `mismatch` verdict in it. Mention it at most as an aside.\n"
+        "  * Judge intent-match PRIMARILY on whether the EDITED questions moved as the\n"
+        "    intent describes (a severity reclassification shows up as a `reseveritied`\n"
+        "    entry naming that question, not as an added/removed finding).\n"
+        "  * A reclassification changes a finding's SEVERITY CLASS, so the finding count\n"
+        "    barely moves. Do not expect added/removed findings from one.\n"
+    )
+
+
+def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
+                      edited_questions: Optional[list[str]] = None) -> str:
     return (
         "## Contributor intent\n"
         f"What: {intent.get('what') or '(none stated)'}\n"
         f"Why: {intent.get('why') or '(none stated)'}\n"
         f"Expected impact: {intent.get('expected_impact') or '(none stated)'}\n"
-        f"Rubric edited directly in the AWS Transform service: {intent.get('edited_in_service')}\n\n"
-        "## Observed delta (from the deterministic differ)\n"
+        f"Rubric edited directly in the AWS Transform service: {intent.get('edited_in_service')}\n"
+        + _scope_note(edited_questions or [])
+        + "\n## Observed delta (from the deterministic differ)\n"
         f"no_op: {impact_summary['no_op']}\n"
         f"changed_tds: {impact_summary['changed_tds']}\n"
         f"dimensions_moved: {impact_summary['dimensions_moved']}\n"
@@ -263,7 +322,8 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str) -> str
 
 
 def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
-                       model: str) -> Optional[dict]:
+                       model: str,
+                       edited_questions: Optional[list[str]] = None) -> Optional[dict]:
     """Call Bedrock; return a parsed verdict dict, or None if unavailable/failed."""
     try:
         import boto3  # noqa: PLC0415
@@ -277,7 +337,8 @@ def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
             "max_tokens": 1024,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user",
-                          "content": build_user_prompt(intent, impact_summary, diff_text)}],
+                          "content": build_user_prompt(intent, impact_summary, diff_text,
+                                                       edited_questions)}],
         }
         resp = client.invoke_model(modelId=model, body=json.dumps(body))
         payload = json.loads(resp["body"].read())
@@ -392,6 +453,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                     help="Optional raw diff of the changed file(s) for extra judge context")
     ap.add_argument("--model", default=DEFAULT_MODEL, help="Bedrock model id")
     ap.add_argument("--no-llm", action="store_true", help="Force the offline heuristic")
+    # The questions the MR actually edited (comma-separated, e.g. "API-Q2"). run-fixtures.sh
+    # already extracts these via select-fixtures.py, so pass them through: they let the judge
+    # separate in-scope movement (signal) from the analysis agent's run-to-run
+    # nondeterminism (noise), which for a one-question edit is the larger of the two.
+    ap.add_argument("--edited-questions", default="",
+                    help="comma-separated question ids the change edited (scope signal)")
     args = ap.parse_args(argv)
 
     try:
@@ -410,10 +477,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         diff_text = args.diff_file.read_text(encoding="utf-8", errors="replace")
 
     impact_summary = summarize_impact(impact)
+    edited_questions = [q.strip().upper() for q in args.edited_questions.split(",")
+                        if q.strip()]
+    if edited_questions:
+        impact_summary["edited_questions"] = edited_questions
 
     verdict = None
     if not args.no_llm:
-        verdict = judge_with_bedrock(intent, impact_summary, diff_text, args.model)
+        verdict = judge_with_bedrock(intent, impact_summary, diff_text, args.model,
+                                     edited_questions)
         if verdict is not None:
             verdict["_engine"] = "bedrock"
     if verdict is None:
