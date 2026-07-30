@@ -152,6 +152,17 @@ else
     # The exhaustive sweep stays available as --scope all (local / harness:full).
     sel_base="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:+origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}}"
     sel_base="${sel_base:-origin/main}"
+    # Every selection decision below is a diff against sel_base, and in GitLab's shallow
+    # `git depth 20` clone that ref is normally ABSENT — the diff then comes back empty and
+    # we cannot tell "nothing changed" from "I can't see the change". should-run.sh fetches
+    # it, but don't depend on having been run through the gate (local invocations, or a
+    # future job that calls this directly). Fetch it here too; idempotent when present.
+    if ! git -C "${REPO_ROOT}" rev-parse --verify --quiet "${sel_base}" >/dev/null 2>&1; then
+      echo "run-fixtures: ${sel_base} missing locally (shallow clone) — fetching for selection" >&2
+      git -C "${REPO_ROOT}" fetch -q --depth=50 origin \
+        "+refs/heads/${sel_base#origin/}:refs/remotes/origin/${sel_base#origin/}" 2>/dev/null \
+        || echo "run-fixtures: WARN could not fetch ${sel_base}; selection will fall back" >&2
+    fi
     # A portfolio TD change must select >=2 fixtures: the rollup it edits aggregates
     # per-repo reports, and aggregating one repo exercises nothing. Floor it here so the
     # portfolio stage below isn't skipped by its own >=2 guard.
@@ -197,8 +208,8 @@ else
                  --base "${sel_base}" --count "${MR_FIXTURES}")
     done
     if [[ ${#selected[@]} -eq 0 ]]; then
-      echo "changed-only: selector returned nothing → falling back to all fixtures" >&2
-      selected=("${ALL_FIXTURES[@]}")
+      echo "changed-only: selector returned nothing → using the broadest fixture per analysis" >&2
+      selected=("${ALL_FIXTURES[0]}")
     else
       echo "changed-only: a watched TD changed → ${#selected[@]} targeted fixture(s); use --scope all for the full sweep" >&2
     fi
@@ -209,14 +220,44 @@ else
     while IFS= read -r line; do
       [[ -n "${line}" ]] && changed_paths+=("${line}")
     done < <(git -C "${REPO_ROOT}" diff --name-only "${base}...HEAD" 2>/dev/null || true)
-    for fx in "${ALL_FIXTURES[@]}"; do
-      for cp in "${changed_paths[@]}"; do
-        [[ "${cp}" == "${fx}"* ]] && { selected+=("${fx}"); break; }
+    # `${changed_paths[@]}` on an EMPTY array is an unbound-variable error under `set -u`
+    # in bash 3.2 (macOS) — and an empty diff is exactly what a shallow CI clone produces
+    # when the base ref can't be resolved, so this crashed the whole job. Guard the loop.
+    if [[ ${#changed_paths[@]} -gt 0 ]]; then
+      for fx in "${ALL_FIXTURES[@]}"; do
+        for cp in "${changed_paths[@]}"; do
+          [[ "${cp}" == "${fx}"* ]] && { selected+=("${fx}"); break; }
+        done
       done
-    done
-    # No fixture directly changed but the gate said run (e.g. harness config) → analyze all.
-    [[ ${#selected[@]} -eq 0 ]] && selected=("${ALL_FIXTURES[@]}")
+    fi
+    # No fixture directly changed but the gate said run (e.g. a harness-only change).
+    #
+    # This used to expand to ALL fixtures, which is what actually blew up on MR !14: the
+    # gate's base ref was unresolvable in the shallow CI clone, so HARNESS_CHANGED_TD came
+    # out false, we landed HERE, and a harness-only MR launched 22 units / ~2,400 agent-min.
+    # `--changed-only` must NEVER silently mean "everything" — an unbounded full sweep is
+    # only ever something an operator asks for explicitly (--scope all / harness:full).
+    # Cap at --mr-fixtures instead: enough to prove the pipeline works end to end, and if
+    # no TD changed there is no rubric delta for extra fixtures to reveal anyway.
+    if [[ ${#selected[@]} -eq 0 ]]; then
+      _cap="${MR_FIXTURES}"
+      [[ "${_cap}" -gt ${#ALL_FIXTURES[@]} ]] && _cap=${#ALL_FIXTURES[@]}
+      echo "changed-only: no TD or fixture changed → smoke-running ${_cap} fixture(s)." >&2
+      echo "              (no rubric edit ⇒ no delta to find; use --scope all to force a sweep.)" >&2
+      selected=()
+      for ((_i = 0; _i < _cap; _i++)); do selected+=("${ALL_FIXTURES[$_i]}"); done
+    fi
   fi
+fi
+
+# Hard ceiling on the changed-only path. Belt-and-braces over the branches above: no
+# combination of a bad base ref, a stale should-run.env, or a future edit may turn an MR
+# into an unbounded sweep. --scope all is the ONLY way to get every fixture.
+if [[ "${SCOPE}" != "all" && ${#selected[@]} -gt "${MR_FIXTURES}" ]]; then
+  echo "changed-only: capping ${#selected[@]} selected fixture(s) → ${MR_FIXTURES} (--mr-fixtures)." >&2
+  _capped=()
+  for ((_i = 0; _i < MR_FIXTURES; _i++)); do _capped+=("${selected[$_i]}"); done
+  selected=("${_capped[@]}")
 fi
 
 echo "run-fixtures: scope=${SCOPE} ara=${run_ara} mod=${run_mod} fixtures=${#selected[@]} after=${AFTER_DIR} (engine: atx custom def exec)" >&2
@@ -366,6 +407,16 @@ stage_unit() {
   UNIT_DEST+=("${dest}"); UNIT_DEFNAME+=("${defname}"); UNIT_GLOB+=("${glob}")
 }
 
+# Zero fixtures means we'd publish the TDs, analyze nothing, and exit 0 — a GREEN job that
+# tested nothing, the worst possible failure mode for a guardrail. Every branch above is
+# supposed to pick at least one, so this is a bug, not a valid state: fail loudly.
+# (Also avoids the bash 3.2 `set -u` unbound-variable error on an empty array below.)
+if [[ ${#selected[@]} -eq 0 ]]; then
+  echo "FATAL: no fixtures selected — refusing to report success having analyzed nothing." >&2
+  echo "       This is a selection bug; check the base-ref resolution warnings above." >&2
+  exit 5
+fi
+
 for fx in "${selected[@]}"; do
   name="$(basename "${fx}")"
   target="${REPO_ROOT}/${fx}"
@@ -417,6 +468,9 @@ wait_for_slot() {
 # that two units resolve to the same directory.
 assert_unique_unit_dests() {
   local dup
+  # Empty array + `set -u` = unbound variable in bash 3.2, so bail early. (Reaching here
+  # with zero units also means nothing would run, which the guard above already rejects.)
+  [[ ${#UNIT_DEST[@]} -eq 0 ]] && return 0
   dup="$(printf '%s\n' "${UNIT_DEST[@]}" | sort | uniq -d | head -1)"
   if [[ -n "${dup}" ]]; then
     echo "FATAL: two units share a stage dir (${dup}) — concurrent atx execs would" >&2

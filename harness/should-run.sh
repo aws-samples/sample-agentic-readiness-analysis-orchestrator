@@ -59,16 +59,41 @@ if [[ -z "${BASE_REF}" ]]; then
   fi
 fi
 
+# --- make sure the base ref actually EXISTS locally ----------------------------------
+# GitLab CI clones with `git depth 20` and fetches ONLY the MR head ref, so
+# origin/<target-branch> is normally ABSENT in the job. Without this fetch the diff
+# below silently fell through to `HEAD~1...HEAD` — one commit — which reported the wrong
+# changed-path set entirely: on MR !14 it missed the SKILL.md edit, so HARNESS_CHANGED_TD
+# came out false and run-fixtures.sh took its "analyze everything" fallback: 22 units,
+# ~39h, ~2,400 agent-min. Fetching the base is the difference between a scoped run and a
+# runaway one, so do it before diffing.
+if ! git rev-parse --verify --quiet "${BASE_REF}" >/dev/null 2>&1; then
+  _branch="${BASE_REF#origin/}"
+  echo "should-run: ${BASE_REF} not present locally (shallow CI clone) — fetching it" >&2
+  # Unshallow just enough to get a real merge-base. Failure is non-fatal: we fall back
+  # to the widest interpretation below, which over-runs rather than under-reports.
+  git fetch -q --depth=50 origin "+refs/heads/${_branch}:refs/remotes/origin/${_branch}" 2>/dev/null \
+    || echo "should-run: WARN could not fetch ${BASE_REF}" >&2
+fi
+
 # --- collect changed paths -----------------------------------------------------------
 # Prefer a merge-base diff; fall back to a plain diff, then to "unknown → run".
 changed=""
+base_resolved="false"
 if git rev-parse --verify --quiet "${BASE_REF}" >/dev/null 2>&1; then
+  base_resolved="true"
   merge_base="$(git merge-base "${BASE_REF}" HEAD 2>/dev/null || echo "${BASE_REF}")"
   changed="$(git diff --name-only "${merge_base}...HEAD" 2>/dev/null || true)"
 fi
-if [[ -z "${changed}" ]]; then
-  # Last-committed change (e.g. detached CI checkout) — better to run than to miss.
-  changed="$(git diff --name-only HEAD~1...HEAD 2>/dev/null || true)"
+if [[ "${base_resolved}" != "true" ]]; then
+  # We could NOT resolve the base, so we cannot know the real changed set. `HEAD~1...HEAD`
+  # is not a safe stand-in — it silently UNDER-reports (see above). Say so loudly and let
+  # the downstream default-run gate decide, rather than emitting a confident wrong answer.
+  echo "should-run: WARN base ref unresolvable — changed-path set is UNKNOWN, not empty." >&2
+  echo "            Treating as 'run' with no TD/fixture classification." >&2
+  changed=""
+elif [[ -z "${changed}" ]]; then
+  echo "should-run: base resolved but diff is empty — nothing changed vs ${BASE_REF}." >&2
 fi
 
 # --- denylist: paths that provably cannot move analysis output -----------------------

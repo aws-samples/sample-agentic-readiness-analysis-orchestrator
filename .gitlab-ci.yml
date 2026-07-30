@@ -234,6 +234,12 @@ harness:impact:
   stage: analyze
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  # A single (fixture, analysis) unit costs ~108 agent-min, and HARNESS_JOBS runs the
+  # MR's 2 units concurrently — so wall-clock is ~one unit, ~2h with install + judge.
+  # GitLab's 1h DEFAULT would kill every MR run mid-sweep, discarding the analysis and
+  # reporting nothing. 3h leaves headroom for a slow unit without letting a wedged atx
+  # exec burn a runner all day.
+  timeout: 3h
   script:
     # GATE (deterministic, no LLM): exit cleanly as a SKIP when the whole diff is
     # denylisted (docs / license / images / DESIGN.md). Permissive by default (§5).
