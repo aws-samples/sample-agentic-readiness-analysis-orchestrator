@@ -156,8 +156,9 @@ def test_a_question_resolved_twice_is_a_defect():
 
 
 def test_mod_expects_37_not_43():
-    # ARA is 43, MOD is 37. Counted from reports, never grepped from SKILL.md — MOD's
-    # DATA-Q* namespace-collision note names ARA's DATA-Q7 and over-counts MOD as 38.
+    # ARA is 43, MOD is 37. A NAIVE heading grep over MOD returns 38 — INF-Q1 "Managed
+    # Compute" is present twice — so the parse must dedup by qid (see
+    # test_the_severity_table_is_parsed_from_the_td_not_transcribed).
     assert sr.EXPECTED_QUESTIONS == {"ara": 43, "mod": 37}
     rpt = {"findings": [{"question_id": f"Q{i}"} for i in range(37)], "evaluations": []}
     assert sr.check_coverage(rpt, "mod") == []
@@ -283,11 +284,59 @@ def test_corrected_rubric_bugs_stay_fixed():
     assert "`overall_score` (0–4)" not in sr.MOD_RUBRIC
 
 
+def test_the_severity_table_is_parsed_from_the_td_not_transcribed():
+    """The prompt's severity table must come FROM SKILL.md on every run.
+
+    A transcribed table drifts silently: someone edits a severity in the TD, the prompt
+    keeps asserting the old one as authoritative, and the scorer marks a CORRECT report
+    wrong. The TD is the thing under change here, so this is the one staleness the harness
+    cannot tolerate.
+    """
+    ara, mod = sr.parse_questions("ara"), sr.parse_questions("mod")
+    assert len(ara) == 43
+    assert len(mod) == 37, "MOD must dedup INF-Q1; a naive heading grep returns 38"
+    # Severities are read, not assumed.
+    assert ara["API-Q1"]["severity"] == "BLOCKER"
+    assert ara["DATA-Q4"]["severity"] == "RISK-QUALITY"
+    # AUTH-Q5 is RISK-SAFETY unconditionally (SKILL.md:870). Six golden reports emit it as
+    # BLOCKER, which pushes them to blocker_count 3 and the worst tier — the table has to
+    # state the TD's severity so the grader does not ratify the report's.
+    assert ara["AUTH-Q5"]["severity"] == "RISK-SAFETY"
+    assert not ara["AUTH-Q5"]["conditional"]
+    # The 5 conditional BLOCKERs, marked so a read-only downgrade reads as CORRECT.
+    conditional = {q for q, v in ara.items() if v["conditional"] and v["severity"] == "BLOCKER"}
+    assert conditional == {"API-Q4", "STATE-Q1", "AUTH-Q6", "DATA-Q1", "DATA-Q2"}
+    # MOD questions carry no severity at all — they score 1-4.
+    assert all(not v["severity"] for v in mod.values())
+
+
+def test_a_broken_parse_fails_loudly_rather_than_scoring_with_a_partial_table():
+    """Half a table is worse than no table: the model fills the holes by guessing.
+
+    Nothing else catches this — score-reports.py is not wired into .gitlab-ci.yml — so the
+    assertion inside ara_context() is the only guard between a TD heading-format edit and
+    a confidently wrong score.
+    """
+    original = sr.SKILLS["ara"]
+    try:
+        sr.SKILLS["ara"] = original.parent / "NOPE.md"   # simulate a moved/renamed TD
+        raised = False
+        try:
+            sr.ara_context()
+        except AssertionError as exc:
+            raised = True
+            assert "43" in str(exc)                     # tells you what it expected
+            assert "NOPE.md" in str(exc)                # ...and where it looked
+        assert raised, "a TD that cannot be parsed must raise, not return a partial table"
+    finally:
+        sr.SKILLS["ara"] = original
+
+
 def test_ara_context_carries_the_authoritative_severity_table():
     """The omission that made the v1 scores unfair: the model was asked to grade against
     a 43-question rubric it had never been shown, so it fell back on AppSec instinct and
     demanded BLOCKER for 6 findings correctly filed under DATA-Q4."""
-    ctx = sr.ARA_CONTEXT
+    ctx = sr.ara_context()
     # Every question id must appear, or the table has a hole the model will fill by guessing.
     for qid in ("API-Q1", "API-Q4", "AUTH-Q1", "AUTH-Q6", "STATE-Q1", "DATA-Q1", "DATA-Q2"):
         assert qid in ctx, f"{qid} missing from the BLOCKER list"
@@ -304,14 +353,14 @@ def test_ara_context_carries_the_authoritative_severity_table():
 def test_ara_context_names_the_rubrics_own_coverage_gaps():
     # Reports were docked for questions the rubric does not contain. Naming them keeps
     # them out of `misses` and in `rubric_gaps`, where they measure the TD instead.
-    ctx = sr.ARA_CONTEXT
+    ctx = sr.ara_context()
     assert "NOT COVERED BY ANY OF THE 43 QUESTIONS" in ctx
     assert "session fixation" in ctx
     assert "rubric_gaps" in ctx
 
 
 def test_mod_context_states_the_scale_and_both_ladders():
-    ctx = sr.MOD_CONTEXT
+    ctx = sr.mod_context()
     assert "1-4" in ctx and "There is no 0" in ctx
     # Score-based bands and count-based tiers are DIFFERENT ladders; conflating them was
     # my own earlier error, and a grader that conflates them mis-reads every MOD report.
@@ -319,6 +368,20 @@ def test_mod_context_states_the_scale_and_both_ladders():
     assert "Mature" in ctx                  # score-based band
     assert "NO sub-qualifier" in ctx        # "Safety Concerns" is ARA-only
     assert "SOFTER than ARA" in ctx
+
+
+def test_the_tier_ladder_in_the_prompt_is_rendered_from_the_checker():
+    """One arithmetic, one source. The tier rule already lives in SKILL.md and in
+    expected_ara_tier(); typing it a third time into a prompt is how the prompt ends up
+    contradicting the checker it is meant to agree with."""
+    ladder = sr._tier_ladder()
+    for blockers, risk_safety in ((3, 0), (1, 0), (0, 3), (0, 1), (0, 0)):
+        tier, _ = sr.expected_ara_tier(blockers, risk_safety)
+        assert tier in ladder
+    # The rule the original benchmark prompt got wrong: 1-2 RISK-SAFETY is plain
+    # Pilot-Ready, and the prompt must say so explicitly rather than leaving it inferable.
+    assert "Pilot-Ready (NO qualifier)" in ladder
+    assert '"Safety Concerns" qualifier' in ladder
 
 
 def test_both_contexts_are_injected_into_the_prompt():

@@ -28,10 +28,18 @@ A ~2 KB rubric summary does not tell the model which of the 43 questions owns wh
 handed a legacy repo full of SQL injection it fell back on general AppSec instinct and
 demanded BLOCKER for 6 findings the reports had correctly filed under DATA-Q4 (which is
 RISK-QUALITY *by definition*, and whose own "look for" list includes parameterized
-queries). It was grading against a rubric it had never been shown. ARA_CONTEXT /
-MOD_CONTEXT close that: the authoritative question->severity table, the scope boundary,
-and the tier arithmetic, extracted from SKILL.md. They are ADDITIVE context, not scoring
-policy — the rubric still decides what matters.
+queries). It was grading against a rubric it had never been shown. ara_context() /
+mod_context() close that: the authoritative question->severity table, the scope boundary,
+and the tier arithmetic. They are ADDITIVE context, not scoring policy — the rubric still
+decides what matters.
+
+Those tables are PARSED FROM SKILL.md ON EVERY RUN, not transcribed. A transcribed table
+goes stale the moment someone edits a severity, and it goes stale SILENTLY — the prompt
+would keep asserting the old severity as authoritative and the scorer would confidently
+mark a correct report wrong. Since the TD is exactly the thing under change here, that is
+the one kind of staleness this harness cannot afford. The parse asserts 43/37 and raises
+if the heading format moves, so a TD edit that breaks it stops the run instead of quietly
+handing the model a table with holes in it.
 
 The fixture source is small (2-12 KB per repo; shipping-api ~100 KB, monolith ~185 KB),
 so the model sees the ENTIRE repository rather than a sample. Groundedness claims here
@@ -72,9 +80,83 @@ FIXTURES = REPO / "harness" / "fixtures"
 DEFAULT_MODEL = os.environ.get(
     "HARNESS_SCORE_MODEL", "global.anthropic.claude-opus-4-5-20251101-v1:0")
 
-# Rubric sizes. Counted from the reports themselves, NEVER by grepping SKILL.md: MOD's
-# DATA-Q* namespace-collision note names ARA's DATA-Q7, which over-counts MOD as 38.
+# Rubric sizes. Kept as literals ON PURPOSE even though parse_questions() derives the same
+# numbers from SKILL.md: these are the independent check that the parse is right. If a
+# heading regex drifts and silently yields 41, the assertion in ara_context() fires instead
+# of the model being handed a table with two questions missing.
+#
+# A NAIVE grep over MOD's headings returns 38, not 37 — INF-Q1 "Managed Compute" appears
+# twice. Dedup by question id (parse_questions does) and the 11/6/4/7/9 split is exact.
 EXPECTED_QUESTIONS = {"ara": 43, "mod": 37}
+
+# The TDs are the single source of truth for question severities. Parsing them beats
+# hardcoding: a hardcoded table goes stale SILENTLY the moment someone edits a severity,
+# which is precisely the drift this harness exists to catch.
+SKILLS = {
+    "ara": REPO / "definitions" / "managed" / "agentic-readiness-analysis" / "SKILL.md",
+    "mod": REPO / "definitions" / "managed" / "modernization-readiness-analysis" / "SKILL.md",
+}
+
+# `#### API-Q4: Idempotent Write Operations — BLOCKER ⚡ (Conditional)`
+# ARA headings carry the severity; MOD headings are `#### INF-Q1: Managed Compute` with no
+# severity (MOD scores 1-4 per question instead), so the severity group is optional.
+_Q_HEADING = re.compile(
+    r"^#### ((?:API|AUTH|STATE|HITL|DATA|DISC|OBS|ENG|INF|APP|SEC|OPS)-Q\d+):"
+    r"\s*(.+?)\s*(?:—\s*(.+?))?\s*$", re.M)
+
+
+def _rel(path: Path) -> str:
+    """Repo-relative path — both SKILL.md files share a basename, so `.name` is ambiguous
+    in a prompt and useless in an assertion message."""
+    return str(path.relative_to(REPO))
+
+
+def parse_questions(analysis: str) -> dict[str, dict[str, str]]:
+    """Extract {qid: {title, severity, conditional}} from a TD, in document order.
+
+    Deduplicates by qid, keeping the FIRST occurrence (MOD repeats INF-Q1). Returns {} if
+    the TD is missing rather than raising — callers assert on the count, which gives a far
+    more useful error than a stack trace from a regex that matched nothing.
+    """
+    path = SKILLS.get(analysis)
+    if not path or not path.exists():
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for qid, title, sev in _Q_HEADING.findall(path.read_text(encoding="utf-8")):
+        if qid in out:
+            continue
+        raw = (sev or "").strip()
+        # "BLOCKER ⚡ (Conditional)" -> severity BLOCKER, conditional marker separately.
+        # The marker is load-bearing: it is what tells the grader a read-only-scope
+        # downgrade is CORRECT rather than an understatement.
+        out[qid] = {
+            "title": title.strip(),
+            "severity": raw.split("⚡")[0].replace("*", "").strip(),
+            "conditional": "⚡" in raw,
+        }
+    return out
+
+
+def _tier_ladder() -> str:
+    """Render the ARA tier table FROM expected_ara_tier() rather than restating it.
+
+    The arithmetic already lives in two places (SKILL.md:1569-1573 and that function);
+    typing it a third time into a prompt is how the prompt ends up disagreeing with the
+    checker it is supposed to agree with.
+    """
+    rows = [(3, 0), (1, 0), (0, 3), (0, 1), (0, 0)]
+    labels = {(3, 0): "blocker_count >= 3", (1, 0): "blocker_count 1-2",
+              (0, 3): "blocker_count 0 AND risk_safety >= 3",
+              (0, 1): "blocker_count 0 AND risk_safety 1-2",
+              (0, 0): "blocker_count 0 AND risk_safety 0"}
+    lines = []
+    for b, rs in rows:
+        tier, qual = expected_ara_tier(b, rs)
+        got = f"{tier} + \"{qual}\" qualifier" if qual else f"{tier}"
+        if not qual and b == 0 and rs:
+            got += " (NO qualifier)"
+        lines.append(f"  {labels[(b, rs)]:<40} -> {got}")
+    return "\n".join(lines)
 
 # ARA tier is a deterministic function of two counts (SKILL.md 1569-1573). Everything
 # else (RISK-QUALITY, INFO) is tier-INERT (line 2054).
@@ -173,12 +255,72 @@ format `<score>X.X</score>` followed by a brief summary."""
 
 # ---------------------------------------------------------------------------------------
 # Authoritative TD context. NOT scoring policy — this is the spec the rubric refers to.
-# Extracted from definitions/managed/*/SKILL.md; regenerate if the TDs change (the
-# question->severity table comes from the `#### <QID>: <title> — <severity>` headings).
+#
+# The FACTUAL half is DERIVED from SKILL.md at runtime (question->severity table,
+# conditional markers, tier arithmetic). Hardcoding it would go stale silently the moment
+# someone edits a severity — the exact drift this harness exists to catch — and it is also
+# how the prompt ends up disagreeing with check_ara().
+#
+# The POLICY half below stays hand-written, because SKILL.md cannot state it about itself:
+#   * which real problems NO question covers (negative space — a TD cannot enumerate its
+#     own blind spots)
+#   * that a severity disagreement is not a miss, and one root cause is one item
+#   * the calibration bands
+# Those are judging policy, not TD facts. Keep the two separated: policy is ours to tune,
+# facts are the TD's to declare.
 # ---------------------------------------------------------------------------------------
 
-ARA_CONTEXT = """\
-## Authoritative ARA severity table (from the TD — this is the spec, not a suggestion)
+# Which questions own the vulnerability classes a general-purpose grader over-escalates.
+# Derived qid -> the note appended to it. Written by hand because it encodes what we LEARNED
+# about grader failure modes, not anything SKILL.md declares.
+_OWNERSHIP_NOTES = {
+    "DATA-Q4": "OWNS SQL injection, NoSQL injection, XXE, command injection, path "
+               "traversal and unvalidated input. Its own evaluation criteria list "
+               "\"parameterized queries (protection against injection)\".",
+    "ENG-Q5":  "Encryption AT REST only — NOT transport security.",
+    "AUTH-Q5": "Credential management, including hardcoded secrets.",
+}
+
+
+def _severity_block(qs: dict[str, dict[str, str]]) -> str:
+    """Group questions by severity, newest-longest first, with conditional markers."""
+    order = ["BLOCKER", "RISK-SAFETY", "RISK-QUALITY", "INFO"]
+    by_sev: dict[str, list[str]] = {s: [] for s in order}
+    for qid, q in qs.items():
+        sev = q["severity"]
+        if sev not in by_sev:
+            by_sev.setdefault(sev, [])
+        mark = " [C]" if q["conditional"] and sev == "BLOCKER" else (
+            " [S]" if q["conditional"] else "")
+        note = _OWNERSHIP_NOTES.get(qid)
+        entry = f"{qid} {q['title']}{mark}"
+        if note:
+            entry += f"\n      -> {note}"
+        by_sev[sev].append(entry)
+    out = []
+    for sev in list(order) + [s for s in by_sev if s not in order]:
+        items = by_sev.get(sev)
+        if not items:
+            continue
+        out.append(f"{sev} ({len(items)}):")
+        out += [f"  - {i}" for i in items]
+    return "\n".join(out)
+
+
+def ara_context() -> str:
+    qs = parse_questions("ara")
+    # Fail LOUDLY. A parse that silently yields 41 hands the model a table with two
+    # questions missing and it fills the hole by guessing — which is the original bug.
+    # score-reports.py is not in CI, so this assertion is the only thing standing between a
+    # TD heading-format change and a quietly wrong prompt.
+    want = EXPECTED_QUESTIONS["ara"]
+    assert len(qs) == want, (
+        f"ARA severity table parse yielded {len(qs)} questions, expected {want}. The "
+        f"'#### <QID>: <title> — <SEVERITY>' heading format in {_rel(SKILLS['ara'])} has "
+        f"probably changed. Fix _Q_HEADING before scoring — do NOT score with a partial "
+        f"table.")
+    return f"""\
+## Authoritative ARA severity table (parsed from {_rel(SKILLS['ara'])} — the spec)
 
 SCOPE BOUNDARY: ARA is a design-time architecture review. It evaluates whether controls
 exist in code and configuration. It is NOT a penetration test, a runtime security scan, or
@@ -188,20 +330,7 @@ assigned severity. "This is a serious vulnerability" is not by itself grounds fo
 Each question below has ONE assigned severity. A report that resolves an issue under the
 owning question at that severity is CORRECT.
 
-BLOCKER (7): API-Q1 Documented API Interface · AUTH-Q1 Machine Identity Authentication ·
-  API-Q4 Idempotent Writes [C] · AUTH-Q6 Immutable Audit Logging [C] ·
-  STATE-Q1 Compensation and Rollback [C] · DATA-Q1 Sensitive Data Classification [C] ·
-  DATA-Q2 Data Residency [C]
-RISK-SAFETY (12): AUTH-Q2 Scoped Permissions · AUTH-Q3 Action-Level Authorization ·
-  AUTH-Q4 Identity Propagation · AUTH-Q5 Credential Management ·
-  AUTH-Q7 Agent Identity Suspension · STATE-Q4 Circuit Breakers ·
-  STATE-Q5 Rate Limiting · DATA-Q6 PII Redaction in Logs ·
-  STATE-Q3 Concurrency Controls [S] · STATE-Q6 Blast Radius [S] ·
-  HITL-Q1 Draft/Pending State [S] · HITL-Q2 Approval Gates [S]
-RISK-QUALITY (17): API-Q2 · API-Q3 · API-Q6 · STATE-Q2 · STATE-Q7 · HITL-Q3 · DATA-Q3 ·
-  DATA-Q4 Input Validation and Schema Enforcement · DATA-Q5 · DISC-Q1 · OBS-Q1 · OBS-Q2 ·
-  ENG-Q1 · ENG-Q2 · ENG-Q3 · ENG-Q4 · ENG-Q5 Encryption at Rest
-INFO (7): API-Q5 · API-Q7 · API-Q8 · DATA-Q7 · DISC-Q2 · DISC-Q3 · OBS-Q3
+{_severity_block(qs)}
 
 [C] = CONDITIONAL BLOCKER: resolves to BLOCKER only when `agent_scope` is "write-enabled".
       Under "read-only" (the TD's DEFAULT, chosen deliberately to avoid false escalation)
@@ -211,31 +340,42 @@ INFO (7): API-Q5 · API-Q7 · API-Q8 · DATA-Q7 · DISC-Q2 · DISC-Q3 · OBS-Q3
       following the TD.
 
 INJECTION, INPUT-HANDLING AND VALIDATION DEFECTS — READ THIS BEFORE RECORDING A MISS.
-SQL injection, NoSQL injection, XXE, command injection, path traversal and unvalidated
-input are owned by **DATA-Q4, which is RISK-QUALITY**. DATA-Q4's own evaluation criteria
-list "parameterized queries (protection against injection)" as a thing to look for. So a
-report that files SQL injection under DATA-Q4 as RISK-QUALITY has applied the rubric
+Injection and traversal defects are owned by DATA-Q4, whose severity is listed above. A
+report that files SQL injection under DATA-Q4 at that severity has applied the rubric
 CORRECTLY. Do NOT record it as a missed BLOCKER or missed RISK-SAFETY, and do not
 double-count one root cause across several question_ids.
 
-NOT COVERED BY ANY OF THE 43 QUESTIONS — do not penalise their absence:
-transport security / TLS / HTTPS-vs-HTTP in transit (ENG-Q5 is encryption AT REST only),
-session fixation and session-token rotation, end-of-life runtime or dependency CVEs,
-and secrets committed to source control except where AUTH-Q5 Credential Management
-genuinely owns the agent-facing credential path. These are real problems and legitimate
-TD coverage gaps, but a report cannot be marked down for a question the rubric lacks. If
-you notice one, list it under `rubric_gaps`, NOT under `misses`.
+NOT COVERED BY ANY OF THE {want} QUESTIONS — do not penalise their absence:
+transport security / TLS / HTTPS-vs-HTTP in transit, session fixation and session-token
+rotation, end-of-life runtime or dependency CVEs, and secrets committed to source control
+except where AUTH-Q5 Credential Management genuinely owns the agent-facing credential
+path. These are real problems and legitimate TD coverage gaps, but a report cannot be
+marked down for a question the rubric lacks. If you notice one, list it under
+`rubric_gaps`, NOT under `misses`.
 
 TIER ARITHMETIC (deterministic — already verified for you in the pre-checks):
-  blocker_count >= 3                      -> Not Agent-Integrable
-  blocker_count 1-2                       -> Remediation Required
-  blocker_count 0 AND risk_safety >= 3    -> Pilot-Ready + "Safety Concerns" qualifier
-  blocker_count 0 AND risk_safety 1-2     -> Pilot-Ready (NO qualifier)
-  blocker_count 0 AND risk_safety 0       -> Agent-Ready
+{_tier_ladder()}
 RISK-QUALITY and INFO counts are tier-INERT — they never change the tier."""
 
-MOD_CONTEXT = """\
-## Authoritative MOD scoring context (from the TD — this is the spec)
+
+def mod_context() -> str:
+    qs = parse_questions("mod")
+    want = EXPECTED_QUESTIONS["mod"]
+    assert len(qs) == want, (
+        f"MOD question parse yielded {len(qs)} questions, expected {want}. Note INF-Q1 "
+        f"appears TWICE in {_rel(SKILLS['mod'])} and must be deduped by qid; a naive parse "
+        f"returns 38.")
+    # MOD headings carry no severity — questions score 1-4 — so list them by category to
+    # give the grader the shape of the rubric without inventing severities it does not have.
+    cats: dict[str, list[str]] = {}
+    for qid, q in qs.items():
+        cats.setdefault(qid.split("-")[0], []).append(f"{qid} {q['title']}")
+    catlines = "\n".join(f"{c} ({len(v)}): " + " · ".join(v) for c, v in cats.items())
+    bands = "\n".join(
+        f"    {lo:>4} - {hi:<4} -> {mod_band(lo)}"
+        for lo, hi in ((3.5, 4.0), (2.5, 3.4), (1.5, 2.4), (1.0, 1.4)))
+    return f"""\
+## Authoritative MOD scoring context (parsed from {_rel(SKILLS['mod'])} — the spec)
 
 SCALE: every question and category scores **1-4**. There is no 0.
   4 Mature      — fully meets the criterion, best-practice implementation
@@ -245,16 +385,15 @@ SCALE: every question and category scores **1-4**. There is no 0.
 A repo scoring 1.0-1.2 overall is at the FLOOR of the scale. That is an expected result for
 an unmodernized legacy fixture, not evidence the report is wrong.
 
-37 questions in 5 categories: INF Infrastructure/Platform/DevOps (11) ·
-APP Application Architecture (6) · DATA Data Platform (4) · SEC Security Baseline (7) ·
-OPS Operations & Observability (9).
+{want} questions in {len(cats)} categories:
+{catlines}
 
-`overall_score` is the EQUALLY-weighted mean of the 5 category scores, regardless of how
-many questions each category holds. (Already verified in the pre-checks.)
+`overall_score` is the EQUALLY-weighted mean of the category scores, regardless of how many
+questions each category holds. (Already verified in the pre-checks.)
 
 TWO LADDERS, and they are different things — do not conflate them:
-  * score-based BANDS from `overall_score`: >=3.5 Mature · 2.5-3.4 Partial ·
-    1.5-2.4 Needs Work · <1.5 Not Ready
+  * score-based BANDS from `overall_score`:
+{bands}
   * count-based TIERS from unified High/Medium counts: 0 High and <=1 Medium ->
     Cloud-Native Ready · 0 High and >=2 Medium -> Pilot-Ready · 1 High -> Pilot-Ready ·
     2-11 High -> Remediation Required · >=12 High -> Not Ready
@@ -268,6 +407,7 @@ is typically a single modernization gap. Do not import ARA's severity instincts 
 
 MOD measures MODERNIZATION MATURITY, not application security. Code-level vulnerabilities
 are ARA's or a SAST tool's concern except where a SEC question genuinely owns them."""
+
 
 SYSTEM_PROMPT = """You are a strict evaluator of automated code-assessment reports.
 
@@ -510,7 +650,7 @@ def load_source(repo: str, max_bytes: int = 220_000) -> str:
 
 def build_prompt(repo: str, analysis: str, rpt: dict, source: str, checks: list[dict]) -> str:
     rubric = ARA_RUBRIC if analysis == "ara" else MOD_RUBRIC
-    context = ARA_CONTEXT if analysis == "ara" else MOD_CONTEXT
+    context = ara_context() if analysis == "ara" else mod_context()
     # Hand the model the deterministic findings rather than hoping it recomputes them.
     # They are FACTS; asking an LLM to verify arithmetic it can already be told is waste,
     # and a model that misses one would understate a confirmed defect.
