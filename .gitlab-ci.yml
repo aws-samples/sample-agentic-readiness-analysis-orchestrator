@@ -74,11 +74,32 @@ default:
   before_script:
     # The slim image ships without curl/git/unzip — install what the harness needs.
     # unzip is REQUIRED: the atx CLI installer unpacks a zip and hard-fails without it.
-    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl git unzip ca-certificates
+    # xz-utils is REQUIRED for `tar -J` when unpacking the Node tarball below.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl git unzip xz-utils ca-certificates
+    # --- NODE RUNTIME — REQUIRED by the atx CLI ---------------------------------
+    # The installed `atx` is a Node script (`#!/usr/bin/env node`), so on this
+    # python-only image every atx call dies with:
+    #   env: 'node': No such file or directory
+    # README documents Node.js 22+ as a prerequisite. We install the official
+    # pinned tarball rather than the NodeSource apt repo: no third-party apt
+    # source and no gnupg dependency (the slim image ships neither).
+    - |
+      NODE_VERSION=22.14.0
+      case "$(dpkg --print-architecture)" in
+        amd64) NODE_ARCH=x64 ;;
+        arm64) NODE_ARCH=arm64 ;;
+        *) echo "unsupported runner arch: $(dpkg --print-architecture)" >&2; exit 1 ;;
+      esac
+      curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz
+      tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
+      rm -f /tmp/node.tar.xz
+      node --version
     # AWS CLI (to sanity-check the vended identity) + atx CLI (drives the managed TDs).
     - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
     - curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash
     - export PATH="$HOME/.local/bin:$PATH"
+    # Fail loudly here if atx still can't start, rather than deep inside run-fixtures.sh.
+    - command -v atx >/dev/null && echo "atx installed at $(command -v atx)" || echo "WARN: atx not on PATH" >&2
     # Region falls back to us-east-1 if the AWS_REGION CI variable is unset.
     - export AWS_REGION="${AWS_REGION:-us-east-1}"
     # --- AWS Credential Vendor -------------------------------------------------
