@@ -123,6 +123,37 @@ def test_posting_failure_still_exits_zero():
         f"must stay advisory on a failed post, exited {r.returncode}"
 
 
+def test_transport_failure_reports_a_single_http_code():
+    """`|| echo 000` on a captured `-w '%{http_code}'` APPENDS to curl's output.
+
+    On a refused connection that produced "000000" in the log — a code that does not
+    exist. The comparison still worked by luck, so this would only ever have surfaced as
+    an operator staring at a nonsense status while debugging a real posting failure.
+    """
+    r = _run({"HARNESS_MR_TOKEN": "pat-sentinel"})
+    assert "HTTP 000)" in r.stderr or "HTTP 000;" in r.stderr, \
+        f"expected a single synthesized 000 code; stderr tail={r.stderr[-400:]}"
+    assert "000000" not in r.stderr, "curl's -w output was appended to, not replaced"
+
+
+def test_stale_response_body_is_not_reprinted():
+    """The body file must be per-run, not a fixed /tmp path.
+
+    curl writes NOTHING to -o when the connection fails, so a fixed path leaves the
+    PREVIOUS run's body in place — and the script would print an unrelated older error as
+    if it were this attempt's API response. Caught exactly that way in local testing: a
+    302 from a much earlier call resurfaced under a fresh failure.
+    """
+    poison = "POISON-STALE-BODY-SHOULD-NOT-APPEAR"
+    Path("/tmp/mr-note-resp.json").write_text(poison)
+    try:
+        r = _run({"HARNESS_MR_TOKEN": "pat-sentinel"})
+        assert poison not in r.stderr, \
+            "a stale response body from a previous run was printed as this run's response"
+    finally:
+        Path("/tmp/mr-note-resp.json").unlink(missing_ok=True)
+
+
 def test_verdict_is_printed_when_posting_fails():
     # If we can't comment, the verdict must survive in the job log.
     r = _run({"HARNESS_MR_TOKEN": "pat-sentinel"})

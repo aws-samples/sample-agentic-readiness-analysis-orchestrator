@@ -209,6 +209,129 @@ harness:auth-check:
   allow_failure: true   # advisory — a red auth-check must not block anything
 
 # -----------------------------------------------------------------------------
+# Entry 0b — harness:comment-check   (manual; MR-comment wiring verification)
+# Proves ONLY that the advisory MR note can actually be POSTED. No atx, no AWS, no
+# Bedrock, no fixtures — it feeds post-mr-comment.sh a CANNED verdict.json and posts
+# it. ~30 seconds instead of the ~20 minutes (and ~130 agent-minutes) a full
+# harness:impact run costs to reach the same 3 seconds of code.
+#
+# WHY THIS EXISTS: the comment is the LAST step of the most expensive job in the repo,
+# so every iteration on a posting bug otherwise costs a full analysis run. MR !14 burned
+# two of them on what turned out to be an auth-header bug.
+#
+# Run it from CI/CD -> Run pipeline (web), or let it appear as a MANUAL job on an MR and
+# press play. It is `when: manual` on MRs so it does not post a junk comment on every
+# push — but note the comment it posts IS visible on the MR, tagged as a wiring test.
+# Delete this job once the comment path is proven.
+# -----------------------------------------------------------------------------
+harness:comment-check:
+  stage: gate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
+  before_script:
+    # Only curl + git are needed. Skipping the Node/atx/awscli install is most of why
+    # this is fast.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
+  script:
+    - |
+      echo "--- token presence (never the value) ---"
+      # A masked variable prints as [MASKED], so length is the only safe signal that it
+      # resolved to something real inside the job.
+      if [ -n "${HARNESS_MR_TOKEN:-}" ]; then
+        echo "HARNESS_MR_TOKEN: set, ${#HARNESS_MR_TOKEN} chars"
+      else
+        echo "HARNESS_MR_TOKEN: NOT SET -> the note WILL 401." >&2
+        echo "  CI_JOB_TOKEN cannot create MR notes (GitLab excludes /notes from its" >&2
+        echo "  allowlist), so this is the variable that matters. Settings -> CI/CD ->" >&2
+        echo "  Variables: Project Access Token with 'api' scope, Reporter or above." >&2
+        echo "  Masked is fine. Protected must be OFF (MRs run on unprotected branches)." >&2
+      fi
+      echo "CI_MERGE_REQUEST_IID: ${CI_MERGE_REQUEST_IID:-(none - not an MR pipeline)}"
+      echo "CI_API_V4_URL:        ${CI_API_V4_URL:-(unset)}"
+    # Canned verdict — shaped like a real one so the RENDERER is exercised too (scoped-run
+    # disclosure, delta highlights, concerns), not just the HTTP call.
+    - |
+      cat > verdict.json <<'JSON'
+      {
+        "score": 85,
+        "verdict": "LGTM",
+        "intent_match": "aligned",
+        "quality_regression": false,
+        "rationale": "**This is a wiring test, not a real verdict.** It was posted by `harness:comment-check` with a canned payload to prove the harness can comment on an MR. No fixtures were analyzed and no rubric was evaluated.",
+        "concerns": [
+          {"dimension": "D1", "detail": "example concern — renders the concerns block"}
+        ],
+        "suggestions": ["example suggestion — renders the suggestions block"],
+        "_engine": "canned (comment-check)",
+        "_impact_summary": {
+          "dimensions_moved": ["D1"],
+          "changed_tds": ["agentic-readiness-analysis"],
+          "highlights": [
+            "[legacy-helpdesk-tickets] D1 reseveritied: API-Q2 RISK-QUALITY -> RISK-SAFETY",
+            "[legacy-loan-calculator] D1 reseveritied: API-Q2 RISK-QUALITY -> RISK-SAFETY"
+          ],
+          "coverage": {"compared": 2, "baseline_total": 24, "partial": true, "not_analyzed_count": 22}
+        }
+      }
+      JSON
+      echo "--- posting ---"
+      harness/post-mr-comment.sh verdict.json
+    # post-mr-comment.sh is advisory and exits 0 even on a failed POST, so its exit code
+    # cannot be the assertion. Re-read the MR's notes and confirm ours is actually there —
+    # otherwise this job would go green while posting nothing, which is the exact failure
+    # it exists to catch.
+    - |
+      if [ -z "${CI_MERGE_REQUEST_IID:-}" ]; then
+        echo "no MR context (web pipeline) — POST not attempted; nothing to verify." >&2
+        exit 0
+      fi
+      if [ -z "${HARNESS_MR_TOKEN:-}" ]; then
+        echo "no HARNESS_MR_TOKEN — cannot read notes back to verify." >&2
+        exit 1
+      fi
+      # `|| echo 000` would APPEND to the captured -w output ("000000"), so branch on
+      # curl's exit status instead and synthesize a code only when there is no HTTP reply.
+      rm -f notes.json
+      if code="$(curl -sS -o notes.json -w '%{http_code}' \
+           --connect-timeout 10 --max-time 30 \
+           --header "PRIVATE-TOKEN: ${HARNESS_MR_TOKEN}" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes?per_page=20&sort=desc")"; then
+        :
+      else
+        code="000"
+      fi
+      echo "GET notes -> HTTP ${code:-000}"
+      if [ "${code}" != "200" ]; then
+        echo "VERIFY FAILED: could not read notes back (HTTP ${code})." >&2
+        [ -s notes.json ] && head -c 500 notes.json >&2
+        exit 1
+      fi
+      python3 - <<'PY'
+      import json, sys
+      notes = json.load(open("notes.json"))
+      ours = [n for n in notes if "comment-check" in (n.get("body") or "")
+              or "wiring test" in (n.get("body") or "")]
+      if ours:
+          n = ours[0]
+          print(f"VERIFIED: note id={n.get('id')} by "
+                f"{(n.get('author') or {}).get('username')} at {n.get('created_at')}")
+          sys.exit(0)
+      print("VERIFY FAILED: the POST reported success but no matching note is on the MR.",
+            file=sys.stderr)
+      print(f"  {len(notes)} recent note(s) found, none ours.", file=sys.stderr)
+      sys.exit(1)
+      PY
+  artifacts:
+    when: always
+    paths:
+      - verdict.json
+    expire_in: 7 days
+  allow_failure: true   # advisory — a red wiring check must not block anything
+
+# -----------------------------------------------------------------------------
 # Schema guardrail — harness:contract-tests   (offline, no AWS, fast)
 # The STRUCTURAL axis (distinct from the semantic judge): validate-contract.py's
 # offline shape-fixture suite proves the contract validator rejects drifted JSON

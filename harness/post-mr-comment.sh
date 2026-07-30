@@ -160,17 +160,36 @@ fi
 # unreachable or wedged endpoint indefinitely — burning a runner and eventually dying on
 # the job timeout with the verdict never printed. Bounded here so a network problem
 # degrades to "couldn't post, here's the verdict" within seconds.
-http_code="$(curl -sS -o /tmp/mr-note-resp.json -w '%{http_code}' \
-  --connect-timeout 10 --max-time 30 \
-  --request POST "${URL}" \
-  --header "${AUTH_HEADER}" \
-  --data-urlencode "body=${BODY}" || echo "000")"
+# Response body goes to a per-run temp file, NOT a fixed /tmp path. curl writes NOTHING to
+# -o when the connection itself fails, so a fixed path would leave a PREVIOUS run's body in
+# place and we would print a stale, unrelated error as if it were this attempt's response.
+RESP="$(mktemp "${TMPDIR:-/tmp}/mr-note-resp.XXXXXX")"
+trap 'rm -f "${RESP}"' EXIT
+
+# NOTE the `-w` output is captured, so a `|| echo 000` fallback would APPEND to whatever
+# curl already wrote and yield nonsense like "000000". Capture and branch on curl's exit
+# code instead, and synthesize the code only when curl produced none.
+if curl -sS -o "${RESP}" -w '%{http_code}' \
+     --connect-timeout 10 --max-time 30 \
+     --request POST "${URL}" \
+     --header "${AUTH_HEADER}" \
+     --data-urlencode "body=${BODY}" > "${RESP}.code" 2>"${RESP}.err"; then
+  http_code="$(cat "${RESP}.code" 2>/dev/null)"
+else
+  # Transport-level failure (DNS, refused, timeout) — there is no HTTP status at all.
+  http_code="000"
+  cat "${RESP}.err" >&2 || true
+fi
+rm -f "${RESP}.code" "${RESP}.err"
+http_code="${http_code:-000}"
 
 if [[ "${http_code}" =~ ^2 ]]; then
   echo "post-mr-comment: posted (HTTP ${http_code})." >&2
 else
   echo "post-mr-comment: could not post note (HTTP ${http_code}); verdict follows:" >&2
-  cat /tmp/mr-note-resp.json >&2 || true
+  # -s: quiet when the body is empty (a transport failure writes nothing) rather than
+  # printing a bare newline that reads like an empty API response.
+  [[ -s "${RESP}" ]] && cat "${RESP}" >&2 || true
   echo "" >&2
   printf '%s\n' "${BODY}" >&2
 fi
