@@ -390,6 +390,124 @@ def test_scope_note_states_the_limits_of_the_noise_rule():
     assert "tier" in note
 
 
+# --- what the score MEASURES: effect on the analysis, not intent match ----------------
+# The score used to answer "does the delta match the stated intent?". That was well
+# calibrated but answered the wrong question: it graded the CONTRIBUTOR. An edit that
+# landed exactly as described while stripping safety signal scored ~92, and an edit that
+# silently failed to apply scored ~15 despite leaving the analysis untouched. Reviewers
+# read this number to decide whether merging helps or hurts the assessment, so the score
+# now measures effect on the ANALYSIS and intent match is demoted to evidence.
+#
+# These tests pin the semantics at the seams where a future edit could quietly revert them.
+
+def _empty_impact(partial: bool = False) -> dict:
+    return {"no_op": True, "changed_tds": [], "per_repo": {}, "portfolio": {},
+            "safety_alerts": [], "coverage_gaps": [],
+            "coverage": {"compared": 2 if partial else 24, "baseline_total": 24,
+                         "partial": partial, "not_analyzed": ["x"] * 22 if partial else [],
+                         "unbaselined": []}}
+
+
+def test_an_empty_delta_is_neutral_whether_or_not_it_was_predicted():
+    """THE defining test of the new semantics.
+
+    The analysis is in byte-identical shape in both cases, so the two scores must land in
+    the same neighbourhood. Under intent-match scoring these were 80 and 25 — a 55-point
+    spread over a delta that did not differ at all.
+    """
+    summ = judge.summarize_impact(_empty_impact())
+    predicted = judge.judge_heuristic({"what": ""}, summ)
+    unmet = judge.judge_heuristic({"what": "reclassify API-Q2 to RISK-SAFETY"}, summ)
+    assert predicted["analysis_effect"] == "neutral"
+    assert unmet["analysis_effect"] == "neutral"
+    assert abs(predicted["score"] - unmet["score"]) <= 15, (
+        "an unmet intent must not swing the score far — the ANALYSIS is identical in both "
+        f"cases. predicted={predicted['score']} unmet={unmet['score']}")
+
+
+def test_a_neutral_change_lands_mid_band_not_at_either_extreme():
+    """A harmless change is not a good change and not a bad one.
+
+    Both extremes are wrong: a high score says "merge this, it helps" and a low score
+    says "this damaged something". Neither is true of a no-op.
+    """
+    for intent in ({"what": ""}, {"what": "reclassify API-Q2 to RISK-SAFETY"}):
+        v = judge.judge_heuristic(intent, judge.summarize_impact(_empty_impact()))
+        assert 35 <= v["score"] <= 70, \
+            f"neutral change scored {v['score']}, outside the neutral band, for {intent}"
+
+
+def test_an_unmet_intent_still_becomes_a_concern():
+    # Demoted from driving the score, NOT dropped: "your edit did not take effect" is the
+    # single most actionable thing the harness can tell a contributor.
+    v = judge.judge_heuristic({"what": "reclassify API-Q2 to RISK-SAFETY"},
+                              judge.summarize_impact(_empty_impact()))
+    assert v["no_op_warning"] is True
+    assert v["verdict"] == "needs-work", "an edit that never landed still needs work"
+    blob = "\n".join(c["detail"] for c in v["concerns"]).lower()
+    assert "no-op" in blob or "never took effect" in blob
+
+
+def test_offline_heuristic_never_claims_the_analysis_improved():
+    # Direction-of-effect is exactly the judgement that needs a model. Claiming "improves"
+    # offline would let a degradation ride out as a positive verdict whenever Bedrock is
+    # unreachable — the fallback must be honest about what it cannot assess.
+    moved = {"no_op": False, "changed_tds": ["agentic-readiness-analysis"],
+             "per_repo": {"r": {"D1_ara_findings": {"added": ["DATA-Q2"], "removed": [],
+                                                    "reseveritied": []}}},
+             "portfolio": {}, "safety_alerts": [], "coverage_gaps": [],
+             "coverage": {"compared": 24, "baseline_total": 24, "partial": False,
+                          "not_analyzed": [], "unbaselined": []}}
+    v = judge.judge_heuristic({"what": "tighten DATA scoring"}, judge.summarize_impact(moved))
+    assert v["analysis_effect"] == "neutral", \
+        "the offline heuristic cannot judge direction and must not assert 'improves'"
+    assert "cannot" in v["rationale"].lower()
+
+
+def test_safety_floor_marks_the_analysis_as_degraded():
+    """A tier-material alert IS a degradation, by the rubric's own arithmetic.
+
+    If the floor only set verdict/score, the comment could render "improves the analysis"
+    next to a SAFETY HOLD — the primary axis has to agree with the hold.
+    """
+    v = judge._enforce_safety_floor({**_lgtm(), "analysis_effect": "improves"},
+                                    {"safety_alerts": _MR14_ALERTS})
+    assert v["analysis_effect"] == "degrades"
+    assert v["safety_hold"] is True
+
+
+def test_system_prompt_scores_analysis_effect_not_intent_match():
+    sp = judge.SYSTEM_PROMPT
+    assert "analysis_effect" in sp
+    low = sp.lower()
+    # The primary question must be stated as an effect on the analysis...
+    assert "better or worse" in low
+    # ...intent match must be explicitly demoted...
+    assert "secondary" in low
+    # ...and the mid band must be named, or the model reaches for an extreme on a no-op.
+    assert "neutral" in low
+
+
+def test_system_prompt_forbids_scoring_on_description_accuracy_alone():
+    """Both failure directions the inversion is meant to prevent, spelled out for the model."""
+    low = judge.SYSTEM_PROMPT.lower()
+    assert "do not score a harmless or beneficial change low merely because the" in low
+    assert "described accurately" in low
+
+
+def test_coerce_defaults_effect_to_neutral_not_degrades():
+    # A model that omits the field has not claimed harm. Defaulting to "degrades" would
+    # trip the degradation framing on well-behaved changes whenever the JSON was terse.
+    assert judge._coerce_verdict({"score": 80})["analysis_effect"] == "neutral"
+    assert judge._coerce_verdict({"analysis_effect": "nonsense"})["analysis_effect"] == "neutral"
+    assert judge._coerce_verdict({"analysis_effect": "degrades"})["analysis_effect"] == "degrades"
+
+
+def test_effect_survives_coercion_for_every_valid_value():
+    for eff in ("improves", "neutral", "degrades"):
+        assert judge._coerce_verdict({"analysis_effect": eff})["analysis_effect"] == eff
+
+
 # --- intent parsing ------------------------------------------------------------------
 
 def test_intent_freeform_becomes_what():

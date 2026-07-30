@@ -12,7 +12,8 @@
 | D5 drift check | Band-crossing only — flag on `score_rating` band change, not raw numeric wobble |
 | Before/after mechanism | **Committed golden reports** — baseline JSON per fixture; MR re-runs only the changed TD's fixtures and diffs vs golden |
 | Judge gate | **Advisory MR comment only** — never blocks the pipeline |
-| Judge intent input | Judge scores delta **against contributor intent** captured in a GitLab MR-template field (§8.1) |
+| **What the judge score means** | **Effect on the ANALYSIS** — "does this change make the ARA/MOD assessment better or worse?" (`analysis_effect: improves \| neutral \| degrades`; 85+ improvement, 45–59 neutral, <45 degradation). **Not** intent-match — see §6.1 |
+| Judge intent input | Contributor intent captured in a GitLab MR-template field (§8.1). Used as **evidence** — it separates signal from nondeterministic noise, and a mismatch lowers confidence and raises a concern — but it does **not** drive the score |
 | Trigger model | **Watched-TD deterministic gate** (`should-run.sh`, NOT an LLM). Runs when a change lands under any *watched TD directory* (`definitions/managed/**` SKILL.md + references/); everything else is skipped unless it is a fixture change. The mechanism is generic (`HARNESS_TD_PATHS`); the config is the 4 managed TDs. Manual `harness:full` for a full re-baseline. LLM is spent only at the *end* (judge). |
 | What contributors edit | Contributors edit the **TD definitions themselves** — `definitions/managed/<td>/SKILL.md` + `references/` — which ARE git-visible. The harness runs the *edited* TD via `atx custom def exec` (see §7), so the diff under review is exactly what gets tested. The published managed TD on AWS Transform Continuous Modernization stays authoritative until an approved change is published there. |
 | CI platform | **Runs on GitLab ONLY** — AWS access via the **AWS Credential Vendor** on the shared runner fleet (OIDC does NOT work on internal `gitlab.aws.dev` — IAM can't reach it to verify tokens). One CI var `AWS_CREDS_TARGET_ROLE` points at a per-project IAM role in the target AWS account; the runner auto-vends temp creds. GitHub stays **open for contributions** (issue/PR templates kept) but runs **no** automation; content mirrors both ways. |
@@ -24,7 +25,35 @@ Give any contributor **automatic feedback on whether a change they made to a man
 
 Two questions the harness answers on every PR/MR:
 1. **Did this change do anything?** — Show the concrete delta in analysis output across a representative set of use cases. A TD edit that moves zero findings/pathways is probably a no-op (or a mistake).
-2. **Is the change good or bad?** — An LLM-as-judge scores the delta against the contributor's stated intent and posts an advisory verdict (score + `LGTM` / `needs-work` + `quality_regression` flag + rationale citing specific question/pathway/program IDs), plus up to 3 improvement suggestions.
+2. **Is the change good or bad *for the analysis*?** — An LLM-as-judge scores whether the delta makes the ARA/MOD assessment more or less accurate/useful/safe-to-act-on, and posts an advisory verdict (score + `analysis_effect` + `LGTM` / `needs-work` + `quality_regression` flag + rationale citing specific question/pathway/program IDs), plus up to 3 improvement suggestions.
+
+### 6.1 Why the score measures analysis effect, not intent match
+
+The score originally answered *"does the observed delta match the contributor's stated intent?"* That was well-calibrated but **graded the contributor instead of the analysis**, and it failed in both directions:
+
+- **False positive:** `dropped-questions` — a change described accurately and executed exactly as described, which left the report answering **41 of 43** rubric questions. Intent-match rewards this; it is a coverage regression.
+- **False negative:** an edit that silently never applied scored ~15 even though the analysis was **byte-identical** to baseline — nothing was harmed.
+
+The MR !14 shape is the canonical case: intent achieved *perfectly*, and a BLOCKER lost with the readiness tier relaxed as a side effect.
+
+Intent is still supplied and still reported — it is what lets the judge separate real movement from the analysis agent's run-to-run nondeterminism (§6.2), and a mismatch means the contributor may not understand what their edit did. But it is **evidence that adjusts confidence**, not the quantity being measured.
+
+**A neutral change lands mid-band (45–59), not low.** A no-op neither helps nor harms, so the bottom of the range is reserved for actual damage to the assessment. The rubric is also deliberately **asymmetric**: a change making the analysis *stricter* outranks one making it *more permissive*, because only the latter can present a system as safer than the evidence supports.
+
+Calibrated with `harness/calibrate-judge.py` (8 scenarios, **8/8 in band**):
+
+| score | scenario | effect | intent match | note |
+|---:|---|---|---|---|
+| 78 | clean-reclassify | improves | aligned | severity now reflects real risk |
+| 78 | stricter-rubric | improves | aligned | harsher = safe direction |
+| 50 | no-op-expected | neutral | aligned | nothing gained, nothing harmed |
+| 47 | no-op-unexpected | neutral | mismatch | **same delta**, same analysis state |
+| 35 | risk-safety-drift | degrades | mismatch | safety signal downgraded (tier-inert) |
+| 18 | mr14-as-shipped 🚨 | degrades | partial | intent achieved, BLOCKER lost |
+| 12 | dropped-questions 🚨 | degrades | **aligned** | described perfectly, answers 41/43 |
+| 5 | gutted-rubric 🚨 | degrades | partial | Agent-Ready under an innocuous intent |
+
+The two rows that prove the semantics: **`dropped-questions` scores 12 while `intent_match: aligned`**, and the two no-op rows **converged from 95/15 to 50/47**.
 
 ## 2. What the managed TDs emit (the contract the harness scores against)
 

@@ -1,22 +1,39 @@
 #!/usr/bin/env python3
 """
-judge.py — intent-aware LLM-as-judge for the change-impact harness (DESIGN.md §6).
+judge.py — LLM-as-judge for the change-impact harness (DESIGN.md §6).
 
 Consumes the deterministic delta (impact.json from diff-reports.py) plus the
-contributor's STATED INTENT (the MR description / --intent) and asks an LLM to score
-the delta *against that intent*. The verdict is ADVISORY — it is posted as an MR
-comment and NEVER fails the pipeline (see .gitlab-ci.yml `allow_failure: true`).
+contributor's stated intent (the MR description / --intent) and asks an LLM:
+**is this change GOOD FOR THE ANALYSIS?** The verdict is ADVISORY — it is posted as an
+MR comment and NEVER fails the pipeline (see .gitlab-ci.yml `allow_failure: true`).
 
-Why intent matters (user's explicit requirement): a delta of "+40 findings" is GOOD
-if the intent was "tighten AUTH scoring" and BAD if the intent was "fix a typo in a
-recommendation string." The judge scores the observed delta relative to what the
-contributor said they were trying to do — not against raw baseline.
+WHAT THE SCORE MEASURES (changed deliberately — see below):
+  score = "does this change make the ARA/MOD analysis BETTER or WORSE?"
+
+It used to mean "does the observed delta match the contributor's stated intent?" That
+was measurable and well-calibrated, but it answered the wrong question. Intent-match
+scores the CONTRIBUTOR, not the analysis: an edit that lands exactly as described but
+strips safety signal scored ~92, while an edit that quietly failed to apply scored ~15
+even though the analysis was left completely untouched and unharmed. Reviewers read
+this number to decide whether merging helps or hurts the assessment, so that is now
+what it measures.
+
+Intent is still supplied and still scored, but it has been DEMOTED to evidence:
+  * it tells the judge which movement is signal and which is run-to-run noise
+    (essential — see _scope_note), and
+  * a mismatch means the contributor may not understand what they changed, which is a
+    reason to lower CONFIDENCE and raise a concern — not a reason to call an
+    analysis-neutral change bad.
+
+`intent_match` and `no_op_warning` therefore still ride in the output; they just no
+longer drive the number.
 
 Output (stdout, JSON — schema from DESIGN.md §6):
   {
-    "score": 0-100,
+    "score": 0-100,               # is the ANALYSIS better or worse for this change?
+    "analysis_effect": "improves" | "neutral" | "degrades",
     "verdict": "LGTM" | "needs-work",
-    "intent_match": "aligned" | "partial" | "mismatch",
+    "intent_match": "aligned" | "partial" | "mismatch",   # evidence, not the score
     "rationale": "…cites AUTH-Q5, pathway ids, program acronyms…",
     "concerns": [ { "dimension": "D3", "detail": "…" } ],
     "no_op_warning": false
@@ -45,6 +62,8 @@ DEFAULT_MODEL = os.environ.get(
     "HARNESS_JUDGE_MODEL", "anthropic.claude-sonnet-5-20250929-v1:0")
 VALID_VERDICTS = {"LGTM", "needs-work"}
 VALID_MATCHES = {"aligned", "partial", "mismatch"}
+# The primary axis the score now tracks: effect on the ANALYSIS, not on intent-match.
+VALID_EFFECTS = {"improves", "neutral", "degrades"}
 
 
 # ---------------------------------------------------------------------------------------
@@ -218,21 +237,48 @@ def _note_dimension(key: str, d: Any, scope: str, moved: set, highlights: list) 
 SYSTEM_PROMPT = """You are reviewing a proposed change to an AWS Transform analysis \
 rubric/config for agentic-readiness (ARA) and modernization-readiness (MOD) assessments. \
 The change is NOT live yet — the "before" is what the service produces today, the "after" \
-is what the proposed change produces. Your job has two parts:
-1. Does the OBSERVED DELTA match the contributor's STATED INTENT?
-2. Is the change a QUALITY REGRESSION, or does it make sense — and can it be improved?
+is what the proposed change produces.
+
+YOUR PRIMARY QUESTION — the one the score answers:
+    Does this change make the ANALYSIS BETTER OR WORSE?
+
+"Better" means the assessment becomes more accurate, more useful, or safer to act on: \
+real risks surfaced that were previously missed, severities that better reflect actual \
+danger, tiers that better reflect true readiness, clearer or better-targeted \
+recommendations. "Worse" means the assessment loses signal, understates risk, answers \
+less of the rubric, or would lead a reader to a decision the evidence does not support.
+
+Judge the ANALYSIS, not the contributor. A change can be sloppily described and still \
+improve the analysis; it can be described perfectly and still damage it. Score the \
+effect on the output.
 
 You are advisory: humans make the final call. Be concrete and cite specifics \
 (question_ids like AUTH-Q5, pathway ids, program acronyms like EBA/MAP) from the delta.
 
 Scoring rubric:
-- intent_match = "aligned"  : the delta does what the intent said it would.
-- intent_match = "partial"  : the delta partly matches, or moves extra dimensions the
-                              intent didn't mention.
-- intent_match = "mismatch" : the delta contradicts the intent, or moves entirely
-                              different dimensions.
+- analysis_effect = "improves" : the assessment is now more accurate / safer to act on.
+- analysis_effect = "neutral"  : the assessment is materially unchanged in quality —
+                              INCLUDING the case where nothing moved at all. A no-op is
+                              not a defect in the analysis; it is simply no improvement.
+- analysis_effect = "degrades" : the assessment lost signal, understates risk, or covers
+                              less of the rubric than before.
+
+- intent_match is SECONDARY EVIDENCE, not the thing being scored. Report it honestly:
+  - "aligned"  : the delta does what the intent said it would.
+  - "partial"  : the delta partly matches, or moves extra dimensions the intent
+                 didn't mention.
+  - "mismatch" : the delta contradicts the intent, or moves entirely different
+                 dimensions.
+  A mismatch means the contributor may not understand what their edit did, so it LOWERS
+  CONFIDENCE and MUST become a concern — but it does NOT by itself make the change bad
+  for the analysis. Do NOT score a harmless or beneficial change low merely because the
+  description was inaccurate, and do NOT score a damaging change high merely because it
+  was described accurately.
 - no_op_warning = true       : the intent claimed a behavioural change but the delta is
-                              empty (nothing moved). This is almost always a problem.
+                              empty (nothing moved) — the edit likely never took effect,
+                              or the baselines are stale. Raise it as a concern; it is an
+                              unmet expectation, NOT damage to the analysis, so it should
+                              not by itself sink the score.
 - quality_regression = true  : the delta plausibly makes the analysis WORSE — e.g. a tier
                               now contradicts its own blocker/severity counts, a pathway
                               fires when the repo clearly can't trigger it (or stops firing
@@ -262,16 +308,32 @@ Scoring rubric:
                               A COVERAGE GAPS section means a report stopped answering part
                               of the rubric (ARA has 43 questions, MOD 37). Treat that as a
                               defect, never as noise.
-- verdict = "LGTM" when the change is safe, intent-aligned, and not a regression;
+- verdict = "LGTM" when the change is safe for the analysis and not a regression;
             "needs-work" otherwise.
-- score 0-100: higher = more confident the change is good, matches intent, and is not a
-            regression.
+
+- score 0-100 = HOW MUCH BETTER OR WORSE THE ANALYSIS IS, and how confident you are:
+    85-100  clear improvement — real risk surfaced, or severity/tier now better reflects
+            reality. Well-evidenced.
+    60-84   likely improvement, or a safe change with some uncertainty (e.g. partial
+            coverage, or an inaccurate description you had to reason around).
+    45-59   genuinely NEUTRAL — the analysis is neither better nor worse. An empty delta
+            belongs here by default: nothing was gained, but nothing was harmed. Land
+            here for "no effect on quality" rather than reaching for an extreme.
+    20-44   likely degradation — signal lost, risk understated, or rubric coverage fell.
+    0-19    clear, serious degradation — a system is newly presented as safer than the
+            evidence supports.
+  A NEUTRAL change is a MID score, not a low one. Reserve the bottom of the range for
+  actual damage to the assessment. Note the asymmetry, and honour it: a change that
+  makes the analysis harsher/more cautious is far less dangerous than one that makes it
+  more permissive, so when uncertain, score a stricter change ABOVE a laxer one.
 - suggestions: 0-3 concrete, actionable improvements to the change (empty if none).
 
 Respond with ONLY a JSON object, no prose, matching exactly this schema:
 {"score": <int 0-100>, "verdict": "LGTM"|"needs-work",
+ "analysis_effect": "improves"|"neutral"|"degrades",
  "intent_match": "aligned"|"partial"|"mismatch",
- "rationale": "<2-4 sentences citing specifics>",
+ "rationale": "<2-4 sentences citing specifics; say plainly whether the ANALYSIS is
+               better, unchanged, or worse, and why>",
  "concerns": [{"dimension": "D1".."D5", "detail": "<...>"}],
  "quality_regression": <bool>,
  "suggestions": ["<concrete improvement>", ...],
@@ -448,35 +510,51 @@ def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
     concerns: list[dict] = []
     no_op_warning = no_op and intent_claims_change
 
+    # An empty delta is NEUTRAL for the analysis in BOTH branches below — nothing was
+    # gained and nothing was harmed. What differs is only how much we trust the
+    # contributor's description, which is a confidence signal, not damage. Under the old
+    # intent-match semantics the two branches scored 25 vs 80; now they sit close together
+    # and mid-range, because the analysis is in exactly the same state either way.
     if no_op:
+        effect = "neutral"
         if no_op_warning:
-            verdict, match, score = "needs-work", "mismatch", 25
+            verdict, match, score = "needs-work", "mismatch", 50
             concerns.append({"dimension": "-",
-                             "detail": "Intent describes a change but the delta is empty (no-op)."})
-            rationale = ("The contributor's intent describes a behavioural change, but the "
-                         "deterministic differ found NO movement across D1–D5. Either the "
-                         "rubric edit didn't land, or it was made in-service and the golden "
-                         "baselines need refreshing (fire harness:full).")
+                             "detail": "Intent describes a change but the delta is empty (no-op) "
+                                       "— the edit likely never took effect. The analysis is "
+                                       "unharmed, but the change also achieves nothing."})
+            rationale = ("The analysis is UNCHANGED — no movement across D1–D5 — so this "
+                         "neither improves nor degrades the assessment. But the intent "
+                         "describes a behavioural change, so the edit probably didn't land: "
+                         "either it was made in-service and the golden baselines need "
+                         "refreshing (fire harness:full), or it has no effect at all. "
+                         "needs-work reflects the unmet expectation, not damage.")
         else:
-            verdict, match, score = "LGTM", "aligned", 80
+            verdict, match, score = "LGTM", "aligned", 55
             rationale = ("No analysis output moved and the intent did not claim one would — "
-                         "consistent with a docs/metadata-only change.")
-            # A clean result over 2 of 26 reports is weaker evidence than a full sweep.
-            # Don't hand out an unqualified 80 for a scoped run.
+                         "consistent with a docs/metadata-only change. Neutral for the "
+                         "analysis: nothing gained, nothing harmed.")
+            # A clean result over 2 of 26 reports is weaker evidence than a full sweep,
+            # so trim confidence — but stay in the neutral band, since partial coverage
+            # is missing evidence about the analysis, not evidence of harm to it.
             cov = impact_summary.get("coverage") or {}
             if cov.get("partial"):
-                score = 70
+                score = 48
                 rationale += (
                     f" NOTE: only {cov.get('compared')} of {cov.get('baseline_total')} baseline "
                     "reports were re-analyzed (the MR path runs just the fixtures that exercise "
                     "the edit), so this is not proof the change is inert portfolio-wide.")
     else:
-        # Something moved. Without an LLM we can't verify it matches intent word-for-word,
-        # so we report the movement and lean neutral-positive, flagging for human review.
-        verdict, match, score = "LGTM", "partial", 65
+        # Something moved. Offline we cannot assess whether the analysis got BETTER or WORSE
+        # — that judgement is exactly what needs a model. So report the movement, claim
+        # nothing about direction, and sit in the neutral band. The deterministic safety
+        # floor below still catches the one case that must never pass quietly.
+        effect, verdict, match, score = "neutral", "LGTM", "partial", 55
         rationale = (f"Delta moved dimensions {moved} across {impact_summary['changed_tds']}. "
-                     "Heuristic (offline) mode cannot confirm alignment with the stated intent — "
-                     "a human should confirm the moved dimensions match what was intended. "
+                     "Heuristic (offline) mode CANNOT judge whether the analysis improved or "
+                     "degraded — that needs the LLM judge — so this score is a neutral "
+                     "placeholder, not a positive assessment. A human should confirm the "
+                     "moved dimensions make the assessment better. "
                      "Highlights: " + "; ".join(impact_summary["highlights"][:4]))
         for h in impact_summary["highlights"][:6]:
             dim = h.split("]", 1)[-1].strip().split(" ", 1)[0] if "]" in h else "-"
@@ -485,6 +563,7 @@ def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
     return {
         "score": score,
         "verdict": verdict,
+        "analysis_effect": effect,
         "intent_match": match,
         "rationale": rationale,
         "concerns": concerns,
@@ -552,8 +631,13 @@ def _enforce_safety_floor(verdict: dict, impact_summary: dict) -> dict:
     verdict["concerns"] = _append_alert_concerns(verdict, alerts, gaps)
     verdict["quality_regression"] = True
     verdict["verdict"] = "needs-work"
-    # Cap rather than zero: the judge's own score still carries information about how well
-    # the change matched its intent, which stays useful once a human clears the alert.
+    # A tier-material alert IS a degradation of the analysis by definition: a system is now
+    # presented as safer than it was, from the rubric's own arithmetic. Under the new
+    # score semantics that has to be stated on the primary axis, not just in the verdict —
+    # otherwise the comment could read "degrades the analysis" nowhere while holding.
+    verdict["analysis_effect"] = "degrades"
+    # Cap rather than zero: the judge's own score still carries information about the rest
+    # of the change, which stays useful once a human clears the alert.
     verdict["score"] = min(int(verdict.get("score", 50) or 0), 40)
     # A machine-readable marker so the MR comment and any downstream tooling can tell a
     # human-reviewable safety hold apart from an ordinary needs-work verdict.
@@ -566,6 +650,11 @@ def _coerce_verdict(v: dict) -> dict:
         "score": int(max(0, min(100, v.get("score", 50)))),
         "verdict": v.get("verdict") if v.get("verdict") in VALID_VERDICTS else "needs-work",
         "intent_match": v.get("intent_match") if v.get("intent_match") in VALID_MATCHES else "partial",
+        # The primary axis. Defaults to "neutral", NOT "degrades": an absent field means the
+        # model did not claim harm, and inventing a degradation would trip the safety
+        # framing on well-behaved changes.
+        "analysis_effect": (v.get("analysis_effect")
+                            if v.get("analysis_effect") in VALID_EFFECTS else "neutral"),
         "rationale": str(v.get("rationale") or "").strip() or "(no rationale)",
         "concerns": [c for c in (v.get("concerns") or []) if isinstance(c, dict)],
         "quality_regression": bool(v.get("quality_regression", False)),

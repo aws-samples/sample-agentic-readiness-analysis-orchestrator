@@ -5,10 +5,18 @@ the four **managed** AWS Transform TDs (`agentic-readiness-analysis`,
 `modernization-readiness-analysis`, `portfolio-agentic-readiness-analysis`,
 `portfolio-modernization-readiness-analysis`). On each merge request it re-runs the
 changed TD over a representative set of fixtures, computes a deterministic D1–D5
-delta versus committed golden baselines, and has an LLM-as-judge score that delta
-against the contributor's stated intent — posting the verdict as an MR comment. It
+delta versus committed golden baselines, and has an LLM-as-judge score **whether that
+delta makes the analysis better or worse** — posting the verdict as an MR comment. It
 never blocks a merge. For the full design (dimensions, differ contract, trigger
 model), see [`DESIGN.md`](./DESIGN.md).
+
+The judge's 0–100 score answers one question: **does this change make the ARA/MOD
+assessment more accurate, more useful, and safer to act on?** (85+ clear improvement ·
+45–59 neutral · under 45 likely degradation). A no-op is *neutral*, so it lands
+mid-band — the bottom of the range is reserved for real damage to the assessment. The
+contributor's stated intent is reported as supporting evidence and shapes confidence,
+but does **not** drive the score: a change can be described perfectly and still degrade
+the analysis. See [`DESIGN.md` §6.1](./DESIGN.md) for the calibration ladder.
 
 > **Automation is GitLab-only.** All CI runs on `gitlab.aws.dev`, where AWS access
 > is granted via the **AWS Credential Vendor** (see below). GitHub stays open for
@@ -125,8 +133,9 @@ Two advisory jobs, both `allow_failure: true` (they never block a merge). See
   watched TD directory (`definitions/managed/<td>/`, configurable via `HARNESS_TD_PATHS`)
   or a fixture; otherwise it skips. It publishes the edited TD as a custom def and runs
   it over the changed fixtures (`--changed-only --validate`), diffs against `golden/`,
-  and the judge scores the delta against the **MR description** (the intent, per the
-  TD-change MR template). The verdict is posted as an MR comment.
+  and the judge scores the delta's **effect on the analysis**, reading the **MR
+  description** (per the TD-change MR template) as intent evidence. The verdict is
+  posted as an MR comment.
 - **`harness:full`** — manual only, via the **Run pipeline** button (web-triggered).
   Use it to force a full re-baseline (e.g. after publishing an approved change). Set
   `CHANGED_TD`, `RUN_SCOPE` (default `all`), and `RUN_INTENT` when launching. With no

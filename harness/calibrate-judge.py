@@ -12,6 +12,16 @@ changed" through "silently weakened the safety rubric", run the real judge over 
 print the scores in expected order. Each scenario carries the band it SHOULD land in, and
 the script reports which ones fall outside it — that is the calibration signal.
 
+WHAT THE BANDS ENCODE: the score measures EFFECT ON THE ANALYSIS ("is the assessment
+better or worse?"), NOT intent-match. Two rows exist specifically to hold that line:
+  * `dropped-questions` is described accurately and executed exactly as described, yet
+    scores near the floor — the report now answers 41 of 43 rubric questions. Under the
+    old intent-match semantics this scored well, which is why the semantics changed.
+  * the two `no-op` rows share an IDENTICAL delta and must land in the same
+    neighbourhood. They used to score 95 and 15. If they diverge again, the score has
+    drifted back to grading the contributor instead of the analysis.
+A NEUTRAL change belongs MID-BAND — the floor is reserved for real damage.
+
 This is a diagnostic tool, not a test: it costs a Bedrock call per scenario and the analysis
 agent is nondeterministic, so it is run deliberately rather than in CI.
 
@@ -149,11 +159,13 @@ SCENARIOS = [
         "mutate": m_noop,
         "intent": "no rubric change — re-running the harness to confirm the baseline is stable",
         "edited": "",
-        "band": (75, 100),
-        "note": "An empty delta against an intent that PREDICTED an empty delta. Scores "
-                "HIGH: the harness confirmed exactly what was claimed. (My first band here "
-                "said 0-40 and the judge scored 95 — the judge was right and the band was "
-                "wrong, which is the whole reason this ladder exists.)",
+        "band": (40, 70),
+        "note": "An empty delta against an intent that predicted one. The analysis is "
+                "UNCHANGED, so this is NEUTRAL — mid band, not high. It scored 95 under the "
+                "old intent-match semantics; that was correct then (perfect prediction) and "
+                "wrong now (nothing was improved). Confirming stability is useful, but it "
+                "does not make the assessment better.",
+        "effect": "neutral",
     },
     {
         "name": "no-op-unexpected",
@@ -161,12 +173,14 @@ SCENARIOS = [
         "intent": "reclassify API-Q2 from RISK-QUALITY to RISK-SAFETY so unauthenticated "
                   "API surfaces stop being filed as mere quality issues",
         "edited": "API-Q2",
-        "band": (0, 40),
-        "note": "The SAME empty delta against an intent that described a real change. This "
-                "must score LOW: an edit that produced no movement usually means it never "
-                "took effect (e.g. edited in the AWS Transform service, baselines stale). "
-                "Same delta, opposite verdict — the score has to come from intent-vs-delta, "
-                "not from delta size alone.",
+        "band": (35, 65),
+        "note": "The SAME empty delta, against an intent describing a real change. The edit "
+                "probably never took effect, which is worth flagging — but the ANALYSIS is "
+                "in exactly the same state as no-op-expected, so it must score in the same "
+                "neighbourhood (slightly lower for the unmet expectation). This scored 15 "
+                "under intent-match semantics. The two no-op rows converging is THE test "
+                "that the score now tracks analysis effect rather than intent match.",
+        "effect": "neutral",
     },
     {
         "name": "clean-reclassify",
@@ -175,7 +189,10 @@ SCENARIOS = [
                   "unauthenticated API surface is a safety concern, not a quality one",
         "edited": "API-Q2",
         "band": (75, 100),
-        "note": "The ideal MR: intent stated, delta matches exactly, nothing else moved.",
+        "note": "A genuine IMPROVEMENT: an unauthenticated API surface is now correctly "
+                "treated as a safety concern rather than a quality nit, so the assessment "
+                "reflects real risk better. Scores high on analysis effect AND intent match.",
+        "effect": "improves",
     },
     {
         "name": "stricter-rubric",
@@ -183,20 +200,27 @@ SCENARIOS = [
         "intent": "promote DATA-Q1 to BLOCKER — unencrypted PII at rest should stop an "
                   "agent integration outright",
         "edited": "DATA-Q1",
-        "band": (70, 100),
-        "note": "Tightening the rubric. Must NOT be penalised as a regression — the tier "
-                "moved toward LESS agent-ready, which is the safe direction.",
+        "band": (75, 100),
+        "note": "Tightening the rubric surfaces real risk that was previously understated, "
+                "so it IMPROVES the analysis and should now rank at or above "
+                "clean-reclassify. Under intent-match semantics it scored 82 — docked for "
+                "moving more than the intent described. That deduction was right for intent "
+                "and wrong for the analysis: the tier moved toward LESS agent-ready, the "
+                "safe direction.",
+        "effect": "improves",
     },
     {
         "name": "risk-safety-drift",
         "mutate": m_risk_safety_drift,
         "intent": "reclassify API-Q2 from RISK-QUALITY to RISK-SAFETY",
         "edited": "API-Q2",
-        "band": (0, 45),
-        "note": "The stated edit (API-Q2) produced NOTHING while an unrelated question "
-                "moved. That is a real mismatch, so a low score is correct — but note there "
-                "is no HOLD: the DATA-Q1 drift is tier-inert while blockers remain, so it is "
-                "reported without vetoing. Low score, no hold, is the intended combination.",
+        "band": (15, 50),
+        "note": "DATA-Q1 lost its RISK-SAFETY class, so safety signal was DOWNGRADED — that "
+                "is a real (if tier-inert) degradation of the assessment, which is why this "
+                "stays low under the new semantics too. But the reason changed: it scores low "
+                "for LOSING SAFETY SIGNAL, not for failing to match its intent. Still NO "
+                "hold: tier-inert while blockers remain, so it is reported without vetoing.",
+        "effect": "degrades",
     },
     {
         "name": "mr14-as-shipped",
@@ -205,8 +229,11 @@ SCENARIOS = [
                   "unauthenticated API surface is a safety concern, not a quality one",
         "edited": "API-Q2",
         "band": (0, 40),
-        "note": "THE REGRESSION CASE. Intent achieved, but a BLOCKER was lost and the tier "
-                "relaxed. Shipped as LGTM/72 before the safety floor existed.",
+        "note": "THE REGRESSION CASE, and the clearest illustration of the new semantics: the "
+                "intent was achieved PERFECTLY, yet a BLOCKER was lost and the tier relaxed. "
+                "Intent-match would reward it; analysis-effect condemns it. Shipped as "
+                "LGTM/72 before the safety floor existed.",
+        "effect": "degrades",
     },
     {
         "name": "gutted-rubric",
@@ -216,6 +243,7 @@ SCENARIOS = [
         "band": (0, 25),
         "note": "Worst case: every blocker cleared and the repo declared Agent-Ready under "
                 "an innocuous-sounding intent. Must score at the floor.",
+        "effect": "degrades",
     },
     {
         "name": "dropped-questions",
@@ -223,8 +251,11 @@ SCENARIOS = [
         "intent": "remove redundant API-Q1 and AUTH-Q5 checks to shorten the rubric",
         "edited": "",
         "band": (0, 40),
-        "note": "Coverage gap. Surfaces as removed findings, which is what churn looks "
-                "like — the structural guard is the only thing that catches it.",
+        "note": "Coverage gap — the analysis now answers LESS of the rubric, so it is "
+                "strictly worse regardless of how the change was described. Surfaces as "
+                "removed findings, which is what churn looks like, so the structural guard "
+                "is the only thing that catches it.",
+        "effect": "degrades",
     },
 ]
 
@@ -253,6 +284,7 @@ def run_scenario(sc: dict, heuristic: bool, model: str) -> dict:
     return {
         "score": v["score"],
         "verdict": v["verdict"],
+        "effect": v.get("analysis_effect", "?"),
         "match": v["intent_match"],
         "hold": bool(v.get("safety_hold")),
         "regression": v["quality_regression"],
@@ -281,9 +313,14 @@ def main() -> int:
         r["name"] = sc["name"]
         r["band"] = sc["band"]
         r["note"] = sc["note"]
+        r["want_effect"] = sc.get("effect")
         if "error" not in r:
             lo, hi = sc["band"]
-            r["in_band"] = lo <= r["score"] <= hi
+            # The score and the primary axis must AGREE. A score of 78 alongside
+            # analysis_effect="degrades" is incoherent even though the number is in band,
+            # and the MR comment renders both — so check them together.
+            r["effect_ok"] = (not sc.get("effect")) or r["effect"] == sc["effect"]
+            r["in_band"] = lo <= r["score"] <= hi and r["effect_ok"]
         results.append(r)
         if not args.json:
             _print_one(r)
@@ -298,7 +335,22 @@ def main() -> int:
     if off:
         print("\nOUT OF BAND (score needs tuning, or the band was wrong):")
         for r in off:
-            print(f"  {r['name']}: scored {r['score']}, expected {r['band'][0]}-{r['band'][1]}")
+            why = f"scored {r['score']}, expected {r['band'][0]}-{r['band'][1]}"
+            if not r.get("effect_ok", True):
+                why += f"; effect={r['effect']}, expected {r['want_effect']}"
+            print(f"  {r['name']}: {why}")
+
+    # The two no-op rows carry the SAME delta. If they drift apart, the score has quietly
+    # gone back to grading the contributor rather than the analysis — the exact regression
+    # this ladder exists to catch, and one no single-scenario band would reveal.
+    ops = {r["name"]: r for r in results
+           if r["name"].startswith("no-op-") and "error" not in r}
+    if len(ops) == 2:
+        spread = abs(ops["no-op-expected"]["score"] - ops["no-op-unexpected"]["score"])
+        verdict = "OK" if spread <= 20 else "DRIFTED"
+        print(f"\n[{verdict}] no-op convergence: identical deltas scored "
+              f"{ops['no-op-expected']['score']} vs {ops['no-op-unexpected']['score']} "
+              f"(spread {spread}; must stay <=20 — was 80/25 under intent-match scoring)")
 
     # Ordering matters more than any single score: a reviewer reads the number as a ranking.
     scored = [r for r in results if "error" not in r]
@@ -315,8 +367,9 @@ def _print_one(r: dict) -> None:
         print(f"  ERROR: {r['error']}")
         return
     mark = "OK " if r.get("in_band") else "OFF"
+    want = f" (want {r['want_effect']})" if r.get("want_effect") else ""
     print(f"  [{mark}] score {r['score']} (expected {r['band'][0]}-{r['band'][1]})  "
-          f"verdict={r['verdict']}  match={r['match']}")
+          f"effect={r['effect']}{want}  verdict={r['verdict']}  match={r['match']}")
     print(f"  hold={r['hold']}  regression={r['regression']}  no_op={r['no_op']}  "
           f"alerts={r['alerts']} ({r['material']} tier-material)  gaps={r['gaps']}")
     print(f"  expected: {r['note']}")

@@ -38,15 +38,28 @@ v = json.load(open(sys.argv[1]))
 score = v.get("score", "?")
 verdict = v.get("verdict", "?")
 match = v.get("intent_match", "?")
+effect = v.get("analysis_effect", "?")
 emoji = {"LGTM": "✅", "needs-work": "⚠️"}.get(verdict, "❓")
 match_emoji = {"aligned": "🟢", "partial": "🟡", "mismatch": "🔴"}.get(match, "⚪")
+# The score measures EFFECT ON THE ANALYSIS, so that axis leads and intent-match trails.
+effect_emoji = {"improves": "📈", "neutral": "➖", "degrades": "📉"}.get(effect, "❓")
+effect_label = {"improves": "improves the analysis",
+                "neutral": "neutral for the analysis",
+                "degrades": "DEGRADES the analysis"}.get(effect, effect)
 engine = v.get("_engine", "?")
 
 lines = []
 lines.append(f"### {emoji} Change-Impact Harness — advisory verdict")
 lines.append("")
 lines.append(f"**Verdict:** {verdict} &nbsp;|&nbsp; **Score:** {score}/100 "
-             f"&nbsp;|&nbsp; **Intent match:** {match_emoji} {match}")
+             f"&nbsp;|&nbsp; **Effect:** {effect_emoji} {effect_label}")
+# Spell out what the number means. Without this a reviewer reads a mid score as a bad
+# grade, when the mid band is exactly where a harmless change is supposed to land.
+lines.append("")
+lines.append(f"<sub>Score = does this change make the ARA/MOD analysis better or worse "
+             f"(85+ clear improvement · 45-59 neutral · under 45 likely degradation). "
+             f"Intent match: {match_emoji} {match} — reported as supporting evidence, it "
+             f"does not drive the score.</sub>")
 # A safety hold outranks the generic regression note and replaces it. This is not a
 # judgement call but deterministic rubric arithmetic (lost BLOCKER, relaxed readiness
 # tier, dropped rubric questions), so it is stated as fact and placed first.

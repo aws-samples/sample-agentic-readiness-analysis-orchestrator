@@ -228,6 +228,51 @@ def test_safety_hold_renders_a_prominent_block():
     assert r.stderr.index("SAFETY HOLD") < r.stderr.index("likely noise")
 
 
+def test_comment_leads_with_analysis_effect_and_explains_the_score():
+    """The score means "is the analysis better or worse" — the comment must say so.
+
+    Without the legend a reviewer reads a mid score as a bad grade, when mid is exactly
+    where a harmless change is supposed to land. And intent match must be visibly demoted,
+    or the old reading survives in the reader even though the code changed.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "v.json"
+        p.write_text(json.dumps({
+            "score": 90, "verdict": "LGTM", "analysis_effect": "improves",
+            "intent_match": "partial", "quality_regression": False,
+            "rationale": "DATA-Q1 promoted to BLOCKER surfaces real risk.",
+        }))
+        r = subprocess.run(
+            ["bash", str(SCRIPT), str(p)],
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": tmp,
+                 "CI_PROJECT_ID": "1", "CI_MERGE_REQUEST_IID": "14",
+                 "CI_API_V4_URL": FAKE_API, "HARNESS_MR_TOKEN": "pat"},
+            capture_output=True, text=True, timeout=120)
+    assert "improves the analysis" in r.stderr
+    assert "better or worse" in r.stderr, "the score legend is missing"
+    assert "does not drive the score" in r.stderr, "intent match is not shown as demoted"
+    # Effect leads, intent match trails.
+    assert r.stderr.index("improves the analysis") < r.stderr.index("Intent match")
+
+
+def test_degrades_is_rendered_unmissably():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "v.json"
+        p.write_text(json.dumps({
+            "score": 20, "verdict": "needs-work", "analysis_effect": "degrades",
+            "intent_match": "aligned", "quality_regression": True,
+            "rationale": "AUTH-Q5 lost BLOCKER status.",
+        }))
+        r = subprocess.run(
+            ["bash", str(SCRIPT), str(p)],
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": tmp,
+                 "CI_PROJECT_ID": "1", "CI_MERGE_REQUEST_IID": "14",
+                 "CI_API_V4_URL": FAKE_API, "HARNESS_MR_TOKEN": "pat"},
+            capture_output=True, text=True, timeout=120)
+    # An aligned intent must not soften a degradation — that pairing IS the MR !14 shape.
+    assert "DEGRADES the analysis" in r.stderr
+
+
 def test_render_script_has_no_apostrophes():
     """The heredoc lives inside $(...) and bash 3.2 re-parses the substitution body.
 
