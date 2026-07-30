@@ -5,18 +5,40 @@ the four **managed** AWS Transform TDs (`agentic-readiness-analysis`,
 `modernization-readiness-analysis`, `portfolio-agentic-readiness-analysis`,
 `portfolio-modernization-readiness-analysis`). On each merge request it re-runs the
 changed TD over a representative set of fixtures, computes a deterministic D1–D5
-delta versus committed golden baselines, and has an LLM-as-judge score **whether that
-delta makes the analysis better or worse** — posting the verdict as an MR comment. It
-never blocks a merge. For the full design (dimensions, differ contract, trigger
-model), see [`DESIGN.md`](./DESIGN.md).
+delta versus committed golden baselines, re-scores the regenerated reports for accuracy,
+and has an LLM-as-judge decide **whether that delta makes the analysis better or worse**
+— posting the verdict as an MR comment. It never blocks a merge. For the full design
+(dimensions, differ contract, trigger model), see [`DESIGN.md`](./DESIGN.md).
 
-The judge's 0–100 score answers one question: **does this change make the ARA/MOD
-assessment more accurate, more useful, and safer to act on?** (85+ clear improvement ·
-45–59 neutral · under 45 likely degradation). A no-op is *neutral*, so it lands
-mid-band — the bottom of the range is reserved for real damage to the assessment. The
-contributor's stated intent is reported as supporting evidence and shapes confidence,
-but does **not** drive the score: a change can be described perfectly and still degrade
-the analysis. See [`DESIGN.md` §6.1](./DESIGN.md) for the calibration ladder.
+**There is one score, on one scale.** `score-reports.py` grades a report's **accuracy** —
+how well it is grounded in the fixture's actual source, with misses (recall) and
+fabrications (precision) counting against it, weighted so a missed BLOCKER costs far more
+than a spurious INFO. That produces a number from **0.000 to 1.000**. The committed
+baseline in [`golden-accuracy-baseline.json`](./golden-accuracy-baseline.json) is exactly
+that measurement over the golden reports, published in [`SCORES.md`](./SCORES.md).
+
+On a merge request the **same scorer** re-scores the reports the *changed* TD just
+produced, the same way. The judge does not invent a second scale — it consumes those two
+numbers and reasons about the **direction**:
+
+| Measured move | What the judge reports |
+| --- | --- |
+| `delta >= threshold` | a measured accuracy **improvement** |
+| `|delta| < threshold` | **within noise — NOT MEASURED**, reported as neutral |
+| `delta <= -threshold` | a measured accuracy **regression** |
+
+`threshold` is per fixture and comes from the data: `2·stddev` once the baseline has
+multiple samples, otherwise a fixed noise floor (ARA 0.10, MOD 0.02). A sub-threshold
+move is a different roll of the dice, not a result — which is why the harness re-baselines
+from several independent runs rather than one draw.
+
+If the regenerated report was **not** scored there is no accuracy number and no
+comparison, so the change **cannot be validated**. That is reported as a harness error to
+fix (`verdict: needs-work`), never as a pass and never as a substituted number.
+
+The contributor's stated intent is reported as supporting evidence, but does **not** drive
+the measurement: a change can be described perfectly and still degrade the analysis. See
+[`DESIGN.md` §6.1](./DESIGN.md) for the calibration ladder.
 
 > **Automation is GitLab-only.** All CI runs on `gitlab.aws.dev`, where AWS access
 > is granted via the **AWS Credential Vendor** (see below). GitHub stays open for

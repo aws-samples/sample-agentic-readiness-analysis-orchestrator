@@ -228,17 +228,20 @@ def test_safety_hold_renders_a_prominent_block():
     assert r.stderr.index("SAFETY HOLD") < r.stderr.index("likely noise")
 
 
-def test_comment_leads_with_analysis_effect_and_explains_the_score():
-    """The score means "is the analysis better or worse" — the comment must say so.
+def test_comment_shows_the_measured_accuracy_against_its_baseline():
+    """A measured number must be rendered WITH the baseline it is compared against.
 
-    Without the legend a reviewer reads a mid score as a bad grade, when mid is exactly
-    where a harmless change is supposed to land. And intent match must be visibly demoted,
-    or the old reading survives in the reader even though the code changed.
+    A bare "0.842" invites the reader to grade it out of 100 — the exact confusion the
+    single 0-1 scale exists to remove. Showing `score vs baseline (delta)` makes the
+    comparison, not the magnitude, the thing being read. Intent match must stay visibly
+    demoted, or the old "this number grades the contributor" reading survives in the reader
+    even though the code changed.
     """
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "v.json"
         p.write_text(json.dumps({
-            "score": 90, "verdict": "LGTM", "analysis_effect": "improves",
+            "score": 0.842, "baseline_score": 0.815, "scored": True,
+            "verdict": "LGTM", "analysis_effect": "improves",
             "intent_match": "partial", "quality_regression": False,
             "rationale": "DATA-Q1 promoted to BLOCKER surfaces real risk.",
         }))
@@ -249,10 +252,43 @@ def test_comment_leads_with_analysis_effect_and_explains_the_score():
                  "CI_API_V4_URL": FAKE_API, "HARNESS_MR_TOKEN": "pat"},
             capture_output=True, text=True, timeout=120)
     assert "improves the analysis" in r.stderr
-    assert "better or worse" in r.stderr, "the score legend is missing"
-    assert "does not drive the score" in r.stderr, "intent match is not shown as demoted"
+    # The measurement, its anchor, and the signed delta must all be present.
+    assert "0.842" in r.stderr and "0.815" in r.stderr, "score or baseline missing"
+    assert "+0.027" in r.stderr, "the signed delta against the baseline is missing"
+    assert "/100" not in r.stderr, "the retired 0-100 axis is still being rendered"
+    assert "grounded in the fixture" in r.stderr, "the accuracy legend is missing"
+    assert "does not drive the measurement" in r.stderr, \
+        "intent match is not shown as demoted"
     # Effect leads, intent match trails.
     assert r.stderr.index("improves the analysis") < r.stderr.index("Intent match")
+
+
+def test_comment_says_validation_was_not_possible_when_unscored():
+    """A missing score is an ERROR TO FIX, never a silent pass.
+
+    If the comment simply omitted the number, a scoring failure would render as an ordinary
+    verdict and a reviewer would merge on the strength of a measurement that was never
+    taken. The comment has to say the change could not be validated.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "v.json"
+        p.write_text(json.dumps({
+            "score": None, "baseline_score": None, "scored": False,
+            "verdict": "needs-work", "analysis_effect": "neutral",
+            "intent_match": "partial", "quality_regression": False,
+            "rationale": "Scoring step did not produce compare.json.",
+        }))
+        r = subprocess.run(
+            ["bash", str(SCRIPT), str(p)],
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": tmp,
+                 "CI_PROJECT_ID": "1", "CI_MERGE_REQUEST_IID": "14",
+                 "CI_API_V4_URL": FAKE_API, "HARNESS_MR_TOKEN": "pat"},
+            capture_output=True, text=True, timeout=120)
+    assert "not measured" in r.stderr
+    assert "could not be validated" in r.stderr, \
+        "a missing measurement must be stated as a failure to validate"
+    assert "score-reports.py" in r.stderr, "the comment must name the step to fix"
+    assert "None" not in r.stderr, "rendered a raw None instead of the unscored branch"
 
 
 def test_degrades_is_rendered_unmissably():

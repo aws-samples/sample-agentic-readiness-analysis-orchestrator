@@ -231,8 +231,13 @@ _COVERAGE_GAP = [{"repo": "legacy-loan-calculator", "analysis": "ara", "expected
 
 
 def _lgtm() -> dict:
-    """The verdict the judge actually returned on MR !14 — the one that must not survive."""
-    return {"score": 72, "verdict": "LGTM", "intent_match": "aligned",
+    """The verdict the judge actually returned on MR !14 — the one that must not survive.
+
+    `score` is on the committed 0.0-1.0 accuracy scale (the scorer's measurement of the
+    regenerated report), not a 0-100 judge opinion.
+    """
+    return {"score": 0.82, "baseline_score": 0.82, "scored": True,
+            "verdict": "LGTM", "intent_match": "aligned",
             "quality_regression": False, "concerns": [],
             "rationale": "AUTH-Q5 movement is likely noise.", "_engine": "bedrock"}
 
@@ -277,12 +282,21 @@ def test_prompt_places_alerts_before_the_highlights():
 
 
 def test_safety_floor_overrides_an_lgtm():
-    """The exact MR !14 verdict, forced down."""
+    """The exact MR !14 verdict, forced down.
+
+    The hold rides on verdict / analysis_effect / safety_hold — NOT on the score. The score
+    is the scorer's measurement of the regenerated report's accuracy on the committed 0-1
+    scale; capping it here would make verdict.json disagree with SCORES.md about the same
+    report, and the one number that has to stay comparable to the baseline would stop being
+    a measurement at all.
+    """
     v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": _MR14_ALERTS})
     assert v["verdict"] == "needs-work"
     assert v["quality_regression"] is True
-    assert v["score"] <= 40
+    assert v["analysis_effect"] == "degrades"
     assert v["safety_hold"] is True
+    assert v["score"] == _lgtm()["score"], \
+        "the floor must not rewrite a measured accuracy score"
 
 
 def test_safety_floor_surfaces_every_alert_as_a_concern():
@@ -324,7 +338,7 @@ def test_non_tier_material_alert_is_reported_without_forcing_a_hold():
               "detail": "DATA-Q1 was RISK-SAFETY and is now RISK-QUALITY."}]
     v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": drift})
     assert v["verdict"] == "LGTM", "a tier-inert drift must not veto"
-    assert v["score"] == 72
+    assert v["score"] == 0.82
     assert "safety_hold" not in v
     # ...but it must still be visible.
     assert "DATA-Q1" in "\n".join(c["detail"] for c in v["concerns"])
@@ -358,15 +372,18 @@ def test_safety_floor_is_a_no_op_without_alerts():
     # It must not turn every clean run into needs-work — that would make the signal useless.
     v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": [], "coverage_gaps": []})
     assert v["verdict"] == "LGTM"
-    assert v["score"] == 72
+    assert v["score"] == 0.82
     assert "safety_hold" not in v
 
 
-def test_safety_floor_does_not_raise_a_low_score():
-    # Capping, not setting: a genuinely awful change stays awful.
+def test_safety_floor_never_touches_the_measured_score():
+    # The score is a MEASUREMENT, so the floor passes it through untouched in BOTH
+    # directions: it neither caps a good score nor lifts a bad one. A low-accuracy report
+    # that also trips a safety alert must still report its real accuracy.
     v = judge._enforce_safety_floor(
-        {**_lgtm(), "score": 5}, {"safety_alerts": _MR14_ALERTS})
-    assert v["score"] == 5
+        {**_lgtm(), "score": 0.05}, {"safety_alerts": _MR14_ALERTS})
+    assert v["score"] == 0.05
+    assert v["safety_hold"] is True
 
 
 def test_safety_floor_tolerates_malformed_alerts():
@@ -408,33 +425,68 @@ def _empty_impact(partial: bool = False) -> dict:
                          "unbaselined": []}}
 
 
+def _compare(now: float = 0.84, baseline: float = 0.82) -> dict:
+    """A compare.json carrying the scorer's MEASUREMENT of the regenerated report."""
+    return {"summary": {"mean_now": now, "mean_baseline": baseline,
+                        "mean_delta": round(now - baseline, 3)},
+            "units": [{"repo": "legacy-loan-calculator", "analysis": "ara",
+                       "score": now, "baseline": baseline,
+                       "delta": round(now - baseline, 3), "threshold": 0.10,
+                       "threshold_basis": "noise floor (n=1)", "verdict": "within-noise"}]}
+
+
 def test_an_empty_delta_is_neutral_whether_or_not_it_was_predicted():
     """THE defining test of the new semantics.
 
-    The analysis is in byte-identical shape in both cases, so the two scores must land in
-    the same neighbourhood. Under intent-match scoring these were 80 and 25 — a 55-point
-    spread over a delta that did not differ at all.
+    The analysis is in byte-identical shape in both cases, so the score must be IDENTICAL —
+    not merely close. Under the old intent-match scoring these were 80 and 25, a 55-point
+    spread over a delta that did not differ at all. Now the score is the scorer's
+    measurement of the report, and the intent cannot reach it by construction: equality is
+    the invariant, and any drift means an opinion has leaked back into a measurement.
     """
     summ = judge.summarize_impact(_empty_impact())
-    predicted = judge.judge_heuristic({"what": ""}, summ)
-    unmet = judge.judge_heuristic({"what": "reclassify API-Q2 to RISK-SAFETY"}, summ)
+    cmp = _compare()
+    predicted = judge.judge_heuristic({"what": ""}, summ, cmp)
+    unmet = judge.judge_heuristic({"what": "reclassify API-Q2 to RISK-SAFETY"}, summ, cmp)
     assert predicted["analysis_effect"] == "neutral"
     assert unmet["analysis_effect"] == "neutral"
-    assert abs(predicted["score"] - unmet["score"]) <= 15, (
-        "an unmet intent must not swing the score far — the ANALYSIS is identical in both "
+    assert predicted["score"] == unmet["score"] == 0.84, (
+        "the intent must not move the score at all — the ANALYSIS is identical in both "
         f"cases. predicted={predicted['score']} unmet={unmet['score']}")
+    assert predicted["baseline_score"] == unmet["baseline_score"] == 0.82
 
 
-def test_a_neutral_change_lands_mid_band_not_at_either_extreme():
-    """A harmless change is not a good change and not a bad one.
+def test_the_score_is_the_measurement_not_a_judge_opinion():
+    """A no-op does not get a "mid-band" number invented for it.
 
-    Both extremes are wrong: a high score says "merge this, it helps" and a low score
-    says "this damaged something". Neither is true of a no-op.
+    The old semantics needed a neutral band because the judge authored the number, so a
+    harmless change had to land somewhere that read as neither praise nor damage. There is
+    no band to sit in now: the score is whatever the scorer measured the report to be, and
+    "harmless" is carried by analysis_effect == "neutral" instead. This test pins that the
+    heuristic reports the measurement verbatim rather than substituting a placeholder.
     """
     for intent in ({"what": ""}, {"what": "reclassify API-Q2 to RISK-SAFETY"}):
-        v = judge.judge_heuristic(intent, judge.summarize_impact(_empty_impact()))
-        assert 35 <= v["score"] <= 70, \
-            f"neutral change scored {v['score']}, outside the neutral band, for {intent}"
+        v = judge.judge_heuristic(intent, judge.summarize_impact(_empty_impact()),
+                                  _compare(now=0.97, baseline=0.96))
+        assert v["score"] == 0.97, \
+            f"heuristic invented a score instead of reporting the measurement, for {intent}"
+        assert v["analysis_effect"] == "neutral", \
+            "harmlessness belongs on analysis_effect, not on the measured score"
+
+
+def test_heuristic_without_a_measurement_cannot_validate():
+    """No score => no validation, and that is an error to fix, not a quiet pass.
+
+    The offline heuristic is allowed to be ignorant of DIRECTION, but it must never bless a
+    change whose regenerated report was never scored — that would let a scoring failure
+    read as a clean run.
+    """
+    v = judge.judge_heuristic({"what": ""}, judge.summarize_impact(_empty_impact()), None)
+    assert v["scored"] is False
+    assert v["score"] is None and v["baseline_score"] is None
+    assert v["verdict"] == "needs-work", "an unvalidated change must not return LGTM"
+    blob = (v["rationale"] + "\n".join(c["detail"] for c in v["concerns"])).lower()
+    assert "cannot be validated" in blob or "not possible" in blob
 
 
 def test_an_unmet_intent_still_becomes_a_concern():

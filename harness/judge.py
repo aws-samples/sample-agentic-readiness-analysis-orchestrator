@@ -7,30 +7,37 @@ contributor's stated intent (the MR description / --intent) and asks an LLM:
 **is this change GOOD FOR THE ANALYSIS?** The verdict is ADVISORY — it is posted as an
 MR comment and NEVER fails the pipeline (see .gitlab-ci.yml `allow_failure: true`).
 
-WHAT THE SCORE MEASURES (changed deliberately — see below):
-  score = "does this change make the ARA/MOD analysis BETTER or WORSE?"
+WHAT THE SCORE MEASURES (unified with the scorer — see below):
+  score = the freshly-generated report's ACCURACY on the SAME 0-1 scale as the
+          committed baseline (groundedness vs the fixture SOURCE).
 
-It used to mean "does the observed delta match the contributor's stated intent?" That
-was measurable and well-calibrated, but it answered the wrong question. Intent-match
-scores the CONTRIBUTOR, not the analysis: an edit that lands exactly as described but
-strips safety signal scored ~92, while an edit that quietly failed to apply scored ~15
-even though the analysis was left completely untouched and unharmed. Reviewers read
-this number to decide whether merging helps or hurts the assessment, so that is now
-what it measures.
+There is ONE scoring method, not two. `score-reports.py` scores the committed baseline
+(0-1, grounded in the fixture source) — that is the number in the repo. On an MR it
+scores the report the CHANGED TD just produced the EXACT SAME WAY, and writes it to
+`compare.json`. The judge does NOT invent a parallel scale: it consumes that 0-1 score
+and REASONS about direction — does the change make the analysis stay the same, improve,
+or degrade — anchored in the baseline it is compared against. Using the same scorer for
+both is what makes the comparison meaningful; a separate 0-100 "improvement" axis
+(the earlier design) is gone.
 
-Intent is still supplied and still scored, but it has been DEMOTED to evidence:
+Deviation reasoning: the comparison hands over a per-fixture THRESHOLD. When the
+baseline is multi-sample the threshold is 2*stddev (real measured run-to-run variance);
+at n=1 it is the fixed noise floor. A move INSIDE the band is NOT MEASURED — the judge
+must call it "within noise", not an improvement or a regression. Anything OUTSIDE the
+band must be reasoned about explicitly.
+
+Intent is supplied as EVIDENCE, not a score driver:
   * it tells the judge which movement is signal and which is run-to-run noise
     (essential — see _scope_note), and
   * a mismatch means the contributor may not understand what they changed, which is a
     reason to lower CONFIDENCE and raise a concern — not a reason to call an
     analysis-neutral change bad.
 
-`intent_match` and `no_op_warning` therefore still ride in the output; they just no
-longer drive the number.
-
 Output (stdout, JSON — schema from DESIGN.md §6):
   {
-    "score": 0-100,               # is the ANALYSIS better or worse for this change?
+    "score": 0.0-1.0,             # the changed report's accuracy (same scale as baseline),
+                                  #   mean across the fixtures scored this run
+    "baseline_score": 0.0-1.0,    # committed baseline mean for the same fixtures
     "analysis_effect": "improves" | "neutral" | "degrades",
     "verdict": "LGTM" | "needs-work",
     "intent_match": "aligned" | "partial" | "mismatch",   # evidence, not the score
@@ -331,29 +338,38 @@ Scoring rubric:
 - verdict = "LGTM" when the change is safe for the analysis and not a regression;
             "needs-work" otherwise.
 
-- score 0-100 = HOW MUCH BETTER OR WORSE THE ANALYSIS IS, and how confident you are:
-    85-100  clear improvement — real risk surfaced, or severity/tier now better reflects
-            reality. Well-evidenced.
-    60-84   likely improvement, or a safe change with some uncertainty (e.g. partial
-            coverage, or an inaccurate description you had to reason around).
-    45-59   genuinely NEUTRAL — the analysis is neither better nor worse. An empty delta
-            belongs here by default: nothing was gained, but nothing was harmed. Land
-            here for "no effect on quality" rather than reaching for an extreme.
-    20-44   likely degradation — signal lost, risk understated, or rubric coverage fell.
-    0-19    clear, serious degradation — a system is newly presented as safer than the
-            evidence supports.
-  A NEUTRAL change is a MID score, not a low one. Reserve the bottom of the range for
-  actual damage to the assessment. Note the asymmetry, and honour it: a change that
-  makes the analysis harsher/more cautious is far less dangerous than one that makes it
-  more permissive, so when uncertain, score a stricter change ABOVE a laxer one.
+- score = DO NOT INVENT ONE. The report's accuracy score is MEASURED, not judged: the
+  same scorer that produced the committed baseline re-scored the freshly-generated
+  report on the SAME 0.0-1.0 scale (recall-weighted groundedness vs the fixture source —
+  a missed BLOCKER/High counts far more than a spurious INFO). That number is supplied
+  to you under "ACCURACY vs BASELINE" and is carried into the output verbatim. Your job
+  is the DIRECTION and the REASONING, not the number. Do not emit a `score` field.
+
+- YOUR JOB — reason about the direction, using the noise band:
+  Each fixture arrives as `baseline -> score (delta, threshold)`. The threshold is that
+  fixture's noise band: 2*stddev when the baseline is multi-sample (real measured
+  run-to-run variance), else a fixed noise floor.
+    * |delta| < threshold  => WITHIN NOISE. NOT MEASURED. You MUST NOT call it an
+      improvement or a regression. Say the quality STAYS THE SAME as far as we can
+      measure, and set analysis_effect = "neutral".
+    * delta >= threshold   => a measured accuracy IMPROVEMENT. Real evidence the change
+      helped: the reports became more true of the source.
+    * delta <= -threshold  => a measured accuracy REGRESSION. Weigh this heavily — the
+      reports became LESS true of the source, which is the outcome this harness exists
+      to prevent.
+  Note the asymmetry and honour it: a change that makes the analysis harsher/more
+  cautious is far less dangerous than one that makes it more permissive, so when
+  uncertain, treat a stricter change more favourably than a laxer one.
 - suggestions: 0-3 concrete, actionable improvements to the change (empty if none).
 
 Respond with ONLY a JSON object, no prose, matching exactly this schema:
-{"score": <int 0-100>, "verdict": "LGTM"|"needs-work",
+{"verdict": "LGTM"|"needs-work",
  "analysis_effect": "improves"|"neutral"|"degrades",
  "intent_match": "aligned"|"partial"|"mismatch",
  "rationale": "<2-4 sentences citing specifics; say plainly whether the ANALYSIS is
-               better, unchanged, or worse, and why>",
+               better, unchanged, or worse, and why. When the accuracy movement is
+               within the noise band, SAY SO explicitly — 'within noise, not measured' —
+               rather than implying a direction the numbers do not support>",
  "concerns": [{"dimension": "D1".."D5", "detail": "<...>"}],
  "quality_regression": <bool>,
  "suggestions": ["<concrete improvement>", ...],
@@ -459,42 +475,65 @@ def _alerts_note(impact_summary: dict) -> str:
 
 
 def _accuracy_note(compare: Optional[dict]) -> str:
-    """Render the accuracy-vs-baseline comparison: the judge's only PAST DATA.
+    """Render the accuracy-vs-baseline comparison: the SCORE the judge reasons about.
 
-    Without this the 0-100 verdict is produced from the delta alone, with no knowledge of
-    where quality stood before — so it cannot say whether the TD is better than it was, only
-    whether this diff looks sensible. The comparison supplies the anchor.
+    This is not decoration — it carries the report's MEASURED 0-1 accuracy, produced by the
+    same recall-weighted scorer that produced the committed baseline. Without it there is no
+    score and no anchor, so the change CANNOT BE VALIDATED (see the absent branch below).
 
     Crucially it hands over the THRESHOLD too, not just the delta, because the dominant term
     is the analysis agent's nondeterminism rather than the TD. A sub-threshold move is NOT
     MEASURED; treating it as an improvement is how a regression gets talked through.
     """
     if not compare or not compare.get("units"):
-        return ""
+        # No score => no validation. Say so as an ERROR TO FIX rather than letting the judge
+        # reason from the delta alone and produce a confident-sounding verdict with no
+        # accuracy evidence behind it. A silent degradation to delta-only was the old
+        # behaviour and it reads identically to a validated pass.
+        return (
+            "\n## ACCURACY vs BASELINE — UNAVAILABLE\n"
+            "The freshly-generated report was NOT re-scored, so there is NO accuracy number\n"
+            "and NO baseline comparison for this run. VALIDATION IS THEREFORE NOT POSSIBLE:\n"
+            "you cannot say whether this change improves, preserves, or degrades the\n"
+            "analysis, because the evidence that would answer that is missing.\n"
+            "You MUST: set verdict = \"needs-work\", state plainly in `rationale` that the\n"
+            "change could not be validated because the accuracy score is missing, and raise\n"
+            "a concern that the scoring step (score-reports.py --compare-out) failed and\n"
+            "needs to be fixed and re-run. Do NOT substitute a judgement of the diff for a\n"
+            "measurement, and do NOT return LGTM.\n")
     s = compare.get("summary") or {}
     lines = [
-        "\n## ACCURACY vs BASELINE — past data, scored against the fixture SOURCE",
-        "Each report was re-scored for groundedness against the actual fixture code and",
-        "compared with the committed baseline. `threshold` is the noise floor for that",
-        "fixture; a |delta| below it is NOT MEASURED, and you MUST NOT call it an",
-        "improvement or a regression — say it is within noise.",
+        "\n## ACCURACY SCORE — THE MEASUREMENT YOU REASON ABOUT (do not invent your own)",
+        "The report the changed TD just produced was re-scored by the SAME scorer that",
+        "produced the committed baseline: a recall-weighted evaluation of groundedness",
+        "against the fixture's actual source, on a 0.0-1.0 scale, where a MISSED",
+        "BLOCKER/High finding costs far more than a spurious INFO. Because both numbers",
+        "come from the same method, the comparison below is apples-to-apples.",
+        "`threshold` is that fixture's NOISE BAND. A |delta| below it is NOT MEASURED:",
+        "you MUST NOT call it an improvement or a regression — say the quality stays the",
+        "same as far as we can measure.",
         f"  totals: improved {s.get('improved')} · regressed {s.get('regressed')} · "
         f"within-noise {s.get('within_noise')} · unscored {s.get('unscored')}",
     ]
     if s.get("mean_baseline") is not None:
-        lines.append(f"  mean accuracy {s['mean_baseline']} -> {s['mean_now']} "
-                     f"({s.get('mean_delta'):+})")
+        lines.append(f"  MEAN ACCURACY: baseline {s['mean_baseline']} -> this run "
+                     f"{s['mean_now']} ({s.get('mean_delta'):+})")
     for u in compare["units"]:
         if u.get("verdict") == "unscored":
             continue
+        # threshold_basis says whether the band is real measured variance (2*stddev over N
+        # runs) or the fallback floor. The judge must know which: a floor-based band at n=1
+        # is a placeholder, and an "improvement" that only clears a placeholder is weak.
         lines.append(f"  [{u['verdict']:<12}] {u['repo']} ({str(u['analysis']).upper()}) "
                      f"{u['baseline']} -> {u['score']} (delta {u['delta']:+}, "
-                     f"threshold {u['threshold']})")
+                     f"threshold {u['threshold']} — {u.get('threshold_basis', 'n/a')})")
     lines.append(
         "Weigh a CONFIRMED accuracy regression heavily: it means the reports became less "
         "true of the source, which is the outcome this harness exists to prevent. Weigh a "
         "confirmed improvement as real evidence the change helped. Ignore within-noise "
-        "movement entirely — it is the agent rolling differently, not the TD changing.\n")
+        "movement entirely — it is the agent rolling differently, not the TD changing. "
+        "Where a threshold rests on the noise FLOOR rather than measured stddev, temper "
+        "your confidence and say so: the baseline is a single draw there.\n")
     return "\n".join(lines) + "\n"
 
 
@@ -545,7 +584,7 @@ def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
         resp = client.invoke_model(modelId=model, body=json.dumps(body))
         payload = json.loads(resp["body"].read())
         text = "".join(blk.get("text", "") for blk in payload.get("content", []))
-        return _coerce_verdict(_extract_json(text))
+        return _coerce_verdict(_extract_json(text), compare)
     except Exception as exc:  # noqa: BLE001 — advisory tool must never hard-fail
         print(f"judge: Bedrock call failed ({exc}); falling back to heuristic", file=sys.stderr)
         return None
@@ -564,7 +603,8 @@ def _extract_json(text: str) -> dict:
 # Deterministic heuristic fallback (no LLM). Keeps the pipeline useful offline.
 # ---------------------------------------------------------------------------------------
 
-def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
+def judge_heuristic(intent: dict, impact_summary: dict,
+                    compare: Optional[dict] = None) -> dict:
     no_op = impact_summary["no_op"]
     moved = impact_summary["dimensions_moved"]
     intent_claims_change = bool(
@@ -575,13 +615,11 @@ def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
 
     # An empty delta is NEUTRAL for the analysis in BOTH branches below — nothing was
     # gained and nothing was harmed. What differs is only how much we trust the
-    # contributor's description, which is a confidence signal, not damage. Under the old
-    # intent-match semantics the two branches scored 25 vs 80; now they sit close together
-    # and mid-range, because the analysis is in exactly the same state either way.
+    # contributor's description, which is a confidence signal, not damage.
     if no_op:
         effect = "neutral"
         if no_op_warning:
-            verdict, match, score = "needs-work", "mismatch", 50
+            verdict, match = "needs-work", "mismatch"
             concerns.append({"dimension": "-",
                              "detail": "Intent describes a change but the delta is empty (no-op) "
                                        "— the edit likely never took effect. The analysis is "
@@ -593,16 +631,16 @@ def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
                          "refreshing (fire harness:full), or it has no effect at all. "
                          "needs-work reflects the unmet expectation, not damage.")
         else:
-            verdict, match, score = "LGTM", "aligned", 55
+            verdict, match = "LGTM", "aligned"
             rationale = ("No analysis output moved and the intent did not claim one would — "
                          "consistent with a docs/metadata-only change. Neutral for the "
                          "analysis: nothing gained, nothing harmed.")
-            # A clean result over 2 of 26 reports is weaker evidence than a full sweep,
-            # so trim confidence — but stay in the neutral band, since partial coverage
-            # is missing evidence about the analysis, not evidence of harm to it.
+            # A clean result over 2 of 26 reports is weaker evidence than a full sweep. Say
+            # so in the rationale — there is nothing to trim numerically, because the score
+            # is the scorer's measurement of the regenerated report, not a confidence dial
+            # this function is entitled to turn.
             cov = impact_summary.get("coverage") or {}
             if cov.get("partial"):
-                score = 48
                 rationale += (
                     f" NOTE: only {cov.get('compared')} of {cov.get('baseline_total')} baseline "
                     "reports were re-analyzed (the MR path runs just the fixtures that exercise "
@@ -612,19 +650,35 @@ def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
         # — that judgement is exactly what needs a model. So report the movement, claim
         # nothing about direction, and sit in the neutral band. The deterministic safety
         # floor below still catches the one case that must never pass quietly.
-        effect, verdict, match, score = "neutral", "LGTM", "partial", 55
+        effect, verdict, match = "neutral", "LGTM", "partial"
         rationale = (f"Delta moved dimensions {moved} across {impact_summary['changed_tds']}. "
                      "Heuristic (offline) mode CANNOT judge whether the analysis improved or "
-                     "degraded — that needs the LLM judge — so this score is a neutral "
-                     "placeholder, not a positive assessment. A human should confirm the "
-                     "moved dimensions make the assessment better. "
+                     "degraded — that needs the LLM judge — so the direction here is an "
+                     "explicit 'unknown', not a positive assessment. Any accuracy score "
+                     "shown alongside is the scorer's measurement, not this function's "
+                     "opinion. A human should confirm the moved dimensions make the "
+                     "assessment better. "
                      "Highlights: " + "; ".join(impact_summary["highlights"][:4]))
         for h in impact_summary["highlights"][:6]:
             dim = h.split("]", 1)[-1].strip().split(" ", 1)[0] if "]" in h else "-"
             concerns.append({"dimension": dim, "detail": h})
 
+    measured = _measured_scores(compare)
+    if not measured["scored"]:
+        # Same rule as the LLM path: no measurement => the change cannot be validated, and
+        # that is an error to fix, not a number to invent. The heuristic is allowed to be
+        # offline about DIRECTION, but it is not allowed to bless an unmeasured change.
+        verdict = "needs-work"
+        concerns.append({"dimension": "-",
+                         "detail": "No accuracy score for the regenerated report, so the "
+                                   "change CANNOT be validated. Fix the scoring step "
+                                   "(score-reports.py --compare-out) and re-run."})
+        rationale += (" VALIDATION NOT POSSIBLE: the regenerated report was never scored, "
+                      "so there is no accuracy number to compare against the committed "
+                      "baseline. This is a harness error to fix, not a pass.")
+
     return {
-        "score": score,
+        **measured,
         "verdict": verdict,
         "analysis_effect": effect,
         "intent_match": match,
@@ -699,18 +753,50 @@ def _enforce_safety_floor(verdict: dict, impact_summary: dict) -> dict:
     # score semantics that has to be stated on the primary axis, not just in the verdict —
     # otherwise the comment could read "degrades the analysis" nowhere while holding.
     verdict["analysis_effect"] = "degrades"
-    # Cap rather than zero: the judge's own score still carries information about the rest
-    # of the change, which stays useful once a human clears the alert.
-    verdict["score"] = min(int(verdict.get("score", 50) or 0), 40)
+    # NOTE: the score is deliberately NOT touched here. It is a MEASUREMENT of the report's
+    # accuracy from the scorer, not a judgement — capping a measured number would corrupt the
+    # one value that has to stay comparable to the committed baseline, and would make the
+    # verdict's own number disagree with SCORES.md for the same report. The hold is expressed
+    # on `verdict` / `analysis_effect` / `safety_hold`, which are judgements and can carry it.
     # A machine-readable marker so the MR comment and any downstream tooling can tell a
     # human-reviewable safety hold apart from an ordinary needs-work verdict.
     verdict["safety_hold"] = True
     return verdict
 
 
-def _coerce_verdict(v: dict) -> dict:
+def _measured_scores(compare: Optional[dict]) -> dict:
+    """Lift the MEASURED accuracy numbers out of compare.json into the verdict.
+
+    The score is not the judge's opinion — it is the scorer's measurement, on the same
+    recall-weighted 0-1 scale as the committed baseline. Returning None for both means the
+    run could not be validated, which callers must surface as an error rather than a pass.
+    """
+    if not compare or not compare.get("units"):
+        return {"score": None, "baseline_score": None, "scored": False,
+                "accuracy_verdicts": {}}
+    s = compare.get("summary") or {}
+    units = [u for u in compare["units"] if u.get("verdict") != "unscored"]
+    return {
+        "score": s.get("mean_now"),
+        "baseline_score": s.get("mean_baseline"),
+        "scored": True,
+        # Per-fixture classification, already noise-thresholded by the scorer. Kept in the
+        # verdict so the MR comment can show WHICH fixture moved without re-deriving it.
+        "accuracy_verdicts": {
+            f"{u.get('repo')}:{u.get('analysis')}": {
+                "score": u.get("score"), "baseline": u.get("baseline"),
+                "delta": u.get("delta"), "threshold": u.get("threshold"),
+                "verdict": u.get("verdict"), "basis": u.get("threshold_basis"),
+            } for u in units
+        },
+    }
+
+
+def _coerce_verdict(v: dict, compare: Optional[dict] = None) -> dict:
     out = {
-        "score": int(max(0, min(100, v.get("score", 50)))),
+        # MEASURED, not judged. Any `score` the model emitted is discarded: the number must
+        # be comparable to the committed baseline, which only the scorer can guarantee.
+        **_measured_scores(compare),
         "verdict": v.get("verdict") if v.get("verdict") in VALID_VERDICTS else "needs-work",
         "intent_match": v.get("intent_match") if v.get("intent_match") in VALID_MATCHES else "partial",
         # The primary axis. Defaults to "neutral", NOT "degrades": an absent field means the
@@ -794,7 +880,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if verdict is not None:
             verdict["_engine"] = "bedrock"
     if verdict is None:
-        verdict = judge_heuristic(intent, impact_summary)
+        verdict = judge_heuristic(intent, impact_summary, compare)
 
     # HARD BACKSTOP — enforced in code, after whichever engine produced the verdict.
     #

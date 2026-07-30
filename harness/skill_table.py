@@ -44,8 +44,17 @@ SEVERITY_RANK = {"BLOCKER": 3, "RISK-SAFETY": 2, "RISK-QUALITY": 1, "INFO": 0}
 
 def rel(path: Path) -> str:
     """Repo-relative path — both SKILL.md files share a basename, so `.name` is ambiguous
-    in a prompt and useless in an assertion message."""
-    return str(path.relative_to(REPO))
+    in a prompt and useless in an assertion message.
+
+    Resolves first, so a path given relative to the cwd (e.g. an `--markdown` argument)
+    still lands inside REPO instead of raising. Anything genuinely outside the repo is
+    returned as-is: this function only ever builds log lines and prompt text, so it must
+    not be able to fail a run that has already done its expensive work.
+    """
+    try:
+        return str(Path(path).resolve().relative_to(REPO))
+    except ValueError:
+        return str(path)
 
 
 def parse_questions(analysis: str) -> dict[str, dict]:

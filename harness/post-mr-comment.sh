@@ -35,7 +35,9 @@ fi
 BODY="$(python3 - "${VERDICT}" <<'PY'
 import json, sys
 v = json.load(open(sys.argv[1]))
-score = v.get("score", "?")
+score = v.get("score")
+baseline_score = v.get("baseline_score")
+scored = bool(v.get("scored"))
 verdict = v.get("verdict", "?")
 match = v.get("intent_match", "?")
 effect = v.get("analysis_effect", "?")
@@ -51,15 +53,38 @@ engine = v.get("_engine", "?")
 lines = []
 lines.append(f"### {emoji} Change-Impact Harness — advisory verdict")
 lines.append("")
-lines.append(f"**Verdict:** {verdict} &nbsp;|&nbsp; **Score:** {score}/100 "
+
+# The score is the regenerated report ACCURACY on the same 0.0-1.0 scale as the committed
+# baseline, produced by the same scorer. It is a MEASUREMENT, so it is rendered next to the
+# baseline it is compared against -- a bare number with no anchor invites the reader to grade
+# it out of 100, which is exactly the confusion the single scale exists to remove.
+if scored and isinstance(score, (int, float)) and isinstance(baseline_score, (int, float)):
+    delta = score - baseline_score
+    score_cell = (f"**Accuracy:** {score:.3f} vs baseline {baseline_score:.3f} "
+                  f"({delta:+.3f})")
+elif scored and isinstance(score, (int, float)):
+    score_cell = f"**Accuracy:** {score:.3f} (no baseline)"
+else:
+    score_cell = "**Accuracy:** not measured"
+lines.append(f"**Verdict:** {verdict} &nbsp;|&nbsp; {score_cell} "
              f"&nbsp;|&nbsp; **Effect:** {effect_emoji} {effect_label}")
-# Spell out what the number means. Without this a reviewer reads a mid score as a bad
-# grade, when the mid band is exactly where a harmless change is supposed to land.
 lines.append("")
-lines.append(f"<sub>Score = does this change make the ARA/MOD analysis better or worse "
-             f"(85+ clear improvement · 45-59 neutral · under 45 likely degradation). "
-             f"Intent match: {match_emoji} {match} — reported as supporting evidence, it "
-             f"does not drive the score.</sub>")
+if scored:
+    # Spell out what the number is and, just as importantly, what it is not: it grades the
+    # REPORT against the fixture source, not the merge request.
+    lines.append(f"<sub>Accuracy = how well the regenerated report is grounded in the fixture "
+                 f"source (misses and fabrications count against it), scored 0.000-1.000 by "
+                 f"the same scorer that produced the committed baseline. The **Effect** is the "
+                 f"judgement: whether the measured move is an improvement, a regression, or "
+                 f"inside the per-fixture noise band. Intent match: {match_emoji} {match} — "
+                 f"supporting evidence only, it does not drive the measurement.</sub>")
+else:
+    # No measurement means no validation. Say that plainly rather than letting a reader read
+    # a missing number as a neutral one.
+    lines.append("<sub>⚠️ The regenerated report was **not scored**, so there is no accuracy "
+                 "number and no baseline comparison: **this change could not be validated.** "
+                 "The scoring step (`score-reports.py --compare-out`) needs to be fixed and "
+                 "re-run. Treat this as a harness error, not a pass.</sub>")
 # A safety hold outranks the generic regression note and replaces it. This is not a
 # judgement call but deterministic rubric arithmetic (lost BLOCKER, relaxed readiness
 # tier, dropped rubric questions), so it is stated as fact and placed first.
