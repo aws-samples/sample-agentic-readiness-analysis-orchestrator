@@ -122,6 +122,13 @@ def summarize_impact(impact: dict) -> dict:
             "partial": bool(cov.get("partial")),
             "not_analyzed_count": len(cov.get("not_analyzed") or []),
         },
+        # Deterministic, rubric-arithmetic findings from the differ. Carried through
+        # VERBATIM and never summarised away: these are the facts the judge is forbidden
+        # from attributing to noise, so dropping them here would silently restore the bug
+        # they exist to prevent (a relaxed readiness tier waved through as run-to-run
+        # variance because the question that caused it was outside the edit scope).
+        "safety_alerts": impact.get("safety_alerts") or [],
+        "coverage_gaps": impact.get("coverage_gaps") or [],
     }
     moved: set[str] = set()
 
@@ -235,6 +242,26 @@ Scoring rubric:
                               the edit scope moved — the analysis agent is nondeterministic
                               and that movement is expected noise (see "Edit scope" below,
                               when present).
+
+                              EXCEPT — and this overrides the noise rule entirely — a
+                              "SAFETY ALERTS" section, when present, lists movements that
+                              were computed DETERMINISTICALLY from the rubric's own
+                              arithmetic, not inferred. A lost BLOCKER, a falling
+                              blocker_count, or a readiness tier moving toward MORE
+                              agent-ready is NEVER noise, EVEN IF the question involved is
+                              outside the edit scope: the ARA rubric derives the tier from
+                              blocker_count (>=3 -> Not Agent-Integrable, 1-2 ->
+                              Remediation Required), so losing a blocker mechanically
+                              relaxes the tier. You MUST address every safety alert
+                              explicitly in `rationale` or `concerns`, and you MUST NOT
+                              describe one as noise or as expected variance. If a safety
+                              alert has no innocent causal explanation, set
+                              quality_regression = true and do NOT return LGTM — a system
+                              being newly judged safer for agent use is the one claim that
+                              must never be waved through.
+                              A COVERAGE GAPS section means a report stopped answering part
+                              of the rubric (ARA has 43 questions, MOD 37). Treat that as a
+                              defect, never as noise.
 - verdict = "LGTM" when the change is safe, intent-aligned, and not a regression;
             "needs-work" otherwise.
 - score 0-100: higher = more confident the change is good, matches intent, and is not a
@@ -289,15 +316,64 @@ def _scope_note(edited_questions: list[str]) -> str:
         "IMPORTANT — how to weigh the delta against this scope:\n"
         "  * The analysis agent is NONDETERMINISTIC. Re-running the SAME rubric on the same\n"
         "    fixture moves roughly 10-20 findings purely from run-to-run variance.\n"
-        "  * Therefore movement on questions OUTSIDE the edited set is EXPECTED NOISE. Do\n"
-        "    NOT treat it as a regression or as evidence the change is broader than stated,\n"
-        "    and do NOT ground a `mismatch` verdict in it. Mention it at most as an aside.\n"
+        "  * Therefore ORDINARY FINDINGS CHURN on questions OUTSIDE the edited set is\n"
+        "    EXPECTED NOISE. Do NOT treat it as a regression or as evidence the change is\n"
+        "    broader than stated, and do NOT ground a `mismatch` verdict in it. Mention it\n"
+        "    at most as an aside.\n"
+        "  * BUT THIS NOISE RULE HAS HARD LIMITS. It covers findings appearing/disappearing\n"
+        "    and severity moving among the non-blocking classes. It does NOT cover:\n"
+        "      - a BLOCKER being downgraded or lost,\n"
+        "      - blocker_count falling,\n"
+        "      - the readiness tier moving toward MORE agent-ready,\n"
+        "      - a report answering fewer rubric questions than the baseline.\n"
+        "    Those are SAFETY-MATERIAL and stay in scope no matter which question caused\n"
+        "    them — being out of edit scope is NOT a reason to dismiss one. Any such\n"
+        "    movement is listed under \"SAFETY ALERTS\" / \"COVERAGE GAPS\" below, computed\n"
+        "    deterministically from the rubric, and you must address each one.\n"
         "  * Judge intent-match PRIMARILY on whether the EDITED questions moved as the\n"
         "    intent describes (a severity reclassification shows up as a `reseveritied`\n"
         "    entry naming that question, not as an added/removed finding).\n"
         "  * A reclassification changes a finding's SEVERITY CLASS, so the finding count\n"
         "    barely moves. Do not expect added/removed findings from one.\n"
     )
+
+
+def _alerts_note(impact_summary: dict) -> str:
+    """Render the deterministic safety alerts / coverage gaps as must-address facts.
+
+    Placed IMMEDIATELY BEFORE the delta highlights and worded as an obligation, because the
+    failure mode this fixes was the judge reading a real tier regression as noise: it had
+    the tier change in its highlights but no signal that the change was rubric-mechanical
+    rather than incidental. Being explicit that these are computed, not inferred, is what
+    stops the edit-scope noise rule from swallowing them.
+    """
+    alerts = impact_summary.get("safety_alerts") or []
+    gaps = impact_summary.get("coverage_gaps") or []
+    if not alerts and not gaps:
+        return ""
+    out = ["\n## SAFETY ALERTS — deterministic, NOT noise, MUST be addressed"]
+    if alerts:
+        out.append(
+            "Computed from the rubric's own arithmetic by the differ, not inferred by a\n"
+            "model. Each of these is safety-material REGARDLESS of whether the question\n"
+            "involved was in the edit scope. Address every one in rationale or concerns;\n"
+            "never call one noise. If any lacks an innocent causal explanation, set\n"
+            "quality_regression = true and do not return LGTM.")
+        for a in alerts[:12]:
+            if isinstance(a, dict):
+                # Mark which alerts actually move the tier. Without this the judge cannot
+                # tell a veto-worthy blocker loss from a RISK-SAFETY drift that is real but
+                # tier-inert while blockers remain, and would either over- or under-react.
+                mark = "TIER-MATERIAL" if a.get("tier_material", True) else "notable"
+                out.append(f"  ! [{a.get('kind')}] ({mark}) {a.get('detail')}")
+    if gaps:
+        out.append(
+            "COVERAGE GAPS — a report answered fewer rubric questions than its baseline\n"
+            "(ARA defines 43, MOD 37). This is a rubric/analysis defect, not variance:")
+        for g in gaps[:12]:
+            if isinstance(g, dict):
+                out.append(f"  ! {g.get('detail')}")
+    return "\n".join(out) + "\n"
 
 
 def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
@@ -314,6 +390,7 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
         f"changed_tds: {impact_summary['changed_tds']}\n"
         f"dimensions_moved: {impact_summary['dimensions_moved']}\n"
         + _coverage_note(impact_summary)
+        + _alerts_note(impact_summary)
         + "highlights:\n" + ("\n".join(f"  - {h}" for h in impact_summary['highlights']) or "  (none)")
         + "\n\n## Raw change diff (may be truncated)\n"
         + (diff_text[:4000] if diff_text else "(not provided)")
@@ -425,6 +502,65 @@ def judge_heuristic(intent: dict, impact_summary: dict) -> dict:
 # Verdict coercion / validation — never emit an off-schema verdict.
 # ---------------------------------------------------------------------------------------
 
+def _append_alert_concerns(verdict: dict, alerts: list, gaps: list) -> list:
+    """Add each alert/gap to the verdict concerns, deduped by detail (so it is idempotent).
+
+    Split out because a NON-tier-material alert must still reach the reader as a concern
+    even though it does not force a hold — reporting it and vetoing on it are two decisions,
+    not one.
+    """
+    concerns = [c for c in (verdict.get("concerns") or []) if isinstance(c, dict)]
+    existing = {str(c.get("detail") or "") for c in concerns}
+    for a in alerts:
+        detail = f"SAFETY ALERT [{a.get('kind')}] {a.get('detail')}"
+        if detail not in existing:
+            concerns.append({"dimension": "D2", "detail": detail})
+            existing.add(detail)
+    for g in gaps:
+        detail = f"COVERAGE GAP {g.get('detail')}"
+        if detail not in existing:
+            concerns.append({"dimension": "D1", "detail": detail})
+            existing.add(detail)
+    return concerns
+
+
+def _enforce_safety_floor(verdict: dict, impact_summary: dict) -> dict:
+    """Prevent an LGTM from surviving an unexplained safety alert or coverage gap.
+
+    Deliberately blunt, and deliberately NOT trying to decide whether the alert is innocent
+    — that judgement needs a human. What it guarantees is that the alert is impossible to
+    miss: verdict downgraded, quality_regression set, score capped, and every alert present
+    as its own concern. Idempotent, so calling it twice cannot double-append.
+    """
+    alerts = [a for a in (impact_summary.get("safety_alerts") or []) if isinstance(a, dict)]
+    gaps = [g for g in (impact_summary.get("coverage_gaps") or []) if isinstance(g, dict)]
+    if not alerts and not gaps:
+        return verdict
+
+    # Only TIER-MATERIAL alerts force the hold. A RISK-SAFETY downgrade while
+    # blocker_count is still above 0 does not move the tier, and that count drifts on every
+    # nondeterministic rerun — holding on it would fire on nearly every MR, and a gate that
+    # always fires is a gate nobody reads. Non-material alerts are still reported below, and
+    # the judge is still asked to explain them; they just do not veto on their own.
+    # Alerts predating this field have no `tier_material` key — default them to holding,
+    # so a missing field can only ever be over-cautious.
+    holding = [a for a in alerts if a.get("tier_material", True)]
+    if not holding and not gaps:
+        verdict["concerns"] = _append_alert_concerns(verdict, alerts, gaps)
+        return verdict
+
+    verdict["concerns"] = _append_alert_concerns(verdict, alerts, gaps)
+    verdict["quality_regression"] = True
+    verdict["verdict"] = "needs-work"
+    # Cap rather than zero: the judge's own score still carries information about how well
+    # the change matched its intent, which stays useful once a human clears the alert.
+    verdict["score"] = min(int(verdict.get("score", 50) or 0), 40)
+    # A machine-readable marker so the MR comment and any downstream tooling can tell a
+    # human-reviewable safety hold apart from an ordinary needs-work verdict.
+    verdict["safety_hold"] = True
+    return verdict
+
+
 def _coerce_verdict(v: dict) -> dict:
     out = {
         "score": int(max(0, min(100, v.get("score", 50)))),
@@ -490,6 +626,19 @@ def main(argv: Optional[list[str]] = None) -> int:
             verdict["_engine"] = "bedrock"
     if verdict is None:
         verdict = judge_heuristic(intent, impact_summary)
+
+    # HARD BACKSTOP — enforced in code, after whichever engine produced the verdict.
+    #
+    # The prompt tells the judge that a lost BLOCKER / relaxed tier is never noise, but a
+    # prompt is a request, not a guarantee: the LLM already dismissed exactly this movement
+    # as "likely noise" once and still returned LGTM/72. The heuristic fallback does not
+    # reason about it at all. So the floor lives here, where nothing can talk it down.
+    #
+    # We do NOT overwrite the rationale or invent a causal story — we downgrade the verdict
+    # and surface each alert as a concern, leaving the model's own reasoning intact so a
+    # reviewer can see the disagreement. A safety alert is exactly the case where the
+    # harness should fail loud rather than defer.
+    verdict = _enforce_safety_floor(verdict, impact_summary)
 
     # Attach the digest so the MR comment / artifact is self-contained.
     verdict["_impact_summary"] = impact_summary

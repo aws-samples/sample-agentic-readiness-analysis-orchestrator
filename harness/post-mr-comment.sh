@@ -47,7 +47,24 @@ lines.append(f"### {emoji} Change-Impact Harness — advisory verdict")
 lines.append("")
 lines.append(f"**Verdict:** {verdict} &nbsp;|&nbsp; **Score:** {score}/100 "
              f"&nbsp;|&nbsp; **Intent match:** {match_emoji} {match}")
-if v.get("quality_regression"):
+# A safety hold outranks the generic regression note and replaces it. This is not a
+# judgement call but deterministic rubric arithmetic (lost BLOCKER, relaxed readiness
+# tier, dropped rubric questions), so it is stated as fact and placed first.
+#
+# NOTE: no apostrophes anywhere in this heredoc, including in comments. It sits inside a
+# $(...) command substitution, and bash 3.2 (the macOS default, where the test suite runs)
+# re-parses the substitution body and treats a single quote character as opening a quoted
+# string -- yielding "unexpected EOF while looking for matching )" and a script that will
+# not run at all. Prefer plural or possessive-free phrasing here.
+if v.get("safety_hold"):
+    lines.append("")
+    lines.append("> 🚨 **SAFETY HOLD — needs a human decision.** The differ found a change that "
+                 "makes a system look *safer for agent use* than before: a lost BLOCKER, a "
+                 "relaxed readiness tier, or a report answering fewer rubric questions. This "
+                 "is computed from the rubric arithmetic, **not** run-to-run noise, and it "
+                 "holds even when the question involved was outside the edited scope. "
+                 "Confirm each alert below is intended before merging.")
+elif v.get("quality_regression"):
     lines.append("")
     lines.append("> 🔴 **Possible quality regression:** the judge thinks this change may make "
                  "the analysis worse. See rationale/concerns below and confirm before merging.")

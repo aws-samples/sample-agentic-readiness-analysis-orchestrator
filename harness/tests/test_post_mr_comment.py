@@ -204,6 +204,50 @@ def test_regression_flag_renders_a_warning_block():
     assert "quality regression" in r.stderr.lower()
 
 
+def test_safety_hold_renders_a_prominent_block():
+    """A safety hold is rubric arithmetic, not the judge's opinion — it must lead."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "v.json"
+        p.write_text(json.dumps({
+            "score": 40, "verdict": "needs-work", "intent_match": "aligned",
+            "quality_regression": True, "safety_hold": True,
+            "rationale": "AUTH-Q5 movement is likely noise.",
+            "concerns": [{"dimension": "D2",
+                          "detail": "SAFETY ALERT [tier_relaxed] tier moved"}],
+        }))
+        r = subprocess.run(
+            ["bash", str(SCRIPT), str(p)],
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": tmp,
+                 "CI_PROJECT_ID": "1", "CI_MERGE_REQUEST_IID": "14",
+                 "CI_API_V4_URL": FAKE_API, "HARNESS_MR_TOKEN": "pat"},
+            capture_output=True, text=True, timeout=120)
+    assert "SAFETY HOLD" in r.stderr
+    # It replaces the generic regression note rather than stacking two warnings, so a
+    # reader is not left guessing which of the two is the actual blocker.
+    assert "Possible quality regression" not in r.stderr
+    assert r.stderr.index("SAFETY HOLD") < r.stderr.index("likely noise")
+
+
+def test_render_script_has_no_apostrophes():
+    """The heredoc lives inside $(...) and bash 3.2 re-parses the substitution body.
+
+    A single apostrophe anywhere in it — prose OR comment — opens a quote bash never sees
+    closed, and the script dies with "unexpected EOF while looking for matching )" before
+    executing a line. Caught exactly that way: adding "the judge's opinion" to a comment
+    broke all 10 tests in this file at once. Cheaper to pin than to rediscover.
+    """
+    text = SCRIPT.read_text(encoding="utf-8")
+    start = text.index("<<'PY'")
+    end = text.index("\nPY\n", start)
+    body = text[start + len("<<'PY'"):end]
+    # Python string literals legitimately use ' as a delimiter, so a flat ban is too
+    # strict; what breaks bash is an UNPAIRED one. Require an even count per line.
+    unbalanced = [ln for ln in body.splitlines() if ln.count("'") % 2 == 1]
+    assert not unbalanced, (
+        "unbalanced apostrophe inside the $(...) heredoc — bash 3.2 will refuse to parse "
+        f"the whole script: {unbalanced}")
+
+
 def test_missing_verdict_file_is_an_error():
     r = subprocess.run(
         ["bash", str(SCRIPT), "/nonexistent/verdict.json"],

@@ -433,6 +433,260 @@ def test_report_absent_from_golden_is_unbaselined_not_added():
     assert "brand-new-fixture" not in impact["per_repo"]
 
 
+# --- safety alerts (the MR !14 tier regression) ---------------------------------------
+# These reproduce the exact delta the judge waved through: AUTH-Q5 dropping from BLOCKER to
+# RISK-SAFETY in legacy-loan-calculator, taking blocker_count 3 -> 2 with it and relaxing
+# the tier from Not Agent-Integrable to Remediation Required. AUTH-Q5 was outside the edit
+# scope, so the noise rule swallowed it. The alerts must fire regardless of scope, because
+# the tier move is rubric arithmetic, not variance.
+
+LOAN_ARA = ("ara", "repo", "legacy-loan-calculator")
+
+
+def _downgrade_a_blocker(tree: dict, qid: str = "AUTH-Q5",
+                         to: str = "RISK-SAFETY") -> dict:
+    """Mutate an 'after' tree the way MR !14's delta did: one BLOCKER reclassified.
+
+    Also decrements the classification counters and re-applies the rubric's own tier rule,
+    because in a real report those move together — a test that changed only the finding
+    would be asserting against a state the analysis agent can never produce.
+    """
+    rpt = tree[LOAN_ARA]
+    for f in rpt["findings"]:
+        if f.get("question_id") == qid:
+            f["ara_metadata"]["native_severity"] = to
+            break
+    else:
+        raise AssertionError(f"fixture precondition: {qid} not in the loan-calculator report")
+    c = rpt["classification"]
+    c["blocker_count"] -= 1
+    c["risk_safety_count"] += 1
+    # >=3 BLOCKER -> Not Agent-Integrable; 1-2 -> Remediation Required (SKILL.md).
+    c["tier"] = "Not Agent-Integrable" if c["blocker_count"] >= 3 else "Remediation Required"
+    return tree
+
+
+def test_lost_blocker_raises_all_three_alerts():
+    full = dr.load_tree(GOLDEN)
+    before = copy.deepcopy(full)
+    after = _downgrade_a_blocker(copy.deepcopy(full))
+    impact = dr.build_impact(before, after)
+    kinds = {a["kind"] for a in impact["safety_alerts"]}
+    assert kinds == {"blocker_downgraded", "blocker_count_fell", "tier_relaxed"}, \
+        f"expected all three alerts, got {kinds}"
+
+
+def test_alerts_attribute_the_tier_move_to_the_lost_blocker():
+    # The whole point: a reader must not have to rediscover that "blocker lost" and "tier
+    # relaxed" are one event. The tier alert names the cause.
+    full = dr.load_tree(GOLDEN)
+    after = _downgrade_a_blocker(copy.deepcopy(full))
+    impact = dr.build_impact(copy.deepcopy(full), after)
+    tier_alert = [a for a in impact["safety_alerts"] if a["kind"] == "tier_relaxed"][0]
+    assert tier_alert["attributed_to"] == ["AUTH-Q5"]
+    assert "AUTH-Q5" in tier_alert["detail"]
+    assert tier_alert["before"] == "Not Agent-Integrable"
+    assert tier_alert["after"] == "Remediation Required"
+
+
+def test_a_clean_rerun_raises_no_alerts():
+    # The guard is worthless if it cries on an identity diff — that is how a real alert
+    # gets trained away.
+    full = dr.load_tree(GOLDEN)
+    impact = dr.build_impact(full, copy.deepcopy(full))
+    assert impact["safety_alerts"] == []
+
+
+def test_getting_stricter_is_not_a_safety_alert():
+    """Direction matters. A question GAINING a blocker is the rubric tightening."""
+    full = dr.load_tree(GOLDEN)
+    after = copy.deepcopy(full)
+    rpt = after[LOAN_ARA]
+    for f in rpt["findings"]:
+        if f.get("question_id") == "DATA-Q1":
+            f["ara_metadata"]["native_severity"] = "BLOCKER"
+            break
+    c = rpt["classification"]
+    c["blocker_count"] += 1
+    impact = dr.build_impact(copy.deepcopy(full), after)
+    # Precondition: the differ DID see the reseverity, so silence below is the direction
+    # check doing its job and not the mutation failing to register.
+    res = impact["per_repo"]["legacy-loan-calculator"]["D1_ara_findings"]["reseveritied"]
+    assert [r["question_id"] for r in res] == ["DATA-Q1"]
+    assert impact["safety_alerts"] == [], \
+        f"a stricter rubric must not alert: {impact['safety_alerts']}"
+
+
+def test_mod_is_exempt_from_safety_alerts():
+    """MOD has no BLOCKER class and no agent-readiness tier — nothing mechanical to assert.
+
+    Deliberately moves the MOD tier along a transition that WOULD fire for ARA
+    ("Remediation Required" -> "Pilot-Ready" are both ranked), so the exemption is what
+    keeps this quiet rather than the tier name simply being unrecognised.
+    """
+    full = dr.load_tree(GOLDEN)
+    key = ("mod", "repo", "legacy-loan-calculator")
+    assert full[key]["classification"]["tier"] == "Remediation Required"
+    assert dr._tier_relaxed("Remediation Required", "Pilot-Ready") is True, \
+        "fixture precondition: this transition must be one ARA would alert on"
+    after = copy.deepcopy(full)
+    after[key]["classification"]["tier"] = "Pilot-Ready"
+    impact = dr.build_impact(copy.deepcopy(full), after)
+    assert impact["safety_alerts"] == [], \
+        f"MOD must be exempt, got {impact['safety_alerts']}"
+    # ...but the tier move itself must still be reported as an ordinary D2 change.
+    assert impact["per_repo"]["legacy-loan-calculator"]["D2_mod_tier"]["changed"] is True
+
+
+def test_severity_and_tier_rank_helpers():
+    assert dr._severity_relaxed("BLOCKER", "RISK-SAFETY") is True
+    assert dr._severity_relaxed("RISK-QUALITY", "RISK-SAFETY") is False   # stricter
+    assert dr._severity_relaxed("BLOCKER", "BLOCKER") is False
+    assert dr._severity_relaxed(None, "BLOCKER") is False                 # unknown -> quiet
+    assert dr._severity_relaxed("BLOCKER", "NOT-A-CLASS") is False
+    assert dr._tier_relaxed("Not Agent-Integrable", "Agent-Ready") is True
+    assert dr._tier_relaxed("Agent-Ready", "Not Agent-Integrable") is False
+    assert dr._tier_relaxed("Pilot-Ready", "Pilot-Ready") is None
+    assert dr._tier_relaxed("Made Up Tier", "Agent-Ready") is None
+
+
+def test_malformed_finding_entries_do_not_crash_the_alerts():
+    # The differ runs on agent-authored JSON. A non-dict in `reseveritied` must not take
+    # down the whole comparison.
+    alerts = dr.safety_alerts(
+        "r", "ara",
+        {"added": [], "removed": [], "reseveritied": ["not-a-dict", None, {}]},
+        {"changed": False, "blocker_count": {"before": None, "after": None}})
+    assert alerts == []
+
+
+def test_risk_safety_downgrade_is_reported_but_not_tier_material_while_blockers_remain():
+    """Found by reading a real advisory comment, not by reasoning about the code.
+
+    The judge filed `DATA-Q1 RISK-SAFETY -> RISK-QUALITY` as "likely run-to-run variance",
+    and the first cut of safety_alerts() — keyed on BLOCKER alone — silently agreed. It IS a
+    tier-driving class (SKILL.md 1571-1573), so it must be reported. But all 11 ARA fixtures
+    sit at blocker_count 1-3, where risk_safety_count does not affect the tier and drifts
+    several findings per rerun, so it must NOT force a hold or the gate fires on every MR.
+    """
+    full = dr.load_tree(GOLDEN)
+    after = copy.deepcopy(full)
+    rpt = after[LOAN_ARA]
+    assert rpt["classification"]["blocker_count"] > 0, "fixture precondition"
+    for f in rpt["findings"]:
+        if f.get("question_id") == "DATA-Q1":
+            assert f["ara_metadata"]["native_severity"] == "RISK-SAFETY"
+            f["ara_metadata"]["native_severity"] = "RISK-QUALITY"
+            break
+    rpt["classification"]["risk_safety_count"] -= 1
+    rpt["classification"]["risk_quality_count"] += 1
+    impact = dr.build_impact(copy.deepcopy(full), after)
+    kinds = {a["kind"] for a in impact["safety_alerts"]}
+    assert "safety_class_downgraded" in kinds, \
+        f"a RISK-SAFETY downgrade must be reported, got {kinds}"
+    assert all(a["tier_material"] is False for a in impact["safety_alerts"]), \
+        "must not hold while blocker_count > 0 — that would fire on nearly every MR"
+
+
+def test_risk_safety_downgrade_is_tier_material_once_blockers_are_clear():
+    """Same movement, blockers cleared: now it IS the tier driver and must hold.
+
+    risk_safety_count 1 -> 0 with blocker_count 0 is the step that declares a repo
+    Agent-Ready, which is the single most consequential claim the rubric can make.
+    """
+    full = dr.load_tree(GOLDEN)
+    before = copy.deepcopy(full)
+    before[LOAN_ARA]["classification"].update(
+        {"blocker_count": 0, "risk_safety_count": 1, "tier": "Pilot-Ready"})
+    after = copy.deepcopy(before)
+    after[LOAN_ARA]["classification"].update(
+        {"blocker_count": 0, "risk_safety_count": 0, "tier": "Agent-Ready"})
+    for f in after[LOAN_ARA]["findings"]:
+        if f.get("question_id") == "DATA-Q1":
+            f["ara_metadata"]["native_severity"] = "RISK-QUALITY"
+            break
+    impact = dr.build_impact(before, after)
+    material = [a for a in impact["safety_alerts"] if a["tier_material"]]
+    assert material, f"must hold once risk_safety drives the tier: {impact['safety_alerts']}"
+    kinds = {a["kind"] for a in material}
+    assert "risk_safety_count_fell" in kinds and "tier_relaxed" in kinds
+
+
+def test_blocker_alerts_are_always_tier_material():
+    full = dr.load_tree(GOLDEN)
+    after = _downgrade_a_blocker(copy.deepcopy(full))
+    impact = dr.build_impact(copy.deepcopy(full), after)
+    assert all(a["tier_material"] for a in impact["safety_alerts"])
+
+
+# --- question coverage (43 ARA / 37 MOD) ----------------------------------------------
+
+def test_every_golden_per_repo_report_answers_the_full_rubric():
+    """Pins the 43/37 totals against the real baseline.
+
+    Counted from the reports, never grepped from SKILL.md: the MOD rubric prose names
+    ARA's DATA-Q7 in a namespace-collision note, so grepping over-counts MOD as 38.
+    """
+    full = dr.load_tree(GOLDEN)
+    for (analysis, scope, repo), rpt in full.items():
+        if scope != "repo":
+            continue
+        n = len(dr._answered_question_ids(rpt))
+        assert n == dr._EXPECTED_QUESTIONS[analysis], \
+            f"{repo} ({analysis}) answers {n}, expected {dr._EXPECTED_QUESTIONS[analysis]}"
+
+
+def test_evaluations_and_findings_are_disjoint():
+    """The bug that made the first cut of the coverage guard fire on all 22 baselines.
+
+    A question that passed lands in `evaluations`, one that flagged in `findings` — they
+    never overlap, so coverage is the UNION. Reading either alone sees ~half the rubric.
+    """
+    full = dr.load_tree(GOLDEN)
+    rpt = full[LOAN_ARA]
+    ev = {e["question_id"] for e in rpt["evaluations"]}
+    fi = {f["question_id"] for f in rpt["findings"]}
+    assert ev & fi == set(), "evaluations and findings overlap — coverage math must change"
+    assert len(ev) + len(fi) == 43
+
+
+def test_clean_tree_reports_no_coverage_gaps():
+    full = dr.load_tree(GOLDEN)
+    impact = dr.build_impact(full, copy.deepcopy(full))
+    assert impact["coverage_gaps"] == []
+
+
+def test_dropped_questions_are_reported_as_a_coverage_gap():
+    # A rubric question that stops being answered surfaces as a pile of removed findings,
+    # which is exactly what ordinary nondeterministic churn looks like. Assert it
+    # structurally so it cannot be filed as noise.
+    full = dr.load_tree(GOLDEN)
+    after = copy.deepcopy(full)
+    rpt = after[LOAN_ARA]
+    dropped = {"API-Q1", "AUTH-Q5"}
+    rpt["findings"] = [f for f in rpt["findings"]
+                       if f.get("question_id") not in dropped]
+    rpt["evaluations"] = [e for e in rpt["evaluations"]
+                          if e.get("question_id") not in dropped]
+    impact = dr.build_impact(copy.deepcopy(full), after)
+    gaps = [g for g in impact["coverage_gaps"] if g["repo"] == "legacy-loan-calculator"]
+    assert len(gaps) == 1, f"expected one gap, got {impact['coverage_gaps']}"
+    gap = gaps[0]
+    assert gap["after_answered"] == 41 and gap["expected"] == 43
+    assert set(gap["missing_vs_baseline"]) == dropped
+    assert "API-Q1" in gap["detail"]
+
+
+def test_structurally_empty_report_is_not_a_coverage_gap():
+    # No question ids at all is a broken/absent report, handled elsewhere. Reporting it as
+    # a coverage dip would bury the real gaps in noise.
+    assert dr.question_coverage("r", "ara", {"findings": []}, {"findings": []}) is None
+
+
+def test_unknown_analysis_has_no_expected_total():
+    assert dr.question_coverage("r", "portfolio-ish", {}, {}) is None
+
+
 # --- fallback runner (no pytest) -----------------------------------------------------
 
 def _run_all():

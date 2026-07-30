@@ -205,6 +205,191 @@ def test_system_prompt_requires_causal_story_for_regression():
     assert "causal" in sp
 
 
+# --- safety floor (the over-correction the scope note introduced) ---------------------
+# Fixing the false `mismatch` created the opposite failure. On MR !14 the delta ALSO moved
+# `AUTH-Q5 BLOCKER -> RISK-SAFETY`, dropping blocker_count 3 -> 2 and relaxing the ARA tier
+# to Remediation Required. AUTH-Q5 was out of scope, the scope note says out-of-scope
+# movement is noise, so the judge filed a real tier regression as "likely noise" and
+# returned LGTM/72.
+#
+# The prompt now carves blockers and tiers out of the noise rule, but a prompt is a request.
+# `_enforce_safety_floor` is the guarantee: it runs in code after whichever engine produced
+# the verdict, so neither the LLM nor the heuristic fallback can talk it down.
+
+_MR14_ALERTS = [
+    {"kind": "blocker_downgraded", "repo": "legacy-loan-calculator",
+     "question_id": "AUTH-Q5", "before": "BLOCKER", "after": "RISK-SAFETY",
+     "detail": "AUTH-Q5 was a BLOCKER and is now RISK-SAFETY."},
+    {"kind": "tier_relaxed", "repo": "legacy-loan-calculator",
+     "before": "Not Agent-Integrable", "after": "Remediation Required",
+     "attributed_to": ["AUTH-Q5"],
+     "detail": "readiness tier moved Not Agent-Integrable -> Remediation Required"},
+]
+_COVERAGE_GAP = [{"repo": "legacy-loan-calculator", "analysis": "ara", "expected": 43,
+                  "after_answered": 41, "missing_vs_baseline": ["API-Q1", "AUTH-Q5"],
+                  "detail": "legacy-loan-calculator (ARA) answered 41 of 43"}]
+
+
+def _lgtm() -> dict:
+    """The verdict the judge actually returned on MR !14 — the one that must not survive."""
+    return {"score": 72, "verdict": "LGTM", "intent_match": "aligned",
+            "quality_regression": False, "concerns": [],
+            "rationale": "AUTH-Q5 movement is likely noise.", "_engine": "bedrock"}
+
+
+def test_alerts_survive_summarisation():
+    # The differ computes them; if summarize_impact drops them the floor never sees them
+    # and the prompt never mentions them.
+    summ = judge.summarize_impact(
+        {**_impact_with_reseverity(), "safety_alerts": _MR14_ALERTS,
+         "coverage_gaps": _COVERAGE_GAP})
+    assert summ["safety_alerts"] == _MR14_ALERTS
+    assert summ["coverage_gaps"] == _COVERAGE_GAP
+
+
+def test_alerts_note_marks_them_as_not_noise():
+    note = judge._alerts_note({"safety_alerts": _MR14_ALERTS,
+                               "coverage_gaps": _COVERAGE_GAP})
+    assert "AUTH-Q5" in note
+    assert "Not Agent-Integrable -> Remediation Required" in note
+    low = note.lower()
+    assert "noise" in low, "the note must explicitly override the noise rule"
+    assert "regardless" in low, "it must say edit scope does not excuse these"
+    assert "43" in note and "41 of 43" in note
+
+
+def test_alerts_note_silent_when_there_are_none():
+    # A permanently-present empty section trains the reader to skip it.
+    assert judge._alerts_note({}) == ""
+    assert judge._alerts_note({"safety_alerts": [], "coverage_gaps": []}) == ""
+
+
+def test_prompt_places_alerts_before_the_highlights():
+    # Ordering is deliberate: the judge read the tier change in its highlights and had no
+    # signal it was rubric-mechanical. The alerts must land before that evidence.
+    prompt = judge.build_user_prompt(
+        {"what": "reclassify API-Q2"},
+        judge.summarize_impact({**_impact_with_reseverity(),
+                                "safety_alerts": _MR14_ALERTS}),
+        "", ["API-Q2"])
+    assert "SAFETY ALERTS" in prompt
+    assert prompt.index("SAFETY ALERTS") < prompt.index("highlights:")
+
+
+def test_safety_floor_overrides_an_lgtm():
+    """The exact MR !14 verdict, forced down."""
+    v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": _MR14_ALERTS})
+    assert v["verdict"] == "needs-work"
+    assert v["quality_regression"] is True
+    assert v["score"] <= 40
+    assert v["safety_hold"] is True
+
+
+def test_safety_floor_surfaces_every_alert_as_a_concern():
+    v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": _MR14_ALERTS,
+                                              "coverage_gaps": _COVERAGE_GAP})
+    blob = "\n".join(c["detail"] for c in v["concerns"])
+    assert "AUTH-Q5" in blob
+    assert "Not Agent-Integrable -> Remediation Required" in blob
+    assert "41 of 43" in blob
+    assert len(v["concerns"]) == 3
+
+
+def test_safety_floor_preserves_the_model_rationale():
+    # We downgrade the verdict but do NOT rewrite the reasoning: a reviewer should be able
+    # to see that the judge disagreed, which is itself information about the judge.
+    v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": _MR14_ALERTS})
+    assert "likely noise" in v["rationale"]
+
+
+def test_safety_floor_is_idempotent():
+    # main() calls it once, but a retry or a future second call must not double-append
+    # concerns or re-cap an already-capped score.
+    first = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": _MR14_ALERTS})
+    n = len(first["concerns"])
+    second = judge._enforce_safety_floor(first, {"safety_alerts": _MR14_ALERTS})
+    assert len(second["concerns"]) == n
+
+
+def test_non_tier_material_alert_is_reported_without_forcing_a_hold():
+    """Reporting and vetoing are two decisions, not one.
+
+    A RISK-SAFETY downgrade while blocker_count > 0 is real and must reach the reader, but
+    that count drifts every rerun — holding on it would make every MR a needs-work, and a
+    gate that always fires is a gate nobody reads.
+    """
+    drift = [{"kind": "safety_class_downgraded", "repo": "legacy-loan-calculator",
+              "question_id": "DATA-Q1", "before": "RISK-SAFETY", "after": "RISK-QUALITY",
+              "tier_material": False,
+              "detail": "DATA-Q1 was RISK-SAFETY and is now RISK-QUALITY."}]
+    v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": drift})
+    assert v["verdict"] == "LGTM", "a tier-inert drift must not veto"
+    assert v["score"] == 72
+    assert "safety_hold" not in v
+    # ...but it must still be visible.
+    assert "DATA-Q1" in "\n".join(c["detail"] for c in v["concerns"])
+
+
+def test_one_tier_material_alert_holds_even_among_drift():
+    drift = {"kind": "safety_class_downgraded", "tier_material": False,
+             "detail": "DATA-Q1 drift"}
+    v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": [drift] + _MR14_ALERTS})
+    assert v["safety_hold"] is True
+    assert v["verdict"] == "needs-work"
+
+
+def test_alert_without_the_field_defaults_to_holding():
+    # Forward/backward compatibility: a missing tier_material must fail SAFE, never quiet.
+    v = judge._enforce_safety_floor(
+        _lgtm(), {"safety_alerts": [{"kind": "tier_relaxed", "detail": "no flag present"}]})
+    assert v["safety_hold"] is True
+
+
+def test_alerts_note_marks_tier_material_vs_notable():
+    note = judge._alerts_note({"safety_alerts": [
+        {"kind": "tier_relaxed", "tier_material": True, "detail": "tier moved"},
+        {"kind": "safety_class_downgraded", "tier_material": False, "detail": "drift"},
+    ]})
+    assert "TIER-MATERIAL" in note
+    assert "notable" in note
+
+
+def test_safety_floor_is_a_no_op_without_alerts():
+    # It must not turn every clean run into needs-work — that would make the signal useless.
+    v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": [], "coverage_gaps": []})
+    assert v["verdict"] == "LGTM"
+    assert v["score"] == 72
+    assert "safety_hold" not in v
+
+
+def test_safety_floor_does_not_raise_a_low_score():
+    # Capping, not setting: a genuinely awful change stays awful.
+    v = judge._enforce_safety_floor(
+        {**_lgtm(), "score": 5}, {"safety_alerts": _MR14_ALERTS})
+    assert v["score"] == 5
+
+
+def test_safety_floor_tolerates_malformed_alerts():
+    v = judge._enforce_safety_floor(_lgtm(), {"safety_alerts": ["nope", None],
+                                              "coverage_gaps": [None]})
+    assert v["verdict"] == "LGTM", "no well-formed alert means nothing to hold on"
+
+
+def test_system_prompt_exempts_blockers_from_the_noise_rule():
+    sp = judge.SYSTEM_PROMPT.lower()
+    assert "safety alerts" in sp
+    assert "blocker" in sp
+    assert "coverage gaps" in sp
+
+
+def test_scope_note_states_the_limits_of_the_noise_rule():
+    """Without this the noise rule reads as unconditional — which is how it swallowed the
+    AUTH-Q5 tier regression."""
+    note = judge._scope_note(["API-Q2"]).lower()
+    assert "blocker" in note
+    assert "tier" in note
+
+
 # --- intent parsing ------------------------------------------------------------------
 
 def test_intent_freeform_becomes_what():

@@ -583,9 +583,275 @@ def _nonempty_findings(d: dict) -> bool:
     return bool(d["added"] or d["removed"] or d["reseveritied"])
 
 
+# ---------------------------------------------------------------------------------------
+# SAFETY ALERTS — deterministic, computed here rather than judged by the LLM
+# ---------------------------------------------------------------------------------------
+# WHY THIS IS NOT THE JUDGE'S JOB: on MR !14 the delta moved
+# `AUTH-Q5 BLOCKER -> RISK-SAFETY` in legacy-loan-calculator, which dropped
+# blocker_count 3 -> 2 and moved the ARA tier `Not Agent-Integrable -> Remediation
+# Required`. The judge was told (correctly) that movement outside the edited questions is
+# nondeterministic noise, AUTH-Q5 was outside the edit scope, so it filed a genuine tier
+# regression as "likely noise" and still returned LGTM.
+#
+# That is not a prompt bug to be tuned away. Some facts are ARITHMETIC, not judgement:
+# the ARA rubric states `blocker_count >= 3 -> Not Agent-Integrable` and `1-2 ->
+# Remediation Required`, so a lost BLOCKER *mechanically* relaxes the tier. A fixture
+# becoming "safer to hand to an agent" is the single claim that most deserves scrutiny,
+# and it must not depend on an LLM choosing to mention it.
+#
+# So these are computed deterministically and REGARDLESS OF EDIT SCOPE. Scope explains
+# findings churn; it never excuses a blocker disappearing. The judge still gets them, but
+# as facts it must address rather than evidence it may weigh away.
+#
+# Direction matters: severity classes are ordered, and only movement toward LESS severe
+# is alarming. A question GAINING a blocker is the rubric getting stricter — worth noting,
+# never a safety alert.
+_ARA_SEVERITY_RANK = {"BLOCKER": 3, "RISK-SAFETY": 2, "RISK-QUALITY": 1, "INFO": 0}
+
+# ARA tiers ordered least -> most permissive for an agent. A move DOWN this list means the
+# analysis now considers the system more agent-ready, which is the direction that needs a
+# causal explanation.
+_ARA_TIER_RANK = {
+    "Not Agent-Integrable": 0,
+    "Remediation Required": 1,
+    "Pilot-Ready (Safety Concerns)": 2,
+    "Pilot-Ready": 3,
+    "Agent-Ready": 4,
+}
+
+
+def _severity_relaxed(before: Optional[str], after: Optional[str]) -> bool:
+    """True when `after` is a strictly LESS severe ARA class than `before`."""
+    b = _ARA_SEVERITY_RANK.get(str(before or "").strip().upper())
+    a = _ARA_SEVERITY_RANK.get(str(after or "").strip().upper())
+    if b is None or a is None:
+        return False
+    return a < b
+
+
+def _tier_relaxed(before: Optional[str], after: Optional[str]) -> Optional[bool]:
+    """True when the tier moved toward MORE agent-ready. None if unrecognised/unchanged."""
+    b = _ARA_TIER_RANK.get(str(before or "").strip())
+    a = _ARA_TIER_RANK.get(str(after or "").strip())
+    if b is None or a is None or a == b:
+        return None
+    return a > b
+
+
+def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict) -> list[dict]:
+    """Deterministic safety-material alerts for one (repo, analysis) pair.
+
+    Returns a list of dicts, each naming the specific movement and — where the rubric makes
+    it mechanical — the causal link between them, so a reader does not have to rediscover
+    that "blocker lost" and "tier relaxed" are the same event.
+    """
+    alerts: list[dict] = []
+    if analysis != "ara":
+        # MOD has no BLOCKER class and no agent-readiness tier; its D5 band crossing is
+        # already surfaced separately. Nothing rubric-mechanical to assert here.
+        return alerts
+
+    # TIER-MATERIAL vs MERELY NOTABLE. Every alert is reported, but only tier-material ones
+    # force a hold, and the distinction is load-bearing rather than cosmetic.
+    #
+    # The tier rules read blocker_count FIRST: while blocker_count > 0 the risk_safety_count
+    # does not affect the tier at all. All 11 ARA fixtures currently sit at blocker_count
+    # 1-3 with risk_safety_count 3-11, and that second number drifts by several findings on
+    # every nondeterministic rerun. So treating any risk_safety movement as a hold would
+    # trip on essentially every MR — and a gate that always fires is a gate nobody reads,
+    # which is precisely how the AUTH-Q5 regression got waved through in the first place.
+    #
+    # Once blocker_count reaches 0, risk_safety_count becomes the sole tier driver (and the
+    # 1 -> 0 step is what declares a repo Agent-Ready), so it is tier-material exactly then.
+    bc_after = (tier.get("blocker_count") or {}).get("after")
+    blockers_clear = bc_after == 0
+
+    # --- 1. a tier-material severity class was downgraded ------------------------------
+    # BOTH tier-driving classes matter, not just BLOCKER. SKILL.md lines 1569-1573:
+    #   blocker_count >= 3                      -> Not Agent-Integrable
+    #   blocker_count 1-2                       -> Remediation Required
+    #   blocker_count == 0, risk_safety >= 3    -> Pilot-Ready (Safety Concerns)
+    #   blocker_count == 0, risk_safety 1-2     -> Pilot-Ready
+    #   blocker_count == 0, risk_safety == 0    -> Agent-Ready
+    # So RISK-SAFETY -> RISK-QUALITY is ALSO a mechanical tier relaxation once blockers are
+    # clear, and it is the move that carries a repo the last step to Agent-Ready. Only
+    # RISK-QUALITY and INFO are tier-inert ("RISK-QUALITY count has no effect", line 2054).
+    #
+    # This gap was found by reading a real advisory comment: the judge filed
+    # `DATA-Q1 RISK-SAFETY -> RISK-QUALITY` as "likely run-to-run variance" while the first
+    # cut of this function, keyed on BLOCKER alone, stayed silent and agreed with it.
+    lost_safety: dict[str, list[str]] = {"BLOCKER": [], "RISK-SAFETY": []}
+    for r in findings.get("reseveritied") or []:
+        if not isinstance(r, dict):
+            continue
+        nat = r.get("native_severity") or {}
+        before_cls = str(nat.get("before") or "").strip().upper()
+        if before_cls not in lost_safety:
+            continue
+        if not _severity_relaxed(nat.get("before"), nat.get("after")):
+            continue
+        qid = str(r.get("question_id"))
+        lost_safety[before_cls].append(qid)
+        if before_cls == "BLOCKER":
+            tier_material = True
+            why = ("A lost BLOCKER relaxes the readiness tier mechanically "
+                   "(>=3 BLOCKER -> Not Agent-Integrable; 1-2 -> Remediation Required), "
+                   "so this is never mere noise.")
+        else:
+            tier_material = blockers_clear
+            why = ("RISK-SAFETY drives the tier once blocker_count is 0 "
+                   "(>=3 -> Pilot-Ready (Safety Concerns); 1-2 -> Pilot-Ready; "
+                   "0 -> Agent-Ready), and RISK-QUALITY is tier-inert. "
+                   + ("blocker_count is now 0, so this DOES move the tier."
+                      if blockers_clear else
+                      "blocker_count is still above 0 here, so the tier does not move "
+                      "yet — noted rather than held, but check it is intended."))
+        alerts.append({
+            "kind": "blocker_downgraded" if before_cls == "BLOCKER"
+                    else "safety_class_downgraded",
+            "repo": repo,
+            "question_id": r.get("question_id"),
+            "before": nat.get("before"),
+            "after": nat.get("after"),
+            "tier_material": tier_material,
+            "detail": f"{qid} was {before_cls} and is now {nat.get('after')}. {why}",
+        })
+    lost_blockers = lost_safety["BLOCKER"]
+    # Everything that moved a repo toward agent-ready, for attributing the tier move below.
+    lost_all = lost_blockers + lost_safety["RISK-SAFETY"]
+
+    # A finding that disappeared ENTIRELY is the same hazard as one downgraded — `removed`
+    # carries only question ids, so we cannot read its class from the delta and must rely on
+    # the counts below to catch it.
+
+    # --- 2. a tier-driving count fell --------------------------------------------------
+    for field, label in (("blocker_count", "blocker_count"),
+                         ("risk_safety_count", "risk_safety_count")):
+        cc = tier.get(field) or {}
+        c_before, c_after = cc.get("before"), cc.get("after")
+        if not (isinstance(c_before, int) and isinstance(c_after, int)):
+            continue
+        if c_after >= c_before:
+            continue
+        is_blocker = field == "blocker_count"
+        attributed = lost_blockers if is_blocker else lost_safety["RISK-SAFETY"]
+        # risk_safety_count drifts on every rerun while blockers remain, so it only holds
+        # when it is actually the tier driver. blocker_count always holds.
+        tier_material = is_blocker or blockers_clear
+        alerts.append({
+            "kind": "blocker_count_fell" if is_blocker else "risk_safety_count_fell",
+            "repo": repo,
+            "field": label,
+            "before": c_before,
+            "after": c_after,
+            "attributed_to": attributed,
+            "tier_material": tier_material,
+            "detail": (f"{label} fell {c_before} -> {c_after}"
+                       + (f" (downgraded: {', '.join(attributed)})" if attributed else "")
+                       + (". A lower tier-driving count means the analysis now considers "
+                          "this system closer to agent-ready — confirm that is intended."
+                          if tier_material else
+                          ". blocker_count is still above 0, so this does not move the tier "
+                          "on its own; noted because it is one blocker fix away from doing "
+                          "so.")),
+        })
+
+    # --- 3. the readiness tier relaxed -------------------------------------------------
+    if tier.get("changed"):
+        relaxed = _tier_relaxed(tier.get("before"), tier.get("after"))
+        if relaxed is True:
+            alerts.append({
+                "kind": "tier_relaxed",
+                "repo": repo,
+                "before": tier.get("before"),
+                "after": tier.get("after"),
+                "attributed_to": lost_all,
+                # An actual tier move is always tier-material, by definition.
+                "tier_material": True,
+                "detail": (f"readiness tier moved {tier.get('before')} -> "
+                           f"{tier.get('after')}, i.e. MORE agent-ready"
+                           + (f", caused by downgrading {', '.join(lost_all)}"
+                              if lost_all else "")
+                           + ". This is a safety-material change and requires a causal "
+                             "explanation, not a noise attribution."),
+            })
+    return alerts
+
+
+# ---------------------------------------------------------------------------------------
+# QUESTION COVERAGE — every per-repo report must answer the WHOLE rubric
+# ---------------------------------------------------------------------------------------
+# The ARA rubric defines 43 questions and MOD 37, and every per-repo golden report answers
+# all of them (verified across all 24 baselines). A report that suddenly answers fewer has
+# either lost a question from the rubric or silently failed to evaluate one — and either
+# way the harness would report it as a pile of REMOVED findings, indistinguishable from the
+# analysis agent's ordinary nondeterministic churn. The judge would then quite reasonably
+# call it noise. So assert coverage structurally instead of hoping the delta reveals it.
+#
+# Counted from the report itself, NOT parsed out of SKILL.md: the rubric prose mentions ids
+# it does not define (MOD's namespace-collision note names ARA's DATA-Q7, which is not a
+# MOD question), so grepping the rubric over-counts. The expected totals are pinned here
+# and asserted against the baseline by the tests.
+_EXPECTED_QUESTIONS = {"ara": 43, "mod": 37}
+
+
+def _answered_question_ids(report: dict) -> set[str]:
+    """Question ids the report actually answered.
+
+    `evaluations` and `findings` are DISJOINT, not overlapping: a question that flagged an
+    issue is recorded in `findings`, one that passed in `evaluations`. On
+    legacy-loan-calculator that is 22 + 21 = 43 with zero intersection. So coverage is the
+    UNION of both — reading either alone reports roughly half the rubric and makes every
+    healthy report look like it dropped 20 questions (which is exactly what the first cut
+    of this function did against all 24 baselines).
+    """
+    ids: set[str] = set()
+    for key in ("evaluations", "findings"):
+        for e in report.get(key) or []:
+            if isinstance(e, dict) and isinstance(e.get("question_id"), str):
+                ids.add(e["question_id"])
+    return ids
+
+
+def question_coverage(repo: str, analysis: str,
+                      before: dict, after: dict) -> Optional[dict]:
+    """Flag a per-repo report that stopped answering the full rubric.
+
+    Returns None when coverage is intact or cannot be assessed. Compares against the
+    BASELINE's own count as well as the expected total, so a baseline that was itself
+    incomplete does not mask a further regression.
+    """
+    expected = _EXPECTED_QUESTIONS.get(analysis)
+    if expected is None:
+        return None
+    b_ids, a_ids = _answered_question_ids(before), _answered_question_ids(after)
+    if not a_ids:
+        # No question ids at all — a structurally broken report, not a coverage dip.
+        return None
+    missing_vs_baseline = sorted(b_ids - a_ids)
+    if len(a_ids) >= expected and not missing_vs_baseline:
+        return None
+    return {
+        "repo": repo,
+        "analysis": analysis,
+        "expected": expected,
+        "baseline_answered": len(b_ids),
+        "after_answered": len(a_ids),
+        "missing_vs_baseline": missing_vs_baseline,
+        "detail": (f"{repo} ({analysis.upper()}) answered {len(a_ids)} of {expected} "
+                   f"rubric questions (baseline answered {len(b_ids)})"
+                   + (f"; no longer answering: {', '.join(missing_vs_baseline[:10])}"
+                      if missing_vs_baseline else "")
+                   + ". A dropped question surfaces as removed findings and is easily "
+                     "mistaken for noise — treat it as a rubric/analysis defect."),
+    }
+
+
 def build_impact(before_tree: dict, after_tree: dict) -> dict:
     per_repo: dict[str, dict] = {}
     portfolio: dict[str, dict] = {}
+    alerts: list[dict] = []
+    coverage_gaps: list[dict] = []
 
     # Compare only reports present on BOTH sides.
     #
@@ -623,6 +889,13 @@ def build_impact(before_tree: dict, after_tree: dict) -> dict:
             td = diff_tier_repo(before, after, analysis)
             entry[f"D1_{analysis}_findings"] = fd
             entry[f"D2_{analysis}_tier"] = td
+            # Deterministic guards. Collected regardless of whether anything else "moved",
+            # and regardless of the MR's edit scope — a relaxed tier is material even when
+            # the questions that caused it were never touched.
+            alerts.extend(safety_alerts(key, analysis, fd, td))
+            gap = question_coverage(key, analysis, before, after)
+            if gap:
+                coverage_gaps.append(gap)
             moved = _nonempty_findings(fd) or td["changed"]
             if analysis == "mod":
                 pw = diff_pathways(before, after)
@@ -656,6 +929,12 @@ def build_impact(before_tree: dict, after_tree: dict) -> dict:
         "changed_tds": sorted(changed_tds),
         "per_repo": per_repo,
         "portfolio": portfolio,
+        # Deterministic findings the judge must ADDRESS rather than weigh away. Kept at the
+        # top level (not buried per-repo) so neither the prompt builder nor a human reader
+        # can miss them, and so `harness/judge.py` can refuse to return LGTM while a
+        # safety alert is unexplained.
+        "safety_alerts": alerts,
+        "coverage_gaps": coverage_gaps,
         # Scope of THIS comparison. `no_op` below means "nothing moved in what we
         # compared" — these fields say how much that was, so a clean verdict on a
         # 2-of-26 run can't be mistaken for a clean verdict on a full sweep.
