@@ -163,6 +163,22 @@ python -m pytest harness/tests/
 `judge.py` is the only component that needs an LLM; the gate, differ, and coverage
 heatmap (`coverage-heatmap.py`, rendered from `usecases.yaml` axes) all run offline.
 
+## Where the scores live (`SCORES.md`)
+
+[`SCORES.md`](./SCORES.md) is the readable score table for every fixture — accuracy
+score, deterministic check status, and the grader's fabrications/misses per report.
+It is **generated** from `golden-accuracy-baseline.json`, never hand-edited:
+
+```sh
+# Free — reads the committed baseline, no Bedrock, no analysis run.
+harness/score-reports.py --show-baseline --markdown
+```
+
+Add `--markdown` to any `--update-baseline` run and the doc is refreshed with the JSON,
+so the two cannot disagree. The file states its own **sample depth**, which governs how
+far the numbers can be pushed: at one run per fixture there is no measured variance, so
+ARA carries a 0.10 noise floor and its scores cannot rank fixtures against each other.
+
 ## Severity is read from the TD, never transcribed (`skill_table.py`)
 
 `skill_table.py` parses the question/severity tables straight out of the two managed
