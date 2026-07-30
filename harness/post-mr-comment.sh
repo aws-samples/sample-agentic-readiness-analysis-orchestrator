@@ -151,7 +151,15 @@ if concerns:
     lines.append("")
     lines.append("**Concerns:**")
     for c in concerns[:10]:
-        lines.append(f"- `{c.get('dimension','-')}` — {c.get('detail','')}")
+        # judge.py emits dicts {dimension, detail}, but a hand-edited or future verdict might
+        # hand us a bare string. Coerce rather than let one malformed entry raise
+        # AttributeError and drop the ENTIRE advisory comment off the MR — a silent absence
+        # is the one failure mode worse than a slightly ugly line, since the comment never
+        # blocks the merge and is the only feedback the contributor sees.
+        if isinstance(c, dict):
+            lines.append(f"- `{c.get('dimension','-')}` — {c.get('detail','')}")
+        else:
+            lines.append(f"- {c}")
 
 suggestions = v.get("suggestions") or []
 if suggestions:
