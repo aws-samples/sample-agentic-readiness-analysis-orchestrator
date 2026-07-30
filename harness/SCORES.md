@@ -8,43 +8,45 @@ Source: [`harness/golden-accuracy-baseline.json`](golden-accuracy-baseline.json)
 
 Each score is an LLM grader's assessment of how well a generated report is **grounded in the fixture's actual source code** — fabrications and misses count against it. This is the *accuracy* axis, and it is what the judge compares a TD change against. It is NOT the ARA tier or the MOD band, which are the report's own verdicts about the app and appear here as context.
 
+The **Checks** column is a different axis entirely: deterministic, arithmetic assertions that a report does not contradict **itself** — its own severity counters, its own tier arithmetic, its own question coverage. No LLM and no sampling is involved, so a failure here is a real defect at any sample depth, and is safe to act on immediately. A report can be perfectly grounded in the source (high score) and still fail a check by miscounting what it found. Each failure names the check; see [What the checks mean](#what-the-checks-mean).
+
 **Sample depth: 1 run per fixture (single draw).** There is no measured variance yet, so the judge falls back to the observed noise floor — **ARA 0.10**, **MOD 0.02** per fixture. Because the entire observed ARA range is about 0.10 wide, ARA scores here **cannot be used to rank fixtures against each other**; only the deterministic defects below are safe to act on at this depth.
 
 ## ARA — 11 reports
 
 Mean **0.76**, range 0.72–0.82.
 
-| Score | Repo | Checks | Tier / blockers |
+| Repo | Score | Checks | Tier / blockers |
 |---|---|---|---|
-| 0.72 | `legacy-document-portal` | **1 FAIL** | Not Agent-Integrable / 3 |
-| 0.72 | `legacy-helpdesk-tickets` | **1 FAIL** | Not Agent-Integrable / 3 |
-| 0.72 | `legacy-loan-calculator` | PASS | Not Agent-Integrable / 3 |
-| 0.72 | `legacy-partner-soap` | **1 FAIL** | Not Agent-Integrable / 3 |
-| 0.72 | `legacy-shipping-api` | **1 FAIL** | Remediation Required / 1 |
-| 0.72 | `legacy-timesheet-webforms` | **1 FAIL** | Not Agent-Integrable / 3 |
-| 0.78 | `legacy-crm-desktop` | PASS | Not Agent-Integrable / 3 |
-| 0.78 | `legacy-payroll-system` | PASS | Remediation Required / 2 |
-| 0.82 | `legacy-pricing-cgi` | PASS | Remediation Required / 2 |
-| 0.82 | `legacy-storefront-rails` | PASS | Not Agent-Integrable / 3 |
-| 0.82 | `monolith` | PASS | Remediation Required / 1 |
+| `legacy-document-portal` | 0.72 | **HIGH** — `severity_counter_undercount` | Not Agent-Integrable / 3 |
+| `legacy-helpdesk-tickets` | 0.72 | **MEDIUM** — `severity_counter_undercount` | Not Agent-Integrable / 3 |
+| `legacy-loan-calculator` | 0.72 | PASS | Not Agent-Integrable / 3 |
+| `legacy-partner-soap` | 0.72 | **MEDIUM** — `severity_counter_undercount` | Not Agent-Integrable / 3 |
+| `legacy-shipping-api` | 0.72 | **MEDIUM** — `severity_counter_undercount` | Remediation Required / 1 |
+| `legacy-timesheet-webforms` | 0.72 | **MEDIUM** — `severity_counter_undercount` | Not Agent-Integrable / 3 |
+| `legacy-crm-desktop` | 0.78 | PASS | Not Agent-Integrable / 3 |
+| `legacy-payroll-system` | 0.78 | PASS | Remediation Required / 2 |
+| `legacy-pricing-cgi` | 0.82 | PASS | Remediation Required / 2 |
+| `legacy-storefront-rails` | 0.82 | PASS | Not Agent-Integrable / 3 |
+| `monolith` | 0.82 | PASS | Remediation Required / 1 |
 
 ## MOD — 11 reports
 
 Mean **0.90**, range 0.85–0.92.
 
-| Score | Repo | Checks | MOD score / band |
+| Repo | Score | Checks | MOD score / band |
 |---|---|---|---|
-| 0.85 | `monolith` | PASS | 1.89 / Needs Work |
-| 0.88 | `legacy-partner-soap` | PASS | 1.09 / Not Ready |
-| 0.88 | `legacy-pricing-cgi` | PASS | 2.0 / Needs Work |
-| 0.88 | `legacy-shipping-api` | PASS | 1.77 / Needs Work |
-| 0.92 | `legacy-crm-desktop` | PASS | 1.15 / Not Ready |
-| 0.92 | `legacy-document-portal` | PASS | 1.18 / Not Ready |
-| 0.92 | `legacy-helpdesk-tickets` | PASS | 1.15 / Not Ready |
-| 0.92 | `legacy-loan-calculator` | PASS | 1.15 / Not Ready |
-| 0.92 | `legacy-payroll-system` | PASS | 1.0 / Not Ready |
-| 0.92 | `legacy-storefront-rails` | PASS | 1.18 / Not Ready |
-| 0.92 | `legacy-timesheet-webforms` | PASS | 1.09 / Not Ready |
+| `monolith` | 0.85 | PASS | 1.89 / Needs Work |
+| `legacy-partner-soap` | 0.88 | PASS | 1.09 / Not Ready |
+| `legacy-pricing-cgi` | 0.88 | PASS | 2.0 / Needs Work |
+| `legacy-shipping-api` | 0.88 | PASS | 1.77 / Needs Work |
+| `legacy-crm-desktop` | 0.92 | PASS | 1.15 / Not Ready |
+| `legacy-document-portal` | 0.92 | PASS | 1.18 / Not Ready |
+| `legacy-helpdesk-tickets` | 0.92 | PASS | 1.15 / Not Ready |
+| `legacy-loan-calculator` | 0.92 | PASS | 1.15 / Not Ready |
+| `legacy-payroll-system` | 0.92 | PASS | 1.0 / Not Ready |
+| `legacy-storefront-rails` | 0.92 | PASS | 1.18 / Not Ready |
+| `legacy-timesheet-webforms` | 0.92 | PASS | 1.09 / Not Ready |
 
 ## Deterministic defects — 5 across 5 reports
 
@@ -52,11 +54,21 @@ Arithmetic contradictions inside a single report — **actionable now**, indepen
 
 | Severity | Repo | Check | Detail |
 |---|---|---|---|
-| high | `legacy-document-portal` (ARA) | severity_counter_undercount | risk_safety_count=8 but 9 findings are natively RISK-SAFETY (undercount by 1; no exclusion rule can lower a counter below the enumerated findings) |
-| medium | `legacy-helpdesk-tickets` (ARA) | severity_counter_undercount | risk_quality_count=8 but 10 findings are natively RISK-QUALITY (undercount by 2; no exclusion rule can lower a counter below the enumerated findings) |
-| medium | `legacy-partner-soap` (ARA) | severity_counter_undercount | risk_quality_count=9 but 11 findings are natively RISK-QUALITY (undercount by 2; no exclusion rule can lower a counter below the enumerated findings) |
-| medium | `legacy-shipping-api` (ARA) | severity_counter_undercount | risk_quality_count=8 but 9 findings are natively RISK-QUALITY (undercount by 1; no exclusion rule can lower a counter below the enumerated findings) |
-| medium | `legacy-timesheet-webforms` (ARA) | severity_counter_undercount | risk_quality_count=6 but 10 findings are natively RISK-QUALITY (undercount by 4; no exclusion rule can lower a counter below the enumerated findings) |
+| high | `legacy-document-portal` (ARA) | `severity_counter_undercount` | risk_safety_count=8 but 9 findings are natively RISK-SAFETY (undercount by 1; no exclusion rule can lower a counter below the enumerated findings) |
+| medium | `legacy-helpdesk-tickets` (ARA) | `severity_counter_undercount` | risk_quality_count=8 but 10 findings are natively RISK-QUALITY (undercount by 2; no exclusion rule can lower a counter below the enumerated findings) |
+| medium | `legacy-partner-soap` (ARA) | `severity_counter_undercount` | risk_quality_count=9 but 11 findings are natively RISK-QUALITY (undercount by 2; no exclusion rule can lower a counter below the enumerated findings) |
+| medium | `legacy-shipping-api` (ARA) | `severity_counter_undercount` | risk_quality_count=8 but 9 findings are natively RISK-QUALITY (undercount by 1; no exclusion rule can lower a counter below the enumerated findings) |
+| medium | `legacy-timesheet-webforms` (ARA) | `severity_counter_undercount` | risk_quality_count=6 but 10 findings are natively RISK-QUALITY (undercount by 4; no exclusion rule can lower a counter below the enumerated findings) |
+
+## What the checks mean
+
+Each check asserts a report is internally consistent. All are deterministic arithmetic — no LLM, no sampling — so a failure is a genuine defect regardless of how many runs we have.
+
+| Check | Severity | What a failure means |
+|---|---|---|
+| `severity_counter_undercount` | high | A severity counter is LOWER than the findings the report itself enumerated. Exclusion rules can push a counter above the enumerated set, never below it, so this is always an error — and because the ARA tier is computed from these counters, an undercount can mechanically relax the tier. |
+
+The other 10 checks passed everywhere: `category_band_mismatch`, `duplicate_question_ids`, `incomplete_question_coverage`, `missing_safety_qualifier`, `overall_score_band_error`, `overall_score_not_mean_of_categories`, `question_in_both_findings_and_evaluations`, `spurious_safety_qualifier`, `tier_contradicts_counts`, `unexpected_question_count`.
 
 ## Per-report grader notes
 
