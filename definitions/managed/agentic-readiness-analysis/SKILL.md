@@ -97,6 +97,13 @@ Each question is scored using a severity model:
 
 Five questions are **conditional BLOCKERs** (⚡) — their severity depends on context (typically `agent_scope` write-enabled vs read-only): API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, and DATA-Q2. DATA-Q1 additionally uses a tiered sub-check model (see its section for B1/B2/B3 evaluation).
 
+**The severity in each question's heading is the ceiling.** A question's severity MUST come from its `#### <question_id>:` heading and MAY NOT be raised above it, no matter how severe the evidence found is. Only two mechanisms move a severity, and both are enumerated in this document:
+
+- The **9 ⚡ questions** (the 5 conditional BLOCKERs above, plus the scope-calibrated HITL-Q1, HITL-Q2, STATE-Q3, STATE-Q6) resolve per `agent_scope`, as specified in each question's own section.
+- **Surface-flag and archetype calibration** only ever DOWNGRADES (see Step 0.3).
+
+Every other question carries the fixed severity in its heading. In particular, severe evidence on a RISK-SAFETY question — hardcoded production credentials on AUTH-Q5, SQL injection on DATA-Q4 — is reported AS RISK-SAFETY. Escalating it to BLOCKER is a rubric violation, not a judgement call: `blocker_count` feeds the readiness profile arithmetic directly (see Readiness Profile Determination), so a single unauthorized escalation silently moves the repository to a stricter tier than the rubric assigns. Describe the severity of the evidence in the finding's `evidence` and `recommendation` text; do not encode it in the severity field.
+
 ### Unified Severity and Category Display Names
 
 A unified severity vocabulary and canonical category display names are emitted on every finding so that a single webapp and portfolio aggregator can consume ARA and MOD findings side-by-side.
