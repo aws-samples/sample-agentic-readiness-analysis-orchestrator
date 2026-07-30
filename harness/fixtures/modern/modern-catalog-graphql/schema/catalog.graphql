@@ -1,0 +1,42 @@
+"""
+Product catalog schema. Schema-first: this file is the machine-discoverable
+contract. Reads are open to any authenticated client; mutations require the
+`catalog:write` scope. Writes are upserts keyed by SKU, so they are idempotent.
+"""
+
+type Product {
+  sku: ID!
+  name: String!
+  description: String
+  priceCents: Int!
+  currency: String!
+  active: Boolean!
+  updatedAt: String!
+}
+
+input UpsertProductInput {
+  sku: ID!
+  name: String!
+  description: String
+  priceCents: Int!
+  currency: String!
+}
+
+type Query {
+  "Fetch a single product by SKU."
+  product(sku: ID!): Product
+  "List active products (paginated)."
+  products(limit: Int = 50, cursor: String): ProductConnection!
+}
+
+type ProductConnection {
+  items: [Product!]!
+  nextCursor: String
+}
+
+type Mutation {
+  "Idempotent upsert keyed by SKU — a retry with the same SKU does not duplicate."
+  upsertProduct(input: UpsertProductInput!): Product!
+  "Soft-delete: sets active=false. Recoverable. (Gap: does not yet emit an audit event.)"
+  deleteProduct(sku: ID!): Product!
+}

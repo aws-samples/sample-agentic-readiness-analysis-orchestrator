@@ -207,6 +207,72 @@ fixtures:
         pathways_triggered: [move-to-cloud-native, move-to-open-source]
         overall_score_band: Needs Work
 
+  # --- Modern fixtures: exercise the tiers the 11 legacy fixtures never reach ------
+  # Every legacy fixture above lands Not Agent-Integrable / Remediation Required (ARA)
+  # and Not Ready / Needs Work (MOD). These three are era:modern and graduate cleanly,
+  # so the blockers==0 half of the ARA tier arithmetic and the MOD Partial/Mature bands
+  # finally run on a real fixture. They also fill three heatmap gaps: era:modern,
+  # architecture:serverless, and has_api:graphql (previously zero fixtures each).
+  - id: modern-payments-api
+    path: harness/fixtures/modern/modern-payments-api
+    axes: { language: python, era: modern, has_iac: true, has_api: rest,
+            architecture: serverless, auth_present: true, persistence: nosql }
+    notes: >-
+      Python 3.12 serverless payments (Lambda + API Gateway + DynamoDB). OpenAPI 3.1
+      contract, OAuth2 client-credentials machine auth, per-write Idempotency-Key,
+      structured logs + X-Ray, least-privilege IAM, append-only ledger, tests + runbook.
+      The gold-standard target: no blockers, machine-drivable end to end.
+    expectations:
+      ara:
+        tier: Agent-Ready                 # machine interface + auth + idempotency, 0 blockers
+        must_have_categories: [AUTH, API, OBS]
+      mod:
+        tier: Mature
+        must_have_categories: [APP, SEC, OPS]
+        pathways_triggered: []            # already cloud-native serverless
+        overall_score_band: Mature
+
+  - id: modern-orders-service
+    path: harness/fixtures/modern/modern-orders-service
+    axes: { language: nodejs, era: modern, has_iac: true, has_api: rest,
+            architecture: service, auth_present: true, persistence: sql }
+    notes: >-
+      Node 20 / TypeScript / Fastify on ECS Fargate + RDS. Clean, typed, JWT-authed,
+      IaC-deployed — but DELETE hard-deletes PII, refund has no idempotency key, and
+      cancel recalls a physical dispatch, all with NO human-in-the-loop. Well-built app,
+      unsafe to drive UNATTENDED: expect >=3 RISK-SAFETY findings but 0 hard blockers.
+    expectations:
+      ara:
+        tier: Pilot-Ready                 # 0 blockers, but >=3 safety concerns -> "Safety Concerns"
+        safety_qualifier: true            # the spurious/missing-safety-qualifier checks exercise this
+        must_have_categories: [AUTH, API, STATE]
+      mod:
+        tier: Partial
+        must_have_categories: [APP, SEC, OPS]
+        pathways_triggered: []
+        overall_score_band: Partial
+
+  - id: modern-catalog-graphql
+    path: harness/fixtures/modern/modern-catalog-graphql
+    axes: { language: nodejs, era: modern, has_iac: true, has_api: graphql,
+            architecture: serverless, auth_present: true, persistence: nosql }
+    notes: >-
+      Node 20 / TypeScript / Apollo Server 4 GraphQL (Lambda + DynamoDB). Schema-first,
+      JWT + scope checks, upsert-by-SKU (idempotent writes), soft-delete. Only minor
+      hardening gaps (no query depth limit; delete lacks an audit event) — no irreversible
+      destructive path, no missing auth. Lands Pilot-Ready with routine hardening, NOT a
+      safety qualifier (the gaps are availability/audit, not unsafe autonomous actions).
+    expectations:
+      ara:
+        tier: Pilot-Ready                 # 0 blockers, 0-2 safety concerns -> no qualifier
+        safety_qualifier: false
+        must_have_categories: [API, AUTH, OBS]
+      mod:
+        tier: Partial
+        must_have_categories: [APP, SEC]
+        pathways_triggered: []
+        overall_score_band: Partial
+
   - id: monolith-php
     path: harness/fixtures/monolith
     axes: { language: php, era: legacy, has_iac: true, has_api: rest,

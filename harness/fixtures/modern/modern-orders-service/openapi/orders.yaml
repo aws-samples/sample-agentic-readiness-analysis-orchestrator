@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: Orders Service
+  version: 2.1.0
+  description: >-
+    Order management. Modern and authenticated, but DELETE/refund/cancel are
+    irreversible and currently have no idempotency or human-approval gate (see SAFETY.md).
+servers:
+  - url: https://orders.example.com
+security:
+  - bearerAuth: []
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      responses: { '201': { description: created } }
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: ok }, '404': { description: not found } }
+    delete:
+      operationId: deleteOrder
+      description: IRREVERSIBLE hard delete of the order and its PII. No confirmation.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '204': { description: deleted } }
+  /orders/{id}/refund:
+    post:
+      operationId: refundOrder
+      description: Real money movement. No Idempotency-Key — a duplicate call double-refunds.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: refunded } }
+  /orders/{id}/cancel:
+    post:
+      operationId: cancelOrder
+      description: Recalls a physical warehouse dispatch. Irreversible; no dry-run.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { '200': { description: cancelled } }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
