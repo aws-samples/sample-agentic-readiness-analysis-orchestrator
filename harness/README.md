@@ -162,3 +162,29 @@ python -m pytest harness/tests/
 
 `judge.py` is the only component that needs an LLM; the gate, differ, and coverage
 heatmap (`coverage-heatmap.py`, rendered from `usecases.yaml` axes) all run offline.
+
+## Is the analysis itself any good? (`score-reports.py`)
+
+`judge.py` scores a *change* against the committed goldens and never opens the analyzed
+repo. `score-reports.py` asks the other question — **is what this report says actually
+true of the source?** — by scoring a report against the complete fixture code. That is
+what measures TD output quality, and what tells you whether the goldens the judge trusts
+are worth trusting.
+
+```sh
+harness/score-reports.py --checks-only     # arithmetic only: free, instant, runs in CI
+harness/score-reports.py                   # groundedness scoring, all 22 reports
+```
+
+**One report tree is a draw, not a measurement.** The analysis agent moves 10–20 findings
+per fixture per re-run, so a single tree cannot separate "the TD improved" from "the agent
+rolled differently". Pass several independent analysis runs and each row reports
+mean/stddev/spread:
+
+```sh
+harness/score-reports.py --trees harness/_run1 harness/_run2 harness/_run3
+```
+
+Read [`STABILITY.md`](./STABILITY.md) before acting on any score — it records the measured
+noise floor (ARA reaches 0.10 per fixture on identical inputs; MOD is 0.00) and the fixture
+spread gaps that currently limit what the numbers can show.
