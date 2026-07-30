@@ -88,8 +88,14 @@ publish_td() {
 collect_and_validate() {
   local search="$1" glob="$2" analysis="$3" found dest
   [[ "${DRY_RUN}" == "true" ]] && return 0
-  found="$(find "${search}" -type f -name "${glob}" \
-             -exec stat -f '%m %N' {} \; 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+  # Newest match — see the note in run-fixtures.sh's collect_report(): `stat -f` is
+  # BSD-only and silently prints FILESYSTEM info on GNU/Linux, yielding a bogus path.
+  found="$(find "${search}" -type f -name "${glob}" -print0 2>/dev/null \
+           | python3 -c 'import os,sys
+paths=[p for p in sys.stdin.buffer.read().split(b"\0") if p]
+if paths:
+    newest=max(paths, key=lambda p: os.path.getmtime(os.fsdecode(p)))
+    sys.stdout.write(os.fsdecode(newest))')"
   if [[ -z "${found}" ]]; then
     echo "error: no ${glob} emitted (${analysis})" >&2; OVERALL=1; return 1
   fi
