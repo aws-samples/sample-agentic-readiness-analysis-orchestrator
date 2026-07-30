@@ -359,9 +359,14 @@ def ara_scope_resolution(rpt: dict) -> str:
     qs = parse_questions("ara")
     lines = []
     for qid, sev_by_scope in parse_scope_severities("ara").items():
-        # DATA-Q1 now parses (its arrow-phrased bullets were previously missed), but it is a
-        # Stage-A/B ladder, not a flat per-scope severity — collapsing it to one value here
-        # would both duplicate and misdescribe it. It gets the dedicated `data_q1` block below.
+        # DATA-Q1 now parses, but its parsed value is only the B1 LAYER, not the question's
+        # severity. DATA-Q1 is a Stage-A/B ladder: B1/B2/B3 fire independently and the highest
+        # wins, Stage A gates the whole question, the stateless-utility archetype and the
+        # dev-library-application override each send it to INFO, and any layer may contribute
+        # no finding at all. Stating "DATA-Q1 -> RISK-SAFETY" here would flatten all of that
+        # and turn every legitimately CLEAR or INFO DATA-Q1 into a false miss — the exact error
+        # class this whole block exists to remove. It gets the `data_q1` ladder block below.
+        # Do NOT "simplify" by deleting this skip.
         if qid == "DATA-Q1":
             continue
         if write_enabled:

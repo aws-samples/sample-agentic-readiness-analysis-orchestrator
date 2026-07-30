@@ -127,6 +127,17 @@ def parse_scope_severities(analysis: str = "ara") -> dict[str, dict[str, str]]:
     DATA-Q2 land on RISK-SAFETY. A blanket rule over-resolves API-Q4 by one full class on
     every read-only report, and since the prompt states these resolutions as authoritative it
     does not merely mis-grade — it actively licenses an over-escalation.
+
+    CAUTION — DATA-Q1's value here is its **B1 layer only**, NOT the question's severity.
+    DATA-Q1 is a Stage-A/B ladder: three independent layers (B1 BLOCKER/conditional,
+    B2 RISK-SAFETY, B3 INFO) whose resolved severity is the HIGHEST that fires, gated by
+    Stage A and overridden to INFO by the stateless-utility archetype or the
+    dev-library-application Step 1.5 override, and any layer may contribute NO finding at all
+    (SKILL.md:1160-1200). This flat dict cannot express any of that. Callers that state a
+    severity to the grader must use the dedicated ladder block instead — see
+    score-reports.ara_scope_resolution, which skips DATA-Q1 in its loop for exactly this
+    reason. Reading this value as "DATA-Q1 is RISK-SAFETY under read-only" would flatten the
+    ladder and turn every legitimately-CLEAR or INFO DATA-Q1 into a false miss.
     """
     path = SKILLS.get(analysis)
     if not path or not path.exists():
@@ -135,13 +146,13 @@ def parse_scope_severities(analysis: str = "ara") -> dict[str, dict[str, str]]:
     out: dict[str, dict[str, str]] = {}
     # Two phrasings carry the same authoritative rule and BOTH must be parsed. Four of the five
     # conditional BLOCKERs (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2) use the "When ... Evaluate as"
-    # form; DATA-Q1 alone uses the "If ... → **SEV**" arrow form. Matching only the first
-    # silently drops DATA-Q1 to `None`, which (a) withholds its read-only resolution from the
-    # grader prompt and (b) leaves the ceiling check falling back to DATA-Q1's heading (BLOCKER)
-    # as the ceiling — so a read-only report that resolves DATA-Q1 to BLOCKER (the TD says
-    # RISK-SAFETY, SKILL.md:1176-1177) passes both gates unchallenged. The arrow pattern is
-    # anchored on `agent_scope` so it ignores the non-scoped arrow bullets nearby (e.g. the
-    # differentiation and aspirational rules), which key on evidence, not scope.
+    # form; DATA-Q1's B1 layer alone uses the "If ... → **SEV**" arrow form. Matching only the
+    # first silently returned None for one of the five, leaving the table incomplete for every
+    # consumer — a latent trap rather than an active misgrade, since the two consumers today
+    # both handle DATA-Q1 specially (the ladder block in the prompt; a scope-blind BLOCKER
+    # ceiling in the severity check). The arrow pattern is anchored on `agent_scope` so it
+    # ignores the non-scoped arrow bullets nearby (B2's differentiation rule and B3's
+    # aspirational rule), which key on evidence, not scope.
     patterns = (
         # - **When `agent_scope` is `"read-only"`:** Evaluate as **RISK-SAFETY**. ...
         re.compile(r"When `agent_scope` is `\"(write-enabled|read-only)\"`:\*\*\s*"

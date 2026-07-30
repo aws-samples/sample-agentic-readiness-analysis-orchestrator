@@ -127,11 +127,13 @@ def test_scope_severities_distinguish_api_q4_from_the_other_blockers():
 
 
 def test_data_q1_arrow_phrasing_parses_like_the_when_evaluate_form():
-    """DATA-Q1 alone phrases its scope rule with the `If ... → **SEV**` arrow form instead of
-    the `When ... Evaluate as **SEV**` form the other four conditional BLOCKERs use. The parser
-    must match BOTH: matching only the first silently dropped DATA-Q1 to None, which withheld
-    its read-only resolution from the grader prompt and let a read-only report resolve it to
-    BLOCKER (the TD says RISK-SAFETY, SKILL.md:1176-1177) unchallenged. Wrong-direction bug."""
+    """DATA-Q1's B1 layer phrases its scope rule with the `If ... → **SEV**` arrow form instead
+    of the `When ... Evaluate as **SEV**` form the other four conditional BLOCKERs use. The
+    parser must match BOTH: matching only the first silently returned None for one of the five
+    conditional BLOCKERs, leaving the table incomplete for any consumer.
+
+    NOTE the value is DATA-Q1's B1 layer, not the question's severity — DATA-Q1 is a Stage-A/B
+    ladder (see parse_scope_severities' docstring). This asserts the parse, not a grading rule."""
     ss = st.parse_scope_severities("ara")
     assert ss["DATA-Q1"] == {"write-enabled": "BLOCKER", "read-only": "RISK-SAFETY"}
     # The nearby non-scoped arrow bullets (differentiation / aspirational, SKILL.md:1189,1202)
