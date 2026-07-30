@@ -246,6 +246,54 @@ def test_portfolio_rollups_are_excluded_from_scoring():
     assert not [r for r, _ in sr.discover() if r.startswith("harness-portfolio")]
 
 
+# --- multi-run sampling: one tree is a draw, not a measurement --------------------------
+
+def test_aggregate_reports_the_spread_across_report_trees():
+    """We are measuring TD OUTPUT QUALITY, so a sample is one RUN OF THE TD.
+
+    Re-scoring a single report N times would measure the scorer's jitter while holding
+    constant the thing that actually varies — the analysis agent, which moves 10-20 findings
+    per fixture per rerun. So samples are report TREES, and the row carries mean/stddev/
+    spread so a claimed improvement can be compared against the noise floor.
+    """
+    rows = [
+        {"repo": "a", "analysis": "ara", "source_tree": "t1", "score": 0.70},
+        {"repo": "a", "analysis": "ara", "source_tree": "t2", "score": 0.80},
+        {"repo": "a", "analysis": "ara", "source_tree": "t3", "score": 0.90},
+    ]
+    (agg,) = sr.aggregate(rows)
+    assert agg["runs"] == 3
+    assert agg["score"] == 0.8                       # the MEAN is the number to act on
+    assert agg["spread"] == 0.2                      # ...and this says how far to trust it
+    assert abs(agg["stddev"] - 0.0816) < 0.001
+    assert agg["scores"] == [0.70, 0.80, 0.90]       # raw draws kept, never discarded
+    assert agg["sources"] == ["t1", "t2", "t3"]
+
+
+def test_aggregate_keeps_units_separate_and_survives_a_failed_run():
+    rows = [
+        {"repo": "a", "analysis": "ara", "source_tree": "t1", "score": 0.7},
+        {"repo": "a", "analysis": "mod", "source_tree": "t1", "score": 0.9},
+        # A tree where the Bedrock call failed contributes no score but must not poison
+        # the mean or crash the aggregation.
+        {"repo": "a", "analysis": "ara", "source_tree": "t2", "error": "throttled"},
+    ]
+    agg = {(r["repo"], r["analysis"]): r for r in sr.aggregate(rows)}
+    assert agg[("a", "ara")]["score"] == 0.7
+    assert agg[("a", "ara")]["runs"] == 2 and agg[("a", "ara")]["scores"] == [0.7]
+    assert agg[("a", "mod")]["score"] == 0.9
+
+
+def test_a_report_tree_is_a_parameter_not_a_hardcoded_path():
+    # Sampling N runs is only possible if the scorer can read a tree other than golden/.
+    after = REPO / "harness" / "_after"
+    if not after.is_dir():
+        return                                        # scratch tree is gitignored
+    assert sr.discover(after), "discover() must accept an alternate tree"
+    row = sr.score_report("monolith", "ara", "unused", True, after)
+    assert row["source_tree"] == "_after"
+
+
 # --- the rubrics stay verbatim ---------------------------------------------------------
 
 def test_rubrics_keep_the_benchmark_structure_and_error_weighting():
@@ -431,6 +479,36 @@ def test_system_prompt_has_an_explicit_top_band():
     assert "belongs at 0.90+" in sp
     # And that a legitimately terrible repo does not mean an inaccurate report.
     assert "not leniency" in sp
+
+
+def test_the_deliverables_are_scored_not_just_the_question_answers():
+    """The per-question findings are the report's WORKING; the deliverables are the product.
+
+    A report can answer all 43/37 questions correctly and still hand the customer wrong
+    advice — a misdetected archetype, a BLOCKER sequenced behind a quality nit, a
+    modernization pathway triggered with no supporting question. Those were in the prompt
+    payload all along (build_prompt dumps the whole report) but nothing ever asked the model
+    to look at them, so they could not affect a score.
+    """
+    sp = sr.SYSTEM_PROMPT
+    assert "GRADE THE DELIVERABLES" in sp
+    for d in ("service_archetype", "remediation_roadmap", "recommended_actions",
+              "pathways", "top_gaps", "decomposition_strategy"):
+        assert d in sp, f"{d} is never mentioned, so it cannot be graded"
+    # Phasing is the specific defect a per-question score cannot see.
+    assert "belongs in phase 1" in sp
+    assert "deliverable_defects" in sp
+    # ...and it has to reach the score, not just the output.
+    assert "deliverable_defects` after applying rules 1-3" in sp
+
+
+def test_deliverables_reach_the_model_in_the_report_payload():
+    import json as _json
+    rpt = _json.loads((REPO / "harness" / "golden"
+                       / "legacy-loan-calculator-mod-report.json").read_text())
+    p = sr.build_prompt("legacy-loan-calculator", "mod", rpt, "src", [])
+    for key in ("pathways", "decomposition_strategy", "top_gaps", "service_archetype"):
+        assert key in p
 
 
 def test_system_prompt_demands_groundedness_not_plausibility():

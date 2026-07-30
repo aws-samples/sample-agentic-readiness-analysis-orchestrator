@@ -55,10 +55,24 @@ some accuracy failures are pure arithmetic and an LLM should never be asked to
     findings|evaluations (never both, never neither)
 A deterministic failure is reported as a hard defect regardless of what the model says.
 
+ONE REPORT TREE IS A DRAW, NOT A MEASUREMENT. What we are measuring is TD OUTPUT QUALITY,
+and the TD prompt is fixed — the analysis agent is what varies, by 10-20 findings per
+fixture per rerun. So a single tree cannot separate "the TD got better" from "the agent
+rolled differently", which is the entire judgement this harness exists to support. Measured
+on two independent ARA trees, 5 of 11 fixtures moved and the worst moved 0.10 — the same
+magnitude as the ARA-vs-MOD gap we had been reading as a real signal.
+
+Pass several trees with `--trees` and every row carries mean/stddev/spread. The published
+TDs deserve an honest number: a claimed improvement smaller than the spread has not been
+measured. Note the samples must be separate ANALYSIS RUNS (run-fixtures.sh into different
+--after-dir targets); re-scoring one report N times only measures the scorer's own jitter
+and reports a false precision.
+
 Usage:
   harness/score-reports.py --checks-only            # fast, free, no Bedrock
   harness/score-reports.py                          # full LLM scoring, all 22 reports
   harness/score-reports.py --only legacy-loan-calculator --analysis ara
+  harness/score-reports.py --trees harness/_run1 harness/_run2 harness/_run3   # mean+spread
   harness/score-reports.py --json -o scores.json
 """
 
@@ -438,6 +452,28 @@ score and a harsh one:
 Only record a MISS when a question the rubric DOES cover was left unresolved, resolved at
 the wrong severity per the table, or answered with evidence the source contradicts.
 
+GRADE THE DELIVERABLES, NOT JUST THE QUESTION ANSWERS. The per-question findings are the
+report's WORKING; the deliverables are what a customer actually reads and acts on, so they
+carry real weight in your score:
+  * `metadata.service_archetype` — is it right for this code (stateless-utility,
+    stateful-crud, orchestrator, data-gateway, event-processor), and does
+    `archetype_justification` cite real structure? A wrong archetype mis-frames everything
+    downstream.
+  * ARA `remediation_roadmap` / `recommended_actions` — is the PHASING sound? Every BLOCKER
+    belongs in phase 1; a blocker sequenced behind a quality nit is a defect even when the
+    finding itself is correct. Do the `question_ids`, `priority` and `effort` on each action
+    match the findings it claims to resolve, and is the action a concrete change to THIS
+    repo rather than generic best-practice advice?
+  * MOD `pathways` — is each of the 7 pathways triggered or not-triggered correctly for this
+    stack, and do the `triggering_questions` actually name the questions that drove it? A
+    pathway triggered with no supporting question, or a stack that plainly needs one and
+    does not get it, is a defect.
+  * MOD `top_gaps` and `decomposition_strategy` — are the ranked gaps the ones that matter
+    most here, and is the recommended approach proportionate to the codebase (full
+    microservices decomposition of a one-file app is wrong even if every score is right)?
+An unsupported or misordered deliverable is a defect on the same footing as a bad finding:
+record it in `deliverable_defects` and reflect it in the score.
+
 Be skeptical and specific: cite question_ids and file paths. Do not award credit for
 confident tone, thorough formatting, or plausible-sounding generic advice. A report can be
 fluent, internally consistent, and still wrong about the code.
@@ -449,13 +485,17 @@ the bottom of the scale is very often the CORRECT answer; scoring it that way is
 not leniency, and a report is not more accurate for being harsher about its repo.
 
 CALIBRATION. Score how ACCURATE the report is, not how bad the repo is:
-  0.90-1.00  no fabrications, no covered-question misses, evidence is concrete and checks out
-  0.75-0.89  accurate overall; minor weak evidence or one debatable severity call
-  0.55-0.74  a real defect — a covered question missed or a demonstrably wrong severity
+  0.90-1.00  no fabrications, no covered-question misses, sound deliverables, evidence is
+             concrete and checks out
+  0.75-0.89  accurate overall; minor weak evidence, one debatable severity call, or a
+             cosmetic deliverable flaw
+  0.55-0.74  a real defect — a covered question missed, a demonstrably wrong severity, a
+             wrong archetype, or a blocker misphased in the roadmap
   0.30-0.54  multiple real defects, or a fabrication that changes the conclusion
   0.00-0.29  the report is substantially wrong about this repository
-A report with nothing in `fabrications` and nothing in `misses` after applying rules 1-3
-belongs at 0.90+. Do not reserve the top of the range for reports that cannot exist.
+A report with nothing in `fabrications`, nothing in `misses` and nothing in
+`deliverable_defects` after applying rules 1-3 belongs at 0.90+. Do not reserve the top of
+the range for reports that cannot exist.
 
 Respond with ONLY a JSON object, no prose:
 {"score": <float 0.0-1.0>,
@@ -468,6 +508,9 @@ Respond with ONLY a JSON object, no prose:
                    "why_it_matters": "<...>"}],
  "rubric_gaps":  [{"what": "<real issue no rubric question covers>", "where": "<file>",
                    "why_no_question_fits": "<...>"}],
+ "deliverable_defects": [{"deliverable": "service_archetype|remediation_roadmap|"
+                          "recommended_actions|pathways|top_gaps|decomposition_strategy",
+                          "what_is_wrong": "<...>", "why": "<what the source supports instead>"}],
  "weak_evidence": ["<question_id: what is missing>"],
  "strengths": ["<what the report got genuinely right, with specifics>"]}
 
@@ -710,12 +753,14 @@ def score_with_bedrock(prompt: str, model: str) -> Optional[dict]:
         return {"error": f"{type(exc).__name__}: {exc}"[:300]}
 
 
-def score_report(repo: str, analysis: str, model: str, checks_only: bool) -> dict:
-    path = GOLDEN / f"{repo}-{analysis}-report.json"
+def score_report(repo: str, analysis: str, model: str, checks_only: bool,
+                 tree: Path = GOLDEN) -> dict:
+    path = tree / f"{repo}-{analysis}-report.json"
     rpt = json.loads(path.read_text(encoding="utf-8"))
     checks = run_checks(rpt, analysis)
     row: dict[str, Any] = {
         "repo": repo, "analysis": analysis,
+        "source_tree": tree.name,
         "checks_failed": checks,
         "n_findings": len(rpt.get("findings") or []),
         "n_evaluations": len(rpt.get("evaluations") or []),
@@ -746,15 +791,19 @@ def score_report(repo: str, analysis: str, model: str, checks_only: bool) -> dic
             # these measure the TD's coverage, not the report's accuracy, and conflating
             # them is what let the rubric's own blind spots depress report scores.
             "rubric_gaps": verdict.get("rubric_gaps") or [],
+            # Archetype, roadmap phasing, pathway triggering, decomposition. These are the
+            # part of the report a customer actually acts on, and a correct finding set can
+            # still be packaged into wrong advice.
+            "deliverable_defects": verdict.get("deliverable_defects") or [],
             "weak_evidence": verdict.get("weak_evidence") or [],
             "strengths": verdict.get("strengths") or [],
         })
     return row
 
 
-def discover() -> list[tuple[str, str]]:
+def discover(tree: Path = GOLDEN) -> list[tuple[str, str]]:
     units = []
-    for p in sorted(GOLDEN.glob("*-report.json")):
+    for p in sorted(tree.glob("*-report.json")):
         m = re.match(r"(.+)-(ara|mod)-report\.json$", p.name)
         if not m:
             continue
@@ -768,6 +817,44 @@ def discover() -> list[tuple[str, str]]:
     return units
 
 
+def aggregate(rows: list[dict]) -> list[dict]:
+    """Collapse N REPORT TREES into one row per (repo, analysis), carrying the SPREAD.
+
+    Each tree is an independent run of the TD over the same fixtures, so each score is one
+    DRAW of that TD's output quality — which is the quantity under measurement. The TD
+    prompt is fixed; what varies is the analysis agent, and it varies a lot: 10-20 findings
+    move per fixture per rerun. A single tree therefore cannot separate "the TD got better"
+    from "the agent rolled differently", and that separation is the entire job here.
+
+    So the mean is the number to act on, and `stddev`/`spread` say how far to trust it. A
+    fixture whose spread exceeds the improvement you are claiming has not measured the
+    improvement.
+
+    `sources` records which trees contributed. The LAST tree supplies the qualitative
+    fields (fabrications, misses, rubric_gaps): those are examples to go read, not
+    statistics to average, and picking the best-scoring tree would launder exactly the
+    noise this function exists to expose.
+    """
+    out: dict[tuple[str, str], list[dict]] = {}
+    for r in rows:
+        out.setdefault((r["repo"], r["analysis"]), []).append(r)
+    agg = []
+    for (repo, analysis), rs in out.items():
+        row = dict(rs[-1])
+        scores = [r["score"] for r in rs if isinstance(r.get("score"), (int, float))]
+        row["runs"] = len(rs)
+        row["scores"] = scores
+        row["sources"] = [r.get("source_tree") for r in rs]
+        if scores:
+            mean = sum(scores) / len(scores)
+            var = sum((s - mean) ** 2 for s in scores) / len(scores)
+            row["score"] = round(mean, 3)
+            row["stddev"] = round(var ** 0.5, 3)
+            row["spread"] = round(max(scores) - min(scores), 3)
+        agg.append(row)
+    return sorted(agg, key=lambda r: (r["analysis"], r["repo"]))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Score report ACCURACY against fixture source")
     ap.add_argument("--only", nargs="*", help="repo names to score")
@@ -776,35 +863,61 @@ def main() -> int:
                     help="deterministic checks only — no Bedrock, instant, free")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--jobs", type=int, default=4, help="concurrent Bedrock calls")
+    # THE SAMPLES ARE REPORT TREES, not repeated scorer passes. We are measuring TD OUTPUT
+    # QUALITY, so a sample is one run of the TD over the fixtures. Re-scoring one report N
+    # times would only measure the scorer's own jitter and would report a false precision:
+    # it holds constant the very thing that varies.
+    #
+    # Produce the trees with run-fixtures.sh --after-dir harness/_sample-N (see STABILITY.md),
+    # then pass them all here.
+    ap.add_argument("--trees", nargs="+", type=Path, metavar="DIR",
+                    help="report trees to score as independent samples of the same TD "
+                         "(default: harness/golden alone). With 2+, each (repo, analysis) "
+                         "row carries mean/stddev/spread across trees.")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("-o", "--out", type=Path, help="also write results as JSON here")
     args = ap.parse_args()
 
-    units = [(r, a) for r, a in discover()
+    trees = args.trees or [GOLDEN]
+    for t in trees:
+        if not t.is_dir():
+            print(f"not a report tree: {t}", file=sys.stderr)
+            return 2
+
+    # Unit list comes from the FIRST tree; a repo absent from a later tree simply
+    # contributes fewer samples (reported as `runs`) rather than failing the whole run.
+    units = [(r, a) for r, a in discover(trees[0])
              if (not args.only or r in args.only)
              and (not args.analysis or a == args.analysis)]
     if not units:
         print("no matching reports", file=sys.stderr)
         return 2
 
+    jobs = [(r, a, t) for t in trees for r, a in units
+            if (t / f"{r}-{a}-report.json").exists()]
+
     if args.checks_only:
-        rows = [score_report(r, a, args.model, True) for r, a in units]
+        rows = [score_report(r, a, args.model, True, t) for r, a, t in jobs]
     else:
-        print(f"scoring {len(units)} reports with {args.model} "
-              f"({args.jobs} concurrent)...", file=sys.stderr)
-        rows = [None] * len(units)
+        print(f"scoring {len(units)} reports x {len(trees)} tree(s) = {len(jobs)} calls "
+              f"with {args.model} ({args.jobs} concurrent)...", file=sys.stderr)
+        rows = [None] * len(jobs)
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
-            futs = {ex.submit(score_report, r, a, args.model, False): i
-                    for i, (r, a) in enumerate(units)}
+            futs = {ex.submit(score_report, r, a, args.model, False, t): i
+                    for i, (r, a, t) in enumerate(jobs)}
             for fut in concurrent.futures.as_completed(futs):
                 i = futs[fut]
+                r, a, t = jobs[i]
                 try:
                     rows[i] = fut.result()
                 except Exception as exc:  # noqa: BLE001
-                    rows[i] = {"repo": units[i][0], "analysis": units[i][1],
+                    rows[i] = {"repo": r, "analysis": a, "source_tree": t.name,
                                "error": f"{type(exc).__name__}: {exc}"[:200]}
-                print(f"  done {units[i][0]} {units[i][1]}", file=sys.stderr)
+                print(f"  done {r} {a} [{t.name}]", file=sys.stderr)
         rows = [r for r in rows if r]
+
+    if len(trees) > 1:
+        rows = aggregate(rows)
 
     if args.out:
         args.out.write_text(json.dumps(rows, indent=2), encoding="utf-8")
@@ -820,9 +933,10 @@ def _report(rows: list[dict], checks_only: bool) -> None:
         sub = [r for r in rows if r["analysis"] == a]
         if not sub:
             continue
+        multi = any(r.get("runs", 1) > 1 for r in sub)
         print(f"\n{'=' * 78}\n{a.upper()}  ({len(sub)} reports)\n{'=' * 78}")
-        hdr = f"{'repo':<28} {'score':>6} {'checks':>7}  detail"
-        print(hdr)
+        spread_hdr = f" {'n':>2} {'sd':>5} {'spread':>6}" if multi else ""
+        print(f"{'repo':<28} {'score':>6}{spread_hdr} {'checks':>7}  detail")
         for r in sorted(sub, key=lambda x: (x.get("score") is None, x.get("score") or 0)):
             sc = "—" if r.get("score") is None else f"{r['score']:.2f}"
             nbad = len(r.get("checks_failed") or [])
@@ -831,12 +945,23 @@ def _report(rows: list[dict], checks_only: bool) -> None:
                      else f"score={r.get('overall_score')} band={r.get('band')}")
             if r.get("error"):
                 extra += f"  ERROR: {r['error'][:60]}"
-            print(f"{r['repo']:<28} {sc:>6} {flag:>7}  {extra}")
+            cols = ""
+            if multi:
+                cols = (f" {r.get('runs', 1):>2} {r.get('stddev', 0):>5.3f} "
+                        f"{r.get('spread', 0):>6.2f}")
+            print(f"{r['repo']:<28} {sc:>6}{cols} {flag:>7}  {extra}")
 
         scored = [r["score"] for r in sub if isinstance(r.get("score"), (int, float))]
         if scored:
             print(f"\n  mean accuracy score: {sum(scored) / len(scored):.2f}   "
                   f"range {min(scored):.2f}-{max(scored):.2f}")
+        # The spread is the headline when there is one: a per-fixture spread of 0.10 means
+        # any claimed improvement below 0.10 is indistinguishable from a rerun.
+        if multi:
+            sd = [r["spread"] for r in sub if r.get("spread") is not None]
+            if sd:
+                print(f"  run-to-run spread: mean {sum(sd) / len(sd):.3f}, worst "
+                      f"{max(sd):.2f} — treat any delta below the worst spread as noise")
 
     bad = [(r, c) for r in rows for c in (r.get("checks_failed") or [])]
     print(f"\n{'=' * 78}\nDETERMINISTIC DEFECTS: {len(bad)} across "
@@ -850,7 +975,8 @@ def _report(rows: list[dict], checks_only: bool) -> None:
               "groundedness scoring against the fixture source)")
         return
     for r in rows:
-        if not (r.get("fabrications") or r.get("misses")):
+        if not (r.get("fabrications") or r.get("misses")
+                or r.get("deliverable_defects")):
             continue
         print(f"\n--- {r['repo']} ({r['analysis'].upper()}) score "
               f"{r.get('score')} ---")
@@ -859,6 +985,8 @@ def _report(rows: list[dict], checks_only: bool) -> None:
             print(f"  FABRICATION {f.get('question_id')}: {f.get('why_wrong')}")
         for m in r.get("misses") or []:
             print(f"  MISS [{m.get('severity_should_be')}] {m.get('where')}: {m.get('what')}")
+        for d in r.get("deliverable_defects") or []:
+            print(f"  DELIVERABLE {d.get('deliverable')}: {d.get('what_is_wrong')}")
 
 
 if __name__ == "__main__":
