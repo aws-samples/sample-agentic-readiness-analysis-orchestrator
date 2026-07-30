@@ -98,8 +98,16 @@ default:
     - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
     - curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash
     - export PATH="$HOME/.local/bin:$PATH"
-    # Fail loudly here if atx still can't start, rather than deep inside run-fixtures.sh.
-    - command -v atx >/dev/null && echo "atx installed at $(command -v atx)" || echo "WARN: atx not on PATH" >&2
+    # Surface atx's location here rather than failing deep inside run-fixtures.sh.
+    # NOTE: block scalar (|) is required — an inline `- foo: bar` style string
+    # containing ": " parses as a YAML MAPPING, and GitLab then rejects
+    # before_script with "config should be a string or a nested array of strings".
+    - |
+      if command -v atx >/dev/null; then
+        echo "atx installed at $(command -v atx)"
+      else
+        echo "WARN: atx not on PATH" >&2
+      fi
     # Region falls back to us-east-1 if the AWS_REGION CI variable is unset.
     - export AWS_REGION="${AWS_REGION:-us-east-1}"
     # --- AWS Credential Vendor -------------------------------------------------
