@@ -6,6 +6,19 @@
 
 Source: [`harness/golden-accuracy-baseline.json`](golden-accuracy-baseline.json)
 
+> ⚠️ **STALE — these ARA scores were produced by an earlier scorer prompt.** (This banner
+> is a deliberate hand-edit to a generated file, and it is meant to be DESTROYED by the
+> next `--markdown` run — regenerating is exactly what resolves the staleness it warns
+> about. Do not re-add it afterwards.)
+>
+> The scorer was later given the authoritative question->severity table parsed from `SKILL.md`, which lets
+> it catch a real TD defect (`AUTH-Q5` emitted as `BLOCKER` where the TD says `RISK-SAFETY`,
+> in 6 of 11 golden ARA reports). Re-scoring the byte-identical golden files under the
+> corrected prompt moves ARA by up to 0.36 while MOD moves at most 0.04. **The ARA column
+> below overstates accuracy.** See [`SCORES-s1-vs-s2.md`](./SCORES-s1-vs-s2.md) for the
+> measured comparison, and regenerate this file with the 3-sample re-baseline.
+
+
 Each score is an LLM grader's assessment of how well a generated report is **grounded in the fixture's actual source code** — fabrications and misses count against it. This is the *accuracy* axis, and it is what the judge compares a TD change against. It is NOT the ARA tier or the MOD band, which are the report's own verdicts about the app and appear here as context.
 
 The **Checks** column is a different axis entirely: deterministic, arithmetic assertions that a report does not contradict **itself** — its own severity counters, its own tier arithmetic, its own question coverage. No LLM and no sampling is involved, so a failure here is a real defect at any sample depth, and is safe to act on immediately. A report can be perfectly grounded in the source (high score) and still fail a check by miscounting what it found. Each failure names the check; see [What the checks mean](#what-the-checks-mean).

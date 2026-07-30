@@ -1,10 +1,23 @@
-# s1 vs s2 — accuracy side by side (INTERIM)
+# s1 vs s2 — accuracy side by side (INTERIM — DELETE THIS FILE AFTER RE-BASELINING)
 
+> **This file is temporary scaffolding and must not become a second home for scores.**
+> There is exactly ONE scoring record: [`golden-accuracy-baseline.json`](./golden-accuracy-baseline.json)
+> (data) rendered to [`SCORES.md`](./SCORES.md) (readable). `SCORES.md` **already** grows
+> one column per batch automatically — `render_markdown()` derives the columns from each
+> row's `by_tree` keys, so re-baselining across `golden s2 s3` produces the side-by-side
+> table below *inside* `SCORES.md`, with no new file and no format change.
+>
+> This file exists only because the re-baseline cannot run yet (s2 is incomplete — see
+> Scope). Once it does:
+> ```
+> harness/score-reports.py --trees harness/golden harness/samples/s2 harness/samples/s3 \
+>   --update-baseline --markdown harness/SCORES.md
+> git rm harness/SCORES-s1-vs-s2.md
+> ```
+>
 > **This is NOT the committed baseline.** It is an ad-hoc, *partial* comparison of two
 > independent analysis runs, kept so the s1/s2 difference is reviewable while s3 is still
-> generating. The committed record stays [`SCORES.md`](./SCORES.md) /
-> [`golden-accuracy-baseline.json`](./golden-accuracy-baseline.json) — neither was touched
-> to produce this file (no `--update-baseline`).
+> generating. Neither committed artifact was touched to produce it (no `--update-baseline`).
 >
 > **Scope: 7 of 14 fixtures, 2 of 3 planned samples.** Only the fixtures that had a
 > complete ARA+MOD pair in *both* trees at the time of the run are included; `s2` was still
@@ -29,21 +42,62 @@ variance of the analysis agent**, not the effect of any change. Two things stand
 
 **MOD is stable; ARA is not.** MOD behaves exactly as a noise band should — symmetric,
 mean delta ≈ 0, every move inside the 0.02 floor. ARA moved **one-sidedly**: six of seven
-fixtures improved and none regressed, with a mean shift of +0.140 that is larger than the
-0.10 ARA noise floor the judge currently uses. A symmetric noise process does not produce
-6-0.
+fixtures improved and none regressed. A symmetric noise process does not produce 6-0, so
+this is not run-to-run variance. It has a specific, identified cause.
 
-Two readings, and this data cannot separate them at n=2:
-1. **The ARA noise floor is too low.** A 0.46 single-fixture swing means the floor should
-   be nearer the observed spread than 0.10 — in which case the judge is currently calling
-   real noise a "measured regression".
-2. **The s1 golden ARA reports are simply worse** (they were generated earlier), and s2 is
-   the more representative draw — in which case the *baseline* is what needs replacing.
+### The low ARA scores are a real, located defect — not scorer noise
 
-Either way the conclusion is the same and it is the reason task #34 exists: **a
-single-draw ARA baseline cannot support the deltas the judge reasons about.** Do not read
-the per-fixture ARA numbers below as fixture rankings. s3 resolves this — with three
-samples the threshold becomes real per-fixture `2·sd` instead of a fixed floor.
+The `golden` column above is **not** comparable to the numbers in `SCORES.md`, and the
+low ARA values are the reason. Re-scoring the byte-identical golden files moved ARA by up
+to **0.36** (`legacy-crm-desktop` 0.78 → 0.42) while MOD moved at most 0.04. Same input,
+same scorer — so the difference is not the reports. The **scorer's prompt changed after
+the baseline was scored** (commit `cede15f` scored the baseline; later commits added the
+authoritative severity table parsed from SKILL.md and the `[fix]` corrections that tell
+the grader to judge severity against the TD instead of against its own security
+intuition).
+
+Under the corrected prompt the grader now checks each finding's `native_severity`
+(nested in `ara_metadata`) against the TD's own table — and it finds a genuine
+contradiction. Excluding the 9 conditional questions, which are legitimately RISK-SAFETY
+under read-only scope, exactly two non-conditional mismatches exist across all golden ARA
+reports:
+
+| Question | TD says | Report emits | Golden reports affected |
+| --- | --- | --- | --- |
+| `AUTH-Q5` Credential Management | `RISK-SAFETY` (SKILL.md:870) | `BLOCKER` | 6 |
+| `DATA-Q4` | `RISK-QUALITY` | `BLOCKER` | 1 |
+
+And the mismatch predicts the score drop almost perfectly:
+
+| Fixture | old prompt | new prompt | delta | non-conditional mismatch |
+| --- | --- | --- | --- | --- |
+| `legacy-crm-desktop` | 0.78 | 0.42 | **−0.36** | AUTH-Q5 |
+| `legacy-loan-calculator` | 0.72 | 0.42 | **−0.30** | AUTH-Q5 |
+| `legacy-partner-soap` | 0.72 | 0.62 | −0.10 | AUTH-Q5 |
+| `legacy-payroll-system` | 0.78 | 0.82 | +0.04 | (none) |
+| `legacy-pricing-cgi` | 0.82 | 0.78 | −0.04 | (none) |
+| `legacy-shipping-api` | 0.72 | 0.82 | +0.10 | (none) |
+
+Every large drop is an AUTH-Q5 report; every clean report is flat within MOD-like noise.
+**So ARA is not noisy — it was being graded against a prompt that could not see a real TD
+defect, and the corrected prompt is now correctly penalising it.** That is the scorer
+working, and it is the concrete answer to "can we actually improve ARA": fixing the
+AUTH-Q5 over-escalation (task #27) should move six fixtures at once.
+
+Supporting evidence that this is the TD and not the scorer: in s2 the analysis agent
+emitted AUTH-Q5 *correctly* for `legacy-loan-calculator` and `legacy-partner-soap`, and
+their scores jumped to 0.88 and 0.78. The defect is intermittent, which is exactly why it
+needs the 3-sample baseline to measure rather than one draw.
+
+### What this means for the numbers below
+
+- **Do not compare the `golden` column to `SCORES.md`.** Different prompt; `SCORES.md` is
+  stale and will be regenerated by the re-baseline.
+- **Do not read the per-fixture ARA values as fixture rankings.** They currently encode
+  "does this report trip the AUTH-Q5 defect" more than overall report quality.
+- The ARA noise floor (0.10) still has not been *measured* — the +0.140 mean shift is
+  explained by the prompt change, so it says nothing about true run-to-run variance. Only
+  the 3-sample re-baseline (task #34) yields a real per-fixture `2·sd`.
 
 ---
 

@@ -12,7 +12,7 @@
 | D5 drift check | Band-crossing only — flag on `score_rating` band change, not raw numeric wobble |
 | Before/after mechanism | **Committed golden reports** — baseline JSON per fixture; MR re-runs only the changed TD's fixtures and diffs vs golden |
 | Judge gate | **Advisory MR comment only** — never blocks the pipeline |
-| **What the judge score means** | **Effect on the ANALYSIS** — "does this change make the ARA/MOD assessment better or worse?" (`analysis_effect: improves \| neutral \| degrades`; 85+ improvement, 45–59 neutral, <45 degradation). **Not** intent-match — see §6.1 |
+| **What the score means** | **Measured accuracy of the regenerated report, 0.0–1.0** — produced by `score-reports.py`, the same scale and same grader used for the committed baseline. The judge does **not** author it; it reads score vs baseline and reports **direction** (`analysis_effect: improves \| neutral \| degrades`). **Not** intent-match — see §6.1 |
 | Judge intent input | Contributor intent captured in a GitLab MR-template field (§8.1). Used as **evidence** — it separates signal from nondeterministic noise, and a mismatch lowers confidence and raises a concern — but it does **not** drive the score |
 | Trigger model | **Watched-TD deterministic gate** (`should-run.sh`, NOT an LLM). Runs when a change lands under any *watched TD directory* (`definitions/managed/**` SKILL.md + references/); everything else is skipped unless it is a fixture change. The mechanism is generic (`HARNESS_TD_PATHS`); the config is the 4 managed TDs. Manual `harness:full` for a full re-baseline. LLM is spent only at the *end* (judge). |
 | What contributors edit | Contributors edit the **TD definitions themselves** — `definitions/managed/<td>/SKILL.md` + `references/` — which ARE git-visible. The harness runs the *edited* TD via `atx custom def exec` (see §7), so the diff under review is exactly what gets tested. The published managed TD on AWS Transform Continuous Modernization stays authoritative until an approved change is published there. |
@@ -38,22 +38,54 @@ The MR !14 shape is the canonical case: intent achieved *perfectly*, and a BLOCK
 
 Intent is still supplied and still reported — it is what lets the judge separate real movement from the analysis agent's run-to-run nondeterminism (§6.2), and a mismatch means the contributor may not understand what their edit did. But it is **evidence that adjusts confidence**, not the quantity being measured.
 
-**A neutral change lands mid-band (45–59), not low.** A no-op neither helps nor harms, so the bottom of the range is reserved for actual damage to the assessment. The rubric is also deliberately **asymmetric**: a change making the analysis *stricter* outranks one making it *more permissive*, because only the latter can present a system as safer than the evidence supports.
+### 6.1.1 There is one score, and the judge does not author it
 
-Calibrated with `harness/calibrate-judge.py` (8 scenarios, **8/8 in band**):
+The fix above was the first half. The second half: the judge used to emit its **own 0–100
+score** alongside the scorer's 0.0–1.0 accuracy scale. Two scales for one question meant
+the number in an MR comment could not be compared to the number in `SCORES.md` for the
+same report, and the judge was authoring a *measurement* it was not positioned to take —
+it sees a diff, not the fixture source.
 
-| score | scenario | effect | intent match | note |
-|---:|---|---|---|---|
-| 78 | clean-reclassify | improves | aligned | severity now reflects real risk |
-| 78 | stricter-rubric | improves | aligned | harsher = safe direction |
-| 50 | no-op-expected | neutral | aligned | nothing gained, nothing harmed |
-| 47 | no-op-unexpected | neutral | mismatch | **same delta**, same analysis state |
-| 35 | risk-safety-drift | degrades | mismatch | safety signal downgraded (tier-inert) |
-| 18 | mr14-as-shipped 🚨 | degrades | partial | intent achieved, BLOCKER lost |
-| 12 | dropped-questions 🚨 | degrades | **aligned** | described perfectly, answers 41/43 |
-| 5 | gutted-rubric 🚨 | degrades | partial | Agent-Ready under an innocuous intent |
+Now `score-reports.py` is the only thing that produces a score. It grades the regenerated
+report exactly as it graded the committed baseline (recall-weighted groundedness against
+the fixture source; a missed BLOCKER costs far more than a spurious INFO) and the judge
+consumes **both** numbers to reason only about **direction**:
 
-The two rows that prove the semantics: **`dropped-questions` scores 12 while `intent_match: aligned`**, and the two no-op rows **converged from 95/15 to 50/47**.
+| measured move | judge reports |
+| --- | --- |
+| `delta >= threshold` | measured accuracy **improvement** |
+| `abs(delta) < threshold` | **within noise — NOT MEASURED** → `analysis_effect: neutral` |
+| `delta <= -threshold` | measured accuracy **regression** |
+
+`threshold` is per fixture: `2·sd` once the baseline has multiple samples, else a fixed
+noise floor (ARA 0.10, MOD 0.02).
+
+Consequences worth stating, because each replaced an earlier design:
+
+- **A no-op no longer needs a "mid-band".** There is no band to sit in — the score is
+  whatever the report measured, and harmlessness is carried by `analysis_effect: neutral`.
+  The old 45–59 neutral band existed only because the judge invented the number.
+- **The safety floor does not cap the score.** A tier-material alert forces
+  `verdict: needs-work` and `analysis_effect: degrades`, but capping a measured number
+  would make `verdict.json` disagree with `SCORES.md` about the same report. The hold rides
+  on the judgement fields, which can carry it.
+- **No measurement ⇒ validation is not possible.** A missing score is reported as a harness
+  error to fix (`verdict: needs-work`, naming `score-reports.py`), never a substituted
+  number and never a quiet pass.
+
+The asymmetry survives as a *judgement*, not arithmetic: a change making the analysis
+stricter outranks one making it more permissive, because only the latter can present a
+system as safer than the evidence supports.
+
+`calibrate-judge.py` was **deleted** along with the 0–100 axis. It existed to check that a
+judge-authored score was *ordered* (a worse change scoring lower than a better one) — a
+question that only makes sense when a model invents the number. A measurement's ordering is
+a property of the scorer, and `test_score_reports.py` plus the deterministic checks cover
+that. The semantics the calibration ladder used to protect are now pinned directly in
+`test_judge.py`: an unmet intent must leave the score **exactly** equal (it was the
+`no-op-expected` / `no-op-unexpected` pair, previously 95/15, then 50/47, now identical by
+construction), the floor must pass a measured score through untouched in both directions,
+and the unscored path must refuse to return LGTM.
 
 ## 2. What the managed TDs emit (the contract the harness scores against)
 
@@ -248,22 +280,39 @@ run-fixtures ─▶ diff-reports.py ─▶ judge.py                            �
 
 ## 6. LLM-as-judge agent
 
-- **Input:** `impact.json` (the delta) + the fixture `expectations` + the raw diff of the changed file(s) **+ the contributor's INTENT** (see below).
-- **Intent is a first-class input.** The judge scores the delta *against what the contributor said they were trying to do* — not just against raw baseline. A change that adds 40 findings is "good" if intent was "tighten AUTH scoring" and "bad" if intent was "fix a typo in a recommendation string." Intent is captured in a **structured MR-template field** (§8.1) and passed to the judge as `intent: {what, why, expected_impact}`.
+- **Input:** `impact.json` (the delta) + `compare.json` (the **measured** accuracy of the regenerated reports vs the committed baseline, with a per-fixture noise threshold) + the fixture `expectations` + the raw diff of the changed file(s) **+ the contributor's INTENT** (see below).
+- **Intent is evidence, not a score driver.** The judge reads the delta *against what the contributor said they were trying to do* — a change that adds 40 findings reads differently under "tighten AUTH scoring" than under "fix a typo in a recommendation string." But intent cannot move the score, because the score is a measurement (`compare.json`); a mismatch lowers **confidence** and raises a concern instead. Intent is captured in a **structured MR-template field** (§8.1) and passed as `intent: {what, why, expected_impact}`.
 - **Prompt shape:** "You are reviewing a proposed change to an AWS Transform analysis TD. The contributor's stated intent is: {intent}. Here is the observed delta (before = published TD output, after = proposed TD output). (1) Does the delta match the stated intent? (2) Is the change a quality regression, or can it be improved?" The judge is instructed to cite `question_id`s / `pathway.id`s / program acronyms, and to flag **intent mismatch**, **no-op** (they intended a change but delta is empty), and **quality regression** (the delta plausibly makes the analysis worse — e.g. a tier now contradicts its own blocker/severity counts, a pathway fires when the repo can't trigger it).
 - **Output (structured):**
   ```jsonc
   {
-    "score": 0-100,
+    // MEASURED by score-reports.py, not authored by the judge. Same 0.0-1.0 scale and
+    // same grader as the committed baseline, so the two are directly comparable.
+    "score": 0.842,               // regenerated report accuracy (mean over fixtures scored)
+    "baseline_score": 0.815,      // committed baseline mean for the SAME fixtures
+    "scored": true,               // false => the change COULD NOT BE VALIDATED (see below)
+    "accuracy_verdicts": {        // per fixture, already noise-thresholded by the scorer
+      "legacy-shipping-api:ara": { "score": 0.88, "baseline": 0.82, "delta": 0.06,
+                                   "threshold": 0.10, "verdict": "not-measured",
+                                   "basis": "noise-floor" }
+    },
+    // JUDGED. Direction, not magnitude.
+    "analysis_effect": "improves" | "neutral" | "degrades",
     "verdict": "LGTM" | "needs-work",
     "intent_match": "aligned" | "partial" | "mismatch",   // delta vs stated intent
     "rationale": "…cites AUTH-Q5, move-to-cloud-native, etc.…",
     "concerns": [ { "dimension": "D3", "detail": "…" } ],
     "quality_regression": false,  // true if the delta plausibly makes the analysis worse
+    "safety_hold": false,         // tier-material alert — independent of the score
     "suggestions": [ "…up to 3 concrete, actionable improvements…" ],
     "no_op_warning": false        // true if intent claimed a change but delta is empty
   }
   ```
+  `scored: false` (no `compare.json`, or nothing in it was scorable) is **not** a neutral
+  result — it means no measurement was taken, so the change cannot be validated. Both the
+  LLM and heuristic paths force `verdict: needs-work` and raise a concern naming
+  `score-reports.py`, and the MR comment says "could not be validated". Neither path is
+  permitted to substitute a placeholder number.
 - **Gate policy:** **advisory only.** The judge posts the verdict + score as an MR comment; it **never fails the pipeline.** Humans decide. (Chosen this session; can tighten to regression-blocking later.)
 - **Backend:** Bedrock (Anthropic Claude) via boto3 using the creds the AWS Credential Vendor already vends into the job. If Bedrock is unavailable (local dev, no creds), `judge.py` falls back to a deterministic heuristic so the pipeline still emits a usable `verdict.json` offline — the heuristic reports movement and defers the quality read to the LLM run rather than guessing correctness. Judge runs against the report JSON, not the HTML/MD renders.
 - **Schema guardrail (distinct axis):** alongside the semantic judge, `validate-contract.py` structurally validates every collected report against the JSON contract (`--validate` on `run-fixtures.sh`, plus an offline `tests/test_validate_contract.py` shape-fixture suite). Semantic quality is the judge's job; structural conformance is the guardrail's — a change that emits off-contract JSON is caught deterministically, no LLM needed.
