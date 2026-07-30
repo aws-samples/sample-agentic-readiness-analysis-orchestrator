@@ -13,8 +13,8 @@ five scored dimensions (see harness/DESIGN.md §3, §5, §12):
   D5  MOD numeric score — MOD only; BAND-CROSSING only (score_rating band boundary)
 
 This step is pure Python — NO ATX, NO LLM, NO network. It is the ATX-free core and is
-unit-tested against examples/reports/full-analysis/. The LLM judge (judge.py) consumes
-the impact.json this produces.
+unit-tested against the committed harness/golden/ baseline. The LLM judge (judge.py)
+consumes the impact.json this produces.
 
 Report field-path quirks handled (verified against real artifacts, DESIGN.md §12):
   - portfolio findings add `repo_name`; match on (repo_name, question_id)

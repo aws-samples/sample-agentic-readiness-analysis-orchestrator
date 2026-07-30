@@ -151,9 +151,9 @@ Publishes a TD folder to the ATX registry. The TD name is derived from the folde
 
 Requires the `atx` CLI and `AWS_REGION=us-east-1` (or a supported region).
 
-### `examples/` — sample reports and fixtures
+### `examples/` — fixtures
 
-`examples/reports/full-analysis/` contains a complete set of generated reports from a real analysis run — per-service ARA/MODA reports, portfolio roll-ups, and the unified execution plan. `examples/fixtures/monolith/` is a PHP test fixture for local runs.
+`examples/fixtures/monolith/` is a PHP test fixture for local runs. For a complete set of generated reports (per-repo ARA/MOD, portfolio roll-ups), see the committed harness baseline under `harness/golden/` — the change-impact harness diffs each MR against it.
 
 ## Quickstart
 

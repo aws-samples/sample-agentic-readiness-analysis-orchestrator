@@ -140,10 +140,10 @@ You can exercise the differ without AWS or `atx` — it only reads report JSON:
 
 ```sh
 # Diff two report trees (e.g. a hand-made "after" vs the committed goldens),
-# using the checked-in sample reports as inputs.
+# using the committed golden baseline as input.
 harness/diff-reports.py \
-  --baseline examples/reports/full-analysis \
-  --after examples/reports/full-analysis \
+  --baseline harness/golden \
+  --after harness/golden \
   -o /tmp/impact.json
 # (Same tree in/out => an all-empty delta with "no_op": true — a good smoke test.)
 

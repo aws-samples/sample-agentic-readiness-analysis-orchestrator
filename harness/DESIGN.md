@@ -28,9 +28,9 @@ Two questions the harness answers on every PR/MR:
 
 ## 2. What the managed TDs emit (the contract the harness scores against)
 
-Grounded in the real reports under `examples/reports/full-analysis/`.
+Grounded in the real reports under `harness/golden/` (the committed baseline).
 
-> **All four report shapes below are verified against the real artifacts in `examples/reports/full-analysis/` (deep scan, 2026-07-28).**
+> **All four report shapes below are verified against the real artifacts in `harness/golden/` (the committed baseline, regenerated from the edited managed TDs).**
 
 ### ARA per-repo — `<repo>-ara-report.json`
 - `classification` → `tier` (Agent-Ready / Pilot-Ready / Remediation Required / Not Agent-Integrable), `sub_qualifier`, `blocker_count`, `risk_safety_count`, `risk_quality_count`, `rule_matched`
@@ -334,7 +334,7 @@ harness/
 ## 10. Build order
 
 1. **`usecases.yaml`** for all 10 fixtures + `coverage-heatmap.py` (proves the matrix; no ATX needed).
-2. **`diff-reports.py`** (D1–D5) + `tests/` against the existing `examples/reports/` as test input (no ATX needed).
+2. **`diff-reports.py`** (D1–D5) + `tests/` against the committed `harness/golden/` baseline as test input (no ATX needed).
 3. **`golden/`** baselines + `run-fixtures.sh` + `should-run.sh` (§7).
 4. **`judge.py`** + prompt (intent-aware), validated on hand-made before/after pairs.
 5. **`.gitlab-ci.yml`** + `.gitlab/` templates (§8), advisory.
@@ -349,7 +349,7 @@ All work lands on **GitLab `feat/harness`**; GitHub receives mirrored content on
 
 ## 12. Verified report field paths (differ contract)
 
-The differ (`diff-reports.py`) must handle these real-artifact quirks (deep scan of `examples/reports/full-analysis/`, 2026-07-28):
+The differ (`diff-reports.py`) must handle these real-artifact quirks (observed across the `harness/golden/` baseline):
 - **Findings array key differs by scope:** portfolio findings add `repo_name`; **portfolio MOD drops `description`/`gap`/`recommendation`** (leaner than per-repo MOD); per-repo ARA nests `native_severity`/`safety_impact` under `ara_metadata`, while portfolio ARA promotes them to top level. Match on `(repo_name, question_id)`.
 - **Pathways:** per-repo uses `status`; portfolio uses `portfolio_status`. `triggering_questions[]` is top-level per-repo but nested under each `contributing_repos[]` element in portfolio.
 - **Distributions differ in shape:** ARA `readiness_distribution` = `{count, percentage}` objects; MOD `tier_distribution` and `score_band_distribution` = flat integers.

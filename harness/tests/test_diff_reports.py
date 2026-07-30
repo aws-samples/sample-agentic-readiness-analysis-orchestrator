@@ -2,9 +2,15 @@
 """
 Tests for diff-reports.py — the ATX-free core of the harness.
 
-Strategy: load REAL reports from examples/reports/full-analysis/, deep-copy them into
-synthetic before/after pairs, mutate the "after" to simulate the kind of change a rubric
+Strategy: load REAL reports from the committed harness/golden/ baseline, deep-copy them
+into synthetic before/after pairs, mutate the "after" to simulate the kind of change a TD
 edit would produce, and assert the differ reports exactly the right dimension moved.
+
+golden/ IS the differ's real-world input (the same tree an MR diffs against), so testing
+the differ against it keeps the tests and the harness reading one dataset — no separate
+sample corpus to drift. golden/ is a flat directory (all *-report.json in one folder), so
+load_tree(GOLDEN) picks up ARA + MOD + portfolio together; where a test needs one analysis
+in isolation it filters the loaded tree by key rather than by subdirectory.
 
 Run:  python3 -m pytest harness/tests/ -q
   or: python3 harness/tests/test_diff_reports.py     (no pytest needed — has a fallback runner)
@@ -18,9 +24,12 @@ import json
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-REPORTS = REPO / "examples" / "reports" / "full-analysis"
-ARA_DIR = REPORTS / "agentic-readiness-analysis"
-MOD_DIR = REPORTS / "modernization-readiness-analysis"
+GOLDEN = REPO / "harness" / "golden"
+# golden/ is flat — ARA and MOD reports live side by side. The per-analysis "dirs" the
+# tests used to load are now the same folder; load_tree() classifies by content, and the
+# few tests that need one analysis alone filter the tree by key.
+ARA_DIR = GOLDEN
+MOD_DIR = GOLDEN
 
 # Import the hyphenated module by path.
 _spec = importlib.util.spec_from_file_location(
@@ -33,10 +42,10 @@ def _load(p: Path) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-ARA_REPO = ARA_DIR / "aws-microservices-ara-report.json"
-MOD_REPO = MOD_DIR / "aws-microservices-mod-report.json"
-ARA_PORT = ARA_DIR / "ecommerce-platform-v2-portfolio-ara-report.json"
-MOD_PORT = MOD_DIR / "ecommerce-platform-v2-portfolio-mod-report.json"
+ARA_REPO = GOLDEN / "monolith-ara-report.json"
+MOD_REPO = GOLDEN / "monolith-mod-report.json"
+ARA_PORT = GOLDEN / "harness-portfolio-portfolio-ara-report.json"
+MOD_PORT = GOLDEN / "harness-portfolio-portfolio-mod-report.json"
 
 
 # --- classification / loading --------------------------------------------------------
@@ -49,9 +58,10 @@ def test_classify_all_four_types():
 
 
 def test_metadata_files_ignored():
-    meta = ARA_DIR / "aws-microservices-ara-report.metadata.json"
-    if meta.exists():
-        assert dr.classify_report(meta, _load(meta)) is None
+    # `.metadata.json` sidecars must be skipped by classification regardless of content —
+    # assert on the filename rule directly so the test doesn't depend on a sample file.
+    meta = ARA_DIR / "monolith-ara-report.metadata.json"
+    assert dr.classify_report(meta, {"analysis_type": "ara"}) is None
 
 
 def test_identical_trees_are_no_op():
@@ -224,11 +234,18 @@ def test_d5_portfolio_band_distribution_shift():
     before = _load(MOD_PORT)
     after = copy.deepcopy(before)
     dist = after["executive_dashboard"]["score_band_distribution"]
-    dist["needs_work"] = (dist.get("needs_work") or 0) + 1
-    dist["partial"] = max(0, (dist.get("partial") or 0) - 1)
+    # Bump one band up by 1 and pick a DIFFERENT band with a positive count to drop by 1,
+    # rather than hardcoding band names — the real distribution may have any band at 0
+    # (a 0 band can't decrement, so it wouldn't register a shift).
+    bump = next(iter(dist))
+    drop = next((k for k in dist if k != bump and (dist.get(k) or 0) > 0), None)
+    dist[bump] = (dist.get(bump) or 0) + 1
+    if drop:
+        dist[drop] = dist[drop] - 1
     d = dr.diff_score_portfolio(before, after)
-    assert d["band_distribution_shift"].get("needs_work") == 1
-    assert d["band_distribution_shift"].get("partial") == -1
+    assert d["band_distribution_shift"].get(bump) == 1
+    if drop:
+        assert d["band_distribution_shift"].get(drop) == -1
 
 
 # --- end-to-end impact.json ----------------------------------------------------------
