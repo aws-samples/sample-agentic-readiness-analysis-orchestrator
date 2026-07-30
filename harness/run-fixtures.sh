@@ -34,6 +34,10 @@
 #   --write-golden        After collecting, copy reports into harness/golden/ (baseline
 #                         refresh — used by the dedicated "baseline update" MR only).
 #   --after-dir <dir>     Where to write collected reports (default: harness/_after).
+#                         Refuses to start if the dir already holds reports — each
+#                         baseline batch must stay a separate, intact draw.
+#   --force               Reuse an --after-dir that already holds reports (e.g. to resume
+#                         a batch that died part-way). Overwrites matching reports.
 #   --name-suffix <s>     Suffix on published custom-def names so we never clobber the
 #                         managed names (default: -harness).
 #   --portfolio-name <n>  portfolio_name passed to the portfolio TDs (default: harness-portfolio).
@@ -64,6 +68,8 @@ USECASES="${HARNESS_DIR}/usecases.yaml"
 SCOPE="changed"          # changed | all
 TD_FILTER=""             # "", ara, mod, or a managed TD folder name
 WRITE_GOLDEN="false"
+# Allow reusing an --after-dir that already holds reports (see the clobber guard below).
+FORCE="false"
 # Honor an inherited AFTER_DIR (the CI job sets it) so the reports we write here land
 # exactly where diff-reports.py reads them. The --after-dir flag still overrides both.
 AFTER_DIR="${AFTER_DIR:-${HARNESS_DIR}/_after}"
@@ -84,6 +90,7 @@ while [[ $# -gt 0 ]]; do
     --all)           SCOPE="all"; shift ;;
     --td)            TD_FILTER="$2"; shift 2 ;;
     --write-golden)  WRITE_GOLDEN="true"; shift ;;
+    --force)         FORCE="true"; shift ;;
     --after-dir)     AFTER_DIR="$2"; shift 2 ;;
     --name-suffix)   NAME_SUFFIX="$2"; shift 2 ;;
     --portfolio-name) PORTFOLIO_NAME="$2"; shift 2 ;;
@@ -345,6 +352,22 @@ if paths:
       || echo "${analysis}: CONTRACT VIOLATION" >&2
   fi
 }
+
+# --- refuse to clobber an existing batch ---------------------------------------------
+# Reports are collected with `cp` into AFTER_DIR, so re-running with the same --after-dir
+# would silently overwrite reports that already cost ~110 agent-min each to produce. A
+# multi-run baseline is only meaningful if each batch stays a SEPARATE, intact draw, so an
+# accidental re-run must not quietly merge two runs into one directory. Opt in with
+# --force to reuse a directory on purpose (e.g. resuming a batch that died part-way).
+if [[ "${DRY_RUN}" != "true" && "${FORCE:-false}" != "true" ]]; then
+  _existing="$(find "${AFTER_DIR}" -maxdepth 1 -name '*-report.json' 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${_existing}" -gt 0 ]]; then
+    echo "refusing to run: ${AFTER_DIR} already holds ${_existing} report(s)." >&2
+    echo "  Each batch must stay a separate draw — overwriting would corrupt the sample." >&2
+    echo "  Use a new --after-dir (e.g. harness/samples/s3), or --force to reuse this one." >&2
+    exit 2
+  fi
+fi
 
 # --- prepare staging + publish the TDs we need ---------------------------------------
 STAGE="${AFTER_DIR}/_src"
