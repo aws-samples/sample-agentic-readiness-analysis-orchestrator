@@ -360,6 +360,11 @@ if paths:
 # accidental re-run must not quietly merge two runs into one directory. Opt in with
 # --force to reuse a directory on purpose (e.g. resuming a batch that died part-way).
 if [[ "${DRY_RUN}" != "true" && "${FORCE:-false}" != "true" ]]; then
+  # `find` on a MISSING dir exits non-zero; under `set -euo pipefail` that killed the whole
+  # script here with exit 1 and NO message — the guard below never ran, so a brand-new batch
+  # dir (the normal case for a fresh sample) silently produced nothing at all. Create the dir
+  # first: the guard only cares whether reports already exist INSIDE it.
+  mkdir -p "${AFTER_DIR}"
   _existing="$(find "${AFTER_DIR}" -maxdepth 1 -name '*-report.json' 2>/dev/null | wc -l | tr -d ' ')"
   if [[ "${_existing}" -gt 0 ]]; then
     echo "refusing to run: ${AFTER_DIR} already holds ${_existing} report(s)." >&2
