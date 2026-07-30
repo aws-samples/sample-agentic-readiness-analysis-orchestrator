@@ -15,7 +15,7 @@
 | Judge intent input | Judge scores delta **against contributor intent** captured in a GitLab MR-template field (§8.1) |
 | Trigger model | **Watched-TD deterministic gate** (`should-run.sh`, NOT an LLM). Runs when a change lands under any *watched TD directory* (`definitions/managed/**` SKILL.md + references/); everything else is skipped unless it is a fixture change. The mechanism is generic (`HARNESS_TD_PATHS`); the config is the 4 managed TDs. Manual `harness:full` for a full re-baseline. LLM is spent only at the *end* (judge). |
 | What contributors edit | Contributors edit the **TD definitions themselves** — `definitions/managed/<td>/SKILL.md` + `references/` — which ARE git-visible. The harness runs the *edited* TD via `atx custom def exec` (see §7), so the diff under review is exactly what gets tested. The published managed TD on AWS Transform Continuous Modernization stays authoritative until an approved change is published there. |
-| CI platform | **Runs on GitLab ONLY** — AWS access via the **AWS Credential Vendor** on the shared runner fleet (OIDC does NOT work on internal `gitlab.aws.dev` — IAM can't reach it to verify tokens). One CI var `AWS_CREDS_TARGET_ROLE` points at a per-project IAM role in the Isengard account; the runner auto-vends temp creds. GitHub stays **open for contributions** (issue/PR templates kept) but runs **no** automation; content mirrors both ways. |
+| CI platform | **Runs on GitLab ONLY** — AWS access via the **AWS Credential Vendor** on the shared runner fleet (OIDC does NOT work on internal `gitlab.aws.dev` — IAM can't reach it to verify tokens). One CI var `AWS_CREDS_TARGET_ROLE` points at a per-project IAM role in the target AWS account; the runner auto-vends temp creds. GitHub stays **open for contributions** (issue/PR templates kept) but runs **no** automation; content mirrors both ways. |
 | Templates | GitHub `.github/ISSUE_TEMPLATE/` kept (contributions welcome there); GitLab adds `.gitlab/` templates that also capture judge **intent** (§8.1). |
 
 ## 1. Purpose
@@ -294,7 +294,7 @@ harness:full:
   allow_failure: true
 ```
 
-Requires AWS access on the GitLab runner for the `atx` step (analysis-scoped; personal Isengard account for now). Auth is the **AWS Credential Vendor** on the shared fleet — set the single CI var `AWS_CREDS_TARGET_ROLE` to a per-project IAM role whose trust policy allows `arn:aws:iam::979517299116:role/gitlab-runners-prod` to assume it, gated by `aws:PrincipalTag/GitLab:{Project,Group}`. The runner injects temp `AWS_ACCESS_KEY_ID/_SECRET_ACCESS_KEY/_SESSION_TOKEN` automatically — no OIDC, no static keys. See `harness/README.md` for the role setup.
+Requires AWS access on the GitLab runner for the `atx` step (analysis-scoped; a developer-owned AWS account for now). Auth is the **AWS Credential Vendor** on the shared fleet — set the single CI var `AWS_CREDS_TARGET_ROLE` to a per-project IAM role whose trust policy allows the GitLab runner fleet's jump role to assume it, gated by `aws:PrincipalTag/GitLab:{Project,Group}`. The jump-role ARN is in `harness/README.md`. The runner injects temp `AWS_ACCESS_KEY_ID/_SECRET_ACCESS_KEY/_SESSION_TOKEN` automatically — no OIDC, no static keys. See `harness/README.md` for the role setup.
 
 ### 8.1 MR template — captures INTENT for the judge (§6)
 

@@ -6,17 +6,17 @@
 # runs here on gitlab.aws.dev.
 #
 # AWS AUTH = AWS CREDENTIAL VENDOR (no long-lived credentials, no OIDC).
-# OIDC is NOT available on the internal gitlab.aws.dev: AWS IAM cannot reach the
+# OIDC is NOT available on the internal GitLab instance: AWS IAM cannot reach the
 # private instance to verify an id_token, so the OIDC provider trust model does
 # not work here. Instead the SHARED RUNNER FLEET vends temporary credentials via
-# the AWS Credential Vendor: the runners' jump role
-#   arn:aws:iam::979517299116:role/gitlab-runners-prod
-# assumes a role that YOU create in your Isengard account, gated by GitLab
-# principal tags (aws:PrincipalTag/GitLab:Project + :Group). You set ONE CI
-# variable, AWS_CREDS_TARGET_ROLE = that role's ARN, and the shared runner
-# injects AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN into the
-# job automatically — there is NOTHING to exchange in before_script. See
-# harness/README.md for the one-time role setup.
+# the AWS Credential Vendor: the runners' jump role assumes a role that YOU create
+# in your own AWS account, gated by GitLab principal tags
+# (aws:PrincipalTag/GitLab:Project + :Group). You set ONE CI variable,
+# AWS_CREDS_TARGET_ROLE = that role's ARN, and the shared runner injects
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN into the job
+# automatically — there is NOTHING to exchange in before_script.
+# See harness/README.md for the one-time role setup (it has the jump-role ARN you
+# need for the trust policy).
 #
 # Requirements (both already in place):
 #   - SHARED runners enabled (the Credential Vendor only works on shared runners).
@@ -37,12 +37,20 @@ stages:
 # phases and reserves structure for a future per-stage split.
 
 variables:
-  # AWS Credential Vendor target role (see header + harness/README.md). Set INLINE
-  # rather than as a CI/CD variable: an IAM role ARN is NOT a secret, and a project
-  # variable that is "Protected" is only injected on protected branches — which
-  # silently breaks the vend on feature branches / MRs (the exact failure we hit).
-  # Every working AWS-GitLab example sets this inline. Override per-job if needed.
-  AWS_CREDS_TARGET_ROLE: "arn:aws:iam::936068047509:role/agentic-readiness-assessment-moda-gitlab-role"
+  # AWS Credential Vendor target role — set as a PROJECT CI/CD VARIABLE, not here.
+  #   Settings -> CI/CD -> Variables -> AWS_CREDS_TARGET_ROLE
+  #   value: arn:aws:iam::<your-account-id>:role/<your-project-role>
+  #
+  # It is deliberately NOT inline: this repo mirrors to a PUBLIC GitHub remote, and
+  # an inline value would publish the account id and role name permanently. An ARN
+  # is not a credential, but it is internal infrastructure detail.
+  #
+  # MUST be created as PLAIN — unprotected AND unmasked:
+  #   - "Protected" is only injected on protected branches, which silently breaks
+  #     the vend on feature branches / MRs (the exact failure we hit before).
+  #   - "Masked"/"Hidden" also breaks it — the runner's pre-clone vendor script
+  #     cannot read a masked value, so no creds are vended at all.
+  # harness:auth-check diagnoses both of these failure modes explicitly.
   # REQUIRED for the vend: the runner's pre-clone aws-creds-vendor.sh only vends
   # when BOTH AWS_CREDS_TARGET_ROLE *and* AWS_DEFAULT_REGION are set. It gates on
   # AWS_DEFAULT_REGION specifically (NOT AWS_REGION) — leaving it unset makes the
@@ -54,8 +62,8 @@ variables:
   # Bedrock model for the LLM judge. MUST be a cross-region INFERENCE PROFILE id
   # (the "global."/"us." prefixed ids from `aws bedrock list-inference-profiles`),
   # NOT a bare foundation-model id — invoke_model rejects the bare id with
-  # "The provided model identifier is invalid." Confirmed ACTIVE in account
-  # 936068047509 / us-east-1. judge.py reads this via HARNESS_JUDGE_MODEL; if the
+  # "The provided model identifier is invalid." Must be ACTIVE in the target
+  # account / us-east-1. judge.py reads this via HARNESS_JUDGE_MODEL; if the
   # call fails for any reason the judge falls back to the offline heuristic.
   HARNESS_JUDGE_MODEL: "global.anthropic.claude-opus-4-5-20251101-v1:0"
   # pip cache location (see cache: block below).
@@ -170,15 +178,16 @@ harness:auth-check:
         echo "DIAGNOSIS:" >&2
         if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
           echo "  No creds were injected -> the VEND did not run. Most likely the" >&2
-          echo "  AWS_CREDS_TARGET_ROLE variable is Masked/Hidden. Re-create it as a" >&2
-          echo "  PLAIN (unmasked, unhidden, unprotected) variable — an ARN is not a" >&2
-          echo "  secret and every working example sets it in plaintext." >&2
+          echo "  AWS_CREDS_TARGET_ROLE variable is Masked/Hidden/Protected. Re-create" >&2
+          echo "  it as a PLAIN (unmasked, unhidden, unprotected) variable — the vendor" >&2
+          echo "  script cannot read a masked value, and Protected is only injected on" >&2
+          echo "  protected branches (so MRs from feature branches get nothing)." >&2
         else
           echo "  Creds WERE injected but STS rejected them -> the target role's trust" >&2
           echo "  policy did not allow the vendor's AssumeRole. Confirm the trust policy" >&2
-          echo "  on ${AWS_CREDS_TARGET_ROLE} has principal" >&2
-          echo "  arn:aws:iam::979517299116:role/gitlab-runners-prod and conditions" >&2
-          echo "  GitLab:Project=agentic-readiness-assessment, GitLab:Group=agentic-readiness-assessment." >&2
+          echo "  on the target role names the GitLab runner jump role as principal" >&2
+          echo "  (ARN is in harness/README.md) with conditions" >&2
+          echo "  GitLab:Project=<project> and GitLab:Group=<group> matching this repo." >&2
         fi
         exit 1
       fi
