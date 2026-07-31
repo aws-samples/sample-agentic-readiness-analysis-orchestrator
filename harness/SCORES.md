@@ -6,72 +6,71 @@
 
 Source: [`harness/golden-accuracy-baseline.json`](golden-accuracy-baseline.json)
 
-> ⚠️ **STALE — these ARA scores were produced by an earlier scorer prompt.** (This banner
-> is a deliberate hand-edit to a generated file, and it is meant to be DESTROYED by the
-> next `--markdown` run — regenerating is exactly what resolves the staleness it warns
-> about. Do not re-add it afterwards.)
->
-> The scorer was later given the authoritative question->severity table parsed from `SKILL.md`, which lets
-> it catch a real TD defect (`AUTH-Q5` emitted as `BLOCKER` where the TD says `RISK-SAFETY`,
-> in 6 of 11 golden ARA reports). Re-scoring the byte-identical golden files under the
-> corrected prompt moves ARA by up to 0.36 while MOD moves at most 0.04. **The ARA column
-> below overstates accuracy.** See [`SCORES-s1-vs-s2.md`](./SCORES-s1-vs-s2.md) for the
-> measured comparison, and regenerate this file with the 3-sample re-baseline.
-
-
 Each score is an LLM grader's assessment of how well a generated report is **grounded in the fixture's actual source code** — fabrications and misses count against it. This is the *accuracy* axis, and it is what the judge compares a TD change against. It is NOT the ARA tier or the MOD band, which are the report's own verdicts about the app and appear here as context.
 
 The **Checks** column is a different axis entirely: deterministic, arithmetic assertions that a report does not contradict **itself** — its own severity counters, its own tier arithmetic, its own question coverage. No LLM and no sampling is involved, so a failure here is a real defect at any sample depth, and is safe to act on immediately. A report can be perfectly grounded in the source (high score) and still fail a check by miscounting what it found. Each failure names the check; see [What the checks mean](#what-the-checks-mean).
 
-**Sample depth: 1 run per fixture (single draw).** There is no measured variance yet, so the judge falls back to the observed noise floor — **ARA 0.10**, **MOD 0.02** per fixture. Because the entire observed ARA range is about 0.10 wide, ARA scores here **cannot be used to rank fixtures against each other**; only the deterministic defects below are safe to act on at this depth.
+**Sample depth: up to 3 independent runs per fixture.** `sd` is the measured per-fixture standard deviation and `spread` the max−min across runs; both read `—` where a fixture was drawn only once (it exists in only some batches), because `0.000` there would read as rock-steady when nothing was measured at all.
 
-## ARA — 11 reports
+A delta counts as real only past `max(2·sd, floor)` — the noise floor (**ARA 0.25**, **MOD 0.03**) is a lower bound the measured `sd` can raise but never lower. A jittery fixture is held to a stricter bar than the floor; a quiet one is not held to a looser one, because an n=3 `sd` is far too weak an estimator to justify shrinking the bar and shrinking it is the direction that manufactures false improvements. **Below the threshold means NOT MEASURED — never "proven equal".**
 
-Mean **0.76**, range 0.72–0.82.
+Every batch has its own column — same TD, same fixtures, different run. Columns: `after-tdfix`, `ara-draw2`, `ara-draw3`, `golden`, `s2`, `s3`. The point of showing them side by side is that the mean alone hides disagreement: 0.72 / 0.92 and a steady 0.82 both average to 0.82, but only one of them is a measurement.
 
-| Repo | Score | Checks | Tier / blockers |
-|---|---|---|---|
-| `legacy-document-portal` | 0.72 | **HIGH** — `severity_counter_undercount` | Not Agent-Integrable / 3 |
-| `legacy-helpdesk-tickets` | 0.72 | **MEDIUM** — `severity_counter_undercount` | Not Agent-Integrable / 3 |
-| `legacy-loan-calculator` | 0.72 | PASS | Not Agent-Integrable / 3 |
-| `legacy-partner-soap` | 0.72 | **MEDIUM** — `severity_counter_undercount` | Not Agent-Integrable / 3 |
-| `legacy-shipping-api` | 0.72 | **MEDIUM** — `severity_counter_undercount` | Remediation Required / 1 |
-| `legacy-timesheet-webforms` | 0.72 | **MEDIUM** — `severity_counter_undercount` | Not Agent-Integrable / 3 |
-| `legacy-crm-desktop` | 0.78 | PASS | Not Agent-Integrable / 3 |
-| `legacy-payroll-system` | 0.78 | PASS | Remediation Required / 2 |
-| `legacy-pricing-cgi` | 0.82 | PASS | Remediation Required / 2 |
-| `legacy-storefront-rails` | 0.82 | PASS | Not Agent-Integrable / 3 |
-| `monolith` | 0.82 | PASS | Remediation Required / 1 |
+## ARA — 14 reports
 
-## MOD — 11 reports
+Mean **0.85**, range 0.81–0.89.
 
-Mean **0.90**, range 0.85–0.92.
+| Repo | Mean | after-tdfix | ara-draw2 | ara-draw3 | golden | s2 | s3 | sd | spread | Checks | Tier / blockers |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `legacy-loan-calculator` | 0.81 | 0.72 | 0.88 | 0.82 | — | — | — | 0.066 | 0.16 | PASS | Remediation Required / 2 |
+| `modern-orders-service` | 0.81 | 0.82 | 0.72 | 0.88 | — | — | — | 0.066 | 0.16 | **HIGH** — `missing_safety_qualifier` | Pilot-Ready / 0 |
+| `modern-payments-api` | 0.81 | 0.72 | 0.88 | 0.82 | — | — | — | 0.066 | 0.16 | **HIGH** — `missing_safety_qualifier` | Pilot-Ready / 0 |
+| `legacy-timesheet-webforms` | 0.81 | 0.78 | 0.88 | 0.78 | — | — | — | 0.047 | 0.10 | PASS | Remediation Required / 2 |
+| `legacy-payroll-system` | 0.83 | 0.72 | 0.88 | 0.88 | — | — | — | 0.075 | 0.16 | PASS | Remediation Required / 2 |
+| `modern-catalog-graphql` | 0.85 | 0.82 | 0.92 | 0.82 | — | — | — | 0.047 | 0.10 | **HIGH** — `missing_safety_qualifier` | Pilot-Ready / 0 |
+| `legacy-partner-soap` | 0.86 | 0.88 | 0.82 | 0.88 | — | — | — | 0.028 | 0.06 | PASS | Remediation Required / 2 |
+| `legacy-pricing-cgi` | 0.86 | 0.78 | 0.88 | 0.92 | — | — | — | 0.059 | 0.14 | PASS | Remediation Required / 1 |
+| `legacy-helpdesk-tickets` | 0.87 | 0.82 | 0.88 | 0.91 | — | — | — | 0.037 | 0.09 | PASS | Remediation Required / 2 |
+| `legacy-document-portal` | 0.88 | 0.88 | 0.88 | 0.88 | — | — | — | 0.000 | 0.00 | PASS | Remediation Required / 2 |
+| `legacy-shipping-api` | 0.88 | 0.88 | 0.88 | 0.88 | — | — | — | 0.000 | 0.00 | PASS | Remediation Required / 1 |
+| `legacy-storefront-rails` | 0.88 | 0.88 | 0.88 | 0.88 | — | — | — | 0.000 | 0.00 | PASS | Remediation Required / 2 |
+| `monolith` | 0.88 | 0.88 | 0.88 | 0.88 | — | — | — | 0.000 | 0.00 | PASS | Remediation Required / 1 |
+| `legacy-crm-desktop` | 0.89 | 0.88 | 0.91 | 0.88 | — | — | — | 0.014 | 0.03 | PASS | Remediation Required / 2 |
 
-| Repo | Score | Checks | MOD score / band |
-|---|---|---|---|
-| `monolith` | 0.85 | PASS | 1.89 / Needs Work |
-| `legacy-partner-soap` | 0.88 | PASS | 1.09 / Not Ready |
-| `legacy-pricing-cgi` | 0.88 | PASS | 2.0 / Needs Work |
-| `legacy-shipping-api` | 0.88 | PASS | 1.77 / Needs Work |
-| `legacy-crm-desktop` | 0.92 | PASS | 1.15 / Not Ready |
-| `legacy-document-portal` | 0.92 | PASS | 1.18 / Not Ready |
-| `legacy-helpdesk-tickets` | 0.92 | PASS | 1.15 / Not Ready |
-| `legacy-loan-calculator` | 0.92 | PASS | 1.15 / Not Ready |
-| `legacy-payroll-system` | 0.92 | PASS | 1.0 / Not Ready |
-| `legacy-storefront-rails` | 0.92 | PASS | 1.18 / Not Ready |
-| `legacy-timesheet-webforms` | 0.92 | PASS | 1.09 / Not Ready |
+Run-to-run spread: mean 0.083, worst 0.16 — treat any delta below the worst spread as noise.
 
-## Deterministic defects — 5 across 5 reports
+## MOD — 14 reports
+
+Mean **0.86**, range 0.62–0.92.
+
+| Repo | Mean | after-tdfix | ara-draw2 | ara-draw3 | golden | s2 | s3 | sd | spread | Checks | MOD score / band |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `modern-orders-service` | 0.62 | — | — | — | — | — | 0.62 | — | 0.00 | PASS | 1.99 / Needs Work |
+| `modern-catalog-graphql` | 0.72 | — | — | — | — | — | 0.72 | — | 0.00 | PASS | 2.8 / Partial |
+| `legacy-pricing-cgi` | 0.76 | — | — | — | 0.88 | 0.52 | 0.88 | 0.170 | 0.36 | PASS | 1.64 / Needs Work |
+| `legacy-shipping-api` | 0.86 | — | — | — | 0.88 | 0.88 | 0.82 | 0.028 | 0.06 | PASS | 1.65 / Needs Work |
+| `legacy-partner-soap` | 0.89 | — | — | — | 0.88 | 0.88 | 0.92 | 0.019 | 0.04 | PASS | 1.18 / Not Ready |
+| `monolith` | 0.89 | — | — | — | 0.88 | 0.88 | 0.92 | 0.019 | 0.04 | PASS | 1.94 / Needs Work |
+| `legacy-helpdesk-tickets` | 0.90 | — | — | — | 0.88 | — | 0.92 | 0.020 | 0.04 | PASS | 1.15 / Not Ready |
+| `legacy-loan-calculator` | 0.91 | — | — | — | 0.88 | 0.92 | 0.92 | 0.019 | 0.04 | PASS | 1.2 / Not Ready |
+| `legacy-crm-desktop` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.05 / Not Ready |
+| `legacy-document-portal` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.18 / Not Ready |
+| `legacy-payroll-system` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.05 / Not Ready |
+| `legacy-storefront-rails` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.15 / Not Ready |
+| `legacy-timesheet-webforms` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.18 / Not Ready |
+| `modern-payments-api` | 0.92 | — | — | — | — | — | 0.92 | — | 0.00 | PASS | 3.3 / Partial |
+
+Run-to-run spread: mean 0.041, worst 0.36 — treat any delta below the worst spread as noise.
+
+## Deterministic defects — 3 across 3 reports
 
 Arithmetic contradictions inside a single report — **actionable now**, independent of sample depth.
 
 | Severity | Repo | Check | Detail |
 |---|---|---|---|
-| high | `legacy-document-portal` (ARA) | `severity_counter_undercount` | risk_safety_count=8 but 9 findings are natively RISK-SAFETY (undercount by 1; no exclusion rule can lower a counter below the enumerated findings) |
-| medium | `legacy-helpdesk-tickets` (ARA) | `severity_counter_undercount` | risk_quality_count=8 but 10 findings are natively RISK-QUALITY (undercount by 2; no exclusion rule can lower a counter below the enumerated findings) |
-| medium | `legacy-partner-soap` (ARA) | `severity_counter_undercount` | risk_quality_count=9 but 11 findings are natively RISK-QUALITY (undercount by 2; no exclusion rule can lower a counter below the enumerated findings) |
-| medium | `legacy-shipping-api` (ARA) | `severity_counter_undercount` | risk_quality_count=8 but 9 findings are natively RISK-QUALITY (undercount by 1; no exclusion rule can lower a counter below the enumerated findings) |
-| medium | `legacy-timesheet-webforms` (ARA) | `severity_counter_undercount` | risk_quality_count=6 but 10 findings are natively RISK-QUALITY (undercount by 4; no exclusion rule can lower a counter below the enumerated findings) |
+| high | `modern-catalog-graphql` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=3 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
+| high | `modern-orders-service` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=10 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
+| high | `modern-payments-api` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=4 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
 
 ## What the checks mean
 
@@ -79,167 +78,144 @@ Each check asserts a report is internally consistent. All are deterministic arit
 
 | Check | Severity | What a failure means |
 |---|---|---|
-| `severity_counter_undercount` | high | A severity counter is LOWER than the findings the report itself enumerated. Exclusion rules can push a counter above the enumerated set, never below it, so this is always an error — and because the ARA tier is computed from these counters, an undercount can mechanically relax the tier. |
+| `missing_safety_qualifier` | high | RISK-SAFETY findings exist with no BLOCKER, which requires the "Safety Concerns" qualifier, and it is absent — the report reads safer than the rubric says it is. |
 
-The other 10 checks passed everywhere: `category_band_mismatch`, `duplicate_question_ids`, `incomplete_question_coverage`, `missing_safety_qualifier`, `overall_score_band_error`, `overall_score_not_mean_of_categories`, `question_in_both_findings_and_evaluations`, `spurious_safety_qualifier`, `tier_contradicts_counts`, `unexpected_question_count`.
+The other 11 checks passed everywhere: `category_band_mismatch`, `duplicate_question_ids`, `incomplete_question_coverage`, `overall_score_band_error`, `overall_score_not_mean_of_categories`, `question_in_both_findings_and_evaluations`, `severity_counter_undercount`, `severity_exceeds_td_ceiling`, `spurious_safety_qualifier`, `tier_contradicts_counts`, `unexpected_question_count`.
 
 ## Per-report grader notes
 
-<details><summary>Fabrications and misses per report (21 reports)</summary>
+<details><summary>Fabrications and misses per report (18 reports)</summary>
 
-### `legacy-crm-desktop` (ARA) — 0.78
+### `legacy-crm-desktop` (ARA) — 0.89
 
-The report accurately identifies the critical issues in this legacy VB6 desktop application: no API surface, hardcoded credentials, SQL injection vulnerability, and lack of authentication. The service archetype (stateful-crud) and tier (Not Agent-Integrable) are correctly determined. However, the report contains some severity inconsistencies and the BLOCKER count (3) doesn't match the findings marked as BLOCKER (API-Q1, AUTH-Q1, AUTH-Q5), while several RISK-SAFETY findings could arguably be BLOCKERs given the system's actual write capabilities.
+The report is largely accurate about this legacy VB6 desktop CRM repository. It correctly identifies the stateful-crud archetype, applies surface-flag calibrations appropriately (downgrading API-Q2, API-Q3, etc. for no HTTP/RPC surface), and handles the read-only agent_scope conditional severities correctly. The findings cite real code patterns (hardcoded credentials, SQL injection, no API surface). Minor issues include API-Q7 being marked 'pass' when it should be evaluated as a finding for stateful-crud archetype, and some count inconsistencies between findings and evaluations.
 
-- **MISS** [High] README.md line 12: File share corruption vulnerability explicitly documented
-- **MISS** [Medium] README.md line 13: No multi-user locking - explicit concurrency problem
+- **MISS** [INFO] frmCustomer.frm - INSERT operations with no event emission: API-Q7 Event Emission for State Changes should be evaluated as a finding, not passed
+- **DELIVERABLE** remediation_roadmap: Phase 1 includes RISK-SAFETY findings (AUTH-Q2, AUTH-Q3, AUTH-Q5, AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2) mixed with BLOCKERs
 
-### `legacy-crm-desktop` (MOD) — 0.92
+### `legacy-document-portal` (ARA) — 0.88
 
-The report is highly accurate and well-grounded in the actual repository source. All findings correctly identify real issues visible in the code (hardcoded credentials, SQL injection risk, VB6 desktop app, Access database, no IaC/CI/CD). The service archetype (stateful-crud), pathway triggers, and severity assessments are all justified by the evidence. Minor issues include the Move to Containers pathway being somewhat conceptually awkward for a VB6 app that cannot actually be containerized.
+The report is largely accurate about this legacy ColdFusion repository. It correctly identifies the two BLOCKERs (API-Q1, AUTH-Q1), properly applies read-only scope downgrades for conditional questions, and the service archetype (stateful-crud) is justified by the SQL Server database and document CRUD operations. Minor issues include weak evidence on some findings and one questionable remediation phasing decision.
 
-- **MISS** [High] frmCustomer.frm: SQL injection vulnerability in cmdSave_Click
+- **DELIVERABLE** remediation_roadmap: DATA-Q4 (SQL injection) placed in Phase 1 with correct priority but marked as P2 in the finding itself
 
-### `legacy-document-portal` (ARA) — 0.72
+### `legacy-loan-calculator` (ARA) — 0.807
 
-The report accurately identifies the legacy ColdFusion application's severe limitations for agentic integration, correctly flagging SQL injection, lack of API surface, and missing machine authentication as blockers. However, there is a severity counter undercount (8 reported vs 9 actual RISK-SAFETY findings), and the archetype classification as 'data-gateway' is debatable given this is more of a document portal application. The evidence citations are generally accurate and tied to specific files.
+The report is largely accurate about this legacy Struts application, correctly identifying the lack of API interface, machine authentication, SQL injection, and hardcoded credentials. The archetype (stateful-crud), repo_type (application), and tier calculation (Remediation Required with 2 BLOCKERs) are all correct. However, there are some calibration issues: AUTH-Q7 should be INFO due to has_auth_surface=false, and DATA-Q6 should also be INFO given has_logging_of_user_data=false AND has_persistent_data_store=true does not fully satisfy the downgrade condition but the surface flags suggest minimal PII logging risk. The evidence quality is strong with specific file/line citations.
 
-- **FABRICATION** API-Q1: While no write endpoints are shown in the provided .cfm files, the README mentions 'Uploaded files written to local disk' indicating upload functionality exists somewhere (likely a missing upload.cfm), making 'read-only' characterization incomplete. However, this is minor as the visible codebase supports the classification.
-- **MISS** [BLOCKER] download.cfm lines 6-8: Path traversal vulnerability in download.cfm - filename from DB used directly in file path without sanitization
-- **MISS** [RISK-SAFETY] README.md Known Issues: Session fixation vulnerability - no token rotation on login
-- **MISS** [RISK-SAFETY] README.md Known Issues: No HTTPS - runs HTTP only
-- **MISS** [RISK-SAFETY] README.md: EOL software with critical CVEs (ColdFusion 8, SQL Server 2005, Windows Server 2008)
+- **DELIVERABLE** remediation_roadmap: API-Q4 is listed in Phase 2 findings but it is INFO severity under read-only scope - INFO items should be Phase 3 Quality, not Phase 2 Safety
+- **DELIVERABLE** recommended_actions: DATA-Q4 action is marked P1 but the question severity is RISK-QUALITY (Medium), and the action groups it with DATA-Q6 which has different ownership
 
-### `legacy-document-portal` (MOD) — 0.92
+### `legacy-partner-soap` (ARA) — 0.86
 
-The report is highly accurate and well-grounded in the repository source. It correctly identifies the ColdFusion 8 application, SQL Server 2005 database, local file storage, SQL injection vulnerabilities, plaintext credentials, and lack of any modern infrastructure. The pathways are appropriately triggered based on actual evidence, and the service archetype (stateful-crud) is correct. Minor issues include some findings citing evidence='null' when the absence of files is itself the evidence.
+The report is largely accurate about this legacy SOAP service. It correctly identifies the two BLOCKERs (API-Q1 no REST interface, AUTH-Q1 no machine authentication), properly applies conditional severity downgrades for read-only agent scope, and grounds findings in specific code evidence. The archetype classification (stateful-crud) and surface flags are correct. Minor weaknesses include AUTH-Q7 not being downgraded to INFO per calibration rules given has_auth_surface=false, and some findings lack the strongest possible evidence citations.
 
-- **MISS** [High] index.cfm line with 'WHERE title LIKE '%#url.q#%': SQL injection vulnerability in index.cfm via string concatenation
-- **MISS** [High] download.cfm - filename from DB used directly in filepath without sanitization: Path traversal vulnerability in download.cfm
+- **MISS** [INFO (calibration downgrade)] Report metadata shows has_auth_surface=false: AUTH-Q7 should be INFO under calibration rules when has_auth_surface=false
+- **DELIVERABLE** remediation_roadmap: DATA-Q4 (SQL injection) is sequenced in Phase 1 with other blockers but marked priority P2 in the finding, creating inconsistency
 
-### `legacy-helpdesk-tickets` (ARA) — 0.72
+### `legacy-payroll-system` (ARA) — 0.827
 
-The report correctly identifies the major issues in this legacy Django application including SQL injection vulnerabilities, hardcoded credentials, lack of API, and EOL software stack. However, it undercounts RISK-QUALITY findings (reports 8 but lists 10), and several INFO-level findings mentioned in evaluations are not actually present in the findings array, creating question coverage gaps. The archetype detection and tier classification are appropriate given the blockers identified.
+The report is largely accurate and well-grounded in the source code. It correctly identifies the mainframe COBOL batch system with hardcoded FTP credentials, lack of API surface, and sensitive data handling issues. The archetype (stateful-crud) and surface flags are appropriate. However, there are minor issues with the tier arithmetic - the report claims 2 BLOCKERs but API-Q1's BLOCKER status is questionable since the system has no HTTP/RPC surface (the calibration rules suggest this context matters), and DATA-Q6 was incorrectly elevated to RISK-SAFETY when the surface_flags show has_logging_of_user_data=false, which per calibration rules should downgrade it to INFO.
 
-- **MISS** [BLOCKER] tickets/views.py lines 11-14 and 23-25: SQL injection vulnerability should be flagged as a BLOCKER or at minimum RISK-SAFETY, not just RISK-QUALITY under DATA-Q4
+- **DELIVERABLE** recommended_actions: DATA-Q6 PII Redaction in Logs rated as RISK-SAFETY and placed in Phase 1, but calibration rules state it should be INFO when has_logging_of_user_data=false AND has_persistent_data_store=false
 
-### `legacy-helpdesk-tickets` (MOD) — 0.92
+### `legacy-shipping-api` (ARA) — 0.88
 
-The report is highly accurate and well-grounded in the repository source. It correctly identifies the critical issues (SQL injection, hardcoded credentials, EOL software), properly classifies the service archetype as stateful-crud, and triggers the appropriate modernization pathways. The evidence citations consistently match what exists in the source files, though it misses explicitly calling out the SQL injection vulnerabilities as BLOCKER/High severity findings in their own right.
+The report is largely accurate about the legacy-shipping-api repository. It correctly identifies the service archetype (data-gateway), properly applies read-only agent scope calibrations, and grounds findings in actual code evidence. The hardcoded API key, lack of authentication mechanisms, missing input validation, and absence of logging are all real issues correctly identified. Minor issues include some weak evidence citations and a debatable downgrade of AUTH-Q4 to INFO.
 
-- **MISS** [BLOCKER] tickets/views.py: SQL injection vulnerabilities in ticket_list() and ticket_search() using raw string formatting with user input
-- **MISS** [High] tickets/views.py: XSS vulnerability in ticket_search() - user-controlled data rendered directly into HTML without escaping
-- **MISS** [High] helpdesk/settings.py: DEBUG = True in production explicitly documented and visible in settings.py
+- **DELIVERABLE** remediation_roadmap: STATE-Q1 is sequenced in Phase 1 as a blocker-level item but it correctly resolved to RISK-SAFETY under read-only scope
 
-### `legacy-loan-calculator` (ARA) — 0.72
+### `legacy-timesheet-webforms` (ARA) — 0.813
 
-The report correctly identifies the repository as a legacy Struts 1.3 application with critical issues like hardcoded credentials, SQL injection, and no API surface. The tier classification (Not Agent-Integrable) is consistent with the 3 BLOCKERs identified. However, the report significantly undersells the SQL injection vulnerability (marking it RISK-QUALITY/Medium when it's a critical security flaw), and the read-only agent scope assumption is questionable given the application clearly performs write operations.
+The report accurately identifies the key issues in this legacy WebForms application and correctly classifies it as stateful-crud with read-only agent scope. The tier determination (Remediation Required with 2 BLOCKERs) is correct. However, there are several issues: some INFO-level evaluations claim findings were 'emitted' but no corresponding findings exist in the findings array, and the question coverage appears incomplete for several INFO questions that should have findings but only have evaluations.
 
-- **FABRICATION** AUTH-Q5: The evidence mentions 'also duplicated in db.properties' in the code comment, but no db.properties file exists in the repository. The report correctly identifies the hardcoded credentials in LoanAction.java, but the code comment reference to a non-existent file is misleading context.
-- **MISS** [BLOCKER] src/com/acme/loan/LoanAction.java lines 47-50: SQL Injection vulnerability severely underweighted - applicant name concatenated directly into SQL string
-- **MISS** [RISK-SAFETY] README.md: Thread-safety bugs explicitly documented in README - ActionForms hold mutable shared state
-- **MISS** [Medium] src/com/acme/loan/LoanAction.java lines 46-53: No connection pooling - creates new JDBC connection per request without closing properly
+- **FABRICATION** API-Q5: No finding for API-Q5 exists in the findings array. The evaluation claims a finding was emitted but none was.
+- **FABRICATION** API-Q7: No finding for API-Q7 exists in the findings array. The evaluation claims a finding was emitted but none was.
+- **FABRICATION** API-Q8: No finding for API-Q8 exists in the findings array. The evaluation claims a finding was emitted but none was.
+- **FABRICATION** DATA-Q7: No finding for DATA-Q7 exists in the findings array. The evaluation claims a finding was emitted but none was.
+- **FABRICATION** DISC-Q2: No finding for DISC-Q2 exists in the findings array. The evaluation claims a finding was emitted but none was.
+- **FABRICATION** DISC-Q3: No finding for DISC-Q3 exists in the findings array. The evaluation claims a finding was emitted but none was.
+- **FABRICATION** OBS-Q3: No finding for OBS-Q3 exists in the findings array. The evaluation claims a finding was emitted but none was.
+- **FABRICATION** API-Q4: No finding for API-Q4 exists in the findings array despite the evaluation claiming one was emitted.
+- **FABRICATION** STATE-Q3: No finding for STATE-Q3 exists in the findings array despite the evaluation claiming one was emitted.
+- **FABRICATION** STATE-Q6: No finding for STATE-Q6 exists in the findings array despite the evaluation claiming one was emitted.
+- **FABRICATION** HITL-Q1: No finding for HITL-Q1 exists in the findings array despite the evaluation claiming one was emitted.
+- **FABRICATION** HITL-Q2: No finding for HITL-Q2 exists in the findings array despite the evaluation claiming one was emitted.
+- **DELIVERABLE** remediation_roadmap: DATA-Q4 (SQL injection) is placed in Phase 1 with P2 priority in the finding but P1 in recommended_actions - inconsistent prioritization
+- **DELIVERABLE** recommended_actions: Counts are inconsistent - report claims 12 INFO findings but only 29 total findings exist, and evaluations claim findings were emitted that don't exist
 
-### `legacy-loan-calculator` (MOD) — 0.92
+### `modern-catalog-graphql` (ARA) — 0.853
 
-The report is highly accurate and well-grounded in the repository source. It correctly identifies the critical issues (hardcoded credentials, SQL injection vulnerability, EOL technologies, no IaC/CI/CD) and appropriately triggers pathways based on actual evidence. The service archetype (stateful-crud) and repository classification (application) are correct. Minor issues include one speculative finding about unstructured data storage and the SQL injection vulnerability being mentioned but not elevated to a dedicated High-severity finding.
+The report is largely accurate about this repository, correctly identifying the stateful-crud archetype, the GraphQL/DynamoDB/Lambda stack, and most technical gaps. The tier arithmetic is correct (0 BLOCKER, 3 RISK-SAFETY = Pilot-Ready with Safety Concerns), though the pre-check flagged a formatting issue with sub_qualifier. The report correctly applies scope-dependent severities for read-only scope and grounds findings in actual code. However, there are some weak evidence issues and one questionable finding.
 
-- **FABRICATION** DATA-Q1: This is speculation - the source code shows no evidence of document handling, file storage, or BLOB columns. The application only stores loan application data (applicant, principal, rate, term, officer) via a simple INSERT statement. There's no indication documents are part of this system.
-- **MISS** [BLOCKER] src/com/acme/loan/LoanAction.java: SQL Injection vulnerability - applicant name directly concatenated into SQL string without parameterization
+- **DELIVERABLE** service_archetype: None - archetype is correct
+- **DELIVERABLE** remediation_roadmap: Phase 1 includes AUTH-Q6 and STATE-Q5 which are RISK-SAFETY, correctly prioritized as safety concerns. However, AUTH-Q4 (also RISK-SAFETY) is placed in Phase 2 instead of Phase 1
 
-### `legacy-partner-soap` (ARA) — 0.72
+### `modern-orders-service` (ARA) — 0.807
 
-The report correctly identifies the service archetype, major security vulnerabilities (SQL injection, XXE, hardcoded credentials), and appropriately classifies this as 'Not Agent-Integrable' due to multiple BLOCKERs. However, there is a severity counter undercount (risk_quality_count=9 but 11 RISK-QUALITY findings exist), some questionable severity classifications (SQL injection/XXE as RISK-QUALITY rather than BLOCKER/RISK-SAFETY), and the agent_scope='read-only' determination is inconsistent with a service that only has write operations.
+The report is substantially accurate about the repository. It correctly identifies the stateful-crud archetype, applies scope-dependent severity downgrades correctly for read-only agent_scope, and grounds findings in real code patterns. The main defect is a malformed sub_qualifier field that puts the qualifier text in a redundant location. Evidence quality is strong with specific file and line references that check out against the source.
 
-- **MISS** [BLOCKER] src/com/acme/partner/PurchaseOrderService.java lines 33-36: SQL injection vulnerability should be a BLOCKER or at minimum RISK-SAFETY, not RISK-QUALITY
-- **MISS** [BLOCKER] src/com/acme/partner/PurchaseOrderService.java lines 28-30: XXE vulnerability should be BLOCKER or RISK-SAFETY, not implicitly folded into DATA-Q4 as RISK-QUALITY
-- **MISS** [RISK-SAFETY] README.md line 8: WS-Security PasswordText over plain HTTP is a critical security issue not explicitly called out
+- **DELIVERABLE** service_archetype: sub_qualifier field contains redundant tier prefix
 
-### `legacy-partner-soap` (MOD) — 0.88
+### `modern-payments-api` (ARA) — 0.807
 
-The report is largely accurate and well-grounded in the repository source. It correctly identifies critical security issues (hardcoded credentials, XXE vulnerability, SQL injection), infrastructure gaps (no IaC, no CI/CD, EOL runtime), and appropriately triggers pathways. However, it misses explicitly calling out the SQL injection vulnerability as a High-severity finding despite mentioning it in passing, and the XXE vulnerability is only mentioned in SEC-Q7 description rather than as its own finding.
+The report is largely accurate about this well-architected payments API, correctly identifying its strengths (idempotency, OAuth2 auth, structured logging, IaC) and finding reasonable gaps (no explicit rate limits, no immutable audit storage, no data residency docs). However, there's a structural defect in the classification tier (missing Safety Concerns qualifier format issue noted in pre-checks) and some weak evidence on a few findings. The archetype, surface flags, and most findings are grounded in the actual source code.
 
-- **MISS** [BLOCKER] src/com/acme/partner/PurchaseOrderService.java lines 38-39: SQL Injection vulnerability - direct string concatenation of user input into SQL query
-- **MISS** [High] src/com/acme/partner/PurchaseOrderService.java lines 30-32: XXE (XML External Entity) vulnerability - DocumentBuilderFactory with no security features enabled
+- **DELIVERABLE** service_archetype: sub_qualifier format is redundant
 
-### `legacy-payroll-system` (ARA) — 0.78
+### `monolith` (ARA) — 0.88
 
-The report accurately identifies the core problems with this legacy COBOL payroll system: no API surface, hardcoded plaintext FTP credentials, no authentication/authorization model, and plaintext transmission of PII. Evidence citations are grounded in the actual source files. However, there are minor issues with question coverage (42 total instead of 43) and some findings could be more precisely scoped to what the source actually shows versus architectural assumptions.
+The report is largely accurate and well-grounded in the source code. It correctly identifies the stateful-crud archetype, properly resolves conditional severities for read-only scope, and provides evidence-based findings. The main issues are some findings that should be in evaluations (INFO items listed as findings instead of pass evaluations) and the question coverage appears incomplete - several INFO-severity items mentioned as 'finding in findings[]' are not actually present in the findings array.
 
-- **FABRICATION** AUTH-Q1: While technically correct that these don't exist, the report implies the system should have these. The source shows this is a mainframe batch system with no HTTP surface - these technologies are not applicable to the architecture. The finding is valid but overstates the gap by framing it against modern API patterns.
-- **MISS** [High] src/PAYRUN.cbl line 35: Outdated FICA wage base hardcoded as 132900.00 (2019 value) - payroll calculations are using stale tax parameters
-- **MISS** [Medium] src/PAYRUN.cbl line 44: State tax calculation explicitly removed ('STATE TAX TABLE LOOKUP REMOVED IN 2011, DONE MANUALLY')
+- **DELIVERABLE** remediation_roadmap: Phase 1 includes AUTH-Q5, AUTH-Q6, AUTH-Q7, STATE-Q5, DATA-Q6 which are all RISK-SAFETY severity, not BLOCKERs. Only AUTH-Q1 is actually a BLOCKER.
+- **DELIVERABLE** recommended_actions: Question coverage issue - report claims INFO findings exist in findings[] for API-Q4, API-Q5, API-Q7, API-Q8, STATE-Q3, STATE-Q6, HITL-Q1, HITL-Q2, DATA-Q1, DATA-Q7, DISC-Q3, OBS-Q3 but these are not present in the actual findings array
 
-### `legacy-pricing-cgi` (ARA) — 0.82
+### `legacy-helpdesk-tickets` (MOD) — 0.9
 
-The report is largely accurate about this legacy C++ CGI pricing application. It correctly identifies the lack of structured API (HTML-only output), absence of authentication, buffer overflow risks in pricing.cpp, and missing observability. The archetype (stateless-utility) and repo_type (application) are correct. However, the report inflates some findings by treating AUTH-Q1 as a BLOCKER when the service has no authentication surface by design for a read-only pricing lookup, and some INFO findings referenced in evaluations are not actually emitted in the findings array.
+The report is highly accurate about this legacy repository. All 37 questions are correctly resolved with evidence that matches the source code. The service archetype (stateful-crud) is correct given the PostgreSQL/Django CRUD pattern. Pathway triggers are well-grounded: Move to Containers, Move to Managed Databases, and Move to Modern DevOps all cite the right questions at Score 1. The decomposition strategy appropriately recommends Modular Monolith over microservices for this tiny codebase. Minor issues include INF-Q9 being scored when has_deployed_workload=false should gate it out.
 
-- **FABRICATION** API-Q5: The evaluation says 'Finding emitted' but API-Q5 does not appear in the findings array. The status is 'pass' but no corresponding INFO finding exists.
-- **FABRICATION** API-Q8: The evaluation says 'Finding emitted' but API-Q8 does not appear in the findings array despite claiming a finding was emitted.
-- **FABRICATION** AUTH-Q4: AUTH-Q4 does not appear in the findings array despite the evaluation claiming a finding was emitted.
-- **FABRICATION** AUTH-Q6: AUTH-Q6 does not appear in the findings array despite claiming emission.
-- **FABRICATION** AUTH-Q7: AUTH-Q7 does not appear in the findings array despite claiming emission.
+- **DELIVERABLE** pathways: INF-Q9 (High Availability) is scored as a finding with Score 1, but has_deployed_workload=false per surface_flags, which should gate it to not_evaluated_surface_flag
 
-### `legacy-pricing-cgi` (MOD) — 0.88
+### `legacy-pricing-cgi` (MOD) — 0.76
 
-The report is largely accurate and well-grounded in the repository source. It correctly identifies the service archetype as stateless-utility, accurately detects the containerized state with Dockerfile and k8s manifests, and appropriately triggers only the Modern DevOps pathway while correctly NOT triggering Move to Containers (already containerized) or Move to Managed Databases (no database). Most findings cite real files and patterns. Minor issues include not explicitly flagging the buffer overflow and XSS vulnerabilities as High-severity security findings.
+The report is largely accurate and well-grounded in the repository source. Service archetype (stateless-utility), surface flags, and repo_type are all correct. The pathway triggers are appropriate — Move to Containers correctly NOT triggered because Dockerfile/k8s exists, Move to Managed Databases correctly NOT triggered because no database. Most findings cite real evidence from the source. Minor issues include some archetype-gated questions that could arguably have scored 4 rather than being marked not_evaluated, and INF-Q9 was scored as a finding when the surface_flag gate should have excluded it.
 
-- **MISS** [High] pricing.cpp lines 14-21: Buffer overflow vulnerabilities via strcpy without bounds checking
-- **MISS** [High] pricing.cpp line 50 (printf with sku): Reflected XSS vulnerability - user input printed without escaping
+- **MISS** [N/A] N/A: INF-Q9 was resolved as a finding with score 2, but the surface_flag gate (has_deployed_workload AND (has_api_surface OR has_persistent_data_store)) evaluates to TRUE for this repo, so this is actually correct - the question should be evaluated. However, the authoritative context says INF-Q9 should be Not Evaluated when gate is false, but gate is TRUE here. This is NOT a miss.
+- **DELIVERABLE** pathways: OPS-Q2 is listed in findings with score 1, but according to the surface_flags and authoritative context, OPS-Q2 should be not_evaluated_surface_flag because its gate is (has_api_surface OR has_persistent_data_store). However, has_api_surface=true means the gate IS met, so OPS-Q2 should be evaluated. The report correctly evaluated it as a finding. This is actually NOT a defect.
 
-### `legacy-shipping-api` (ARA) — 0.72
+### `legacy-shipping-api` (MOD) — 0.86
 
-The report is largely accurate about the repository's structure and issues, correctly identifying the hardcoded credentials, lack of authentication sophistication, missing observability, and absence of input validation. However, it has a severity counter undercount (reports 8 RISK-QUALITY but lists 9 such findings), and the service archetype classification as 'data-gateway' is questionable given the POST /quote endpoint performs business logic computation. The report correctly identifies most real issues in the source code with proper file/line citations.
+The report is largely accurate and well-grounded in the repository source. It correctly identifies the legacy stack, hardcoded credentials, lack of CI/CD, and EOL dependencies. The archetype (data-gateway) is justified, pathways are appropriately triggered, and most findings cite real evidence. However, there are some scoring inconsistencies and one debatable pathway decision that prevent a higher score.
 
-- **FABRICATION** API-Q4: While technically true that /quote has no database writes, the evaluation status 'pass' is misleading - the question about idempotent write operations should note that POST /quote returns different results for identical inputs if the magic numbers change, and the archetype classification affects this assessment
-- **MISS** [High] server.js lines 26-27: NoSQL injection vulnerability - unvalidated query params passed directly to MongoDB filter
-- **MISS** [Medium] server.js lines 22-34: MongoDB connection not reused - new connection per request causes resource exhaustion
-
-### `legacy-shipping-api` (MOD) — 0.88
-
-The report is largely accurate and well-grounded in the repository source. It correctly identifies the critical issues (hardcoded credentials, EOL MongoDB 2.4, no CI/CD, self-managed database) and appropriately triggers Move to Managed Databases and Move to Modern DevOps pathways while correctly NOT triggering Move to Containers (since Dockerfile/K8s manifests exist). The service archetype as data-gateway is reasonable. Minor issues include some evidence citations that could be more precise and one potentially inflated finding.
-
-- **FABRICATION** DATA-Q1: While technically true there's no S3, the application is a simple rate lookup API. The source shows MongoDB stores rate data appropriately for this use case. Framing absence of S3 as a High-severity gap for a data-gateway service is arguably inflated - the repo doesn't indicate any need for object storage.
-
-### `legacy-storefront-rails` (ARA) — 0.82
-
-The report is largely accurate about this legacy Rails repository, correctly identifying critical security issues like SQL injection, mass assignment vulnerabilities, and hardcoded credentials. The tier classification of 'Not Agent-Integrable' with 3 BLOCKERs is appropriate. However, some findings slightly overstate issues (e.g., claiming 'no documented API' when routes do exist), and the count arithmetic shows inconsistencies (29 total findings but 3+26+9=38 by severity).
-
-- **FABRICATION** OBS-Q1: While accurate that no tracing exists, the evidence field is null despite the README.md explicitly mentioning the architecture and logging patterns. The claim is true but lacks specific file evidence.
-- **MISS** [BLOCKER] app/controllers/orders_controller.rb lines 9-11: SQL injection vulnerability in index action with direct string interpolation
-- **MISS** [RISK-SAFETY] README.md line 17: Session secret stored in source control
-
-### `legacy-storefront-rails` (MOD) — 0.92
-
-The report is highly accurate and well-grounded in the repository source. It correctly identifies the critical issues (plaintext credentials, EOL components, SQL injection risk, no IaC/CI-CD), accurately classifies the service archetype as stateful-crud, and appropriately triggers pathways for containers, managed databases, cloud-native, and modern DevOps. The findings cite actual files and patterns present in the source. Minor weaknesses include not explicitly calling out the SQL injection vulnerability as a distinct High-severity security finding.
-
-- **MISS** [High] app/controllers/orders_controller.rb: SQL injection vulnerability via string interpolation in find_by_sql
-- **MISS** [High] app/controllers/orders_controller.rb and README.md: Mass assignment vulnerability explicitly documented
-
-### `legacy-timesheet-webforms` (ARA) — 0.72
-
-The report accurately identifies the repository as a legacy ASP.NET WebForms application with critical security issues (SQL injection, plaintext credentials, no API surface). However, there is a counter undercount issue where risk_quality_count=6 but 10 findings are marked as RISK-QUALITY. The service archetype detection and most findings are well-grounded in the source code, with specific file/line citations. The tier classification of 'Not Agent-Integrable' is consistent with the 3 BLOCKERs identified.
-
-- **MISS** [BLOCKER] Timesheet.aspx.vb lines 20-23 and 34-39: SQL Injection vulnerability severity should be higher
-- **MISS** [RISK-SAFETY] web.config line 10-11 (requireSSL='false'): Forms authentication cookie sent without SSL is a significant security issue
+- **DELIVERABLE** pathways: Move to Containers pathway marked 'Not Triggered' despite containerization being incomplete for production deployment
+- **DELIVERABLE** top_gaps: DATA-Q1 ranked in top 5 gaps may be overstated
 
 ### `legacy-timesheet-webforms` (MOD) — 0.92
 
-The report is highly accurate and well-grounded in the repository source. All findings correctly identify real issues present in the code (SQL injection, plaintext credentials, EOL software, no IaC/CI-CD). The pathways are appropriately triggered based on actual evidence, and the stateful-crud archetype is correctly identified. Minor issues include one questionable High severity finding (DATA-Q1 for unstructured storage) and some findings that could have cited specific line numbers.
+The report is highly accurate about this legacy WebForms repository. It correctly identifies the stateful-crud archetype, properly scores nearly all 37 questions with concrete evidence from the source files, and triggers the right modernization pathways. The findings accurately cite real issues like SQL injection in Timesheet.aspx.vb, plaintext credentials in web.config, and the EOL .NET Framework 2.0/SQL Server 2005 stack. Minor issues include some findings lacking line-number specificity and one debatable pathway decision.
 
-- **FABRICATION** DATA-Q1: The application is a timesheet entry system with no evidence it needs unstructured data storage. The README and code show only structured relational data (timesheets table). Marking absence of S3 as a High/P1 gap is arguably fabricating a requirement not supported by the source.
+- **DELIVERABLE** pathways: Move to Open Source marked Not Triggered despite self-managed SQL Server 2005 being a commercial database
 
-### `monolith` (ARA) — 0.82
+### `modern-catalog-graphql` (MOD) — 0.72
 
-The report is largely accurate and well-grounded in the actual source code. Key findings about session-based auth (AUTH-Q1), hardcoded credential fallbacks (AUTH-Q5), lack of rate limiting (STATE-Q5), and absence of OpenAPI specs (API-Q2) are all verifiable in index.php and the CloudFormation template. However, there are minor inaccuracies in line number citations and one questionable severity assessment for the archetype classification.
+The report correctly identifies the service archetype, detects many genuine gaps in CI/CD and observability, and accurately triggers only the Move to Modern DevOps pathway. However, it significantly overstates the severity of several operational gaps (OPS-Q5, OPS-Q6, INF-Q11), treating them as High findings when the evidence shows a modern, well-architected serverless application with reasonable maturity. The report also misses that deployment strategy assessment from source code alone is explicitly gated per the spec, and the resulting 'Remediation Required' tier contradicts the actual state of this near-production-ready codebase.
 
-- **FABRICATION** AUTH-Q1: The session check for API calls is at line ~203-207 (checking $_SESSION['user']), but the cited lines are approximately correct. The claim itself is accurate - the code does use session-based auth exclusively for API endpoints.
+- **DELIVERABLE** top_gaps: OPS-Q5 scored as High/Score 1 claiming 'No deployment strategy — direct-to-production releases'
+- **DELIVERABLE** service_archetype: Archetype classification is correct but surface_flags include has_multi_instance_deployment=true without evidence
 
-### `monolith` (MOD) — 0.85
+### `modern-orders-service` (MOD) — 0.62
 
-The report is largely accurate and well-grounded in the actual repository source. It correctly identifies the monolithic PHP architecture, hardcoded credentials, lack of CI/CD, session-based auth, and containerized deployment. Pathway triggers are mostly appropriate - Move to Cloud Native and Move to Modern DevOps are correctly triggered while Move to Containers is correctly not triggered since Dockerfile exists. Minor issues include some line number imprecision and the APP-Q2 finding overstates the line count.
+The report has several accurate findings but contains significant errors. Most critically, DATA-Q1 (Unstructured Data Storage) is marked as a High severity finding claiming the service lacks S3/document handling, but this is inappropriate for an orders service that deals with structured data only - there's no evidence documents are needed. The report also claims 'no tests exist' (OPS-Q6) when the README explicitly states 'Unit + integration tests' and a 'healthy test suite' exists. Additionally, several archetype-appropriate scoring opportunities were missed (e.g., APP-Q3, APP-Q4 could reasonably score higher for a stateful-crud service making limited external calls).
 
-- **FABRICATION** APP-Q2: The index.php file is approximately 2000 lines, not 3193. While the monolithic nature is accurate, the line count is inflated.
-- **FABRICATION** DATA-Q2: Counting the actual route handlers in index.php shows approximately 20 distinct API endpoints, not 25+. Minor exaggeration but the scattered query pattern observation is accurate.
+- **FABRICATION** OPS-Q6: README.md explicitly states 'Unit + integration tests' and describes a 'healthy test suite'. The absence of test files in this fixture is due to it being a minimal repository sample, but the report should have noted the documented claim of existing tests rather than asserting definitively that none exist.
+- **FABRICATION** DATA-Q1: This is speculative - nothing in the repository indicates the service needs to handle unstructured data. The service deals with structured order data in PostgreSQL. Marking this as High severity is unjustified fabrication of a requirement.
+- **DELIVERABLE** top_gaps: DATA-Q1 ranked as a top gap with High severity for missing S3/unstructured data
+- **DELIVERABLE** pathways: Move to Modern DevOps pathway correctly triggered but claims 'No tests' as supporting evidence
+
+### `modern-payments-api` (MOD) — 0.92
+
+The report is highly accurate for this well-modernized serverless payments API. The stateful-crud archetype is correct (DynamoDB CRUD operations), the Pilot-Ready tier matches the 1 High finding (OPS-Q5 deployment strategy), and the 37 questions are correctly resolved with strong evidence. The Move to Modern DevOps pathway is appropriately triggered based on INF-Q11/OPS-Q5/OPS-Q6 scores. Minor quibbles exist around SEC-Q7 severity (scored 1 but marked Medium instead of High) but this is within acceptable range given the internal_score is correctly 1.
+
+- **DELIVERABLE** top_gaps: SEC-Q7 listed at rank 3 with score=1 but severity=Medium; a score of 1 (Not Ready) typically warrants High severity
 
 </details>
