@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Catalog GraphQL API — a single Lambda resolver behind API Gateway (HTTP API) with
+  a Cognito JWT authorizer, backed by a DynamoDB products table. Least-privilege role.
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Architectures: [arm64]
+    Timeout: 30
+    MemorySize: 512
+    Tracing: Active
+
+Resources:
+  ProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{ AttributeName: sku, AttributeType: S }]
+      KeySchema: [{ AttributeName: sku, KeyType: HASH }]
+      SSESpecification: { SSEEnabled: true }
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+
+  CatalogFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dist/server.handler
+      CodeUri: ../
+      Environment:
+        Variables: { TABLE: !Ref ProductsTable }
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref ProductsTable }
+      Events:
+        Graphql:
+          Type: HttpApi
+          Properties:
+            Path: /graphql
+            Method: post
+            ApiId: !Ref CatalogApi
+
+  CatalogApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}'
+              audience: [catalog]
+
+Parameters:
+  UserPoolId: { Type: String }

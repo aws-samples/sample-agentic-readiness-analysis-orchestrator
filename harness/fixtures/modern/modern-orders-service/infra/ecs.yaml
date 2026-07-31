@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Orders Service — ECS Fargate behind an ALB, PostgreSQL on RDS. Reproducible infra;
+  blue/green deploy. Secrets come from Secrets Manager (no hardcoded credentials).
+
+Parameters:
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  SubnetIds: { Type: List<AWS::EC2::Subnet::Id> }
+  ImageUri: { Type: String, Description: ECR image for the orders container }
+
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties: { ClusterName: orders }
+
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: orders/db
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"orders"}'
+        GenerateStringKey: password
+        ExcludePunctuation: true
+
+  TaskDef:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: orders
+          Image: !Ref ImageUri
+          PortMappings: [{ ContainerPort: 3000 }]
+          Secrets:
+            - { Name: DB_PASSWORD, ValueFrom: !Sub '${DbSecret}:password::' }
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/orders
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: orders
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      DesiredCount: 2
+      TaskDefinition: !Ref TaskDef
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker: { Enable: true, Rollback: true }
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref SubnetIds
+          AssignPublicIp: DISABLED

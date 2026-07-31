@@ -12,7 +12,7 @@ set -uo pipefail
 
 ORG="YOUR-GITHUB-ORG"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PORTFOLIO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/sample-legacy-portfolio"
+PORTFOLIO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/harness/fixtures/portfolio"
 
 REPOS=(legacy-shipping-api legacy-storefront-rails legacy-loan-calculator)
 

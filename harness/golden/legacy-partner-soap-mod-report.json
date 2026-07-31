@@ -1,0 +1,1192 @@
+{
+  "analysis_type": "mod",
+  "metadata": {
+    "repository": "legacy-partner-soap",
+    "analysis_date": "2026-07-30",
+    "td_version": "modernization-readiness-analysis",
+    "repo_type": "application",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Service accepts purchase order submissions via SOAP and writes them to an Oracle database. It owns persistent state (partner_orders table) and exposes a write endpoint (submitOrder). Classified as stateful-crud.",
+    "priority": null,
+    "tags": [],
+    "context": null,
+    "preferences": null,
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": false,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": false
+    }
+  },
+  "overall_score": 1.09,
+  "classification": {
+    "tier": "Not Ready",
+    "high_count": 14,
+    "medium_count": 13,
+    "low_count": 0,
+    "rule_matched": ">=12 High -> Not Ready",
+    "classification_consistency_check": "consistent"
+  },
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 1.17,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 1.25,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "SEC-Q5",
+      "title": "Secrets Management",
+      "score": 1,
+      "gap": "Plaintext Oracle credentials hardcoded in source code",
+      "impact": "Critical security vulnerability; credentials exposed in version control"
+    },
+    {
+      "rank": 2,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "No IaC \u2014 all infrastructure manually provisioned",
+      "impact": "Cannot reproduce environments; no disaster recovery automation"
+    },
+    {
+      "rank": 3,
+      "question_id": "INF-Q2",
+      "title": "Managed Databases",
+      "score": 1,
+      "gap": "Self-managed Oracle 11g (EOL) on bare metal/VM",
+      "impact": "High operational burden; no automated failover, patching, or scaling"
+    },
+    {
+      "rank": 4,
+      "question_id": "APP-Q2",
+      "title": "Monolith vs Microservices",
+      "score": 1,
+      "gap": "Single tightly-coupled class with no module boundaries",
+      "impact": "Cannot scale, deploy, or evolve independently"
+    },
+    {
+      "rank": 5,
+      "question_id": "INF-Q11",
+      "title": "CI/CD Automation",
+      "score": 1,
+      "gap": "No CI/CD pipeline \u2014 manual Ant build",
+      "impact": "No automated testing, no repeatable deployments"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Compute - All compute on EOL JBoss/RHEL",
+      "description": "All compute runs on JBoss AS 5.1 deployed on RHEL 6. No managed compute services (ECS, EKS, Lambda, Fargate) detected.",
+      "gap": "No managed compute \u2014 entire workload on a manually provisioned, end-of-life application server on an end-of-life OS.",
+      "recommendation": "Containerize the application and deploy on ECS/Fargate or EKS. Rewrite to Spring Boot/Quarkus and deploy as a container or Lambda function.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Databases - Self-managed Oracle 11g",
+      "description": "Database is Oracle 11g accessed via hardcoded JDBC connection to IP address 10.0.9.30:1521:PARTDB. Self-managed Oracle instance with no managed database service.",
+      "gap": "Entirely self-managed database with no automated failover, patching, backup, or scaling. Oracle 11g is past end-of-life.",
+      "recommendation": "Migrate to Amazon RDS or Aurora PostgreSQL. Use AWS DMS for data migration.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "22-24"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Workflow Orchestration - No orchestration for order processing",
+      "description": "No workflow orchestration services detected. The submitOrder operation performs XML parsing, DB insert in a single synchronous method with no error recovery.",
+      "gap": "No orchestration \u2014 order processing logic hardcoded in a single method with no error handling strategy.",
+      "recommendation": "Adopt Step Functions for multi-step order processing workflow with built-in retry and error handling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "27-46"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Async Messaging - No messaging infrastructure",
+      "description": "No messaging or streaming infrastructure detected. Service processes orders synchronously with no decoupling.",
+      "gap": "No messaging where state changes cross service boundaries \u2014 partner is tightly coupled to database operation.",
+      "recommendation": "Introduce SQS or EventBridge to decouple order submission from order processing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Network Security - No VPC or network controls",
+      "description": "No VPC, subnet, security group, or network segmentation configuration found. Service exposed over plain HTTP.",
+      "gap": "No evidence of network security controls. Service exposed over plain HTTP with no TLS.",
+      "recommendation": "Deploy in VPC with private subnets. Place behind ALB or API Gateway with TLS termination.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "wsdl/PurchaseOrderService.wsdl",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "API Entry Point - No gateway or load balancer",
+      "description": "No API Gateway, ALB, or CloudFront entry point. SOAP service exposed directly on JBoss port 8080.",
+      "gap": "Service exposed directly with no gateway or load balancer.",
+      "recommendation": "Place API Gateway or ALB in front of the service for throttling, auth, and request validation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "wsdl/PurchaseOrderService.wsdl",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Auto-Scaling - No scaling configured",
+      "description": "No auto-scaling configuration found. Service runs on a single JBoss instance with no scaling mechanism.",
+      "gap": "No auto-scaling \u2014 all capacity statically provisioned on a single instance.",
+      "recommendation": "After containerization, configure ECS/EKS auto-scaling based on request count or CPU.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Backup and Recovery - No backup configuration",
+      "description": "No backup configuration found. Self-managed Oracle 11g with no backup evidence.",
+      "gap": "No backup configuration. Data loss risk is unmitigated.",
+      "recommendation": "Migrate to RDS/Aurora with automated backups. In interim, implement Oracle RMAN backups.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "High Availability - Single instance, no fault isolation",
+      "description": "No multi-AZ configuration found. Service runs on single JBoss instance. Database connection points to single IP.",
+      "gap": "All resources in single AZ or single host. No fault isolation.",
+      "recommendation": "Configure Multi-AZ for RDS and deploy compute across 2+ AZs behind ALB.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "22"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Infrastructure as Code Coverage - No IaC",
+      "description": "No Infrastructure as Code found. No Terraform, CloudFormation, CDK, Helm, or any IaC files exist.",
+      "gap": "0% IaC coverage \u2014 all infrastructure manually created.",
+      "recommendation": "Define all infrastructure in Terraform or CDK: VPC, compute, database, and operational resources.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation - No pipeline",
+      "description": "No CI/CD pipeline found. README states build is Ant with wsgen/wsimport run by hand.",
+      "gap": "No CI/CD \u2014 all builds and deployments are manual.",
+      "recommendation": "Create CI/CD pipeline with build, test, security scan, and deploy stages.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q1",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Programming Languages - Java 6 with JAX-WS (compound legacy)",
+      "description": "Java 6 with JAX-WS on JBoss AS 5.1. Compound legacy regression across language version, framework, and SDK.",
+      "gap": "Language, framework, and runtime all deeply end-of-life. No AWS SDK integration possible without version upgrade.",
+      "recommendation": "Upgrade to Java 17+ with Spring Boot 3.x or Quarkus. Replace JAX-WS with REST. Add AWS SDK v2.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "1-11"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q2",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Monolith vs Microservices - Tightly-coupled single class",
+      "description": "Single class with all logic in one method: XML parsing, data extraction, JDBC connection, SQL execution. No module boundaries.",
+      "gap": "Tightly-coupled monolith with no clear module boundaries. All responsibilities interleaved.",
+      "recommendation": "Refactor into layered architecture: controller, service, repository. See Decomposition Strategy.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Async vs Sync Communication - All synchronous SOAP",
+      "description": "All communication is synchronous SOAP over HTTP. Partner blocks until database INSERT completes.",
+      "gap": "All communication synchronous with no async patterns. Partner tightly coupled to database latency.",
+      "recommendation": "Introduce async order processing with SQS/EventBridge. Return acknowledgment immediately.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "27-46"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-Running Process Handling - All operations synchronous",
+      "description": "All operations synchronous regardless of duration. No async job framework, no status polling, no callbacks.",
+      "gap": "No async job processing infrastructure for operations that may exceed 30s.",
+      "recommendation": "Implement async processing with status polling for order submissions. Use SQS for job queuing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "API Versioning Strategy - No versioning",
+      "description": "No API versioning strategy. SOAP endpoint has no version identifier in namespace, URL, or WSDL.",
+      "gap": "No versioning \u2014 breaking changes deployed directly to all partners.",
+      "recommendation": "Implement URL-path versioning when migrating to REST. Version WSDL namespace in interim.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "wsdl/PurchaseOrderService.wsdl",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Service Discovery - Partial DNS, hardcoded DB IP",
+      "description": "WSDL references DNS hostname for service but database connection uses hardcoded IP (10.0.9.30). Partial pattern.",
+      "gap": "Environment variables for service endpoint but no dynamic discovery. Database endpoint hardcoded.",
+      "recommendation": "Externalize all endpoints to environment variables or AWS Service Discovery.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "22"
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unstructured Data Storage - PO XML not persisted",
+      "description": "Purchase order XML received, parsed in memory, and discarded. Raw documents not stored in managed object storage.",
+      "gap": "Unstructured data (PO XML) not stored or accessible for audit, analytics, or reprocessing.",
+      "recommendation": "Store raw purchase order XML in S3 with lifecycle policies for audit trail and reprocessing.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "30-32"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unified Data Access Layer - Direct JDBC in business logic",
+      "description": "Database access is direct JDBC with string-concatenated SQL in business logic. No DAO, no ORM, no connection pool.",
+      "gap": "Database queries scattered in business logic with no abstraction pattern.",
+      "recommendation": "Introduce repository/DAO layer. Use ORM or prepared statements with connection pooling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "35-40"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Database Engine Version and EOL - Oracle 11g past EOL",
+      "description": "Oracle 11g reached end of Extended Support in December 2020. No version pinning in IaC. Engine past EOL.",
+      "gap": "Database engine past EOL with no security patches or support available.",
+      "recommendation": "Migrate to Aurora PostgreSQL. Use AWS SCT for schema conversion and DMS for data migration.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Stored Procedures - No stored procedures but raw SQL",
+      "description": "No stored procedures or triggers detected. SQL uses standard INSERT syntax. However, string-concatenated SQL approach is fragile.",
+      "gap": "While no stored procedures exist, raw SQL with string concatenation makes data layer fragile and Oracle-driver-dependent.",
+      "recommendation": "Replace string-concatenated SQL with prepared statements. Adopt ORM for database portability.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "38-39"
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption at Rest - No encryption configured",
+      "description": "Oracle 11g stores partner order data with no evidence of encryption at rest. No KMS keys or TDE.",
+      "gap": "No encryption at rest for database storing partner order data.",
+      "recommendation": "Migrate to RDS/Aurora with encryption at rest enabled by default.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Authentication - WS-Security plaintext over HTTP",
+      "description": "WS-Security username token with password in plaintext over plain HTTP. No OAuth2, JWT, or modern auth.",
+      "gap": "No token-based authentication. Plaintext passwords over unencrypted HTTP.",
+      "recommendation": "Migrate to OAuth2/JWT. Enforce TLS immediately. Use API Gateway with Cognito authorizer.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Centralized Identity - Self-managed flat file credentials",
+      "description": "No centralized IdP. Partner credentials in a flat properties file. No Cognito, OIDC, or SAML.",
+      "gap": "Application manages its own authentication entirely with no external IdP.",
+      "recommendation": "Integrate with Amazon Cognito. Use OAuth2 client credentials for partner M2M integration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets Management - Hardcoded credentials in source",
+      "description": "Plaintext database credentials hardcoded in source: DB_USER='partner_app', DB_PASS='partner2009'. Committed to git.",
+      "gap": "Plaintext credentials in source code \u2014 critical security vulnerability.",
+      "recommendation": "Immediately rotate credentials. Move all secrets to AWS Secrets Manager with automated rotation.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "23-24"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Compute Hardening - EOL runtime, no patching",
+      "description": "JBoss AS 5.1 on RHEL 6 with Java 6 \u2014 all past EOL. No patching strategy or vulnerability scanning.",
+      "gap": "Runtime entirely past EOL with no security patches available.",
+      "recommendation": "Migrate to supported runtime. Enable SSM Patch Manager and Inspector after migration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Application Security Pipeline - No scanning",
+      "description": "No SAST, DAST, or dependency scanning. No CI/CD pipeline exists. Known vulnerabilities (XXE, SQLi) in code.",
+      "gap": "No security scanning tools. Pipeline has no security validation.",
+      "recommendation": "Integrate SAST and dependency scanning when CI/CD is established.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Distributed Tracing - No tracing",
+      "description": "No distributed tracing instrumented. No X-Ray, OpenTelemetry, or trace ID propagation.",
+      "gap": "No distributed tracing \u2014 debugging requires log correlation with no trace context.",
+      "recommendation": "Add OpenTelemetry SDK when migrating to modern framework.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Business Metrics - No custom metrics",
+      "description": "No custom metrics published. No CloudWatch putMetricData, no business event tracking.",
+      "gap": "No visibility into order volumes, success rates, or partner-specific metrics.",
+      "recommendation": "Instrument business metrics: orders submitted/accepted/failed by partner.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Anomaly Detection and Alerting - No alerting",
+      "description": "No alerting or anomaly detection. Errors returned to caller with no server-side alerting.",
+      "gap": "No alerting. Service failures invisible to operators until partners report.",
+      "recommendation": "Configure CloudWatch alarms on error rates and latency. Enable anomaly detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "43-45"
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing - No tests at all",
+      "description": "No automated tests of any kind. README states 'No tests; partner onboarding is manual SOAP-UI session.'",
+      "gap": "No integration tests \u2014 only manual SOAP-UI testing. No regression protection.",
+      "recommendation": "Add integration tests with Testcontainers. Create automated SOAP/REST test suites in CI/CD.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Incident Response - No runbooks",
+      "description": "No runbooks, no incident response automation, no self-healing patterns.",
+      "gap": "Incident response entirely ad hoc.",
+      "recommendation": "Create runbooks for common incidents. Automate with SSM Automation after migration.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Ownership - No ownership defined",
+      "description": "No CODEOWNERS, no per-service dashboards, no alarm ownership or SLO definitions.",
+      "gap": "No observability ownership \u2014 monitoring reactive and fragmented.",
+      "recommendation": "Define observability ownership with CODEOWNERS and per-service dashboards.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Resource Tagging - No tags (no IaC)",
+      "description": "No resource tagging. No IaC exists to carry tags.",
+      "gap": "No tags on resources. No IaC to define tags.",
+      "recommendation": "Implement consistent tagging when IaC is established.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": null,
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "SEC-Q1",
+      "category_id": "SEC",
+      "title": "Audit Logging",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "No IaC provisioning AWS resources. CloudTrail is account-level and not assessed in application repos."
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category_id": "OPS",
+      "title": "SLO Definitions",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "No deployed workload infrastructure in repo. SLO definitions cannot be assessed from source code alone."
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category_id": "OPS",
+      "title": "Deployment Strategy",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "No deployed workload found (has_deployed_workload=false). Deployment strategy cannot be assessed."
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2 < 3 (score=1) AND supporting: INF-Q1=1, APP-Q3=1, APP-Q4=1",
+      "triggering_questions": [
+        {
+          "question_id": "APP-Q2",
+          "score": 1
+        },
+        {
+          "question_id": "INF-Q1",
+          "score": 1
+        },
+        {
+          "question_id": "APP-Q3",
+          "score": 1
+        },
+        {
+          "question_id": "APP-Q4",
+          "score": 1
+        }
+      ],
+      "detail": {
+        "aws_services": [
+          "Lambda",
+          "API Gateway",
+          "Step Functions",
+          "EventBridge",
+          "ECS",
+          "EKS",
+          "Fargate"
+        ],
+        "patterns": [
+          "Strangler Fig",
+          "Anti-corruption Layer",
+          "Event Sourcing",
+          "Hexagonal Architecture"
+        ],
+        "immediate_actions": [
+          "Containerize application",
+          "Introduce layered architecture",
+          "Deploy behind API Gateway"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q1 < 3 (score=1) AND no container definitions found in repo",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q1",
+          "score": 1
+        }
+      ],
+      "detail": {
+        "aws_services": [
+          "ECS",
+          "EKS",
+          "Fargate",
+          "ECR",
+          "App Runner"
+        ],
+        "patterns": [
+          "Lift-and-containerize",
+          "Refactor-then-containerize"
+        ],
+        "immediate_actions": [
+          "Create Dockerfile for WAR",
+          "Set up ECR registry",
+          "Configure ECS task definition"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM",
+          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "High",
+      "key_trigger_criteria": "DATA-Q4 < 3 (score=2) AND commercial Oracle DB detected in INF-Q2 finding",
+      "triggering_questions": [
+        {
+          "question_id": "DATA-Q4",
+          "score": 2
+        },
+        {
+          "question_id": "INF-Q2",
+          "score": 1,
+          "note": "Oracle 11g commercial engine detected"
+        }
+      ],
+      "detail": {
+        "aws_services": [
+          "RDS PostgreSQL",
+          "Aurora PostgreSQL",
+          "DMS",
+          "SCT"
+        ],
+        "patterns": [
+          "Schema conversion",
+          "Data migration",
+          "Driver replacement"
+        ],
+        "immediate_actions": [
+          "Run AWS SCT assessment",
+          "Identify Oracle-specific SQL",
+          "Plan PostgreSQL migration"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2 < 3 (score=1), supporting: DATA-Q3=1",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q2",
+          "score": 1
+        },
+        {
+          "question_id": "DATA-Q3",
+          "score": 1,
+          "note": "Oracle 11g past EOL"
+        }
+      ],
+      "detail": {
+        "aws_services": [
+          "Aurora",
+          "RDS",
+          "DynamoDB",
+          "DMS",
+          "SCT"
+        ],
+        "patterns": [
+          "Self-managed to managed migration",
+          "Engine upgrade"
+        ],
+        "immediate_actions": [
+          "Assess Oracle 11g schema complexity",
+          "Plan migration to RDS/Aurora",
+          "Set up DMS replication"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
+          "https://skillbuilder.aws/learn/ND246G8Y3W"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No data processing/streaming workloads exist in this service",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found. Service has no data processing responsibilities beyond simple INSERT."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10 < 3 (score=1) AND INF-Q11 < 3 (score=1), supporting: OPS-Q6=1",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q10",
+          "score": 1
+        },
+        {
+          "question_id": "INF-Q11",
+          "score": 1
+        },
+        {
+          "question_id": "OPS-Q6",
+          "score": 1,
+          "note": "No automated tests"
+        }
+      ],
+      "detail": {
+        "aws_services": [
+          "CodeBuild",
+          "CodePipeline",
+          "CodeDeploy",
+          "CloudFormation",
+          "CDK"
+        ],
+        "patterns": [
+          "IaC-first",
+          "Pipeline-as-code",
+          "Automated testing"
+        ],
+        "immediate_actions": [
+          "Create CI/CD pipeline",
+          "Define infrastructure in Terraform/CDK",
+          "Add automated tests"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. Context field is empty."
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Conditional / Adaptive",
+    "rationale": "Service is tiny (single endpoint, single class). Full microservices decomposition not warranted. Containerize first, then modernize framework with proper layering.",
+    "approaches": [
+      {
+        "name": "Strengthen as Modular Monolith",
+        "effort": "Low",
+        "recommended": false,
+        "reason": "Service too small for this to be meaningful"
+      },
+      {
+        "name": "Strangler Fig",
+        "effort": "Medium-High",
+        "recommended": false,
+        "reason": "Overkill for single-endpoint service"
+      },
+      {
+        "name": "Conditional / Adaptive",
+        "effort": "Low-Medium",
+        "recommended": true,
+        "reason": "Containerize as-is, then modernize framework with layered architecture"
+      },
+      {
+        "name": "Big-Bang Rewrite",
+        "effort": "Very High",
+        "recommended": false,
+        "reason": "Not recommended - high risk for any service"
+      }
+    ],
+    "patterns": [
+      "Anti-corruption Layer",
+      "Hexagonal Architecture",
+      "Strangler Fig"
+    ]
+  },
+  "filter_vocab": {
+    "categories": [
+      "Infrastructure & DevOps",
+      "Application Architecture",
+      "Data Platform",
+      "Security Baseline",
+      "Operations & Observability"
+    ],
+    "severities": [
+      "High",
+      "Medium",
+      "Low"
+    ],
+    "priorities": [
+      "P1",
+      "P2"
+    ]
+  },
+  "repo_name": "legacy-partner-soap"
+}

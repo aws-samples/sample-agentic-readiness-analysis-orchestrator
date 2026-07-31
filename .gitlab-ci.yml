@@ -1,0 +1,487 @@
+# =============================================================================
+# Change-Impact Harness — GitLab CI   (see harness/DESIGN.md §5, §6, §8)
+#
+# AUTOMATION IS GITLAB-ONLY. GitHub carries NO Actions/workflows — it stays open
+# for issues/PRs and mirrors content both ways, but runs nothing. All analysis
+# runs here on gitlab.aws.dev.
+#
+# AWS AUTH = AWS CREDENTIAL VENDOR (no long-lived credentials, no OIDC).
+# OIDC is NOT available on the internal GitLab instance: AWS IAM cannot reach the
+# private instance to verify an id_token, so the OIDC provider trust model does
+# not work here. Instead the SHARED RUNNER FLEET vends temporary credentials via
+# the AWS Credential Vendor: the runners' jump role assumes a role that YOU create
+# in your own AWS account, gated by GitLab principal tags
+# (aws:PrincipalTag/GitLab:Project + :Group). You set ONE CI variable,
+# AWS_CREDS_TARGET_ROLE = that role's ARN, and the shared runner injects
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN into the job
+# automatically — there is NOTHING to exchange in before_script.
+# See harness/README.md for the one-time role setup (it has the jump-role ARN you
+# need for the trust policy).
+#
+# Requirements (both already in place):
+#   - SHARED runners enabled (the Credential Vendor only works on shared runners).
+#   - The role is created PER-PROJECT (it cannot be reused across projects).
+#
+# Both jobs are ADVISORY (allow_failure: true) — the harness NEVER blocks a merge.
+# The only LLM call is the judge step, spent at the very end (§6). The run|skip
+# decision is a deterministic git-diff gate (should-run.sh), not a model (§5).
+# =============================================================================
+
+stages:
+  - gate      # deterministic run|skip decision (harness/should-run.sh) — no LLM
+  - test      # offline, no-AWS: schema-guardrail contract tests (fast, always runs)
+  - analyze   # atx re-run of changed fixtures + D1–D5 delta -> impact.json
+  - judge     # LLM-as-judge advisory verdict -> verdict.json, posted to the MR
+# NOTE: harness:impact and harness:full each run the gate -> analyze -> judge
+# phases INLINE as a single advisory job. The stage list above names those
+# phases and reserves structure for a future per-stage split.
+
+variables:
+  # AWS_CREDS_TARGET_ROLE is deliberately NOT set here. It lives as a project CI/CD
+  # variable (Settings -> CI/CD -> Variables) because it names an AWS account id +
+  # role, and this repo is mirrored to the public GitHub aws-samples org. An ARN is
+  # not a credential, but it should not be published there.
+  #
+  # It MUST stay PLAIN (Expanded, not Masked/Hidden, not Protected):
+  #   - "Protected" is only injected on protected branches, silently breaking the
+  #     vend on feature branches and MRs — the exact failure we hit before.
+  #   - "Masked"/"Hidden" cannot be read by the runner's pre-clone vendor script at
+  #     all, so no credentials are vended.
+  # Run the manual harness:auth-check job to diagnose either case: it prints the
+  # variable's LENGTH (never its value) and whether creds were injected.
+  #
+  # REQUIRED for the vend: the runner's pre-clone aws-creds-vendor.sh only vends
+  # when BOTH AWS_CREDS_TARGET_ROLE *and* AWS_DEFAULT_REGION are set. It gates on
+  # AWS_DEFAULT_REGION specifically (NOT AWS_REGION) — leaving it unset makes the
+  # vendor silently skip, so no creds are injected (confirmed: zero AssumeRole
+  # attempts in the target account's CloudTrail). Every working example sets it.
+  AWS_DEFAULT_REGION: "us-east-1"
+  # Where run-fixtures.sh writes the freshly-generated "after" reports (§7).
+  AFTER_DIR: "harness/after"
+  # Bedrock model for the LLM judge. MUST be a cross-region INFERENCE PROFILE id
+  # (the "global."/"us." prefixed ids from `aws bedrock list-inference-profiles`),
+  # NOT a bare foundation-model id — invoke_model rejects the bare id with
+  # "The provided model identifier is invalid." Must be ACTIVE in the target
+  # account / us-east-1. judge.py reads this via HARNESS_JUDGE_MODEL; if the
+  # call fails for any reason the judge falls back to the offline heuristic.
+  HARNESS_JUDGE_MODEL: "global.anthropic.claude-opus-4-5-20251101-v1:0"
+  # pip cache location (see cache: block below).
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  # --- COST / WALL-CLOCK CONTROLS (see harness/run-fixtures.sh header) ---------
+  # Each (fixture, analysis) unit bills ~110-130 AGENT-minutes (internal compute; the
+  # observed WALL-CLOCK is ~10-20 min per unit, and units run concurrently). Two knobs
+  # keep an MR at ~20 min instead of a 22-unit sweep:
+  #
+  # HARNESS_MR_FIXTURES — how many fixtures the changed-only path selects. The
+  # selector (select-fixtures.py) picks the ones whose declared expectations
+  # actually exercise the EDITED rubric questions, so 1-2 is enough to observe a
+  # change; breadth is what harness:full is for. A portfolio-TD edit auto-floors
+  # this to 2 (a rollup over one repo exercises nothing).
+  HARNESS_MR_FIXTURES: "2"
+  # HARNESS_JOBS — concurrent atx execs. Safe because every unit gets its own
+  # staged copy of the fixture with its own `git init` (atx switches branches in
+  # the repo enclosing its -p target, so the invariant is "never two execs in ONE
+  # repo", not "never two at once"). Each exec is Bedrock-bound, not CPU-bound.
+  HARNESS_JOBS: "4"
+
+default:
+  image: python:3.13-slim
+  # No `tags:` — AWS GitLab has no tag literally named "shared". Untagged jobs are
+  # auto-picked-up by the default shared fleet (t-shirt sizes like amd64-small /
+  # amd64-medium are opt-in via tags; add one only if a job needs more CPU/RAM).
+  # The AWS Credential Vendor runs on this default shared fleet.
+  cache:
+    key: "harness-pip-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/pip
+  before_script:
+    # The slim image ships without curl/git/unzip — install what the harness needs.
+    # unzip is REQUIRED: the atx CLI installer unpacks a zip and hard-fails without it.
+    # xz-utils is REQUIRED for `tar -J` when unpacking the Node tarball below.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl git unzip xz-utils ca-certificates
+    # --- NODE RUNTIME — REQUIRED by the atx CLI ---------------------------------
+    # The installed `atx` is a Node script (`#!/usr/bin/env node`), so on this
+    # python-only image every atx call dies with:
+    #   env: 'node': No such file or directory
+    # README documents Node.js 22+ as a prerequisite. We install the official
+    # pinned tarball rather than the NodeSource apt repo: no third-party apt
+    # source and no gnupg dependency (the slim image ships neither).
+    - |
+      NODE_VERSION=22.14.0
+      case "$(dpkg --print-architecture)" in
+        amd64) NODE_ARCH=x64 ;;
+        arm64) NODE_ARCH=arm64 ;;
+        *) echo "unsupported runner arch: $(dpkg --print-architecture)" >&2; exit 1 ;;
+      esac
+      curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz
+      tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
+      rm -f /tmp/node.tar.xz
+      node --version
+    # AWS CLI (to sanity-check the vended identity) + atx CLI (drives the managed TDs).
+    - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
+    - curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash
+    - export PATH="$HOME/.local/bin:$PATH"
+    # Surface atx's location here rather than failing deep inside run-fixtures.sh.
+    # NOTE: block scalar (|) is required — an inline `- foo: bar` style string
+    # containing ": " parses as a YAML MAPPING, and GitLab then rejects
+    # before_script with "config should be a string or a nested array of strings".
+    - |
+      if command -v atx >/dev/null; then
+        echo "atx installed at $(command -v atx)"
+      else
+        echo "WARN: atx not on PATH" >&2
+      fi
+    # Region falls back to us-east-1 if the AWS_REGION CI variable is unset.
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    # --- AWS Credential Vendor -------------------------------------------------
+    # No token exchange here. When AWS_CREDS_TARGET_ROLE + AWS_DEFAULT_REGION are set,
+    # the shared runner's pre-clone script has ALREADY vended temporary creds into the
+    # default AWS profile (~/.aws/credentials — NOT env vars) before this script runs.
+    # We just confirm the identity so a missing/rejected role fails loudly with a
+    # useful message instead of deep inside atx.
+    - |
+      if [ -z "${AWS_CREDS_TARGET_ROLE:-}" ]; then
+        echo "WARN: AWS_CREDS_TARGET_ROLE is unset — no AWS creds were vended." >&2
+        echo "      Set it in .gitlab-ci.yml variables: (see harness/README.md)." >&2
+      else
+        aws sts get-caller-identity >/dev/null 2>&1 \
+          && echo "AWS Credential Vendor: creds vended for role ${AWS_CREDS_TARGET_ROLE}" \
+          || echo "WARN: creds not usable yet (check the role trust policy / project tags)." >&2
+      fi
+    # Python deps for the differ / judge (guarded — file is optional).
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+
+# -----------------------------------------------------------------------------
+# Entry 0 — harness:auth-check   (manual; one-time wiring verification)
+# Cheap smoke test that proves ONLY that the AWS Credential Vendor vended usable
+# creds — no atx, no fixtures, no baselines. Overrides before_script so it does
+# not install the atx CLI. Run it from CI/CD → Run pipeline, or add ?var to a push.
+# Delete this job once the first real pipeline is green.
+# -----------------------------------------------------------------------------
+harness:auth-check:
+  stage: gate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
+    - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
+  script:
+    - |
+      if [ -z "${AWS_CREDS_TARGET_ROLE:-}" ]; then
+        echo "FAIL: AWS_CREDS_TARGET_ROLE is unset — the variable is not reaching this job." >&2
+        echo "      (Is it Protected while the branch is not? Is the branch tag/name matched?)" >&2
+        exit 1
+      fi
+      # Print only the LENGTH of the role var — masked/hidden vars print as [MASKED],
+      # so length confirms it resolved to a real (non-empty) ARN inside the job.
+      echo "AWS_CREDS_TARGET_ROLE length = ${#AWS_CREDS_TARGET_ROLE} chars"
+      # AWS_DEFAULT_REGION is the one the vendor GATES on; AWS_REGION is only what the
+      # aws CLI reads. Print both — if AWS_DEFAULT_REGION is empty the vend was skipped
+      # before this script ever ran, regardless of what AWS_REGION says.
+      echo "AWS_DEFAULT_REGION (gates vend) = ${AWS_DEFAULT_REGION:-<UNSET — vend skipped>}"
+      echo "AWS_REGION         (cli only)   = ${AWS_REGION:-<unset>}"
+      # Did the runner's Credential Vendor actually inject creds *before* this script?
+      # If these are empty, the VEND never happened (usually: the var is masked/hidden,
+      # or this isn't the shared fleet). If they're set but get-caller-identity fails,
+      # the vend ran but the target role's trust policy rejected the AssumeRole.
+      echo "--- vended credential env (presence only, never the secret) ---"
+      echo "AWS_ACCESS_KEY_ID set?     $([ -n "${AWS_ACCESS_KEY_ID:-}" ] && echo yes || echo NO)"
+      echo "AWS_SESSION_TOKEN set?     $([ -n "${AWS_SESSION_TOKEN:-}" ] && echo yes || echo NO)"
+      echo "AWS_ROLE_ARN set?          $([ -n "${AWS_ROLE_ARN:-}" ] && echo yes || echo NO)"
+      echo "--- aws sts get-caller-identity ---"
+      if aws sts get-caller-identity; then
+        echo "OK: Credential Vendor vended usable credentials."
+      else
+        echo "" >&2
+        echo "DIAGNOSIS:" >&2
+        if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+          echo "  No creds were injected -> the VEND did not run. Most likely the" >&2
+          echo "  AWS_CREDS_TARGET_ROLE variable is Masked/Hidden/Protected. Re-create" >&2
+          echo "  it as a PLAIN (unmasked, unhidden, unprotected) variable — the vendor" >&2
+          echo "  script cannot read a masked value, and Protected is only injected on" >&2
+          echo "  protected branches (so MRs from feature branches get nothing)." >&2
+        else
+          echo "  Creds WERE injected but STS rejected them -> the target role's trust" >&2
+          echo "  policy did not allow the vendor's AssumeRole. Confirm the trust policy" >&2
+          echo "  on the target role names the GitLab runner jump role as principal" >&2
+          echo "  (ARN is in harness/README.md) with conditions" >&2
+          echo "  GitLab:Project=<project> and GitLab:Group=<group> matching this repo." >&2
+        fi
+        exit 1
+      fi
+  allow_failure: true   # advisory — a red auth-check must not block anything
+
+# -----------------------------------------------------------------------------
+# Entry 0b — harness:comment-check   (manual; MR-comment wiring verification)
+# Proves ONLY that the advisory MR note can actually be POSTED. No atx, no AWS, no
+# Bedrock, no fixtures — it feeds post-mr-comment.sh a CANNED verdict.json and posts
+# it. ~30 seconds instead of the ~20 minutes (and ~130 agent-minutes) a full
+# harness:impact run costs to reach the same 3 seconds of code.
+#
+# WHY THIS EXISTS: the comment is the LAST step of the most expensive job in the repo,
+# so every iteration on a posting bug otherwise costs a full analysis run. MR !14 burned
+# two of them on what turned out to be an auth-header bug.
+#
+# Run it from CI/CD -> Run pipeline (web), or let it appear as a MANUAL job on an MR and
+# press play. It is `when: manual` on MRs so it does not post a junk comment on every
+# push — but note the comment it posts IS visible on the MR, tagged as a wiring test.
+# Delete this job once the comment path is proven.
+# -----------------------------------------------------------------------------
+harness:comment-check:
+  stage: gate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
+  before_script:
+    # Only curl is needed — this job posts a note via the API and never touches the repo.
+    # Skipping the Node/atx/awscli install is most of why this is fast. (The comment here
+    # used to claim "curl + git"; git was never in the apt line and never used. If you add
+    # a step that shells out to git, add the package too — see harness:contract-tests.)
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
+  script:
+    - |
+      echo "--- token presence (never the value) ---"
+      # A masked variable prints as [MASKED], so length is the only safe signal that it
+      # resolved to something real inside the job.
+      if [ -n "${HARNESS_MR_TOKEN:-}" ]; then
+        echo "HARNESS_MR_TOKEN: set, ${#HARNESS_MR_TOKEN} chars"
+      else
+        echo "HARNESS_MR_TOKEN: NOT SET -> the note WILL 401." >&2
+        echo "  CI_JOB_TOKEN cannot create MR notes (GitLab excludes /notes from its" >&2
+        echo "  allowlist), so this is the variable that matters. Settings -> CI/CD ->" >&2
+        echo "  Variables: Project Access Token with 'api' scope, Reporter or above." >&2
+        echo "  Masked is fine. Protected must be OFF (MRs run on unprotected branches)." >&2
+      fi
+      echo "CI_MERGE_REQUEST_IID: ${CI_MERGE_REQUEST_IID:-(none - not an MR pipeline)}"
+      echo "CI_API_V4_URL:        ${CI_API_V4_URL:-(unset)}"
+    # Canned verdict — shaped like a real one so the RENDERER is exercised too (scoped-run
+    # disclosure, delta highlights, concerns), not just the HTTP call.
+    #
+    # It MUST carry `scored`, `score` AND `baseline_score` on the real 0.0-1.0 scale:
+    # post-mr-comment.sh only renders the accuracy cell when all three are present and
+    # numeric, so a payload missing them (or carrying a retired 0-100 `score: 85`) makes
+    # this job green-light a comment reading "Accuracy: not measured" — i.e. it would pass
+    # while the scored branch it exists to prove was never executed.
+    - |
+      cat > verdict.json <<'JSON'
+      {
+        "score": 0.842,
+        "baseline_score": 0.815,
+        "scored": true,
+        "analysis_effect": "improves",
+        "verdict": "LGTM",
+        "intent_match": "aligned",
+        "quality_regression": false,
+        "rationale": "**This is a wiring test, not a real verdict.** It was posted by `harness:comment-check` with a canned payload to prove the harness can comment on an MR. No fixtures were analyzed and no rubric was evaluated.",
+        "concerns": [
+          {"dimension": "D1", "detail": "example concern — renders the concerns block"}
+        ],
+        "suggestions": ["example suggestion — renders the suggestions block"],
+        "_engine": "canned (comment-check)",
+        "_impact_summary": {
+          "dimensions_moved": ["D1"],
+          "changed_tds": ["agentic-readiness-analysis"],
+          "highlights": [
+            "[legacy-helpdesk-tickets] D1 reseveritied: API-Q2 RISK-QUALITY -> RISK-SAFETY",
+            "[legacy-loan-calculator] D1 reseveritied: API-Q2 RISK-QUALITY -> RISK-SAFETY"
+          ],
+          "coverage": {"compared": 2, "baseline_total": 28, "partial": true, "not_analyzed_count": 26, "unbaselined": []}
+        }
+      }
+      JSON
+      echo "--- posting ---"
+      harness/post-mr-comment.sh verdict.json
+    # post-mr-comment.sh is advisory and exits 0 even on a failed POST, so its exit code
+    # cannot be the assertion. Re-read the MR's notes and confirm ours is actually there —
+    # otherwise this job would go green while posting nothing, which is the exact failure
+    # it exists to catch.
+    - |
+      if [ -z "${CI_MERGE_REQUEST_IID:-}" ]; then
+        echo "no MR context (web pipeline) — POST not attempted; nothing to verify." >&2
+        exit 0
+      fi
+      if [ -z "${HARNESS_MR_TOKEN:-}" ]; then
+        echo "no HARNESS_MR_TOKEN — cannot read notes back to verify." >&2
+        exit 1
+      fi
+      # `|| echo 000` would APPEND to the captured -w output ("000000"), so branch on
+      # curl's exit status instead and synthesize a code only when there is no HTTP reply.
+      rm -f notes.json
+      if code="$(curl -sS -o notes.json -w '%{http_code}' \
+           --connect-timeout 10 --max-time 30 \
+           --header "PRIVATE-TOKEN: ${HARNESS_MR_TOKEN}" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes?per_page=20&sort=desc")"; then
+        :
+      else
+        code="000"
+      fi
+      echo "GET notes -> HTTP ${code:-000}"
+      if [ "${code}" != "200" ]; then
+        echo "VERIFY FAILED: could not read notes back (HTTP ${code})." >&2
+        [ -s notes.json ] && head -c 500 notes.json >&2
+        exit 1
+      fi
+      python3 - <<'PY'
+      import json, sys
+      notes = json.load(open("notes.json"))
+      ours = [n for n in notes if "comment-check" in (n.get("body") or "")
+              or "wiring test" in (n.get("body") or "")]
+      if ours:
+          n = ours[0]
+          print(f"VERIFIED: note id={n.get('id')} by "
+                f"{(n.get('author') or {}).get('username')} at {n.get('created_at')}")
+          sys.exit(0)
+      print("VERIFY FAILED: the POST reported success but no matching note is on the MR.",
+            file=sys.stderr)
+      print(f"  {len(notes)} recent note(s) found, none ours.", file=sys.stderr)
+      sys.exit(1)
+      PY
+  artifacts:
+    when: always
+    paths:
+      - verdict.json
+    expire_in: 7 days
+  allow_failure: true   # advisory — a red wiring check must not block anything
+
+# -----------------------------------------------------------------------------
+# Schema guardrail — harness:contract-tests   (offline, no AWS, fast)
+# The STRUCTURAL axis (distinct from the semantic judge): validate-contract.py's
+# offline shape-fixture suite proves the contract validator rejects drifted JSON
+# and accepts conforming JSON. No atx, no creds, no fixtures re-run — so it runs on
+# EVERY MR regardless of the gate, and fails loudly if the contract logic breaks.
+# before_script is overridden to skip the atx/awscli install (none needed here).
+# -----------------------------------------------------------------------------
+harness:contract-tests:
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  before_script:
+    # git is REQUIRED, not optional: test_fixtures_integrity.py asserts against
+    # `git ls-files` rather than the filesystem, because the regression it pins (a bare
+    # `services/` .gitignore entry swallowing a fixture's only unsafe-code file) is
+    # INVISIBLE on disk. The runner clones via a separate helper image, so the job
+    # container itself has no git — this override skips the default before_script's
+    # atx/Node install, and for a while it skipped the `apt-get install git` with it.
+    # Those 3 tests then died on FileNotFoundError: 'git' and allow_failure: true hid it,
+    # so the fixture-integrity axis was never actually running in CI.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+  script:
+    # Contract guard + differ + envelope normalizer + the SKILL.md severity-table parse
+    # (test_skill_table.py asserts 43/37 and AUTH-Q5's class). The parse is what tells the
+    # differ a BLOCKER->RISK-SAFETY move is a correction, so a TD heading-format change that
+    # broke it would silently disable over-escalation detection — the tests catch that here.
+    - python3 -m pytest harness/tests/ -q
+  allow_failure: true   # advisory — surfaces contract drift without blocking the merge
+
+# -----------------------------------------------------------------------------
+# Entry 1 — harness:impact   (automatic on every merge request)
+# Gate -> run changed fixtures -> diff vs golden -> judge vs MR intent -> comment.
+# -----------------------------------------------------------------------------
+harness:impact:
+  stage: analyze
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  # A single (fixture, analysis) unit costs ~108 agent-min, and HARNESS_JOBS runs the
+  # MR's 2 units concurrently — so wall-clock is ~one unit, ~2h with install + judge.
+  # GitLab's 1h DEFAULT would kill every MR run mid-sweep, discarding the analysis and
+  # reporting nothing. 3h leaves headroom for a slow unit without letting a wedged atx
+  # exec burn a runner all day.
+  timeout: 3h
+  script:
+    # GATE (deterministic, no LLM): exit cleanly as a SKIP when the whole diff is
+    # denylisted (docs / license / images / DESIGN.md). Permissive by default (§5).
+    - |
+      harness/should-run.sh || { echo "skip - no analysis-affecting change"; exit 0; }
+    # ANALYZE: re-run only the fixtures that exercise the edit, then compute the delta.
+    # --validate: contract-check each collected report as it lands (schema guardrail).
+    # --jobs/--mr-fixtures: see the HARNESS_JOBS / HARNESS_MR_FIXTURES notes above.
+    - harness/run-fixtures.sh --changed-only --validate --jobs "$HARNESS_JOBS" --mr-fixtures "$HARNESS_MR_FIXTURES"
+    # SEVERITY GATE INPUT: which questions had their DOCUMENTED severity edited in this MR.
+    # The differ reads the working-tree SKILL.md to decide whether a lost BLOCKER was an
+    # "over-escalation correction" (the report was wrong, the table was right). If the SAME
+    # MR moved that table row, that premise is gone — so these qids are barred from the
+    # exemption and a downgrade on them alerts as a real relaxation. should-run.sh already
+    # fetched the target branch, so origin/<target> resolves here. Advisory: never fatal.
+    - |
+      SEV_BASE="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:+origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+      python3 harness/skill_table.py --base "${SEV_BASE:-origin/main}" -o changed-severity.json || echo '{}' > changed-severity.json
+    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" --changed-severity changed-severity.json -o impact.json
+    # SCORE (accuracy anchor): re-score the freshly-generated reports for groundedness
+    # against the fixture SOURCE and classify each against the committed baseline
+    # (improved / regressed / within-noise, with a per-fixture noise threshold). This is
+    # the judge's only PAST DATA — without it the verdict is produced from the delta alone,
+    # blind to where accuracy stood before the change. Advisory: `|| true` so a scoring
+    # hiccup degrades the judge to delta-only rather than failing the job.
+    - harness/score-reports.py --trees "$AFTER_DIR" --compare-out compare.json || true
+    # JUDGE: LLM scores the delta against the contributor's INTENT (MR description, §6/§8.1).
+    # --edited-questions tells the judge WHICH rubric questions the MR touched. Without it
+    # the judge cannot separate the edit's effect from the analysis agent's run-to-run
+    # nondeterminism (a same-rubric re-run moves 10-20 findings), and it read a
+    # one-question change as "far broader than stated" -> a false `mismatch`.
+    # --compare feeds the accuracy anchor above (absent file => judge falls back cleanly).
+    - |
+      EDITED=""
+      [ -f "$AFTER_DIR/edited-questions.txt" ] && EDITED="$(cat "$AFTER_DIR/edited-questions.txt")"
+      harness/judge.py --impact impact.json --intent "$CI_MERGE_REQUEST_DESCRIPTION" \
+        --edited-questions "$EDITED" --compare compare.json > verdict.json
+    # REPORT: advisory MR comment (never blocks).
+    - harness/post-mr-comment.sh verdict.json
+  artifacts:
+    when: always
+    paths:
+      - impact.json
+      - verdict.json
+      - compare.json   # accuracy-vs-baseline anchor the judge scored against
+      - changed-severity.json   # which questions' severity the MR edited (differ gate input)
+      # Per-unit atx logs (spinner already stripped at write time). These are the
+      # only record of what atx actually did — the job log deliberately carries just
+      # our concise markers so it can't hit the 4 MB cap again.
+      # Literal path, NOT $AFTER_DIR: artifact globs are resolved by the runner, and a
+      # silently-unexpanded variable here would just drop the artifact with no error.
+      - harness/after/_logs/
+    expire_in: 30 days
+  allow_failure: true   # advisory — never blocks the MR
+
+# -----------------------------------------------------------------------------
+# Entry 2 — harness:full   (manual "Run pipeline" button; web-triggered only)
+# For a full re-baseline (e.g. after publishing an approved change), or a forced re-run.
+#
+# THIS is the exhaustive sweep an MR deliberately does NOT do: every fixture in
+# harness/usecases.yaml x 2 analyses (14 x 2 = 28 units today), ~110-130 agent-min each. A
+# scoped 2-unit MR run measured 19 min wall-clock end to end, so a full sweep at RUN_JOBS=6
+# is a few hours — hence the raised
+# timeout. RUN_JOBS is higher than the MR's HARNESS_JOBS because wall-clock is the whole
+# point here. Narrow with CHANGED_TD (ara|mod) to halve the work.
+# -----------------------------------------------------------------------------
+harness:full:
+  stage: analyze
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  timeout: 12h           # default job timeout (1h) cannot fit a full sweep
+  variables:
+    CHANGED_TD: ""       # operator restricts to one TD's analysis type (optional)
+    RUN_SCOPE: "all"     # "all", or a narrower scope understood by run-fixtures.sh
+    RUN_INTENT: ""       # free-text intent handed to the judge (§6)
+    RUN_JOBS: "6"        # concurrent atx execs — see HARNESS_JOBS note above
+  script:
+    - harness/run-fixtures.sh --scope "$RUN_SCOPE" --td "$CHANGED_TD" --validate --jobs "$RUN_JOBS"
+    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
+    # Accuracy anchor — see the note in harness:impact.
+    - harness/score-reports.py --trees "$AFTER_DIR" --compare-out compare.json || true
+    - harness/judge.py --impact impact.json --intent "$RUN_INTENT" --compare compare.json > verdict.json
+    # No MR exists on a web pipeline -> fall back to printing the verdict.
+    - harness/post-mr-comment.sh verdict.json || cat verdict.json
+  artifacts:
+    when: always
+    paths:
+      - impact.json
+      - verdict.json
+      - compare.json   # accuracy-vs-baseline anchor the judge scored against
+      - harness/after/_logs/   # literal — see note on harness:impact
+    expire_in: 30 days
+  allow_failure: true   # advisory — never blocks

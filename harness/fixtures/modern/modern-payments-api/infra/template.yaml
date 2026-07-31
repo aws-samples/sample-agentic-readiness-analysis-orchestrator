@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Payments API — serverless, contract-first, idempotent. Every function has a
+  least-privilege role scoped to exactly the table actions it needs.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    Timeout: 15
+    MemorySize: 256
+    Tracing: Active
+    Environment:
+      Variables:
+        LEDGER_TABLE: !Ref LedgerTable
+        IDEMPOTENCY_TTL_SECONDS: '86400'
+        POWERTOOLS_SERVICE_NAME: payments
+        LOG_LEVEL: INFO
+
+Resources:
+  LedgerTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+      TimeToLiveSpecification: { AttributeName: ttl, Enabled: true }
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      SSESpecification: { SSEEnabled: true }
+
+  PaymentsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: v1
+      TracingEnabled: true
+      Auth:
+        DefaultAuthorizer: OAuth2Authorizer
+        Authorizers:
+          OAuth2Authorizer:
+            FunctionArn: !GetAtt AuthorizerFunction.Arn
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters: { Location: ../openapi/payments.yaml }
+
+  ChargesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: payments.handlers.create_charge
+      CodeUri: ../src
+      Policies:
+        - DynamoDBWritePolicy: { TableName: !Ref LedgerTable }
+        - DynamoDBReadPolicy: { TableName: !Ref LedgerTable }
+      Events:
+        CreateCharge:
+          Type: Api
+          Properties: { RestApiId: !Ref PaymentsApi, Path: /charges, Method: post }
+
+  RefundsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: payments.handlers.refund_charge
+      CodeUri: ../src
+      Policies:
+        - DynamoDBWritePolicy: { TableName: !Ref LedgerTable }
+        - DynamoDBReadPolicy: { TableName: !Ref LedgerTable }
+      Events:
+        RefundCharge:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PaymentsApi
+            Path: /charges/{chargeId}/refunds
+            Method: post
+
+  AuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: payments.authorizer.handler
+      CodeUri: ../src
+      # Validates OAuth2 client-credentials tokens against Cognito; no static keys.
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref UserPoolId
+
+Parameters:
+  UserPoolId:
+    Type: String
+    Description: Cognito user pool that issues client-credentials tokens.
+
+Outputs:
+  ApiUrl:
+    Value: !Sub 'https://${PaymentsApi}.execute-api.${AWS::Region}.amazonaws.com/v1'

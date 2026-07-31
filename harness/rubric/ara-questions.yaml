@@ -1,0 +1,291 @@
+# =============================================================================
+# ARA Question Bank  —  PROPOSAL MIRROR (not the authoritative rubric)
+# =============================================================================
+#
+# WHAT THIS IS
+#   A git-visible, machine-parseable mirror of the Agentic Readiness Analysis
+#   (ARA) rubric questions, so that proposing a new question or re-scoring an
+#   existing one is a reviewable Merge Request the change-impact harness runs
+#   against. See harness/rubric/README.md and harness/DESIGN.md (§2, §3, §8.1).
+#
+# WHAT THIS IS NOT
+#   The source of truth. The live ARA rubric — the full question set, scoring
+#   logic, and category weights — is maintained in the AWS Transform managed
+#   service and versioned independently. This file is a PROPOSAL MIRROR only.
+#   Editing it does NOT change production behavior; a maintainer manually syncs
+#   an approved MR into the service.
+#
+# HOW TO ADD A NEW QUESTION
+#   1. Find the category block below (AUTH, API, STATE, DATA, OBS, ENG, HITL,
+#      DISC).
+#   2. Append an entry using the NEXT free Q number for that category
+#      (e.g. if AUTH-Q7 is the highest here, add AUTH-Q8). Do not renumber or
+#      delete existing entries — an `id` maps directly to emitted findings, so
+#      changing it breaks the harness diff.
+#   3. Keep the schema identical to the entries below.
+#   4. Open a Merge Request with the `rubric-change` template and state your
+#      intent (what / why / expected D1–D5 impact).
+#
+# SCHEMA (per question entry)
+#   id                 : "<CATEGORY>-Q<n>"  e.g. AUTH-Q1   (matches report question_id)
+#   category_id        : one of AUTH|API|STATE|DATA|OBS|ENG|HITL|DISC
+#   title              : short human-readable name of what the question checks
+#   intent             : what the question is looking for / what a pass means
+#   severity_guidance  : how a GAP maps to native_severity + unified severity.
+#       native_severity : BLOCKER | RISK-SAFETY | RISK-QUALITY | INFO
+#       severity        : High | Medium | Low   (unified severity emitted in findings)
+#       maps_to         : plain-language rule for when the gap lands at that severity
+#   safety_impact      : true|false  (does an unaddressed gap affect agent safety)
+#
+# NOTE: ARA readiness is CATEGORICAL only (tier / D2) and is BLOCKER-driven — a
+# single BLOCKER gap forces "Remediation Required" / "Not Agent-Integrable".
+# ARA carries no 0–4 numeric score (that is MOD-only, D5).
+#
+# schema_version: 1
+# analysis: agentic-readiness-analysis
+# categories: [AUTH, API, STATE, DATA, OBS, ENG, HITL, DISC]
+# =============================================================================
+
+questions:
+
+  # ---- AUTH — Authentication & Authorization ----------------------------------
+  - id: AUTH-Q1
+    category_id: AUTH
+    title: Machine Identity Authentication
+    intent: >-
+      Every agent-facing API can authenticate the calling principal (OAuth2,
+      IAM SigV4, mTLS, API keys with usage plans, or a Cognito authorizer) so
+      each call is attributable to an identity.
+    severity_guidance:
+      native_severity: BLOCKER
+      severity: High
+      maps_to: >-
+        No machine identity mechanism at all (endpoints publicly reachable,
+        callers indistinguishable) is a BLOCKER — an agent cannot be safely
+        granted access to an unauthenticated surface. This alone forces the
+        repo out of Agent-Ready.
+    safety_impact: true
+
+  - id: AUTH-Q2
+    category_id: AUTH
+    title: Scoped Permissions for Agent Identity
+    intent: >-
+      Agent principals hold least-privilege, scoped permissions rather than
+      broad or shared credentials, so a compromised or misbehaving agent has a
+      bounded blast radius.
+    severity_guidance:
+      native_severity: RISK-SAFETY
+      severity: Medium
+      maps_to: >-
+        Authentication exists but permissions are coarse/shared (no per-agent
+        scoping) → RISK-SAFETY. Multiple RISK-SAFETY findings push the tier
+        toward "Pilot-Ready (Safety Concerns)".
+    safety_impact: true
+
+  # ---- API — API Surface ------------------------------------------------------
+  - id: API-Q2
+    category_id: API
+    title: Machine-Readable API Specification
+    intent: >-
+      APIs publish a machine-readable contract (OpenAPI/JSON Schema/WSDL) an
+      agent can consume to discover operations, parameters, and response shapes.
+    severity_guidance:
+      native_severity: RISK-QUALITY
+      severity: Medium
+      maps_to: >-
+        No machine-readable spec → RISK-QUALITY: agents can still be integrated
+        but reliability/discoverability suffers. Not a safety blocker.
+    safety_impact: false
+
+  - id: API-Q4
+    category_id: API
+    title: Idempotency for Write Operations
+    intent: >-
+      Write/mutating operations accept idempotency keys so a retrying agent
+      cannot duplicate side effects.
+    severity_guidance:
+      native_severity: INFO
+      severity: Low
+      maps_to: >-
+        Missing idempotency keys on writes → INFO/Low when other resilience
+        controls exist; escalate to RISK-SAFETY if writes are unbounded AND no
+        rate limiting/blast-radius controls are present.
+    safety_impact: false
+
+  # ---- STATE — State Management -----------------------------------------------
+  - id: STATE-Q4
+    category_id: STATE
+    title: Circuit Breakers & Resilience Patterns
+    intent: >-
+      Downstream calls are protected by circuit breakers / timeouts / retries
+      with backoff so an agent driving load cannot cascade failures.
+    severity_guidance:
+      native_severity: RISK-SAFETY
+      severity: Medium
+      maps_to: >-
+        No resilience patterns on downstream dependencies → RISK-SAFETY, because
+        an autonomous agent can amplify a transient fault into an outage.
+    safety_impact: true
+
+  - id: STATE-Q5
+    category_id: STATE
+    title: Rate Limiting & Throttling
+    intent: >-
+      Agent-facing endpoints enforce rate limits/throttling to bound request
+      volume from an automated caller.
+    severity_guidance:
+      native_severity: RISK-SAFETY
+      severity: Medium
+      maps_to: >-
+        No throttling on agent-reachable endpoints → RISK-SAFETY. If the same
+        surface is also unauthenticated (see AUTH-Q1), the AUTH BLOCKER dominates
+        the tier.
+    safety_impact: true
+
+  # ---- DATA — Data Accessibility ----------------------------------------------
+  - id: DATA-Q1
+    category_id: DATA
+    title: Sensitive Data Exposure in Agent-Facing Responses
+    intent: >-
+      Agent-facing API responses do not over-return sensitive fields (PII,
+      secrets, internal identifiers) beyond what the operation requires.
+    severity_guidance:
+      native_severity: RISK-SAFETY
+      severity: Medium
+      maps_to: >-
+        Responses expose sensitive data to agents by default → RISK-SAFETY.
+        Escalate to BLOCKER if regulated data (e.g. full PII/PHI) is returned on
+        an unauthenticated surface.
+    safety_impact: true
+
+  - id: DATA-Q4
+    category_id: DATA
+    title: Input Validation & Schema Enforcement
+    intent: >-
+      Inputs are validated against an explicit schema before processing so an
+      agent cannot submit malformed or injection payloads.
+    severity_guidance:
+      native_severity: RISK-QUALITY
+      severity: Medium
+      maps_to: >-
+        No input validation / schema enforcement → RISK-QUALITY (reliability and
+        correctness risk). Not a safety blocker on its own.
+    safety_impact: false
+
+  # ---- OBS — Observability ----------------------------------------------------
+  - id: OBS-Q1
+    category_id: OBS
+    title: Distributed Tracing & Structured Logging
+    intent: >-
+      Requests are traceable end-to-end with structured logs so agent-driven
+      activity can be attributed and debugged.
+    severity_guidance:
+      native_severity: RISK-QUALITY
+      severity: Medium
+      maps_to: >-
+        No distributed tracing / unstructured logs → RISK-QUALITY: agent actions
+        cannot be reconstructed after the fact, hurting operability.
+    safety_impact: false
+
+  - id: OBS-Q2
+    category_id: OBS
+    title: Alerting on Error Rates & Latency
+    intent: >-
+      Alerting exists on error-rate and latency signals so anomalous
+      agent-driven behavior is detected quickly.
+    severity_guidance:
+      native_severity: RISK-QUALITY
+      severity: Medium
+      maps_to: >-
+        No alerting on error rate/latency → RISK-QUALITY. Escalate to RISK-SAFETY
+        when the agent has write access AND there is no way to notice runaway
+        behavior.
+    safety_impact: false
+
+  # ---- ENG — Engineering Maturity ---------------------------------------------
+  - id: ENG-Q2
+    category_id: ENG
+    title: CI/CD & Contract Testing
+    intent: >-
+      Changes flow through CI/CD with automated contract tests so agent-facing
+      interfaces do not silently break.
+    severity_guidance:
+      native_severity: RISK-QUALITY
+      severity: Medium
+      maps_to: >-
+        No CI/CD or no contract testing on public interfaces → RISK-QUALITY:
+        elevates the risk that a change breaks an integrated agent.
+    safety_impact: false
+
+  - id: ENG-Q3
+    category_id: ENG
+    title: Controlled Rollback Capability
+    intent: >-
+      A tested, controlled rollback path exists so a bad change affecting an
+      agent integration can be reverted quickly.
+    severity_guidance:
+      native_severity: RISK-QUALITY
+      severity: Medium
+      maps_to: >-
+        No controlled rollback → RISK-QUALITY. Escalate to RISK-SAFETY when the
+        system performs irreversible writes on the agent's behalf.
+    safety_impact: false
+
+  # ---- HITL — Human-in-the-Loop -----------------------------------------------
+  - id: HITL-Q2
+    category_id: HITL
+    title: Configurable Approval Gates
+    intent: >-
+      High-impact or irreversible operations can require human approval before
+      an agent commits them.
+    severity_guidance:
+      native_severity: INFO
+      severity: Low
+      maps_to: >-
+        No approval gates → INFO/Low for low-impact reads; escalate to
+        RISK-SAFETY when the agent can perform irreversible or high-blast-radius
+        writes with no human checkpoint.
+    safety_impact: false
+
+  - id: HITL-Q3
+    category_id: HITL
+    title: Sandbox / Staging Environment
+    intent: >-
+      A non-production sandbox/staging environment exists where agent behavior
+      can be validated before touching production.
+    severity_guidance:
+      native_severity: INFO
+      severity: Low
+      maps_to: >-
+        No sandbox/staging path → INFO/Low. Signals reduced ability to safely
+        pilot an agent, but is not itself a safety or quality blocker.
+    safety_impact: false
+
+  # ---- DISC — Discovery & Documentation ---------------------------------------
+  - id: DISC-Q1
+    category_id: DISC
+    title: Schema Versioning & API Contracts
+    intent: >-
+      APIs are versioned with explicit, documented contracts so an agent can
+      depend on stable interface semantics.
+    severity_guidance:
+      native_severity: RISK-QUALITY
+      severity: Medium
+      maps_to: >-
+        No schema versioning / no documented contract → RISK-QUALITY: agent
+        integrations are brittle to undocumented interface changes.
+    safety_impact: false
+
+  - id: DISC-Q3
+    category_id: DISC
+    title: Data Catalog / Metadata Layer
+    intent: >-
+      A data catalog or metadata layer describes available data so an agent can
+      discover what exists and what it means.
+    severity_guidance:
+      native_severity: INFO
+      severity: Low
+      maps_to: >-
+        No catalog/metadata layer → INFO/Low: limits agent discovery but does
+        not block integration or create a safety risk.
+    safety_impact: false

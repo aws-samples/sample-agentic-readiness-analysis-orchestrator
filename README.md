@@ -33,11 +33,13 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 │   ├── 01-live-discovery-push.sh   # Live beat: new repo appears (3 → 4)
 │   ├── 02-reset-live-discovery.sh  # Reset for rehearsal
 │   └── 99-full-reset.sh            # Nuke everything
-├── sample-legacy-portfolio/         # 10 synthetic legacy repos for demo/testing
+├── harness/
+│   ├── fixtures/                    # test/demo repos the harness runs the TDs over
+│   │   ├── portfolio/              # 10 synthetic legacy repos (also the demo portfolio)
+│   │   └── monolith/               # PHP test fixture
+│   └── golden/                      # committed baseline reports each MR diffs against
 ├── examples/
-│   ├── atx-config-exec-plan.yaml   # Example EBA config
-│   ├── fixtures/monolith/          # PHP test fixture
-│   └── reports/full-analysis/      # Sample generated reports
+│   └── atx-config-exec-plan.yaml   # Example EBA config
 └── README.md
 ```
 
@@ -151,9 +153,17 @@ Publishes a TD folder to the ATX registry. The TD name is derived from the folde
 
 Requires the `atx` CLI and `AWS_REGION=us-east-1` (or a supported region).
 
-### `examples/` — sample reports and fixtures
+### `harness/fixtures/` — test & demo repos
 
-`examples/reports/full-analysis/` contains a complete set of generated reports from a real analysis run — per-service ARA/MODA reports, portfolio roll-ups, and the unified execution plan. `examples/fixtures/monolith/` is a PHP test fixture for local runs.
+The repos the harness runs the TDs over live under `harness/fixtures/`:
+`portfolio/` holds the 10 synthetic legacy repos (also the source the demo scripts
+discover), and `monolith/` is a PHP fixture for local runs. For a complete set of
+generated reports (per-repo ARA/MOD, portfolio roll-ups), see the committed harness
+baseline under `harness/golden/` — the change-impact harness diffs each MR against it.
+
+### `examples/` — EBA config
+
+`examples/atx-config-exec-plan.yaml` is a sample EBA `additionalPlanContext` config.
 
 ## Quickstart
 

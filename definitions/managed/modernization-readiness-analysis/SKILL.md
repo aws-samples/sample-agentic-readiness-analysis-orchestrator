@@ -1753,7 +1753,7 @@ Every one of the 7 AWS Modernization Pathways MUST appear in the Pathway Summary
 Every finding MUST cite specific evidence from the repository:
 - **File paths** — Reference the specific files that support the finding (e.g., `terraform/main.tf`, `src/app/server.ts`, `.github/workflows/deploy.yml`).
 - **Resource names** — Reference specific IaC resource names, service names, or configuration keys.
-- **Absence is evidence** — If a search for specific artifacts finds nothing, that absence is itself a finding. State what was searched for and that it was not found (e.g., "No Dockerfile or container definitions found in the repository").
+- **Absence is evidence** — If a search for specific artifacts finds nothing, that absence is itself a finding. State what was searched for and that it was not found (e.g., "No Dockerfile or container definitions found in the repository"), and name the searched path in the finding's `evidence.file` — an absence finding with `evidence: null` is an unsupported finding.
 
 Do not make findings based on assumptions or general knowledge. Every score must be traceable to specific repository evidence or documented absence of evidence.
 
@@ -1844,7 +1844,7 @@ Every MOD finding MUST carry these 12 fields:
 | `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — static per-question priority. See table below. |
 | `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
 | `phase` | integer | `1`–`4` — derived roadmap phase, default. |
-| `evidence` | object or null | `{file, lines}` reference to the gap location in the repo, or `null` when no file-and-line reference applies. |
+| `evidence` | object or null | `{file, lines}` reference to the gap location in the repo. **When the finding is that something is ABSENT, cite where you looked** — `{"file": "<the file or path searched>", "lines": null}` — because absence is evidence (see Notable absences in Discovery). Reserve `null` for the rare finding that is genuinely repo-wide with no representative path to name. `lines` is `null` whenever no specific line range applies. |
 
 All 12 fields are REQUIRED on every emitted finding — missing any one fails the analysis and names the offending `question_id`. Findings are NEVER emitted for questions that resolve to pass (score 4), N/A, Not Evaluated (archetype-N/A), or Not Evaluated (extended-not-triggered); those questions appear only under `evaluations[]`.
 

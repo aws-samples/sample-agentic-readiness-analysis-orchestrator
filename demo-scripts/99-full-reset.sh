@@ -17,7 +17,7 @@ MODE="local"
 ORG="YOUR-GITHUB-ORG"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PORTFOLIO_DIR="$PROJECT_DIR/sample-legacy-portfolio"
+PORTFOLIO_DIR="$PROJECT_DIR/harness/fixtures/portfolio"
 LOCAL_STAGED_DIR="$PROJECT_DIR/.local-source"
 REPORTS_DIR="$PROJECT_DIR/reports"
 

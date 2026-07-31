@@ -1,0 +1,158 @@
+openapi: 3.1.0
+info:
+  title: Payments API
+  version: 1.4.0
+  description: >-
+    Machine-to-machine payments service. Every mutating operation is idempotent
+    and authenticated with OAuth2 client-credentials. This spec is the contract
+    of record and is validated in CI.
+  contact:
+    name: Payments Platform
+    url: https://runbook.internal.example/payments
+servers:
+  - url: https://api.example.com/payments/v1
+security:
+  - oauth2ClientCredentials: [payments:write]
+paths:
+  /charges:
+    post:
+      operationId: createCharge
+      summary: Create a charge (idempotent)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChargeRequest' }
+      responses:
+        '201':
+          description: Charge created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Charge' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /charges/{chargeId}:
+    get:
+      operationId: getCharge
+      summary: Retrieve a charge
+      security:
+        - oauth2ClientCredentials: [payments:read]
+      parameters:
+        - name: chargeId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^chg_[A-Za-z0-9]+$' }
+      responses:
+        '200':
+          description: The charge
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Charge' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /charges/{chargeId}/refunds:
+    post:
+      operationId: refundCharge
+      summary: Refund a charge (idempotent, fully audited)
+      parameters:
+        - name: chargeId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^chg_[A-Za-z0-9]+$' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundRequest' }
+      responses:
+        '201':
+          description: Refund created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Refund' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example.com/oauth2/token
+          scopes:
+            payments:read: Read charges and refunds
+            payments:write: Create charges and refunds
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Client-generated key; a retry with the same key is a no-op that returns the original result.
+      schema: { type: string, minLength: 16, maxLength: 128 }
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Trace id propagated to logs and X-Ray.
+      schema: { type: string, format: uuid }
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Request failed schema validation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    IdempotencyConflict:
+      description: The idempotency key was reused with a different request body
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    ChargeRequest:
+      type: object
+      required: [amount, currency, source]
+      additionalProperties: false
+      properties:
+        amount: { type: integer, minimum: 1, description: Minor units (cents) }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        source: { type: string, description: Tokenized payment source; raw PAN is never accepted }
+        description: { type: string, maxLength: 500 }
+    Charge:
+      type: object
+      required: [id, amount, currency, status, created_at]
+      properties:
+        id: { type: string, pattern: '^chg_[A-Za-z0-9]+$' }
+        amount: { type: integer }
+        currency: { type: string }
+        status: { type: string, enum: [pending, succeeded, failed] }
+        created_at: { type: string, format: date-time }
+    RefundRequest:
+      type: object
+      required: [amount, reason]
+      additionalProperties: false
+      properties:
+        amount: { type: integer, minimum: 1 }
+        reason: { type: string, enum: [requested_by_customer, duplicate, fraudulent] }
+    Refund:
+      type: object
+      required: [id, charge_id, amount, status, created_at]
+      properties:
+        id: { type: string, pattern: '^re_[A-Za-z0-9]+$' }
+        charge_id: { type: string }
+        amount: { type: integer }
+        status: { type: string, enum: [pending, succeeded, failed] }
+        created_at: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlation_id: { type: string }
