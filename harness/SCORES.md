@@ -23,8 +23,8 @@ Mean **0.86**, range 0.82–0.89.
 | Repo | Mean | Runs | sd | spread | Checks | Tier / blockers |
 |---|---|---|---|---|---|---|
 | `legacy-payroll-system` | 0.82 | 0.72 / 0.82 / 0.88 / 0.88 | 0.065 | 0.16 | PASS | Remediation Required / 2 |
-| `modern-orders-service` | 0.82 | 0.88 / 0.72 / 0.88 / 0.82 | 0.065 | 0.16 | **HIGH** | Pilot-Ready / 0 |
-| `modern-payments-api` | 0.82 | 0.72 / 0.88 / 0.82 / 0.88 | 0.065 | 0.16 | **HIGH** | Pilot-Ready / 0 |
+| `modern-orders-service` | 0.82 | 0.88 / 0.72 / 0.88 / 0.82 | 0.065 | 0.16 | PASS | Pilot-Ready / 0 |
+| `modern-payments-api` | 0.82 | 0.72 / 0.88 / 0.82 / 0.88 | 0.065 | 0.16 | PASS | Pilot-Ready / 0 |
 | `legacy-timesheet-webforms` | 0.83 | 0.78 / 0.88 / 0.78 / 0.88 | 0.050 | 0.10 | PASS | Remediation Required / 2 |
 | `legacy-loan-calculator` | 0.84 | 0.72 / 0.88 / 0.88 / 0.88 | 0.069 | 0.16 | PASS | Remediation Required / 2 |
 | `legacy-partner-soap` | 0.86 | 0.88 / 0.82 / 0.88 / 0.85 | 0.025 | 0.06 | PASS | Remediation Required / 2 |
@@ -62,24 +62,15 @@ Mean **0.86**, range 0.62–0.92.
 
 Run-to-run spread: mean 0.053, worst 0.36 — treat any delta below the worst spread as noise.
 
-## Deterministic defects — 2 across 2 reports
+## Deterministic defects — 0 across 0 reports
 
-Arithmetic contradictions inside a single report — **actionable now**, independent of sample depth.
-
-| Severity | Repo | Check | Detail |
-|---|---|---|---|
-| high | `modern-orders-service` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=10 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
-| high | `modern-payments-api` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=5 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
+None.
 
 ## What the checks mean
 
 Each check asserts a report is internally consistent. All are deterministic arithmetic — no LLM, no sampling — so a failure is a genuine defect regardless of how many runs we have.
 
-| Check | Severity | What a failure means |
-|---|---|---|
-| `missing_safety_qualifier` | high | RISK-SAFETY findings exist with no BLOCKER, which requires the "Safety Concerns" qualifier, and it is absent — the report reads safer than the rubric says it is. |
-
-The other 11 checks passed everywhere: `category_band_mismatch`, `duplicate_question_ids`, `incomplete_question_coverage`, `overall_score_band_error`, `overall_score_not_mean_of_categories`, `question_in_both_findings_and_evaluations`, `severity_counter_undercount`, `severity_exceeds_td_ceiling`, `spurious_safety_qualifier`, `tier_contradicts_counts`, `unexpected_question_count`.
+All checks passed on every report. The full set: `category_band_mismatch`, `duplicate_question_ids`, `incomplete_question_coverage`, `missing_safety_qualifier`, `overall_score_band_error`, `overall_score_not_mean_of_categories`, `question_in_both_findings_and_evaluations`, `severity_counter_undercount`, `severity_exceeds_td_ceiling`, `spurious_safety_qualifier`, `tier_contradicts_counts`, `unexpected_question_count`.
 
 ## Per-report grader notes
 

@@ -83,6 +83,33 @@ def test_qualifier_present_exactly_when_due_is_clean():
                 if "qualifier" in c["check"]]
 
 
+def test_the_qualifier_spelling_the_td_actually_emits_is_accepted():
+    """The regression this check shipped with, and the reason it survived the suite.
+
+    Every test above spells the qualifier `"Safety Concerns"` — the bare form
+    expected_ara_tier() returns, because its first element already carries the tier. But the
+    TD's output contract writes the FULL tier label into the field (SKILL.md:2061 and the
+    example at 2068), and every real report emits `"Pilot-Ready (Safety Concerns)"`. An `!=`
+    between those two spellings of the same verdict fired `missing_safety_qualifier` HIGH on
+    3 fixtures x 4 draws, all correct reports.
+
+    That is the worst failure mode this check has: it is documented as pure arithmetic that
+    is "safe to act on immediately", so a contributor has no reason to doubt it, and it never
+    blocks the merge so nothing else contradicts it. Assert the form the TD PRODUCES, not
+    only the form the helper returns.
+    """
+    for spelling in ("Pilot-Ready (Safety Concerns)", "Safety Concerns",
+                     "pilot-ready (safety concerns)"):
+        hits = [c["check"] for c in sr.check_ara(_ara(0, 4, "Pilot-Ready", spelling))]
+        assert "missing_safety_qualifier" not in hits, spelling
+    # Still absent means still flagged — the fix must not turn the check off entirely.
+    assert "missing_safety_qualifier" in [
+        c["check"] for c in sr.check_ara(_ara(0, 4, "Pilot-Ready", None))]
+    # And an unrelated string does NOT satisfy it.
+    assert "missing_safety_qualifier" in [
+        c["check"] for c in sr.check_ara(_ara(0, 4, "Pilot-Ready", "Pilot-Ready"))]
+
+
 # --- severity counters -----------------------------------------------------------------
 
 def test_counter_check_only_flags_undercounts():

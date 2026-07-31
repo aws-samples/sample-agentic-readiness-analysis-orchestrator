@@ -759,11 +759,21 @@ def check_ara(rpt: dict) -> list[dict]:
                         "detail": f"tier={got_tier!r} but blocker_count={b}, "
                                   f"risk_safety_count={rs} -> {want_tier!r}"})
         got_qual = cls.get("sub_qualifier")
-        # The qualifier must appear EXACTLY when RISK-SAFETY is present without a BLOCKER.
-        if want_qual and got_qual != want_qual:
+        # The qualifier must appear EXACTLY when RISK-SAFETY is present without a BLOCKER —
+        # but compare on PRESENCE, not on an exact string. The TD's output contract writes
+        # this field as the full tier label, `"Pilot-Ready (Safety Concerns)"` (SKILL.md:2061
+        # and the example at 2068), while expected_ara_tier() returns the bare qualifier
+        # "Safety Concerns" because its first element is already the tier. An `!=` between
+        # those two spellings of the SAME verdict fired `missing_safety_qualifier` HIGH on
+        # every correctly-qualified report: 3 fixtures x 4 draws here, all false. A
+        # false-positive HIGH is worse than no check, because it is the harness telling a
+        # contributor their correct report is broken on a check that claims to be pure
+        # arithmetic.
+        got_has = want_qual and want_qual.lower() in str(got_qual or "").lower()
+        if want_qual and not got_has:
             out.append({"check": "missing_safety_qualifier", "severity": "high",
-                        "detail": f"blocker_count=0 and risk_safety_count={rs} requires "
-                                  f"sub_qualifier={want_qual!r}, got {got_qual!r}"})
+                        "detail": f"blocker_count=0 and risk_safety_count={rs} requires the "
+                                  f"{want_qual!r} qualifier, got sub_qualifier={got_qual!r}"})
         if got_qual and not want_qual:
             out.append({"check": "spurious_safety_qualifier", "severity": "medium",
                         "detail": f"sub_qualifier={got_qual!r} set but blocker_count={b}, "
