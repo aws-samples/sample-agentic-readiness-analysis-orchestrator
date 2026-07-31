@@ -33,11 +33,22 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 │   ├── 01-live-discovery-push.sh   # Live beat: new repo appears (3 → 4)
 │   ├── 02-reset-live-discovery.sh  # Reset for rehearsal
 │   └── 99-full-reset.sh            # Nuke everything
-├── harness/
+├── harness/                         # change-impact harness — advisory, never blocks a merge
+│   ├── DESIGN.md                    # scored dimensions + the reasoning behind each step
+│   ├── usecases.yaml                # fixture matrix + coverage axes + expectations
 │   ├── fixtures/                    # test/demo repos the harness runs the TDs over
 │   │   ├── portfolio/              # 10 synthetic legacy repos (also the demo portfolio)
 │   │   └── monolith/               # PHP test fixture
-│   └── golden/                      # committed baseline reports each MR diffs against
+│   ├── golden/                      # committed baseline reports each MR diffs against
+│   ├── should-run.sh                # 0. gate: deterministic run|skip path check (no LLM)
+│   ├── run-fixtures.sh              # 1. publish the edited TD + atx custom def exec
+│   ├── skill_table.py               # parses the TDs' severity tables; 2. severity gate
+│   ├── diff-reports.py              # 3. D1–D5 delta + safety alerts -> impact.json
+│   ├── score-reports.py             # 4. groundedness vs source -> compare.json
+│   ├── judge.py                     # 5. LLM-as-judge -> verdict.json (the only LLM call)
+│   ├── validate-contract.py         # schema guardrail: structural JSON-contract check
+│   ├── post-mr-comment.sh           # 6. advisory MR comment
+│   └── tests/                       # offline test suite (no AWS, no LLM)
 ├── examples/
 │   └── atx-config-exec-plan.yaml   # Example EBA config
 └── README.md
@@ -153,13 +164,65 @@ Publishes a TD folder to the ATX registry. The TD name is derived from the folde
 
 Requires the `atx` CLI and `AWS_REGION=us-east-1` (or a supported region).
 
-### `harness/fixtures/` — test & demo repos
+### `harness/` — the change-impact harness
 
-The repos the harness runs the TDs over live under `harness/fixtures/`:
-`portfolio/` holds the 10 synthetic legacy repos (also the source the demo scripts
-discover), and `monolith/` is a PHP fixture for local runs. For a complete set of
-generated reports (per-repo ARA/MOD, portfolio roll-ups), see the committed harness
-baseline under `harness/golden/` — the change-impact harness diffs each MR against it.
+A rubric edit is a one-line diff whose blast radius is a whole portfolio of reports. Reading
+the diff tells you what the text now says; it does not tell you that `AUTH-Q5` was emitted as a
+BLOCKER on 6 of 12 reference reports, above its documented severity. The harness answers that
+question mechanically: it re-runs the **edited** TD over fixture repos, diffs the resulting
+reports against a committed baseline, and posts an advisory verdict on the MR.
+
+**Every job is `allow_failure: true` — the harness never blocks a merge.** It is a reviewer aid,
+not a gate. The only LLM call is the judge, spent once at the very end; the run/skip decision is
+a deterministic `git diff`, not a model.
+
+```
+                    MR touches definitions/managed/<td>/**
+                                    │
+  0. GATE      should-run.sh — deterministic git diff, NO LLM
+               RUN when a changed path is under a watched TD; else SKIP (no atx, no cost)
+                                    │
+                                    ▼
+  1. ANALYZE   run-fixtures.sh — publish the EDITED TD as a custom def,
+               atx custom def exec over the applicable fixtures → harness/after/
+                                    │
+                                    ▼
+  2. SEV GATE  skill_table.py --base origin/<target> → changed-severity.json
+               which questions' DOCUMENTED severity this MR moved
+                                    │
+                                    ▼
+  3. DIFF      diff-reports.py → impact.json    D1–D5 delta + safety_alerts
+                                    │
+                                    ▼
+  4. SCORE     score-reports.py → compare.json  groundedness vs the fixture SOURCE,
+               classified improved / regressed / within-noise
+                                    │
+                                    ▼
+  5. JUDGE     judge.py {delta, intent from the MR description, edited questions,
+               accuracy anchor} → verdict.json     ◀── the ONLY LLM call
+                                    │
+                                    ▼
+  6. REPORT    post-mr-comment.sh → advisory MR comment
+```
+
+**Why steps 2 and 3 are separate.** The differ excuses a lost BLOCKER when the rubric says the
+finding was over-escalated all along — the report was wrong, the table was right. But the
+grader reads the *working-tree* `SKILL.md`, so an MR that lowers a question's documented
+severity **and** downgrades the matching finding would have that downgrade auto-excused, and
+score clean. Step 2 diffs the severity table against the target branch and bars exactly those
+question ids from the exemption; the downgrade then surfaces as a real safety alert. An
+unresolvable base ref bars the whole question set rather than emitting an empty gate, so a
+broken ref fails toward alerting instead of silently disabling the check.
+
+Fixtures live under `harness/fixtures/`: `portfolio/` holds the 10 synthetic legacy repos (also
+the source the demo scripts discover), `monolith/` is a PHP fixture for local runs. The
+committed baseline each MR diffs against — a full set of per-repo ARA/MOD reports and portfolio
+roll-ups — is `harness/golden/`. See [`harness/README.md`](harness/README.md) for setup and
+[`harness/DESIGN.md`](harness/DESIGN.md) for the scored dimensions and the reasoning behind
+each step.
+
+> Automation runs on the internal GitLab instance only, where the AWS credentials live. GitHub
+> stays open for issues and PRs but carries no CI.
 
 ### `examples/` — EBA config
 

@@ -250,23 +250,59 @@ The **coverage heatmap** is generated from the `axes` across all fixtures: it re
 3. **Skip** — when no changed path is under a watched TD (and no fixture changed). Job stops cleanly, no `atx`, no cost.
 
 ```
-should-run.sh   ── deterministic git-diff; run UNLESS all-denylisted ──▶  run │ skip   (no LLM)
-      │ run
-      ▼
-run-fixtures ─▶ diff-reports.py ─▶ judge.py                            ◀── the ONLY LLM, at the end
+                    MR touches definitions/managed/<td>/**
+                                    │
+            ┌───────────────────────▼───────────────────────┐
+  0. GATE   │ should-run.sh — git diff --name-only vs base   │   deterministic, NO LLM
+            │ RUN when any changed path is under a watched   │
+            │ TD (HARNESS_TD_PATHS) or a fixture; else SKIP  │
+            └───────────────┬───────────────────┬───────────┘
+                        run │                   │ skip → exit 0, no atx, no cost
+                            ▼
+  1. ANALYZE   run-fixtures.sh --changed-only --validate
+               publishes the EDITED TD as a custom def, atx custom def exec
+               over the applicable fixtures → harness/after/
+                 └─ --validate: validate-contract.py per report as it lands
+                            │
+                            ▼
+  2. SEV GATE  skill_table.py --base origin/<target> → changed-severity.json
+               which questions' DOCUMENTED severity this MR moved.
+               Unresolvable base ⇒ bar the WHOLE question set (fail toward alerting)
+                            │
+                            ▼
+  3. DIFF      diff-reports.py --baseline harness/golden --after harness/after
+               --changed-severity ⇒ impact.json  (D1–D5 delta + safety_alerts)
+               A qid whose severity row this MR edited canNOT be excused as an
+               "over-escalation correction" — that premise died with the edit
+                            │
+                            ▼
+  4. SCORE     score-reports.py --compare-out compare.json      ‹|| true›
+               groundedness vs fixture SOURCE, classified against the committed
+               baseline: improved / regressed / within-noise. The judge's ONLY
+               past data; absent ⇒ judge degrades to delta-only
+                            │
+                            ▼
+  5. JUDGE     judge.py --impact --intent "$CI_MERGE_REQUEST_DESCRIPTION"
+               --edited-questions --compare  → verdict.json
+               ◀── the ONLY LLM call, spent once at the very end
+                            │
+                            ▼
+  6. REPORT    post-mr-comment.sh → advisory MR comment
+
+  Every job is allow_failure: true — the harness NEVER blocks a merge.
 ```
 
 > **TD-as-contribution:** the TD definition itself (`SKILL.md` + `references/`) is edited under `definitions/managed/<td>/`, so "add `AUTH-Q9`" or "re-score `INF-Q11`" is a normal reviewable MR the harness runs against by publishing the edited folder as a custom def and exec'ing it (§7). The published managed TD on Continuous Modernization remains authoritative; an approved change is published there separately (the repo is the *proposal + test* surface, Continuous Modernization is the *deploy* surface). All of this runs on **GitLab only** for now; GitHub stays open for issues/PRs but triggers nothing.
 
-```
-0. Gate                              should-run.sh → run | skip (watched-TD path check)
-1. Resolve scope                     HARNESS_CHANGED_TD from the gate → a TD edit is portfolio-wide → all fixtures
-2. Select applicable fixtures        from usecases.yaml (--changed-only subset, or --all on manual full run)
-3. Produce after-reports             publish edited TD as custom def + atx custom def exec on selected fixtures  [see §7]
-4. Diff vs baseline                   compute per-dimension delta (D1–D5) → impact.json
-5. Judge                              LLM-as-judge consumes {delta, expectations, diff, INTENT from MR}  [§6]
-6. Report                            post advisory verdict as MR comment (never blocks — §6)
-```
+Two details the diagram above compresses:
+
+- **Scope resolution (inside step 1).** `HARNESS_CHANGED_TD` comes from the gate. A TD edit is
+  portfolio-wide by nature, so it selects every applicable fixture from `usecases.yaml` —
+  `--changed-only` narrows to the subset that exercises the edit, `--all` (manual
+  `harness:full`) takes the lot for a re-baseline.
+- **`harness:full` is deliberately NOT severity-gated.** It re-baselines rather than reviewing an
+  MR, so there is no "same MR moved the table row" premise to defend and no target branch to
+  diff a severity table against.
 
 **Delta computation (deterministic, pre-judge):** a small differ compares before/after reports and emits a structured `impact.json`:
 ```jsonc
