@@ -37,19 +37,19 @@ stages:
 # phases and reserves structure for a future per-stage split.
 
 variables:
-  # AWS Credential Vendor target role. INLINE while we finish validating the harness
-  # — do not move this to a CI variable until the pipeline is proven green, so that a
-  # variable-wiring mistake can't be confused with a harness bug.
+  # AWS_CREDS_TARGET_ROLE is deliberately NOT set here. It lives as a project CI/CD
+  # variable (Settings -> CI/CD -> Variables) because it names an AWS account id +
+  # role, and this repo is mirrored to the public GitHub aws-samples org. An ARN is
+  # not a credential, but it should not be published there.
   #
-  # MUST stay PLAIN if/when it does move: a "Protected" variable is only injected on
-  # protected branches (silently breaking the vend on feature branches / MRs — the
-  # exact failure we hit), and a "Masked"/"Hidden" one can't be read by the runner's
-  # pre-clone vendor script at all. harness:auth-check diagnoses both.
+  # It MUST stay PLAIN (Expanded, not Masked/Hidden, not Protected):
+  #   - "Protected" is only injected on protected branches, silently breaking the
+  #     vend on feature branches and MRs — the exact failure we hit before.
+  #   - "Masked"/"Hidden" cannot be read by the runner's pre-clone vendor script at
+  #     all, so no credentials are vended.
+  # Run the manual harness:auth-check job to diagnose either case: it prints the
+  # variable's LENGTH (never its value) and whether creds were injected.
   #
-  # BEFORE PUBLISHING TO THE PUBLIC GitHub MIRROR: move this to a project CI/CD
-  # variable (Settings -> CI/CD -> Variables). An ARN is not a credential, but this
-  # one names an AWS account id + role and should not be published to aws-samples.
-  AWS_CREDS_TARGET_ROLE: "arn:aws:iam::936068047509:role/agentic-readiness-assessment-moda-gitlab-role"
   # REQUIRED for the vend: the runner's pre-clone aws-creds-vendor.sh only vends
   # when BOTH AWS_CREDS_TARGET_ROLE *and* AWS_DEFAULT_REGION are set. It gates on
   # AWS_DEFAULT_REGION specifically (NOT AWS_REGION) — leaving it unset makes the
@@ -176,7 +176,11 @@ harness:auth-check:
       # Print only the LENGTH of the role var — masked/hidden vars print as [MASKED],
       # so length confirms it resolved to a real (non-empty) ARN inside the job.
       echo "AWS_CREDS_TARGET_ROLE length = ${#AWS_CREDS_TARGET_ROLE} chars"
-      echo "AWS_REGION                   = ${AWS_REGION:-us-east-1}"
+      # AWS_DEFAULT_REGION is the one the vendor GATES on; AWS_REGION is only what the
+      # aws CLI reads. Print both — if AWS_DEFAULT_REGION is empty the vend was skipped
+      # before this script ever ran, regardless of what AWS_REGION says.
+      echo "AWS_DEFAULT_REGION (gates vend) = ${AWS_DEFAULT_REGION:-<UNSET — vend skipped>}"
+      echo "AWS_REGION         (cli only)   = ${AWS_REGION:-<unset>}"
       # Did the runner's Credential Vendor actually inject creds *before* this script?
       # If these are empty, the VEND never happened (usually: the var is masked/hidden,
       # or this isn't the shared fleet). If they're set but get-caller-identity fails,
