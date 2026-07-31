@@ -572,6 +572,43 @@ def test_a_real_lost_blocker_still_holds_alongside_a_correction():
     assert downgraded == {"API-Q1"}, f"only the real blocker should be a relaxation: {alerts}"
 
 
+def test_a_severity_edit_in_the_same_mr_defeats_the_correction_exemption():
+    """The laundering path the gate closes. AUTH-Q5 -> RISK-SAFETY reads as a correction ONLY
+    because the TD documents AUTH-Q5 as RISK-SAFETY. If the SAME MR edited AUTH-Q5's severity
+    row, the grader is now parsing the EDITED rubric, so 'the report over-stated against a
+    stable table' no longer holds — the downgrade must alert as a REAL relaxation instead of
+    being waved through as `over_escalation_corrected`.
+    """
+    full = dr.load_tree(GOLDEN)
+    after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
+
+    # Without the gate (no MR touched AUTH-Q5's row): a correction, nothing tier-material.
+    ungated = dr.build_impact(copy.deepcopy(full), after)
+    assert not any(a.get("tier_material") for a in ungated["safety_alerts"])
+    assert "over_escalation_corrected" in {a["kind"] for a in ungated["safety_alerts"]}
+
+    # With the gate (this MR edited AUTH-Q5's documented severity): the exemption is void.
+    gated = dr.build_impact(copy.deepcopy(full), after,
+                            changed_severity_qids={"ara": {"AUTH-Q5"}})
+    kinds = {a["kind"] for a in gated["safety_alerts"]}
+    assert "over_escalation_corrected" not in kinds, \
+        f"an edited severity row must NOT be exempted as a correction: {kinds}"
+    assert any(a.get("tier_material") for a in gated["safety_alerts"]), \
+        f"the downgrade must now hold as a real relaxation: {gated['safety_alerts']}"
+
+
+def test_a_severity_edit_to_an_unrelated_question_leaves_the_correction_intact():
+    """The gate must be surgical: editing some OTHER question's row does not turn AUTH-Q5's
+    genuine over-escalation correction into a false relaxation alert."""
+    full = dr.load_tree(GOLDEN)
+    after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
+    gated = dr.build_impact(copy.deepcopy(full), after,
+                            changed_severity_qids={"ara": {"API-Q2"}})
+    assert not any(a.get("tier_material") for a in gated["safety_alerts"]), \
+        "an unrelated severity edit must not disturb AUTH-Q5's correction"
+    assert "over_escalation_corrected" in {a["kind"] for a in gated["safety_alerts"]}
+
+
 def test_mod_is_exempt_from_safety_alerts():
     """MOD has no BLOCKER class and no agent-readiness tier — nothing mechanical to assert.
 

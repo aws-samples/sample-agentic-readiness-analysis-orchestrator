@@ -315,6 +315,19 @@ fixed severity, the "before" was strictly *more* severe than documented, and the
 lands *exactly* on it. So it never excuses the 9 scope-dependent (⚡) questions, and never
 excuses an **under**-statement — the dangerous direction still alerts.
 
+**The one launderable path, and the gate that closes it.** The grader parses the *working-tree*
+`SKILL.md`, so on an MR "what does the TD document for AUTH-Q5?" is answered from the *edited*
+rubric. That means an MR could lower AUTH-Q5's documented severity **and** downgrade the
+finding in the same change, and the downgrade would auto-read as an "over-escalation correction"
+against a table the MR itself just moved. So `harness/skill_table.py --base <target>` diffs the
+severity/conditional column between the target branch and the working tree, and any question
+whose row moved is **barred** from the exemption (`--changed-severity` on the differ) — it falls
+through to a real `blocker_downgraded` / `tier_relaxed` alert. Prose, retitles, and added/removed
+questions that don't move an *existing* row don't trip it. The gate defaults off, so the offline
+unit tests (which have no MR diff) are unaffected; it only tightens when CI supplies the diff.
+If the target ref can't be resolved, the whole question set is treated as changed (fail toward
+alerting), consistent with the harness's "unresolvable base = unknown, not empty" rule.
+
 **One report tree is a draw, not a measurement.** The analysis agent moves 10–20 findings per
 fixture per re-run, so a single golden tree cannot separate "the TD improved" from "the agent
 rolled differently". That is why the safety alerts above are computed from the rubric's own

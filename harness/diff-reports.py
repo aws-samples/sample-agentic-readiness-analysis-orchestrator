@@ -644,12 +644,21 @@ def _tier_relaxed(before: Optional[str], after: Optional[str]) -> Optional[bool]
     return a > b
 
 
-def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict) -> list[dict]:
+def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict,
+                  changed_qids: Optional[set[str]] = None) -> list[dict]:
     """Deterministic safety-material alerts for one (repo, analysis) pair.
 
     Returns a list of dicts, each naming the specific movement and — where the rubric makes
     it mechanical — the causal link between them, so a reader does not have to rediscover
     that "blocker lost" and "tier relaxed" are the same event.
+
+    `changed_qids` is the set of question ids whose documented severity/conditional row was
+    edited in THIS MR (from `skill_table.diff_severity_tables`, resolved in the shell layer
+    that owns the merge base — this file stays git-free and offline). A qid in that set is
+    barred from the over-escalation-correction exemption below: the exemption assumes the
+    report over-stated against a STABLE table, and an MR that moved the table in the same
+    change cannot claim its report merely "corrected" toward it. Defaults to None so the
+    committed-baseline tests, which have no MR diff, see the prior behaviour unchanged.
     """
     alerts: list[dict] = []
     if analysis != "ara":
@@ -709,7 +718,8 @@ def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict) -> list[
         # MORE accurate. Such a move must not count toward `lost_safety` (it never fed a
         # correct tier), must not be tier-material, and is emitted as its own `kind` so the
         # judge reads it as an improvement rather than a hazard to explain away.
-        if is_over_escalation_correction(analysis, qid, nat.get("before"), nat.get("after")):
+        if is_over_escalation_correction(analysis, qid, nat.get("before"), nat.get("after"),
+                                         changed_qids):
             corrected[before_cls].append(qid)
             alerts.append({
                 "kind": "over_escalation_corrected",
@@ -912,11 +922,17 @@ def question_coverage(repo: str, analysis: str,
     }
 
 
-def build_impact(before_tree: dict, after_tree: dict) -> dict:
+def build_impact(before_tree: dict, after_tree: dict,
+                 changed_severity_qids: Optional[dict[str, set[str]]] = None) -> dict:
     per_repo: dict[str, dict] = {}
     portfolio: dict[str, dict] = {}
     alerts: list[dict] = []
     coverage_gaps: list[dict] = []
+    # {analysis: {qids whose documented severity moved in this MR}}. Threaded to
+    # safety_alerts so a report matching a freshly-edited rubric row cannot be waved through
+    # as an "over-escalation correction". None/absent = the differ was pointed at two static
+    # report trees with no rubric diff (all unit tests, and `--after <dir>` with no base ref).
+    changed_severity_qids = changed_severity_qids or {}
 
     # Compare only reports present on BOTH sides.
     #
@@ -957,7 +973,8 @@ def build_impact(before_tree: dict, after_tree: dict) -> dict:
             # Deterministic guards. Collected regardless of whether anything else "moved",
             # and regardless of the MR's edit scope — a relaxed tier is material even when
             # the questions that caused it were never touched.
-            alerts.extend(safety_alerts(key, analysis, fd, td))
+            alerts.extend(safety_alerts(key, analysis, fd, td,
+                                        changed_severity_qids.get(analysis)))
             gap = question_coverage(key, analysis, before, after)
             if gap:
                 coverage_gaps.append(gap)
@@ -1032,6 +1049,13 @@ def main(argv: Optional[list[str]] = None) -> int:
                     help="Directory of 'after' reports (freshly produced)")
     ap.add_argument("-o", "--out", type=Path, default=None,
                     help="Write impact.json here (default: stdout)")
+    ap.add_argument("--changed-severity", type=Path, default=None,
+                    help="JSON file {analysis: [qids]} of questions whose documented "
+                         "severity/conditional row was edited in this MR (from "
+                         "`skill_table.py diff-severity`). Those qids are barred from the "
+                         "over-escalation-correction exemption so a report matching a "
+                         "freshly-edited rubric row still alerts as a real relaxation. "
+                         "Absent/empty => no gate (the committed baseline has no MR diff).")
     args = ap.parse_args(argv)
 
     before_tree = load_tree(args.baseline)
@@ -1042,7 +1066,27 @@ def main(argv: Optional[list[str]] = None) -> int:
               file=sys.stderr)
         return 2
 
-    impact = build_impact(before_tree, after_tree)
+    # {analysis: set(qids)}; None when no diff was supplied. A malformed/empty file is
+    # treated as "no gate" rather than fatal — this is an advisory job (`allow_failure`),
+    # and failing the differ because a severity-diff file was unreadable would throw away
+    # the whole delta over a belt-and-braces guard.
+    changed_severity: Optional[dict[str, set[str]]] = None
+    if args.changed_severity and args.changed_severity.is_file():
+        try:
+            raw = json.loads(args.changed_severity.read_text(encoding="utf-8") or "{}")
+            changed_severity = {
+                str(k): {str(q).strip().upper() for q in (v or [])}
+                for k, v in (raw or {}).items()
+            }
+            _named = sorted(q for s in changed_severity.values() for q in s)
+            if _named:
+                print(f"diff-reports: severity-table edited for {_named} — these are barred "
+                      "from the over-escalation-correction exemption", file=sys.stderr)
+        except (ValueError, AttributeError) as exc:
+            print(f"diff-reports: WARN could not parse {args.changed_severity} "
+                  f"({exc}); proceeding with no severity gate", file=sys.stderr)
+
+    impact = build_impact(before_tree, after_tree, changed_severity)
     text = json.dumps(impact, indent=2)
     if args.out:
         args.out.write_text(text + "\n", encoding="utf-8")
