@@ -1944,7 +1944,7 @@ Every ARA finding MUST carry these 12 fields:
 | `priority` | enum | `"P0"` / `"P1"` / `"P2"` / `"P3"` — per-question priority. See table below. |
 | `effort` | enum | `"High"` / `"Medium"` / `"Low"` — remediation effort estimate. |
 | `phase` | integer | `1`–`4` — derived roadmap phase. |
-| `evidence` | object or null | `{file: string, lines: string}` reference to the gap location (e.g., `{"file": "src/auth.ts", "lines": "42-58"}`), or `null` when no specific file location applies. `lines` is a string range like `"12-15"` or single line like `"42"`. |
+| `evidence` | object or null | `{file: string, lines: string}` reference to the gap location (e.g., `{"file": "src/auth.ts", "lines": "42-58"}`). `lines` is a string range like `"12-15"`, a single line like `"42"`, or `null` when no specific line range applies. **When the finding is that something is ABSENT, cite where you looked** — `{"file": "package.json", "lines": null}` for a missing dependency, `{"file": "README.md", "lines": null}` when the repo documents the gap — because absence is evidence (see Notable absences in Discovery). Reserve `null` for the rare finding that is genuinely repo-wide with no representative path to name. |
 
 All 12 fields are REQUIRED on every emitted finding — missing any one fails the analysis and names the offending `question_id`. Findings are never emitted for questions that resolve to pass, N/A, Not Evaluated (extended), or any other non-finding outcome; those questions appear only under `evaluations[]`.
 
