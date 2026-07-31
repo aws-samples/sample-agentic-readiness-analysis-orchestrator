@@ -263,6 +263,70 @@ def test_comment_shows_the_measured_accuracy_against_its_baseline():
     assert r.stderr.index("improves the analysis") < r.stderr.index("Intent match")
 
 
+def test_unbaselined_run_is_never_rendered_as_an_inert_edit():
+    """A run that compared 0 reports must NOT read as "the edit did nothing".
+
+    The audit case: an MR selects fixtures with no golden. Every regenerated report lands
+    in coverage.unbaselined, the differ reports compared=0 / no_op=true, and without this
+    block the comment shows a scoped-run line and an empty delta -- which a reviewer reads
+    as "the change is inert" after ~110 agent-minutes per unit were actually spent. The
+    comment has to say NOTHING WAS MEASURED.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "v.json"
+        p.write_text(json.dumps({
+            "score": None, "baseline_score": None, "scored": False,
+            "verdict": "needs-work", "analysis_effect": "neutral",
+            "intent_match": "unknown", "quality_regression": False,
+            "rationale": "Nothing was measured.",
+            "_impact_summary": {
+                "dimensions_moved": [], "changed_tds": [], "highlights": [],
+                "coverage": {"compared": 0, "baseline_total": 28, "partial": True,
+                             "not_analyzed_count": 28,
+                             "unbaselined": ["mod/repo/modern-orders-service",
+                                             "mod/repo/modern-payments-api"]},
+            },
+        }))
+        r = subprocess.run(
+            ["bash", str(SCRIPT), str(p)],
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": tmp,
+                 "CI_PROJECT_ID": "1", "CI_MERGE_REQUEST_IID": "14",
+                 "CI_API_V4_URL": FAKE_API, "HARNESS_MR_TOKEN": "pat"},
+            capture_output=True, text=True, timeout=120)
+    assert "NOT MEASURED" in r.stderr, "an unbaselined run must be labelled not-measured"
+    assert "modern-orders-service" in r.stderr, \
+        "the comment must NAME the unbaselined fixtures so a maintainer can fix the gap"
+    assert "vacuous" in r.stderr, \
+        "the comment must say the empty delta is not evidence the edit is inert"
+
+
+def test_partially_unbaselined_run_still_discloses_the_dropped_reports():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "v.json"
+        p.write_text(json.dumps({
+            "score": 0.84, "baseline_score": 0.83, "scored": True,
+            "verdict": "LGTM", "analysis_effect": "neutral",
+            "intent_match": "aligned", "quality_regression": False,
+            "rationale": "One fixture measured.",
+            "_impact_summary": {
+                "dimensions_moved": ["D1"], "changed_tds": ["mod"], "highlights": [],
+                "coverage": {"compared": 1, "baseline_total": 28, "partial": True,
+                             "not_analyzed_count": 27,
+                             "unbaselined": ["mod/repo/brand-new-fixture"]},
+            },
+        }))
+        r = subprocess.run(
+            ["bash", str(SCRIPT), str(p)],
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": tmp,
+                 "CI_PROJECT_ID": "1", "CI_MERGE_REQUEST_IID": "14",
+                 "CI_API_V4_URL": FAKE_API, "HARNESS_MR_TOKEN": "pat"},
+            capture_output=True, text=True, timeout=120)
+    assert "brand-new-fixture" in r.stderr
+    assert "unbaselined" in r.stderr.lower()
+    # It measured something, so it must NOT claim nothing was measured.
+    assert "NOT MEASURED" not in r.stderr
+
+
 def test_comment_says_validation_was_not_possible_when_unscored():
     """A missing score is an ERROR TO FIX, never a silent pass.
 
@@ -355,6 +419,47 @@ def _run_all():
     print(f"\n{passed} passed, {failed} failed")
     return 1 if failed else 0
 
+
+
+# --- the wiring-test job must actually exercise the path it claims to prove ------------
+
+def _canned_verdict_from_ci() -> dict:
+    """Extract the canned verdict.json heredoc out of .gitlab-ci.yml."""
+    import re
+    ci = (REPO / ".gitlab-ci.yml").read_text()
+    m = re.search(r"cat > verdict\.json <<'JSON'\n(.*?)\n\s*JSON\n", ci, re.S)
+    assert m, "could not find the canned verdict heredoc in .gitlab-ci.yml"
+    body = "\n".join(l[6:] if l.startswith(" " * 6) else l.lstrip()
+                      for l in m.group(1).splitlines())
+    return json.loads(body)
+
+
+def test_canned_comment_check_verdict_renders_a_real_accuracy_line():
+    """harness:comment-check exists to prove the comment path works before a full run.
+
+    It used to carry `"score": 85` (the retired 0-100 scale) with no `scored` /
+    `baseline_score`, so the renderer took its "not measured" branch: the job passed while
+    the scored branch it exists to validate was never executed. Pin the payload shape.
+    """
+    v = _canned_verdict_from_ci()
+    assert v.get("scored") is True, "canned verdict must exercise the SCORED branch"
+    assert isinstance(v.get("score"), float) and 0.0 <= v["score"] <= 1.0, \
+        f"score must be on the live 0.0-1.0 scale, got {v.get('score')!r}"
+    assert isinstance(v.get("baseline_score"), float), \
+        "without baseline_score the renderer cannot show the delta"
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "v.json"
+        p.write_text(json.dumps(v))
+        r = subprocess.run(
+            ["bash", str(SCRIPT), str(p)],
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": tmp,
+                 "CI_PROJECT_ID": "1", "CI_MERGE_REQUEST_IID": "14",
+                 "CI_API_V4_URL": FAKE_API, "HARNESS_MR_TOKEN": "pat"},
+            capture_output=True, text=True, timeout=120)
+    assert "not measured" not in r.stderr, (
+        "the canned payload still renders the unscored branch, so comment-check would "
+        "green-light a regression in the accuracy line")
+    assert "vs baseline" in r.stderr, "the accuracy comparison line did not render"
 
 if __name__ == "__main__":
     raise SystemExit(_run_all())

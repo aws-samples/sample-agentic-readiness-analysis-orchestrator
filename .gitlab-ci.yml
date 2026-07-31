@@ -253,10 +253,19 @@ harness:comment-check:
       echo "CI_API_V4_URL:        ${CI_API_V4_URL:-(unset)}"
     # Canned verdict — shaped like a real one so the RENDERER is exercised too (scoped-run
     # disclosure, delta highlights, concerns), not just the HTTP call.
+    #
+    # It MUST carry `scored`, `score` AND `baseline_score` on the real 0.0-1.0 scale:
+    # post-mr-comment.sh only renders the accuracy cell when all three are present and
+    # numeric, so a payload missing them (or carrying a retired 0-100 `score: 85`) makes
+    # this job green-light a comment reading "Accuracy: not measured" — i.e. it would pass
+    # while the scored branch it exists to prove was never executed.
     - |
       cat > verdict.json <<'JSON'
       {
-        "score": 85,
+        "score": 0.842,
+        "baseline_score": 0.815,
+        "scored": true,
+        "analysis_effect": "improves",
         "verdict": "LGTM",
         "intent_match": "aligned",
         "quality_regression": false,
@@ -273,7 +282,7 @@ harness:comment-check:
             "[legacy-helpdesk-tickets] D1 reseveritied: API-Q2 RISK-QUALITY -> RISK-SAFETY",
             "[legacy-loan-calculator] D1 reseveritied: API-Q2 RISK-QUALITY -> RISK-SAFETY"
           ],
-          "coverage": {"compared": 2, "baseline_total": 24, "partial": true, "not_analyzed_count": 22}
+          "coverage": {"compared": 2, "baseline_total": 28, "partial": true, "not_analyzed_count": 26, "unbaselined": []}
         }
       }
       JSON
@@ -417,9 +426,10 @@ harness:impact:
 # Entry 2 — harness:full   (manual "Run pipeline" button; web-triggered only)
 # For a full re-baseline (e.g. after publishing an approved change), or a forced re-run.
 #
-# THIS is the exhaustive sweep an MR deliberately does NOT do: 11 fixtures x 2
-# analyses = 22 units, ~110-130 agent-min each. A scoped 2-unit MR run measured 19 min
-# wall-clock end to end, so 22 units at RUN_JOBS=6 is a few hours — hence the raised
+# THIS is the exhaustive sweep an MR deliberately does NOT do: every fixture in
+# harness/usecases.yaml x 2 analyses (14 x 2 = 28 units today), ~110-130 agent-min each. A
+# scoped 2-unit MR run measured 19 min wall-clock end to end, so a full sweep at RUN_JOBS=6
+# is a few hours — hence the raised
 # timeout. RUN_JOBS is higher than the MR's HARNESS_JOBS because wall-clock is the whole
 # point here. Narrow with CHANGED_TD (ara|mod) to halve the work.
 # -----------------------------------------------------------------------------

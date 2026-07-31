@@ -117,9 +117,28 @@ lines.append(v.get("rationale", "").strip() or "_(no rationale)_")
 summ = v.get("_impact_summary") or {}
 
 # Scope of the run. An MR analyzes only the fixtures that exercise the edited questions,
-# so state that plainly — a reviewer must not read "no impact" over 2 of 26 reports as
+# so state that plainly — a reviewer must not read "no impact" over 2 of N reports as
 # "no impact portfolio-wide". Silence here would be the misleading option.
 cov = summ.get("coverage") or {}
+# Reports regenerated with no golden to diff against. Rendered FIRST and unconditionally,
+# because when nothing was compared the "empty delta" below is vacuous: without this line a
+# reviewer reads `no_op` as "the edit is inert" when the truth is the harness had no
+# baseline. That misread is the one this block exists to prevent.
+unbaselined = cov.get("unbaselined") or []
+if unbaselined:
+    lines.append("")
+    if not cov.get("compared"):
+        lines.append(f"> ⚠️ **NOT MEASURED — no baseline.** {len(unbaselined)} report(s) were "
+                     f"regenerated but have no golden to diff against, and **0 were compared**. "
+                     f"The empty delta below is *vacuous* — it is **not** evidence the edit is "
+                     f"inert. Generate goldens for these fixtures and re-run: "
+                     f"`{', '.join(unbaselined[:6])}`"
+                     f"{' …' if len(unbaselined) > 6 else ''}.")
+    else:
+        lines.append(f"> ⚠️ **{len(unbaselined)} unbaselined report(s)** were regenerated with no "
+                     f"golden to compare against, so they contributed nothing to this verdict: "
+                     f"`{', '.join(unbaselined[:6])}`"
+                     f"{' …' if len(unbaselined) > 6 else ''}.")
 if cov.get("partial"):
     lines.append("")
     lines.append(f"> 🔍 **Scoped run:** {cov.get('compared')} of {cov.get('baseline_total')} "

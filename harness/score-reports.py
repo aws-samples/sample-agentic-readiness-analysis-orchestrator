@@ -512,14 +512,17 @@ def ara_context() -> str:
     qs = parse_questions("ara")
     # Fail LOUDLY. A parse that silently yields 41 hands the model a table with two
     # questions missing and it fills the hole by guessing — which is the original bug.
-    # score-reports.py is not in CI, so this assertion is the only thing standing between a
-    # TD heading-format change and a quietly wrong prompt.
+    # This assertion is what stands between a TD heading-format change and a quietly wrong
+    # prompt; test_skill_table.py asserts the same constant, so CI catches it too.
     want = EXPECTED_QUESTIONS["ara"]
     assert len(qs) == want, (
-        f"ARA severity table parse yielded {len(qs)} questions, expected {want}. The "
-        f"'#### <QID>: <title> — <SEVERITY>' heading format in {_rel(SKILLS['ara'])} has "
-        f"probably changed. Fix _Q_HEADING before scoring — do NOT score with a partial "
-        f"table.")
+        f"ARA severity table parse yielded {len(qs)} questions, expected {want}.\n"
+        f"TWO possible causes — check which:\n"
+        f"  1. You ADDED or REMOVED a question (intentional). Then this is not a bug: update "
+        f"EXPECTED_QUESTIONS['ara'] to {len(qs)} in harness/skill_table.py, which is the "
+        f"deliberate speed bump that makes a rubric-size change explicit rather than silent.\n"
+        f"  2. The '#### <QID>: <title> — <SEVERITY>' heading format in {_rel(SKILLS['ara'])} "
+        f"changed (accidental). Then fix _Q_HEADING — do NOT score with a partial table.")
     return f"""\
 ## Authoritative ARA severity table (parsed from {_rel(SKILLS['ara'])} — the spec)
 
@@ -568,9 +571,11 @@ def mod_context() -> str:
     qs = parse_questions("mod")
     want = EXPECTED_QUESTIONS["mod"]
     assert len(qs) == want, (
-        f"MOD question parse yielded {len(qs)} questions, expected {want}. Note INF-Q1 "
-        f"appears TWICE in {_rel(SKILLS['mod'])} and must be deduped by qid; a naive parse "
-        f"returns 38.")
+        f"MOD question parse yielded {len(qs)} questions, expected {want}.\n"
+        f"If you ADDED or REMOVED a question, this is not a bug: update "
+        f"EXPECTED_QUESTIONS['mod'] to {len(qs)} in harness/skill_table.py.\n"
+        f"Otherwise the parse drifted. Note INF-Q1 appears TWICE in {_rel(SKILLS['mod'])} and "
+        f"must be deduped by qid; a naive parse returns 38.")
     # MOD headings carry no severity — questions score 1-4 — so list them by category to
     # give the grader the shape of the rubric without inventing severities it does not have.
     cats: dict[str, list[str]] = {}

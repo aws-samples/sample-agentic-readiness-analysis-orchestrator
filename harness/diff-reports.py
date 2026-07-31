@@ -1002,7 +1002,7 @@ def build_impact(before_tree: dict, after_tree: dict) -> dict:
         "coverage_gaps": coverage_gaps,
         # Scope of THIS comparison. `no_op` below means "nothing moved in what we
         # compared" — these fields say how much that was, so a clean verdict on a
-        # 2-of-26 run can't be mistaken for a clean verdict on a full sweep.
+        # scoped run can't be mistaken for a clean verdict on a full sweep.
         "coverage": {
             "compared": len(compared_keys),
             "baseline_total": len(before_tree),

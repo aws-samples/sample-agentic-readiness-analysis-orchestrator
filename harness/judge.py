@@ -114,13 +114,30 @@ def parse_intent(raw: str) -> dict:
             if rest.strip():
                 buf[current].append(rest.strip())
             continue
-        # "edited in service" checkbox line
-        if "rubric edited" in low or "edited in the aws transform service" in low:
-            intent["edited_in_service"] = "[x]" in stripped.lower() or "[X]" in stripped
+        # "edited in service" — the template asks this as a HEADING with the two checkboxes
+        # on the lines BELOW it, so a heading match carries no "[x]" and must not be read as
+        # an answer. Only a line that actually holds a checkbox decides the value; the
+        # heading merely arms the next few lines. (An inline `... ? [x] yes` still works.)
+        _is_q = ("rubric edited" in low or "edited in the aws transform service" in low
+                 or "was the rubric edited" in low)
+        _box = "[x]" in stripped.lower()
+        if _is_q:
+            current = None            # stop appending this section into `what`/`why`
+            if _box:                  # inline form: the answer is on the heading line
+                intent["edited_in_service"] = True
+            elif intent["edited_in_service"] is None:
+                intent["_awaiting_service_answer"] = True
+            continue
+        if intent.get("_awaiting_service_answer") and stripped.startswith(("-", "*", "[")):
+            if _box:
+                # Read the option text, not just the box: "[x] no" means False.
+                intent["edited_in_service"] = not low.lstrip("-*[]x ").strip().startswith("no")
+                intent.pop("_awaiting_service_answer", None)
             continue
         if current:
             buf[current].append(line)
 
+    intent.pop("_awaiting_service_answer", None)   # internal parse state, never emitted
     for field in ("what", "why", "expected_impact"):
         intent[field] = "\n".join(buf[field]).strip()
     # If nothing matched the template, treat the whole thing as `what`.
@@ -150,6 +167,17 @@ def summarize_impact(impact: dict) -> dict:
             "baseline_total": cov.get("baseline_total"),
             "partial": bool(cov.get("partial")),
             "not_analyzed_count": len(cov.get("not_analyzed") or []),
+            # Reports that were REGENERATED but had no golden to diff against. These must
+            # reach the verdict: an MR whose whole selection is unbaselined produces
+            # `compared: 0` and `no_op: true`, and the judge -- with no way to tell the two
+            # apart -- reports "the edit probably didn't land". That is the wrong diagnosis
+            # and it blames the contributor for a harness coverage hole, after ~110
+            # agent-minutes per unit were spent generating reports that were then discarded.
+            # select-fixtures.py now prefers baselined fixtures so this should be
+            # unreachable via the normal path, but a hand-passed --only or a new fixture
+            # can still hit it, and silence is the failure mode that cost us the most.
+            "unbaselined": list(cov.get("unbaselined") or []),
+            "unbaselined_count": len(cov.get("unbaselined") or []),
         },
         # Deterministic, rubric-arithmetic findings from the differ. Carried through
         # VERBATIM and never summarised away: these are the facts the judge is forbidden
@@ -379,9 +407,28 @@ Respond with ONLY a JSON object, no prose, matching exactly this schema:
 def _coverage_note(impact_summary: dict) -> str:
     """One line telling the judge how much evidence this delta actually rests on."""
     cov = impact_summary.get("coverage") or {}
+    # An unbaselined report was regenerated but had nothing to diff against. If NOTHING was
+    # compared, the empty delta is vacuous and the model must not read `no_op: true` as
+    # "the edit is inert" — the single most misleading conclusion this harness can reach.
+    unbaselined = list(cov.get("unbaselined") or [])
+    prefix = ""
+    if unbaselined:
+        prefix = (
+            f"unbaselined: {len(unbaselined)} regenerated report(s) had NO golden baseline to "
+            f"diff against: {', '.join(unbaselined[:6])}"
+            f"{', …' if len(unbaselined) > 6 else ''}\n"
+        )
+        if not (cov.get("compared") or 0):
+            prefix += (
+                "  *** NOTHING WAS MEASURED. 0 reports were compared, so `no_op: true` above is\n"
+                "  vacuous — it does NOT mean the edit is inert, and you must NOT say the edit\n"
+                "  'did not land'. Report that the run produced no evidence, set intent_match\n"
+                "  to 'unknown', and tell the maintainer to generate a golden for these\n"
+                "  fixtures. This is a harness coverage gap, not a fact about the change. ***\n"
+            )
     if not cov.get("partial"):
-        return "coverage: FULL — every baseline report was re-analyzed.\n"
-    return (
+        return prefix + "coverage: FULL — every baseline report was re-analyzed.\n"
+    return prefix + (
         f"coverage: PARTIAL — {cov.get('compared')} of {cov.get('baseline_total')} baseline "
         f"reports were re-analyzed ({cov.get('not_analyzed_count')} not analyzed).\n"
         "  The harness deliberately runs only the fixtures that exercise the edited\n"
@@ -611,7 +658,42 @@ def judge_heuristic(intent: dict, impact_summary: dict,
         (intent.get("what") or intent.get("expected_impact") or "").strip())
 
     concerns: list[dict] = []
-    no_op_warning = no_op and intent_claims_change
+
+    # DISTINGUISH "the edit did nothing" from "we measured nothing". A run whose reports all
+    # landed in coverage.unbaselined compared 0 against 0, so `no_op` is true by vacuity —
+    # not evidence. Firing no_op_warning here would tell the contributor their edit didn't
+    # land when the truth is that the harness had no baseline to diff against.
+    _cov = impact_summary.get("coverage") or {}
+    unbaselined = list(_cov.get("unbaselined") or [])
+    unmeasured = bool(unbaselined) and not (_cov.get("compared") or 0)
+    no_op_warning = no_op and intent_claims_change and not unmeasured
+
+    if unmeasured:
+        concerns.append({
+            "dimension": "-",
+            "detail": f"NOT MEASURED: {len(unbaselined)} regenerated report(s) had no golden "
+                      f"baseline to diff against ({', '.join(unbaselined[:4])}"
+                      f"{', …' if len(unbaselined) > 4 else ''}), and 0 were compared. This is "
+                      f"a harness coverage gap, not a finding about the edit.",
+        })
+        return {
+            "verdict": "needs-work",
+            "intent_match": "unknown",
+            "quality_regression": False,
+            "rationale": (
+                "NOTHING WAS MEASURED. Every regenerated report in this run lacked a golden "
+                "baseline, so the differ compared 0 reports and the empty delta is vacuous — "
+                "it is NOT evidence that the edit is inert. Do not read this as a no-op. "
+                "Generate a golden baseline for the selected fixture(s) (harness:full, or "
+                "run-fixtures.sh --update-baseline for the fixture) and re-run; until then "
+                "this MR carries no accuracy evidence either way."),
+            "concerns": concerns,
+            "suggestions": [
+                "Generate golden reports for the unbaselined fixtures, or re-select fixtures "
+                "that already have a baseline (select-fixtures.py now prefers baselined ones).",
+            ],
+            "no_op_warning": False,
+        }
 
     # An empty delta is NEUTRAL for the analysis in BOTH branches below — nothing was
     # gained and nothing was harmed. What differs is only how much we trust the
@@ -635,7 +717,7 @@ def judge_heuristic(intent: dict, impact_summary: dict,
             rationale = ("No analysis output moved and the intent did not claim one would — "
                          "consistent with a docs/metadata-only change. Neutral for the "
                          "analysis: nothing gained, nothing harmed.")
-            # A clean result over 2 of 26 reports is weaker evidence than a full sweep. Say
+            # A clean result over 2 of N baseline reports is weaker evidence than a full sweep. Say
             # so in the rationale — there is nothing to trim numerically, because the score
             # is the scorer's measurement of the regenerated report, not a confidence dial
             # this function is entitled to turn.

@@ -38,6 +38,15 @@
 #
 set -euo pipefail
 
+# Write the dotenv next to the repo root, NOT into the caller's CWD. run-fixtures.sh sources
+# it as "${REPO_ROOT}/should-run.env", so a relative write landed wherever the caller happened
+# to stand — and a stale copy left in the repo root makes a later `--changed-only` run read
+# HARNESS_CHANGED_TD=false and silently smoke-run the WRONG fixtures. In CI the workspace is
+# fresh so it never bit there, which is exactly why it survived.
+_SR_HARNESS_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+_SR_REPO_ROOT="$(cd -- "${_SR_HARNESS_DIR}/.." && pwd)"
+SHOULD_RUN_ENV="${SHOULD_RUN_ENV:-${_SR_REPO_ROOT}/should-run.env}"
+
 # Watched TD directory prefixes (repo-relative). Override/extend via HARNESS_TD_PATHS
 # (colon-separated) to automate other TDs without touching this script. Default = the 4
 # managed TDs this harness currently owns.
@@ -162,7 +171,7 @@ fi
   echo "HARNESS_CHANGED_TD=${changed_td}"
   echo "HARNESS_CHANGED_PORTFOLIO_TD=${changed_portfolio_td}"
   echo "HARNESS_CHANGED_FIXTURES=${changed_fixtures}"
-} > should-run.env 2>/dev/null || true
+} > "${SHOULD_RUN_ENV}" 2>/dev/null || true
 
 if [[ "${run}" == "true" ]]; then
   echo "RUN — analysis-affecting change detected (base=${BASE_REF})" >&2

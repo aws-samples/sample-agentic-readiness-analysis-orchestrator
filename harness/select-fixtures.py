@@ -4,10 +4,11 @@ select-fixtures.py — pick the 1-2 fixtures that best exercise a rubric change.
 
 WHY THIS EXISTS
 A TD edit is portfolio-wide in principle, so run-fixtures.sh's changed-only path used to
-analyze every fixture: 11 fixtures x 2 analyses = 22 units. Each unit bills ~110-130
-AGENT-minutes (internal compute, parallelized inside atx; wall-clock is ~10-20 min per
-unit as measured on the runner), so 22 units is a large multiple of the cost needed to
-observe a single rubric edit. Worse, atx's progress spinner blew GitLab's 4 MB log limit
+analyze every fixture: currently 14 fixtures x 2 analyses = 28 units (the AUTHORITATIVE
+count is harness/usecases.yaml, not this comment — the set has grown from 11 and will grow
+again). Each unit bills ~110-130 AGENT-minutes (internal compute, parallelized inside atx;
+wall-clock is ~10-20 min per unit as measured on the runner), so a full sweep is a large
+multiple of the cost needed to observe a single rubric edit. Worse, atx's progress spinner blew GitLab's 4 MB log limit
 after only 4 units, so the differ/judge never even reported.
 
 So: the FULL sweep is a local / harness:full concern, and an MR runs the SMALLEST set of
@@ -55,6 +56,7 @@ except ImportError:  # pragma: no cover - yaml is in requirements.txt
 HARNESS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = HARNESS_DIR.parent
 DEFAULT_USECASES = HARNESS_DIR / "usecases.yaml"
+DEFAULT_GOLDEN = HARNESS_DIR / "golden"
 
 # A question id looks like API-Q2 / AUTH-Q11 / INF-Q3.
 QUESTION_RE = re.compile(r"\b([A-Z]{3,6})-Q(\d+)\b")
@@ -107,7 +109,20 @@ def axis_bonus(axes: dict, categories: set[str]) -> int:
     return bonus
 
 
-def select(usecases: dict, analysis: str, categories: set[str], count: int) -> list[dict]:
+def has_golden(fx: dict, analysis: str, golden_dir: Path) -> bool:
+    """Is there a baseline report this fixture's regenerated report can be diffed against?
+
+    The report key is the fixture PATH BASENAME, not its usecases.yaml `id` — run-fixtures.sh
+    names the report from `basename(fixture dir)` (run-fixtures.sh:488 -> stage_unit), so
+    `monolith-php` writes `monolith-mod-report.json`. Keying off `id` here would call the
+    monolith unbaselined when it is in fact the best-covered fixture in the set.
+    """
+    key = Path(str(fx.get("path") or fx.get("id") or "")).name
+    return (golden_dir / f"{key}-{analysis}-report.json").is_file()
+
+
+def select(usecases: dict, analysis: str, categories: set[str], count: int,
+           golden_dir: Path | None = DEFAULT_GOLDEN) -> list[dict]:
     fixtures = usecases.get("fixtures") or []
     scored = []
     for fx in fixtures:
@@ -129,9 +144,23 @@ def select(usecases: dict, analysis: str, categories: set[str], count: int) -> l
             "score": overlap,
             "bonus": bonus,
             "categories": sorted(cats),
+            # A fixture with no golden report CANNOT produce a measurement: diff-reports.py
+            # files it under coverage.unbaselined, it gets no per_repo entry, no safety alert
+            # and no score -- so an MR that selects only such fixtures burns ~110 agent-min
+            # per unit and reports `no_op: true`, telling the contributor their edit "probably
+            # didn't land". Ranking must therefore prefer a baselined fixture over an
+            # unbaselined one, ABOVE axis relevance: a slightly-less-apt probe that actually
+            # measures beats a perfect probe that measures nothing.
+            #
+            # This is not hypothetical. MOD/OPS is declared by modern-orders-service,
+            # modern-payments-api, monolith-php and legacy-helpdesk-tickets. The first two
+            # have no golden, and won on the (-overlap, -bonus, id) sort because
+            # `modern-*` sorts before `monolith`/`legacy-*` alphabetically -- so every OPS-*
+            # edit, 9 of MOD's 37 questions, measured exactly nothing.
+            "baselined": has_golden(fx, analysis, golden_dir) if golden_dir else True,
         })
-    # Highest overlap, then axis relevance, then id for stable ordering.
-    scored.sort(key=lambda r: (-r["score"], -r["bonus"], str(r["id"])))
+    # Highest overlap, then MEASURABILITY, then axis relevance, then id for stable ordering.
+    scored.sort(key=lambda r: (-r["score"], not r["baselined"], -r["bonus"], str(r["id"])))
     chosen = [r for r in scored if r["score"] > 0][:count]
     if not chosen:  # nothing overlapped at all — still return something runnable
         chosen = scored[:count]
@@ -147,6 +176,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--changed-questions", help="comma-separated ids, bypassing git diff")
     ap.add_argument("--count", type=int, default=2, help="max fixtures to select (default 2)")
     ap.add_argument("--usecases", type=Path, default=DEFAULT_USECASES)
+    ap.add_argument("--golden", type=Path, default=DEFAULT_GOLDEN,
+                    help="baseline report dir; fixtures with a golden report are preferred "
+                         "because only they can produce a measurement (default harness/golden)")
     ap.add_argument("--format", choices=["lines", "json"], default="lines")
     args = ap.parse_args(argv)
 
@@ -160,7 +192,8 @@ def main(argv: list[str] | None = None) -> int:
         ids = set()
 
     categories = {i.split("-Q")[0] for i in ids}
-    chosen = select(usecases, args.analysis, categories, max(1, args.count))
+    chosen = select(usecases, args.analysis, categories, max(1, args.count),
+                    golden_dir=args.golden)
 
     if args.format == "json":
         print(json.dumps({
@@ -179,7 +212,17 @@ def main(argv: list[str] | None = None) -> int:
                   f"-> falling back to broadest-coverage fixtures", file=sys.stderr)
         for r in chosen:
             print(f"select-fixtures:   picked {r['id']} "
-                  f"(overlap={r['score']} axis_bonus={r['bonus']} cats={r['categories']})",
+                  f"(overlap={r['score']} axis_bonus={r['bonus']} "
+                  f"baselined={'yes' if r['baselined'] else 'NO'} cats={r['categories']})",
+                  file=sys.stderr)
+        # Say it out loud rather than letting the differ report `no_op` and the judge
+        # conclude "the edit probably didn't land". An unbaselined selection is a harness
+        # coverage hole, not a contributor mistake.
+        if chosen and not any(r["baselined"] for r in chosen):
+            print(f"select-fixtures: WARNING: no selected fixture has a "
+                  f"{args.analysis} golden report in {args.golden} — this run will produce "
+                  f"NO measurement (every report lands in coverage.unbaselined). Generate a "
+                  f"golden for one of these fixtures, or the verdict is not evidence.",
                   file=sys.stderr)
         for r in chosen:
             print(r["path"])

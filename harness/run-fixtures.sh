@@ -18,8 +18,9 @@
 #
 # Modes:
 #   --changed-only        Analyze only fixtures relevant to what changed (default in MRs).
-#                         A TD edit is portfolio-wide in PRINCIPLE, but analyzing all 11
-#                         fixtures x 2 analyses = 22 units, each billing ~110-130 AGENT-
+#                         A TD edit is portfolio-wide in PRINCIPLE, but analyzing every
+#                         fixture (14 x 2 = 28 units today; usecases.yaml is authoritative,
+#                         this comment is not) means each unit bills ~110-130 AGENT-
 #                         minutes (internal compute; wall-clock per unit is ~10-20 min,
 #                         measured), and atx's progress spinner blows GitLab's 4 MB log
 #                         cap after ~4 units. So a

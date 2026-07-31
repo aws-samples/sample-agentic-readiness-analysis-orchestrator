@@ -66,8 +66,10 @@ temporary `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` in
 the job automatically — there is nothing to exchange in `before_script`, and no
 static keys are stored. Two constraints:
 
-- It **only works on shared runners** (already enabled here — the CI pins
-  `tags: [shared]`).
+- It **only works on the shared runner fleet** (already the case here). Do **not** add
+  `tags: [shared]` — there is no GitLab tag by that name; untagged jobs are picked up by
+  the default shared fleet automatically, which is where the Vendor runs. Adding a bogus
+  tag leaves the job stuck with no matching runner.
 - The role is **per-project** — it cannot be reused across GitLab projects.
 
 ### 1. Create the IAM role in your Isengard account
@@ -126,22 +128,26 @@ Add variable**.
 
 | Variable | What it is | Masked | Protected |
 |---|---|---|---|
-| `AWS_CREDS_TARGET_ROLE` | ARN of the IAM role created in step 1 — the trigger the Credential Vendor keys off | No | Yes |
-| `AWS_REGION` | Region for the analysis run (`us-east-1`) | No | Yes |
+| `AWS_CREDS_TARGET_ROLE` | ARN of the IAM role created in step 1 — the trigger the Credential Vendor keys off | **No** | **No — must stay Plain** |
+| `AWS_DEFAULT_REGION` | Region for the analysis run (`us-east-1`) | **No** | **No — must stay Plain** |
 
 Notes:
 
 - `AWS_CREDS_TARGET_ROLE` is the **only** switch — when it is set, the shared runner
   vends creds for it automatically; when it is unset, the job logs a clear warning
-  and no AWS access is granted. An ARN and a region are not secret, so both are
-  **protected but not masked** (masking rejects such values anyway). `AWS_REGION`
-  defaults to `us-east-1` if unset.
+  and no AWS access is granted.
+- **Both variables MUST stay Plain — not Protected, not Masked.** This is the failure we
+  actually hit. A *Protected* variable is injected **only on protected branches**, so it is
+  silently absent on the feature branches and MRs where this harness runs — no creds, no
+  analysis, no error explaining why. A *Masked* / *Hidden* variable can't be read by the
+  runner's pre-clone vendor script at all. Neither value is a secret (an ARN and a region),
+  so there is nothing to protect. `harness:auth-check` diagnoses both cases.
+- **The variable is `AWS_DEFAULT_REGION`, not `AWS_REGION`.** The vendor gates on
+  `AWS_DEFAULT_REGION` specifically and vends only when it *and*
+  `AWS_CREDS_TARGET_ROLE` are set. Setting only `AWS_REGION` makes the vendor skip
+  silently — confirmed by zero AssumeRole attempts in the target account's CloudTrail.
 - **No token to refresh.** The Vendor removes the old Isengard session-token expiry
   pain — no static keys to rotate; fresh short-lived credentials on every run.
-- **Protect the branch.** For a *protected* variable to be injected, the running
-  branch must be Protected. Mark `feat/harness` (and any release branches) Protected
-  under **Settings → Repository → Protected branches**, or `AWS_CREDS_TARGET_ROLE`
-  will be absent and no creds will be vended.
 - **Multiple roles/stages?** If you later split analysis across accounts, each job
   can set its own `AWS_CREDS_TARGET_ROLE` value and the Vendor assumes accordingly.
 

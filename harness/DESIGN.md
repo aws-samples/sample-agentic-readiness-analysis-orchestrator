@@ -57,8 +57,13 @@ consumes **both** numbers to reason only about **direction**:
 | `abs(delta) < threshold` | **within noise — NOT MEASURED** → `analysis_effect: neutral` |
 | `delta <= -threshold` | measured accuracy **regression** |
 
-`threshold` is per fixture: `2·sd` once the baseline has multiple samples, else a fixed
-noise floor (ARA 0.10, MOD 0.02).
+`threshold` is per fixture: `max(2·sd, NOISE_FLOOR)` — measured variance may only ever RAISE
+the bar, never lower it below the floor. The floor is **ARA 0.25 / MOD 0.03**
+(`score-reports.py: NOISE_FLOOR`), measured by re-running the analysis on a byte-identical
+rubric. An earlier draft of this doc quoted 0.10 / 0.02; those were derived from re-scoring
+the same report tree, which holds the dominant variance source (the analysis agent) fixed and
+so understated the true floor by ~2.5×. Do not reintroduce them — a threshold that small
+reports run-to-run noise as a measured improvement.
 
 Consequences worth stating, because each replaced an earlier design:
 
@@ -293,7 +298,7 @@ run-fixtures ─▶ diff-reports.py ─▶ judge.py                            �
     "scored": true,               // false => the change COULD NOT BE VALIDATED (see below)
     "accuracy_verdicts": {        // per fixture, already noise-thresholded by the scorer
       "legacy-shipping-api:ara": { "score": 0.88, "baseline": 0.82, "delta": 0.06,
-                                   "threshold": 0.10, "verdict": "not-measured",
+                                   "threshold": 0.25, "verdict": "not-measured",
                                    "basis": "noise-floor" }
     },
     // JUDGED. Direction, not magnitude.
@@ -344,7 +349,7 @@ harness:contract-tests:
   stage: test
   rules: [ {if: '$CI_PIPELINE_SOURCE == "merge_request_event"'}, {if: '$CI_PIPELINE_SOURCE == "web"'} ]
   script:
-    - python3 -m pytest harness/tests/test_validate_contract.py -q   # rejects drifted JSON shapes
+    - python3 -m pytest harness/tests/ -q   # whole suite: contract shapes, differ, SKILL.md parse
   allow_failure: true
 
 # Entry 1: MR pipeline — watched-TD gate → run edited TD → diff → judge → comment

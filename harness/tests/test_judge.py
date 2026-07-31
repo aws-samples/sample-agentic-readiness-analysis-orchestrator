@@ -591,5 +591,93 @@ def _run_all():
     return 1 if failed else 0
 
 
+
+# --- unbaselined: "we measured nothing" is NOT "the edit did nothing" -----------------
+#
+# Found in the pre-contribution audit. summarize_impact() copied compared/baseline_total/
+# partial/not_analyzed_count into the digest but DROPPED `unbaselined`, so a run whose every
+# report lacked a golden reached the judge as a plain `no_op: true` -- and the judge, with no
+# way to tell the two apart, reported "the edit probably didn't land". That is a false
+# accusation against the contributor for what is actually a harness coverage hole.
+
+def _impact_all_unbaselined():
+    return {
+        "no_op": True, "changed_tds": [], "per_repo": {}, "portfolio": {},
+        "coverage": {"compared": 0, "baseline_total": 28, "partial": True,
+                     "not_analyzed": ["x"] * 28,
+                     "unbaselined": ["mod/repo/modern-orders-service",
+                                     "mod/repo/modern-payments-api"]},
+    }
+
+
+def test_unbaselined_reports_survive_summarisation():
+    summ = judge.summarize_impact(_impact_all_unbaselined())
+    cov = summ["coverage"]
+    assert cov["unbaselined_count"] == 2, cov
+    assert "mod/repo/modern-orders-service" in cov["unbaselined"], (
+        "the unbaselined report list was dropped during summarisation, so the verdict "
+        "cannot distinguish 'nothing moved' from 'nothing was compared'")
+
+
+def test_heuristic_does_not_blame_the_contributor_when_nothing_was_compared():
+    intent = {"what": "Tightened OPS-Q3 so missing runbooks now fail.",
+              "why": "ops gaps", "expected_impact": "more OPS findings"}
+    v = judge.judge_heuristic(intent, judge.summarize_impact(_impact_all_unbaselined()))
+    assert v["no_op_warning"] is False, (
+        "no_op_warning accuses the contributor of an edit that did not land; with 0 reports "
+        "compared the empty delta is vacuous and cannot support that claim")
+    assert v["intent_match"] == "unknown", v["intent_match"]
+    assert "NOT MEASURED" in v["rationale"] or "NOTHING WAS MEASURED" in v["rationale"], \
+        v["rationale"]
+    assert v["quality_regression"] is False
+
+
+def test_a_real_no_op_still_warns_when_reports_were_actually_compared():
+    """The guard above must not disarm the genuine no-op warning."""
+    impact = {"no_op": True, "changed_tds": [], "per_repo": {}, "portfolio": {},
+              "coverage": {"compared": 2, "baseline_total": 28, "partial": True,
+                           "not_analyzed": ["x"] * 26, "unbaselined": []}}
+    intent = {"what": "Tightened OPS-Q3.", "why": "w", "expected_impact": "more findings"}
+    v = judge.judge_heuristic(intent, judge.summarize_impact(impact))
+    assert v["no_op_warning"] is True, "a real no-op over real comparisons must still warn"
+
+
+def test_prompt_tells_the_model_not_to_read_an_unmeasured_run_as_inert():
+    summ = judge.summarize_impact(_impact_all_unbaselined())
+    note = judge._coverage_note(summ)
+    assert "unbaselined" in note
+    assert "NOTHING WAS MEASURED" in note, note
+    assert "did not land" in note or "'did not land'" in note, (
+        "the prompt must explicitly forbid the 'edit did not land' conclusion here")
+
+
+# --- the MR template's in-service checkbox must actually parse -------------------------
+
+def test_edited_in_service_checkbox_is_read_from_the_real_mr_template():
+    """judge.py greps for this field and DESIGN.md documents it, but the template shipped
+    without it, so `edited_in_service` was permanently None -- losing the one signal that
+    tells "stale goldens" apart from "the edit didn't land"."""
+    tmpl = (REPO / ".gitlab" / "merge_request_templates" / "rubric-change.md").read_text()
+    assert judge.parse_intent(tmpl).get("edited_in_service") is None, \
+        "an unfilled template must stay None, not default to a guess"
+    yes = judge.parse_intent(tmpl.replace("- [ ] yes", "- [x] yes"))
+    assert yes["edited_in_service"] is True, (
+        "the template ships an in-service checkbox that judge.py must parse; got "
+        f"{yes['edited_in_service']!r}")
+    no = judge.parse_intent(tmpl.replace("- [ ] no", "- [x] no"))
+    assert no["edited_in_service"] is False, no["edited_in_service"]
+
+
+def test_the_in_service_section_does_not_leak_into_what_or_why():
+    tmpl = (REPO / ".gitlab" / "merge_request_templates" / "rubric-change.md").read_text()
+    i = judge.parse_intent(tmpl.replace("- [ ] no", "- [x] no"))
+    for field in ("what", "why", "expected_impact"):
+        assert "[x]" not in i[field].lower(), f"checkbox text leaked into {field}"
+
+
+def test_parse_intent_never_emits_internal_state():
+    tmpl = (REPO / ".gitlab" / "merge_request_templates" / "rubric-change.md").read_text()
+    assert "_awaiting_service_answer" not in judge.parse_intent(tmpl)
+
 if __name__ == "__main__":
     raise SystemExit(_run_all())

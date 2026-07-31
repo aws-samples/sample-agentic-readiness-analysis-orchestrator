@@ -797,26 +797,6 @@ def test_ara_prompt_gets_all_four_resolution_blocks():
     assert "API-Q4 Idempotent Write Operations -> INFO" in p
 
 
-# --- fallback runner -------------------------------------------------------------------
-
-def _run_all():
-    fns = [v for k, v in sorted(globals().items())
-           if k.startswith("test_") and callable(v)]
-    passed = failed = 0
-    for fn in fns:
-        try:
-            fn()
-            passed += 1
-            print(f"  PASS  {fn.__name__}")
-        except Exception as exc:  # noqa: BLE001
-            failed += 1
-            print(f"  FAIL  {fn.__name__}: {exc}")
-    print(f"\n{passed} passed, {failed} failed")
-    return 1 if failed else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(_run_all())
 
 
 def test_update_baseline_with_an_analysis_filter_merges_instead_of_truncating():
@@ -908,3 +888,61 @@ def test_an_unknown_question_id_does_not_trip_the_ceiling_check():
     rpt = _ara(findings=[_f("BOGUS-Q99", "BLOCKER")])
     assert not [c for c in sr.check_ara(rpt)
                 if c["check"] == "severity_exceeds_td_ceiling"]
+
+# --- the published noise floor must match the code ------------------------------------
+# The audit found DESIGN.md still quoting "ARA 0.10, MOD 0.02" -- the values the in-code
+# comment documents as WRONG by ~2.5x (they came from re-scoring one report tree, which holds
+# the dominant variance source fixed). A contributor following the doc computes a threshold
+# 2.5x too small and reads run-to-run noise as a measured improvement. Docs that state a
+# threshold are code; pin them.
+
+def test_published_noise_floor_matches_the_code():
+    floor = sr.NOISE_FLOOR
+    for doc in ("DESIGN.md", "README.md"):
+        text = (REPO / "harness" / doc).read_text()
+        # The retired pair must not reappear as a stated floor.
+        for retired, live in (("0.10", floor["ara"]), ("0.02", floor["mod"])):
+            bad = f"ARA {retired}" if retired == "0.10" else f"MOD {retired}"
+            assert bad not in text, (
+                f"{doc} states the retired noise floor '{bad}'; the live value is {live}. "
+                f"A floor has exactly one home: score-reports.py NOISE_FLOOR.")
+        assert f"{floor['ara']:.2f}" in text, (
+            f"{doc} never states the live ARA noise floor {floor['ara']:.2f}")
+        assert f"{floor['mod']:.2f}" in text, (
+            f"{doc} never states the live MOD noise floor {floor['mod']:.2f}")
+
+
+def test_design_doc_describes_the_threshold_as_a_max_not_an_either_or():
+    """`max(2*sd, floor)` is the rule: measured variance may only RAISE the bar. An
+    "either/or" phrasing invites reimplementing it as a replacement, which would let a
+    fixture that happens to read sd=0.00 get a zero threshold."""
+    text = (REPO / "harness" / "DESIGN.md").read_text()
+    assert "max(2" in text.replace("·", "*").replace(" ", "") or "max(2*sd" in \
+        text.replace("·", "*").replace(" ", ""), \
+        "DESIGN.md must state the threshold as max(2*sd, NOISE_FLOOR)"
+
+
+# --- fallback runner -------------------------------------------------------------------
+# MUST stay the LAST thing in this file. _run_all() collects globals() at call time, so when
+# this block sat mid-file it ran before the remaining tests were defined and silently skipped
+# them -- `python3 harness/tests/test_score_reports.py` reported 58 passed while pytest
+# collected 64. A green run that quietly omits 6 tests is worse than a red one.
+
+def _run_all():
+    fns = [v for k, v in sorted(globals().items())
+           if k.startswith("test_") and callable(v)]
+    passed = failed = 0
+    for fn in fns:
+        try:
+            fn()
+            passed += 1
+            print(f"  PASS  {fn.__name__}")
+        except Exception as exc:  # noqa: BLE001
+            failed += 1
+            print(f"  FAIL  {fn.__name__}: {exc}")
+    print(f"\n{passed} passed, {failed} failed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_run_all())

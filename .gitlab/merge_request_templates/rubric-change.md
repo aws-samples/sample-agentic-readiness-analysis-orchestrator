@@ -25,6 +25,14 @@
 
 
 
+## Was the rubric edited in the AWS Transform service?
+<!-- The judge reads this to tell "the edit didn't land" apart from "the goldens are stale".
+     If you edited the rubric in-service rather than in this repo, the fixtures here run the
+     REPO copy, so the delta can come back empty even though your change is real. -->
+
+- [ ] yes — the change was made in-service (fire `harness:full` manually to refresh goldens)
+- [ ] no — the change is in this repo's SKILL.md
+
 ## Expected impact
 <!-- Which harness dimension(s) should move, and in which direction?
      D1 Findings      — more/fewer/re-severitied findings, in which categories?

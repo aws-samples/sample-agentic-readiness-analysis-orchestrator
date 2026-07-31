@@ -124,6 +124,91 @@ def test_ties_break_on_id_not_dict_order():
     assert a == b, "input ordering must not change the selection"
 
 
+# --- measurability: a fixture with no golden measures NOTHING -------------------------
+#
+# The bug these pin, found in the pre-contribution audit: MOD/OPS was declared by
+# modern-orders-service, modern-payments-api, monolith-php and legacy-helpdesk-tickets.
+# Only the last two had golden reports, but the sort was (-overlap, -bonus, id) and
+# `modern-*` sorts first alphabetically — so every OPS-* edit (9 of MOD's 37 questions)
+# selected two unbaselined fixtures, compared 0 reports, and the judge told the
+# contributor their edit "probably didn't land" after ~220 agent-minutes of real analysis.
+
+def _golden_dir(tmp_path, names):
+    d = tmp_path / "golden"
+    d.mkdir(parents=True)
+    for n in names:
+        (d / n).write_text("{}")
+    return d
+
+
+def test_baselined_fixture_beats_an_unbaselined_one_with_a_better_axis_bonus(tmp_path):
+    # iac-rich has has_iac=True (axis bonus 1 for OPS); mod-only also has has_iac=True.
+    # Give the golden to the LOWER-bonus fixture and it must still win: a slightly worse
+    # probe that produces a measurement beats a better probe that produces none.
+    g = _golden_dir(tmp_path, ["batch-only-mod-report.json"])
+    chosen = sf.select(USECASES, "mod", {"APP"}, 2, golden_dir=g)
+    assert chosen[0]["id"] == "batch-only", ids(chosen)
+    assert chosen[0]["baselined"] is True
+
+
+def test_unbaselined_fixtures_are_still_returned_when_nothing_is_baselined(tmp_path):
+    # Degrade, never crash: if no fixture has a golden we must still return something
+    # runnable so the operator gets reports (and the loud warning), not an empty set.
+    g = _golden_dir(tmp_path, [])
+    chosen = sf.select(USECASES, "mod", {"OPS"}, 2, golden_dir=g)
+    assert chosen, "must not return an empty selection just because nothing is baselined"
+    assert all(c["baselined"] is False for c in chosen)
+
+
+def test_measurability_outranks_axis_bonus_but_not_overlap(tmp_path):
+    # Ordering of the sort keys matters: overlap (can this fixture SEE the category at all)
+    # must still dominate. A baselined fixture that cannot observe the edited category is
+    # worse than an unbaselined one that can.
+    g = _golden_dir(tmp_path, ["batch-only-ara-report.json"])
+    chosen = sf.select(USECASES, "ara", {"API"}, 1, golden_dir=g)
+    assert chosen[0]["id"] != "batch-only", (
+        "batch-only has zero API overlap; a golden must not promote a blind fixture")
+
+
+def test_report_key_is_the_path_basename_not_the_usecases_id(tmp_path):
+    # run-fixtures.sh names the report from basename(fixture dir), so `monolith-php`
+    # writes monolith-mod-report.json. Keying off `id` would call the best-covered
+    # fixture in the real set unbaselined.
+    uc = {"fixtures": [{"id": "monolith-php", "path": "harness/fixtures/monolith",
+                        "axes": {"has_iac": True},
+                        "expectations": {"mod": {"must_have_categories": ["OPS"]}}}]}
+    g = _golden_dir(tmp_path, ["monolith-mod-report.json"])
+    assert sf.select(uc, "mod", {"OPS"}, 1, golden_dir=g)[0]["baselined"] is True
+    g2 = _golden_dir(tmp_path / "x", ["monolith-php-mod-report.json"])
+    assert sf.select(uc, "mod", {"OPS"}, 1, golden_dir=g2)[0]["baselined"] is False
+
+
+def test_every_real_category_selects_at_least_one_measurable_fixture():
+    """The end-to-end guard: no rubric category may be a measurement blackout.
+
+    Runs against the REAL usecases.yaml and the REAL harness/golden — this is the check
+    that would have caught the OPS hole, and it will fail the moment a new fixture or a
+    new question category reintroduces one.
+    """
+    import yaml
+    uc = yaml.safe_load((REPO / "harness" / "usecases.yaml").read_text())
+    golden = REPO / "harness" / "golden"
+    if not golden.is_dir():          # pragma: no cover - goldens are committed
+        return
+    blackouts = []
+    for analysis, skill in (("ara", "agentic-readiness-analysis"),
+                            ("mod", "modernization-readiness-analysis")):
+        text = (REPO / "definitions" / "managed" / skill / "SKILL.md").read_text()
+        cats = {m.group(1) for m in sf.QUESTION_RE.finditer(text)}
+        for cat in sorted(cats):
+            chosen = sf.select(uc, analysis, {cat}, 2, golden_dir=golden)
+            if chosen and not any(c["baselined"] for c in chosen):
+                blackouts.append(f"{analysis}/{cat} -> {ids(chosen)}")
+    assert not blackouts, (
+        "these categories select ONLY fixtures with no golden report, so an MR editing "
+        "them compares 0 reports and measures nothing: " + "; ".join(blackouts))
+
+
 # --- question-id parsing --------------------------------------------------------------
 
 def test_question_re_extracts_category_prefixes():
