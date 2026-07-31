@@ -63,12 +63,11 @@ The `atx` (AWS Transform) step needs AWS access on the GitLab runner.
 > provider that trusts the instance. That does **not** work on the internal
 > `gitlab.aws.dev`: AWS IAM cannot reach the private instance to verify the
 > `id_token`, so OIDC is not an option here.
-> ([ref](https://w.amazon.com/bin/view/Users/dnchi/AWSGitLab/))
 
 Instead we use the **AWS Credential Vendor**, which is built into the **shared
 runner fleet**. The runners' jump role
 `arn:aws:iam::979517299116:role/gitlab-runners-prod` assumes a role **you** create
-in your Isengard account, gated by GitLab principal tags. The runner then injects
+in your own AWS account, gated by GitLab principal tags. The runner then injects
 temporary `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` into
 the job automatically — there is nothing to exchange in `before_script`, and no
 static keys are stored. Two constraints:
@@ -79,7 +78,7 @@ static keys are stored. Two constraints:
   tag leaves the job stuck with no matching runner.
 - The role is **per-project** — it cannot be reused across GitLab projects.
 
-### 1. Create the IAM role in your Isengard account
+### 1. Create the IAM role in your AWS account
 
 Create a role whose **trust policy** lets the shared-runner jump role assume it,
 scoped to *this* GitLab group + project via principal tags. Replace `<GROUP>` and
@@ -111,7 +110,7 @@ group `agentic-readiness-assessment`, project `agentic-readiness-assessment`:
 }
 ```
 
-One-liner to create it (run with your Isengard admin credentials; save the trust
+One-liner to create it (run with admin credentials in that account; save the trust
 policy above as `trust.json`):
 
 ```sh
@@ -162,8 +161,8 @@ Notes:
   silently — confirmed by zero AssumeRole attempts in the target account's CloudTrail.
   `AWS_REGION` is read by the `aws` CLI but has **no** effect on whether creds are vended,
   so adding it as a CI variable does not substitute for `AWS_DEFAULT_REGION`.
-- **No token to refresh.** The Vendor removes the old Isengard session-token expiry
-  pain — no static keys to rotate; fresh short-lived credentials on every run.
+- **No token to refresh.** The Vendor removes the usual session-token expiry pain —
+  no static keys to rotate; fresh short-lived credentials on every run.
 - **Multiple roles/stages?** If you later split analysis across accounts, each job
   can set its own `AWS_CREDS_TARGET_ROLE` value and the Vendor assumes accordingly.
 
