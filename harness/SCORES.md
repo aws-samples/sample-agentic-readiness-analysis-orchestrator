@@ -10,67 +10,66 @@ Each score is an LLM grader's assessment of how well a generated report is **gro
 
 The **Checks** column is a different axis entirely: deterministic, arithmetic assertions that a report does not contradict **itself** — its own severity counters, its own tier arithmetic, its own question coverage. No LLM and no sampling is involved, so a failure here is a real defect at any sample depth, and is safe to act on immediately. A report can be perfectly grounded in the source (high score) and still fail a check by miscounting what it found. Each failure names the check; see [What the checks mean](#what-the-checks-mean).
 
-**Sample depth: up to 3 independent runs per fixture.** `sd` is the measured per-fixture standard deviation and `spread` the max−min across runs; both read `—` where a fixture was drawn only once (it exists in only some batches), because `0.000` there would read as rock-steady when nothing was measured at all.
+**Sample depth: up to 4 independent runs per fixture, 3 fixture(s) drawn once.** `sd` is the measured per-fixture standard deviation and `spread` the max−min across runs. Both read `—` for a fixture drawn only once — not `0.000`, which would read as re-run and rock-steady when nothing was compared at all.
 
-A delta counts as real only past `max(2·sd, floor)` — the noise floor (**ARA 0.25**, **MOD 0.03**) is a lower bound the measured `sd` can raise but never lower. A jittery fixture is held to a stricter bar than the floor; a quiet one is not held to a looser one, because an n=3 `sd` is far too weak an estimator to justify shrinking the bar and shrinking it is the direction that manufactures false improvements. **Below the threshold means NOT MEASURED — never "proven equal".**
+A delta counts as real only past `max(2·sd, floor)` — the noise floor (**ARA 0.25**, **MOD 0.03**) is a lower bound the measured `sd` can raise but never lower. A jittery fixture is held to a stricter bar than the floor; a quiet one is not held to a looser one, because an n=4 `sd` is far too weak an estimator to justify shrinking the bar and shrinking it is the direction that manufactures false improvements. **Below the threshold means NOT MEASURED — never "proven equal".**
 
-Every batch has its own column — same TD, same fixtures, different run. Columns: `after-tdfix`, `ara-draw2`, `ara-draw3`, `golden`, `s2`, `s3`. The point of showing them side by side is that the mean alone hides disagreement: 0.72 / 0.92 and a steady 0.82 both average to 0.82, but only one of them is a measurement.
+The per-run scores are listed in the **Runs** column rather than one column per batch: the two analyses are sampled from different batches, so a shared column per batch left every row half-empty and the reader counting dashes to work out which run was which. The point of showing the runs at all is that the mean hides disagreement — 0.72 / 0.92 and a steady 0.82 both average to 0.82, but only one of them is a measurement.
 
 ## ARA — 14 reports
 
-Mean **0.85**, range 0.81–0.89.
+Mean **0.86**, range 0.82–0.89.
 
-| Repo | Mean | after-tdfix | ara-draw2 | ara-draw3 | golden | s2 | s3 | sd | spread | Checks | Tier / blockers |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| `legacy-loan-calculator` | 0.81 | 0.72 | 0.88 | 0.82 | — | — | — | 0.066 | 0.16 | PASS | Remediation Required / 2 |
-| `modern-orders-service` | 0.81 | 0.82 | 0.72 | 0.88 | — | — | — | 0.066 | 0.16 | **HIGH** — `missing_safety_qualifier` | Pilot-Ready / 0 |
-| `modern-payments-api` | 0.81 | 0.72 | 0.88 | 0.82 | — | — | — | 0.066 | 0.16 | **HIGH** — `missing_safety_qualifier` | Pilot-Ready / 0 |
-| `legacy-timesheet-webforms` | 0.81 | 0.78 | 0.88 | 0.78 | — | — | — | 0.047 | 0.10 | PASS | Remediation Required / 2 |
-| `legacy-payroll-system` | 0.83 | 0.72 | 0.88 | 0.88 | — | — | — | 0.075 | 0.16 | PASS | Remediation Required / 2 |
-| `modern-catalog-graphql` | 0.85 | 0.82 | 0.92 | 0.82 | — | — | — | 0.047 | 0.10 | **HIGH** — `missing_safety_qualifier` | Pilot-Ready / 0 |
-| `legacy-partner-soap` | 0.86 | 0.88 | 0.82 | 0.88 | — | — | — | 0.028 | 0.06 | PASS | Remediation Required / 2 |
-| `legacy-pricing-cgi` | 0.86 | 0.78 | 0.88 | 0.92 | — | — | — | 0.059 | 0.14 | PASS | Remediation Required / 1 |
-| `legacy-helpdesk-tickets` | 0.87 | 0.82 | 0.88 | 0.91 | — | — | — | 0.037 | 0.09 | PASS | Remediation Required / 2 |
-| `legacy-document-portal` | 0.88 | 0.88 | 0.88 | 0.88 | — | — | — | 0.000 | 0.00 | PASS | Remediation Required / 2 |
-| `legacy-shipping-api` | 0.88 | 0.88 | 0.88 | 0.88 | — | — | — | 0.000 | 0.00 | PASS | Remediation Required / 1 |
-| `legacy-storefront-rails` | 0.88 | 0.88 | 0.88 | 0.88 | — | — | — | 0.000 | 0.00 | PASS | Remediation Required / 2 |
-| `monolith` | 0.88 | 0.88 | 0.88 | 0.88 | — | — | — | 0.000 | 0.00 | PASS | Remediation Required / 1 |
-| `legacy-crm-desktop` | 0.89 | 0.88 | 0.91 | 0.88 | — | — | — | 0.014 | 0.03 | PASS | Remediation Required / 2 |
+| Repo | Mean | Runs | sd | spread | Checks | Tier / blockers |
+|---|---|---|---|---|---|---|
+| `legacy-payroll-system` | 0.82 | 0.72 / 0.82 / 0.88 / 0.88 | 0.065 | 0.16 | PASS | Remediation Required / 2 |
+| `modern-orders-service` | 0.82 | 0.88 / 0.72 / 0.88 / 0.82 | 0.065 | 0.16 | **HIGH** | Pilot-Ready / 0 |
+| `modern-payments-api` | 0.82 | 0.72 / 0.88 / 0.82 / 0.88 | 0.065 | 0.16 | **HIGH** | Pilot-Ready / 0 |
+| `legacy-timesheet-webforms` | 0.83 | 0.78 / 0.88 / 0.78 / 0.88 | 0.050 | 0.10 | PASS | Remediation Required / 2 |
+| `legacy-loan-calculator` | 0.84 | 0.72 / 0.88 / 0.88 / 0.88 | 0.069 | 0.16 | PASS | Remediation Required / 2 |
+| `legacy-partner-soap` | 0.86 | 0.88 / 0.82 / 0.88 / 0.85 | 0.025 | 0.06 | PASS | Remediation Required / 2 |
+| `legacy-document-portal` | 0.86 | 0.88 / 0.88 / 0.88 / 0.82 | 0.026 | 0.06 | PASS | Remediation Required / 2 |
+| `legacy-helpdesk-tickets` | 0.87 | 0.82 / 0.92 / 0.92 / 0.82 | 0.050 | 0.10 | PASS | Remediation Required / 2 |
+| `legacy-pricing-cgi` | 0.87 | 0.78 / 0.88 / 0.92 / 0.91 | 0.055 | 0.14 | PASS | Remediation Required / 2 |
+| `legacy-crm-desktop` | 0.88 | 0.88 / 0.88 / 0.88 / 0.88 | 0.000 | 0.00 | PASS | Remediation Required / 2 |
+| `legacy-shipping-api` | 0.88 | 0.88 / 0.88 / 0.88 / 0.88 | 0.000 | 0.00 | PASS | Remediation Required / 1 |
+| `legacy-storefront-rails` | 0.88 | 0.88 / 0.88 / 0.88 / 0.88 | 0.000 | 0.00 | PASS | Remediation Required / 2 |
+| `modern-catalog-graphql` | 0.89 | 0.88 / 0.92 / 0.82 / 0.92 | 0.041 | 0.10 | PASS | Pilot-Ready / 0 |
+| `monolith` | 0.89 | 0.88 / 0.92 / 0.88 / 0.88 | 0.017 | 0.04 | PASS | Remediation Required / 1 |
 
-Run-to-run spread: mean 0.083, worst 0.16 — treat any delta below the worst spread as noise.
+Run-to-run spread: mean 0.089, worst 0.16 — treat any delta below the worst spread as noise.
 
 ## MOD — 14 reports
 
 Mean **0.86**, range 0.62–0.92.
 
-| Repo | Mean | after-tdfix | ara-draw2 | ara-draw3 | golden | s2 | s3 | sd | spread | Checks | MOD score / band |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| `modern-orders-service` | 0.62 | — | — | — | — | — | 0.62 | — | 0.00 | PASS | 1.99 / Needs Work |
-| `modern-catalog-graphql` | 0.72 | — | — | — | — | — | 0.72 | — | 0.00 | PASS | 2.8 / Partial |
-| `legacy-pricing-cgi` | 0.76 | — | — | — | 0.88 | 0.52 | 0.88 | 0.170 | 0.36 | PASS | 1.64 / Needs Work |
-| `legacy-shipping-api` | 0.86 | — | — | — | 0.88 | 0.88 | 0.82 | 0.028 | 0.06 | PASS | 1.65 / Needs Work |
-| `legacy-partner-soap` | 0.89 | — | — | — | 0.88 | 0.88 | 0.92 | 0.019 | 0.04 | PASS | 1.18 / Not Ready |
-| `monolith` | 0.89 | — | — | — | 0.88 | 0.88 | 0.92 | 0.019 | 0.04 | PASS | 1.94 / Needs Work |
-| `legacy-helpdesk-tickets` | 0.90 | — | — | — | 0.88 | — | 0.92 | 0.020 | 0.04 | PASS | 1.15 / Not Ready |
-| `legacy-loan-calculator` | 0.91 | — | — | — | 0.88 | 0.92 | 0.92 | 0.019 | 0.04 | PASS | 1.2 / Not Ready |
-| `legacy-crm-desktop` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.05 / Not Ready |
-| `legacy-document-portal` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.18 / Not Ready |
-| `legacy-payroll-system` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.05 / Not Ready |
-| `legacy-storefront-rails` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.15 / Not Ready |
-| `legacy-timesheet-webforms` | 0.92 | — | — | — | 0.92 | 0.92 | 0.92 | 0.000 | 0.00 | PASS | 1.18 / Not Ready |
-| `modern-payments-api` | 0.92 | — | — | — | — | — | 0.92 | — | 0.00 | PASS | 3.3 / Partial |
+| Repo | Mean | Runs | sd | spread | Checks | MOD score / band |
+|---|---|---|---|---|---|---|
+| `modern-orders-service` | 0.62 | 0.62 | — | — | PASS | 1.99 / Needs Work |
+| `modern-catalog-graphql` | 0.72 | 0.72 | — | — | PASS | 2.8 / Partial |
+| `legacy-pricing-cgi` | 0.76 | 0.88 / 0.52 / 0.88 | 0.170 | 0.36 | PASS | 1.64 / Needs Work |
+| `legacy-shipping-api` | 0.86 | 0.88 / 0.88 / 0.82 | 0.028 | 0.06 | PASS | 1.65 / Needs Work |
+| `legacy-partner-soap` | 0.89 | 0.88 / 0.88 / 0.92 | 0.019 | 0.04 | PASS | 1.18 / Not Ready |
+| `monolith` | 0.89 | 0.88 / 0.88 / 0.92 | 0.019 | 0.04 | PASS | 1.94 / Needs Work |
+| `legacy-helpdesk-tickets` | 0.90 | 0.88 / 0.92 | 0.020 | 0.04 | PASS | 1.15 / Not Ready |
+| `legacy-loan-calculator` | 0.91 | 0.88 / 0.92 / 0.92 | 0.019 | 0.04 | PASS | 1.2 / Not Ready |
+| `legacy-crm-desktop` | 0.92 | 0.92 / 0.92 / 0.92 | 0.000 | 0.00 | PASS | 1.05 / Not Ready |
+| `legacy-document-portal` | 0.92 | 0.92 / 0.92 / 0.92 | 0.000 | 0.00 | PASS | 1.18 / Not Ready |
+| `legacy-payroll-system` | 0.92 | 0.92 / 0.92 / 0.92 | 0.000 | 0.00 | PASS | 1.05 / Not Ready |
+| `legacy-storefront-rails` | 0.92 | 0.92 / 0.92 / 0.92 | 0.000 | 0.00 | PASS | 1.15 / Not Ready |
+| `legacy-timesheet-webforms` | 0.92 | 0.92 / 0.92 / 0.92 | 0.000 | 0.00 | PASS | 1.18 / Not Ready |
+| `modern-payments-api` | 0.92 | 0.92 | — | — | PASS | 3.3 / Partial |
 
-Run-to-run spread: mean 0.041, worst 0.36 — treat any delta below the worst spread as noise.
+Run-to-run spread: mean 0.053, worst 0.36 — treat any delta below the worst spread as noise.
 
-## Deterministic defects — 3 across 3 reports
+## Deterministic defects — 2 across 2 reports
 
 Arithmetic contradictions inside a single report — **actionable now**, independent of sample depth.
 
 | Severity | Repo | Check | Detail |
 |---|---|---|---|
-| high | `modern-catalog-graphql` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=3 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
 | high | `modern-orders-service` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=10 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
-| high | `modern-payments-api` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=4 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
+| high | `modern-payments-api` (ARA) | `missing_safety_qualifier` | blocker_count=0 and risk_safety_count=5 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)' |
 
 ## What the checks mean
 
@@ -84,91 +83,83 @@ The other 11 checks passed everywhere: `category_band_mismatch`, `duplicate_ques
 
 ## Per-report grader notes
 
-<details><summary>Fabrications and misses per report (18 reports)</summary>
+<details><summary>Fabrications and misses per report (19 reports)</summary>
 
-### `legacy-crm-desktop` (ARA) — 0.89
+### `legacy-crm-desktop` (ARA) — 0.88
 
-The report is largely accurate about this legacy VB6 desktop CRM repository. It correctly identifies the stateful-crud archetype, applies surface-flag calibrations appropriately (downgrading API-Q2, API-Q3, etc. for no HTTP/RPC surface), and handles the read-only agent_scope conditional severities correctly. The findings cite real code patterns (hardcoded credentials, SQL injection, no API surface). Minor issues include API-Q7 being marked 'pass' when it should be evaluated as a finding for stateful-crud archetype, and some count inconsistencies between findings and evaluations.
+The report accurately identifies the legacy VB6 desktop application's fundamental lack of API surface and authentication, correctly classifying it as stateful-crud with read-only agent scope. Evidence citations are concrete and grounded in the actual source code. The tier arithmetic is correct (2 BLOCKERs → Remediation Required), and scope-dependent questions are properly resolved. Minor issues include DATA-Q6 being elevated to RISK-SAFETY when surface flags suggest INFO would be appropriate, and some weak evidence on extended questions.
 
-- **MISS** [INFO] frmCustomer.frm - INSERT operations with no event emission: API-Q7 Event Emission for State Changes should be evaluated as a finding, not passed
-- **DELIVERABLE** remediation_roadmap: Phase 1 includes RISK-SAFETY findings (AUTH-Q2, AUTH-Q3, AUTH-Q5, AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2) mixed with BLOCKERs
+- **DELIVERABLE** remediation_roadmap: DATA-Q6 listed in Phase 1 as RISK-SAFETY finding, but per calibration rules it should be INFO
 
-### `legacy-document-portal` (ARA) — 0.88
+### `legacy-document-portal` (ARA) — 0.865
 
-The report is largely accurate about this legacy ColdFusion repository. It correctly identifies the two BLOCKERs (API-Q1, AUTH-Q1), properly applies read-only scope downgrades for conditional questions, and the service archetype (stateful-crud) is justified by the SQL Server database and document CRUD operations. Minor issues include weak evidence on some findings and one questionable remediation phasing decision.
+The report is largely accurate about the legacy ColdFusion application, correctly identifying its lack of API surface, authentication mechanisms, and numerous security deficiencies. The archetype (stateful-crud) and scope handling are correct. However, there are issues with the has_http_rpc_surface flag being set to false when the application does serve HTTP requests, and some calibration downgrades were applied incorrectly as a result.
 
-- **DELIVERABLE** remediation_roadmap: DATA-Q4 (SQL injection) placed in Phase 1 with correct priority but marked as P2 in the finding itself
+- **DELIVERABLE** service_archetype: has_http_rpc_surface set to false
 
-### `legacy-loan-calculator` (ARA) — 0.807
+### `legacy-helpdesk-tickets` (ARA) — 0.87
 
-The report is largely accurate about this legacy Struts application, correctly identifying the lack of API interface, machine authentication, SQL injection, and hardcoded credentials. The archetype (stateful-crud), repo_type (application), and tier calculation (Remediation Required with 2 BLOCKERs) are all correct. However, there are some calibration issues: AUTH-Q7 should be INFO due to has_auth_surface=false, and DATA-Q6 should also be INFO given has_logging_of_user_data=false AND has_persistent_data_store=true does not fully satisfy the downgrade condition but the surface flags suggest minimal PII logging risk. The evidence quality is strong with specific file/line citations.
+The report is largely accurate about this legacy Django repository, correctly identifying the lack of API surface, missing authentication, hardcoded credentials, SQL injection vulnerabilities, and PII exposure. The service archetype (stateful-crud) and repo_type (application) are correct. However, there are some issues with AUTH-Q7 severity under the calibration rules and a few weak evidence items. The roadmap phasing is generally sound with blockers in phase 1.
 
-- **DELIVERABLE** remediation_roadmap: API-Q4 is listed in Phase 2 findings but it is INFO severity under read-only scope - INFO items should be Phase 3 Quality, not Phase 2 Safety
-- **DELIVERABLE** recommended_actions: DATA-Q4 action is marked P1 but the question severity is RISK-QUALITY (Medium), and the action groups it with DATA-Q6 which has different ownership
+- **DELIVERABLE** recommended_actions: AUTH-Q7 is marked RISK-SAFETY but should be INFO per calibration rules
 
-### `legacy-partner-soap` (ARA) — 0.86
+### `legacy-loan-calculator` (ARA) — 0.84
 
-The report is largely accurate about this legacy SOAP service. It correctly identifies the two BLOCKERs (API-Q1 no REST interface, AUTH-Q1 no machine authentication), properly applies conditional severity downgrades for read-only agent scope, and grounds findings in specific code evidence. The archetype classification (stateful-crud) and surface flags are correct. Minor weaknesses include AUTH-Q7 not being downgraded to INFO per calibration rules given has_auth_surface=false, and some findings lack the strongest possible evidence citations.
+The report is largely accurate about this legacy loan calculator repository. It correctly identifies the stateful-crud archetype, the lack of programmatic API, hardcoded credentials, SQL injection vulnerability, and absence of modern infrastructure. The conditional BLOCKER resolutions for read-only scope are correctly applied. Minor issues include some weak evidence citations and a questionable DATA-Q6 finding given the surface flag indicates no user data logging.
 
-- **MISS** [INFO (calibration downgrade)] Report metadata shows has_auth_surface=false: AUTH-Q7 should be INFO under calibration rules when has_auth_surface=false
-- **DELIVERABLE** remediation_roadmap: DATA-Q4 (SQL injection) is sequenced in Phase 1 with other blockers but marked priority P2 in the finding, creating inconsistency
+- **DELIVERABLE** recommended_actions: DATA-Q6 finding is questionable given surface_flags.has_logging_of_user_data=false
 
-### `legacy-payroll-system` (ARA) — 0.827
+### `legacy-partner-soap` (ARA) — 0.857
 
-The report is largely accurate and well-grounded in the source code. It correctly identifies the mainframe COBOL batch system with hardcoded FTP credentials, lack of API surface, and sensitive data handling issues. The archetype (stateful-crud) and surface flags are appropriate. However, there are minor issues with the tier arithmetic - the report claims 2 BLOCKERs but API-Q1's BLOCKER status is questionable since the system has no HTTP/RPC surface (the calibration rules suggest this context matters), and DATA-Q6 was incorrectly elevated to RISK-SAFETY when the surface_flags show has_logging_of_user_data=false, which per calibration rules should downgrade it to INFO.
+The report is largely accurate about this legacy SOAP service, correctly identifying the stateful-crud archetype, documenting real issues like SQL injection, XXE vulnerabilities, hardcoded credentials, and missing modern API interfaces. The tier calculation is correct (2 BLOCKERs → Remediation Required), and scope-dependent questions are properly resolved for read-only scope. However, there are minor issues with deliverable phasing and some weak evidence citations.
 
-- **DELIVERABLE** recommended_actions: DATA-Q6 PII Redaction in Logs rated as RISK-SAFETY and placed in Phase 1, but calibration rules state it should be INFO when has_logging_of_user_data=false AND has_persistent_data_store=false
+- **DELIVERABLE** remediation_roadmap: API-Q4 (idempotency) is placed in Phase 2 but was correctly resolved as INFO under read-only scope - INFO items should be Phase 3
+- **DELIVERABLE** recommended_actions: Action 5 'Implement input validation and parameterized queries' is marked P1 but DATA-Q4 is RISK-QUALITY severity which maps to P2
+
+### `legacy-payroll-system` (ARA) — 0.825
+
+The report is largely accurate about this legacy COBOL payroll system. It correctly identifies the lack of API surface (API-Q1) and machine authentication (AUTH-Q1) as BLOCKERs, properly applies scope-dependent severity downgrades for read-only agent_scope, and appropriately marks questions N/A due to surface flags (no HTTP/RPC surface). The archetype classification and surface flags are correct. Minor issues include weak evidence for DATA-Q6 (the claim of PII in logs is speculative) and some phase sequencing that mixes RISK-SAFETY items into Phase 1.
+
+- **DELIVERABLE** remediation_roadmap: Phase 1 includes RISK-SAFETY findings (AUTH-Q2, AUTH-Q3, AUTH-Q5, AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2) alongside the actual BLOCKERs
 
 ### `legacy-shipping-api` (ARA) — 0.88
 
-The report is largely accurate about the legacy-shipping-api repository. It correctly identifies the service archetype (data-gateway), properly applies read-only agent scope calibrations, and grounds findings in actual code evidence. The hardcoded API key, lack of authentication mechanisms, missing input validation, and absence of logging are all real issues correctly identified. Minor issues include some weak evidence citations and a debatable downgrade of AUTH-Q4 to INFO.
+The report is largely accurate and well-grounded in the source code. It correctly identifies the service archetype as data-gateway, appropriately applies read-only scope calibrations, and cites specific files and line numbers for evidence. The tier determination (Remediation Required with 1 BLOCKER) is consistent with the findings. Minor issues include AUTH-Q4 being resolved as INFO which is correct per calibration rules, but some weak evidence exists where findings cite broad line ranges.
 
-- **DELIVERABLE** remediation_roadmap: STATE-Q1 is sequenced in Phase 1 as a blocker-level item but it correctly resolved to RISK-SAFETY under read-only scope
+- **DELIVERABLE** remediation_roadmap: STATE-Q1 is placed in Phase 2 but has native_severity RISK-SAFETY
 
-### `legacy-timesheet-webforms` (ARA) — 0.813
+### `legacy-storefront-rails` (ARA) — 0.88
 
-The report accurately identifies the key issues in this legacy WebForms application and correctly classifies it as stateful-crud with read-only agent scope. The tier determination (Remediation Required with 2 BLOCKERs) is correct. However, there are several issues: some INFO-level evaluations claim findings were 'emitted' but no corresponding findings exist in the findings array, and the question coverage appears incomplete for several INFO questions that should have findings but only have evaluations.
+The report is largely accurate and well-grounded in the source code. It correctly identifies the service archetype, applies conditional BLOCKER resolutions appropriately for read-only scope, and cites real evidence from the repository. The tier calculation is correct (2 BLOCKERs = Remediation Required). Minor issues include some evaluations marked 'pass' that should emit INFO findings, and a few weak evidence citations for infrastructure-level findings.
 
-- **FABRICATION** API-Q5: No finding for API-Q5 exists in the findings array. The evaluation claims a finding was emitted but none was.
-- **FABRICATION** API-Q7: No finding for API-Q7 exists in the findings array. The evaluation claims a finding was emitted but none was.
-- **FABRICATION** API-Q8: No finding for API-Q8 exists in the findings array. The evaluation claims a finding was emitted but none was.
-- **FABRICATION** DATA-Q7: No finding for DATA-Q7 exists in the findings array. The evaluation claims a finding was emitted but none was.
-- **FABRICATION** DISC-Q2: No finding for DISC-Q2 exists in the findings array. The evaluation claims a finding was emitted but none was.
-- **FABRICATION** DISC-Q3: No finding for DISC-Q3 exists in the findings array. The evaluation claims a finding was emitted but none was.
-- **FABRICATION** OBS-Q3: No finding for OBS-Q3 exists in the findings array. The evaluation claims a finding was emitted but none was.
-- **FABRICATION** API-Q4: No finding for API-Q4 exists in the findings array despite the evaluation claiming one was emitted.
-- **FABRICATION** STATE-Q3: No finding for STATE-Q3 exists in the findings array despite the evaluation claiming one was emitted.
-- **FABRICATION** STATE-Q6: No finding for STATE-Q6 exists in the findings array despite the evaluation claiming one was emitted.
-- **FABRICATION** HITL-Q1: No finding for HITL-Q1 exists in the findings array despite the evaluation claiming one was emitted.
-- **FABRICATION** HITL-Q2: No finding for HITL-Q2 exists in the findings array despite the evaluation claiming one was emitted.
-- **DELIVERABLE** remediation_roadmap: DATA-Q4 (SQL injection) is placed in Phase 1 with P2 priority in the finding but P1 in recommended_actions - inconsistent prioritization
-- **DELIVERABLE** recommended_actions: Counts are inconsistent - report claims 12 INFO findings but only 29 total findings exist, and evaluations claim findings were emitted that don't exist
+- **DELIVERABLE** remediation_roadmap: Phase 1 includes AUTH-Q4 (Identity Propagation) which is RISK-SAFETY, but the report places it in Phase 2 in the roadmap items while listing it correctly in Phase 1 summary text - inconsistent
+- **DELIVERABLE** recommended_actions: STATE-Q1 (Compensation and Rollback) is a RISK-SAFETY finding but is not included in any recommended action
 
-### `modern-catalog-graphql` (ARA) — 0.853
+### `legacy-timesheet-webforms` (ARA) — 0.83
 
-The report is largely accurate about this repository, correctly identifying the stateful-crud archetype, the GraphQL/DynamoDB/Lambda stack, and most technical gaps. The tier arithmetic is correct (0 BLOCKER, 3 RISK-SAFETY = Pilot-Ready with Safety Concerns), though the pre-check flagged a formatting issue with sub_qualifier. The report correctly applies scope-dependent severities for read-only scope and grounds findings in actual code. However, there are some weak evidence issues and one questionable finding.
+The report is largely accurate about this legacy WebForms repository. It correctly identifies the BLOCKERs (API-Q1, AUTH-Q1), applies scope-calibrated severities correctly for read-only agent_scope, and grounds findings in real code patterns (SQL injection, plaintext credentials, lack of API surface). The archetype classification as stateful-crud is correct. Minor issues include DATA-Q6 being elevated to RISK-SAFETY when surface-flag calibration should have applied (has_logging_of_user_data=false), and some weak evidence on a few evaluations.
 
-- **DELIVERABLE** service_archetype: None - archetype is correct
-- **DELIVERABLE** remediation_roadmap: Phase 1 includes AUTH-Q6 and STATE-Q5 which are RISK-SAFETY, correctly prioritized as safety concerns. However, AUTH-Q4 (also RISK-SAFETY) is placed in Phase 2 instead of Phase 1
+- **DELIVERABLE** remediation_roadmap: DATA-Q6 is included in Phase 1 as a RISK-SAFETY finding, but per surface-flag calibration rules, with has_logging_of_user_data=false AND has_persistent_data_store=true, the calibration rule does not fully apply. However, the finding claims PII exposure through error messages, which is a different vector than logging. This is a borderline interpretation issue rather than a clear defect.
 
-### `modern-orders-service` (ARA) — 0.807
+### `modern-orders-service` (ARA) — 0.825
 
-The report is substantially accurate about the repository. It correctly identifies the stateful-crud archetype, applies scope-dependent severity downgrades correctly for read-only agent_scope, and grounds findings in real code patterns. The main defect is a malformed sub_qualifier field that puts the qualifier text in a redundant location. Evidence quality is strong with specific file and line references that check out against the source.
+The report is largely accurate about this repository, correctly identifying the stateful-crud archetype, documenting real safety gaps around irreversible operations, and properly applying read-only scope calibration to conditional questions. The main defect is a structural one with the tier qualifier format (already flagged in pre-checks). Evidence citations are concrete and verifiable against the source. Some findings could be stronger in evidence specificity, but there are no fabrications and no missed BLOCKERs or RISK-SAFETY issues given the read-only scope.
 
-- **DELIVERABLE** service_archetype: sub_qualifier field contains redundant tier prefix
+- **DELIVERABLE** remediation_roadmap: Phase 1 includes INFO-severity items (API-Q4, STATE-Q3, HITL-Q1, HITL-Q2) alongside RISK-SAFETY items
 
-### `modern-payments-api` (ARA) — 0.807
+### `modern-payments-api` (ARA) — 0.825
 
-The report is largely accurate about this well-architected payments API, correctly identifying its strengths (idempotency, OAuth2 auth, structured logging, IaC) and finding reasonable gaps (no explicit rate limits, no immutable audit storage, no data residency docs). However, there's a structural defect in the classification tier (missing Safety Concerns qualifier format issue noted in pre-checks) and some weak evidence on a few findings. The archetype, surface flags, and most findings are grounded in the actual source code.
+The report is largely accurate and well-grounded in the source code. It correctly identifies the stateful-crud archetype, properly applies read-only scope calibrations for conditional BLOCKERs, and provides evidence-backed findings. The main structural defect is the malformed sub_qualifier field ('Pilot-Ready (Safety Concerns)' instead of just 'Safety Concerns'), but this was already flagged in pre-checks. Most findings cite real files and patterns that exist in the repository.
 
-- **DELIVERABLE** service_archetype: sub_qualifier format is redundant
+- **DELIVERABLE** service_archetype: sub_qualifier format is incorrect
 
-### `monolith` (ARA) — 0.88
+### `monolith` (ARA) — 0.89
 
-The report is largely accurate and well-grounded in the source code. It correctly identifies the stateful-crud archetype, properly resolves conditional severities for read-only scope, and provides evidence-based findings. The main issues are some findings that should be in evaluations (INFO items listed as findings instead of pass evaluations) and the question coverage appears incomplete - several INFO-severity items mentioned as 'finding in findings[]' are not actually present in the findings array.
+The report is largely accurate about the repository, correctly identifying the PHP monolithic e-commerce application's lack of machine identity authentication (AUTH-Q1 BLOCKER), session-based auth, and various security gaps. The service archetype (stateful-crud) is correct given the MySQL database with CRUD operations. Most findings cite real code patterns. However, there are some issues with findings recorded where evaluations should be (INFO items appearing in findings rather than evaluations), and a few extended questions that should have been evaluated were marked not_evaluated_extended.
 
-- **DELIVERABLE** remediation_roadmap: Phase 1 includes AUTH-Q5, AUTH-Q6, AUTH-Q7, STATE-Q5, DATA-Q6 which are all RISK-SAFETY severity, not BLOCKERs. Only AUTH-Q1 is actually a BLOCKER.
-- **DELIVERABLE** recommended_actions: Question coverage issue - report claims INFO findings exist in findings[] for API-Q4, API-Q5, API-Q7, API-Q8, STATE-Q3, STATE-Q6, HITL-Q1, HITL-Q2, DATA-Q1, DATA-Q7, DISC-Q3, OBS-Q3 but these are not present in the actual findings array
+- **MISS** [INFO] index.php - order_status_history table and update_order_status function: API-Q7 Event Emission for State Changes should be evaluated as a finding since stateful-crud archetype triggers it
+- **DELIVERABLE** recommended_actions: First action claims to address AUTH-Q2, AUTH-Q3, AUTH-Q7 but implementing API keys alone does not solve scoped permissions (AUTH-Q2), action-level authorization (AUTH-Q3), or identity suspension (AUTH-Q7)
+- **DELIVERABLE** remediation_roadmap: Phase 1 includes AUTH-Q4 (Identity Propagation) but AUTH-Q4 is listed as Phase 2 in the finding itself with P2 priority
 
 ### `legacy-helpdesk-tickets` (MOD) — 0.9
 

@@ -310,10 +310,15 @@ def test_one_draw_reports_no_stddev_rather_than_a_perfectly_stable_zero():
     It is indistinguishable from "measured 3x, never moved", and a threshold derived from
     it is 0.0 — so every subsequent wobble reads as a regression. None means NOT MEASURED,
     and compare_to_baseline must fall back to the noise floor for it.
+
+    `spread` is held to the SAME rule: `max - min` over one score is also 0.0, and it is
+    published in SCORES.md right beside the stddev, so a guarded stddev next to a 0.00
+    spread still tells the reader the fixture was re-run and never moved.
     """
     (one,) = sr.aggregate([{"repo": "a", "analysis": "ara", "source_tree": "t1",
                             "score": 0.80}])
     assert one["stddev"] is None and one["scored_runs"] == 1
+    assert one["spread"] is None, "max-min over a single score is 0.0, not 'stable'"
     verdict = sr.compare_to_baseline(
         [{"repo": "a", "analysis": "ara", "score": 0.90}], [one])["units"][0]
     assert verdict["verdict"] == "within-noise"          # +0.10 < the 0.25 ARA floor

@@ -1119,7 +1119,13 @@ def aggregate(rows: list[dict]) -> list[dict]:
         if scores:
             mean = sum(scores) / len(scores)
             row["score"] = round(mean, 3)
-            row["spread"] = round(max(scores) - min(scores), 3)
+        # BOTH variance measures stay None below 2 numeric scores, for the same reason.
+        # `max - min` over a single score is 0.0, which reads in a published table as
+        # "re-run and never moved" when nothing was compared at all — the identical
+        # misleading zero the stddev guard below exists to prevent, and the one the ARA rows
+        # spent this whole exercise eliminating. Not measured is not the same as stable.
+        row["spread"] = (round(max(scores) - min(scores), 3)
+                         if len(scores) >= 2 else None)
         # stddev stays None below 2 numeric scores. A single draw would otherwise report
         # stddev 0.0 — indistinguishable from "measured 3x, perfectly stable" — and a
         # threshold read off that 0.0 makes ANY wobble look like a regression. None is the
@@ -1566,12 +1572,6 @@ def _num(v, places: int) -> str:
     return "—" if not isinstance(v, (int, float)) else f"{v:.{places}f}"
 
 
-def _batch_label(tree: str) -> str:
-    """Column header for a batch. `golden` is the committed baseline tree; `sN` are samples."""
-    t = str(tree or "?")
-    return "golden" if t == "golden" else t
-
-
 def render_markdown(rows: list[dict]) -> str:
     """Render the scores as a committed, human-readable SCORES.md.
 
@@ -1588,14 +1588,10 @@ def render_markdown(rows: list[dict]) -> str:
     """
     multi = any(r.get("runs", 1) > 1 for r in rows)
     max_runs = max((r.get("runs", 1) for r in rows), default=1)
-    # Every batch that contributed, in a stable order, so each run gets its own column.
-    # Ordered by first appearance rather than sorted, because batch order is chronological
-    # (golden, s2, s3) and sorting would scramble it.
-    trees: list[str] = []
-    for r in rows:
-        for t in (r.get("by_tree") or {}):
-            if t and t not in trees:
-                trees.append(t)
+    # Counted, not asserted in prose: the depth is uneven (a fixture added late exists in
+    # fewer batches), and a hand-written "up to N runs" sentence stops matching the table the
+    # first time the baseline is refreshed at a different depth.
+    single_draw = sum(1 for r in rows if (r.get("scored_runs") or r.get("runs", 1)) < 2)
     out = [
         "# Report accuracy scores",
         "",
@@ -1623,30 +1619,31 @@ def render_markdown(rows: list[dict]) -> str:
 
     if multi:
         out += [
-            f"**Sample depth: up to {max_runs} independent runs per fixture.** `sd` is the "
-            "measured per-fixture standard deviation and `spread` the max−min across runs; "
-            "both read `—` where a fixture was drawn only once (it exists in only some "
-            "batches), because `0.000` there would read as rock-steady when nothing was "
-            "measured at all.",
+            f"**Sample depth: up to {max_runs} independent runs per fixture"
+            + (f", {single_draw} fixture(s) drawn once" if single_draw else "")
+            + ".** `sd` is the measured per-fixture standard deviation and `spread` the "
+            "max−min across runs. Both read `—` for a fixture drawn only once — not "
+            "`0.000`, which would read as re-run and rock-steady when nothing was compared "
+            "at all.",
             "",
             "A delta counts as real only past `max(2·sd, floor)` — the noise floor "
             f"(**ARA {NOISE_FLOOR['ara']:.2f}**, **MOD {NOISE_FLOOR['mod']:.2f}**) is a "
             "lower bound the measured `sd` can raise but never lower. A jittery fixture is "
             "held to a stricter bar than the floor; a quiet one is not held to a looser one, "
-            "because an n=3 `sd` is far too weak an estimator to justify shrinking the bar "
-            "and shrinking it is the direction that manufactures false improvements. "
+            f"because an n={max_runs} `sd` is far too weak an estimator to justify shrinking "
+            "the bar and shrinking it is the direction that manufactures false improvements. "
             "**Below the threshold means NOT MEASURED — never \"proven equal\".**",
             "",
         ]
-        if len(trees) > 1:
-            out += [
-                "Every batch has its own column — same TD, same fixtures, different run. "
-                "Columns: " + ", ".join(f"`{_batch_label(t)}`" for t in trees) + ". "
-                "The point of showing them side by side is that the mean alone hides "
-                "disagreement: 0.72 / 0.92 and a steady 0.82 both average to 0.82, but only "
-                "one of them is a measurement.",
-                "",
-            ]
+        out += [
+            "The per-run scores are listed in the **Runs** column rather than one column per "
+            "batch: the two analyses are sampled from different batches, so a shared column "
+            "per batch left every row half-empty and the reader counting dashes to work out "
+            "which run was which. The point of showing the runs at all is that the mean "
+            "hides disagreement — 0.72 / 0.92 and a steady 0.82 both average to 0.82, but "
+            "only one of them is a measurement.",
+            "",
+        ]
     else:
         out += [
             "**Sample depth: 1 run per fixture (single draw).** There is no measured "
@@ -1673,12 +1670,21 @@ def render_markdown(rows: list[dict]) -> str:
                        f"{min(scored):.2f}–{max(scored):.2f}.")
             out.append("")
         detail_hdr = "Tier / blockers" if a == "ara" else "MOD score / band"
-        # Per-batch score columns, so every run is visible and the mean can be checked by
-        # eye. This is what makes disagreement between batches legible instead of averaged
-        # away: two runs of 0.72/0.92 and a steady 0.82 both mean 0.82.
-        batch_cols = [_batch_label(t) for t in trees] if len(trees) > 1 else []
-        cols = (["Repo"] + (["Mean"] if batch_cols else ["Score"]) + batch_cols
-                + (["sd", "spread"] if multi else []) + ["Checks", detail_hdr])
+        # This analysis' OWN batches, in chronological (first-appearance) order. Scoped per
+        # analysis on purpose: ARA and MOD are sampled from different batches, so a shared
+        # column set printed 6 columns of which 3 were always "—" on every row.
+        trees: list[str] = []
+        for r in sub:
+            for t in (r.get("by_tree") or {}):
+                if t and t not in trees:
+                    trees.append(t)
+        # The runs go in ONE column as a compact list. Per-batch columns don't survive
+        # contact with more batches: at n=4 the table was already 12 columns wide and wraps
+        # in a terminal and on GitLab, which is where contributors actually read it. Which
+        # batch a run came from is in the JSON; what a reader needs here is the SHAPE of the
+        # disagreement, and "0.72 / 0.88 / 0.82" shows that in one glance.
+        cols = (["Repo"] + (["Mean"] if multi else ["Score"])
+                + (["Runs", "sd", "spread"] if multi else []) + ["Checks", detail_hdr])
         out.append("| " + " | ".join(cols) + " |")
         out.append("|" + "|".join(["---"] * len(cols)) + "|")
         # Worst first: the reports needing attention should be read first, and a reader
@@ -1686,24 +1692,28 @@ def render_markdown(rows: list[dict]) -> str:
         for r in sorted(sub, key=lambda x: (x.get("score") is None, x.get("score") or 0)):
             sc = "—" if r.get("score") is None else f"{r['score']:.2f}"
             failed = r.get("checks_failed") or []
-            # Name the checks rather than printing a bare count: "1 FAIL" tells a reader
-            # nothing about whether the report is unusable or trivially over-answered.
+            # Severity only. The check NAMES used to be inlined here too, which made this the
+            # widest column in the table while repeating verbatim what the defects table
+            # below already lists per failure — with the detail string that makes the name
+            # mean something. A reader scanning for "which reports are broken" wants the
+            # severity; a reader acting on one wants the defects table.
             if not failed:
                 flag = "PASS"
             else:
-                names = ", ".join(f"`{c.get('check')}`" for c in failed)
                 worst = min((c.get("severity", "low") for c in failed),
                             key=lambda s: _SEV_ORDER.get(s, 9))
-                flag = f"**{worst.upper()}** — {names}"
+                n = f" ×{len(failed)}" if len(failed) > 1 else ""
+                flag = f"**{worst.upper()}**{n}"
             detail = (f"{r.get('tier')} / {r.get('blockers')}" if a == "ara"
                       else f"{r.get('overall_score')} / {r.get('band')}")
             cells = [f"`{r['repo']}`", sc]
-            for t in trees:
-                if len(trees) <= 1:
-                    break
-                v = (r.get("by_tree") or {}).get(t)
-                cells.append("—" if not isinstance(v, (int, float)) else f"{v:.2f}")
             if multi:
+                # In batch order, so the list is reproducible rather than sorted into a
+                # tidier-looking sequence that no longer says which run moved.
+                bt = r.get("by_tree") or {}
+                runs = [f"{bt[t]:.2f}" for t in trees
+                        if isinstance(bt.get(t), (int, float))]
+                cells.append(" / ".join(runs) if runs else "—")
                 # A single-draw unit publishes "—" for both. `stddev: 0.000` in a published
                 # table is the most misleading cell the harness could print: a reader takes
                 # it as "measured, never moved" and trusts a delta the harness never

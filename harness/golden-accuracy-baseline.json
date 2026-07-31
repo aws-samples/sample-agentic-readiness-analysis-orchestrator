@@ -2,781 +2,729 @@
   {
     "repo": "legacy-crm-desktop",
     "analysis": "ara",
-    "source_tree": "ara-draw3",
+    "source_tree": "after-tdfix-d3",
     "checks_failed": [],
-    "n_findings": 20,
-    "n_evaluations": 23,
+    "n_findings": 18,
+    "n_evaluations": 25,
     "tier": "Remediation Required",
     "blockers": 2,
-    "score": 0.89,
-    "summary": "The report is largely accurate about this legacy VB6 desktop CRM repository. It correctly identifies the stateful-crud archetype, applies surface-flag calibrations appropriately (downgrading API-Q2, API-Q3, etc. for no HTTP/RPC surface), and handles the read-only agent_scope conditional severities correctly. The findings cite real code patterns (hardcoded credentials, SQL injection, no API surface). Minor issues include API-Q7 being marked 'pass' when it should be evaluated as a finding for stateful-crud archetype, and some count inconsistencies between findings and evaluations.",
+    "score": 0.88,
+    "summary": "The report accurately identifies the legacy VB6 desktop application's fundamental lack of API surface and authentication, correctly classifying it as stateful-crud with read-only agent scope. Evidence citations are concrete and grounded in the actual source code. The tier arithmetic is correct (2 BLOCKERs \u2192 Remediation Required), and scope-dependent questions are properly resolved. Minor issues include DATA-Q6 being elevated to RISK-SAFETY when surface flags suggest INFO would be appropriate, and some weak evidence on extended questions.",
     "fabrications": [],
-    "misses": [
-      {
-        "what": "API-Q7 Event Emission for State Changes should be evaluated as a finding, not passed",
-        "where": "frmCustomer.frm - INSERT operations with no event emission",
-        "question_id": "API-Q7",
-        "severity_should_be": "INFO",
-        "why_it_matters": "The extended question trigger 'Service has state changes (stateful-crud, orchestrator)' is met - this is a stateful-crud archetype with write operations. Should be evaluated as INFO finding, not passed."
-      }
-    ],
+    "misses": [],
     "rubric_gaps": [],
     "deliverable_defects": [
       {
         "deliverable": "remediation_roadmap",
-        "what_is_wrong": "Phase 1 includes RISK-SAFETY findings (AUTH-Q2, AUTH-Q3, AUTH-Q5, AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2) mixed with BLOCKERs",
-        "why": "The phase naming and structure conflates BLOCKER resolution with RISK-SAFETY remediation. However, this is minor as all BLOCKERs are correctly in phase 1."
+        "what_is_wrong": "DATA-Q6 listed in Phase 1 as RISK-SAFETY finding, but per calibration rules it should be INFO",
+        "why": "Surface flags show has_logging_of_user_data=false AND has_persistent_data_store=true. The calibration rule states: 'If has_logging_of_user_data is false AND has_persistent_data_store is false, record as INFO'. Since has_persistent_data_store=true, the rule doesn't fully apply, but the system currently has no logging infrastructure at all (VB6 desktop app), so the PII-in-logs risk is theoretical rather than actual. The finding itself is debatable but not strictly wrong given the persistent data store flag."
       }
     ],
     "weak_evidence": [
-      "OBS-Q2: Evidence cites README.md lines 1-18 which describes architecture, not alerting - weak connection to the finding"
+      "API-Q6: Extended question marked not_evaluated_extended citing 'no evidence of operations >30s' but the nightly sync job to SQL Server mentioned in README could qualify as a long-running workflow - though this is arguably a separate batch process, not the CRM itself",
+      "DATA-Q3: Extended question marked not_evaluated_extended but the application does have customer queries that could return unbounded results - though no list endpoints exist since there's no API"
     ],
     "strengths": [
-      "Correct identification of stateful-crud archetype with solid justification citing persistent state and CRUD operations",
-      "Accurate application of surface-flag calibrations: API-Q2, API-Q3, STATE-Q5, ENG-Q1, ENG-Q2, ENG-Q3 correctly downgraded to INFO for no HTTP/RPC surface",
-      "Correct handling of read-only agent_scope conditionals: API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2 all resolved to appropriate severities",
-      "Accurate identification of hardcoded credentials (AUTH-Q5) with specific line citation to DB_PW constant",
-      "Correct identification of SQL injection vulnerability under DATA-Q4 at RISK-QUALITY severity per the rubric",
-      "Proper handling of extended questions: HITL-Q1, HITL-Q2, STATE-Q3 correctly not evaluated for read-only scope",
-      "AUTH-Q7 correctly resolved to INFO due to has_auth_surface=false calibration rule"
+      "Correct identification of service_archetype as stateful-crud with concrete justification citing the Access .mdb database and INSERT operations on Customers table",
+      "Accurate detection of hardcoded credentials (DB_PW = 'crm2005pw' at line 17 of frmCustomer.frm) under AUTH-Q5",
+      "Correct identification of SQL injection vulnerability under DATA-Q4 with precise line citations (lines 26-27) showing string concatenation",
+      "Proper application of surface-flag calibration rules: API-Q2, API-Q3, AUTH-Q7, STATE-Q5, OBS-Q1, OBS-Q2, ENG-Q1, ENG-Q2, ENG-Q3 all correctly downgraded to INFO due to has_http_rpc_surface=false",
+      "Correct scope-dependent question resolution: API-Q4, STATE-Q3, STATE-Q6, HITL-Q1, HITL-Q2 all correctly resolved to INFO under read-only scope",
+      "AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2 correctly resolved to RISK-SAFETY (not BLOCKER) under read-only scope",
+      "Tier arithmetic is correct: 2 BLOCKERs (API-Q1, AUTH-Q1) \u2192 Remediation Required",
+      "Remediation roadmap correctly sequences BLOCKERs in Phase 1"
     ],
-    "runs": 3,
+    "runs": 4,
     "scores": [
       0.88,
-      0.91,
+      0.88,
+      0.88,
       0.88
     ],
     "sources": [
       "after-tdfix",
       "ara-draw2",
-      "ara-draw3"
+      "ara-draw3",
+      "after-tdfix-d3"
     ],
     "by_tree": {
       "after-tdfix": 0.88,
-      "ara-draw2": 0.91,
-      "ara-draw3": 0.88
+      "ara-draw2": 0.88,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.88
     },
-    "scored_runs": 3,
-    "spread": 0.03,
-    "stddev": 0.014
+    "scored_runs": 4,
+    "spread": 0.0,
+    "stddev": 0.0
   },
   {
     "repo": "legacy-document-portal",
     "analysis": "ara",
-    "source_tree": "ara-draw3",
+    "source_tree": "after-tdfix-d3",
     "checks_failed": [],
     "n_findings": 30,
     "n_evaluations": 13,
     "tier": "Remediation Required",
     "blockers": 2,
-    "score": 0.88,
-    "summary": "The report is largely accurate about this legacy ColdFusion repository. It correctly identifies the two BLOCKERs (API-Q1, AUTH-Q1), properly applies read-only scope downgrades for conditional questions, and the service archetype (stateful-crud) is justified by the SQL Server database and document CRUD operations. Minor issues include weak evidence on some findings and one questionable remediation phasing decision.",
+    "score": 0.865,
+    "summary": "The report is largely accurate about the legacy ColdFusion application, correctly identifying its lack of API surface, authentication mechanisms, and numerous security deficiencies. The archetype (stateful-crud) and scope handling are correct. However, there are issues with the has_http_rpc_surface flag being set to false when the application does serve HTTP requests, and some calibration downgrades were applied incorrectly as a result.",
     "fabrications": [],
     "misses": [],
     "rubric_gaps": [
       {
         "what": "Path traversal vulnerability in download.cfm - filename from DB used directly in file path",
-        "where": "download.cfm lines 6-8",
-        "why_no_question_fits": "Path traversal is not explicitly listed under DATA-Q4's injection types (SQL, NoSQL, XXE, command injection). While it could arguably fit under 'unvalidated input', the report doesn't address this specific file-serving vulnerability."
+        "where": "download.cfm",
+        "why_no_question_fits": "Path traversal is listed alongside injection under DATA-Q4's ownership, but the report's DATA-Q4 finding focuses only on SQL injection and doesn't mention the path traversal issue explicitly documented in the code comments and README"
       }
     ],
     "deliverable_defects": [
       {
-        "deliverable": "remediation_roadmap",
-        "what_is_wrong": "DATA-Q4 (SQL injection) placed in Phase 1 with correct priority but marked as P2 in the finding itself",
-        "why": "The finding says P2/Phase 1 which is inconsistent - a P0 security fix should be P0, not P2. The recommended_actions correctly treats it as P0."
+        "deliverable": "service_archetype",
+        "what_is_wrong": "has_http_rpc_surface set to false",
+        "why": "The application serves HTTP requests via IIS/ColdFusion (index.cfm, download.cfm are web endpoints). While not a REST API, it IS an HTTP surface that agents could potentially call. The README says 'runs HTTP only on the internal network'. This caused incorrect calibration downgrades for API-Q2 and API-Q3 which should have been evaluated as findings rather than passed."
       }
     ],
     "weak_evidence": [
-      "AUTH-Q6: No file path cited, just 'null' evidence - though the absence of audit logging is accurate",
-      "STATE-Q5: No file path cited for rate limiting absence",
-      "OBS-Q1: No evidence field - accurate claim but no specific file reference",
-      "OBS-Q2: No evidence field - accurate claim but no specific file reference",
-      "ENG-Q2: No evidence field - accurate claim but no specific file reference"
+      "API-Q2: marked as pass due to no HTTP surface, but the app does serve HTTP - evidence is contradictory",
+      "API-Q3: same issue - passed due to false has_http_rpc_surface flag"
     ],
     "strengths": [
-      "Correctly identifies the two BLOCKERs (API-Q1 for no documented API, AUTH-Q1 for no machine identity)",
-      "Properly applies read-only scope downgrades: API-Q4, STATE-Q1, STATE-Q3, STATE-Q6, HITL-Q1, HITL-Q2, AUTH-Q6, DATA-Q1, DATA-Q2 all correctly resolved to their read-only severities",
-      "Accurate service archetype detection (stateful-crud) with valid justification citing SQL Server database, session auth, and file storage",
-      "SQL injection correctly identified under DATA-Q4 at RISK-QUALITY severity per the rubric, with specific file/line evidence (index.cfm lines 22-27)",
-      "Hardcoded credentials finding (AUTH-Q5) correctly cites README.md line 18 where 'cfadmin' password is documented",
-      "Extended question STATE-Q7 correctly marked not_evaluated_extended since service is not P0/critical path",
-      "Tier arithmetic is correct: 2 BLOCKERs \u2192 Remediation Required"
+      "Correctly identified API-Q1 as BLOCKER - no documented API interface exists (HTML-only)",
+      "Correctly identified AUTH-Q1 as BLOCKER - no machine identity authentication",
+      "Correctly applied read-only scope downgrades for conditional BLOCKERs (API-Q4, AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2)",
+      "DATA-Q4 correctly identifies SQL injection at RISK-QUALITY severity per the rubric",
+      "AUTH-Q5 correctly identifies the hardcoded credentials in README.md",
+      "Extended questions correctly marked as not_evaluated when triggers not met (STATE-Q4, STATE-Q7, API-Q6)",
+      "Tier calculation is correct: 2 BLOCKERs = Remediation Required",
+      "Remediation roadmap correctly sequences BLOCKERs in phase 1",
+      "Archetype classification as stateful-crud is appropriate given SQL Server database with sessions"
     ],
-    "runs": 3,
+    "runs": 4,
     "scores": [
       0.88,
       0.88,
-      0.88
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.88,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.88
-    },
-    "scored_runs": 3,
-    "spread": 0.0,
-    "stddev": 0.0
-  },
-  {
-    "repo": "legacy-helpdesk-tickets",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [],
-    "n_findings": 36,
-    "n_evaluations": 7,
-    "tier": "Remediation Required",
-    "blockers": 2,
-    "score": 0.87,
-    "summary": "The report is highly accurate and well-grounded in the repository source. It correctly identifies the stateful-crud archetype (Django + PostgreSQL ticket system), properly applies read-only scope calibrations for conditional BLOCKERs, and cites real evidence from settings.py and views.py. The SQL injection finding is correctly filed under DATA-Q4 at RISK-QUALITY severity per the rubric. All 43 questions are accounted for with appropriate coverage and the tier arithmetic is correct.",
-    "fabrications": [],
-    "misses": [],
-    "rubric_gaps": [
-      {
-        "what": "SECRET_KEY and database password committed to source control in settings.py",
-        "where": "helpdesk/settings.py lines 14-25",
-        "why_no_question_fits": "While AUTH-Q5 covers credential management for agent-facing paths, secrets committed to source control (git history exposure) is a distinct security concern not fully owned by AUTH-Q5's agent-credential scope. The report did file it under AUTH-Q5 which is the closest match, but committed secrets vs runtime credential management are adjacent but different risks."
-      },
-      {
-        "what": "DEBUG=True in production leaking stack traces to end users",
-        "where": "helpdesk/settings.py line 7",
-        "why_no_question_fits": "Information disclosure via DEBUG mode is a runtime security configuration issue not clearly owned by any of the 43 questions. The report mentions it under DATA-Q6 context but it's a broader security misconfiguration."
-      }
-    ],
-    "deliverable_defects": [],
-    "weak_evidence": [],
-    "strengths": [
-      "Correctly identifies stateful-crud archetype with accurate justification citing Django + PostgreSQL + ticket CRUD lifecycle",
-      "Properly applies read-only scope calibrations: API-Q4 -> INFO, AUTH-Q6 -> RISK-SAFETY, STATE-Q1 -> RISK-SAFETY, DATA-Q1 -> RISK-SAFETY, DATA-Q2 -> RISK-SAFETY",
-      "SQL injection correctly filed under DATA-Q4 at RISK-QUALITY severity per the authoritative severity table, with accurate file/line citations to tickets/views.py lines 10-23",
-      "Extended questions (API-Q6, STATE-Q3, STATE-Q4, STATE-Q7, HITL-Q1, HITL-Q2) correctly marked not_evaluated_extended with appropriate trigger reasoning",
-      "DISC-Q2 correctly evaluated as pass - the field names (id, subject, requester, priority, status, created) are indeed semantically meaningful as visible in the SQL queries",
-      "Evidence citations are specific and verifiable: AUTH-Q5 points to helpdesk/settings.py lines 14-25 where SECRET_KEY and DB password are hardcoded",
-      "Blocker count of 2 (API-Q1, AUTH-Q1) correctly yields 'Remediation Required' tier per the deterministic formula",
-      "Remediation roadmap correctly sequences BLOCKERs in phase 1"
-    ],
-    "runs": 3,
-    "scores": [
-      0.82,
-      0.88,
-      0.91
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.82,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.91
-    },
-    "scored_runs": 3,
-    "spread": 0.09,
-    "stddev": 0.037
-  },
-  {
-    "repo": "legacy-loan-calculator",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [],
-    "n_findings": 36,
-    "n_evaluations": 7,
-    "tier": "Remediation Required",
-    "blockers": 2,
-    "score": 0.807,
-    "summary": "The report is largely accurate about this legacy Struts application, correctly identifying the lack of API interface, machine authentication, SQL injection, and hardcoded credentials. The archetype (stateful-crud), repo_type (application), and tier calculation (Remediation Required with 2 BLOCKERs) are all correct. However, there are some calibration issues: AUTH-Q7 should be INFO due to has_auth_surface=false, and DATA-Q6 should also be INFO given has_logging_of_user_data=false AND has_persistent_data_store=true does not fully satisfy the downgrade condition but the surface flags suggest minimal PII logging risk. The evidence quality is strong with specific file/line citations.",
-    "fabrications": [],
-    "misses": [],
-    "rubric_gaps": [
-      {
-        "what": "End-of-life framework (Struts 1.3 EOL 2013) and runtime (Java 5, WebLogic 10.3)",
-        "where": "README.md, pom/build system",
-        "why_no_question_fits": "EOL/CVE concerns for frameworks and runtimes are explicitly listed as not covered by the 43 ARA questions"
-      }
-    ],
-    "deliverable_defects": [
-      {
-        "deliverable": "remediation_roadmap",
-        "what_is_wrong": "API-Q4 is listed in Phase 2 findings but it is INFO severity under read-only scope - INFO items should be Phase 3 Quality, not Phase 2 Safety",
-        "why": "The report correctly resolved API-Q4 to INFO but then mis-phased it in the roadmap"
-      },
-      {
-        "deliverable": "recommended_actions",
-        "what_is_wrong": "DATA-Q4 action is marked P1 but the question severity is RISK-QUALITY (Medium), and the action groups it with DATA-Q6 which has different ownership",
-        "why": "SQL injection is owned by DATA-Q4 at RISK-QUALITY severity per the rubric; while urgent, the priority assignment conflates security intuition with the rubric's actual severity"
-      }
-    ],
-    "weak_evidence": [
-      "ENG-Q5: claims 'no encryption at rest configuration' but acknowledges Oracle may have TDE - the finding lacks concrete evidence either way",
-      "OBS-Q2: evidence field is null - no specific file/line cited"
-    ],
-    "strengths": [
-      "Correctly identified API-Q1 BLOCKER: no programmatic API exists, only HTML form interface via struts-config.xml",
-      "Correctly identified AUTH-Q1 BLOCKER: only container-managed auth with request.getRemoteUser(), no machine identity support",
-      "Accurately found SQL injection in LoanAction.java lines 46-48 with string concatenation and filed it correctly under DATA-Q4 at RISK-QUALITY",
-      "Correctly identified hardcoded credentials (DB_USER, DB_PASS) in LoanAction.java lines 22-24 under AUTH-Q5",
-      "Proper handling of conditional BLOCKERs under read-only scope: API-Q4 resolved to INFO, AUTH-Q6/STATE-Q1/DATA-Q1/DATA-Q2 resolved to RISK-SAFETY",
-      "Extended questions correctly marked not_evaluated when triggers not met (STATE-Q3, HITL-Q1, HITL-Q2 for read-only scope)",
-      "Service archetype stateful-crud is accurate - application has Oracle database INSERT operations for loan applications",
-      "Question coverage is complete with 36 findings + 7 evaluations = 43 questions resolved"
-    ],
-    "runs": 3,
-    "scores": [
-      0.72,
       0.88,
       0.82
     ],
     "sources": [
       "after-tdfix",
       "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.72,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.82
-    },
-    "scored_runs": 3,
-    "spread": 0.16,
-    "stddev": 0.066
-  },
-  {
-    "repo": "legacy-partner-soap",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [],
-    "n_findings": 37,
-    "n_evaluations": 6,
-    "tier": "Remediation Required",
-    "blockers": 2,
-    "score": 0.86,
-    "summary": "The report is largely accurate about this legacy SOAP service. It correctly identifies the two BLOCKERs (API-Q1 no REST interface, AUTH-Q1 no machine authentication), properly applies conditional severity downgrades for read-only agent scope, and grounds findings in specific code evidence. The archetype classification (stateful-crud) and surface flags are correct. Minor weaknesses include AUTH-Q7 not being downgraded to INFO per calibration rules given has_auth_surface=false, and some findings lack the strongest possible evidence citations.",
-    "fabrications": [],
-    "misses": [
-      {
-        "what": "AUTH-Q7 should be INFO under calibration rules when has_auth_surface=false",
-        "where": "Report metadata shows has_auth_surface=false",
-        "question_id": "AUTH-Q7",
-        "severity_should_be": "INFO (calibration downgrade)",
-        "why_it_matters": "The calibration rules state: If has_auth_surface is false, record as INFO with rationale 'System does not issue or enforce agent identities \u2014 suspension is a consumer responsibility.' Report marked it RISK-SAFETY, affecting the risk_safety_count."
-      }
-    ],
-    "rubric_gaps": [
-      {
-        "what": "XXE vulnerability in XML parsing (DocumentBuilderFactory with no setFeature protections)",
-        "where": "src/com/acme/partner/PurchaseOrderService.java lines 29-31",
-        "why_no_question_fits": "XXE is a specific input parsing vulnerability. DATA-Q4 covers SQL injection and input validation but its evaluation criteria focus on 'parameterized queries (protection against injection)' rather than XML external entity attacks. The report doesn't explicitly address XXE though it mentions 'Raw XML parsing with no schema enforcement'."
-      }
-    ],
-    "deliverable_defects": [
-      {
-        "deliverable": "remediation_roadmap",
-        "what_is_wrong": "DATA-Q4 (SQL injection) is sequenced in Phase 1 with other blockers but marked priority P2 in the finding, creating inconsistency",
-        "why": "SQL injection is a critical security vulnerability that the report correctly places in Phase 1, but the finding itself says P2/Phase 1 which is internally inconsistent prioritization"
-      }
-    ],
-    "weak_evidence": [
-      "OBS-Q2: evidence field is null - no file citation for alerting gap claim",
-      "ENG-Q1: evidence field is null - no file citation for IaC gap claim",
-      "API-Q8: evidence field is null - no file citation for rate limit documentation claim"
-    ],
-    "strengths": [
-      "Correctly identifies both BLOCKERs: API-Q1 (SOAP-only, no REST) citing wsdl/PurchaseOrderService.wsdl, and AUTH-Q1 (no machine auth) citing PurchaseOrderService.java",
-      "Accurately applies conditional BLOCKER->RISK-SAFETY downgrades for read-only scope on AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2 with explicit reasoning",
-      "API-Q4 correctly resolved to INFO under read-only scope per the severity table specification",
-      "Correctly identifies hardcoded credentials (AUTH-Q5) with precise line citations (lines 21-23: DB_USER='partner_app', DB_PASS='partner2009')",
-      "SQL injection finding (DATA-Q4) correctly assigned to that question at RISK-QUALITY severity with accurate code evidence (lines 30-39, string concatenation in SQL)",
-      "Service archetype (stateful-crud) is correct - the service owns persistent state via Oracle DB partner_orders table and exposes write operations",
-      "Extended questions appropriately marked not_evaluated_extended when triggers don't fire (e.g., STATE-Q3 under read-only scope, HITL-Q1/Q2 under read-only scope)"
-    ],
-    "runs": 3,
-    "scores": [
-      0.88,
-      0.82,
-      0.88
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
+      "ara-draw3",
+      "after-tdfix-d3"
     ],
     "by_tree": {
       "after-tdfix": 0.88,
-      "ara-draw2": 0.82,
-      "ara-draw3": 0.88
+      "ara-draw2": 0.88,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.82
     },
-    "scored_runs": 3,
+    "scored_runs": 4,
     "spread": 0.06,
-    "stddev": 0.028
+    "stddev": 0.026
   },
   {
-    "repo": "legacy-payroll-system",
+    "repo": "legacy-helpdesk-tickets",
     "analysis": "ara",
-    "source_tree": "ara-draw3",
+    "source_tree": "after-tdfix-d3",
     "checks_failed": [],
-    "n_findings": 22,
-    "n_evaluations": 21,
+    "n_findings": 28,
+    "n_evaluations": 15,
     "tier": "Remediation Required",
     "blockers": 2,
-    "score": 0.827,
-    "summary": "The report is largely accurate and well-grounded in the source code. It correctly identifies the mainframe COBOL batch system with hardcoded FTP credentials, lack of API surface, and sensitive data handling issues. The archetype (stateful-crud) and surface flags are appropriate. However, there are minor issues with the tier arithmetic - the report claims 2 BLOCKERs but API-Q1's BLOCKER status is questionable since the system has no HTTP/RPC surface (the calibration rules suggest this context matters), and DATA-Q6 was incorrectly elevated to RISK-SAFETY when the surface_flags show has_logging_of_user_data=false, which per calibration rules should downgrade it to INFO.",
+    "score": 0.87,
+    "summary": "The report is largely accurate about this legacy Django repository, correctly identifying the lack of API surface, missing authentication, hardcoded credentials, SQL injection vulnerabilities, and PII exposure. The service archetype (stateful-crud) and repo_type (application) are correct. However, there are some issues with AUTH-Q7 severity under the calibration rules and a few weak evidence items. The roadmap phasing is generally sound with blockers in phase 1.",
     "fabrications": [],
     "misses": [],
     "rubric_gaps": [
       {
-        "what": "Plaintext FTP transfer of SSN and bank account data (transport security)",
-        "where": "jcl/PAYRUN.jcl lines 16-22",
-        "why_no_question_fits": "Transport security / TLS / HTTPS-vs-HTTP in transit is explicitly listed as NOT COVERED BY ANY OF THE 43 QUESTIONS. The report correctly identifies this issue but attributes it to DATA-Q2 (residency) rather than a dedicated transport security question."
-      },
-      {
-        "what": "DB2 v10 end-of-support since April 2020",
-        "where": "README.md line 12",
-        "why_no_question_fits": "End-of-life runtime or dependency CVEs are explicitly listed as not covered by the rubric."
+        "what": "SECRET_KEY committed to source control poses cryptographic session security risk",
+        "where": "helpdesk/settings.py line 26",
+        "why_no_question_fits": "AUTH-Q5 covers credential management for database/service credentials but Django SECRET_KEY for session signing is a different security concern not explicitly owned by any question"
       }
     ],
     "deliverable_defects": [
       {
         "deliverable": "recommended_actions",
-        "what_is_wrong": "DATA-Q6 PII Redaction in Logs rated as RISK-SAFETY and placed in Phase 1, but calibration rules state it should be INFO when has_logging_of_user_data=false AND has_persistent_data_store=false",
-        "why": "The surface_flags show has_logging_of_user_data=false, but has_persistent_data_store=true, so the full calibration condition is not met. However, the archetype calibration for stateless-utility would apply if that were the archetype. Since it's stateful-crud, the RISK-SAFETY rating is actually defensible given the system does handle user PII even if not explicitly logging it."
+        "what_is_wrong": "AUTH-Q7 is marked RISK-SAFETY but should be INFO per calibration rules",
+        "why": "Surface flags show has_auth_surface=false, which triggers the calibration rule: 'If has_auth_surface is false, record as INFO with the rationale System does not issue or enforce agent identities'. The report incorrectly assessed AUTH-Q7 as RISK-SAFETY when the calibration downgrade should apply."
       }
     ],
     "weak_evidence": [
-      "API-Q1: The finding correctly identifies no REST/GraphQL API, but the evidence pointing to JCL lines 1-24 is generic - could be more specific about what integration paths actually exist",
-      "HITL-Q3: Evidence cites README.md line 18 about 'shared QA region' but the actual text is on a different line describing lack of automated tests"
+      "STATE-Q5: No evidence field provided - claim of no rate limiting is correct but should cite specific files",
+      "ENG-Q2: No evidence field provided for CI/CD claim",
+      "API-Q2: No evidence field provided for OpenAPI claim",
+      "OBS-Q2: No evidence field provided for alerting claim",
+      "DISC-Q1: No evidence field provided for schema versioning claim",
+      "ENG-Q4: No evidence field provided - README.md mentions 'stale unit tests' which contradicts 'no tests' claim"
     ],
     "strengths": [
-      "Correctly identifies hardcoded FTP credentials in jcl/PAYRUN.jcl lines 16-22 with username 'payroll' and password 'PayR0ll2003!'",
-      "Accurate archetype classification as stateful-crud with solid justification citing DB2 database, indexed VSAM files, and write operations",
-      "Proper application of read-only agent_scope conditional logic for API-Q4, AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2 - all correctly downgraded from BLOCKER to RISK-SAFETY or INFO",
-      "Correct identification of sensitive data fields (SSN in EMP-SSN PIC 9(09), bank account in EMP-ACCT PIC X(17)) in src/PAYRUN.cbl lines 20-25",
-      "Appropriate handling of extended questions - STATE-Q3, HITL-Q1, HITL-Q2 correctly marked not_evaluated_extended due to read-only scope",
-      "Surface flags accurately reflect the codebase: has_http_rpc_surface=false (correct - no REST/GraphQL), has_persistent_data_store=true (DB2/VSAM), has_write_operations=true (generates payout files)",
-      "Calibration downgrades correctly applied for API-Q2, API-Q3, ENG-Q1, ENG-Q2, ENG-Q3, STATE-Q5 based on has_http_rpc_surface=false"
+      "Correctly identified SQL injection vulnerability in tickets/views.py lines 12-14 and 22-24 under DATA-Q4",
+      "Accurately detected hardcoded database password in settings.py line 18 under AUTH-Q5",
+      "Correctly identified DEBUG=True in production under DATA-Q6 and API-Q3",
+      "Service archetype stateful-crud is accurate - Django app with PostgreSQL performing CRUD on tickets",
+      "Correct application of conditional BLOCKER resolution for read-only agent_scope on API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2",
+      "Accurate identification of no API documentation (API-Q1) - views return HTML not JSON",
+      "Correct identification of no authentication decorators on views (AUTH-Q1)",
+      "Roadmap correctly places both BLOCKERs (API-Q1, AUTH-Q1) in Phase 1",
+      "Extended questions API-Q6 and STATE-Q7 correctly marked not_evaluated_extended"
     ],
-    "runs": 3,
-    "scores": [
-      0.72,
-      0.88,
-      0.88
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.72,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.88
-    },
-    "scored_runs": 3,
-    "spread": 0.16,
-    "stddev": 0.075
-  },
-  {
-    "repo": "legacy-pricing-cgi",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [],
-    "n_findings": 14,
-    "n_evaluations": 29,
-    "tier": "Remediation Required",
-    "blockers": 1,
-    "score": 0.86,
-    "summary": "The report is highly accurate and well-grounded in the source code. It correctly identifies the service as a stateless-utility CGI application, properly applies scope and archetype calibrations to downgrade many questions to INFO, and accurately identifies the lack of authentication as the sole BLOCKER. The remediation roadmap correctly phases blockers first, and the evidence citations point to real files and code patterns.",
-    "fabrications": [],
-    "misses": [],
-    "rubric_gaps": [
-      {
-        "what": "Buffer overflow vulnerabilities via strcpy/sprintf on user-controlled input",
-        "where": "pricing.cpp lines 16-30",
-        "why_no_question_fits": "DATA-Q4 owns input validation at RISK-QUALITY severity, which the report correctly applied. The underlying memory safety issue is a CVE-class vulnerability but no ARA question assigns BLOCKER severity to buffer overflows specifically."
-      },
-      {
-        "what": "Reflected XSS vulnerability - user input printed to HTML without escaping",
-        "where": "pricing.cpp line 57 (printf SKU)",
-        "why_no_question_fits": "XSS is not explicitly covered by any of the 43 ARA questions. DATA-Q4 covers input validation but the evaluation criteria focus on injection (SQL, command) rather than output encoding."
-      }
-    ],
-    "deliverable_defects": [],
-    "weak_evidence": [
-      "ENG-Q1: Finding says 'no peer review requirements' but this is inferred from absence rather than demonstrated - acceptable given the source has no CI config files"
-    ],
-    "strengths": [
-      "Correctly classified as stateless-utility archetype with accurate justification citing the CGI binary's read-only nature and flat file data source",
-      "Properly applied all calibration downgrades for stateless-utility archetype (AUTH-Q4, DATA-Q1, DATA-Q2, DATA-Q5, DATA-Q6, STATE-Q1, STATE-Q5)",
-      "AUTH-Q1 correctly identified as BLOCKER with specific evidence pointing to pricing.cpp lacking any authentication mechanism",
-      "Extended questions (API-Q6, API-Q7, STATE-Q2, STATE-Q4, STATE-Q7, DATA-Q3, DATA-Q5, ENG-Q5) correctly marked not_evaluated_extended with appropriate trigger justifications",
-      "Remediation roadmap correctly sequences BLOCKER and RISK-SAFETY findings in Phase 1, quality items in Phase 2",
-      "Surface flags accurately reflect the codebase: has_http_rpc_surface=true (CGI endpoint), has_persistent_data_store=false (reads flat file at runtime), has_auth_surface=false, has_write_operations=false",
-      "DATA-Q4 finding correctly identifies strcpy buffer overflow risk at RISK-QUALITY severity per the authoritative table"
-    ],
-    "runs": 3,
-    "scores": [
-      0.78,
-      0.88,
-      0.92
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.78,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.92
-    },
-    "scored_runs": 3,
-    "spread": 0.14,
-    "stddev": 0.059
-  },
-  {
-    "repo": "legacy-shipping-api",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [],
-    "n_findings": 33,
-    "n_evaluations": 10,
-    "tier": "Remediation Required",
-    "blockers": 1,
-    "score": 0.88,
-    "summary": "The report is largely accurate about the legacy-shipping-api repository. It correctly identifies the service archetype (data-gateway), properly applies read-only agent scope calibrations, and grounds findings in actual code evidence. The hardcoded API key, lack of authentication mechanisms, missing input validation, and absence of logging are all real issues correctly identified. Minor issues include some weak evidence citations and a debatable downgrade of AUTH-Q4 to INFO.",
-    "fabrications": [],
-    "misses": [],
-    "rubric_gaps": [
-      {
-        "what": "MongoDB connection string with no authentication (mongodb://10.0.8.20:27017/shipping)",
-        "where": "server.js:13",
-        "why_no_question_fits": "While AUTH-Q5 covers credential management for the API key, the unauthenticated MongoDB connection is a separate infrastructure security gap not directly owned by any of the 43 questions"
-      }
-    ],
-    "deliverable_defects": [
-      {
-        "deliverable": "remediation_roadmap",
-        "what_is_wrong": "STATE-Q1 is sequenced in Phase 1 as a blocker-level item but it correctly resolved to RISK-SAFETY under read-only scope",
-        "why": "While grouping with other safety items is reasonable, the P0 priority assigned to STATE-Q1 finding is inconsistent with its RISK-SAFETY severity since the system has no write operations"
-      }
-    ],
-    "weak_evidence": [
-      "STATE-Q1: evidence cites entire file (lines 1-45) rather than specific absence of compensation logic",
-      "STATE-Q5: evidence cites entire file rather than specific locations where rate limiting would be implemented",
-      "STATE-Q6: evidence cites entire file rather than specific code paths"
-    ],
-    "strengths": [
-      "Correctly identified service_archetype as data-gateway based on the read-focused MongoDB access pattern",
-      "Properly applied read-only agent_scope calibration, downgrading conditional BLOCKERs (API-Q4, STATE-Q1, AUTH-Q6, etc.) to appropriate severities",
-      "AUTH-Q1 correctly flagged as BLOCKER with accurate evidence of hardcoded static API key at server.js:10",
-      "DATA-Q4 correctly identified NoSQL injection risk from unvalidated query params passed to MongoDB filter at server.js:26",
-      "AUTH-Q5 accurately documents both hardcoded API key and MongoDB credentials in source",
-      "Extended questions (API-Q6, API-Q7, STATE-Q3, STATE-Q7, HITL-Q1, HITL-Q2) correctly marked not_evaluated_extended with accurate trigger reasoning",
-      "AUTH-Q4 correctly downgraded to INFO per archetype calibration for data-gateway",
-      "DATA-Q1 correctly resolved to INFO via Stage A (no sensitive data - only shipping rates)",
-      "DATA-Q2 and DATA-Q6 correctly passed since system handles only shipping rate reference data with no PII"
-    ],
-    "runs": 3,
-    "scores": [
-      0.88,
-      0.88,
-      0.88
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.88,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.88
-    },
-    "scored_runs": 3,
-    "spread": 0.0,
-    "stddev": 0.0
-  },
-  {
-    "repo": "legacy-storefront-rails",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [],
-    "n_findings": 38,
-    "n_evaluations": 5,
-    "tier": "Remediation Required",
-    "blockers": 2,
-    "score": 0.88,
-    "summary": "The report is largely accurate about this legacy Rails repository. It correctly identifies the stateful-crud archetype, applies read-only scope downgrades appropriately for conditional BLOCKERs, and grounds most findings in real code patterns. The main issues are minor: AUTH-Q7 lacks evidence citation, and the phasing places some non-blocker items in phase 1 alongside true blockers, though this is defensible for safety reasons.",
-    "fabrications": [],
-    "misses": [],
-    "rubric_gaps": [
-      {
-        "what": "Session secret stored in source control (mentioned in README)",
-        "where": "README.md",
-        "why_no_question_fits": "No rubric question specifically covers session management or session secret exposure; AUTH-Q5 focuses on credential management for service authentication, not session secrets."
-      },
-      {
-        "what": "EOL runtime (Ruby 1.8.7, Rails 2.3) with known CVEs",
-        "where": "README.md",
-        "why_no_question_fits": "End-of-life runtime/dependency CVEs are explicitly listed as not covered by the 43 questions."
-      },
-      {
-        "what": "No HTTPS termination configured",
-        "where": "README.md",
-        "why_no_question_fits": "Transport security/TLS is explicitly listed as not covered by the rubric."
-      }
-    ],
-    "deliverable_defects": [],
-    "weak_evidence": [
-      "AUTH-Q7: Finding has null evidence field - no specific file or code pattern cited to support the claim about missing identity suspension mechanism"
-    ],
-    "strengths": [
-      "Correctly identifies SQL injection vulnerability in orders_controller.rb line 10 under DATA-Q4 at RISK-QUALITY severity, which is the correct rubric severity for input validation issues",
-      "Accurately detects hardcoded credentials in config/payment.yml and files under AUTH-Q5 at RISK-SAFETY",
-      "Properly applies read-only scope downgrade for API-Q4 (idempotency) to INFO, AUTH-Q6 to RISK-SAFETY, STATE-Q1 to RISK-SAFETY, and DATA-Q1/DATA-Q2 to RISK-SAFETY",
-      "Correctly marks STATE-Q3, HITL-Q1, HITL-Q2 as not_evaluated_extended since agent_scope is read-only",
-      "Service archetype stateful-crud is correct - the app has MySQL database, CRUD operations on orders, and user-specific data",
-      "Tier calculation is correct: 2 BLOCKERs (API-Q1, AUTH-Q1) yields Remediation Required",
-      "Accurately identifies mass assignment vulnerability and lack of attr_accessible in the create action",
-      "Correctly notes the comment about missing auth before_filter as evidence for AUTH-Q1"
-    ],
-    "runs": 3,
-    "scores": [
-      0.88,
-      0.88,
-      0.88
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.88,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.88
-    },
-    "scored_runs": 3,
-    "spread": 0.0,
-    "stddev": 0.0
-  },
-  {
-    "repo": "legacy-timesheet-webforms",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [],
-    "n_findings": 29,
-    "n_evaluations": 14,
-    "tier": "Remediation Required",
-    "blockers": 2,
-    "score": 0.813,
-    "summary": "The report accurately identifies the key issues in this legacy WebForms application and correctly classifies it as stateful-crud with read-only agent scope. The tier determination (Remediation Required with 2 BLOCKERs) is correct. However, there are several issues: some INFO-level evaluations claim findings were 'emitted' but no corresponding findings exist in the findings array, and the question coverage appears incomplete for several INFO questions that should have findings but only have evaluations.",
-    "fabrications": [
-      {
-        "question_id": "API-Q5",
-        "claim": "status: pass with reason 'INFO question \u2014 finding emitted'",
-        "why_wrong": "No finding for API-Q5 exists in the findings array. The evaluation claims a finding was emitted but none was."
-      },
-      {
-        "question_id": "API-Q7",
-        "claim": "status: pass with reason 'INFO question \u2014 finding emitted'",
-        "why_wrong": "No finding for API-Q7 exists in the findings array. The evaluation claims a finding was emitted but none was."
-      },
-      {
-        "question_id": "API-Q8",
-        "claim": "status: pass with reason 'INFO question \u2014 finding emitted'",
-        "why_wrong": "No finding for API-Q8 exists in the findings array. The evaluation claims a finding was emitted but none was."
-      },
-      {
-        "question_id": "DATA-Q7",
-        "claim": "status: pass with reason 'INFO question \u2014 finding emitted'",
-        "why_wrong": "No finding for DATA-Q7 exists in the findings array. The evaluation claims a finding was emitted but none was."
-      },
-      {
-        "question_id": "DISC-Q2",
-        "claim": "status: pass with reason 'INFO question \u2014 field names are semantic. Finding emitted'",
-        "why_wrong": "No finding for DISC-Q2 exists in the findings array. The evaluation claims a finding was emitted but none was."
-      },
-      {
-        "question_id": "DISC-Q3",
-        "claim": "status: pass with reason 'INFO question \u2014 finding emitted'",
-        "why_wrong": "No finding for DISC-Q3 exists in the findings array. The evaluation claims a finding was emitted but none was."
-      },
-      {
-        "question_id": "OBS-Q3",
-        "claim": "status: pass with reason 'INFO question \u2014 finding emitted'",
-        "why_wrong": "No finding for OBS-Q3 exists in the findings array. The evaluation claims a finding was emitted but none was."
-      },
-      {
-        "question_id": "API-Q4",
-        "claim": "status: pass with finding emitted as INFO",
-        "why_wrong": "No finding for API-Q4 exists in the findings array despite the evaluation claiming one was emitted."
-      },
-      {
-        "question_id": "STATE-Q3",
-        "claim": "status: pass with finding emitted as INFO",
-        "why_wrong": "No finding for STATE-Q3 exists in the findings array despite the evaluation claiming one was emitted."
-      },
-      {
-        "question_id": "STATE-Q6",
-        "claim": "status: pass with finding emitted as INFO",
-        "why_wrong": "No finding for STATE-Q6 exists in the findings array despite the evaluation claiming one was emitted."
-      },
-      {
-        "question_id": "HITL-Q1",
-        "claim": "status: pass with finding emitted as INFO",
-        "why_wrong": "No finding for HITL-Q1 exists in the findings array despite the evaluation claiming one was emitted."
-      },
-      {
-        "question_id": "HITL-Q2",
-        "claim": "status: pass with finding emitted as INFO",
-        "why_wrong": "No finding for HITL-Q2 exists in the findings array despite the evaluation claiming one was emitted."
-      }
-    ],
-    "misses": [],
-    "rubric_gaps": [
-      {
-        "what": "No HTTPS - forms auth cookie sent in clear text (transport security)",
-        "where": "web.config line 9 requireSSL='false'",
-        "why_no_question_fits": "Transport security/TLS is explicitly listed as not covered by any of the 43 questions"
-      },
-      {
-        "what": "End-of-life runtime (.NET Framework 2.0, Windows Server 2003, IIS 6)",
-        "where": "README.md",
-        "why_no_question_fits": "End-of-life runtime/dependency CVEs are explicitly listed as not covered by the rubric"
-      }
-    ],
-    "deliverable_defects": [
-      {
-        "deliverable": "remediation_roadmap",
-        "what_is_wrong": "DATA-Q4 (SQL injection) is placed in Phase 1 with P2 priority in the finding but P1 in recommended_actions - inconsistent prioritization",
-        "why": "The finding says priority P2 and phase 1, while recommended_actions says P1. SQL injection fix should be consistent."
-      },
-      {
-        "deliverable": "recommended_actions",
-        "what_is_wrong": "Counts are inconsistent - report claims 12 INFO findings but only 29 total findings exist, and evaluations claim findings were emitted that don't exist",
-        "why": "The counts section shows info_count: 12 but there are far fewer INFO findings actually in the findings array"
-      }
-    ],
-    "weak_evidence": [
-      "ENG-Q1: No evidence cited (evidence: null) for no IaC claim",
-      "ENG-Q2: No evidence cited (evidence: null) for no CI/CD claim",
-      "ENG-Q3: No evidence cited (evidence: null) for no rollback claim",
-      "ENG-Q4: No evidence cited (evidence: null) for no test coverage claim",
-      "OBS-Q2: No evidence cited (evidence: null) for no alerting claim"
-    ],
-    "strengths": [
-      "Correctly identified service_archetype as stateful-crud based on SQL Server CRUD operations",
-      "Correctly identified agent_scope as read-only and applied conditional severity rules appropriately for AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2",
-      "Accurately identified SQL injection vulnerability in Timesheet.aspx.vb lines 20-26 and 34-42 with string concatenation",
-      "Correctly identified plaintext credentials in web.config (ts_app/Time2006!)",
-      "Correctly identified customErrors mode=Off exposing stack traces",
-      "Tier determination (Remediation Required with 2 BLOCKERs: API-Q1, AUTH-Q1) is arithmetically correct",
-      "API-Q1 BLOCKER is well-grounded - WebForms has no REST/GraphQL API surface for agents",
-      "AUTH-Q1 BLOCKER is well-grounded - only Forms Authentication exists, no machine identity support"
-    ],
-    "runs": 3,
-    "scores": [
-      0.78,
-      0.88,
-      0.78
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.78,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.78
-    },
-    "scored_runs": 3,
-    "spread": 0.1,
-    "stddev": 0.047
-  },
-  {
-    "repo": "modern-catalog-graphql",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [
-      {
-        "check": "missing_safety_qualifier",
-        "severity": "high",
-        "detail": "blocker_count=0 and risk_safety_count=3 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)'"
-      }
-    ],
-    "n_findings": 22,
-    "n_evaluations": 21,
-    "tier": "Pilot-Ready",
-    "blockers": 0,
-    "score": 0.853,
-    "summary": "The report is largely accurate about this repository, correctly identifying the stateful-crud archetype, the GraphQL/DynamoDB/Lambda stack, and most technical gaps. The tier arithmetic is correct (0 BLOCKER, 3 RISK-SAFETY = Pilot-Ready with Safety Concerns), though the pre-check flagged a formatting issue with sub_qualifier. The report correctly applies scope-dependent severities for read-only scope and grounds findings in actual code. However, there are some weak evidence issues and one questionable finding.",
-    "fabrications": [],
-    "misses": [],
-    "rubric_gaps": [
-      {
-        "what": "No query depth/complexity limit for GraphQL",
-        "where": "src/server.ts, README.md",
-        "why_no_question_fits": "The README explicitly calls out missing query depth/complexity limits as a hardening gap. This is a DoS/availability concern specific to GraphQL that no ARA question directly covers - STATE-Q5 covers rate limiting but not query complexity analysis."
-      }
-    ],
-    "deliverable_defects": [
-      {
-        "deliverable": "service_archetype",
-        "what_is_wrong": "None - archetype is correct",
-        "why": "stateful-crud is accurate: DynamoDB persistent state, CRUD operations (get/scan/put/update), entity lifecycle management with active flag"
-      },
-      {
-        "deliverable": "remediation_roadmap",
-        "what_is_wrong": "Phase 1 includes AUTH-Q6 and STATE-Q5 which are RISK-SAFETY, correctly prioritized as safety concerns. However, AUTH-Q4 (also RISK-SAFETY) is placed in Phase 2 instead of Phase 1",
-        "why": "All RISK-SAFETY findings should be in Phase 1 for a Safety Concerns qualifier. AUTH-Q4 Identity Propagation is a safety issue but sequenced after quality items."
-      }
-    ],
-    "weak_evidence": [
-      "ENG-Q4: Claims 'zero automated test coverage' and 'no test files exist' but no directory listing proves absence of test files - the repo source provided doesn't include any test directory so this is likely accurate but stated without definitive proof",
-      "STATE-Q4: Marked not_evaluated_extended claiming 'no external service-to-service dependencies' - this is accurate (only DynamoDB via SDK) but the reasoning could cite specific code showing no external HTTP calls"
-    ],
-    "strengths": [
-      "Correctly identifies read-only agent_scope and applies conditional severity downgrades appropriately (API-Q4->INFO, STATE-Q3->INFO, HITL-Q1/Q2->INFO, etc.)",
-      "Accurately detects missing audit logging in deleteProduct (AUTH-Q6) with correct file/line reference to src/resolvers/catalog.ts lines 48-57",
-      "Correctly passes API-Q1 based on schema/catalog.graphql serving as documented API interface",
-      "Accurately identifies DynamoDB SSE encryption at rest (ENG-Q5) from infra/template.yaml SSESpecification",
-      "Correctly passes AUTH-Q5 - no hardcoded credentials found, IAM role-based access",
-      "Accurately identifies scope-based authorization in resolvers (AUTH-Q2, AUTH-Q3) with requireScope function",
-      "Correctly identifies pagination implementation in products query (DATA-Q3)",
-      "Accurate finding on missing explicit rate limiting in API Gateway config (STATE-Q5)",
-      "Correct identification that X-Ray tracing is enabled via SAM Globals (OBS-Q1)"
-    ],
-    "runs": 3,
+    "runs": 4,
     "scores": [
       0.82,
+      0.92,
       0.92,
       0.82
     ],
     "sources": [
       "after-tdfix",
       "ara-draw2",
-      "ara-draw3"
+      "ara-draw3",
+      "after-tdfix-d3"
     ],
     "by_tree": {
       "after-tdfix": 0.82,
       "ara-draw2": 0.92,
-      "ara-draw3": 0.82
+      "ara-draw3": 0.92,
+      "after-tdfix-d3": 0.82
     },
-    "scored_runs": 3,
+    "scored_runs": 4,
     "spread": 0.1,
-    "stddev": 0.047
+    "stddev": 0.05
+  },
+  {
+    "repo": "legacy-loan-calculator",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [],
+    "n_findings": 37,
+    "n_evaluations": 6,
+    "tier": "Remediation Required",
+    "blockers": 2,
+    "score": 0.84,
+    "summary": "The report is largely accurate about this legacy loan calculator repository. It correctly identifies the stateful-crud archetype, the lack of programmatic API, hardcoded credentials, SQL injection vulnerability, and absence of modern infrastructure. The conditional BLOCKER resolutions for read-only scope are correctly applied. Minor issues include some weak evidence citations and a questionable DATA-Q6 finding given the surface flag indicates no user data logging.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [
+      {
+        "what": "End-of-life runtime (Java 5, WebLogic 10.3, Struts 1.3 EOL 2013) with no security patches",
+        "where": "README.md",
+        "why_no_question_fits": "No ARA question specifically covers EOL runtime/framework vulnerabilities - this is a CVE/dependency audit concern outside ARA scope"
+      }
+    ],
+    "deliverable_defects": [
+      {
+        "deliverable": "recommended_actions",
+        "what_is_wrong": "DATA-Q6 finding is questionable given surface_flags.has_logging_of_user_data=false",
+        "why": "The calibration rules state that if has_logging_of_user_data is false AND has_persistent_data_store is false, DATA-Q6 should be INFO. While has_persistent_data_store is true, the current system has NO logging framework at all (as the report acknowledges), making the RISK-SAFETY severity for potential future logging arguably premature."
+      }
+    ],
+    "weak_evidence": [
+      "API-Q2: evidence is null - could cite absence of any .yaml/.json spec files",
+      "API-Q8: evidence is null - could cite struts-config.xml showing no rate limit configuration",
+      "OBS-Q2: evidence is null - could cite README.md mentioning lack of monitoring",
+      "ENG-Q1: evidence is null - could cite README.md describing manual deployment",
+      "DISC-Q3: evidence is null - could cite absence of any metadata/catalog files"
+    ],
+    "strengths": [
+      "Correctly identified stateful-crud archetype based on Oracle database with INSERT operations (src/com/acme/loan/LoanAction.java:55-65)",
+      "Properly applied read-only agent_scope conditional resolution: API-Q4 correctly resolved to INFO, AUTH-Q6/STATE-Q1/DATA-Q1/DATA-Q2 correctly resolved to RISK-SAFETY",
+      "Accurately identified SQL injection vulnerability in saveApplication() with string concatenation (LoanAction.java:55-65) under DATA-Q4 at RISK-QUALITY severity per rubric",
+      "Correctly flagged hardcoded credentials (DB_URL, DB_USER, DB_PASS in LoanAction.java:8-10) under AUTH-Q5",
+      "Appropriate use of extended question triggers - correctly not evaluated STATE-Q3, HITL-Q1, HITL-Q2 for read-only scope",
+      "Remediation roadmap correctly phases BLOCKERs (API-Q1, AUTH-Q1) in Phase 1",
+      "Surface flags accurately reflect the codebase: has_http_rpc_surface=true (Struts), has_write_operations=true (INSERT), has_persistent_data_store=true (Oracle)"
+    ],
+    "runs": 4,
+    "scores": [
+      0.72,
+      0.88,
+      0.88,
+      0.88
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.72,
+      "ara-draw2": 0.88,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.88
+    },
+    "scored_runs": 4,
+    "spread": 0.16,
+    "stddev": 0.069
+  },
+  {
+    "repo": "legacy-partner-soap",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [],
+    "n_findings": 35,
+    "n_evaluations": 8,
+    "tier": "Remediation Required",
+    "blockers": 2,
+    "score": 0.857,
+    "summary": "The report is largely accurate about this legacy SOAP service, correctly identifying the stateful-crud archetype, documenting real issues like SQL injection, XXE vulnerabilities, hardcoded credentials, and missing modern API interfaces. The tier calculation is correct (2 BLOCKERs \u2192 Remediation Required), and scope-dependent questions are properly resolved for read-only scope. However, there are minor issues with deliverable phasing and some weak evidence citations.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [
+      {
+        "what": "WS-Security plaintext password over HTTP transport",
+        "where": "README.md",
+        "why_no_question_fits": "Transport security (TLS/HTTPS) is explicitly listed as not covered by the 43 questions. The report mentions this under AUTH-Q1 but it's technically a rubric gap."
+      }
+    ],
+    "deliverable_defects": [
+      {
+        "deliverable": "remediation_roadmap",
+        "what_is_wrong": "API-Q4 (idempotency) is placed in Phase 2 but was correctly resolved as INFO under read-only scope - INFO items should be Phase 3",
+        "why": "The finding correctly shows native_severity=INFO but the roadmap assigns it to Phase 2 instead of Phase 3 with other INFO findings"
+      },
+      {
+        "deliverable": "recommended_actions",
+        "what_is_wrong": "Action 5 'Implement input validation and parameterized queries' is marked P1 but DATA-Q4 is RISK-QUALITY severity which maps to P2",
+        "why": "DATA-Q4 has native_severity RISK-QUALITY per the report itself, so the action priority should be P2 not P1"
+      }
+    ],
+    "weak_evidence": [
+      "OBS-Q2: evidence is null but the finding claims no alerting - could cite README.md or the absence of monitoring configuration in the codebase",
+      "API-Q8: evidence is null - could cite the WSDL or README showing no rate limit documentation",
+      "DATA-Q7: evidence is null - could cite the INSERT statement showing only basic fields stored"
+    ],
+    "strengths": [
+      "Correctly identified stateful-crud archetype with sound justification citing Oracle 11g persistence and INSERT operation",
+      "Properly resolved all 5 conditional-BLOCKER questions for read-only scope (API-Q4\u2192INFO, AUTH-Q6\u2192RISK-SAFETY, STATE-Q1\u2192RISK-SAFETY, DATA-Q1\u2192RISK-SAFETY, DATA-Q2\u2192RISK-SAFETY)",
+      "Accurately identified SQL injection under DATA-Q4 at RISK-QUALITY severity per the rubric",
+      "XXE vulnerability correctly identified under DATA-Q4 with specific file/line evidence (PurchaseOrderService.java:30-41)",
+      "Hardcoded credentials (DB_USER/DB_PASS) correctly cited at lines 21-23 under AUTH-Q5",
+      "Extended questions correctly marked not_evaluated_extended with proper trigger reasoning (HITL-Q1/Q2 for read-only, STATE-Q3/Q4 for missing triggers)",
+      "Tier arithmetic is correct: 2 BLOCKERs \u2192 Remediation Required with no qualifier",
+      "Surface flags accurately reflect the codebase: has_persistent_data_store=true (Oracle), has_http_rpc_surface=true (SOAP), has_write_operations=true (INSERT)"
+    ],
+    "runs": 4,
+    "scores": [
+      0.88,
+      0.82,
+      0.88,
+      0.85
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.88,
+      "ara-draw2": 0.82,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.85
+    },
+    "scored_runs": 4,
+    "spread": 0.06,
+    "stddev": 0.025
+  },
+  {
+    "repo": "legacy-payroll-system",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [],
+    "n_findings": 25,
+    "n_evaluations": 18,
+    "tier": "Remediation Required",
+    "blockers": 2,
+    "score": 0.825,
+    "summary": "The report is largely accurate about this legacy COBOL payroll system. It correctly identifies the lack of API surface (API-Q1) and machine authentication (AUTH-Q1) as BLOCKERs, properly applies scope-dependent severity downgrades for read-only agent_scope, and appropriately marks questions N/A due to surface flags (no HTTP/RPC surface). The archetype classification and surface flags are correct. Minor issues include weak evidence for DATA-Q6 (the claim of PII in logs is speculative) and some phase sequencing that mixes RISK-SAFETY items into Phase 1.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [
+      {
+        "what": "Plaintext FTP transmission of SSN and bank account data (transport security)",
+        "where": "jcl/PAYRUN.jcl lines 12-18, README.md",
+        "why_no_question_fits": "Transport security / TLS / HTTPS-vs-HTTP in transit is explicitly listed as not covered by the 43 questions. The report mentions this under AUTH-Q5 and DATA-Q2 but neither question formally owns transport encryption."
+      }
+    ],
+    "deliverable_defects": [
+      {
+        "deliverable": "remediation_roadmap",
+        "what_is_wrong": "Phase 1 includes RISK-SAFETY findings (AUTH-Q2, AUTH-Q3, AUTH-Q5, AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2) alongside the actual BLOCKERs",
+        "why": "Per the rubric, Phase 1 should contain only BLOCKERs (API-Q1, AUTH-Q1). While including safety items in phase 1 is not wrong per se, the phase is labeled 'Blockers' but contains non-blockers. This is a minor labeling inconsistency rather than a serious mis-sequencing since no BLOCKER is sequenced behind a quality nit."
+      }
+    ],
+    "weak_evidence": [
+      "DATA-Q6: Claims 'SYSOUT may contain employee data' but the COBOL code only writes PAY-RECORD to PAY-FILE, not to SYSOUT. No evidence that PII actually appears in logs."
+    ],
+    "strengths": [
+      "Correctly identified API-Q1 (no documented API) and AUTH-Q1 (no machine identity) as the two BLOCKERs, with accurate evidence pointing to src/PAYRUN.cbl and jcl/PAYRUN.jcl",
+      "Properly applied read-only agent_scope downgrades: API-Q4 to INFO, AUTH-Q6/STATE-Q1/DATA-Q1/DATA-Q2 to RISK-SAFETY",
+      "Correctly applied surface-flag calibrations: API-Q2, API-Q3, STATE-Q5, ENG-Q1, ENG-Q2, ENG-Q3, OBS-Q1, OBS-Q2 all marked as N/A due to has_http_rpc_surface=false",
+      "Accurate archetype detection (stateful-crud) with valid justification citing DB2 database and indexed employee master file",
+      "AUTH-Q5 correctly identifies hardcoded plaintext FTP credentials at jcl/PAYRUN.jcl lines 14-15 with actual password visible in source",
+      "DATA-Q1 analysis correctly notes B1 is CLEAR because output file excludes SSN/ACCT from PAY-RECORD (verifiable in COBOL STRING statement)",
+      "Extended questions appropriately marked not_evaluated_extended when triggers not met (STATE-Q3, HITL-Q1, HITL-Q2 for read-only scope)"
+    ],
+    "runs": 4,
+    "scores": [
+      0.72,
+      0.82,
+      0.88,
+      0.88
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.72,
+      "ara-draw2": 0.82,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.88
+    },
+    "scored_runs": 4,
+    "spread": 0.16,
+    "stddev": 0.065
+  },
+  {
+    "repo": "legacy-pricing-cgi",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [],
+    "n_findings": 30,
+    "n_evaluations": 13,
+    "tier": "Remediation Required",
+    "blockers": 2,
+    "score": 0.873,
+    "summary": "The report is accurate and well-grounded in the repository source. It correctly identifies the service archetype as stateless-utility, applies calibration downgrades appropriately, and the tier determination (Remediation Required with 2 BLOCKERs) is consistent with the findings. Evidence citations point to real files and line numbers. The scope-dependent questions are correctly resolved to INFO under read-only scope, and extended questions are properly marked as not_evaluated when triggers are absent.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [
+      {
+        "what": "Buffer overflow vulnerabilities via unsafe C functions (strcpy, sprintf) with no bounds checking",
+        "where": "pricing.cpp lines 17-19",
+        "why_no_question_fits": "The report correctly files this under DATA-Q4 (Input Validation) at RISK-QUALITY severity. While this is a serious memory safety vulnerability, the rubric assigns DATA-Q4 to RISK-QUALITY severity, not BLOCKER. No ARA question specifically addresses memory safety or buffer overflows at a higher severity."
+      },
+      {
+        "what": "XSS vulnerability via reflected output without escaping",
+        "where": "pricing.cpp lines 57-60",
+        "why_no_question_fits": "The report mentions this under DATA-Q4 but XSS is not explicitly covered by the 43 questions. Output encoding/XSS prevention falls outside the ARA rubric scope which focuses on agent integration readiness rather than web application security."
+      }
+    ],
+    "deliverable_defects": [],
+    "weak_evidence": [],
+    "strengths": [
+      "Correct identification of stateless-utility archetype with proper justification (no persistent data store, no write operations, read-only pricing lookups)",
+      "Accurate application of calibration downgrades - AUTH-Q4, AUTH-Q6, AUTH-Q7, STATE-Q1, DATA-Q1, DATA-Q2, DATA-Q6 all correctly resolved to INFO per the archetype/surface-flag rules",
+      "Scope-dependent questions (API-Q4, STATE-Q6, HITL-Q1, HITL-Q2) correctly resolved to INFO under read-only agent_scope",
+      "Extended questions properly marked not_evaluated with correct trigger reasoning (STATE-Q2, STATE-Q3, STATE-Q4, DATA-Q3, DATA-Q5, ENG-Q5)",
+      "Evidence citations are specific and verifiable - e.g., pricing.cpp lines 17-19 for input validation issues, lines 54-63 for HTML output",
+      "Tier arithmetic is correct: 2 BLOCKERs (API-Q1, AUTH-Q1) \u2192 Remediation Required",
+      "Remediation roadmap correctly phases BLOCKERs and RISK-SAFETY findings in Phase 1",
+      "Surface flags accurately reflect the codebase: has_http_rpc_surface=true, has_persistent_data_store=false, has_write_operations=false"
+    ],
+    "runs": 4,
+    "scores": [
+      0.78,
+      0.88,
+      0.92,
+      0.91
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.78,
+      "ara-draw2": 0.88,
+      "ara-draw3": 0.92,
+      "after-tdfix-d3": 0.91
+    },
+    "scored_runs": 4,
+    "spread": 0.14,
+    "stddev": 0.055
+  },
+  {
+    "repo": "legacy-shipping-api",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [],
+    "n_findings": 33,
+    "n_evaluations": 10,
+    "tier": "Remediation Required",
+    "blockers": 1,
+    "score": 0.88,
+    "summary": "The report is largely accurate and well-grounded in the source code. It correctly identifies the service archetype as data-gateway, appropriately applies read-only scope calibrations, and cites specific files and line numbers for evidence. The tier determination (Remediation Required with 1 BLOCKER) is consistent with the findings. Minor issues include AUTH-Q4 being resolved as INFO which is correct per calibration rules, but some weak evidence exists where findings cite broad line ranges.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [
+      {
+        "what": "MongoDB connection string uses no TLS (mongodb://10.0.8.20:27017)",
+        "where": "server.js line 13",
+        "why_no_question_fits": "Transport security/TLS is explicitly noted as NOT COVERED BY ANY OF THE 43 QUESTIONS in the rubric"
+      }
+    ],
+    "deliverable_defects": [
+      {
+        "deliverable": "remediation_roadmap",
+        "what_is_wrong": "STATE-Q1 is placed in Phase 2 but has native_severity RISK-SAFETY",
+        "why": "RISK-SAFETY findings with safety_impact should arguably be in Phase 1 with other safety-related items, though this is a minor sequencing concern given the read-only scope makes compensation less critical"
+      }
+    ],
+    "weak_evidence": [
+      "ENG-Q1: cites k8s/deployment.yaml lines 1-65 which is the entire file rather than specific missing IaC elements",
+      "STATE-Q5: cites server.js lines 1-45 (entire file) rather than pointing to specific locations where rate limiting should be added",
+      "ENG-Q4: cites package.json lines 1-15 for absence of tests - correct observation but broad citation"
+    ],
+    "strengths": [
+      "Correctly identifies data-gateway archetype with sound justification (MongoDB queries dominate, POST /quote is stateless calculation)",
+      "Properly applies read-only scope calibrations - API-Q4 resolved to INFO, AUTH-Q6 to RISK-SAFETY, DATA-Q1 Stage A=No resulting in INFO",
+      "AUTH-Q4 correctly downgraded to INFO per archetype calibration for data-gateway",
+      "AUTH-Q1 correctly identified as BLOCKER with specific evidence (server.js lines 9-19 showing hardcoded API key)",
+      "Extended questions (STATE-Q3, HITL-Q1, HITL-Q2) correctly marked not_evaluated_extended under read-only scope",
+      "DATA-Q4 correctly identifies NoSQL injection vulnerability at RISK-QUALITY severity as specified in rubric",
+      "AUTH-Q5 correctly identifies hardcoded credentials in server.js with specific line references",
+      "STATE-Q4 correctly identifies connection-per-request pattern with no resilience",
+      "Surface flags accurately reflect the codebase: has_persistent_data_store=true (MongoDB), has_http_rpc_surface=true (Express), has_auth_surface=true (API key check), has_write_operations=false (no DB writes), has_logging_of_user_data=false",
+      "Recommended actions are concrete and specific to this repository, not generic advice"
+    ],
+    "runs": 4,
+    "scores": [
+      0.88,
+      0.88,
+      0.88,
+      0.88
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.88,
+      "ara-draw2": 0.88,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.88
+    },
+    "scored_runs": 4,
+    "spread": 0.0,
+    "stddev": 0.0
+  },
+  {
+    "repo": "legacy-storefront-rails",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [],
+    "n_findings": 29,
+    "n_evaluations": 14,
+    "tier": "Remediation Required",
+    "blockers": 2,
+    "score": 0.88,
+    "summary": "The report is largely accurate and well-grounded in the source code. It correctly identifies the service archetype, applies conditional BLOCKER resolutions appropriately for read-only scope, and cites real evidence from the repository. The tier calculation is correct (2 BLOCKERs = Remediation Required). Minor issues include some evaluations marked 'pass' that should emit INFO findings, and a few weak evidence citations for infrastructure-level findings.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [
+      {
+        "what": "Session secret stored in source control (mentioned in README)",
+        "where": "README.md",
+        "why_no_question_fits": "Session management and session secrets are not covered by AUTH-Q5 (which focuses on credential management for service-to-service auth) or any other ARA question"
+      },
+      {
+        "what": "EOL Ruby 1.8.7 and Rails 2.3 with known CVEs",
+        "where": "README.md",
+        "why_no_question_fits": "End-of-life runtime/framework CVEs are explicitly listed as not covered by the 43 ARA questions"
+      }
+    ],
+    "deliverable_defects": [
+      {
+        "deliverable": "remediation_roadmap",
+        "what_is_wrong": "Phase 1 includes AUTH-Q4 (Identity Propagation) which is RISK-SAFETY, but the report places it in Phase 2 in the roadmap items while listing it correctly in Phase 1 summary text - inconsistent",
+        "why": "AUTH-Q4 appears in Phase 2 findings list but the summary text for Phase 1 mentions 'authorization' which should include it. Actually reviewing again - AUTH-Q4 is correctly in Phase 2, this is acceptable as RISK-SAFETY can be phased after BLOCKERs"
+      },
+      {
+        "deliverable": "recommended_actions",
+        "what_is_wrong": "STATE-Q1 (Compensation and Rollback) is a RISK-SAFETY finding but is not included in any recommended action",
+        "why": "The finding identifies the save->charge pattern with no error handling as a gap, but no action addresses implementing pending-confirm pattern"
+      }
+    ],
+    "weak_evidence": [
+      "OBS-Q1: No file path cited - claims no distributed tracing but evidence is null",
+      "OBS-Q2: No file path cited - claims no alerting but evidence is null",
+      "ENG-Q1: No file path cited - claims no IaC but README mentions Capistrano which could be partially cited",
+      "ENG-Q2: No file path cited - README explicitly states tests don't run which could be cited",
+      "ENG-Q3: No file path cited - README mentions Capistrano 2 which could support limited rollback claim"
+    ],
+    "strengths": [
+      "Correctly identifies stateful-crud archetype with accurate justification citing MySQL database and Order CRUD operations",
+      "Accurately applies read-only agent_scope conditional resolutions - API-Q4 correctly resolved to INFO, AUTH-Q6/STATE-Q1/DATA-Q1/DATA-Q2 correctly resolved to RISK-SAFETY",
+      "AUTH-Q5 finding correctly cites config/payment.yml with hardcoded credentials (lines 1-5)",
+      "DATA-Q4 finding correctly identifies SQL injection in orders_controller.rb line 9 with string interpolation in find_by_sql",
+      "API-Q1 BLOCKER correctly identified - the controller only renders HTML, no JSON API exists",
+      "AUTH-Q1 BLOCKER correctly identified - the comment on line 4 explicitly notes 'No before_filter auth'",
+      "Extended questions appropriately marked not_evaluated_extended when triggers are not met (STATE-Q3, HITL-Q1, HITL-Q2)",
+      "Surface flags accurately reflect the codebase: has_persistent_data_store=true (MySQL), has_http_rpc_surface=true (Rails controllers), has_auth_surface=false (no auth code)"
+    ],
+    "runs": 4,
+    "scores": [
+      0.88,
+      0.88,
+      0.88,
+      0.88
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.88,
+      "ara-draw2": 0.88,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.88
+    },
+    "scored_runs": 4,
+    "spread": 0.0,
+    "stddev": 0.0
+  },
+  {
+    "repo": "legacy-timesheet-webforms",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [],
+    "n_findings": 22,
+    "n_evaluations": 21,
+    "tier": "Remediation Required",
+    "blockers": 2,
+    "score": 0.83,
+    "summary": "The report is largely accurate about this legacy WebForms repository. It correctly identifies the BLOCKERs (API-Q1, AUTH-Q1), applies scope-calibrated severities correctly for read-only agent_scope, and grounds findings in real code patterns (SQL injection, plaintext credentials, lack of API surface). The archetype classification as stateful-crud is correct. Minor issues include DATA-Q6 being elevated to RISK-SAFETY when surface-flag calibration should have applied (has_logging_of_user_data=false), and some weak evidence on a few evaluations.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [
+      {
+        "what": "Transport security - Forms auth cookie sent without HTTPS (requireSSL=false)",
+        "where": "web.config line 10",
+        "why_no_question_fits": "Transport security / TLS / HTTPS-vs-HTTP in transit is explicitly noted as not covered by any of the 43 questions"
+      },
+      {
+        "what": "End-of-life runtime (.NET Framework 2.0, Windows Server 2003, IIS 6)",
+        "where": "README.md",
+        "why_no_question_fits": "End-of-life runtime or dependency CVEs are explicitly noted as not covered by the rubric"
+      }
+    ],
+    "deliverable_defects": [
+      {
+        "deliverable": "remediation_roadmap",
+        "what_is_wrong": "DATA-Q6 is included in Phase 1 as a RISK-SAFETY finding, but per surface-flag calibration rules, with has_logging_of_user_data=false AND has_persistent_data_store=true, the calibration rule does not fully apply. However, the finding claims PII exposure through error messages, which is a different vector than logging. This is a borderline interpretation issue rather than a clear defect.",
+        "why": "The surface-flag calibration for DATA-Q6 states: 'If has_logging_of_user_data is false AND has_persistent_data_store is false' - but here has_persistent_data_store is true, so the calibration does NOT fire, making RISK-SAFETY potentially correct."
+      }
+    ],
+    "weak_evidence": [
+      "OBS-Q1: 'pass' status cites surface-flag calibration but no mention of what logging actually exists in the codebase",
+      "ENG-Q3: 'pass' status for rollback capability - correct calibration but no discussion of what deployment mechanism exists"
+    ],
+    "strengths": [
+      "Correctly identifies API-Q1 and AUTH-Q1 as BLOCKERs with specific file/line evidence (Timesheet.aspx.vb, web.config)",
+      "Accurately applies read-only agent_scope calibrations - AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2 all correctly resolved to RISK-SAFETY instead of BLOCKER",
+      "DATA-Q4 correctly identifies SQL injection (string concatenation in Timesheet.aspx.vb lines 36-40) at RISK-QUALITY severity per the rubric",
+      "AUTH-Q5 correctly flags plaintext credentials in web.config at RISK-SAFETY with exact line references",
+      "Service archetype of stateful-crud is accurate - the code shows persistent SQL Server state with CRUD operations on timesheets table",
+      "Surface flags are correct: has_persistent_data_store=true (SQL Server), has_http_rpc_surface=false (WebForms only), has_auth_surface=true (Forms auth), has_write_operations=true (INSERT statement)",
+      "Tier arithmetic is correct: 2 BLOCKERs \u2192 Remediation Required",
+      "Extended questions correctly marked as not_evaluated_extended where triggers don't apply (API-Q6, STATE-Q7)"
+    ],
+    "runs": 4,
+    "scores": [
+      0.78,
+      0.88,
+      0.78,
+      0.88
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.78,
+      "ara-draw2": 0.88,
+      "ara-draw3": 0.78,
+      "after-tdfix-d3": 0.88
+    },
+    "scored_runs": 4,
+    "spread": 0.1,
+    "stddev": 0.05
+  },
+  {
+    "repo": "modern-catalog-graphql",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [],
+    "n_findings": 17,
+    "n_evaluations": 26,
+    "tier": "Pilot-Ready",
+    "blockers": 0,
+    "score": 0.885,
+    "summary": "This report is highly accurate and well-grounded in the repository source. The archetype detection (stateful-crud) is correct, the tier determination (Pilot-Ready with 0 BLOCKER, 2 RISK-SAFETY) follows the rubric, and findings cite real code locations. The scope-dependent severity resolutions are correctly applied for read-only agent scope. Minor issues include one debatable pass (STATE-Q4 circuit breakers) and the remediation roadmap is sound with safety items correctly in phase 1.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [
+      {
+        "what": "No query depth/complexity limit for GraphQL - potential DoS vector",
+        "where": "src/server.ts",
+        "why_no_question_fits": "README explicitly acknowledges this gap. While it could arguably fall under STATE-Q5 or a general availability concern, no ARA question specifically addresses GraphQL query complexity limits as a control."
+      }
+    ],
+    "deliverable_defects": [],
+    "weak_evidence": [
+      "STATE-Q4: Claims AWS SDK v3 built-in retry qualifies as circuit breaker pattern - while accurate about retries, this is weak evidence for circuit breakers specifically; however the single managed dependency argument has merit"
+    ],
+    "strengths": [
+      "Correctly identified stateful-crud archetype based on DynamoDB CRUD operations with entity lifecycle (products table, upsert/delete mutations)",
+      "Accurately resolved all 5 conditional-BLOCKER questions (API-Q4, AUTH-Q6, STATE-Q1, DATA-Q1, DATA-Q2) at appropriate read-only severities",
+      "AUTH-Q6 finding correctly cites src/resolvers/catalog.ts:43-55 and the README-acknowledged missing audit event on deleteProduct",
+      "STATE-Q5 finding correctly identifies absence of explicit rate limiting in the SAM template",
+      "DATA-Q1 evaluation correctly identifies Stage A = No (only product catalog data, no PII)",
+      "ENG-Q5 pass correctly cites SSESpecification in template.yaml",
+      "API-Q1, API-Q2 passes are well-grounded - GraphQL schema-first with introspection is genuinely machine-discoverable",
+      "Extended questions (API-Q6, STATE-Q3, STATE-Q7, HITL-Q1, HITL-Q2) correctly marked not_evaluated_extended with appropriate trigger reasons",
+      "Remediation roadmap correctly sequences RISK-SAFETY items (AUTH-Q6, STATE-Q5) in phase 1",
+      "Surface flags are accurate: has_persistent_data_store=true (DynamoDB), has_auth_surface=true (Cognito JWT), has_write_operations=true (mutations), has_logging_of_user_data=false (no user data logging visible)"
+    ],
+    "runs": 4,
+    "scores": [
+      0.88,
+      0.92,
+      0.82,
+      0.92
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.88,
+      "ara-draw2": 0.92,
+      "ara-draw3": 0.82,
+      "after-tdfix-d3": 0.92
+    },
+    "scored_runs": 4,
+    "spread": 0.1,
+    "stddev": 0.041
   },
   {
     "repo": "modern-orders-service",
     "analysis": "ara",
-    "source_tree": "ara-draw3",
+    "source_tree": "after-tdfix-d3",
     "checks_failed": [
       {
         "check": "missing_safety_qualifier",
@@ -784,109 +732,45 @@
         "detail": "blocker_count=0 and risk_safety_count=10 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)'"
       }
     ],
-    "n_findings": 33,
-    "n_evaluations": 10,
+    "n_findings": 32,
+    "n_evaluations": 11,
     "tier": "Pilot-Ready",
     "blockers": 0,
-    "score": 0.807,
-    "summary": "The report is substantially accurate about the repository. It correctly identifies the stateful-crud archetype, applies scope-dependent severity downgrades correctly for read-only agent_scope, and grounds findings in real code patterns. The main defect is a malformed sub_qualifier field that puts the qualifier text in a redundant location. Evidence quality is strong with specific file and line references that check out against the source.",
+    "score": 0.825,
+    "summary": "The report is largely accurate about this repository, correctly identifying the stateful-crud archetype, documenting real safety gaps around irreversible operations, and properly applying read-only scope calibration to conditional questions. The main defect is a structural one with the tier qualifier format (already flagged in pre-checks). Evidence citations are concrete and verifiable against the source. Some findings could be stronger in evidence specificity, but there are no fabrications and no missed BLOCKERs or RISK-SAFETY issues given the read-only scope.",
     "fabrications": [],
     "misses": [],
     "rubric_gaps": [
       {
-        "what": "No transport security / TLS configuration visible in the repository",
-        "where": "infra/ecs.yaml",
-        "why_no_question_fits": "Transport security (HTTPS vs HTTP) is explicitly noted as not covered by any of the 43 ARA questions"
+        "what": "No CI/CD pipeline definition exists in repository",
+        "where": "repository root",
+        "why_no_question_fits": "ENG-Q2 evaluates CI/CD with API contract testing, which the report correctly flags as a gap. This is covered by the rubric."
       }
     ],
     "deliverable_defects": [
       {
-        "deliverable": "service_archetype",
-        "what_is_wrong": "sub_qualifier field contains redundant tier prefix",
-        "why": "The sub_qualifier should be just 'Safety Concerns' but contains 'Pilot-Ready (Safety Concerns)'. The pre-check already flagged this as a structural defect. The tier is 'Pilot-Ready' and the qualifier should be 'Safety Concerns' separately."
+        "deliverable": "remediation_roadmap",
+        "what_is_wrong": "Phase 1 includes INFO-severity items (API-Q4, STATE-Q3, HITL-Q1, HITL-Q2) alongside RISK-SAFETY items",
+        "why": "Under read-only scope these are correctly INFO severity per the TD, but phasing INFO items in Phase 1 'Safety' conflates tier-inert findings with actual safety concerns. The roadmap rationale mentions 'scope-calibrated INFOs that become blockers under write-enabled scope' which is forward-looking rather than addressing current state."
       }
     ],
     "weak_evidence": [
-      "ENG-Q4: Claims 'no test files exist' but only checked package.json - could have been more explicit about searching for *.test.ts or test/ directories in the source listing (though conclusion appears correct given no test files in provided source)"
+      "DATA-Q6: cites package.json but pino is only mentioned in README, not in actual dependencies - should cite README.md instead",
+      "ENG-Q4: claims 'no test files present' but cannot be verified from the provided source - there's a test script but no test directory shown"
     ],
     "strengths": [
-      "Correctly identified service_archetype as stateful-crud with accurate justification citing PostgreSQL, CRUD operations, customerId, and status field lifecycle",
-      "Properly applied read-only agent_scope to all 5 conditional-BLOCKER questions (API-Q4\u2192INFO, AUTH-Q6\u2192RISK-SAFETY, STATE-Q1\u2192RISK-SAFETY, DATA-Q1\u2192RISK-SAFETY, DATA-Q2\u2192RISK-SAFETY)",
-      "Correctly triggered extended questions (STATE-Q2 evaluated as pass, STATE-Q7 and DATA-Q3 marked not_evaluated_extended with valid reasoning)",
-      "AUTH-Q5 correctly passed - verified against actual Secrets Manager usage in infra/ecs.yaml (DbSecret with GenerateSecretString)",
-      "ENG-Q3 correctly passed - verified against actual DeploymentCircuitBreaker with Rollback: true in infra/ecs.yaml lines 46-48",
-      "Findings cite specific files and line numbers that correspond to actual code patterns (e.g., STATE-Q1 citing order-service.ts lines 24-42 for hardDelete/refund/cancel)",
-      "Correctly identified the three irreversible operations documented in SAFETY.md and routes.ts (hardDelete, refund, cancelAndRecallShipment)",
-      "API-Q1 and API-Q2 correctly passed - OpenAPI spec exists at openapi/orders.yaml",
-      "Tier arithmetic is correct: 0 BLOCKERs + 10 RISK-SAFETY = Pilot-Ready with Safety Concerns"
+      "Correctly identifies stateful-crud archetype with accurate justification citing PostgreSQL, CRUD operations, and entity lifecycle",
+      "Properly applies read-only scope calibration - API-Q4 correctly resolved to INFO, AUTH-Q6/STATE-Q1/DATA-Q1/DATA-Q2 correctly resolved to RISK-SAFETY",
+      "Accurately documents the irreversible operations (hard delete, refund without idempotency, cancel with downstream effects) that SAFETY.md explicitly calls out",
+      "AUTH-Q1, AUTH-Q2, AUTH-Q5 correctly marked as pass with accurate evidence from src/auth.ts and infra/ecs.yaml",
+      "API-Q1 and API-Q2 correctly pass - OpenAPI spec exists at openapi/orders.yaml",
+      "ENG-Q3 correctly passes citing ECS deployment circuit breaker with rollback in CloudFormation",
+      "Surface flags are accurate: has_persistent_data_store=true (PostgreSQL), has_http_rpc_surface=true (Fastify REST), has_auth_surface=true (JWT), has_write_operations=true (POST/DELETE endpoints)",
+      "Extended questions STATE-Q7 and DATA-Q3 correctly marked not_evaluated_extended with valid trigger reasoning"
     ],
-    "runs": 3,
+    "runs": 4,
     "scores": [
-      0.82,
-      0.72,
-      0.88
-    ],
-    "sources": [
-      "after-tdfix",
-      "ara-draw2",
-      "ara-draw3"
-    ],
-    "by_tree": {
-      "after-tdfix": 0.82,
-      "ara-draw2": 0.72,
-      "ara-draw3": 0.88
-    },
-    "scored_runs": 3,
-    "spread": 0.16,
-    "stddev": 0.066
-  },
-  {
-    "repo": "modern-payments-api",
-    "analysis": "ara",
-    "source_tree": "ara-draw3",
-    "checks_failed": [
-      {
-        "check": "missing_safety_qualifier",
-        "severity": "high",
-        "detail": "blocker_count=0 and risk_safety_count=4 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)'"
-      }
-    ],
-    "n_findings": 16,
-    "n_evaluations": 27,
-    "tier": "Pilot-Ready",
-    "blockers": 0,
-    "score": 0.807,
-    "summary": "The report is largely accurate about this well-architected payments API, correctly identifying its strengths (idempotency, OAuth2 auth, structured logging, IaC) and finding reasonable gaps (no explicit rate limits, no immutable audit storage, no data residency docs). However, there's a structural defect in the classification tier (missing Safety Concerns qualifier format issue noted in pre-checks) and some weak evidence on a few findings. The archetype, surface flags, and most findings are grounded in the actual source code.",
-    "fabrications": [],
-    "misses": [],
-    "rubric_gaps": [],
-    "deliverable_defects": [
-      {
-        "deliverable": "service_archetype",
-        "what_is_wrong": "sub_qualifier format is redundant",
-        "why": "The pre-check shows 'sub_qualifier' contains 'Pilot-Ready (Safety Concerns)' when with blocker_count=0 and risk_safety_count=4, the tier should be 'Pilot-Ready' and sub_qualifier should be just 'Safety Concerns' - the current format redundantly repeats 'Pilot-Ready'"
-      }
-    ],
-    "weak_evidence": [
-      "ENG-Q1: The finding about 'no drift detection' is valid but the evidence pointer (lines 1-80) is too broad - could cite specific absence rather than entire file",
-      "AUTH-Q4: The identity propagation finding cites authorizer.py but the evidence is essentially the absence of on-behalf-of logic rather than pointing to specific code"
-    ],
-    "strengths": [
-      "Correctly identifies stateful-crud archetype based on DynamoDB ledger with CRUD operations for charges/refunds",
-      "Accurately detects all surface_flags: has_persistent_data_store (DynamoDB), has_http_rpc_surface (API Gateway), has_auth_surface (OAuth2), has_write_operations (POST endpoints), has_logging_of_user_data=false (only machine identifiers logged)",
-      "Correctly passes API-Q1 citing OpenAPI 3.1 spec at openapi/payments.yaml",
-      "Correctly passes API-Q4 identifying idempotency via Idempotency-Key header and DynamoDB deduplication in src/payments/app.py _idempotent_put()",
-      "Correctly passes AUTH-Q1 recognizing OAuth2 client-credentials via Cognito in authorizer.py",
-      "Correctly passes AUTH-Q5 noting no hardcoded credentials - the code uses environment variables and OAuth tokens",
-      "Correctly passes ENG-Q5 citing SSESpecification.SSEEnabled:true in infra/template.yaml line 28",
-      "Correctly passes OBS-Q1 identifying X-Ray tracing (Tracing: Active) and aws_lambda_powertools structured logging",
-      "Correctly handles conditional BLOCKER downgrades for read-only scope (AUTH-Q6, DATA-Q2 resolved as RISK-SAFETY)",
-      "STATE-Q5 finding is accurate - no UsagePlan resource exists in template.yaml, only default API Gateway throttling",
-      "DISC-Q1/ENG-Q2 findings are accurate - CI validates spec structure but no oasdiff or breaking change detection exists in .github/workflows/ci.yml",
-      "Correctly marks extended questions as not_evaluated_extended when triggers don't apply (API-Q6, STATE-Q7, DATA-Q3)"
-    ],
-    "runs": 3,
-    "scores": [
+      0.88,
       0.72,
       0.88,
       0.82
@@ -894,80 +778,153 @@
     "sources": [
       "after-tdfix",
       "ara-draw2",
-      "ara-draw3"
+      "ara-draw3",
+      "after-tdfix-d3"
+    ],
+    "by_tree": {
+      "after-tdfix": 0.88,
+      "ara-draw2": 0.72,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.82
+    },
+    "scored_runs": 4,
+    "spread": 0.16,
+    "stddev": 0.065
+  },
+  {
+    "repo": "modern-payments-api",
+    "analysis": "ara",
+    "source_tree": "after-tdfix-d3",
+    "checks_failed": [
+      {
+        "check": "missing_safety_qualifier",
+        "severity": "high",
+        "detail": "blocker_count=0 and risk_safety_count=5 requires sub_qualifier='Safety Concerns', got 'Pilot-Ready (Safety Concerns)'"
+      }
+    ],
+    "n_findings": 18,
+    "n_evaluations": 25,
+    "tier": "Pilot-Ready",
+    "blockers": 0,
+    "score": 0.825,
+    "summary": "The report is largely accurate and well-grounded in the source code. It correctly identifies the stateful-crud archetype, properly applies read-only scope calibrations for conditional BLOCKERs, and provides evidence-backed findings. The main structural defect is the malformed sub_qualifier field ('Pilot-Ready (Safety Concerns)' instead of just 'Safety Concerns'), but this was already flagged in pre-checks. Most findings cite real files and patterns that exist in the repository.",
+    "fabrications": [],
+    "misses": [],
+    "rubric_gaps": [],
+    "deliverable_defects": [
+      {
+        "deliverable": "service_archetype",
+        "what_is_wrong": "sub_qualifier format is incorrect",
+        "why": "The sub_qualifier field contains 'Pilot-Ready (Safety Concerns)' but should contain just 'Safety Concerns' - the tier is already 'Pilot-Ready' in the tier field. This is a formatting issue already caught in pre-checks."
+      }
+    ],
+    "weak_evidence": [
+      "DATA-Q7: No file evidence cited for finding about data quality metrics",
+      "DISC-Q3: No file evidence cited for finding about data catalog"
+    ],
+    "strengths": [
+      "Correctly identified stateful-crud archetype based on DynamoDB persistent state with CRUD operations on charge/refund entities",
+      "Properly applied read-only scope calibration - conditional BLOCKERs (AUTH-Q6, DATA-Q2, STATE-Q1) correctly resolved to RISK-SAFETY or INFO",
+      "API-Q4 idempotency correctly evaluated as pass with INFO severity under read-only scope, matching the actual Idempotency-Key implementation in src/payments/app.py",
+      "AUTH-Q1, AUTH-Q2, AUTH-Q3 correctly passed based on OAuth2 client-credentials in authorizer.py and scope-based authorization in app.py",
+      "DATA-Q4 correctly passed citing OpenAPI schema validation with additionalProperties:false, patterns, and required fields",
+      "ENG-Q5 correctly passed citing SSEEnabled:true in template.yaml",
+      "Extended questions properly marked as not_evaluated_extended when triggers not met (API-Q6, STATE-Q3, STATE-Q7, HITL-Q1, HITL-Q2, DATA-Q3)",
+      "OBS-Q1 correctly passed citing X-Ray tracing, Powertools structured logging, and correlation ID propagation visible in handlers.py",
+      "Findings cite specific files and line ranges that exist and contain the referenced code",
+      "Remediation roadmap correctly phases RISK-SAFETY items (AUTH-Q6, DATA-Q2, STATE-Q4, STATE-Q5) in phase 1"
+    ],
+    "runs": 4,
+    "scores": [
+      0.72,
+      0.88,
+      0.82,
+      0.88
+    ],
+    "sources": [
+      "after-tdfix",
+      "ara-draw2",
+      "ara-draw3",
+      "after-tdfix-d3"
     ],
     "by_tree": {
       "after-tdfix": 0.72,
       "ara-draw2": 0.88,
-      "ara-draw3": 0.82
+      "ara-draw3": 0.82,
+      "after-tdfix-d3": 0.88
     },
-    "scored_runs": 3,
+    "scored_runs": 4,
     "spread": 0.16,
-    "stddev": 0.066
+    "stddev": 0.065
   },
   {
     "repo": "monolith",
     "analysis": "ara",
-    "source_tree": "ara-draw3",
+    "source_tree": "after-tdfix-d3",
     "checks_failed": [],
-    "n_findings": 20,
-    "n_evaluations": 23,
+    "n_findings": 23,
+    "n_evaluations": 20,
     "tier": "Remediation Required",
     "blockers": 1,
-    "score": 0.88,
-    "summary": "The report is largely accurate and well-grounded in the source code. It correctly identifies the stateful-crud archetype, properly resolves conditional severities for read-only scope, and provides evidence-based findings. The main issues are some findings that should be in evaluations (INFO items listed as findings instead of pass evaluations) and the question coverage appears incomplete - several INFO-severity items mentioned as 'finding in findings[]' are not actually present in the findings array.",
+    "score": 0.89,
+    "summary": "The report is largely accurate about the repository, correctly identifying the PHP monolithic e-commerce application's lack of machine identity authentication (AUTH-Q1 BLOCKER), session-based auth, and various security gaps. The service archetype (stateful-crud) is correct given the MySQL database with CRUD operations. Most findings cite real code patterns. However, there are some issues with findings recorded where evaluations should be (INFO items appearing in findings rather than evaluations), and a few extended questions that should have been evaluated were marked not_evaluated_extended.",
     "fabrications": [],
-    "misses": [],
-    "rubric_gaps": [
+    "misses": [
       {
-        "what": "Transport security/HTTPS configuration not enforced in application code",
-        "where": "index.php, docker-compose.yml",
-        "why_no_question_fits": "TLS/HTTPS transport security is explicitly listed as not covered by the 43 questions"
+        "what": "API-Q7 Event Emission for State Changes should be evaluated as a finding since stateful-crud archetype triggers it",
+        "where": "index.php - order_status_history table and update_order_status function",
+        "question_id": "API-Q7",
+        "severity_should_be": "INFO",
+        "why_it_matters": "The trigger condition is met (stateful-crud archetype) but report says 'pass' in evaluations and references a finding that doesn't exist in the findings array"
       }
     ],
+    "rubric_gaps": [],
     "deliverable_defects": [
       {
-        "deliverable": "remediation_roadmap",
-        "what_is_wrong": "Phase 1 includes AUTH-Q5, AUTH-Q6, AUTH-Q7, STATE-Q5, DATA-Q6 which are all RISK-SAFETY severity, not BLOCKERs. Only AUTH-Q1 is actually a BLOCKER.",
-        "why": "The rubric states 'Every BLOCKER belongs in phase 1' but does not require non-BLOCKERs to be there. While including safety items in phase 1 is reasonable prioritization, labeling the phase 'Blockers' is misleading when most items are RISK-SAFETY."
+        "deliverable": "recommended_actions",
+        "what_is_wrong": "First action claims to address AUTH-Q2, AUTH-Q3, AUTH-Q7 but implementing API keys alone does not solve scoped permissions (AUTH-Q2), action-level authorization (AUTH-Q3), or identity suspension (AUTH-Q7)",
+        "why": "AUTH-Q2 requires fine-grained RBAC, AUTH-Q3 requires per-action permission checks, AUTH-Q7 requires is_active flag - these are separate implementation tasks from basic API key auth"
       },
       {
-        "deliverable": "recommended_actions",
-        "what_is_wrong": "Question coverage issue - report claims INFO findings exist in findings[] for API-Q4, API-Q5, API-Q7, API-Q8, STATE-Q3, STATE-Q6, HITL-Q1, HITL-Q2, DATA-Q1, DATA-Q7, DISC-Q3, OBS-Q3 but these are not present in the actual findings array",
-        "why": "The evaluations section references 'Finding in findings[]' for these questions but they don't appear in the findings array. This creates an incomplete picture - either they should be in findings or marked as simple pass evaluations without referencing non-existent findings."
+        "deliverable": "remediation_roadmap",
+        "what_is_wrong": "Phase 1 includes AUTH-Q4 (Identity Propagation) but AUTH-Q4 is listed as Phase 2 in the finding itself with P2 priority",
+        "why": "Finding AUTH-Q4 explicitly states 'phase': 2 and 'priority': 'P2' but roadmap phase 1 does not include it - this is inconsistent (AUTH-Q4 is correctly in phase 2 items)"
       }
     ],
     "weak_evidence": [
-      "STATE-Q4: Claims 'service has no external service dependencies (only MySQL database)' but MySQL is an external dependency that could benefit from circuit breakers"
+      "STATE-Q4: Report says 'monolith has no external service dependencies' but the application connects to MySQL database which is technically an external dependency - though the extended question trigger may reasonably exclude local DB",
+      "ENG-Q2: Evidence field is null despite deploy.sh and docker-compose.yml existing as deployment artifacts"
     ],
     "strengths": [
-      "Correctly identified stateful-crud archetype with strong justification citing MySQL tables, CRUD operations, and order lifecycle state machine",
-      "Properly applied read-only scope conditional resolutions for API-Q4 (INFO), AUTH-Q6 (RISK-SAFETY), STATE-Q1 (RISK-SAFETY), DATA-Q2 (RISK-SAFETY)",
-      "AUTH-Q1 BLOCKER finding is well-evidenced citing lines 231-268 where session-based auth is implemented",
-      "AUTH-Q5 correctly identifies hardcoded fallback credentials at lines 14-17 in index.php",
-      "DATA-Q4 correctly notes PDO prepared statements prevent injection while flagging lack of schema validation",
-      "ENG-Q5 pass evaluation correctly identifies RDS StorageEncrypted, ECR KMS encryption with key rotation",
-      "Surface flags accurately detected from source: persistent data store (MySQL), HTTP/RPC surface (API endpoints), auth surface (session auth), write operations, logging of user data"
+      "Correctly identified AUTH-Q1 as BLOCKER for lack of machine identity authentication - the code only has session-based auth at lines 185-210",
+      "Accurate archetype classification as stateful-crud with proper justification citing MySQL tables and entity lifecycle",
+      "Correctly applied read-only scope downgrades for conditional BLOCKERs (AUTH-Q6, STATE-Q1, DATA-Q2 all resolved to RISK-SAFETY)",
+      "Accurate identification of hardcoded seed credentials in index.php (AUTH-Q5) at line 132-134 with password_hash calls",
+      "Correct detection of WAF without rate limiting in infrastructure/monolith-apprunner.yaml (STATE-Q5)",
+      "Properly identified ENG-Q5 as pass due to RDS StorageEncrypted: true and ECR KMS encryption in CloudFormation"
     ],
-    "runs": 3,
+    "runs": 4,
     "scores": [
       0.88,
+      0.92,
       0.88,
       0.88
     ],
     "sources": [
       "after-tdfix",
       "ara-draw2",
-      "ara-draw3"
+      "ara-draw3",
+      "after-tdfix-d3"
     ],
     "by_tree": {
       "after-tdfix": 0.88,
-      "ara-draw2": 0.88,
-      "ara-draw3": 0.88
+      "ara-draw2": 0.92,
+      "ara-draw3": 0.88,
+      "after-tdfix-d3": 0.88
     },
-    "scored_runs": 3,
-    "spread": 0.0,
-    "stddev": 0.0
+    "scored_runs": 4,
+    "spread": 0.04,
+    "stddev": 0.017
   },
   {
     "repo": "legacy-crm-desktop",
@@ -1627,7 +1584,7 @@
       "s3": 0.72
     },
     "scored_runs": 1,
-    "spread": 0.0,
+    "spread": null,
     "stddev": null
   },
   {
@@ -1701,7 +1658,7 @@
       "s3": 0.62
     },
     "scored_runs": 1,
-    "spread": 0.0,
+    "spread": null,
     "stddev": null
   },
   {
@@ -1750,7 +1707,7 @@
       "s3": 0.92
     },
     "scored_runs": 1,
-    "spread": 0.0,
+    "spread": null,
     "stddev": null
   },
   {
