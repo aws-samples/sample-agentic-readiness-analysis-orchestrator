@@ -232,8 +232,10 @@ harness:comment-check:
       when: manual
       allow_failure: true
   before_script:
-    # Only curl + git are needed. Skipping the Node/atx/awscli install is most of why
-    # this is fast.
+    # Only curl is needed — this job posts a note via the API and never touches the repo.
+    # Skipping the Node/atx/awscli install is most of why this is fast. (The comment here
+    # used to claim "curl + git"; git was never in the apt line and never used. If you add
+    # a step that shells out to git, add the package too — see harness:contract-tests.)
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
   script:
     - |
@@ -354,6 +356,15 @@ harness:contract-tests:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
   before_script:
+    # git is REQUIRED, not optional: test_fixtures_integrity.py asserts against
+    # `git ls-files` rather than the filesystem, because the regression it pins (a bare
+    # `services/` .gitignore entry swallowing a fixture's only unsafe-code file) is
+    # INVISIBLE on disk. The runner clones via a separate helper image, so the job
+    # container itself has no git — this override skips the default before_script's
+    # atx/Node install, and for a while it skipped the `apt-get install git` with it.
+    # Those 3 tests then died on FileNotFoundError: 'git' and allow_failure: true hid it,
+    # so the fixture-integrity axis was never actually running in CI.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git
     - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
   script:
     # Contract guard + differ + envelope normalizer + the SKILL.md severity-table parse

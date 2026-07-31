@@ -42,10 +42,39 @@ SOURCE_SUFFIXES = {".ts", ".js", ".py", ".java", ".rb", ".php", ".cs", ".vb", ".
 
 
 def _tracked() -> set[str]:
-    """Repo-relative paths of every file GIT knows about."""
-    out = subprocess.run(["git", "-C", str(REPO), "ls-files"],
-                         capture_output=True, text=True, check=True).stdout
-    return set(out.splitlines())
+    """Repo-relative paths of every file GIT knows about.
+
+    Fails LOUDLY and in one line when git is unavailable or the checkout is not a repo.
+    Both happen in CI and neither is a fixture problem, so neither should present as a
+    200-line subprocess traceback that buries which of the two it was:
+
+      - no git binary — the runner clones via a separate helper image, so a job that
+        overrides the default `before_script` (harness:contract-tests) drops the
+        `apt-get install git` and the tests die on FileNotFoundError. With
+        `allow_failure: true` on the job, that reads as an advisory red rather than
+        "this axis never ran".
+      - not a work tree — a shallow/detached export with no .git.
+
+    These MUST NOT be silently skipped. Returning an empty set here would make every
+    caller trivially pass and re-open exactly the invisible gap this file exists to close.
+    """
+    try:
+        proc = subprocess.run(["git", "-C", str(REPO), "ls-files"],
+                              capture_output=True, text=True, check=True)
+    except FileNotFoundError:
+        raise AssertionError(
+            "git is not installed in this environment, so fixture integrity CANNOT be "
+            "checked (these tests deliberately assert against `git ls-files`, not the "
+            "filesystem — the regression they pin is invisible on disk). Install git in "
+            "the job: any .gitlab-ci.yml job that overrides the default before_script "
+            "must still `apt-get install -y git`.") from None
+    except subprocess.CalledProcessError as exc:
+        raise AssertionError(
+            f"`git ls-files` failed in {REPO} (exit {exc.returncode}): "
+            f"{(exc.stderr or '').strip()}") from None
+    tracked = set(proc.stdout.splitlines())
+    assert tracked, f"`git ls-files` returned nothing in {REPO} — not a git work tree?"
+    return tracked
 
 
 def _fixture_dirs() -> list[Path]:
@@ -122,6 +151,44 @@ def test_no_generated_report_is_committed_inside_a_fixture():
              if t.startswith("harness/fixtures/")
              and re.search(r"-(ara|mod|portfolio)-report\.(json|md)$", t)]
     assert not stray, f"generated reports committed inside fixture trees: {stray}"
+
+
+# --- the CI job that runs these tests must give them git ------------------------------
+
+def test_the_ci_job_running_this_suite_installs_git():
+    """A job that overrides `before_script` inherits NONE of the default's apt installs.
+
+    `harness:contract-tests` overrides it to skip the atx/Node install (that is most of why
+    it is fast) and for a while dropped `git` along with it. The three git-backed tests above
+    then failed on `FileNotFoundError: 'git'` — and because every harness job is
+    `allow_failure: true`, that surfaced as an advisory red rather than "the fixture-integrity
+    axis has never run in CI". The job container genuinely has no git: the runner clones via a
+    separate helper image.
+
+    So pin the invariant where it is cheap to check: any job whose script runs this pytest
+    suite must install git in its own before_script.
+    """
+    ci = (REPO / ".gitlab-ci.yml").read_text(encoding="utf-8")
+    blocks = re.findall(r"^([a-z][\w:.-]*):\n((?:[ \t].*\n|\n)*)", ci, re.M)
+    offenders = []
+    for name, body in blocks:
+        if name in {"default", "stages", "variables", "include", "workflow"}:
+            continue
+        # Strip YAML comments BEFORE matching. Prose is not a dependency: an earlier draft
+        # of this test matched the word "install ... git" anywhere in the block, and the
+        # explanatory comment directly above the apt line satisfied it — so deleting the
+        # real install kept the test green. A guard that a comment can satisfy is not a
+        # guard.
+        code = "\n".join(re.sub(r"#.*$", "", ln) for ln in body.splitlines())
+        runs_suite = "pytest harness/tests" in code
+        overrides = "before_script:" in code
+        if runs_suite and overrides and not re.search(r"install[^\n]*\bgit\b", code):
+            offenders.append(name)
+    assert not offenders, (
+        "these .gitlab-ci.yml jobs run the harness pytest suite AND override "
+        "before_script, but never install git — the git-backed fixture-integrity tests "
+        f"will die on FileNotFoundError inside them: {offenders}. Add "
+        "`apt-get install -y --no-install-recommends git` to the job's before_script.")
 
 
 if __name__ == "__main__":
