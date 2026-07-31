@@ -1,26 +1,28 @@
 # Change-Impact Harness — Operator Guide
 
-```
-  MR touches definitions/managed/<td>/**
-              │
-  0. GATE     should-run.sh        run | skip — deterministic git diff, NO LLM
-              ▼
-  1. ANALYZE  run-fixtures.sh      publish the EDITED TD, atx custom def exec
-                                   over the applicable fixtures → harness/after/
-              ▼
-  2. SEV GATE skill_table.py       which questions' documented severity this MR moved
-              ▼
-  3. DIFF     diff-reports.py      D1–D5 delta + safety alerts  → impact.json
-              ▼
-  4. SCORE    score-reports.py     accuracy vs the fixture SOURCE → compare.json
-              ▼
-  5. JUDGE    judge.py             delta + intent + accuracy → verdict.json
-                                   ◀── the ONLY LLM call, once, at the end
-              ▼
-  6. REPORT   post-mr-comment.sh   advisory MR comment
+```mermaid
+flowchart TD
+    MR["merge request touches<br/>definitions/managed/&lt;td&gt;/**"]
 
-  Every job is allow_failure: true — the harness NEVER blocks a merge.
+    MR --> GATE{"<b>0. GATE</b> · should-run.sh<br/>deterministic git diff"}
+    GATE -->|"nothing watched"| SKIP["skip — no atx, no cost"]
+    GATE -->|"a watched TD or fixture moved"| RUN["<b>1. ANALYZE</b> · run-fixtures.sh<br/>publish the EDITED TD, exec it<br/>over the applicable fixtures"]
+
+    RUN --> SEV["<b>2. SEV GATE</b> · skill_table.py<br/>which questions' documented severity<br/>this MR itself moved"]
+    SEV --> DIFF["<b>3. DIFF</b> · diff-reports.py<br/>D1–D5 delta + safety alerts<br/>→ impact.json"]
+    DIFF --> SCORE["<b>4. SCORE</b> · score-reports.py<br/>accuracy vs the fixture source<br/>→ compare.json"]
+    SCORE --> JUDGE["<b>5. JUDGE</b> · judge.py<br/>delta + intent + accuracy<br/>→ verdict.json"]
+    JUDGE --> REPORT["<b>6. REPORT</b> · post-mr-comment.sh<br/>advisory MR comment"]
+
+    classDef llm fill:#fff3cd,stroke:#c8a415,stroke-width:2px
+    classDef det fill:#e8f4ea,stroke:#4a8f5b
+    class JUDGE llm
+    class GATE,SEV,DIFF,SCORE det
 ```
+
+**Step 5 is the only LLM call** (amber), spent once at the very end. Everything before it is
+deterministic (green) — including the run/skip decision, which is a `git diff` and not a model.
+**Every job is `allow_failure: true`; the harness never blocks a merge.**
 
 The harness gives contributors automatic, advisory feedback on any change to one of
 the four **managed** AWS Transform TDs (`agentic-readiness-analysis`,
@@ -297,12 +299,8 @@ flowchart TD
     SRC["fixture source<br/>(entire repo, 2-185 KB)"] --> P
 
     P --> LLM["LLM grader<br/><b>judges only what is not mechanical</b><br/>groundedness · recall · precision"]
-    LLM --> SCORE["accuracy score<br/>0.000 - 1.000"]
+    LLM --> SCORE["accuracy score<br/>0.000 - 1.000<br/><i>= step 4 of the pipeline above</i>"]
     DEF --> SCORE
-
-    SCORE --> CMP{"vs golden baseline<br/>max(2·sd, noise floor)"}
-    CMP --> V["judge verdict<br/>improves / regresses /<br/>within noise = NOT MEASURED"]
-    V --> MR["advisory MR comment<br/><i>never blocks the merge</i>"]
 ```
 
 **Why the derived facts are in the prompt at all.** They are *additive context, not scoring
