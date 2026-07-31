@@ -78,8 +78,11 @@ say "==> scanning the tree that would be published"
 FINDINGS=0
 scan() {  # scan <label> <extended-regex> [allowlist-regex]
   local label="$1" pattern="$2" allow="${3:-}" hits
+  # --exclude this script: its own pattern literals match every rule it defines, so it
+  # would always flag itself. It is reviewed as source, not scanned as content.
   hits="$(grep -rInE --binary-files=without-match \
-            --exclude-dir=.git "$pattern" "$SCAN_DIR" 2>/dev/null || true)"
+            --exclude-dir=.git --exclude="$(basename "$0")" \
+            "$pattern" "$SCAN_DIR" 2>/dev/null || true)"
   [ -n "$allow" ] && hits="$(printf '%s\n' "$hits" | grep -vE "$allow" || true)"
   hits="$(printf '%s\n' "$hits" | sed "s|^$SCAN_DIR/||" | grep -v '^$' || true)"
   if [ -n "$hits" ]; then
