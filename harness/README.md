@@ -1,5 +1,27 @@
 # Change-Impact Harness — Operator Guide
 
+```
+  MR touches definitions/managed/<td>/**
+              │
+  0. GATE     should-run.sh        run | skip — deterministic git diff, NO LLM
+              ▼
+  1. ANALYZE  run-fixtures.sh      publish the EDITED TD, atx custom def exec
+                                   over the applicable fixtures → harness/after/
+              ▼
+  2. SEV GATE skill_table.py       which questions' documented severity this MR moved
+              ▼
+  3. DIFF     diff-reports.py      D1–D5 delta + safety alerts  → impact.json
+              ▼
+  4. SCORE    score-reports.py     accuracy vs the fixture SOURCE → compare.json
+              ▼
+  5. JUDGE    judge.py             delta + intent + accuracy → verdict.json
+                                   ◀── the ONLY LLM call, once, at the end
+              ▼
+  6. REPORT   post-mr-comment.sh   advisory MR comment
+
+  Every job is allow_failure: true — the harness NEVER blocks a merge.
+```
+
 The harness gives contributors automatic, advisory feedback on any change to one of
 the four **managed** AWS Transform TDs (`agentic-readiness-analysis`,
 `modernization-readiness-analysis`, `portfolio-agentic-readiness-analysis`,

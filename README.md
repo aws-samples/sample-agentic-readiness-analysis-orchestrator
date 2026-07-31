@@ -176,50 +176,12 @@ reports against a committed baseline, and posts an advisory verdict on the MR.
 not a gate. The only LLM call is the judge, spent once at the very end; the run/skip decision is
 a deterministic `git diff`, not a model.
 
-```
-                    MR touches definitions/managed/<td>/**
-                                    │
-  0. GATE      should-run.sh — deterministic git diff, NO LLM
-               RUN when a changed path is under a watched TD; else SKIP (no atx, no cost)
-                                    │
-                                    ▼
-  1. ANALYZE   run-fixtures.sh — publish the EDITED TD as a custom def,
-               atx custom def exec over the applicable fixtures → harness/after/
-                                    │
-                                    ▼
-  2. SEV GATE  skill_table.py --base origin/<target> → changed-severity.json
-               which questions' DOCUMENTED severity this MR moved
-                                    │
-                                    ▼
-  3. DIFF      diff-reports.py → impact.json    D1–D5 delta + safety_alerts
-                                    │
-                                    ▼
-  4. SCORE     score-reports.py → compare.json  groundedness vs the fixture SOURCE,
-               classified improved / regressed / within-noise
-                                    │
-                                    ▼
-  5. JUDGE     judge.py {delta, intent from the MR description, edited questions,
-               accuracy anchor} → verdict.json     ◀── the ONLY LLM call
-                                    │
-                                    ▼
-  6. REPORT    post-mr-comment.sh → advisory MR comment
-```
-
-**Why steps 2 and 3 are separate.** The differ excuses a lost BLOCKER when the rubric says the
-finding was over-escalated all along — the report was wrong, the table was right. But the
-grader reads the *working-tree* `SKILL.md`, so an MR that lowers a question's documented
-severity **and** downgrades the matching finding would have that downgrade auto-excused, and
-score clean. Step 2 diffs the severity table against the target branch and bars exactly those
-question ids from the exemption; the downgrade then surfaces as a real safety alert. An
-unresolvable base ref bars the whole question set rather than emitting an empty gate, so a
-broken ref fails toward alerting instead of silently disabling the check.
-
 Fixtures live under `harness/fixtures/`: `portfolio/` holds the 10 synthetic legacy repos (also
 the source the demo scripts discover), `monolith/` is a PHP fixture for local runs. The
 committed baseline each MR diffs against — a full set of per-repo ARA/MOD reports and portfolio
-roll-ups — is `harness/golden/`. See [`harness/README.md`](harness/README.md) for setup and
-[`harness/DESIGN.md`](harness/DESIGN.md) for the scored dimensions and the reasoning behind
-each step.
+roll-ups — is `harness/golden/`. See [`harness/README.md`](harness/README.md) for the pipeline
+diagram and setup, and [`harness/DESIGN.md`](harness/DESIGN.md) for the scored dimensions and
+the reasoning behind each step.
 
 > Automation runs on the internal GitLab instance only, where the AWS credentials live. GitHub
 > stays open for issues and PRs but carries no CI.
