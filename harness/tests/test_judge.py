@@ -174,10 +174,39 @@ def test_scope_note_explains_reclassification_shows_as_reseverity():
     assert "reseveritied" in note or "severity" in note
 
 
-def test_scope_note_absent_when_scope_unknown():
-    # A full sweep / non-TD change has no "edited questions"; stay silent rather than
-    # asserting an empty scope, which would read as "nothing was edited".
-    assert judge._scope_note([]) == ""
+def test_scope_note_states_the_noise_rule_even_with_no_edited_questions():
+    """The empty list is a PROSE edit, not an unknown scope — and it still needs the rule.
+
+    This used to early-return "", which dropped the churn warning for precisely the edits
+    that need it most. A prose / output-contract change (a guardrail bullet, the `evidence`
+    contract row) touches no `question_id`, so run-fixtures.sh never writes
+    edited-questions.txt and the list arrives empty. MR !15 was that shape: with the
+    warning omitted the judge returned `needs-work` grounded in "+17 findings ... exceeds
+    expected noise for a prose-only edit" — and 17 is INSIDE the harness's own measured
+    10-20 band, which the note would have told it.
+    """
+    note = judge._scope_note([])
+    assert note, "an empty edit scope must still carry the nondeterminism warning"
+    low = note.lower()
+    assert "nondeterministic" in low and "10-20 findings" in low
+    assert "noise" in low
+    # No question was edited => ALL churn is out of scope, so it must say so positively
+    # rather than leaving the judge to infer a scope from silence.
+    assert "none" in low
+    # And the hard limits travel with the rule: a lost blocker is never noise either way.
+    assert "blocker" in low and "tier" in low
+
+
+def test_scope_note_with_no_questions_explains_the_differ_ignores_evidence():
+    """A near-empty delta is the CORRECT result for an evidence/prose edit.
+
+    diff-reports.py compares findings, severities, tiers, pathways and programs — never
+    `evidence` content. Without this the judge reads "nothing moved" as "the edit did not
+    land" and marks the intent unmatched for doing exactly what it claimed.
+    """
+    low = judge._scope_note([]).lower()
+    assert "evidence" in low
+    assert "near-empty delta" in low or "empty delta" in low
 
 
 def test_prompt_carries_scope_and_reseverity_together():
@@ -191,11 +220,17 @@ def test_prompt_carries_scope_and_reseverity_together():
 
 
 def test_prompt_is_valid_without_scope():
-    # Back-compat: the arg is optional and omitting it must not break the prompt.
+    """Back-compat: the arg is optional and omitting it must not break the prompt.
+
+    It must not omit the noise rule either. No question ids means a prose / output-contract
+    edit, which is the case that most needs to be told findings churn is expected — see
+    test_scope_note_states_the_noise_rule_even_with_no_edited_questions.
+    """
     prompt = judge.build_user_prompt({"what": "x"},
                                      judge.summarize_impact(_impact_with_reseverity()), "")
     assert "## Observed delta" in prompt
-    assert "questions actually edited" not in prompt
+    assert "questions actually edited: NONE" in prompt
+    assert "10-20 findings" in prompt
 
 
 def test_system_prompt_requires_causal_story_for_regression():

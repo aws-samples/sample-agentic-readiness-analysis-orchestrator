@@ -377,14 +377,19 @@ Scoring rubric:
   Each fixture arrives as `baseline -> score (delta, threshold)`. The threshold is that
   fixture's noise band: 2*stddev when the baseline is multi-sample (real measured
   run-to-run variance), else a fixed noise floor.
-    * |delta| < threshold  => WITHIN NOISE. NOT MEASURED. You MUST NOT call it an
+    * |delta| <= threshold => WITHIN NOISE. NOT MEASURED. You MUST NOT call it an
       improvement or a regression. Say the quality STAYS THE SAME as far as we can
       measure, and set analysis_effect = "neutral".
-    * delta >= threshold   => a measured accuracy IMPROVEMENT. Real evidence the change
+    * delta > threshold    => a measured accuracy IMPROVEMENT. Real evidence the change
       helped: the reports became more true of the source.
-    * delta <= -threshold  => a measured accuracy REGRESSION. Weigh this heavily — the
+    * delta < -threshold   => a measured accuracy REGRESSION. Weigh this heavily — the
       reports became LESS true of the source, which is the outcome this harness exists
       to prevent.
+  These verdicts are COMPUTED FOR YOU: each fixture line already carries its `verdict`.
+  Use it. Do NOT re-derive the classification from the raw delta, and do NOT describe a
+  unit as a regression when its verdict says within-noise — a delta sitting AT the
+  threshold is the width of the noise we already know is there, and the scores move on a
+  coarse grid where one step can equal the whole band.
   Note the asymmetry and honour it: a change that makes the analysis harsher/more
   cautious is far less dangerous than one that makes it more permissive, so when
   uncertain, treat a stricter change more favourably than a laxer one.
@@ -439,8 +444,30 @@ def _coverage_note(impact_summary: dict) -> str:
     )
 
 
+# The noise rule is UNCONDITIONAL and the limits on it are unconditional too. Only the
+# "which questions" part depends on the diff, so these live apart from _scope_note's
+# scope-specific text — see the docstring there for why emitting this without a question
+# list was the fix to a real false `needs-work`.
+_NOISE_RULE = (
+    "  * The analysis agent is NONDETERMINISTIC. Re-running the SAME rubric on the same\n"
+    "    fixture moves roughly 10-20 findings purely from run-to-run variance.\n"
+)
+_NOISE_RULE_LIMITS = (
+    "  * BUT THIS NOISE RULE HAS HARD LIMITS. It covers findings appearing/disappearing\n"
+    "    and severity moving among the non-blocking classes. It does NOT cover:\n"
+    "      - a BLOCKER being downgraded or lost,\n"
+    "      - blocker_count falling,\n"
+    "      - the readiness tier moving toward MORE agent-ready,\n"
+    "      - a report answering fewer rubric questions than the baseline.\n"
+    "    Those are SAFETY-MATERIAL and stay in scope no matter which question caused\n"
+    "    them — being out of edit scope is NOT a reason to dismiss one. Any such\n"
+    "    movement is listed under \"SAFETY ALERTS\" / \"COVERAGE GAPS\" below, computed\n"
+    "    deterministically from the rubric, and you must address each one.\n"
+)
+
+
 def _scope_note(edited_questions: list[str]) -> str:
-    """Tell the judge which questions the MR actually edited, and that the rest is noise.
+    """Tell the judge which questions the MR edited — and ALWAYS that churn is noise.
 
     WHY THIS IS ESSENTIAL: the underlying analysis agent is NONDETERMINISTIC. Two runs of
     the byte-identical rubric on the same fixture differ by ~10-20 findings (measured
@@ -452,29 +479,49 @@ def _scope_note(edited_questions: list[str]) -> str:
     stated`. Naming the edited questions lets it weigh movement IN scope as evidence and
     movement OUT of scope as suspected noise — which is the only way a verdict on a
     narrow edit can mean anything.
+
+    AND THE NOISE RULE MUST BE STATED EVEN WHEN NO QUESTION IDS WERE EDITED. This used to
+    early-return "" on an empty list, which dropped the churn warning entirely for exactly
+    the edits that need it most: a prose / output-contract change (a guardrail bullet, an
+    `evidence` field row) touches no `question_id`, so `edited-questions.txt` is never
+    written and the list arrives empty. MR !15 was that shape — and with the warning
+    silently omitted the judge returned `needs-work` grounded in "+17 findings ... exceeds
+    expected noise for a prose-only edit", when 17 sits INSIDE the harness's own measured
+    10-20 band. An empty list means "no question was edited", which makes ALL findings
+    churn out-of-scope noise; it does not mean "we know nothing about the scope".
     """
     if not edited_questions:
-        return ""
+        return (
+            "\n## Edit scope (from the rubric diff — authoritative)\n"
+            "questions actually edited: NONE — no `question_id` appears in the diff.\n"
+            "This is a PROSE / OUTPUT-CONTRACT edit (guardrail wording, a field's contract\n"
+            "row, scoring narrative) rather than a change to any question. It is NOT an\n"
+            "unknown scope, and it is NOT evidence the edit failed to land.\n"
+            "IMPORTANT — how to weigh the delta against this scope:\n"
+            + _NOISE_RULE +
+            "  * Since NO question was edited, ALL findings churn is out of edit scope and\n"
+            "    therefore EXPECTED NOISE. Do NOT treat a finding count moving by ~10-20 on\n"
+            "    a fixture as 'exceeding expected noise', as a regression, or as evidence\n"
+            "    the change is broader than stated. Mention it at most as an aside.\n"
+            + _NOISE_RULE_LIMITS +
+            "  * Judge intent-match on whether the CONTRACT-level effect the intent\n"
+            "    describes is visible. Be aware the deterministic differ compares findings,\n"
+            "    severities, tiers, pathways and programs — it does NOT compare `evidence`\n"
+            "    content or other per-finding prose. So an edit that changes what a finding\n"
+            "    CITES rather than whether it FIRES should produce a near-empty delta, and\n"
+            "    that empty delta is the CORRECT result, not a failure. Where the intent\n"
+            "    names such a channel, weigh the ACCURACY comparison below over the delta.\n"
+        )
     return (
         "\n## Edit scope (from the rubric diff — authoritative)\n"
         f"questions actually edited: {', '.join(edited_questions)}\n"
         "IMPORTANT — how to weigh the delta against this scope:\n"
-        "  * The analysis agent is NONDETERMINISTIC. Re-running the SAME rubric on the same\n"
-        "    fixture moves roughly 10-20 findings purely from run-to-run variance.\n"
+        + _NOISE_RULE +
         "  * Therefore ORDINARY FINDINGS CHURN on questions OUTSIDE the edited set is\n"
         "    EXPECTED NOISE. Do NOT treat it as a regression or as evidence the change is\n"
         "    broader than stated, and do NOT ground a `mismatch` verdict in it. Mention it\n"
         "    at most as an aside.\n"
-        "  * BUT THIS NOISE RULE HAS HARD LIMITS. It covers findings appearing/disappearing\n"
-        "    and severity moving among the non-blocking classes. It does NOT cover:\n"
-        "      - a BLOCKER being downgraded or lost,\n"
-        "      - blocker_count falling,\n"
-        "      - the readiness tier moving toward MORE agent-ready,\n"
-        "      - a report answering fewer rubric questions than the baseline.\n"
-        "    Those are SAFETY-MATERIAL and stay in scope no matter which question caused\n"
-        "    them — being out of edit scope is NOT a reason to dismiss one. Any such\n"
-        "    movement is listed under \"SAFETY ALERTS\" / \"COVERAGE GAPS\" below, computed\n"
-        "    deterministically from the rubric, and you must address each one.\n"
+        + _NOISE_RULE_LIMITS +
         "  * Judge intent-match PRIMARILY on whether the EDITED questions moved as the\n"
         "    intent describes (a severity reclassification shows up as a `reseveritied`\n"
         "    entry naming that question, not as an added/removed finding).\n"
