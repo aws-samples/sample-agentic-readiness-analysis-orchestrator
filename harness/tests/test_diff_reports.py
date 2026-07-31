@@ -223,11 +223,26 @@ def test_d5_within_band_wobble_not_flagged():
 
 
 def test_d5_overall_band_labels():
-    assert dr._overall_band_label(0.5) == "Not Ready"
+    # Boundaries are the TD's: 3.5 / 2.5 / 1.5 on the 1-4 scale (MOD SKILL.md:1579-1582).
+    # The prior assertions here banded at 1/2/3 and were written FROM a wrong local
+    # implementation, so they passed while the differ mislabeled 9 of 14 golden fixtures —
+    # a green test pinning a bug. These are the TD's own boundary cases.
+    assert dr._overall_band_label(1.49) == "Not Ready"     # was wrongly "Needs Work"
     assert dr._overall_band_label(1.5) == "Needs Work"
-    assert dr._overall_band_label(2.31) == "Partial"
+    assert dr._overall_band_label(2.31) == "Needs Work"    # was wrongly "Partial" (TD example)
+    assert dr._overall_band_label(2.5) == "Partial"
+    assert dr._overall_band_label(3.4) == "Partial"        # was wrongly "Mature"
     assert dr._overall_band_label(3.5) == "Mature"
     assert dr._overall_band_label(None) is None
+
+
+def test_overall_band_label_never_forks_from_the_td_parse():
+    """`_overall_band_label` and `skill_table.mod_band` must be the SAME banding — the differ
+    once carried a second copy that disagreed on most of the range. A boundary lives in one
+    place, the TD parse; this guards against anyone re-inlining it."""
+    import skill_table as st
+    for s in [x / 100 for x in range(100, 401)]:          # 1.00 .. 4.00 in 0.01 steps
+        assert dr._overall_band_label(s) == st.mod_band(s), s
 
 
 def test_d5_portfolio_band_distribution_shift():

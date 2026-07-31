@@ -50,7 +50,7 @@ from typing import Any, Optional
 # Shared read of the managed TDs' severity tables — the SAME parse the judge prompt uses,
 # so "was this BLOCKER correct?" is answered from the rubric, not re-transcribed here.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from skill_table import is_over_escalation_correction  # noqa: E402
+from skill_table import is_over_escalation_correction, mod_band  # noqa: E402
 
 # --- score_rating bands, ordered low→high. Band-crossing detection uses the index. -----
 SCORE_BANDS = ["Not Ready", "Needs Work", "Partial", "Mature"]
@@ -536,8 +536,15 @@ def _repo_category_bands(report: dict) -> dict[str, Optional[str]]:
             for c in report.get("categories", []) or [] if c.get("category_id")}
 
 
-# Overall numeric scores don't carry an explicit band; derive from thresholds aligned to
-# the same 4 bands. Boundaries at 1/2/3 on the 0–4 scale (kept simple + documented).
+# Overall numeric scores don't carry an explicit band; derive it. This MUST use the same
+# boundaries as skill_table.mod_band, which are parsed from the TD (MOD SKILL.md:1579-1582,
+# 2014): 3.5 / 2.5 / 1.5 on the 1-4 scale. An earlier local copy here banded at 1/2/3
+# "kept simple" — a second, WRONG implementation of a TD threshold. It mislabeled 9 of 14
+# golden MOD fixtures (every score in 1.0-1.49 read "Needs Work" when the TD says "Not
+# Ready", and a 3.3 read "Mature" when the TD says "Partial"), so band_crossed both invented
+# crossings the TD does not have (1.9->2.1) and missed real ones (1.15->1.55), feeding a
+# wrong `moved` flag and a wrong D5 judge highlight. Never re-inline the thresholds; a band
+# boundary has exactly one home, and it is the TD parse.
 def _overall_band_label(score: Optional[float]) -> Optional[str]:
     if score is None:
         return None
@@ -545,13 +552,7 @@ def _overall_band_label(score: Optional[float]) -> Optional[str]:
         s = float(score)
     except (TypeError, ValueError):
         return None
-    if s < 1.0:
-        return "Not Ready"
-    if s < 2.0:
-        return "Needs Work"
-    if s < 3.0:
-        return "Partial"
-    return "Mature"
+    return mod_band(s)
 
 
 def diff_score_portfolio(before: dict, after: dict) -> dict:
