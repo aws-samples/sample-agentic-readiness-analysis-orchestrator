@@ -53,9 +53,17 @@ consumes **both** numbers to reason only about **direction**:
 
 | measured move | judge reports |
 | --- | --- |
-| `delta >= threshold` | measured accuracy **improvement** |
-| `abs(delta) < threshold` | **within noise — NOT MEASURED** → `analysis_effect: neutral` |
-| `delta <= -threshold` | measured accuracy **regression** |
+| `delta > threshold` | measured accuracy **improvement** |
+| `abs(delta) <= threshold` | **within noise — NOT MEASURED** → `analysis_effect: neutral` |
+| `delta < -threshold` | measured accuracy **regression** |
+
+A delta must **exceed** the band, not merely reach it — the comparison is `abs(delta) <=
+threshold`. The scores are not continuous: the grader's observed MOD alphabet is `[0.52,
+0.62, 0.72, 0.82, 0.88, 0.92]`, whose smallest gap is exactly `0.04` = `NOISE_FLOOR["mod"]`.
+Under a strict `<`, one grid step — the smallest move the grader can express — was reported
+as a **confirmed regression on 12 of 14 MOD fixtures** (MR !15 published exactly that).
+Raising the MOD floor to `2q = 0.08` is *not* the alternative fix: `0.08` exceeds the entire
+headroom of a `0.92`-baseline fixture, so it kills 7 rows and re-creates the ARA defect below.
 
 `threshold` is per fixture: `max(2·sd, NOISE_FLOOR)` — measured variance may only ever RAISE
 the bar, never lower it below the floor. The floor is **ARA 0.09 / MOD 0.04**

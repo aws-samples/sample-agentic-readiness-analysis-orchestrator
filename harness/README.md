@@ -23,9 +23,14 @@ numbers and reasons about the **direction**:
 
 | Measured move | What the judge reports |
 | --- | --- |
-| `delta >= threshold` | a measured accuracy **improvement** |
-| `|delta| < threshold` | **within noise — NOT MEASURED**, reported as neutral |
-| `delta <= -threshold` | a measured accuracy **regression** |
+| `delta > threshold` | a measured accuracy **improvement** |
+| `|delta| <= threshold` | **within noise — NOT MEASURED**, reported as neutral |
+| `delta < -threshold` | a measured accuracy **regression** |
+
+A delta must **exceed** the band, not just reach it. The grader's scores sit on a coarse grid
+(observed MOD values: `0.52, 0.62, 0.72, 0.82, 0.88, 0.92`) whose smallest step is exactly the
+MOD floor, so a strict `<` classified the tiniest expressible move as a confirmed regression on
+12 of 14 MOD fixtures. See DESIGN.md §"measured move".
 
 `threshold` is per fixture and comes from the data: **`max(2·stddev, noise floor)`**, where
 the floor is **ARA 0.09 / MOD 0.04** — derived as `2 × median per-fixture stddev` over

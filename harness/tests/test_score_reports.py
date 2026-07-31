@@ -422,6 +422,69 @@ def test_noise_floor_cannot_exceed_the_observed_score_range():
             f"reported as improved or regressed.")
 
 
+def test_one_grid_step_is_never_a_measured_regression():
+    """The MOD score alphabet's smallest gap IS the MOD noise floor. Pin the boundary.
+
+    The grader emits MOD scores on a coarse alphabet — the committed baseline contains only
+    [0.52, 0.62, 0.72, 0.82, 0.88, 0.92], whose smallest positive gap is exactly 0.04, which
+    is exactly NOISE_FLOOR["mod"]. So the smallest move the grader can express is precisely
+    the width of the band, and with a strict `abs(delta) < threshold` it fell on the
+    measured side: `regressed` on 12 of 14 MOD fixtures for the quietest possible wobble.
+    MR !15 was published with "one confirmed accuracy regression" on exactly this.
+
+    The comparison must therefore be `<=`: a delta EXCEEDS the band or it is not a
+    measurement. Raising the floor to 2*q=0.08 instead is not the fix — it re-creates the
+    ARA disease (0.08 exceeds a 0.92-baseline fixture's entire headroom to 1.0, killing 7
+    rows), which is why this is pinned at the boundary and not at the constant.
+    """
+    rows = json.loads((REPO / "harness" / "golden-accuracy-baseline.json").read_text())
+    for analysis, floor in sr.NOISE_FLOOR.items():
+        # Reconstruct the grader's observed alphabet from the PER-RUN scores, not the
+        # aggregated means — the means are averages of grid points and land off-grid.
+        vals = sorted({s for r in rows if r.get("analysis") == analysis
+                       for s in (r.get("scores") or [])})
+        gaps = [round(y - x, 4) for x, y in zip(vals, vals[1:])]
+        if not gaps:                # pragma: no cover - baseline carries per-run scores
+            continue
+        q = min(gaps)
+        if q > floor:               # a grid step wider than the band is genuinely a signal
+            continue
+        base = [{"repo": "a", "analysis": analysis, "score": 0.80,
+                 "stddev": 0.0, "scored_runs": 3, "runs": 3}]
+        got = sr.compare_to_baseline(
+            [{"repo": "a", "analysis": analysis, "score": round(0.80 - q, 3)}],
+            base)["units"][0]
+        assert got["verdict"] == "within-noise", (
+            f"a single {analysis} grid step ({q}) is the smallest delta the grader can "
+            f"emit and does not exceed the {floor} band, so it CANNOT be a measured "
+            f"regression — got {got['verdict']}. The comparison must be "
+            f"abs(delta) <= threshold.")
+
+
+def test_a_delta_exactly_on_the_threshold_is_not_measured():
+    """Boundary, stated directly and independently of the baseline's grid.
+
+    `abs(delta) == threshold` means the move is exactly the size of the noise we already
+    know is there — indistinguishable from it, so NOT MEASURED. Two grid steps still clear
+    the bar, which is what keeps the harness able to detect anything at all.
+    """
+    base = [{"repo": "a", "analysis": "mod", "score": 0.80,
+             "stddev": 0.0, "scored_runs": 3, "runs": 3}]
+    floor = sr.NOISE_FLOOR["mod"]
+    for delta in (floor, -floor):
+        got = sr.compare_to_baseline(
+            [{"repo": "a", "analysis": "mod", "score": round(0.80 + delta, 3)}],
+            base)["units"][0]
+        assert got["verdict"] == "within-noise", f"delta {delta:+} == threshold {floor}"
+    # Strictly past it is a measurement in both directions — the band must not swallow real
+    # movement, or the harness measures nothing.
+    for delta, want in ((2 * floor, "improved"), (-2 * floor, "regressed")):
+        got = sr.compare_to_baseline(
+            [{"repo": "a", "analysis": "mod", "score": round(0.80 + delta, 3)}],
+            base)["units"][0]
+        assert got["verdict"] == want, f"delta {delta:+} must be {want}"
+
+
 def test_a_jittery_baseline_raises_its_own_bar_above_the_floor():
     """Per-fixture measured variance may RAISE the threshold, never lower it.
 

@@ -1231,6 +1231,19 @@ def compare_to_baseline(rows: list[dict],
     Threshold per fixture, best evidence first:
       1. 2 * baseline stddev, when the baseline is multi-sample (real measured variance)
       2. NOISE_FLOOR[analysis], while the baseline is a single draw
+
+    The comparison is `abs(delta) <= threshold` -> within-noise: a delta must EXCEED the
+    band, not merely reach it. This is not fastidiousness about a boundary, because the
+    scores are not continuous. The grader emits MOD scores on a coarse alphabet -- the
+    observed values are [0.52, 0.62, 0.72, 0.82, 0.88, 0.92], whose smallest gap is exactly
+    0.04, which is exactly NOISE_FLOOR["mod"]. With a strict `<`, ONE GRID STEP -- the
+    smallest move the grader can possibly express, and the one a re-run produces for free --
+    landed on the wrong side of the band and was reported as a CONFIRMED REGRESSION on 12 of
+    14 MOD fixtures. MR !15 hit this: legacy-document-portal 0.92 -> 0.88 was published as
+    "one confirmed accuracy regression" when it is the quietest non-zero delta the scale has.
+    Raising the MOD floor to 2*q=0.08 instead would re-create the disease just fixed on ARA
+    (it kills 7 rows outright: 0.08 is more headroom than a 0.92 baseline has to 1.0), so the
+    boundary is where this belongs.
     """
     if baseline is None:
         baseline = (json.loads(BASELINE.read_text(encoding="utf-8"))
@@ -1275,7 +1288,11 @@ def compare_to_baseline(rows: list[dict],
             basis = ("measured noise floor (baseline has no multi-run variance"
                      f"{'' if runs is None else f'; runs={runs}'})")
         delta = round(now - was, 3)
-        if abs(delta) < threshold:
+        # `<=`, not `<` — a delta must EXCEED the band to be a measurement. The MOD score
+        # alphabet's smallest gap IS the MOD floor (0.04), so under `<` the smallest move the
+        # grader can express was auto-classified `regressed` on 12 of 14 MOD fixtures. See
+        # the docstring.
+        if abs(delta) <= threshold:
             verdict = "within-noise"
             noise += 1
         elif delta > 0:
