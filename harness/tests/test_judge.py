@@ -656,16 +656,34 @@ def test_prompt_tells_the_model_not_to_read_an_unmeasured_run_as_inert():
 def test_edited_in_service_checkbox_is_read_from_the_real_mr_template():
     """judge.py greps for this field and DESIGN.md documents it, but the template shipped
     without it, so `edited_in_service` was permanently None -- losing the one signal that
-    tells "stale goldens" apart from "the edit didn't land"."""
+    tells "stale goldens" apart from "the edit didn't land".
+
+    The template now ships with `no` PRE-CHECKED, because ~98% of contributors edit
+    SKILL.md in this repo and an unfilled template used to parse as None -- the judge then
+    lost the signal for the overwhelmingly common case. Defaulting to the common truth
+    beats defaulting to "unknown" here: `no` is also the CONSERVATIVE default, since it
+    keeps the judge holding the edit to the committed goldens rather than excusing an empty
+    delta as "the goldens are stale".
+    """
     tmpl = (REPO / ".gitlab" / "merge_request_templates" / "rubric-change.md").read_text()
-    assert judge.parse_intent(tmpl).get("edited_in_service") is None, \
-        "an unfilled template must stay None, not default to a guess"
-    yes = judge.parse_intent(tmpl.replace("- [ ] yes", "- [x] yes"))
+    assert judge.parse_intent(tmpl).get("edited_in_service") is False, (
+        "the template must ship with `no` pre-checked so the 98% case needs no edit; "
+        "an unfilled template parsing as None loses the signal entirely")
+    # Switching to yes must flip it -- this is the case that needs a golden refresh.
+    yes = judge.parse_intent(
+        tmpl.replace("- [ ] yes", "- [x] yes").replace("- [x] no", "- [ ] no"))
     assert yes["edited_in_service"] is True, (
         "the template ships an in-service checkbox that judge.py must parse; got "
         f"{yes['edited_in_service']!r}")
-    no = judge.parse_intent(tmpl.replace("- [ ] no", "- [x] no"))
-    assert no["edited_in_service"] is False, no["edited_in_service"]
+    # Sloppy fill (BOTH boxes ticked) must resolve to the SAFE direction: assume
+    # in-service, which prompts a golden refresh instead of trusting a stale baseline.
+    both = judge.parse_intent(tmpl.replace("- [ ] yes", "- [x] yes"))
+    assert both["edited_in_service"] is True, (
+        "both boxes ticked must assume in-service (the safe direction), not silently "
+        f"trust the goldens; got {both['edited_in_service']!r}")
+    # And unchecking everything degrades to "unknown", never to a confident guess.
+    neither = judge.parse_intent(tmpl.replace("- [x] no", "- [ ] no"))
+    assert neither["edited_in_service"] is None, neither["edited_in_service"]
 
 
 def test_the_in_service_section_does_not_leak_into_what_or_why():

@@ -31,7 +31,7 @@
      REPO copy, so the delta can come back empty even though your change is real. -->
 
 - [ ] yes — the change was made in-service (fire `harness:full` manually to refresh goldens)
-- [ ] no — the change is in this repo's SKILL.md
+- [x] no — the change is in this repo's SKILL.md  ← default; uncheck only if you edited in-service
 
 ## Expected impact
 <!-- Which harness dimension(s) should move, and in which direction?
