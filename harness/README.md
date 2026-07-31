@@ -133,26 +133,35 @@ write/delete on unrelated resources, no `AdministratorAccess`. Attach it with
 Click-path (GitLab project on `gitlab.aws.dev`): **Settings → CI/CD → Variables →
 Add variable**.
 
+Exactly **one** variable has to be created here:
+
 | Variable | What it is | Masked | Protected |
 |---|---|---|---|
 | `AWS_CREDS_TARGET_ROLE` | ARN of the IAM role created in step 1 — the trigger the Credential Vendor keys off | **No** | **No — must stay Plain** |
-| `AWS_DEFAULT_REGION` | Region for the analysis run (`us-east-1`) | **No** | **No — must stay Plain** |
+
+`AWS_DEFAULT_REGION` is **not** a CI variable — it is set to `us-east-1` directly in
+[`.gitlab-ci.yml`](../.gitlab-ci.yml) under `variables:`. A region is not sensitive, and
+keeping it in the file means the vend can't break from a variable-naming slip. The role
+ARN is the opposite case: it names an AWS account id, so it stays out of the file because
+this repo is mirrored to the public GitHub `aws-samples` org.
 
 Notes:
 
 - `AWS_CREDS_TARGET_ROLE` is the **only** switch — when it is set, the shared runner
   vends creds for it automatically; when it is unset, the job logs a clear warning
   and no AWS access is granted.
-- **Both variables MUST stay Plain — not Protected, not Masked.** This is the failure we
+- **It MUST stay Plain — not Protected, not Masked, not Hidden.** This is the failure we
   actually hit. A *Protected* variable is injected **only on protected branches**, so it is
   silently absent on the feature branches and MRs where this harness runs — no creds, no
   analysis, no error explaining why. A *Masked* / *Hidden* variable can't be read by the
-  runner's pre-clone vendor script at all. Neither value is a secret (an ARN and a region),
-  so there is nothing to protect. `harness:auth-check` diagnoses both cases.
-- **The variable is `AWS_DEFAULT_REGION`, not `AWS_REGION`.** The vendor gates on
+  runner's pre-clone vendor script at all. An ARN is not a credential, so there is nothing
+  to protect. `harness:auth-check` diagnoses both cases.
+- **The region variable is `AWS_DEFAULT_REGION`, not `AWS_REGION`.** The vendor gates on
   `AWS_DEFAULT_REGION` specifically and vends only when it *and*
   `AWS_CREDS_TARGET_ROLE` are set. Setting only `AWS_REGION` makes the vendor skip
   silently — confirmed by zero AssumeRole attempts in the target account's CloudTrail.
+  `AWS_REGION` is read by the `aws` CLI but has **no** effect on whether creds are vended,
+  so adding it as a CI variable does not substitute for `AWS_DEFAULT_REGION`.
 - **No token to refresh.** The Vendor removes the old Isengard session-token expiry
   pain — no static keys to rotate; fresh short-lived credentials on every run.
 - **Multiple roles/stages?** If you later split analysis across accounts, each job
