@@ -51,11 +51,17 @@ esac
 # ---------------------------------------------------------------------------
 UPSTREAM="$GITHUB_REMOTE/$DST"
 if git rev-parse --verify -q "$UPSTREAM" >/dev/null; then
-  if ! git merge-base --is-ancestor "$UPSTREAM" "$SRC"; then
-    AHEAD="$(git rev-list --count "$SRC..$UPSTREAM")"
+  # Commits this script itself created are expected to be absent from the source ref: a
+  # squash commit is never an ancestor of the branch it was squashed FROM. Ignoring them by
+  # subject prefix keeps the guard meaningful on every run after the first -- otherwise it
+  # fires on its own output forever and the habit becomes to bypass it.
+  FOREIGN="$(git rev-list "$SRC..$UPSTREAM" --invert-grep --grep='^mirror: sync content from ')"
+  if [ -n "$FOREIGN" ]; then
     say ""
-    say "mirror: $UPSTREAM has $AHEAD commit(s) not in '$SRC':"
-    git log --oneline "$SRC..$UPSTREAM" | sed 's/^/    /'
+    say "mirror: $UPSTREAM has commit(s) not in '$SRC' and not made by this script:"
+    printf '%s\n' "$FOREIGN" | while read -r sha; do
+      git log -1 --oneline "$sha" | sed 's/^/    /'
+    done
     say ""
     say "A content squash would REVERT those. Some may already be present as equivalent"
     say "text (a cherry-pick or a re-apply on the GitLab side) — in that case the revert is"
