@@ -147,13 +147,21 @@ Notes:
 
 ## How it runs
 
-Two advisory jobs, both `allow_failure: true` (they never block a merge). See
-[`.gitlab-ci.yml`](../.gitlab-ci.yml).
+Five jobs, **every one `allow_failure: true`** — the harness is advisory and never blocks a
+merge. See [`.gitlab-ci.yml`](../.gitlab-ci.yml).
 
-- **`harness:contract-tests`** — offline schema guardrail (no AWS). Runs
-  `tests/test_validate_contract.py` on every MR (and web run) to prove the JSON-contract
-  validator still rejects drifted report shapes. This is the structural axis, distinct
-  from the semantic judge; it needs no creds and no fixtures.
+- **`harness:contract-tests`** — the offline guardrail (no AWS, no fixtures, no creds). Runs
+  the **whole** test suite (`python3 -m pytest harness/tests/ -q`) on every MR and web run:
+  the JSON-contract validator, the differ, the envelope normalizer, the scorer, and the
+  `SKILL.md` parse (`test_skill_table.py` asserts 43/37 questions and AUTH-Q5's class). That
+  parse is what tells the differ a `BLOCKER → RISK-SAFETY` move is a *correction*, so a TD
+  heading-format change that broke it would silently disable over-escalation detection —
+  these tests are what catch that. This is the structural axis, distinct from the semantic
+  judge.
+- **`harness:auth-check`** — reports whether the Credential Vendor actually vended
+  credentials, so "no creds" is distinguishable from "role trust rejected".
+- **`harness:comment-check`** — **manual** on an MR. Renders the advisory comment from a
+  canned verdict in ~30s, so the comment path can be tested without a full analysis run.
 - **`harness:impact`** — runs automatically on every merge request. A deterministic
   gate (`should-run.sh`) decides run vs skip: it RUNs when a change lands under a
   watched TD directory (`definitions/managed/<td>/`, configurable via `HARNESS_TD_PATHS`)
@@ -182,12 +190,24 @@ harness/diff-reports.py \
   -o /tmp/impact.json
 # (Same tree in/out => an all-empty delta with "no_op": true — a good smoke test.)
 
-# Run the differ unit tests (synthetic before/after pairs).
-python -m pytest harness/tests/
+# Run the full offline suite — the same command CI runs.
+python3 -m pytest harness/tests/ -q
 ```
 
 `judge.py` is the only component that needs an LLM; the gate, differ, and coverage
 heatmap (`coverage-heatmap.py`, rendered from `usecases.yaml` axes) all run offline.
+
+Anything that regenerates reports **does** need AWS + `atx`. Two flags worth knowing:
+
+```sh
+# Re-run ONE fixture (fast iteration, or backfill one a transient failure dropped
+# from a batch). --force is required to write into a dir that already holds reports.
+harness/run-fixtures.sh --scope all --td ara --no-portfolio --skip-publish \
+  --after-dir /tmp/mybatch --only monolith --force --jobs 8
+
+# Print the atx commands without executing — offline sanity check of the selection.
+harness/run-fixtures.sh --scope all --td ara --only monolith --dry-run
+```
 
 ## Where the scores live (`SCORES.md`)
 
