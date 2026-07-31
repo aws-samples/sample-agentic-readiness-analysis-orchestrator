@@ -397,7 +397,16 @@ harness:impact:
     # --validate: contract-check each collected report as it lands (schema guardrail).
     # --jobs/--mr-fixtures: see the HARNESS_JOBS / HARNESS_MR_FIXTURES notes above.
     - harness/run-fixtures.sh --changed-only --validate --jobs "$HARNESS_JOBS" --mr-fixtures "$HARNESS_MR_FIXTURES"
-    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
+    # SEVERITY GATE INPUT: which questions had their DOCUMENTED severity edited in this MR.
+    # The differ reads the working-tree SKILL.md to decide whether a lost BLOCKER was an
+    # "over-escalation correction" (the report was wrong, the table was right). If the SAME
+    # MR moved that table row, that premise is gone — so these qids are barred from the
+    # exemption and a downgrade on them alerts as a real relaxation. should-run.sh already
+    # fetched the target branch, so origin/<target> resolves here. Advisory: never fatal.
+    - |
+      SEV_BASE="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:+origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+      python3 harness/skill_table.py --base "${SEV_BASE:-origin/main}" -o changed-severity.json || echo '{}' > changed-severity.json
+    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" --changed-severity changed-severity.json -o impact.json
     # SCORE (accuracy anchor): re-score the freshly-generated reports for groundedness
     # against the fixture SOURCE and classify each against the committed baseline
     # (improved / regressed / within-noise, with a per-fixture noise threshold). This is
@@ -424,6 +433,7 @@ harness:impact:
       - impact.json
       - verdict.json
       - compare.json   # accuracy-vs-baseline anchor the judge scored against
+      - changed-severity.json   # which questions' severity the MR edited (differ gate input)
       # Per-unit atx logs (spinner already stripped at write time). These are the
       # only record of what atx actually did — the job log deliberately carries just
       # our concise markers so it can't hit the 4 MB cap again.

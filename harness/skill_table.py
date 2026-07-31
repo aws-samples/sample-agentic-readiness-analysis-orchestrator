@@ -11,6 +11,7 @@ about severity from the SAME parsed table. It was extracted from the retired
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -83,6 +84,58 @@ def parse_questions(analysis: str) -> dict[str, dict]:
             "conditional": "⚡" in raw,
         }
     return out
+
+
+def parse_questions_text(text: str) -> dict[str, dict]:
+    """`parse_questions` over a STRING rather than the checked-out TD.
+
+    Split out so the same parser can read a SKILL.md from another git ref (via
+    `git show <ref>:<path>`), which is what `diff_severity_tables` needs. Keeping one regex
+    and one dedup rule for both callers is the point — a second parser would drift from this
+    one and the drift would be invisible.
+    """
+    out: dict[str, dict] = {}
+    for qid, title, sev in _Q_HEADING.findall(text):
+        if qid in out:
+            continue
+        raw = (sev or "").strip()
+        out[qid] = {
+            "title": title.strip(),
+            "severity": raw.split("⚡")[0].replace("*", "").strip(),
+            "conditional": "⚡" in raw,
+        }
+    return out
+
+
+def diff_severity_tables(base_text: str, head_text: str) -> dict[str, dict]:
+    """Which questions had their SEVERITY CLASS or CONDITIONAL marker changed.
+
+    Returns `{qid: {"before": {...} | None, "after": {...} | None}}` — empty when the two
+    revisions agree. Only `severity` and `conditional` are compared: those two are what
+    `is_over_escalation_correction` treats as authority, so they are the only fields whose
+    movement can flip a safety alert into a "correction". A retitled or reworded question is
+    NOT a table change and must not appear here, or the gate below would fire on every prose
+    edit and get ignored.
+
+    An ADDED or REMOVED question also lands here (`before`/`after` None respectively): a qid
+    that did not exist in the base has no documented severity to have over-escalated against.
+    """
+    base, head = parse_questions_text(base_text), parse_questions_text(head_text)
+    keys = ("severity", "conditional")
+
+    def _sig(q: Optional[dict]) -> Optional[tuple]:
+        return None if q is None else tuple(q.get(k) for k in keys)
+
+    changed: dict[str, dict] = {}
+    for qid in sorted(set(base) | set(head)):
+        b, h = base.get(qid), head.get(qid)
+        if _sig(b) == _sig(h):
+            continue
+        changed[qid] = {
+            "before": None if b is None else {k: b.get(k) for k in keys},
+            "after": None if h is None else {k: h.get(k) for k in keys},
+        }
+    return changed
 
 
 def _owning_qid(text: str, pos: int) -> Optional[str]:
@@ -310,7 +363,8 @@ def mod_band(score: float) -> str:
 
 def is_over_escalation_correction(
         analysis: str, qid: Optional[str],
-        before: Optional[str], after: Optional[str]) -> bool:
+        before: Optional[str], after: Optional[str],
+        changed_qids: Optional[set[str]] = None) -> bool:
     """True when a severity DOWNGRADE brings a finding INTO LINE with the TD's own table.
 
     This is the distinction the harness was missing: a lost BLOCKER is only a safety
@@ -322,7 +376,8 @@ def is_over_escalation_correction(
     Deliberately conservative — returns True ONLY when all of:
       - the TD documents this qid with a fixed (non-conditional) severity, AND
       - `before` was strictly MORE severe than that documented severity, AND
-      - `after` equals the documented severity exactly.
+      - `after` equals the documented severity exactly, AND
+      - this qid's documented severity was NOT itself edited in the same MR (see below).
 
     So it never exempts:
       - conditional blockers (the 5 ⚡ questions) — their severity is scope-dependent, so a
@@ -330,8 +385,22 @@ def is_over_escalation_correction(
       - an UNDER-statement (`after` less severe than documented) — that is the dangerous
         direction and must still alert;
       - a partial move that overshoots or undershoots the documented level.
+
+    `changed_qids` is the set of question ids whose severity/conditional row moved in THIS
+    MR (from `diff_severity_tables`). The exemption's entire premise is a report
+    over-escalating against a *stable* documented severity: "the table says RISK-SAFETY, the
+    report said BLOCKER, so dropping to RISK-SAFETY is a correction." If the same MR edited
+    that table row, the premise collapses — the grader is now parsing the EDITED rubric (the
+    working-tree SKILL.md), so `documented` reflects the new value and a report matching it
+    would be auto-exempted no matter what the change was. That is the one path by which an MR
+    could launder a genuine safety relaxation through a self-serving rubric edit. Excluding
+    edited qids forces those back through `lost_safety` to alert as real relaxations. Defaults
+    to None so existing callers (and the 265 tests) see no behaviour change — the gate only
+    tightens when a table diff is supplied.
     """
     if not qid:
+        return False
+    if changed_qids and str(qid) in changed_qids:
         return False
     q = parse_questions(analysis).get(str(qid))
     if not q or q.get("conditional"):
@@ -342,3 +411,85 @@ def is_over_escalation_correction(
     if documented is None or b is None or a is None:
         return False
     return b > documented and a == documented
+
+
+# ---------------------------------------------------------------------------------------
+# CLI: which questions had their documented severity moved in THIS change.
+#
+# Emits {analysis: [qids]} JSON for `diff-reports.py --changed-severity`. This is the ONE
+# git-aware entry point in this module — the parser stays a pure function of file text, and
+# `diff-reports.py` stays offline/git-free. Kept here rather than in the differ because the
+# severity-table parse lives here; a second git wrapper elsewhere would need to re-import it.
+# ---------------------------------------------------------------------------------------
+
+def _git_show(ref: str, path: Path) -> Optional[str]:
+    """`git show <ref>:<repo-relative path>` — None if the ref or path is absent there.
+
+    A missing base blob is NOT an error: a brand-new SKILL.md has no `before`, and
+    diff_severity_tables treats an all-None `before` as "every question added", which is the
+    correct reading (a question that did not exist cannot have been over-escalated against).
+    """
+    try:
+        rel_path = Path(path).resolve().relative_to(REPO)
+    except ValueError:
+        rel_path = Path(path)
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(REPO), "show", f"{ref}:{rel_path.as_posix()}"],
+            capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    return res.stdout if res.returncode == 0 else None
+
+
+def changed_severity_qids(base: str) -> dict[str, list[str]]:
+    """{analysis: [qids whose severity/conditional moved between `base` and the work tree]}.
+
+    `base` is a git ref (e.g. `origin/main` or a merge-base sha). The HEAD side is read from
+    the WORKING TREE on disk, not `HEAD:` — the grader parses the working-tree SKILL.md
+    (`SKILLS[analysis]`), so the gate must diff against exactly what the grader will read, or
+    a rubric edit that is staged-but-not-committed would slip the gate while still feeding the
+    grader. Analyses with no change are omitted entirely (not emitted as an empty list) so the
+    consumer's `.get(analysis)` is None and short-circuits.
+    """
+    out: dict[str, list[str]] = {}
+    for analysis, path in SKILLS.items():
+        head_text = path.read_text(encoding="utf-8") if path.exists() else ""
+        base_text = _git_show(base, path)
+        if base_text is None:
+            # Base blob unreadable (new file, or unresolved ref). With no `before` there is
+            # nothing to have over-escalated against, so treat every current question as
+            # changed for this analysis — the conservative reading, which only ever WIDENS
+            # the set barred from the exemption.
+            base_text = ""
+        changed = diff_severity_tables(base_text, head_text)
+        if changed:
+            out[analysis] = sorted(changed)
+    return out
+
+
+def _main(argv: Optional[list[str]] = None) -> int:
+    import argparse
+    import json
+    ap = argparse.ArgumentParser(
+        description="Emit {analysis: [qids]} whose documented severity/conditional row moved "
+                    "vs a base ref — feeds `diff-reports.py --changed-severity`.")
+    ap.add_argument("--base", default="origin/main",
+                    help="git ref to diff the working-tree SKILL.md against (default origin/main)")
+    ap.add_argument("-o", "--out", type=Path, default=None,
+                    help="write JSON here (default stdout)")
+    args = ap.parse_args(argv)
+    result = changed_severity_qids(args.base)
+    text = json.dumps(result, indent=2)
+    if args.out:
+        args.out.write_text(text + "\n", encoding="utf-8")
+        named = sorted(q for v in result.values() for q in v)
+        print(f"skill_table: severity-table changed for {named or 'nothing'} "
+              f"vs {args.base} -> {args.out}", file=__import__("sys").stderr)
+    else:
+        print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

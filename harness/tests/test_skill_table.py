@@ -112,6 +112,81 @@ def test_getting_stricter_is_not_a_correction():
     assert not st.is_over_escalation_correction("ara", "AUTH-Q5", "RISK-QUALITY", "RISK-SAFETY")
 
 
+# --- the changed_qids gate (a self-serving rubric edit cannot launder a relaxation) -----
+
+def test_an_edited_severity_row_is_barred_from_the_correction_exemption():
+    """The whole point of the gate. AUTH-Q5 -> RISK-SAFETY normally reads as a correction; if
+    this MR EDITED AUTH-Q5's documented severity, the 'the table was right all along' premise
+    is gone and the downgrade must fall through to a real safety alert."""
+    assert st.is_over_escalation_correction("ara", "AUTH-Q5", "BLOCKER", "RISK-SAFETY")
+    assert not st.is_over_escalation_correction(
+        "ara", "AUTH-Q5", "BLOCKER", "RISK-SAFETY", changed_qids={"AUTH-Q5"})
+
+
+def test_the_gate_only_bars_the_qid_that_actually_moved():
+    """An edit to some OTHER question does not disturb an unrelated correction."""
+    assert st.is_over_escalation_correction(
+        "ara", "AUTH-Q5", "BLOCKER", "RISK-SAFETY", changed_qids={"API-Q2"})
+
+
+def test_the_gate_defaults_off_so_existing_callers_are_unchanged():
+    """None / empty set = no diff supplied = prior behaviour (the 265 tests rely on this)."""
+    assert st.is_over_escalation_correction("ara", "AUTH-Q5", "BLOCKER", "RISK-SAFETY", None)
+    assert st.is_over_escalation_correction("ara", "AUTH-Q5", "BLOCKER", "RISK-SAFETY", set())
+
+
+# --- diff_severity_tables ---------------------------------------------------------------
+
+_BASE_TD = (
+    "#### AUTH-Q5: Credential Management — RISK-SAFETY\n"
+    "prose\n"
+    "#### API-Q1: Something — BLOCKER\n"
+    "#### API-Q4: Idempotent Writes — BLOCKER ⚡ (Conditional)\n"
+)
+
+
+def test_diff_severity_tables_flags_a_class_change():
+    head = _BASE_TD.replace("AUTH-Q5: Credential Management — RISK-SAFETY",
+                            "AUTH-Q5: Credential Management — BLOCKER")
+    changed = st.diff_severity_tables(_BASE_TD, head)
+    assert set(changed) == {"AUTH-Q5"}
+    assert changed["AUTH-Q5"]["before"]["severity"] == "RISK-SAFETY"
+    assert changed["AUTH-Q5"]["after"]["severity"] == "BLOCKER"
+
+
+def test_diff_severity_tables_flags_a_conditional_marker_change():
+    """The ⚡ marker is load-bearing — flipping it changes how a downgrade is judged, so it
+    counts as a table move even when the severity WORD is unchanged."""
+    head = _BASE_TD.replace("API-Q4: Idempotent Writes — BLOCKER ⚡ (Conditional)",
+                            "API-Q4: Idempotent Writes — BLOCKER")
+    changed = st.diff_severity_tables(_BASE_TD, head)
+    assert set(changed) == {"API-Q4"}
+    assert changed["API-Q4"]["before"]["conditional"] is True
+    assert changed["API-Q4"]["after"]["conditional"] is False
+
+
+def test_diff_severity_tables_ignores_a_pure_retitle():
+    """A reworded title is not a severity move and must not trip the gate."""
+    head = _BASE_TD.replace("AUTH-Q5: Credential Management",
+                            "AUTH-Q5: Secrets and Credential Management")
+    assert st.diff_severity_tables(_BASE_TD, head) == {}
+
+
+def test_diff_severity_tables_reports_added_and_removed_questions():
+    head = _BASE_TD + "#### SEC-Q1: New Question — RISK-SAFETY\n"
+    changed = st.diff_severity_tables(_BASE_TD, head)
+    assert changed["SEC-Q1"]["before"] is None
+    assert changed["SEC-Q1"]["after"]["severity"] == "RISK-SAFETY"
+    # And the reverse: dropping a question.
+    back = st.diff_severity_tables(head, _BASE_TD)
+    assert back["SEC-Q1"]["before"]["severity"] == "RISK-SAFETY"
+    assert back["SEC-Q1"]["after"] is None
+
+
+def test_diff_severity_tables_is_empty_for_identical_text():
+    assert st.diff_severity_tables(_BASE_TD, _BASE_TD) == {}
+
+
 # --- calibration / extended / N/A parsers -----------------------------------------------
 
 def test_scope_severities_distinguish_api_q4_from_the_other_blockers():
