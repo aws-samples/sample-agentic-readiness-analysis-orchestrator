@@ -28,8 +28,10 @@ numbers and reasons about the **direction**:
 | `delta <= -threshold` | a measured accuracy **regression** |
 
 `threshold` is per fixture and comes from the data: **`max(2·stddev, noise floor)`**, where
-the floor is ARA **0.25** / MOD **0.03** (measured by re-running the analysis, not by
-re-scoring fixed reports). Measured variance may only **raise** the bar, never lower it — an
+the floor is **ARA 0.09 / MOD 0.04** — derived as `2 × median per-fixture stddev` over
+independent re-runs of the analysis, not by re-scoring fixed reports. Re-derive it whenever you
+re-baseline; a test recomputes it from `golden-accuracy-baseline.json` and fails when the
+constant drifts (it has gone stale twice). Measured variance may only **raise** the bar, never lower it — an
 n=3 stddev is too weak an estimator to justify shrinking the threshold, and shrinking it
 manufactures false "improved" verdicts. A sub-threshold move is a different roll of the dice,
 not a result — which is why the harness re-baselines from several independent runs rather than
@@ -229,7 +231,7 @@ harness/score-reports.py --show-baseline --markdown
 Add `--markdown` to any `--update-baseline` run and the doc is refreshed with the JSON,
 so the two cannot disagree. The file states its own **sample depth**, which governs how
 far the numbers can be pushed: at one run per fixture there is no measured variance, so
-ARA falls back to its 0.25 noise floor and its scores cannot rank fixtures against each other.
+ARA falls back to its noise floor and its scores cannot rank fixtures against each other.
 
 ## Severity is read from the TD, never transcribed (`skill_table.py`)
 

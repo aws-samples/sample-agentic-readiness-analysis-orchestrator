@@ -1174,30 +1174,44 @@ def merge_baseline(prior: list[dict], rows: list[dict],
     return merged, missing, note
 
 
-# Measured noise floor per analysis, from THREE INDEPENDENT ANALYSIS RUNS over the same
-# fixtures (golden + s2 + s3, 11 fixtures x 2 analyses, 2026-07-30):
+# Measured noise floor per analysis. THE RULE IS `2 * median per-fixture stddev`, computed
+# over INDEPENDENT ANALYSIS RUNS (not re-scores) of the committed baseline. Re-scoring
+# byte-identical reports measures only the JUDGE's jitter and holds constant the thing that
+# actually dominates — the analysis agent — so it understates the floor badly.
 #
-#            median sd   max sd   max spread   2*median_sd
-#     ARA       0.123     0.198      0.46         0.246
-#     MOD       0.014     0.123      0.26         0.028
+# Current basis: golden-accuracy-baseline.json, ARA n=4 independent trees
+# (after-tdfix / ara-draw2 / ara-draw3 / after-tdfix-d3), MOD n=3 (golden / s2 / s3):
 #
-# The earlier values (ARA 0.10, MOD 0.02) came from RE-SCORING BYTE-IDENTICAL reports, which
-# measures only the JUDGE's jitter and holds constant the thing that actually dominates: the
-# analysis agent. Re-running the TD moves storefront-rails 0.42 -> 0.88 -> 0.52 with no code
-# change at all. So 0.10 understated ARA's real floor by ~2.5x, and every delta between 0.10
-# and 0.25 was being reported as "improved"/"regressed" when it was indistinguishable from a
-# different roll of the dice. That is the failure mode most likely to make a contributor
-# trust a number they should not.
+#            median sd   max sd   score range   2*median_sd   floor
+#     ARA      0.0455     0.069   0.825-0.890      0.091       0.09
+#     MOD      0.0190     0.170   0.620-0.920      0.038       0.04
 #
-# ARA is set to 2*median_sd. Deliberately NOT 2*max_sd (0.396) — that is so wide it would
-# call every plausible TD improvement "within-noise" and the harness would stop saying
-# anything. The per-fixture stddev path below is the real fix; these are only the fallback
-# for a single-draw baseline.
+# HISTORY — why this constant is now DERIVED and TESTED against the baseline, not typed in:
+# it has been wrong twice, in both directions, and each time a green test pinned the wrong
+# value.
+#   1. ARA 0.10 / MOD 0.02 came from re-scoring one report tree. Too SMALL: it reported
+#      dice-rolls as "improved"/"regressed".
+#   2. ARA 0.25 came from a genuinely-measured median sd of 0.123 — but that measurement
+#      predated the noise fixes and the n=4 ARA re-baseline, which cut ARA's median sd to
+#      0.0455. The constant never followed the data. Too LARGE, catastrophically: 0.25 is
+#      ~4x the entire observed ARA score range (0.065) and exceeded every fixture's
+#      arithmetic headroom to a perfect 1.0, so `within-noise` was the ONLY verdict ARA
+#      could ever return. The harness had silently stopped being able to say anything about
+#      ARA at all, which is worse than a wrong number because it looks like a working
+#      measurement.
+#
+# So: NOT 2*max_sd (ARA 0.138 / MOD 0.340) — MOD's max is one outlier fixture (pricing-cgi,
+# sd 0.170) and a floor there would swallow every plausible improvement. Per-fixture variance
+# already raises the bar for exactly those fixtures via the max() below; that is the right
+# place to be strict, because it is strict about the fixture that earned it.
 #
 # These remain FALLBACKS: a multi-sample baseline supplies a real per-fixture `stddev`, which
 # is strictly better evidence and takes precedence in compare_to_baseline(). Treat a
 # sub-threshold delta as "NOT MEASURED", never as "proven equal".
-NOISE_FLOOR = {"ara": 0.25, "mod": 0.03}
+#
+# If you re-baseline, RE-DERIVE THIS. `test_noise_floor_matches_the_committed_baseline`
+# recomputes 2*median_sd from golden-accuracy-baseline.json and fails when this drifts.
+NOISE_FLOOR = {"ara": 0.09, "mod": 0.04}
 
 
 def compare_to_baseline(rows: list[dict],

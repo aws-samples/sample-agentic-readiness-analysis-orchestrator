@@ -58,12 +58,22 @@ consumes **both** numbers to reason only about **direction**:
 | `delta <= -threshold` | measured accuracy **regression** |
 
 `threshold` is per fixture: `max(2·sd, NOISE_FLOOR)` — measured variance may only ever RAISE
-the bar, never lower it below the floor. The floor is **ARA 0.25 / MOD 0.03**
-(`score-reports.py: NOISE_FLOOR`), measured by re-running the analysis on a byte-identical
-rubric. An earlier draft of this doc quoted 0.10 / 0.02; those were derived from re-scoring
-the same report tree, which holds the dominant variance source (the analysis agent) fixed and
-so understated the true floor by ~2.5×. Do not reintroduce them — a threshold that small
-reports run-to-run noise as a measured improvement.
+the bar, never lower it below the floor. The floor is **ARA 0.09 / MOD 0.04**
+(`score-reports.py: NOISE_FLOOR`), **derived as `2 × median per-fixture stddev`** over
+independent re-runs of the analysis on a byte-identical rubric (ARA n=4, MOD n=3 — see
+`golden-accuracy-baseline.json`). Re-derive it whenever you re-baseline; a test recomputes it
+from the baseline and fails when the constant drifts.
+
+Two retired values, because the floor has been wrong in both directions and each time a green
+test pinned it:
+
+- **ARA 0.10 / MOD 0.02** — derived from re-scoring one report tree, which holds the dominant
+  variance source (the analysis agent) fixed. Too small: reported dice-rolls as improvements.
+- **ARA 0.25** — a real measurement (median sd 0.123) that was never updated after the noise
+  fixes and the n=4 ARA re-baseline cut median sd to 0.0455. Too large by ~4× the entire
+  observed ARA range (0.825–0.890), which made `within-noise` the *only verdict ARA could
+  ever return*. A harness that can only say "not measured" still looks like it is working —
+  that is the more dangerous of the two failures.
 
 Consequences worth stating, because each replaced an earlier design:
 
@@ -298,7 +308,7 @@ run-fixtures ─▶ diff-reports.py ─▶ judge.py                            �
     "scored": true,               // false => the change COULD NOT BE VALIDATED (see below)
     "accuracy_verdicts": {        // per fixture, already noise-thresholded by the scorer
       "legacy-shipping-api:ara": { "score": 0.88, "baseline": 0.82, "delta": 0.06,
-                                   "threshold": 0.25, "verdict": "not-measured",
+                                   "threshold": 0.09, "verdict": "not-measured",
                                    "basis": "noise-floor" }
     },
     // JUDGED. Direction, not magnitude.
