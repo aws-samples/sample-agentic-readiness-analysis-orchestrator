@@ -20,7 +20,7 @@ Turn Claude into an orchestrator for running comprehensive analyses across a ser
 >
 > - **No server needed.** `atx ct server` still exists but is **hidden and deprecated** — analyses run in-process. It prints its own warning and starts a real daemon on `:8081` that will block your shell, so never invoke it. Use `atx ct status --health` (an in-process check, not a daemon ping). There is also a hidden top-level `--api <url>` defaulting to `http://localhost:8081`; leave it alone.
 > - **`--wait` DOES exist** on `analysis run`, `remediation create`, and `remediation retry` — registered with `.hideHelp()`, so it appears in neither `--help` nor `atx ct schema`. Earlier revisions of this doc claimed it was removed; that was wrong. Prefer polling in agent workflows (see [Long-running analysis](#agent-behavior-long-running-analysis)) — but that is a *choice*, not a missing flag.
-> - **`analysis list-artifacts` / `get-artifact` are GONE** — 0 occurrences in the shipped bundle; `error: unknown command`. Reports now come from `analysis get --json` → `report_paths`. See [Report artifacts](#report-artifacts).
+> - **`analysis list-artifacts` / `get-artifact` are GONE** — 0 occurrences in the shipped bundle; `error: unknown command`. Reports now come from `analysis get --json` → `report_paths`, but that map is **markdown-only**: `.json` and `.html` (and every portfolio artifact) live under `~/.atxct/sources/<src>/<type>/runs/<id>/`, which `report_paths` never mentions. See [Report artifacts](#report-artifacts).
 > - **Region: only `us-east-1` resolves.** A stray `AWS_REGION=us-west-2` makes the definition/credential endpoint NXDOMAIN (`transform-custom.us-west-2.api.aws`). Always `export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1`.
 > - **`atx ct schema` is NOT a complete manifest.** It reports 11 top-level commands and omits the hidden `schedule` and `server` groups plus every hidden flag. The shipped bundle is ground truth; treat `schema` (and `ATXControlTower/docs/cli-reference.md`) as incomplete.
 > - **Zero-findings bug is fixed as of 3.9.0.** On 3.7.0 analyses completed with 0 findings. Verified fixed on 3.9.0: a single-repo ARA produced 43 findings and a MOD 31. If you are on 3.7.0, upgrade. See [Zero-findings bug](#zero-findings-bug-370).
@@ -204,22 +204,49 @@ atx ct analysis get --id <id> --json | jq -r '.report_paths | to_entries[] | "\(
 # harness-portfolio::legacy-loan-calculator  /Users/me/.atxct/shared/analyses/<id>/artifacts/harness-portfolio__legacy-loan-calculator/legacy-loan-calculator-ara-report.md
 ```
 
+⚠️ **`report_paths` is the markdown-only view.** It is the right way to enumerate *which* repos produced reports, but the wrong way to reach a `.json` or `.html` — those live in a different tree. See [Three on-disk locations](#three-on-disk-locations--know-which-one-has-what) before concluding an artifact wasn't generated.
+
 Note `analysis list` returns a **thinner** object with no `report_paths` — you must call `get` per id. `analysis get --json` exposes 31 keys, the useful ones being `report_paths, ara_results, mod_results, portfolio_summary, portfolio_ara_summary, portfolio_mod_summary, repo_scores, repo_status, repo_errors, progress, repos_done, repos_total, status`.
 
-**Two on-disk trees, both real, different roles:**
+### Three on-disk locations — know which one has what
 
-| Path | Role |
-|---|---|
-| `~/.atxct/shared/analyses/<id>/analysis.json` + `<id>/artifacts/<source>__<repo>/<repo>-{ara,mod}-report.md` | Per-analysis artifact store — where `report_paths` points. Portfolio output appears as a sibling dir `_portfolio_ara` / `_portfolio_mod`. |
-| `~/.atxct/sources/<src>/<type>/runs/<id>/<repo-or-portfolio>/` plus a `<type>/latest` symlink | Source-scoped run history — where `portfolio_summary.report_path` points. |
+`report_paths` points at the **thinnest** of the three. Measured on one 11-repo ARA run (`.md` / `.json` / `.html` / `.metadata.json` file counts):
 
-Also: `~/.atxct/sources/<src>/{config.json,repos/index.json}` and `~/.atxct/shared/analyses/index.json`.
+| Location | md | json | html | meta | What it holds |
+|---|---|---|---|---|---|
+| `~/.atxct/shared/analyses/<id>/artifacts/<source>__<repo>/` (+ sibling `_portfolio_ara` / `_portfolio_mod`) | 12 | 1 | **0** | **0** | Per-analysis artifact store — **where `report_paths` points**. Effectively markdown-only. Plus `<id>/analysis.json`. |
+| `~/.atxct/sources/<src>/<type>/runs/<id>/` | 12 | **13** | **1** | **1** | **Source-scoped run history — the only COMPLETE copy.** Where `portfolio_summary.report_path` points. Also holds the generated `.atx-config-*.yaml` per repo. |
+| the repo working tree (local sources only) | ✓ | ✓ | ✓ | ✓ | Full per-repo bundle written into `services/<repo>/{agentic-readiness,modernization-readiness}-analysis/`. **Per-repo only — never portfolio.** |
 
-**Where reports land also depends on provider:**
-- **Remote (GitHub) sources:** nothing is committed to the repos — no branch, no files. `ct` only touches repo git during a **remediation** (branch + PR).
-- **Local sources:** analyses ALSO write full bundles INTO each repo's working tree at `services/<repo>/{agentic-readiness,modernization-readiness}-analysis/<repo>-{ara,mod}-report.{md,json,html,metadata.json}` — including HTML. ⚠️ Untracked files make the worktree dirty, which **blocks subsequent remediation** ("has uncommitted changes") — clean `services/` before remediating.
+Inside the `sources/` run tree:
 
-**Do not hardcode formats, and do not treat `report_paths` as complete.** Verified on 3.9.0: `report_paths` listed **only the `.md`**, while the full 4-artifact bundle (`.md`, `.json`, `.html`, `.metadata.json`) was written into the repo working tree. So the `.json` that downstream tooling actually consumes is *not* reachable from `report_paths` alone — treat it as a starting point, then `ls` both the artifact dir and the in-tree `services/<repo>/<analysis>-analysis/` directory. If a demo needs browser-openable HTML and only markdown is exposed, look in the working tree before rendering locally (`pandoc`).
+```
+~/.atxct/sources/<src>/<type>/runs/<id>/
+├── <source>-<repo>-<16hex>/<type>-analysis/<repo>-{ara,mod}-report.{md,json}
+└── portfolio-<name>/<type>-analysis/<name>-portfolio-{ara,mod}-report.{md,json,html,metadata.json}
+```
+
+Three traps in that layout:
+
+- **`<type>` is the SOURCE's analysis root, not the run's type.** A `modernization-readiness` run's output sits under `sources/<src>/agentic-readiness/runs/<id>/` — verified: the MOD run `01KZ4DCZ…` wrote `.../agentic-readiness/runs/01KZ4DCZ…/<repo>/modernization-readiness-analysis/`. Do not build the path from the analysis type; glob `sources/*/*/runs/<id>/` or read `portfolio_summary.report_path`.
+- **Per-repo dirs here are slug-mangled** (`<source>-<repo>-<16hex>`, a sha256 prefix), unlike the `<source>__<repo>` form in `shared/analyses/`. Glob, don't construct.
+- **HTML and portfolio JSON exist ONLY here.** Not in `shared/analyses/`, and not in any working tree — no repo owns portfolio output. So "there is no HTML/JSON" is almost always a wrong-directory error, not a missing artifact. `find ~/.atxct -name '<name>-portfolio-*-report.html'` settles it.
+
+Also: `~/.atxct/sources/<src>/{config.json,repos/index.json}`, `~/.atxct/shared/analyses/index.json`, and a `<type>/latest` symlink.
+
+**Provider affects only the working-tree copy:**
+- **Remote (GitHub) sources:** nothing is committed to the repos — no branch, no files. `ct` only touches repo git during a **remediation** (branch + PR). Both `~/.atxct` trees are still written.
+- **Local sources:** analyses ALSO write the full per-repo bundle into each working tree (including HTML). ⚠️ Those files make the worktree dirty, which **blocks subsequent remediation** ("has uncommitted changes") — clean `services/` before remediating.
+
+**So: do not hardcode formats, and do not treat `report_paths` as complete.** It is markdown-only in practice. To get a `.json` (what the EBA TD and every downstream tool consume) or an `.html` (what you open in a browser for a demo), go to the `sources/` run tree — for portfolio artifacts that is the *only* copy. Render with `pandoc` only after confirming the HTML genuinely isn't there.
+
+```bash
+# The reliable way to find every artifact of a run, regardless of type or slug mangling:
+find ~/.atxct/sources -path "*runs/<analysis-id>/*" -type f \( -name '*.md' -o -name '*.json' -o -name '*.html' \)
+
+# Portfolio bundle for one run (html + json live here and nowhere else):
+ls ~/.atxct/sources/*/*/runs/<analysis-id>/portfolio-*/*-analysis/
+```
 
 ⚠️ **`ct` auto-commits report bundles into local-source repos.** Each analysis lands its own commit (authored `ATX Bot <checkpoint@atx.bot>`) in the fixture/repo working tree. Two consequences: a tree can look clean right after an analysis because the output was *committed*, not because nothing was written; and a repo mid-analysis has those files modified, which trips the remediation dirty-worktree guard until the run finishes.
 

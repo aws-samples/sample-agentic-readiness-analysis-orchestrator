@@ -292,18 +292,30 @@ atx ct analysis get --id <id> --json | jq -r '.report_paths | to_entries[] | "\(
 
 Keys are repo slugs (plus the portfolio entries); values are paths you read directly with `cat`/`Read`.
 
-### `report_paths` is not the whole story
+### `report_paths` is markdown-only — three trees, different contents
 
-**Verified on 3.9.0: `report_paths` is incomplete.** It listed only the `.md` report, while the full four-artifact bundle was written into the repo working tree:
+**Verified on 3.9.0.** File counts from one 11-repo ARA run:
+
+| Location | md | json | html | meta |
+|---|---|---|---|---|
+| `~/.atxct/shared/analyses/<id>/artifacts/` — **where `report_paths` points** | 12 | 1 | 0 | 0 |
+| `~/.atxct/sources/<src>/<type>/runs/<id>/` — **the complete copy** | 12 | 13 | 1 | 1 |
+| `services/<repo>/*-analysis/` in the working tree (local sources) | ✓ | ✓ | ✓ | ✓ |
+
+Use `report_paths` to enumerate which repos reported. To read a `.json` or open an `.html`, go to the `sources/` run tree:
 
 ```bash
-ls services/<repo>/{agentic-readiness,modernization-readiness}-analysis/
-# <name>.md  <name>.json  <name>.html  <name>.metadata.json
+# every artifact of a run
+find ~/.atxct/sources -path "*runs/<id>/*" -type f
+# portfolio bundle — html and portfolio json exist HERE AND NOWHERE ELSE
+ls ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/
 ```
 
-The `.json` that downstream tooling consumes is frequently present **only** in the working tree, so **`ls` both locations** — `report_paths` and `services/<repo>/*-analysis/` — before concluding a report is missing.
+Two path traps: `<type>` is the **source's** analysis root, not the run's type (a MOD run lands under `sources/<src>/agentic-readiness/runs/<id>/`), and per-repo dirs there are slug-mangled `<source>-<repo>-<16hex>` rather than `<source>__<repo>`. Glob; don't construct. `portfolio_summary.report_path` also points into this tree.
 
-Note that ct **auto-commits** these bundles into local-source repo working trees, authored as `ATX Bot <checkpoint@atx.bot>`.
+Working trees carry only **per-repo** bundles — never portfolio output, since no repo owns it. So a missing portfolio `.html`/`.json` is nearly always a wrong-directory error, not a failed render.
+
+Note that ct **auto-commits** the per-repo bundles into local-source repo working trees, authored as `ATX Bot <checkpoint@atx.bot>`.
 
 ### Report kinds by analysis type
 
@@ -313,7 +325,7 @@ Note that ct **auto-commits** these bundles into local-source repo working trees
 | `modernization-readiness` | `mod` | `services/<repo>/modernization-readiness-analysis/` |
 | `tech-debt-*` | `technical-debt-report/summary` | — |
 
-Portfolio reports appear as their own `report_paths` entries once the portfolio phase runs (which requires ≥ 2 repos in the run — see Step 3).
+Portfolio reports appear as their own `report_paths` entries once the portfolio phase runs (which requires ≥ 2 repos in the run — see Step 3). That entry is the `.md`; the portfolio `.json`, `.html`, and `.metadata.json` are only in `~/.atxct/sources/<src>/<type>/runs/<id>/portfolio-<name>/`.
 
 ---
 
