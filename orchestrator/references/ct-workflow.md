@@ -44,8 +44,8 @@ The end-to-end workflow for running analyses using AWS Transform Continuous Mode
           │
           ▼
 ┌─────────────────────┐
-│  6. Retrieve        │  atx ct analysis list-artifacts --id <id>
-│     artifacts       │  atx ct analysis get-artifact --id <id> --repo <slug> --name ara
+│  6. Retrieve        │  atx ct analysis get --id <id> --json  → .report_paths
+│     artifacts       │  AND ls services/<repo>/*-analysis/  (working tree)
 └─────────┬───────────┘
           │
           ▼
@@ -54,6 +54,8 @@ The end-to-end workflow for running analyses using AWS Transform Continuous Mode
 │     Execution Plan  │  Requires report artifacts from steps 3-4
 └─────────────────────┘
 ```
+
+There is no step for starting a server: `atx ct` analyses run **in-process**. `atx ct server` is hidden and deprecated, and starts a daemon on `:8081` that blocks the shell — never invoke it. Pre-flight with `atx ct status --health`.
 
 ---
 
@@ -118,7 +120,7 @@ After discovery, you can:
 Each discovered repo gets a slug in the format `<source>::<repo-name>`. This slug is used in:
 - `--repo` filters on analysis commands
 - `findings list --repo` filters
-- `analysis get-artifact --repo` to retrieve per-repo artifacts
+- the keys of `report_paths` in `analysis get --json` (see Step 6)
 
 ---
 
@@ -134,12 +136,14 @@ atx ct analysis run --type agentic-readiness --source my-portfolio
 # Tell the user: "Running ARA — this takes 5-15 minutes per repo. I'll check back."
 
 # Poll every 30-60 seconds
-atx ct analysis get --id <analysis-id>
-# → Status: running | complete | failed
+atx ct analysis get --id <analysis-id> --json | jq -r .status
+# → running | complete | failed
 
 # On complete — summarize for the user
 atx ct findings list --analysis-id <id> --json
 ```
+
+> Poll `status` and nothing else. While a run is in flight, `repos_done` and `repos_total` read `null` — they are not a progress bar and an agent that watches them will conclude the run never started.
 
 ### Alternative: Blocking wait (scripts/CI)
 
@@ -147,7 +151,7 @@ atx ct findings list --analysis-id <id> --json
 atx ct analysis run --type agentic-readiness --source my-portfolio --wait
 ```
 
-The `--wait` flag blocks until the analysis completes (or fails). Suitable for scripts but NOT recommended for agent workflows — it holds the execution slot for 5–30 minutes with no intermediate feedback.
+`--wait` does exist on `analysis run` (and on `remediation create` / `remediation retry`), though it is hidden from `--help`. It blocks until the analysis completes (or fails). Suitable for scripts but NOT recommended for agent workflows — it holds the execution slot for 5–30 minutes with no intermediate feedback.
 
 ### Targeting specific repos
 
@@ -158,10 +162,11 @@ atx ct analysis run --type agentic-readiness --repo my-portfolio::my-app --sourc
 ### What happens internally
 
 1. ct queues analysis jobs for each discovered repo
-2. Per-repo analyses run in parallel (ct manages concurrency)
-3. Portfolio-level aggregation runs after all per-repo analyses complete
-4. Report artifacts are stored in the ct artifact store
+2. Per-repo analyses run **concurrently** — verified on 3.9.0, an 11-repo ARA had 8 repos in flight within ~2 minutes. Wall-clock is therefore roughly the slowest repo plus the portfolio phase, not the sum of the repos.
+3. Portfolio-level aggregation runs automatically as a **second phase of the same `analysis run`** once the per-repo reports land — you do not launch it separately. Each portfolio TD needs **≥ 2 discovered reports**: a single-repo run produces no portfolio report and logs `runPortfolioAra: no portfolio ARA report found for <name>`. Aggregation is per-run, so separate single-repo runs do **not** accumulate into a portfolio — scan the whole portfolio in one run.
+4. Report artifacts are recorded in `report_paths` and written into the repo working trees (see Step 6)
 5. Findings are generated and stored in the ct findings database
+6. For local sources, ct **auto-commits** the report bundle into the repo's working tree as `ATX Bot <checkpoint@atx.bot>`. Expect unexpected commits on the branch you had checked out.
 
 ### Verify success
 
@@ -182,8 +187,8 @@ atx ct analysis run --type modernization-readiness --source my-portfolio
 
 # Tell the user: "Running MODA — this takes 5-15 minutes per repo. I'll check back."
 
-# Poll every 30-60 seconds
-atx ct analysis get --id <analysis-id>
+# Poll every 30-60 seconds (status only — repos_done/repos_total are null mid-run)
+atx ct analysis get --id <analysis-id> --json | jq -r .status
 
 # On complete — summarize for the user
 atx ct findings list --analysis-id <id> --json
@@ -277,42 +282,38 @@ atx ct findings delete --id <id>
 
 ## Step 6: Retrieve Report Artifacts
 
-Report artifacts are stored in the ct server's artifact store, NOT on the local filesystem.
+Reports land as **files on the local filesystem**. There is no artifact-fetch subcommand — `analysis list-artifacts` and `analysis get-artifact` were removed (they now fail with `error: unknown command`). Discover report locations from the analysis record instead.
 
-### List artifacts for an analysis
-
-```bash
-atx ct analysis list-artifacts --id <analysis-id> --json
-```
-
-### Get specific artifact content
+### List report paths for an analysis
 
 ```bash
-# Per-repo ARA report
-atx ct analysis get-artifact --id <analysis-id> --repo <source>::<repo-name> --name ara
-
-# Per-repo MODA report
-atx ct analysis get-artifact --id <analysis-id> --repo <source>::<repo-name> --name mod
-
-# Portfolio-level ARA report
-atx ct analysis get-artifact --id <analysis-id> --repo _portfolio_ara --name report
-
-# Portfolio-level MODA report
-atx ct analysis get-artifact --id <analysis-id> --repo _portfolio_mod --name report
-
-# Save to file
-atx ct analysis get-artifact --id <analysis-id> --repo <slug> --name ara > ./report.md
+atx ct analysis get --id <id> --json | jq -r '.report_paths | to_entries[] | "\(.key)\t\(.value.ara // .value.mod)"'
 ```
 
-### Artifact names by analysis type
+Keys are repo slugs (plus the portfolio entries); values are paths you read directly with `cat`/`Read`.
 
-| Analysis type | Per-repo artifact name | Portfolio artifact repo key | Portfolio artifact name |
-|---|---|---|---|
-| `agentic-readiness` | `ara` | `_portfolio_ara` | `report` |
-| `modernization-readiness` | `mod` | `_portfolio_mod` | `report` |
-| `tech-debt-*` | `technical-debt-report/summary` | — | — |
+### `report_paths` is not the whole story
 
-Use `list-artifacts --json` to discover available names for any given analysis.
+**Verified on 3.9.0: `report_paths` is incomplete.** It listed only the `.md` report, while the full four-artifact bundle was written into the repo working tree:
+
+```bash
+ls services/<repo>/{agentic-readiness,modernization-readiness}-analysis/
+# <name>.md  <name>.json  <name>.html  <name>.metadata.json
+```
+
+The `.json` that downstream tooling consumes is frequently present **only** in the working tree, so **`ls` both locations** — `report_paths` and `services/<repo>/*-analysis/` — before concluding a report is missing.
+
+Note that ct **auto-commits** these bundles into local-source repo working trees, authored as `ATX Bot <checkpoint@atx.bot>`.
+
+### Report kinds by analysis type
+
+| Analysis type | Per-repo report key | Working-tree directory |
+|---|---|---|
+| `agentic-readiness` | `ara` | `services/<repo>/agentic-readiness-analysis/` |
+| `modernization-readiness` | `mod` | `services/<repo>/modernization-readiness-analysis/` |
+| `tech-debt-*` | `technical-debt-report/summary` | — |
+
+Portfolio reports appear as their own `report_paths` entries once the portfolio phase runs (which requires ≥ 2 repos in the run — see Step 3).
 
 ---
 
@@ -321,8 +322,11 @@ Use `list-artifacts --json` to discover available names for any given analysis.
 For running custom TDs as analyses (not ARA/MODA built-ins):
 
 ```bash
-atx ct analysis run --type custom --transformation-name my-custom-td --source my-portfolio --wait
+atx ct analysis run --type custom --transformation-name my-custom-td --source my-portfolio
+# then poll: atx ct analysis get --id <analysis-id> --json | jq -r .status
 ```
+
+The `--wait` in the snippets below is the scripted/CI form; from an agent, launch without it and poll `status` as in Step 3.
 
 Custom analyses support the `-g`/`--configuration` flag:
 
@@ -362,9 +366,9 @@ atx ct remediation status --id <remediation-id>
 atx ct remediation retry --id <remediation-id>
 ```
 
-> **Verified 2026-07: ARA and MODA findings are assessment-only.** Every finding has `fix: null` and no `fix-transform` field — so mode (a) `--ids` has nothing to bind to for ARA/MODA findings. To auto-remediate an assessment finding (e.g. "not containerized"), author your own TD and use mode (b) `--transformation-name`. See **"Authoring a custom remediation TD"** in `SKILL.md`. Mode (a) is for analysis types whose findings ship a bound fix transform (e.g. certain tech-debt/upgrade transforms).
+> **Verified 2026-08 on 3.9.0: ARA and MODA findings are assessment-only.** Every finding has `fix: null` and no `fix-transform` field — so mode (a) has nothing to bind to, and `remediation create --ids` rejects the whole batch, reporting them as `non_remediable`. To auto-remediate an assessment finding (e.g. "not containerized"), author your own TD and use mode (b) `--transformation-name`. See **"Authoring a custom remediation TD"** in `SKILL.md`. Mode (a) is for analysis types whose findings ship a bound fix transform (e.g. certain tech-debt/upgrade transforms).
 
-`--local` runs the ATX transform on the ct server rather than delegating; useful for local sources. `-g/--configuration` is valid only alongside `--transformation-name`.
+`--local` runs the ATX transform in-process against the checked-out working tree rather than delegating to the provider; useful for local sources. `-g/--configuration` is valid only alongside `--transformation-name`. `remediation create` and `remediation retry` also accept the hidden `--wait`; prefer polling `remediation status --id <id>` in agent workflows.
 
 Remediation creates branches and PRs/MRs depending on source provider:
 - GitHub → Pull Request
@@ -411,7 +415,9 @@ Pass telemetry metadata to track analysis runs:
 
 ```bash
 atx ct analysis run --type agentic-readiness --source my-portfolio \
-  --telemetry "agent=claude-code,executionMode=local" --wait
+  --telemetry "agent=claude-code,executionMode=local"
 ```
+
+(`--telemetry` composes with `--wait` too, but agent runs should launch and poll.)
 
 `client=zerodebt` is always included automatically.
