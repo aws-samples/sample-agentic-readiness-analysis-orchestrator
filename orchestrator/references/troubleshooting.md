@@ -97,9 +97,32 @@ atx ct source remove --name <name>
 
 Note on `--wait`: it **does** exist on `analysis run` — it's just hidden from `--help` (registered with `.hideHelp()`), so its absence from the help text is not evidence it was removed. In agent workflows prefer explicit polling of `atx ct analysis get --id <id> --json` over `--wait`, so you keep control of the timeout and can report progress.
 
+### `status: complete` but no reports, no findings, no portfolio summary
+
+**Symptom:** on a multi-repo run, `analysis get` reads `status: complete` with `completed_at` set, but `report_paths` is `{}`, `findings` is empty, `portfolio_ara_summary` is `null`, and `progress` reads `{"done": 0, "total": 11}`. Looks like the run produced nothing.
+
+**Cause: it isn't finished.** `status` flips to `complete` when the **per-repo phase** ends; the **portfolio phase** then runs for tens of minutes on the same invocation. Everything above is populated in the final record update, after that phase. Measured on an 11-repo ARA: `completed_at: 20:27:42Z`, but at 20:37 the launching process was still alive (68 min elapsed) and still logging `Still analyzing portfolio-<name>... (7m elapsed)`. The run had already generated 899 findings.
+
+**Fix — do not re-run.** Confirm it is still working, then wait:
+
+```bash
+# 1. Is the launching process alive?  (if you launched it)
+ps -p <pid> -o pid,etime
+
+# 2. Is the portfolio phase still progressing?  Line count should grow.
+wc -l < <your-run-log>; sleep 60; wc -l < <your-run-log>
+
+# 3. Have the artifacts landed yet?
+ls ~/.atxct/sources/*/*/runs/<analysis-id>/portfolio-*/*-analysis/
+```
+
+Terminal condition to use in a poller: **process exit** (best), or `status` terminal **and** `report_paths` non-empty, with a timeout — an early failure leaves `report_paths` empty permanently, so the second form alone can hang.
+
+This is the third way `status` misleads. The other two: ARA reads `failed` when its output is fine (see "Missing HTML or JSON" corollary below and the `repositoryId: null` persist bug), and MOD reads `complete` when its portfolio report is missing — recorded as a `repo_error`, which does not fail the run. **Always corroborate `status` with artifacts on disk and `findings count` before reporting an outcome.**
+
 ### Analysis completes but reports 0 findings
 
-**Symptom:** Analysis reaches `complete`, report artifacts are written, but the findings count is 0.
+**Symptom:** Analysis reaches `complete`, report artifacts **are** written (`report_paths` non-empty), but the findings count is 0. If `report_paths` is empty, see the entry above first — the run is probably still going.
 
 **Cause (atx 3.7.0 bug):** the report parser fell back to markdown scraping whenever `categories` was emitted as a JSON array, and silently extracted nothing. **Fixed in 3.9.0** — verified 43 findings on an ARA and 31 on a MOD run.
 
