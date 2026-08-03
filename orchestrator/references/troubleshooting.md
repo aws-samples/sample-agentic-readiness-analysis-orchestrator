@@ -169,32 +169,30 @@ Additionally, the `bridge_summary` phase needs **both** a portfolio ARA report *
 
 **Symptom:** After analysis completes you don't know where to look, or `find . -name "*report*"` from the wrong directory returns nothing.
 
-**Cause (verified 2026-08, atx 3.9.0):** Reports **ARE** on the local filesystem. They are written to **two** places, and you generally want to check both:
+**Cause (verified 2026-08, atx 3.9.0):** Reports **ARE** on the local filesystem — in **three** places with different contents. `report_paths` points at the thinnest one. File counts from one 11-repo ARA run:
 
-1. The shared analysis store, keyed by analysis id:
-   ```
-   ~/.atxct/shared/analyses/<analysis-id>/artifacts/<source>__<repo>/
-   ```
-2. For **local** sources, directly into the repo working tree:
-   ```
-   services/<repo>/agentic-readiness-analysis/<repo>-ara-report.{md,json,html,metadata.json}
-   services/<repo>/modernization-readiness-analysis/<repo>-mod-report.{md,json,html,metadata.json}
-   ```
+| Location | md | json | html | meta |
+|---|---|---|---|---|
+| `~/.atxct/shared/analyses/<id>/artifacts/<source>__<repo>/` — where `report_paths` points | 12 | 1 | 0 | 0 |
+| `~/.atxct/sources/<src>/<type>/runs/<id>/` — **the only complete copy** | 12 | 13 | 1 | 1 |
+| `services/<repo>/*-analysis/` in the working tree (local sources only) | ✓ | ✓ | ✓ | ✓ |
 
-Portfolio output lands under the run directory:
+The `sources/` run tree is laid out as:
+
 ```
-<run>/portfolio-<name>/agentic-readiness-analysis/
-<run>/portfolio-<name>/modernization-readiness-analysis/
+~/.atxct/sources/<src>/<type>/runs/<id>/
+├── <source>-<repo>-<16hex>/<type>-analysis/<repo>-{ara,mod}-report.{md,json}
+└── portfolio-<name>/<type>-analysis/<name>-portfolio-{ara,mod}-report.{md,json,html,metadata.json}
 ```
 
-**Fix:** Read the files off disk directly. To locate them for a given run:
+**Fix:** glob the `sources/` tree — do not construct the path:
 ```bash
-atx ct analysis get --id <analysis-id> --json   # → .report_paths
-ls -la ~/.atxct/shared/analyses/<analysis-id>/artifacts/*/
-ls -la services/<repo>/*-readiness-analysis/
+find ~/.atxct/sources -path "*runs/<analysis-id>/*" -type f     # everything the run produced
+ls ~/.atxct/sources/*/*/runs/<analysis-id>/portfolio-*/*-analysis/   # portfolio bundle
+atx ct analysis get --id <analysis-id> --json   # → .report_paths (markdown-only) + portfolio_summary.report_path
 ```
 
-**Caveat — `report_paths` is not complete.** On 3.9.0 it listed only the `.md` file, while the full 4-artifact bundle (`.md`, `.json`, `.html`, `.metadata.json`) was sitting in the working tree. Treat `report_paths` as a hint, not an index: always `ls` **both** locations before concluding an artifact wasn't produced.
+Two reasons hand-built paths fail here: **`<type>` is the source's analysis root, not the run's type** — a `modernization-readiness` run writes under `sources/<src>/agentic-readiness/runs/<id>/` — and per-repo dirs are slug-mangled `<source>-<repo>-<16hex>` (sha256 prefix), not the `<source>__<repo>` form used in `shared/analyses/`.
 
 ### `list-artifacts` / `get-artifact` return "unknown command"
 
@@ -206,15 +204,23 @@ ls -la services/<repo>/*-readiness-analysis/
 ```bash
 atx ct analysis get --id <analysis-id> --json   # → .report_paths
 ```
-Then `ls` both the shared store and the repo working tree (per the caveat above) and read/copy the files with ordinary filesystem tools.
+Then read the files off disk. Remember `report_paths` is markdown-only — for `.json`/`.html` glob `~/.atxct/sources/*/*/runs/<id>/` per the section above.
 
 ### Missing HTML or JSON alongside the markdown
 
-**Symptom:** You found the `.md` report but believe no HTML/JSON was produced.
+**Symptom:** You found the `.md` report but believe no HTML/JSON was produced — especially for a **portfolio** report.
 
-**Cause:** Most often you only consulted `report_paths`, which under-reports (see caveat above). On 3.9.0 a complete ARA/MOD run emits four artifacts per repo: `.md`, `.json`, `.html`, and `.metadata.json`.
+**Cause:** Almost always a wrong-directory error, not a missing artifact. `report_paths` and `~/.atxct/shared/analyses/` are effectively **markdown-only** (1 json, 0 html across a whole 11-repo run). Worse, searching the working tree doesn't save you for portfolio output: working trees hold **per-repo bundles only** — no repo owns portfolio output, so the portfolio `.html`/`.json` are not there either. They exist in exactly one place: the `sources/` run tree.
 
-**Fix:** `ls services/<repo>/*-readiness-analysis/` in the working tree before assuming anything is missing. Only if the bundle is genuinely short should you render markdown yourself (e.g. `pandoc report.md -s -o report.html`).
+**Fix:** search the store by name before concluding anything is missing:
+```bash
+find ~/.atxct -name '*portfolio*-report.html'                     # settles it in one command
+ls ~/.atxct/sources/*/*/runs/<analysis-id>/portfolio-*/*-analysis/
+open -a Firefox ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/*-report.html
+```
+Only if the bundle is genuinely short should you render markdown yourself (e.g. `pandoc report.md -s -o report.html`).
+
+Corollary for a **failed** run: a portfolio phase that completed its report and then died persisting findings still leaves the full 4-artifact portfolio bundle on disk. `status: failed` does not mean no artifacts — check before re-running.
 
 ### Reports not found in the git repos (remote sources)
 
@@ -243,8 +249,8 @@ Then `ls` both the shared store and the repo working tree (per the caveat above)
 1. Verify ARA + MODA analyses are truly `complete` (not just `running`): `atx ct analysis list`
 2. Locate the report files on disk and copy them where the TD expects them:
    ```bash
-   atx ct analysis get --id <ara-id> --json   # → .report_paths (incomplete — also ls)
-   ls ~/.atxct/shared/analyses/<ara-id>/artifacts/*/
+   atx ct analysis get --id <ara-id> --json   # → .report_paths (markdown-only)
+   ls ~/.atxct/sources/*/*/runs/<ara-id>/portfolio-*/*-analysis/   # the JSON EBA needs
    ls services/<slug>/agentic-readiness-analysis/
    cp services/<slug>/agentic-readiness-analysis/<slug>-ara-report.json ./ara-reports/
    ```

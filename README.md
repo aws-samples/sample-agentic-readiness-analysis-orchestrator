@@ -99,7 +99,18 @@ cp "$(atx ct analysis get --id <ara-id> --json | jq -r '.report_paths["<src>::<r
    services/<repo>/agentic-readiness-analysis/<repo>-ara-report.json
 ```
 
-Reports live on local disk under `~/.atxct/shared/analyses/<id>/artifacts/<source>__<repo>/`, with portfolio output in sibling `_portfolio_ara` / `_portfolio_mod` directories.
+⚠️ **`report_paths` is markdown-only.** It points into `~/.atxct/shared/analyses/<id>/artifacts/<source>__<repo>/` (portfolio output in sibling `_portfolio_ara` / `_portfolio_mod` dirs), which holds essentially only `.md`. The **complete** bundle — including the `.json` the EBA TD consumes and the browser-openable `.html` — lives in the source-scoped run tree, and for portfolio reports that is the *only* copy:
+
+```bash
+# Portfolio bundle: .md .json .html .metadata.json — html/json exist here and nowhere else
+ls ~/.atxct/sources/*/*/runs/<analysis-id>/portfolio-*/*-analysis/
+
+# Every artifact of a run (glob — the path segment is the SOURCE's analysis root, not the
+# run's type, and per-repo dirs are slug-mangled <source>-<repo>-<16hex>)
+find ~/.atxct/sources -path "*runs/<analysis-id>/*" -type f
+```
+
+Working trees receive **per-repo** bundles only — never portfolio output. See [`orchestrator/SKILL.md`](orchestrator/SKILL.md) for the full three-location table.
 
 > **`atx ct analysis list-artifacts` and `get-artifact` no longer exist** (verified 2026-08-03 on atx 3.9.0 — `error: unknown command`, zero occurrences in the shipped CLI bundle). Any script still calling them must move to `analysis get --json` → `report_paths`.
 

@@ -42,17 +42,34 @@ atx ct analysis get --id $moda_id --json | jq -r '.report_paths | to_entries[] |
 
 Note `analysis list` returns a thinner object with no `report_paths` — you must call `get` per id.
 
-> **Critical: `report_paths` is NOT complete, and EBA consumes the JSON.** Verified on atx 3.9.0, `report_paths` listed **only the `.md`**, while the full four-artifact bundle (`.md`, `.json`, `.html`, `.metadata.json`) was written into the repo working tree at:
->
-> ```
-> services/<repo>/{agentic-readiness,modernization-readiness}-analysis/
-> ```
->
-> Since the EBA TD consumes the **JSON**, treat `report_paths` as a starting point only — then `ls` both the working-tree directory above and the per-analysis artifact dir:
->
-> ```
-> ~/.atxct/shared/analyses/<id>/artifacts/<source>__<repo>/
-> ```
+> **Critical: `report_paths` will not get you the JSON that EBA needs.** Verified on atx 3.9.0, `report_paths` is **markdown-only** — it points into `~/.atxct/shared/analyses/<id>/artifacts/`, which on an 11-repo run held 12 `.md` files and exactly one `.json`. The EBA TD consumes the **JSON**, so use `report_paths` to see *which* repos reported, then fetch the actual files from the tree that has them.
+
+**Where the JSON actually lives.** Two places, and for **portfolio** reports only the first:
+
+```
+~/.atxct/sources/<src>/<type>/runs/<id>/
+├── <source>-<repo>-<16hex>/<type>-analysis/<repo>-{ara,mod}-report.{md,json}
+└── portfolio-<name>/<type>-analysis/<name>-portfolio-{ara,mod}-report.{md,json,html,metadata.json}
+
+services/<repo>/{agentic-readiness,modernization-readiness}-analysis/   # local sources; PER-REPO ONLY
+```
+
+The portfolio JSON — the one input EBA cannot run without — exists **only** in the `sources/` run tree. No working tree contains it, because no single repo owns portfolio output. Two traps when building that path:
+
+- `<type>` is the **source's** analysis root, not the run's type: a `modernization-readiness` run writes under `sources/<src>/agentic-readiness/runs/<id>/`. Don't derive it from the analysis type.
+- per-repo dirs are slug-mangled (`<source>-<repo>-<16hex>`), unlike the `<source>__<repo>` form in `shared/analyses/`.
+
+So glob rather than construct:
+
+```bash
+# Portfolio JSON for a run (the EBA input) — html/json live here and nowhere else
+ls ~/.atxct/sources/*/*/runs/$ara_id/portfolio-*/*-analysis/
+
+# Every artifact of a run, immune to type/slug surprises
+find ~/.atxct/sources -path "*runs/$ara_id/*" -name '*.json'
+```
+
+`portfolio_summary.report_path` on the analysis record also points into this tree, if you prefer reading it over globbing.
 
 ### Portfolio report prerequisite
 

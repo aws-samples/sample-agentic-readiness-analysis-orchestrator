@@ -118,12 +118,26 @@ atx ct analysis get --id <analysis-id> --json | jq -r '.report_paths | to_entrie
 `analysis run` does accept a hidden `--wait`, but prefer polling in agent workflows — a blocking call
 gives the user no progress signal for the 5–15 min per repo an analysis takes.
 
-### Important: `report_paths` Is Not the Whole Bundle
+### Important: `report_paths` Is Markdown-Only
 
-Verified on 3.9.0, `report_paths` listed only the `.md`, while the full 4-artifact bundle
-(`.md`, `.json`, `.html`, `.metadata.json`) was written into the repo working tree at
-`services/<repo>/{agentic-readiness,modernization-readiness}-analysis/`. The `.json` that downstream
-tooling consumes is often only there, so check the working tree too — don't stop at `report_paths`.
+Verified on 3.9.0, `report_paths` lists only the `.md`. The full 4-artifact bundle
+(`.md`, `.json`, `.html`, `.metadata.json`) lives in the source-scoped run tree, which
+`report_paths` never mentions:
+
+```bash
+# per-repo and portfolio artifacts for a run
+find ~/.atxct/sources -path "*runs/<analysis-id>/*" -type f
+# portfolio bundle — its .html and .json exist here and NOWHERE else
+ls ~/.atxct/sources/*/*/runs/<analysis-id>/portfolio-*/*-analysis/
+```
+
+Glob rather than construct these paths: the segment after `<src>` is the **source's** analysis
+root, not the run's type (a MOD run lands under `.../agentic-readiness/runs/<id>/`), and per-repo
+directories are slug-mangled `<source>-<repo>-<16hex>`.
+
+For **local** sources the per-repo bundle is also copied into the working tree at
+`services/<repo>/{agentic-readiness,modernization-readiness}-analysis/` — per-repo only, never
+portfolio output.
 
 ### Important: Local Source Path
 
