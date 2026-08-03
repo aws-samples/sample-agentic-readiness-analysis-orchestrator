@@ -118,7 +118,39 @@ ls ~/.atxct/sources/*/*/runs/<analysis-id>/portfolio-*/*-analysis/
 
 Terminal condition to use in a poller: **process exit** (best), or `status` terminal **and** `report_paths` non-empty, with a timeout — an early failure leaves `report_paths` empty permanently, so the second form alone can hang.
 
+**Side effect: the premature transition can swallow a real failure.** Once `status` is terminal, a portfolio-phase error cannot move it — you get `saveFn: exhausted 3 retries persisting analysis <id>: Analysis is already in terminal status COMPLETE; cannot transition`, and the run keeps `status: complete` while carrying a populated `error`. Two runs of the same ARA hitting the same `repositoryId: null` persist bug ended one `failed` and one `complete`, purely on this race. **Always read `error` and `repo_errors` directly:**
+
+```bash
+atx ct analysis get --id <id> --json | jq '{status, error, repo_errors}'
+```
+
 This is the third way `status` misleads. The other two: ARA reads `failed` when its output is fine (see "Missing HTML or JSON" corollary below and the `repositoryId: null` persist bug), and MOD reads `complete` when its portfolio report is missing — recorded as a `repo_error`, which does not fail the run. **Always corroborate `status` with artifacts on disk and `findings count` before reporting an outcome.**
+
+### `PersistFindingsError: ... repositoryId ... Member must not be null`
+
+**Symptom:** at the very end of a multi-repo ARA:
+
+```
+PersistFindingsError: Failed to persist finding portfolio::my-portfolio::API::<hash>:
+  1 validation error detected: Value at 'findings.1.member.repositoryId'
+  failed to satisfy constraint: Member must not be null
+```
+
+**Cause — a service-side bug, not your configuration.** Portfolio *cross-cutting* findings span several repos by definition, so they carry no single `repositoryId`; the persist API rejects null. Any ≥2-repo run whose portfolio phase emits a cross-cutting blocker hits this. **Reproduced on two consecutive 11-repo ARA runs** — re-running does not avoid it.
+
+**What survives:** everything except the cross-cutting findings. The log says so explicitly — `persisted 473/473 findings before failing; preserving them in the local record` — and the full 4-artifact portfolio bundle (including the `.html` and the `.json` the EBA TD consumes) is already on disk, because the report is written *before* the persist step. The cross-cutting findings are still readable in `portfolio_ara_summary.cross_cutting_blockers` on the analysis record and in the portfolio report itself; they are only missing from the findings store.
+
+**Fix:** don't re-run — read the artifacts.
+
+```bash
+# The cross-cutting findings that failed to persist are still here
+atx ct analysis get --id <id> --json | jq '.portfolio_ara_summary.cross_cutting_blockers'
+
+# And the portfolio bundle is complete on disk
+ls ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/
+```
+
+Note the run's `status` after this is **not deterministic** — see the entry above. If the premature terminal transition already fired, `status` stays `complete` and the error lands only in the `error` field; otherwise the run reads `failed`. Same bug, two presentations.
 
 ### Analysis completes but reports 0 findings
 
