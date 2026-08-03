@@ -52,7 +52,23 @@ Both portfolio TDs are **managed and built into `ct`** — `AWS/portfolio-agenti
 - **Separate single-repo runs do not accumulate.** Aggregation only ever covers the repos in one `analysis run` invocation, so to get a portfolio view, pass ≥2 repos (or omit `--repo` to take every repo under `--source`).
 - **The bridge phase needs BOTH portfolio reports.** `runBridge` populates `bridge_summary`, and skips with `runBridge: missing portfolio report paths, skipping bridge` unless a portfolio ARA *and* a portfolio MOD report exist. Note this overlaps with the custom `definitions/custom/bridge-analysis/` TD in this repo — decide deliberately which one a given workflow uses.
 
-**The per-repo phase runs concurrently.** An 11-repo ARA cloned and began analyzing 8 repos within ~2 minutes, so wall-clock ≈ slowest repo + portfolio phase (tens of minutes), not repos × ~20 min. `ATXCT_MAX_CONCURRENT_DEEP_SCANS` (default 1) gates only `tech-debt-comprehensive` and does **not** throttle ARA/MOD fan-out. Separately, an `ALREADY_RUNNING` guard rejects a run whose repos are mid-analysis for the same type, and `repos_done`/`repos_total` read `null` while a run is in flight — poll `status`, not those fields.
+**The per-repo phase runs concurrently.** An 11-repo ARA cloned and began analyzing 8 repos within ~2 minutes, so wall-clock ≈ slowest repo + portfolio phase (tens of minutes), not repos × ~20 min. `ATXCT_MAX_CONCURRENT_DEEP_SCANS` (default 1) gates only `tech-debt-comprehensive` and does **not** throttle ARA/MOD fan-out. Separately, an `ALREADY_RUNNING` guard rejects a run whose repos are mid-analysis for the same type.
+
+⚠️ **`status: complete` is NOT a terminal signal on a multi-repo run.** `status` flips to `complete` (and `completed_at` is stamped) when the **per-repo phase** finishes, while the **portfolio phase is still running** — for tens of minutes. Measured on an 11-repo ARA: `status: complete`, `completed_at: 20:27:42Z`, yet at 20:37 the launching process was still alive (68 min elapsed) and the log was still emitting `Still analyzing portfolio-<name>... (7m elapsed)`. Read at that moment, the record looks like a total failure and is not one:
+
+| field | at premature `complete` | at true completion |
+|---|---|---|
+| `status` | `complete` | `complete` / `failed` |
+| `report_paths` | `{}` (0 entries) | 12 entries |
+| `portfolio_ara_summary` | `null` | populated |
+| `progress` | `{"done": 0, "total": 11}` | — |
+
+An agent that stops at `status` here reports **0 findings and no reports** on a run that in fact produced 899 findings and a full portfolio bundle. Wait on one of these instead:
+
+- **If you launched the run, wait for the process to exit.** That is the only unambiguous signal.
+- **Otherwise require `status` terminal *and* `report_paths` non-empty** — that map is written in the final record update, after the portfolio phase, so it is empty for the entire premature window. Cap it with a timeout: a run that fails early leaves `report_paths` empty forever.
+
+Never conclude "no reports were generated" from an empty `report_paths` alone — check disk (`ls ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/`) before reporting anything to the user. This is the **third** way `status` misleads, alongside: ARA reads `failed` when its output is fine (the `repositoryId: null` persist bug), and MOD reads `complete` when its portfolio report is missing (filed as a `repo_error`, which does not fail the run).
 
 ### When to use
 - Planning agentic AI adoption across microservices

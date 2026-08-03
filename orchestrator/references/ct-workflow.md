@@ -143,7 +143,28 @@ atx ct analysis get --id <analysis-id> --json | jq -r .status
 atx ct findings list --analysis-id <id> --json
 ```
 
-> Poll `status` and nothing else. While a run is in flight, `repos_done` and `repos_total` read `null` — they are not a progress bar and an agent that watches them will conclude the run never started.
+> While a run is in flight, `repos_done` and `repos_total` read `null` — they are not a progress bar and an agent that watches them will conclude the run never started.
+
+> ⚠️ **But do not stop at `status: complete` either.** On a multi-repo run `status` flips to
+> `complete` when the *per-repo* phase ends, while the portfolio phase keeps running for tens of
+> minutes. Measured: `status: complete` / `completed_at: 20:27:42Z`, yet at 20:37 the process was
+> still alive and logging `Still analyzing portfolio-<name>... (7m elapsed)`, with
+> `report_paths: {}` and `portfolio_ara_summary: null`. Reported at that moment the run looks
+> like it produced nothing; it had in fact produced 899 findings and a full portfolio bundle.
+>
+> Terminal condition: **the launching process has exited** (best, if you launched it), or
+> `status` is terminal **and** `report_paths` is non-empty — `report_paths` is written in the
+> final record update, so it stays empty for the whole premature window. Use a timeout with the
+> second form, since an early failure leaves it empty forever.
+
+```bash
+# Terminal check that does not fire early
+atx ct analysis get --id <analysis-id> --json \
+  | jq -e '.status as $s | (.report_paths // {} | length) as $n
+           | if ($s == "running") then false
+             elif $n > 0 then true
+             else false end'   # exit 0 = genuinely done
+```
 
 ### Alternative: Blocking wait (scripts/CI)
 
@@ -164,7 +185,7 @@ atx ct analysis run --type agentic-readiness --repo my-portfolio::my-app --sourc
 1. ct queues analysis jobs for each discovered repo
 2. Per-repo analyses run **concurrently** — verified on 3.9.0, an 11-repo ARA had 8 repos in flight within ~2 minutes. Wall-clock is therefore roughly the slowest repo plus the portfolio phase, not the sum of the repos.
 3. Portfolio-level aggregation runs automatically as a **second phase of the same `analysis run`** once the per-repo reports land — you do not launch it separately. Each portfolio TD needs **≥ 2 discovered reports**: a single-repo run produces no portfolio report and logs `runPortfolioAra: no portfolio ARA report found for <name>`. Aggregation is per-run, so separate single-repo runs do **not** accumulate into a portfolio — scan the whole portfolio in one run.
-4. Report artifacts are recorded in `report_paths` and written into the repo working trees (see Step 6)
+4. Report artifacts are recorded in `report_paths` and written into the repo working trees (see Step 6). `report_paths` is populated in the **final** record update, after the portfolio phase — which is why it doubles as the terminal signal `status` cannot provide.
 5. Findings are generated and stored in the ct findings database
 6. For local sources, ct **auto-commits** the report bundle into the repo's working tree as `ATX Bot <checkpoint@atx.bot>`. Expect unexpected commits on the branch you had checked out.
 
@@ -187,8 +208,9 @@ atx ct analysis run --type modernization-readiness --source my-portfolio
 
 # Tell the user: "Running MODA — this takes 5-15 minutes per repo. I'll check back."
 
-# Poll every 30-60 seconds (status only — repos_done/repos_total are null mid-run)
-atx ct analysis get --id <analysis-id> --json | jq -r .status
+# Poll every 30-60 seconds. repos_done/repos_total are null mid-run, and `status: complete`
+# fires while the portfolio phase still runs — require report_paths non-empty too (see Step 3).
+atx ct analysis get --id <analysis-id> --json | jq -r '"\(.status) report_paths=\(.report_paths // {} | length)"'
 
 # On complete — summarize for the user
 atx ct findings list --analysis-id <id> --json
@@ -205,9 +227,9 @@ atx ct analysis run --type modernization-readiness --source my-portfolio --wait
 Launch both sequentially, polling each:
 ```bash
 atx ct analysis run --type agentic-readiness --source my-portfolio
-# Poll until complete...
+# Wait for genuine completion (status terminal AND report_paths non-empty)...
 atx ct analysis run --type modernization-readiness --source my-portfolio
-# Poll until complete...
+# Same again...
 ```
 
 Do NOT run both simultaneously — ct handles internal parallelism, but launching two analysis types concurrently on the same source can cause resource contention.

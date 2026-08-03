@@ -105,8 +105,10 @@ atx ct repository list
 # 5. Run ARA analysis (returns immediately with an analysis ID)
 atx ct analysis run --type agentic-readiness --source my-portfolio
 
-# 6. Poll until status is complete (every 30-60s)
-atx ct analysis get --id <analysis-id>
+# 6. Poll every 30-60s. NOTE: `status: complete` fires when the per-repo phase ends, while the
+#    portfolio phase is still running — a run is genuinely done only once report_paths is
+#    non-empty (or the launching process exits). See ct-workflow.md Step 3.
+atx ct analysis get --id <analysis-id> --json | jq -r '"\(.status) report_paths=\(.report_paths // {} | length)"'
 
 # 7. Check findings
 atx ct findings list --json
