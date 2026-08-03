@@ -20,27 +20,51 @@ How to run the Execution Plan (EBA) TD after ARA and MODA analyses are complete.
 
 1. **ARA analysis complete**: `atx ct analysis list --type agentic-readiness` shows status `complete`
 2. **MODA analysis complete**: `atx ct analysis list --type modernization-readiness` shows status `complete`
-3. **Report artifacts available**: `atx ct analysis list-artifacts --id <ara-id>` returns artifacts
-4. **No concurrent `atx ct analysis run` in progress** — the ct server and custom exec may conflict on git state
+3. **Report artifacts available**: `atx ct analysis get --id <ara-id> --json` returns a populated `report_paths`
+4. **At least one portfolio report exists** (ARA and/or MOD) — see [Portfolio report prerequisite](#portfolio-report-prerequisite)
+5. **No concurrent `atx ct analysis run` in progress** — `atx ct` analyses run in-process, and they and custom exec may conflict on git state. Health-check with `atx ct status --health`; never start `atx ct server` (hidden/deprecated, starts a daemon on `:8081` that blocks the shell)
 
 ---
 
 ## Retrieving Artifacts for EBA Input
 
-Since ct stores artifacts in its internal store (not on disk), you must export them before running EBA:
+Reports are on local disk, and `analysis get --json` tells you where — `report_paths` maps each repo slug to its report file:
 
 ```bash
 # Get the analysis IDs
 ara_id=$(atx ct analysis list --type agentic-readiness --status complete --json | jq -r '.[0].id')
 moda_id=$(atx ct analysis list --type modernization-readiness --status complete --json | jq -r '.[0].id')
 
-# List available artifacts
-atx ct analysis list-artifacts --id $ara_id --json
-atx ct analysis list-artifacts --id $moda_id --json
+# repo slug -> report path
+atx ct analysis get --id $ara_id --json | jq -r '.report_paths | to_entries[] | "\(.key)\t\(.value.ara // .value.mod)"'
+atx ct analysis get --id $moda_id --json | jq -r '.report_paths | to_entries[] | "\(.key)\t\(.value.ara // .value.mod)"'
+```
 
-# Export per-repo reports to local files
-atx ct analysis get-artifact --id $ara_id --repo <source>::<repo-name> --name report > ./ara-reports/<repo-name>.json
-atx ct analysis get-artifact --id $moda_id --repo <source>::<repo-name> --name report > ./moda-reports/<repo-name>.json
+Note `analysis list` returns a thinner object with no `report_paths` — you must call `get` per id.
+
+> **Critical: `report_paths` is NOT complete, and EBA consumes the JSON.** Verified on atx 3.9.0, `report_paths` listed **only the `.md`**, while the full four-artifact bundle (`.md`, `.json`, `.html`, `.metadata.json`) was written into the repo working tree at:
+>
+> ```
+> services/<repo>/{agentic-readiness,modernization-readiness}-analysis/
+> ```
+>
+> Since the EBA TD consumes the **JSON**, treat `report_paths` as a starting point only — then `ls` both the working-tree directory above and the per-analysis artifact dir:
+>
+> ```
+> ~/.atxct/shared/analyses/<id>/artifacts/<source>__<repo>/
+> ```
+
+### Portfolio report prerequisite
+
+The EBA TD requires at least **one** portfolio report (ARA and/or MOD). Portfolio reports are produced automatically as a second phase of `atx ct analysis run` — there is no separate command — but each portfolio TD needs **≥ 2 discovered repo reports**:
+
+- **A single-repo analysis produces NO portfolio report.** The run still completes, but logs `runPortfolioAra: no portfolio ARA report found` and leaves the portfolio summary null. That is expected on 1 repo, not a bug.
+- **Aggregation is per-run.** Separate single-repo runs do not accumulate into a portfolio view — pass ≥2 repos (or omit `--repo` to take every repo under `--source`).
+
+Portfolio output lands under:
+
+```
+<run>/portfolio-<name>/{agentic,modernization}-readiness-analysis/
 ```
 
 ---
@@ -75,6 +99,8 @@ atx ct findings list --source <name> --type agentic-readiness --json
 | `service_inventory[].tags` | Repository labels from ct |
 | `service_inventory[].findings_summary` | Severity counts from `findings list` |
 | `dependency_overrides[]` | Inferred from cross-service findings (API calls, shared DBs) |
+
+> **Note:** CLI finding counts and the report JSON's own `counts.total` legitimately differ. The report splits `findings[]` (severity-bearing gaps) from `evaluations[]` (passing questions, no severity); the CLI counts both. Measured on one ARA: `counts.total: 36` vs CLI `43`. Either is a valid basis for `findings_summary` — just don't treat the mismatch as a bug.
 
 ### Step 2: Prompt the user for execution constraints (interactive)
 
@@ -233,7 +259,7 @@ Use the Bash tool's `timeout` parameter directly.
 ## Safety Contract
 
 1. **Run ONLY after both ARA and MODA are complete** — verify with `atx ct analysis list`.
-2. **Verify report artifacts are available** via `atx ct analysis list-artifacts`.
+2. **Verify report artifacts are available** via `atx ct analysis get --id <id> --json` (populated `report_paths`, empty `repo_errors`), then confirm the JSON files are on disk — `complete` alone is not sufficient.
 3. **Issue exactly one Bash call** with timeout 1800000 ms. Do not poll, background, or split.
 4. **Do NOT run concurrently with `atx ct analysis run`** — git state conflicts.
 5. **After completion**, verify the execution plan artifact exists before reporting success.

@@ -88,17 +88,20 @@ The EBA TD is the richest — it needs human planning inputs the agent can't inf
 
 _*At least one of the two portfolio reports is required — the TD terminates with an error if neither is found. Per-repo reports are read only when deeper granularity is needed._
 
-On **local sources**, `ct` writes these artifacts directly into the repo working trees during analysis. On **remote sources**, you must export them from the artifact store first:
+On **local sources**, `ct` writes these artifacts directly into the repo working trees during analysis. Either way, the authoritative location of every report is the `report_paths` map on the analysis record:
 
 ```bash
-# Export per-repo reports
-atx ct analysis get-artifact --id <ara-id> --repo <slug> --name ara > services/<repo>/agentic-readiness-analysis/<repo>-ara-report.json
-atx ct analysis get-artifact --id <moda-id> --repo <slug> --name mod > services/<repo>/modernization-readiness-analysis/<repo>-mod-report.json
+# List every report this analysis produced (repo slug -> absolute path)
+atx ct analysis get --id <analysis-id> --json | jq -r '.report_paths | to_entries[] | "\(.key)\t\(.value.ara // .value.mod)"'
 
-# Export portfolio reports
-atx ct analysis get-artifact --id <ara-id> --repo _portfolio_ara --name report > portfolio-agentic-readiness-analysis/<portfolio>-ara-portfolio-report.json
-atx ct analysis get-artifact --id <moda-id> --repo _portfolio_mod --name report > portfolio-modernization-readiness-analysis/<portfolio>-mod-portfolio-report.json
+# Copy one into place
+cp "$(atx ct analysis get --id <ara-id> --json | jq -r '.report_paths["<src>::<repo>"].ara')" \
+   services/<repo>/agentic-readiness-analysis/<repo>-ara-report.json
 ```
+
+Reports live on local disk under `~/.atxct/shared/analyses/<id>/artifacts/<source>__<repo>/`, with portfolio output in sibling `_portfolio_ara` / `_portfolio_mod` directories.
+
+> **`atx ct analysis list-artifacts` and `get-artifact` no longer exist** (verified 2026-08-03 on atx 3.9.0 — `error: unknown command`, zero occurrences in the shipped CLI bundle). Any script still calling them must move to `analysis get --json` → `report_paths`.
 
 **Running the EBA TD** (requires at least one portfolio report — ARA and/or MODA):
 
@@ -195,24 +198,36 @@ the reasoning behind each step.
 Prerequisites: AWS credentials (`aws sts get-caller-identity`), the ATX CLI (`curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash`), Node.js 22+, and the `AWSTransformCustomFullAccess` managed policy.
 
 ```bash
-# Start the ct server (localhost:8081)
-atx ct server &
+# Check the CLI version. NOTE: inside Claude Code a bare `atx --version` reports
+# Builder Toolbox's claude-code build (2.1.x), not atx's — strip the inherited var.
+env -u TOOLBOX_TOOL_VERSION atx --version     # → 3.9.0
 
-# Add a local source (absolute path to a parent directory containing repos)
+# Region: only us-east-1 resolves for the definition/credential endpoint
+export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1
+
+# No server to start — analyses run in-process. This is just a health check.
+atx ct status --health
+
+# Add a local source (absolute path to a parent directory containing repos,
+# each of which must contain a .git directory for discovery to find it)
 atx ct source add --name my-portfolio --provider local --path $(pwd)/services
 
 # Discover repositories
 atx ct discovery scan --source my-portfolio
 
-# Run ARA (per-repo + portfolio aggregation)
-atx ct analysis run --type agentic-readiness --source my-portfolio --wait
+# Run ARA (per-repo + portfolio aggregation), then poll
+atx ct analysis run --type agentic-readiness --source my-portfolio
+atx ct analysis get --id <analysis-id>
 
-# Run MODA (per-repo + portfolio aggregation)
-atx ct analysis run --type modernization-readiness --source my-portfolio --wait
+# Run MODA (after ARA — do not run both concurrently)
+atx ct analysis run --type modernization-readiness --source my-portfolio
 
 # Inspect findings
+atx ct findings count --by severity --json
 atx ct findings list --json
 ```
+
+> `atx ct server` is deprecated and hidden — never start it; it blocks the shell on `:8081` and is not required. A hidden `--wait` does exist on `analysis run`, but polling is preferable in agent workflows. Both are covered in [`orchestrator/SKILL.md`](orchestrator/SKILL.md), which is the current source of truth for CLI behavior.
 
 The [`orchestrator/SKILL.md`](orchestrator/SKILL.md) skill walks an agent through the same workflow interactively.
 

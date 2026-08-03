@@ -4,23 +4,20 @@ Common errors and their resolutions when running the orchestrator. Read this whe
 
 ---
 
-## Server Issues
+## Connectivity Issues
 
-### Connection refused or server not running
+### Never start a server — there isn't one to start
 
-**Symptom:** Any `atx ct` command returns "Connection refused" or "server not running."
+**Symptom:** A command failed and you're tempted to run `atx ct server` (an older note or doc may have told you to).
 
-**Fix:**
+**Cause (verified 2026-08, atx 3.9.0):** No server is needed. `atx ct` analyses run **in-process** — the CLI does the work itself. `atx ct server` is a hidden/deprecated command that starts a daemon and **blocks the shell** until killed; in an automated flow it will hang the session outright.
+
+**Fix:** Never invoke `atx ct server`. Health-check with:
 ```bash
-atx ct server &
-# Wait 3-5 seconds
 atx ct status --health
 ```
 
-If health check still fails:
-- Check if port 8081 is already in use: `lsof -i :8081`
-- Kill any stale server process and restart
-- Check server logs for startup errors
+If the health check fails, the cause is credentials or region (see "Credential Issues") — **"server not running" is never a valid diagnosis** for any `atx ct` failure.
 
 ---
 
@@ -96,11 +93,28 @@ atx ct source remove --name <name>
 **Fix:**
 1. Check: `atx ct analysis get --id <id>` for per-repo status
 2. If stuck > 40 minutes, cancel: `atx ct analysis cancel --id <id>`
-3. Re-run: `atx ct analysis run --type <type> --source <name> --wait`
+3. Re-run: `atx ct analysis run --type <type> --source <name>`
 
-### Analysis completes but no findings
+Note on `--wait`: it **does** exist on `analysis run` — it's just hidden from `--help` (registered with `.hideHelp()`), so its absence from the help text is not evidence it was removed. In agent workflows prefer explicit polling of `atx ct analysis get --id <id> --json` over `--wait`, so you keep control of the timeout and can report progress.
 
-**Possible causes:**
+### Analysis completes but reports 0 findings
+
+**Symptom:** Analysis reaches `complete`, report artifacts are written, but the findings count is 0.
+
+**Cause (atx 3.7.0 bug):** the report parser fell back to markdown scraping whenever `categories` was emitted as a JSON array, and silently extracted nothing. **Fixed in 3.9.0** — verified 43 findings on an ARA and 31 on a MOD run.
+
+**Fix:** upgrade the CLI. There is **no `atx update` subcommand** — re-run the installer:
+```bash
+curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash
+```
+Upgrading in place preserves your registered sources, repos, and prior analyses — you do not need to re-register or re-run anything.
+
+Verify the version (see "`atx --version` misreports inside Claude Code" below):
+```bash
+env -u TOOLBOX_TOOL_VERSION atx --version
+```
+
+If you are already on 3.9.0+, then consider the benign causes:
 - Repos are already fully compliant
 - Analysis type doesn't apply (e.g., security requires security agent setup)
 - Repos were not properly discovered (check `atx ct repository list`)
@@ -113,6 +127,18 @@ atx ct source remove --name <name>
 
 **Fix:** Remove the `-g` flag. Built-in types use their own defaults and cannot be customized via configuration files.
 
+### `schedule create --expression` is rejected
+
+**Symptom:** `atx ct schedule create --expression "<cron>"` fails on the unknown option.
+
+**Cause:** `--expression` (and cron syntax generally) was **removed in 3.8.0**. Schedules now take a fixed set of recurrence keywords.
+
+**Fix:** Use `--recurrence`, which is now required:
+```bash
+atx ct schedule create --type agentic-readiness --source <name> --recurrence daily
+# also: --recurrence weekly:MONDAY   |   --recurrence monthly:1
+```
+
 ### Portfolio aggregation says "fewer than 2 valid reports"
 
 **Symptom:** Portfolio artifact exists but shows analysis failed due to insufficient reports.
@@ -121,58 +147,80 @@ atx ct source remove --name <name>
 
 **Fix:** Run analysis on at least 2 repos in the same source:
 ```bash
-atx ct analysis run --type agentic-readiness --source my-portfolio --wait
+atx ct analysis run --type agentic-readiness --source my-portfolio
 ```
 Without `--repo`, ct runs analysis on ALL discovered repos.
+
+### "no portfolio ARA report found" / "no portfolio MOD report found"
+
+**Symptom:** A portfolio TD phase errors out saying it found no portfolio report to work from.
+
+**Cause (verified 2026-08, atx 3.9.0):** This is **not a bug** if you ran against a single repo. Both portfolio TDs require **>= 2 discovered per-repo reports** to aggregate, and aggregation is **per-run** — a run only sees the reports produced within itself. Two separate single-repo runs do **not** accumulate into a 2-report portfolio.
+
+Additionally, the `bridge_summary` phase needs **both** a portfolio ARA report **and** a portfolio MOD report present. Having only one of the two is enough to fail it, even with 2+ repos.
+
+**Fix:** Run one analysis over a source with 2+ discovered repos (omit `--repo`), and run **both** ARA and MOD before expecting `bridge_summary` to succeed.
 
 ---
 
 ## Artifact Issues
 
-### Report artifacts not found on local filesystem
+### Where the report artifacts actually are
 
-**Symptom:** After analysis completes, `find . -name "*report*"` returns nothing.
+**Symptom:** After analysis completes you don't know where to look, or `find . -name "*report*"` from the wrong directory returns nothing.
 
-**Cause:** The ct server stores artifacts in its internal artifact store, NOT on the local filesystem. This is by design.
+**Cause (verified 2026-08, atx 3.9.0):** Reports **ARE** on the local filesystem. They are written to **two** places, and you generally want to check both:
 
-**Fix:** Access artifacts via the API:
-```bash
-# List available artifacts
-atx ct analysis list-artifacts --id <analysis-id> --json
+1. The shared analysis store, keyed by analysis id:
+   ```
+   ~/.atxct/shared/analyses/<analysis-id>/artifacts/<source>__<repo>/
+   ```
+2. For **local** sources, directly into the repo working tree:
+   ```
+   services/<repo>/agentic-readiness-analysis/<repo>-ara-report.{md,json,html,metadata.json}
+   services/<repo>/modernization-readiness-analysis/<repo>-mod-report.{md,json,html,metadata.json}
+   ```
 
-# Get specific artifact content
-atx ct analysis get-artifact --id <analysis-id> --repo <repo-slug> --name ara
+Portfolio output lands under the run directory:
+```
+<run>/portfolio-<name>/agentic-readiness-analysis/
+<run>/portfolio-<name>/modernization-readiness-analysis/
 ```
 
-### Unknown artifact name
-
-**Symptom:** `get-artifact` returns "artifact not found."
-
-**Fix:** First list available artifacts to see valid names — and don't assume the names/formats below still hold; the service is changing:
+**Fix:** Read the files off disk directly. To locate them for a given run:
 ```bash
-atx ct analysis list-artifacts --id <analysis-id> --json
-# → [ { "repo": "...", "name": "ara", "format": "markdown" }, ... ]
+atx ct analysis get --id <analysis-id> --json   # → .report_paths
+ls -la ~/.atxct/shared/analyses/<analysis-id>/artifacts/*/
+ls -la services/<repo>/*-readiness-analysis/
 ```
 
-Artifact names by type (historical — verify against the live index):
-- ARA per-repo: `ara`
-- MODA per-repo: `mod`
-- Portfolio ARA: repo=`_portfolio_ara`, name=`report`
-- Portfolio MODA: repo=`_portfolio_mod`, name=`report`
+**Caveat — `report_paths` is not complete.** On 3.9.0 it listed only the `.md` file, while the full 4-artifact bundle (`.md`, `.json`, `.html`, `.metadata.json`) was sitting in the working tree. Treat `report_paths` as a hint, not an index: always `ls` **both** locations before concluding an artifact wasn't produced.
 
-### Only markdown artifacts / no portfolio / no HTML
+### `list-artifacts` / `get-artifact` return "unknown command"
 
-**Symptom:** `list-artifacts` returns only per-repo `ara`/`mod` in `markdown` format — no HTML, no JSON, no `_portfolio_*` artifact.
+**Symptom:** `atx ct analysis list-artifacts` or `atx ct analysis get-artifact` fails with `error: unknown command`.
 
-**Cause (verified 2026-07, ATX CLI 2.1.x / atx 3.2.0):** the current TD version emits per-repo markdown only; portfolio aggregation and HTML did not appear. This may change between versions.
+**Cause:** Both subcommands were **removed**. There is no artifact-export API to call — see above, the artifacts are already files on disk.
 
-**Fix:** Drive off the live index (don't hardcode). If the user needs HTML to open in a browser, render the exported markdown locally (e.g. `pandoc report.md -s -o report.html`) rather than expecting `ct` to produce it.
+**Fix:** Use `analysis get` to find the paths, then read the files:
+```bash
+atx ct analysis get --id <analysis-id> --json   # → .report_paths
+```
+Then `ls` both the shared store and the repo working tree (per the caveat above) and read/copy the files with ordinary filesystem tools.
+
+### Missing HTML or JSON alongside the markdown
+
+**Symptom:** You found the `.md` report but believe no HTML/JSON was produced.
+
+**Cause:** Most often you only consulted `report_paths`, which under-reports (see caveat above). On 3.9.0 a complete ARA/MOD run emits four artifacts per repo: `.md`, `.json`, `.html`, and `.metadata.json`.
+
+**Fix:** `ls services/<repo>/*-readiness-analysis/` in the working tree before assuming anything is missing. Only if the bundle is genuinely short should you render markdown yourself (e.g. `pandoc report.md -s -o report.html`).
 
 ### Reports not found in the git repos (remote sources)
 
 **Symptom:** After ARA/MODA on a GitHub/GitLab source, there are no report files or branches in the repos.
 
-**Expected (verified 2026-07):** For remote sources, reports live ONLY in the ct artifact store — nothing is committed or pushed to the repos. `ct` touches repo git only during a **remediation** (branch + PR). Export with `get-artifact`. (Local sources may differ — reports can land in the working tree.)
+**Expected:** For **remote** sources nothing is committed or pushed to the repo — `ct` touches remote repo git only during a **remediation** (branch + PR). The reports still exist locally under `~/.atxct/shared/analyses/<analysis-id>/artifacts/<source>__<repo>/`. The in-tree report bundle described above is a **local-source** behavior.
 
 ---
 
@@ -193,9 +241,12 @@ Artifact names by type (historical — verify against the live index):
 
 **Fix:**
 1. Verify ARA + MODA analyses are truly `complete` (not just `running`): `atx ct analysis list`
-2. Export artifacts from the ct server to local files:
+2. Locate the report files on disk and copy them where the TD expects them:
    ```bash
-   atx ct analysis get-artifact --id <ara-id> --repo <slug> --name ara > ./ara-reports/<slug>.md
+   atx ct analysis get --id <ara-id> --json   # → .report_paths (incomplete — also ls)
+   ls ~/.atxct/shared/analyses/<ara-id>/artifacts/*/
+   ls services/<slug>/agentic-readiness-analysis/
+   cp services/<slug>/agentic-readiness-analysis/<slug>-ara-report.json ./ara-reports/
    ```
 3. Ensure `service_inventory[].path` in the config matches actual repo paths
 
@@ -226,27 +277,39 @@ git merge --no-ff atx-result-staging-<timestamp>
 
 ### "The security token included in the request is invalid"
 
-**Symptom:** Server log or command output shows security token error.
+**Symptom:** Command output shows security token error.
 
 **Fix:**
 ```bash
 aws sts get-caller-identity
 # If expired:
 aws sso login
-# Then restart the server:
-# Kill existing: kill $(lsof -t -i :8081)
-atx ct server &
+# Then simply re-run the atx command — there is no daemon to restart.
+atx ct status --health
 ```
 
 ### Region not supported
 
-**Symptom:** `AWS Transform is not available in region 'us-west-2'`
+**Symptom:** `AWS Transform is not available in region 'us-west-2'`, or the endpoint fails to resolve at all (NXDOMAIN).
 
-**Fix:** Set the region to a supported one:
+**Cause:** Only `us-east-1` resolves. A stray `AWS_REGION=us-west-2` in the environment points the CLI at a hostname that does not exist, so the failure can surface as a DNS error rather than a clean "not available" message.
+
+**Fix:** Set the region explicitly:
 ```bash
 export AWS_REGION=us-east-1
 ```
 Note: `atx ct` commands use the region from your AWS config. `atx custom def exec` may require explicit region setting.
+
+### `atx --version` reports 2.1.x instead of 3.9.0
+
+**Symptom:** Inside Claude Code (or any Builder Toolbox-managed shell), `atx --version` prints a `2.1.x` version that doesn't match the installed CLI, which can send you chasing version-specific bugs that don't apply.
+
+**Cause:** `atx` is shimmed by Builder Toolbox, and an inherited `$TOOLBOX_TOOL_VERSION` makes it report Toolbox's own version rather than the real `atx` version.
+
+**Fix:** Unset it for the call:
+```bash
+env -u TOOLBOX_TOOL_VERSION atx --version
+```
 
 ---
 
@@ -277,11 +340,26 @@ git -C <repo-path> branch --list 'remediation-*'
 git -C <repo-path> merge <branch-name>
 ```
 
-### `remediation create --ids` does nothing useful for ARA/MODA findings
+### Remediation fails: "repository has uncommitted changes"
 
-**Symptom:** You try to remediate an ARA/MODA finding with `--ids <finding-id>` and there's no fix to apply.
+**Symptom:** `remediation create` refuses to run because the target repo's working tree is dirty.
 
-**Cause (verified 2026-07):** ARA and MODA findings are **assessment-only** — `fix` is `null` and there is no bound fix-transform. The `--ids` mode only works for findings that ship a fix transform.
+**Cause (verified 2026-08, atx 3.9.0):** A repo that is **currently being analyzed** *is* dirty, by design — `ct` rewrites the report bundle in that repo's working tree in place as the analysis progresses.
+
+**Fix:** Wait for the analysis to reach `complete`, then retry. Alternatively, test remediation against an isolated copy of the repo registered as its own source.
+
+**Do NOT** "fix" this by committing mid-analysis — that races the writer that is still rewriting the bundle and can leave you with a half-written report committed.
+
+**Related:** `ct` **auto-commits** the report bundle into local-source repos, authored as `ATX Bot <checkpoint@atx.bot>`. So a *clean* tree immediately after an analysis does **not** mean nothing was written — it means the output was already committed. Check the log before concluding the analysis produced nothing:
+```bash
+git -C services/<repo> log --oneline --author=checkpoint@atx.bot -5
+```
+
+### `remediation create --ids` rejects ARA/MODA findings as `non_remediable`
+
+**Symptom:** You try to remediate an ARA/MODA finding with `--ids <finding-id>` and every finding comes back `non_remediable` / there's no fix to apply.
+
+**Cause:** ARA and MODA findings are **assessment-only** — **all** of them have `fix: null` and no bound fix-transform. The `--ids` mode only works for findings that ship a fix transform, so it can **never** work for ARA/MOD findings. This is not a data problem with your particular findings.
 
 **Fix:** Author your own TD and use the explicit-transform mode:
 ```bash
@@ -289,6 +367,18 @@ atx ct remediation create --repo <src>::<repo> --source <src> \
   --transformation-name <your-td> --name "..."
 ```
 See "Authoring a custom remediation TD" in `SKILL.md`.
+
+### "Transformation not found in the registry" — but `custom def get` resolves it fine
+
+**Symptom:** `remediation create --transformation-name <your-td>` fails with "Transformation not found in the registry," even though `atx custom def list` shows the TD and `atx custom def get -n <your-td>` fetches it successfully.
+
+**Cause (verified 2026-08, atx 3.9.0):** The remediation runtime resolves transformation names against a **different catalog** than the `atx custom def` commands do. It resolves **AWS-managed** transforms (e.g. `containerize-to-eks`) but does **not** see **user-published** TDs. Publishing is not the missing step — re-publishing will not help.
+
+**Fix:** Don't route a custom TD through `remediation create`. Execute it directly and open the PR yourself:
+```bash
+AWS_REGION=us-east-1 atx custom def exec -n <your-td> -p <abs-repo-path> ...
+# then review the branch and raise the PR/MR manually
+```
 
 ---
 
@@ -356,15 +446,24 @@ atx ct findings batch-update --ids <csv> --status dismissed --reason "..."
 
 ```bash
 atx ct status
+atx ct status --health
 ```
 
-Shows counts for sources, repos, analyses, findings, and remediations.
+Shows counts for sources, repos, analyses, findings, and remediations. `--health` is the connectivity check — there is no server to ping.
 
-### Server logs
+### Logs
 
-Server logs go to stdout/stderr. If you started with `atx ct server &`, redirect:
+Analyses run in-process, so the logs are simply the command's own stdout/stderr. Capture them on the invocation you care about:
 ```bash
-atx ct server > /tmp/atx-ct-server.log 2>&1 &
+atx ct analysis run --type agentic-readiness --source <name> > /tmp/atx-ct-run.log 2>&1
 ```
 
-Then inspect: `tail -f /tmp/atx-ct-server.log`
+Then inspect: `tail -f /tmp/atx-ct-run.log`
+
+Per-run state and artifacts also persist under `~/.atxct/shared/analyses/<analysis-id>/`, which is worth listing when a run fails opaquely.
+
+### Confirm which CLI you're actually running
+
+```bash
+env -u TOOLBOX_TOOL_VERSION atx --version   # plain `atx --version` misreports as 2.1.x
+```
