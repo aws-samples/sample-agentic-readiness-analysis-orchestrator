@@ -68,6 +68,8 @@ An agent that stops at `status` here reports **0 findings and no reports** on a 
 - **If you launched the run, wait for the process to exit.** That is the only unambiguous signal.
 - **Otherwise require `status` terminal *and* `report_paths` non-empty** — that map is written in the final record update, after the portfolio phase, so it is empty for the entire premature window. Cap it with a timeout: a run that fails early leaves `report_paths` empty forever.
 
+**Worse, the premature transition can swallow a later failure.** Because `status` is already terminal, a portfolio-phase error cannot transition it: `saveFn: exhausted 3 retries persisting analysis <id>: Analysis is already in terminal status COMPLETE; cannot transition`. Two runs of the *same* ARA hitting the *same* `repositoryId: null` persist bug therefore ended differently — one `failed`, one `complete` with a populated `error` field. **So `status: complete` does not imply `error: null`.** Read `error` and `repo_errors` explicitly; never infer them from `status`.
+
 Never conclude "no reports were generated" from an empty `report_paths` alone — check disk (`ls ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/`) before reporting anything to the user. This is the **third** way `status` misleads, alongside: ARA reads `failed` when its output is fine (the `repositoryId: null` persist bug), and MOD reads `complete` when its portfolio report is missing (filed as a `repo_error`, which does not fail the run).
 
 ### When to use
