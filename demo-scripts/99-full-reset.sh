@@ -33,18 +33,14 @@ echo "  Press Ctrl+C within 5 seconds to abort."
 sleep 5
 echo
 
-# --- Ensure ct server is running ---
-if [ "$(atx ct status --health 2>/dev/null)" != "healthy" ]; then
-  echo "==> Starting ct server..."
-  pkill -f "atx ct server" 2>/dev/null || true
-  sleep 2
-  PYENV_VERSION=system AWS_REGION=us-east-1 atx ct server >/dev/null 2>&1 &
-  for i in $(seq 1 15); do
-    [ "$(atx ct status --health 2>/dev/null)" = "healthy" ] && break
-    sleep 2
-  done
+# --- Health check (there is no server to start; analyses run in-process) ---
+health=$(atx ct status --health 2>&1)
+if [ "$health" != "healthy" ]; then
+  echo "!! ct is not healthy: $health"
+  echo "   Usually AWS credentials. Try: aws sts get-caller-identity"
+  exit 1
 fi
-echo "==> ct server: $(atx ct status --health 2>/dev/null)"
+echo "==> ct: healthy"
 echo
 
 # --- Step 1: Delete all analyses (cascades findings) ---

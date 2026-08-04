@@ -39,10 +39,56 @@ echo "  $(date)"
 echo "============================================"
 echo
 
+# Wait for an analysis to ACTUALLY finish.
+#
+# `status` alone is not a terminal signal on a multi-repo run: it flips to `complete` when the
+# per-repo phase ends, while the portfolio phase keeps running for tens of minutes. In that
+# window report_paths is {}, findings is empty and portfolio_*_summary is null — the run looks
+# like it produced nothing. `report_paths` is written in the FINAL record update, so require it
+# non-empty too. Timeout is required: a genuine early failure leaves it empty forever.
+#
+# Prints the terminal status on stdout; returns non-zero on timeout.
+wait_for_analysis() {
+  local id="$1" label="$2" timeout_min="${3:-90}"
+  local deadline=$(( $(date +%s) + timeout_min * 60 ))
+  local st n
+  while :; do
+    read -r st n < <(atx ct analysis get --id "$id" --json 2>/dev/null \
+      | jq -r '"\(.status // "unknown") \(.report_paths // {} | length)"' 2>/dev/null)
+    st="${st:-unknown}"; n="${n:-0}"
+
+    if [ "$st" = "failed" ]; then echo "$st"; return 0; fi
+    if [ "$st" = "complete" ] && [ "$n" -gt 0 ]; then echo "$st"; return 0; fi
+
+    if [ "$st" = "complete" ] && [ "$n" -eq 0 ]; then
+      echo "    $label: portfolio phase still running... ($(date +%H:%M:%S))" >&2
+    else
+      echo "    $label: $st ($(date +%H:%M:%S))" >&2
+    fi
+
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "!! $label: timed out after ${timeout_min}m (status=$st, reports=$n)" >&2
+      echo "$st"; return 1
+    fi
+    sleep 30
+  done
+}
+
 # --- Step 0: Pre-flight ---
 echo "==> [0/7] Pre-flight checks"
 aws sts get-caller-identity >/dev/null 2>&1 || { echo "!! AWS creds not active"; exit 1; }
-atx --version >/dev/null 2>&1 || { echo "!! atx CLI not found"; exit 1; }
+command -v atx >/dev/null 2>&1 || { echo "!! atx CLI not found"; exit 1; }
+command -v jq  >/dev/null 2>&1 || { echo "!! jq not found (required)"; exit 1; }
+# Inside Claude Code a bare `atx --version` reports Builder Toolbox's version (2.1.x), which atx
+# inherits from $TOOLBOX_TOOL_VERSION. Strip it to read the real one. Needs >= 3.9.0: 3.7.0 had a
+# report parser that silently extracted 0 findings.
+atx_ver=$(env -u TOOLBOX_TOOL_VERSION atx --version 2>/dev/null | tr -d '[:space:]')
+echo "    atx version: ${atx_ver:-unknown}"
+case "$atx_ver" in
+  3.9.*|3.1[0-9].*|[4-9].*) ;;
+  *) echo "    !! expected atx >= 3.9.0; older builds silently produce 0 findings."
+     echo "       Upgrade: curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash" ;;
+esac
 
 if [ "$MODE" = "remote" ]; then
   gh auth status >/dev/null 2>&1 || { echo "!! gh not authenticated"; exit 1; }
@@ -77,25 +123,17 @@ fi
 echo "    All pre-flight checks passed."
 echo
 
-# --- Step 1: Start ct server ---
-echo "==> [1/7] Starting ct server (us-east-1, system python)"
-if [ "$(atx ct status --health 2>/dev/null)" = "healthy" ]; then
-  echo "    Already running and healthy."
-else
-  pkill -f "atx ct server" 2>/dev/null || true
-  sleep 2
-  PYENV_VERSION=system AWS_REGION=us-east-1 atx ct server >/dev/null 2>&1 &
-  CT_PID=$!
-  echo "    Started (pid $CT_PID). Waiting for healthy..."
-  for i in $(seq 1 20); do
-    [ "$(atx ct status --health 2>/dev/null)" = "healthy" ] && break
-    sleep 2
-  done
-  if [ "$(atx ct status --health 2>/dev/null)" != "healthy" ]; then
-    echo "!! ct server failed to start"; exit 1
-  fi
-  echo "    Healthy."
+# --- Step 1: Health check ---
+# There is NO server to start. Analyses run in-process; `atx ct server` still exists but is
+# deprecated and hidden, and starting it just blocks a shell on :8081 for no benefit.
+echo "==> [1/7] Checking ct health"
+health=$(atx ct status --health 2>&1)
+if [ "$health" != "healthy" ]; then
+  echo "!! ct is not healthy: $health"
+  echo "   Usually AWS credentials. Try: aws sts get-caller-identity"
+  exit 1
 fi
+echo "    healthy."
 echo
 
 # --- Step 2: Add source ---
@@ -147,15 +185,27 @@ ARA_ID=$(echo "$ARA_OUT" | grep -oE '01[A-Z0-9]{24}' | head -1)
 
 if [ -z "$ARA_ID" ]; then echo "!! Failed to launch ARA"; exit 1; fi
 
-while true; do
-  st=$(atx ct analysis get --id "$ARA_ID" --json 2>/dev/null | jq -r '.status' 2>/dev/null)
-  echo "    ARA: $st ($(date +%H:%M:%S))"
-  case "$st" in complete|failed) break;; esac
-  sleep 30
-done
-if [ "$st" = "failed" ]; then echo "!! ARA failed"; exit 1; fi
+st=$(wait_for_analysis "$ARA_ID" "ARA" 90) || { echo "!! ARA did not finish in time"; exit 1; }
+
+# A `failed` ARA is NOT fatal for the demo. The known repositoryId-null persist bug fires at the
+# very end of any multi-repo run that emits a cross-cutting blocker: the reports are already on
+# disk and the per-repo findings are already stored, so only the cross-cutting findings are lost
+# (they remain readable in portfolio_ara_summary.cross_cutting_blockers). Only bail if nothing
+# was actually produced.
 ARA_FINDINGS=$(atx ct findings list --analysis-id "$ARA_ID" --json 2>/dev/null | jq 'length' 2>/dev/null)
-echo "    ARA complete: $ARA_FINDINGS findings"
+ARA_FINDINGS=${ARA_FINDINGS:-0}
+if [ "$st" = "failed" ]; then
+  if [ "$ARA_FINDINGS" -gt 0 ]; then
+    echo "    ARA reports 'failed' but produced $ARA_FINDINGS findings — this is the known"
+    echo "    portfolio persist bug (cross-cutting findings only). Continuing."
+  else
+    echo "!! ARA failed with no findings"
+    atx ct analysis get --id "$ARA_ID" --json 2>/dev/null | jq -r '.error // "no error recorded"'
+    exit 1
+  fi
+else
+  echo "    ARA complete: $ARA_FINDINGS findings"
+fi
 echo
 
 # --- Step 5: Run MODA ---
@@ -166,35 +216,67 @@ MODA_ID=$(echo "$MODA_OUT" | grep -oE '01[A-Z0-9]{24}' | head -1)
 
 if [ -z "$MODA_ID" ]; then echo "!! Failed to launch MODA"; exit 1; fi
 
-while true; do
-  st=$(atx ct analysis get --id "$MODA_ID" --json 2>/dev/null | jq -r '.status' 2>/dev/null)
-  echo "    MODA: $st ($(date +%H:%M:%S))"
-  case "$st" in complete|failed) break;; esac
-  sleep 30
-done
-if [ "$st" = "failed" ]; then echo "!! MODA failed"; exit 1; fi
+st=$(wait_for_analysis "$MODA_ID" "MODA" 120) || { echo "!! MODA did not finish in time"; exit 1; }
+
 MODA_FINDINGS=$(atx ct findings list --analysis-id "$MODA_ID" --json 2>/dev/null | jq 'length' 2>/dev/null)
-echo "    MODA complete: $MODA_FINDINGS findings"
+MODA_FINDINGS=${MODA_FINDINGS:-0}
+if [ "$st" = "failed" ]; then
+  if [ "$MODA_FINDINGS" -gt 0 ]; then
+    echo "    MODA reports 'failed' but produced $MODA_FINDINGS findings — continuing."
+  else
+    echo "!! MODA failed with no findings"
+    atx ct analysis get --id "$MODA_ID" --json 2>/dev/null | jq -r '.error // "no error recorded"'
+    exit 1
+  fi
+else
+  echo "    MODA complete: $MODA_FINDINGS findings"
+fi
+
+# MODA can also read `complete` while its portfolio report is missing — recorded as a repo_error,
+# which does not fail the run. Surface it so the demo operator knows before showing the console.
+moda_repo_errs=$(atx ct analysis get --id "$MODA_ID" --json 2>/dev/null | jq -r '(.repo_errors // {}) | length' 2>/dev/null)
+if [ "${moda_repo_errs:-0}" -gt 0 ]; then
+  echo "    note: MODA recorded $moda_repo_errs repo_error(s):"
+  atx ct analysis get --id "$MODA_ID" --json 2>/dev/null | jq -r '(.repo_errors // {}) | to_entries[] | "      \(.key): \(.value)"' 2>/dev/null | head -5
+fi
 echo
 
 # --- Step 6: Export artifacts ---
 echo "==> [6/7] Exporting report artifacts"
 mkdir -p "$REPORTS_DIR/ara" "$REPORTS_DIR/moda"
 
-atx ct analysis list-artifacts --id "$ARA_ID" --json 2>/dev/null | jq -c '.[]' | while read -r line; do
-  repo=$(echo "$line" | jq -r '.repo')
-  name=$(echo "$line" | jq -r '.name')
-  safe="${repo//::/__}__${name//\//_}"
-  atx ct analysis get-artifact --id "$ARA_ID" --repo "$repo" --name "$name" > "$REPORTS_DIR/ara/${safe}" 2>/dev/null
-  echo "    ara/$safe"
-done
+# `analysis list-artifacts` and `get-artifact` were REMOVED (atx 3.9.0: "unknown command").
+# Copy straight off disk instead. Reports live in the source-scoped run tree, which is the ONLY
+# complete copy — report_paths on the analysis record is markdown-only, and the portfolio .html
+# and .json exist here and nowhere else. Two reasons to glob rather than construct these paths:
+# the segment after the source name is the SOURCE's analysis root (a MOD run lands under
+# .../agentic-readiness/runs/<id>/), and per-repo dirs are slug-mangled <source>-<repo>-<16hex>.
+export_run() {
+  local id="$1" dest="$2" n=0 f rel
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    # flatten <repo-dir>/<type>-analysis/<file> into one filename
+    rel=$(printf '%s' "$f" | sed "s|.*/runs/$id/||; s|/|__|g")
+    cp "$f" "$dest/$rel" 2>/dev/null && n=$((n+1))
+  done < <(find "$HOME/.atxct/sources" -path "*runs/$id/*" -type f \
+             \( -name '*.md' -o -name '*.json' -o -name '*.html' \) 2>/dev/null)
+  echo "$n"
+}
 
-atx ct analysis list-artifacts --id "$MODA_ID" --json 2>/dev/null | jq -c '.[]' | while read -r line; do
-  repo=$(echo "$line" | jq -r '.repo')
-  name=$(echo "$line" | jq -r '.name')
-  safe="${repo//::/__}__${name//\//_}"
-  atx ct analysis get-artifact --id "$MODA_ID" --repo "$repo" --name "$name" > "$REPORTS_DIR/moda/${safe}" 2>/dev/null
-  echo "    moda/$safe"
+ara_n=$(export_run "$ARA_ID" "$REPORTS_DIR/ara")
+echo "    ara/  $ara_n files"
+moda_n=$(export_run "$MODA_ID" "$REPORTS_DIR/moda")
+echo "    moda/ $moda_n files"
+
+if [ "$ara_n" -eq 0 ] && [ "$moda_n" -eq 0 ]; then
+  echo "    !! no artifacts found on disk — check: find ~/.atxct/sources -path '*runs/$ARA_ID/*'"
+fi
+
+# The portfolio .json is what the EBA execution-plan TD consumes; the .html is what you open in a
+# browser during the demo. Point at them explicitly so nobody goes hunting.
+for f in "$HOME"/.atxct/sources/*/*/runs/"$ARA_ID"/portfolio-*/*-analysis/*.html \
+         "$HOME"/.atxct/sources/*/*/runs/"$MODA_ID"/portfolio-*/*-analysis/*.html; do
+  [ -f "$f" ] && echo "    portfolio html: $f"
 done
 
 cat > "$REPORTS_DIR/_ids.txt" <<EOF
