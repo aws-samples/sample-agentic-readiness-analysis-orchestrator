@@ -27,13 +27,52 @@ No prerequisites beyond `atx` CLI + AWS creds (us-east-1). Nothing GitHub-relate
 
 ## During the demo (with Claude)
 
+### First: load the skill
+
+The **Claude** rows below only work if Claude is running as the orchestrator. The skill in
+[`../orchestrator/`](../orchestrator/) is what teaches it the `atx ct` behavior this demo depends
+on — which commands still exist, when a run is actually finished, and where the reports really
+live. Without it Claude will improvise, and the failure modes here are ones that look like
+success (see "Key facts" below).
+
+Install it once, then start Claude Code from the project root:
+
+```bash
+# from the project root
+mkdir -p ~/.claude/skills/ara-moda-orchestrator
+cp -R orchestrator/SKILL.md orchestrator/references ~/.claude/skills/ara-moda-orchestrator/
+```
+
+Re-copy after pulling — an out-of-date installed copy is worse than none, because it confidently
+uses commands that were removed. Verify the loaded copy is current:
+
+```bash
+diff -q orchestrator/SKILL.md ~/.claude/skills/ara-moda-orchestrator/SKILL.md \
+  && echo "skill is current" || echo "STALE — re-copy before demoing"
+```
+
+Then confirm it engaged before you present. Ask Claude *"what analyses can you run?"* — it should
+name ARA, MODA and the Execution Plan, and know that portfolio aggregation needs ≥2 repos. If it
+asks what `atx ct` is, the skill did not load. You can also just say **"use the
+ara-moda-orchestrator skill"**.
+
+### The run of show
+
 | Step | Who | What |
 |------|-----|------|
 | Live discovery | **You** | `./demo-scripts/01-live-discovery-push.sh` (3 repos → 4) |
 | Run analysis | **Claude** | "run ARA on pricing-cgi" / "run MODA on pricing-cgi" |
 | Show findings | **You** | Console → Findings tab |
-| Remediate | **Claude** | "containerize shipping-api" (uses containerize-to-eks) |
+| Show the report | **Claude** | "open the portfolio report" → the `.html` in the sources run tree |
+| Remediate | **Claude** | "containerize shipping-api" (uses `containerize-to-eks`) |
 | Show the diff | **You** | `git -C harness/fixtures/portfolio/legacy-shipping-api diff main` (local branch) |
+
+Two things to know before you present, so a healthy run doesn't look like a broken one:
+
+- **A single-repo analysis produces no portfolio report** — aggregation needs ≥2 repos, and the
+  run still spends ~13 min invoking the portfolio TD before declining. Expected, not a bug.
+- **"failed" on a multi-repo ARA usually still gave you everything you're about to show.** See
+  Key facts. Don't abandon the demo on that word.
 
 ## Rehearsal loop (just the live-discovery beat)
 

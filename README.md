@@ -164,6 +164,19 @@ The orchestrator skill ([`orchestrator/references/execution-plan.md`](orchestrat
 
 A Claude/agent skill ([`orchestrator/SKILL.md`](orchestrator/SKILL.md)) that turns an agent into the orchestrator for the full workflow: source setup → discovery → ARA/MODA analysis → findings → Execution Plan. Reference docs in [`orchestrator/references/`](orchestrator/references/) are read on demand (getting started, ct workflow, execution plan, troubleshooting).
 
+Install it for Claude Code, then start Claude from the project root:
+
+```bash
+mkdir -p ~/.claude/skills/ara-moda-orchestrator
+cp -R orchestrator/SKILL.md orchestrator/references ~/.claude/skills/ara-moda-orchestrator/
+
+# re-copy after pulling; a stale copy confidently calls commands that no longer exist
+diff -q orchestrator/SKILL.md ~/.claude/skills/ara-moda-orchestrator/SKILL.md \
+  && echo "skill is current" || echo "STALE — re-copy"
+```
+
+The skill carries the verified `atx ct` behavior — which commands were removed, when a run is genuinely finished, and where reports actually land. Those are the places an agent working from the CLI's own help text gets it wrong, usually in ways that look like success.
+
 ### `scripts/publish-td.sh` — publishing TDs
 
 Publishes a TD folder to the ATX registry. The TD name is derived from the folder basename; the description is extracted from the SKILL.md frontmatter (or the first heading of `transformation_definition.md`).
