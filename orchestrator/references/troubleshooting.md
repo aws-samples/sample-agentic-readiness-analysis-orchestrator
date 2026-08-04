@@ -433,29 +433,56 @@ See "Authoring a custom remediation TD" in `SKILL.md`.
 
 **Symptom:** `remediation create --transformation-name <your-td>` fails with *"Transformation '<your-td>' not found in the registry. Did you mean … ?"*
 
-**Cause:** That name is not published in the account/region the remediation is running in. Nothing more exotic. `--transformation-name` is resolved at run time against the published registry, and TD names are not stable identifiers: `custom def publish` adds one, `custom def delete` removes it permanently, drafts (`save-draft`) expire after ~30 days, and the registry is shared and churns (**793 TDs on 2026-08-04, 761 user — up from 41 the previous day**).
+**Cause:** Usually the name genuinely isn't published in the account/region you're running in — check that first, since TD names aren't stable identifiers: `custom def publish` adds one, `custom def delete` removes it permanently, drafts (`save-draft`) expire after ~30 days, and the registry is shared and churns (**802 TDs across many owners on 2026-08-04**).
 
-Take the *"Did you mean …?"* suggestion literally: it is a fuzzy match over names that **do** resolve, which is usually enough to spot a typo, a renamed TD, or a draft that lapsed.
+**The other cause — and the one that wastes a day: you published to a different tenant than remediation reads.** The registry is **tenanted by authentication mode**. One endpoint (`transform-custom.<region>.api.aws`), two separate namespaces, and a TD in one is a 404 in the other. So `custom def get` saying *"retrieved successfully"* is **not** proof the name resolves for remediation.
 
-> **Corrected 2026-08-04 — this entry previously blamed a "different catalog."** It claimed the remediation runtime saw only **AWS-managed** transforms and never user-published TDs, citing `containerize-to-eks` as the managed transform that worked. `containerize-to-eks` was in fact a **user** TD (listed under **👤 User Transformations**, no `AWS/` prefix, hash version `3gagkofw5feywyss`). The theory was built on a misread of `custom def list`'s section boundary and was wrong: **`remediation create` does resolve user-published TDs**, and routing your own TD through it is the intended path. Publishing *is* the fix.
+The CLI selects the mode from the environment (3.9.0, `AuthenticationManager.isAWSMode`):
 
-**Fix:** Verify the exact name resolves where you'll run it, then publish if it doesn't.
+| `MIDWAY` | Builder Toolbox on PATH (`TOOLBOX_TOOL_VERSION` set) | Mode |
+|---|---|---|
+| unset | **yes** | Midway (internal identity) |
+| unset | no | AWS credentials |
+| `false` | either | **AWS credentials** |
+| `true` | either | Midway |
+
+This bites Amazon-internal users specifically: with Builder Toolbox on PATH, `custom def publish` goes to the **Midway** tenant, while the `ct remediation` worker subprocess logs `MIDWAY=false detected, using AWS credentials` and looks in the **account** tenant. Confirm it in the debug log:
 
 ```bash
-# `get` is the authoritative check — run from a scratch dir, it writes into CWD
-cd "$(mktemp -d)" && AWS_REGION=us-east-1 atx custom def get -n <your-td>
-#   "✓ ... retrieved successfully"  -> resolvable; the name in your command is wrong
-#   "Error: ... not found."         -> not published here
-
-AWS_REGION=us-east-1 atx custom def publish -n <your-td> --sd <path-to-td-dir> --description "..."
+grep -E "MIDWAY|Using Midway|getTransformationPackageUrl (succeeded|failed)" ~/.aws/atx/logs/debug*.log | tail -20
 ```
 
-Prefer `get -n <name>` over grepping `atx custom def list`: the list wraps long names across lines and invites substring false positives, and its managed/user split is a section header rather than a per-row field — which is exactly how the mistake above happened.
+A publish/`get` that logs `Using Midway authentication (default)` next to a remediation that logs `MIDWAY=false detected` is this bug. The server-side error is explicit — `ResourceNotFoundException`, *"The transformation package doesn't exist, if the transformation package is saved as a draft please publish it"* — which reads like a draft problem but here means wrong tenant.
 
-If you'd rather skip the registry entirely while iterating on the TD text, execute it directly and raise the PR yourself:
+**Fix:** publish and verify with `MIDWAY=false`, so both sides use the tenant remediation reads.
+
+```bash
+export MIDWAY=false
+./scripts/publish-td.sh definitions/custom/<your-td>
+cd "$(mktemp -d)" && MIDWAY=false atx custom def get -n <your-td>   # now authoritative
+```
+
+Publishing to one tenant does **not** backfill the other — re-publish, don't wait. Verified 2026-08-04 on 3.9.0: an identical `remediation create` failed before and reached `Analyzing <repo> with <your-td>…` after.
+
+To see the split rather than guess:
+
+```bash
+cd "$(mktemp -d)"
+              atx custom def get -n <your-td>   # Midway tenant
+MIDWAY=false  atx custom def get -n <your-td>   # AWS tenant — what remediation uses
+```
+
+Don't trust the *"Did you mean …?"* list either: it's a Levenshtein match over names the *remediation* side can see, so it suggests neighbors from a namespace your `custom def` may not be reading.
+
+Ruled out by experiment before the auth mode was found — don't re-debug these: **schema** (a byte-identical workshop `SKILL.md` failed too), **identity**, **propagation delay** (30+ min), **publish tooling** (raw `atx custom def publish`), **account** (three), **region**.
+
+If it still won't resolve, run the TD locally — same TD, no registry round-trip, changes left uncommitted for you to commit or PR (match the mode you published in):
+
 ```bash
 AWS_REGION=us-east-1 atx custom def exec -n <your-td> -p <abs-repo-path> -x -t
 ```
+
+Prefer `get -n <name>` over grepping `atx custom def list`: the list wraps long names across lines and invites substring false positives, and its managed/user split is a section header rather than a per-row field.
 
 ---
 
