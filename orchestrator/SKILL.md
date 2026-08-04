@@ -93,14 +93,14 @@ Do NOT load all of these proactively. Pick the one relevant to the current task 
 
 > All four were rewritten against verified 3.9.0 behavior on 2026-08-03: the `atx ct server` start-up steps are gone (replaced by `atx ct status --health`), `list-artifacts`/`get-artifact` are gone (replaced by `analysis get --json` → `report_paths`, with the "`report_paths` is not the whole bundle" caveat), and `troubleshooting.md`'s claim that artifacts are "NOT on the local filesystem" is corrected — they are on local disk. This SKILL.md remains the source of truth for CLI behavior; the references carry the interactive flows and error taxonomies.
 
-## Demo harness (tested end-to-end 2026-07-10; local-first)
+## Demo harness (scripts re-verified against 3.9.0 on 2026-08-04; local-first)
 
 A full reset-and-rebuild harness lives at the project root.
 All scripts default to **LOCAL mode** (no GitHub, no Code Defender); pass `--remote` for GitHub mode.
 
 ```
 <project>/demo-scripts/
-├── 00-full-setup.sh           # Bake env: server (PYENV_VERSION=system) → source → discovery → trim → ARA → MODA → export (~45 min)
+├── 00-full-setup.sh           # Bake env: health → source → discovery → trim → ARA → MODA → export (~45 min)
 ├── 00-push-repos.sh           # [remote only] Push 3 pre-baked repos to org (user runs — Code Defender)
 ├── 01-live-discovery-push.sh  # Live beat: pricing-cgi "appears" (3 repos → 4)
 ├── 02-reset-live-discovery.sh # Reset just the live-discovery beat
@@ -108,11 +108,31 @@ All scripts default to **LOCAL mode** (no GitHub, no Code Defender); pass `--rem
 └── README.md
 ```
 
-**Full local cycle:** `99-full-reset.sh` → `00-full-setup.sh` → demo-ready. No prerequisites beyond atx CLI + AWS creds.
+**Full local cycle:** `99-full-reset.sh` → `00-full-setup.sh` → demo-ready. No prerequisites beyond atx CLI + AWS creds + `jq`.
+
+### Your role when someone is demoing
+
+The demo README's "During the demo" table assigns steps to **you**. When the operator runs a demo, they drive the console and the live-discovery script; you drive `ct`. Expect these asks and map them as follows:
+
+| They say | You do |
+|---|---|
+| "run ARA on `<repo>`" | `analysis run --type agentic-readiness --repo <src>::<repo> --source <src>`, then wait properly (below) |
+| "run MODA on `<repo>`" | same with `--type modernization-readiness` |
+| "containerize `<repo>`" | `remediation create --transformation-name containerize-to-eks` — **not** `--ids`; ARA/MOD findings all have `fix: null` and are rejected as `non_remediable` |
+| "show me the report" | Open the portfolio `.html` from the **sources run tree** — `ls ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/`. It is nowhere else. |
+| "how ready are we?" | `findings count --by severity --json` + `portfolio_ara_summary` from the analysis record |
+
+Demo-specific traps, on top of the general rules above:
+- **Never say "the analysis produced nothing" mid-demo.** A single-repo demo run gets **no portfolio report** by design (aggregation needs ≥2 repos) and `status: complete` fires while the portfolio phase is still running. Check disk before reporting.
+- **A `failed` ARA is usually a healthy run.** The `repositoryId: null` persist bug fires after reports and per-repo findings are saved. Say what actually survived rather than declaring failure — the demo can continue.
+- **One analysis type at a time.** Launching ARA and MODA concurrently on one source causes contention; an `ALREADY_RUNNING` guard rejects overlapping runs on the same repos and type.
+- A single-repo run still burns ~13 min invoking the portfolio TD before declining. Set expectations out loud before starting.
 
 Key fixes baked into the harness:
-- **Portfolio repos are git-inited on the fly** — a fresh clone of the harness ships the portfolio dirs WITHOUT nested `.git` (they can't live inside the parent repo), and `ct` discovery scans for `.git` subdirs → finds 0. Setup self-heals: `git init -b main` + initial commit for any portfolio dir missing `.git`.
-- `PYENV_VERSION=system` on server start (fixes pyenv 3.13.2 blake2b crash in git push)
+- **Portfolio repos are git-inited on the fly** — a fresh clone of the harness ships the portfolio dirs WITHOUT nested `.git` (they can't live inside the parent repo), and `ct` discovery scans for `.git` subdirs → finds 0. Setup self-heals: `git init -b main` + initial commit for any portfolio dir missing `.git`. Verified: without this loop, discovery finds **zero** of the 10 fixtures.
+- **No server is started** — setup and reset only health-check with `atx ct status --health`. The old `PYENV_VERSION=system atx ct server` startup is gone (see the CLI rules above).
+- **Both analysis waits require `report_paths` non-empty**, not just `status` — otherwise the scripts break out during the portfolio phase and export nothing. Setup also continues past a `failed` ARA when findings exist, instead of discarding a usable 45-minute environment.
+- **Artifact export copies off disk** (`find ~/.atxct/sources -path "*runs/<id>/*"`) — `analysis list-artifacts`/`get-artifact` were removed in 3.9.0 and the old export silently produced nothing.
 - **Local remediation requires a CLEAN worktree** — prior analysis runs write `services/<repo>/{ara,mod}-report.{md,json,html}` artifacts INTO local repos (this is also where HTML reports live for local sources!). Remediation fails with "has uncommitted changes" until `services/` is removed. Reset cleans this.
 - Local-source remediation completes with status `pr_open` and creates a local staging branch (`atx-result-staging-*`) — show the diff with `git diff main`.
 - `findings update` (single) instead of `batch-update` — batch fails with `UnknownError` on some IDs.
@@ -353,7 +373,7 @@ Confirmed behaviors that differ from naive expectation — save time by knowing 
 - **`custom def get` writes files into CWD** — run it from a scratch dir or clean up afterward.
 - **Never invoke a bare `atx ct server`.** It is hidden and deprecated but still functional: it starts a real daemon on `:8081` and **blocks your shell** until killed (this caused a 2-minute tool timeout during verification). It prints its own warning: *"`atx ct server` is deprecated and no longer required for `atx ct` commands, which run directly in-process."*
 - **Amazon Code Defender blocks `git push` to unapproved PUBLIC GitHub repos** — both from a local terminal AND from the `ct` remediation server-side push. The fix is `git-defender self-attest --reason 1 --url "https://github.com/<org>/<repo>.git"` for each repo. Do this BEFORE running remediation; the setup harness handles it automatically.
-- **`PYENV_VERSION=system` for git pushes** on machines where pyenv's Python (3.13.2) has a broken `hashlib` (blake2b/blake2s `ValueError`). The system Python (3.9.6+) works. Without this, `git push` during remediation fails with a cryptic Python traceback — the root cause of "remediation failed to push branch". Historically applied when starting the server; now that execution is in-process, export it in the environment running `atx ct`. The harness scripts handle this.
+- **`PYENV_VERSION=system` for git pushes** on machines where pyenv's Python (3.13.2) has a broken `hashlib` (blake2b/blake2s `ValueError`). The system Python (3.9.6+) works. Without this, `git push` during remediation fails with a cryptic Python traceback — the root cause of "remediation failed to push branch". Historically applied when starting the server; now that execution is in-process, export it in the environment running `atx ct` — `PYENV_VERSION=system atx ct remediation create ...`. The demo scripts no longer set it (they had it only on the removed server start), so apply it yourself if you hit a blake2b traceback during a local remediation.
 - **Pipe-stdin consumption in loops:** when iterating over `atx ct repository list --json | jq ... | while read ...`, the `atx` CLI can consume the pipe's stdin and terminate the loop after one item. Fix: capture the output into a variable first, then `while read ... <<< "$variable"`. The harness scripts use this pattern.
 
 ## Guided workflow (UX)
