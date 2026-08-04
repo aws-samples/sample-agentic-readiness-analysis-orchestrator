@@ -435,26 +435,25 @@ See "Authoring a custom remediation TD" in `SKILL.md`.
 
 **Cause:** Usually the name genuinely isn't published in the account/region you're running in — check that first, since TD names aren't stable identifiers: `custom def publish` adds one, `custom def delete` removes it permanently, drafts (`save-draft`) expire after ~30 days, and the registry is shared and churns (**802 TDs across many owners on 2026-08-04**).
 
-**The other cause — and the one that wastes a day: you published to a different tenant than remediation reads.** The registry is **tenanted by authentication mode**. One endpoint (`transform-custom.<region>.api.aws`), two separate namespaces, and a TD in one is a 404 in the other. So `custom def get` saying *"retrieved successfully"* is **not** proof the name resolves for remediation.
+**The other cause — and the one that wastes a day: you published to a different namespace than remediation reads.** The registry is **tenanted by authentication mode**. One endpoint (`transform-custom.<region>.api.aws`), two separate namespaces, and a TD in one is a 404 in the other. So `custom def get` saying *"retrieved successfully"* is **not** proof the name resolves for remediation.
 
 The CLI selects the mode from the environment (3.9.0, `AuthenticationManager.isAWSMode`):
 
-| `MIDWAY` | Builder Toolbox on PATH (`TOOLBOX_TOOL_VERSION` set) | Mode |
-|---|---|---|
-| unset | **yes** | Midway (internal identity) |
-| unset | no | AWS credentials |
-| `false` | either | **AWS credentials** |
-| `true` | either | Midway |
+| `MIDWAY` | Mode |
+|---|---|
+| `false` | **AWS credentials** |
+| `true` | the alternate identity mode |
+| unset | depends on whether `TOOLBOX_TOOL_VERSION` is set in the environment |
 
-This bites Amazon-internal users specifically: with Builder Toolbox on PATH, `custom def publish` goes to the **Midway** tenant, while the `ct remediation` worker subprocess logs `MIDWAY=false detected, using AWS credentials` and looks in the **account** tenant. Confirm it in the debug log:
+The `ct remediation` worker subprocess **always** runs in AWS-credentials mode. So if `custom def publish` defaults the other way in your environment, the TD lands in a namespace remediation never reads. Confirm it in the debug log:
 
 ```bash
-grep -E "MIDWAY|Using Midway|getTransformationPackageUrl (succeeded|failed)" ~/.aws/atx/logs/debug*.log | tail -20
+grep -E "MIDWAY|authentication|getTransformationPackageUrl (succeeded|failed)" ~/.aws/atx/logs/debug*.log | tail -20
 ```
 
-A publish/`get` that logs `Using Midway authentication (default)` next to a remediation that logs `MIDWAY=false detected` is this bug. The server-side error is explicit — `ResourceNotFoundException`, *"The transformation package doesn't exist, if the transformation package is saved as a draft please publish it"* — which reads like a draft problem but here means wrong tenant.
+A publish/`get` that logs a *different* authentication line than the remediation's `MIDWAY=false detected, using AWS credentials` is this bug. The server-side error is explicit — `ResourceNotFoundException`, *"The transformation package doesn't exist, if the transformation package is saved as a draft please publish it"* — which reads like a draft problem but here means wrong namespace.
 
-**Fix:** publish and verify with `MIDWAY=false`, so both sides use the tenant remediation reads.
+**Fix:** publish and verify with `MIDWAY=false`, so both sides use the namespace remediation reads.
 
 ```bash
 export MIDWAY=false
@@ -462,14 +461,14 @@ export MIDWAY=false
 cd "$(mktemp -d)" && MIDWAY=false atx custom def get -n <your-td>   # now authoritative
 ```
 
-Publishing to one tenant does **not** backfill the other — re-publish, don't wait. Verified 2026-08-04 on 3.9.0: an identical `remediation create` failed before and reached `Analyzing <repo> with <your-td>…` after.
+Publishing to one namespace does **not** backfill the other — re-publish, don't wait. Verified 2026-08-04 on 3.9.0: an identical `remediation create` failed before and reached `Analyzing <repo> with <your-td>…` after.
 
 To see the split rather than guess:
 
 ```bash
 cd "$(mktemp -d)"
-              atx custom def get -n <your-td>   # Midway tenant
-MIDWAY=false  atx custom def get -n <your-td>   # AWS tenant — what remediation uses
+              atx custom def get -n <your-td>   # whatever your environment defaults to
+MIDWAY=false  atx custom def get -n <your-td>   # AWS credentials — what remediation uses
 ```
 
 Don't trust the *"Did you mean …?"* list either: it's a Levenshtein match over names the *remediation* side can see, so it suggests neighbors from a namespace your `custom def` may not be reading.

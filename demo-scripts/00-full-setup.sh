@@ -151,10 +151,10 @@ echo
 # built-in containerization transform, so the demo publishes its own and owns the source in-repo.
 #
 # Publish in AWS-credentials auth mode (MIDWAY=false, which publish-td.sh now defaults to). The
-# registry is tenanted by auth mode: with Builder Toolbox on PATH, a plain publish lands in the
-# Midway tenant, while the `ct remediation` worker reads the AWS-credentials tenant and reports the
-# TD as "not found in the registry" even though `custom def get` confirms it. Verified 2026-08-04:
-# after re-publishing with MIDWAY=false, `ct remediation create` ran to `completed`.
+# registry is tenanted by authentication mode — two namespaces behind one endpoint — and the
+# `ct remediation` worker only reads the AWS-credentials one. Publish the other way and the TD is
+# reported "not found in the registry" even though `custom def get` confirms it. Verified
+# 2026-08-04: after re-publishing with MIDWAY=false, `ct remediation create` ran to `completed`.
 #
 # Publishing here (not at demo time) means the name is resolvable before anyone is watching.
 # Registry state is not version-controlled — drafts expire, TDs get deleted, the registry is

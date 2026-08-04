@@ -9,14 +9,14 @@
 #   ct    (default) — `atx ct remediation create` in direct-TD mode (--transformation-name + --repo,
 #                     no findings needed). The documented path: visible in the Console's
 #                     Remediations tab, commits to a branch (atx/<td>-<timestamp>). ~4 min.
-#                     REQUIRES the TD to be published in the AWS-credentials tenant — see below.
+#                     REQUIRES the TD published in the AWS-credentials namespace — see below.
 #   exec  (opt-in)  — `atx custom def exec`. Same TD against the working tree, no registry
 #                     round-trip, no Console record, changes left uncommitted. ~5-10 min.
 #
-# The registry is tenanted by auth mode. With Builder Toolbox on PATH, a plain `custom def publish`
-# lands in the Midway tenant while the ct remediation worker reads the AWS-credentials tenant, so
-# the TD is a 404 there even though `custom def get` confirms it. publish-td.sh defaults to
-# MIDWAY=false to keep both sides in the same tenant.
+# The registry is tenanted by authentication mode: two namespaces behind one endpoint. The ct
+# remediation worker only reads the AWS-credentials one, so a TD published the other way is a 404
+# there even though `custom def get` confirms it. publish-td.sh defaults to MIDWAY=false to keep
+# both sides in the same namespace.
 #
 # You can also ask Claude: "containerize legacy-storefront-rails"
 #
@@ -71,19 +71,19 @@ if [ -f "$REPO_DIR/Dockerfile" ]; then
   echo
 fi
 
-# The TD must resolve in the AWS-credentials tenant — the one the ct remediation worker reads.
-# MIDWAY=false is what makes this probe authoritative: without it, on a laptop with Builder Toolbox
-# on PATH, `get` queries the Midway tenant and passes for a TD remediation cannot see. Use `get`
-# rather than grepping `custom def list`, which wraps names across lines and invites false positives.
+# The TD must resolve in the AWS-credentials namespace — the one the ct remediation worker reads.
+# MIDWAY=false is what makes this probe authoritative: without it `get` may query the other
+# namespace and pass for a TD remediation cannot see. Use `get` rather than grepping
+# `custom def list`, which wraps names across lines and invites substring false positives.
 td_probe=$(cd "$(mktemp -d)" && MIDWAY=false atx custom def get -n "$REMED_TD" </dev/null 2>&1)
 if printf '%s' "$td_probe" | grep -qi "not found"; then
-  echo "!! TD '$REMED_TD' does not resolve in the AWS-credentials tenant. Publish it:"
+  echo "!! TD '$REMED_TD' does not resolve in the AWS-credentials namespace. Publish it:"
   echo "     ./scripts/publish-td.sh $REMED_TD_DIR"
-  echo "   (publish-td.sh defaults to MIDWAY=false; a TD published Midway-side is invisible here"
-  echo "    and must be re-published — publishing one tenant does not backfill the other.)"
+  echo "   (publish-td.sh pins MIDWAY=false; a TD published in the other namespace is invisible"
+  echo "    here and must be re-published — publishing one does not backfill the other.)"
   exit 1
 fi
-echo "    TD '$REMED_TD' resolves (AWS-credentials tenant)."
+echo "    TD '$REMED_TD' resolves (AWS-credentials namespace)."
 
 # The worktree must be clean. A repo that was just analyzed IS dirty (ct writes its report bundle
 # into the working tree), and these paths either refuse to run or bury the demo diff in noise.
@@ -155,7 +155,7 @@ else
     atx ct remediation status --id "$REMED_ID" --json 2>/dev/null \
       | jq -r '(.repos // {}) | to_entries[] | "    \(.key): \(.value.error // "no error")"' 2>/dev/null | head -8
     echo
-    echo "    'not found in the registry' here means the TD isn't in the AWS-credentials tenant"
+    echo "    'not found in the registry' here means the TD isn't in the AWS-credentials namespace"
     echo "    that this worker reads. Re-publish, then retry:"
     echo "      ./scripts/publish-td.sh $REMED_TD_DIR   # defaults to MIDWAY=false"
     echo "    Local fallback that skips the registry entirely: --path exec"

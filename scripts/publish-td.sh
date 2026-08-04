@@ -96,13 +96,16 @@ if [[ -z "${AWS_REGION:-}" ]]; then
   export AWS_REGION=us-east-1
 fi
 
-# The registry is tenanted by auth mode: one endpoint, two namespaces. `atx` picks the mode in
-# AuthenticationManager.isAWSMode() — with Builder Toolbox on PATH (TOOLBOX_TOOL_VERSION set, i.e.
-# any Amazon dev laptop) an unset MIDWAY means Midway, but the `ct remediation` worker subprocess
-# runs with MIDWAY=false and reads the AWS-credentials tenant. Publishing Midway-side therefore
-# yields a TD that `custom def get` confirms and `remediation create` reports as "not found in the
-# registry", and publishing to one tenant does not backfill the other. Default to AWS mode so what
-# we publish is what remediation resolves; MIDWAY=true still overrides deliberately.
+# The TD registry is tenanted by authentication mode: one endpoint, two separate namespaces, and a
+# TD published in one is a 404 in the other. `atx` picks the mode in AuthenticationManager
+# .isAWSMode(): MIDWAY=false forces AWS-credentials mode, and when MIDWAY is unset the default
+# flips based on whether TOOLBOX_TOOL_VERSION is set in the environment.
+#
+# That matters because the `ct remediation` worker subprocess always runs in AWS-credentials mode.
+# If a publish defaults the other way, `custom def get` confirms the TD while `remediation create`
+# reports "not found in the registry" — and publishing to one namespace does not backfill the other,
+# so the only fix is to re-publish. Pin AWS-credentials mode here so what we publish is what
+# remediation resolves. An explicit MIDWAY=true still overrides.
 if [[ -z "${MIDWAY:-}" ]]; then
   export MIDWAY=false
 fi

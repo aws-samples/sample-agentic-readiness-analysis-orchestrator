@@ -22,7 +22,7 @@ a name someone else has to have already created.
 `demo-scripts/00-full-setup.sh` does this automatically. To do it by hand:
 
 ```bash
-export MIDWAY=false   # publish into the tenant `ct remediation` reads — see "Run it"
+export MIDWAY=false   # publish into the namespace `ct remediation` reads — see "Run it"
 ./scripts/publish-td.sh definitions/custom/containerize-service          # publish
 ./scripts/publish-td.sh definitions/custom/containerize-service --draft  # or a ~30-day draft
 ```
@@ -42,11 +42,10 @@ atx ct remediation create --repo <src>::<repo> --source <src> \
 atx ct remediation status --id <remediation-id>
 ```
 
-**Publish it with `MIDWAY=false`** (see "Publish it" above). The registry is tenanted by auth mode:
-with Builder Toolbox on PATH, a plain `custom def publish` lands in the Midway tenant while the
-`ct remediation` worker reads the AWS-credentials tenant, so the TD is a 404 there even though
-`custom def get` confirms it. Details: `orchestrator/references/troubleshooting.md` → *"not found in
-the registry."*
+**Publish it with `MIDWAY=false`** (see "Publish it" above). The registry is tenanted by
+authentication mode, and the `ct remediation` worker only reads the AWS-credentials namespace — a TD
+published the other way is a 404 there even though `custom def get` confirms it. Details:
+`orchestrator/references/troubleshooting.md` → *"not found in the registry."*
 
 **Local fallback** — same TD, no registry round-trip, changes left uncommitted:
 
@@ -78,7 +77,7 @@ cd "$(mktemp -d)" && MIDWAY=false AWS_REGION=us-east-1 atx custom def get -n con
 ```
 
 `MIDWAY=false` is what makes this check authoritative — without it you may be querying the other
-tenant, and a pass there says nothing about whether remediation can resolve the name.
+namespace, and a pass there says nothing about whether remediation can resolve the name.
 
 Prefer `get -n <name>` over grepping `atx custom def list`: the list is long, wraps names across
 lines, and its managed/user split is a section header rather than a per-row field.

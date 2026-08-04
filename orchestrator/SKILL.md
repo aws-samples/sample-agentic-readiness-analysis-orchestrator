@@ -493,23 +493,22 @@ other — `remediation create` reports *"Transformation \<name\> not found in th
 
 The CLI picks the mode from the environment (3.9.0, `AuthenticationManager.isAWSMode`):
 
-| `MIDWAY` | Builder Toolbox on PATH (`TOOLBOX_TOOL_VERSION` set) | Mode |
-|---|---|---|
-| unset | **yes** | Midway (internal identity) |
-| unset | no | AWS credentials |
-| `false` | either | **AWS credentials** |
-| `true` | either | Midway |
+| `MIDWAY` | Mode |
+|---|---|
+| `false` | **AWS credentials** |
+| `true` | the alternate identity mode |
+| unset | depends on whether `TOOLBOX_TOOL_VERSION` is set in the environment |
 
-So the trap is Amazon-internal-specific: with Builder Toolbox on PATH, `atx custom def publish`
-defaults to the **Midway** tenant, while the `ct remediation` worker subprocess logs
-`MIDWAY=false detected, using AWS credentials` and reads the **account** tenant. Publishing
-"succeeds" and remediation still can't see it. `custom def get` also answers with **no AWS
-credentials at all** — a tell that it wasn't using them.
+The `ct remediation` worker subprocess **always** runs in AWS-credentials mode — it logs
+`MIDWAY=false detected, using AWS credentials`. So if `atx custom def publish` defaults the other
+way, the publish "succeeds" into a namespace remediation never reads. `custom def get` also answers
+with **no AWS credentials at all** — a tell that it wasn't using them, and the reason it can confirm
+a TD remediation can't resolve.
 
-**Fix: force AWS mode for both steps.** `MIDWAY=false` makes the two agree regardless of Toolbox.
+**Fix: pin AWS-credentials mode for both steps** so the publish and the run agree.
 
 ```bash
-export MIDWAY=false                       # publish into the tenant remediation reads
+export MIDWAY=false                       # publish into the namespace remediation reads
 ./scripts/publish-td.sh definitions/custom/containerize-service
 cd "$(mktemp -d)" && MIDWAY=false atx custom def get -n containerize-service   # now authoritative
 ```
@@ -517,15 +516,15 @@ cd "$(mktemp -d)" && MIDWAY=false atx custom def get -n containerize-service   #
 Verified 2026-08-04 on 3.9.0: an identical `remediation create` failed pre-fix, and after
 re-publishing with `MIDWAY=false` the same command ran to **`completed`** (~4 min, Console
 **Remediations** tab) and committed branch `atx/containerize-service-<timestamp>` with all four
-expected artifacts. Publishing to one tenant does **not** backfill the other — a TD published
-Midway-side must be re-published in AWS mode.
+expected artifacts. Publishing to one namespace does **not** backfill the other — re-publish, don't
+wait.
 
 To confirm the split rather than guess, diff the two directly:
 
 ```bash
 cd "$(mktemp -d)"
-              atx custom def get -n <your-td>   # Midway tenant
-MIDWAY=false  atx custom def get -n <your-td>   # AWS tenant — the one remediation uses
+              atx custom def get -n <your-td>   # whatever your environment defaults to
+MIDWAY=false  atx custom def get -n <your-td>   # AWS credentials — the one remediation uses
 ```
 
 Don't trust the *"Did you mean …?"* suggestions either: that's a Levenshtein match over the names the
