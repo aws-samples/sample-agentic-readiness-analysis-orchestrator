@@ -64,7 +64,7 @@ ara-moda-orchestrator skill"**.
 | Run analysis | **Claude** | "run ARA on pricing-cgi" / "run MODA on pricing-cgi" |
 | Show findings | **You** | Console → Findings tab |
 | Show the report | **Claude** | "open the portfolio report" → the `.html` in the sources run tree |
-| Remediate | **Claude** | "containerize shipping-api" (uses `containerize-to-eks`) |
+| Remediate | **Claude** | "containerize shipping-api" (uses the TD you published — see below) |
 | Show the diff | **You** | `git -C harness/fixtures/portfolio/legacy-shipping-api diff main` (local branch) |
 
 Two things to know before you present, so a healthy run doesn't look like a broken one:
@@ -111,7 +111,12 @@ Only if you want the "PR appears in GitHub" story. Extra prerequisites:
 - **An ARA that reports `failed` is usually still fine.** Any ≥2-repo run emitting a cross-cutting blocker trips a service-side persist bug (`repositoryId ... must not be null`). Reports and per-repo findings are already saved; only the cross-cutting findings miss the store, and they remain readable in `portfolio_ara_summary.cross_cutting_blockers`. The setup script continues in this case rather than aborting the demo.
 - **Local mode remediation creates a local branch** (no PR) — the ct Console still shows it, and you demo the diff in terminal.
 - **Remote mode needs Code Defender self-attest** or the server-side push fails.
-- **Remediation uses managed `containerize-to-eks`** (custom user TDs are not resolvable by the ct remediation runtime as of 2026-07).
+- **You must publish the remediation TD yourself — there is no built-in containerization transform.** ARA/MOD findings are assessment-only (`fix: null`), so `--ids` can never remediate them; remediation always runs a TD you name. Any TD works, and `remediation create` **does** resolve user-published ones. Publish it, then confirm the exact name resolves in the demo's account **and** region — TD names go stale (drafts expire, TDs get deleted, the registry is shared). `containerize-to-eks`, named in earlier versions of these docs, no longer resolves at all.
+  ```bash
+  AWS_REGION=us-east-1 atx custom def publish -n <my-td> --sd <path-to-td-dir> --description "..."
+  cd "$(mktemp -d)" && AWS_REGION=us-east-1 atx custom def get -n <my-td>   # ✓ = ready to demo
+  ```
+  Then: `atx ct remediation create --repo <src>::<repo> --source <src> --transformation-name <my-td> --name "containerize" --local` (`--local` for local sources → local branch, no PR).
 - **Reports are NOT markdown-only, and `analysis list-artifacts`/`get-artifact` no longer exist.** The full bundle (`.md`, `.json`, `.html`, `.metadata.json`) is on local disk in the source-scoped run tree — the only complete copy, and the only place portfolio `.html`/`.json` exist. `report_paths` on the analysis record is the markdown-only view. Glob, never construct: the segment after the source name is the *source's* analysis root (a MOD run lands under `.../agentic-readiness/runs/<id>/`) and per-repo dirs are slug-mangled `<source>-<repo>-<16hex>`.
   ```bash
   ls ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/   # portfolio bundle (open the .html)

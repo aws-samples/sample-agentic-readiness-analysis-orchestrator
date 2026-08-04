@@ -118,7 +118,7 @@ The demo README's "During the demo" table assigns steps to **you**. When the ope
 |---|---|
 | "run ARA on `<repo>`" | `analysis run --type agentic-readiness --repo <src>::<repo> --source <src>`, then wait properly (below) |
 | "run MODA on `<repo>`" | same with `--type modernization-readiness` |
-| "containerize `<repo>`" | `remediation create --transformation-name containerize-to-eks` — **not** `--ids`; ARA/MOD findings all have `fix: null` and are rejected as `non_remediable` |
+| "containerize `<repo>`" | `remediation create --transformation-name <the-TD-published-for-this-demo> --repo <src>::<repo> [--local]` — **not** `--ids`; ARA/MOD findings all have `fix: null` and are rejected as `non_remediable`. **Ask which TD** and confirm it resolves (`custom def get -n <name>` from a scratch dir) before running — there is no default containerization transform, and names go stale. |
 | "show me the report" | Open the portfolio `.html` from the **sources run tree** — `ls ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/`. It is nowhere else. |
 | "how ready are we?" | `findings count --by severity --json` + `portfolio_ara_summary` from the analysis record |
 
@@ -127,6 +127,7 @@ Demo-specific traps, on top of the general rules above:
 - **A `failed` ARA is usually a healthy run.** The `repositoryId: null` persist bug fires after reports and per-repo findings are saved. Say what actually survived rather than declaring failure — the demo can continue.
 - **One analysis type at a time.** Launching ARA and MODA concurrently on one source causes contention; an `ALREADY_RUNNING` guard rejects overlapping runs on the same repos and type.
 - A single-repo run still burns ~13 min invoking the portfolio TD before declining. Set expectations out loud before starting.
+- **Check the remediation TD resolves before the demo starts, not during it.** The TD is whatever the operator published for this demo; `custom def get -n <name>` in the demo's account/region is a two-second check that turns a mid-demo "not found in the registry" into a pre-flight fix.
 
 Key fixes baked into the harness:
 - **Portfolio repos are git-inited on the fly** — a fresh clone of the harness ships the portfolio dirs WITHOUT nested `.git` (they can't live inside the parent repo), and `ct` discovery scans for `.git` subdirs → finds 0. Setup self-heals: `git init -b main` + initial commit for any portfolio dir missing `.git`. Verified: without this loop, discovery finds **zero** of the 10 fixtures.
@@ -462,22 +463,53 @@ atx ct remediation status --id <remediation-id>   # includes PR/MR link
 > **`atx custom def *` needs `AWS_REGION` set explicitly** even when `atx ct` works fine — otherwise it errors "AWS Transform is not available in region 'us-west-2'". Prefix with `AWS_REGION=us-east-1` (or export it). `atx ct` reads region from AWS config; `atx custom def` does not.
 > **`atx custom def get` writes the fetched TD files into the current directory** — run it from a scratch dir or clean up afterward.
 
-> **⚠️ CRITICAL — `ct remediation` could NOT resolve a user-published custom TD. Re-confirmed on 3.9.0 (2026-08-03).** A `containerize-service` TD published and visible via `atx custom def list`/`get` (us-east-1) failed in `remediation create --transformation-name` with *"Transformation 'containerize-service' not found in the registry. Did you mean … containerize-to-eks?"* — even after restarting the `ct` server in the same region. The remediation runtime resolves TDs from a **different catalog than the CLI**: it surfaced `containerize-to-eks` (an AWS-**managed** transform that does NOT appear in `atx custom def list`) but not our user TD. The split is now demonstrated in both directions: `atx custom def exec -n containerize-service` runs the user TD fine, and `remediation create --transformation-name containerize-to-eks` succeeds while the reverse of each fails. Practical implications:
-> - **Do NOT assume `ct remediation` can run an arbitrary user-published TD.** In this environment it only resolved **AWS-managed** transforms.
-> - **For containerization remediation, prefer the managed `containerize-to-eks`** (generates container + EKS/K8s resources targeting EC2 managed node groups) — it's what the runtime actually resolves. Check `atx custom def list` for other `AWS/*` managed transforms (version-upgrades, SDK migrations, etc.).
-> - **To run YOUR custom TD and still get a PR**, run it locally with `atx custom def exec -n <td> -p <repo> -x -t` to generate the changes, then open the PR yourself with `gh` (note: local `git push` to public GitHub may hit Amazon Code Defender — push from an approved terminal).
-> - This may be an account/allowlist/propagation limitation rather than a hard product rule; re-test as the service evolves. But don't build a demo/workflow on custom-TD remediation without confirming resolution first with a throwaway run.
+### `remediation create --transformation-name` takes YOUR TD — pick one, publish it, pass its name
 
-**Working end-to-end example (verified 3.9.0, 2026-08-03).** `containerize-to-eks` on a containerized Node fixture completed and committed its own change:
+There is **no fixed containerization transform** to reach for. `--transformation-name` accepts any published TD, and because ARA/MOD findings are assessment-only, authoring one is the *normal* path — not a workaround. So the remediation step is always three moves: decide what the fix should do, publish a TD that does it, run it by name.
 
 ```bash
-atx ct remediation create --transformation-name containerize-to-eks \
-  --repo <src>::legacy-shipping-api --name test-containerize-eks
+# 1. publish (permanent; drafts expire in ~30 days)
+AWS_REGION=us-east-1 atx custom def publish -n my-containerize-td \
+  --sd ./my-containerize-td --description "Containerize a PHP/Apache service for EKS (INF-Q1)"
+
+# 2. confirm the runtime can see it — `get` is the real test, not the list
+AWS_REGION=us-east-1 atx custom def get -n my-containerize-td   # run from a scratch dir; writes into CWD
+
+# 3. run it against a repo
+atx ct remediation create --repo <src>::<repo> --source <src> \
+  --transformation-name my-containerize-td --name "containerize" [--local]
+```
+
+> **⚠️ A TD name is only as good as the registry it's in — verify before you build on it.** `--transformation-name` is resolved at run time against the published registry; TD names are **not** stable identifiers you can hardcode across accounts, regions, or time. `atx custom def publish` puts it there, `atx custom def delete` removes it permanently, and drafts expire on their own. Before any demo or scripted workflow, check the exact name resolves **in the account and region you'll run in**:
+>
+> ```bash
+> cd "$(mktemp -d)" && AWS_REGION=us-east-1 atx custom def get -n <td-name>
+> # "✓ ... retrieved successfully"  -> resolvable
+> # "Error: ... not found."         -> publish it (or fix the name) before proceeding
+> ```
+>
+> Prefer `get -n <name>` over eyeballing `atx custom def list`: the list is long (**793 TDs in this account on 2026-08-04, 761 of them user TDs**, up from 41 the day before — it is shared and it churns), it wraps names across lines, and grepping it invites substring false positives. `get` answers the only question that matters — does *this exact name* resolve.
+
+**`remediation create` resolves user-published TDs.** Earlier notes here claimed the remediation runtime read from a *different catalog* than the CLI and saw only AWS-managed transforms. **That was wrong**, and the evidence for it was misread: `containerize-to-eks` — the name the error message suggested and the one that then worked — was itself listed under **👤 User Transformations** (no `AWS/` prefix, hash version `3gagkofw5feywyss`), not under AWS Managed. A user TD resolving is exactly what the "two catalogs" theory said could not happen.
+
+What actually happened is the ordinary case: `containerize-service` was not resolvable under that name at that moment, and `containerize-to-eks` was — a **name/registry-state** mismatch, which the CLI's own *"Did you mean …?"* was telling us plainly. Both are user TDs, so publish-then-run works; treat a "not found in the registry" error as *"this name isn't published here"*, not as a product limitation. See troubleshooting.md.
+
+> `containerize-to-eks` **no longer resolves at all** (verified 2026-08-04: absent from `custom def list`, and `custom def get -n containerize-to-eks` → *"not found"*). Any doc, script, or demo naming it needs a TD you publish yourself. The verified example below is kept only for what it shows about remediation *behavior* — do not copy the name.
+
+**Worked example (3.9.0, 2026-08-03) — for behavior, not for the name.** A containerization TD run against an already-containerized Node fixture completed and committed its own change:
+
+```bash
+atx ct remediation create --transformation-name <your-published-td> \
+  --repo <src>::legacy-shipping-api --name test-containerize
 # → Remediating with 20 concurrent slot(s) (remote mode)...
 # → status: completed   (~5 min)
 ```
 
 It committed as `ATX Bot <checkpoint@atx.bot>`: *"Fix Dockerfile HEALTHCHECK to use reliable TCP connectivity check via Node.js net module instead of wget --spider which fails on HTTP 401…"* — a 2-line Dockerfile edit. Two lessons: the TD **adapts to an already-containerized repo** rather than no-opping or regenerating scaffolding, and its change set can be far smaller than the finding implies (the MOD `INF-Q1` gap was missing EKS IaC, which this did *not* address). Don't assume a remediation resolved the finding that motivated it — re-analyze and diff.
+
+**`--local` runs the job on the ct server against the checked-out working tree** instead of delegating to the provider — the right mode for `local` sources, where the result is a local branch rather than a PR. `-g/--configuration` is valid only alongside `--transformation-name`.
+
+**To run a TD without going through `remediation` at all** (no registry round-trip, no PR), execute it directly: `AWS_REGION=us-east-1 atx custom def exec -n <td> -p <abs-repo-path> -x -t`, then raise the PR yourself. Useful while iterating on TD text, since a draft is enough.
 
 ⚠️ **Remediation refuses to run against a repo with a dirty worktree**, and a repo being analyzed right now *is* dirty (`ct` rewrites its report bundle in place). Error: *"Local repository at … has uncommitted changes. Commit or stash them before running remediation."* Don't "fix" this by committing mid-analysis — you'd be racing the writer. Either wait for the analysis to finish, or test against an isolated copy of the fixture registered as its own source.
 
