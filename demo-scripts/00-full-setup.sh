@@ -303,11 +303,17 @@ echo "Next steps:"
 echo "  1. Open AWS Transform Console → Continuous Modernization"
 echo "  2. Live discovery: ./demo-scripts/01-live-discovery-push.sh"
 echo "  3. Reset discovery: ./demo-scripts/02-reset-live-discovery.sh"
+echo "  4. Remediation — publish a TD FIRST; there is no built-in containerization transform."
+echo "     ARA/MOD findings are assessment-only (fix: null), so remediation always runs a TD"
+echo "     you name. Any TD works; user-published ones resolve fine. Names go stale, so"
+echo "     verify the exact name in THIS account+region before demoing:"
+echo "       AWS_REGION=us-east-1 atx custom def publish -n <my-td> --sd <td-dir> --description \"...\""
+echo "       (cd \"\$(mktemp -d)\" && AWS_REGION=us-east-1 atx custom def get -n <my-td>)   # ✓ = ready"
 if [ "$MODE" = "local" ]; then
-  echo "  4. Remediation: ask Claude 'containerize shipping-api'"
+  echo "     Then ask Claude 'containerize shipping-api' (add --local for local sources)"
   echo "     → creates a local branch. Show with: git -C <repo> diff main"
 else
-  echo "  4. Remediation: ask Claude 'containerize shipping-api'"
+  echo "     Then ask Claude 'containerize shipping-api'"
   echo "     → opens a PR in GitHub."
 fi
 echo

@@ -429,16 +429,32 @@ atx ct remediation create --repo <src>::<repo> --source <src> \
 ```
 See "Authoring a custom remediation TD" in `SKILL.md`.
 
-### "Transformation not found in the registry" — but `custom def get` resolves it fine
+### "Transformation 'X' not found in the registry. Did you mean …?"
 
-**Symptom:** `remediation create --transformation-name <your-td>` fails with "Transformation not found in the registry," even though `atx custom def list` shows the TD and `atx custom def get -n <your-td>` fetches it successfully.
+**Symptom:** `remediation create --transformation-name <your-td>` fails with *"Transformation '<your-td>' not found in the registry. Did you mean … ?"*
 
-**Cause (verified 2026-08, atx 3.9.0):** The remediation runtime resolves transformation names against a **different catalog** than the `atx custom def` commands do. It resolves **AWS-managed** transforms (e.g. `containerize-to-eks`) but does **not** see **user-published** TDs. Publishing is not the missing step — re-publishing will not help.
+**Cause:** That name is not published in the account/region the remediation is running in. Nothing more exotic. `--transformation-name` is resolved at run time against the published registry, and TD names are not stable identifiers: `custom def publish` adds one, `custom def delete` removes it permanently, drafts (`save-draft`) expire after ~30 days, and the registry is shared and churns (**793 TDs on 2026-08-04, 761 user — up from 41 the previous day**).
 
-**Fix:** Don't route a custom TD through `remediation create`. Execute it directly and open the PR yourself:
+Take the *"Did you mean …?"* suggestion literally: it is a fuzzy match over names that **do** resolve, which is usually enough to spot a typo, a renamed TD, or a draft that lapsed.
+
+> **Corrected 2026-08-04 — this entry previously blamed a "different catalog."** It claimed the remediation runtime saw only **AWS-managed** transforms and never user-published TDs, citing `containerize-to-eks` as the managed transform that worked. `containerize-to-eks` was in fact a **user** TD (listed under **👤 User Transformations**, no `AWS/` prefix, hash version `3gagkofw5feywyss`). The theory was built on a misread of `custom def list`'s section boundary and was wrong: **`remediation create` does resolve user-published TDs**, and routing your own TD through it is the intended path. Publishing *is* the fix.
+
+**Fix:** Verify the exact name resolves where you'll run it, then publish if it doesn't.
+
 ```bash
-AWS_REGION=us-east-1 atx custom def exec -n <your-td> -p <abs-repo-path> ...
-# then review the branch and raise the PR/MR manually
+# `get` is the authoritative check — run from a scratch dir, it writes into CWD
+cd "$(mktemp -d)" && AWS_REGION=us-east-1 atx custom def get -n <your-td>
+#   "✓ ... retrieved successfully"  -> resolvable; the name in your command is wrong
+#   "Error: ... not found."         -> not published here
+
+AWS_REGION=us-east-1 atx custom def publish -n <your-td> --sd <path-to-td-dir> --description "..."
+```
+
+Prefer `get -n <name>` over grepping `atx custom def list`: the list wraps long names across lines and invites substring false positives, and its managed/user split is a section header rather than a per-row field — which is exactly how the mistake above happened.
+
+If you'd rather skip the registry entirely while iterating on the TD text, execute it directly and raise the PR yourself:
+```bash
+AWS_REGION=us-east-1 atx custom def exec -n <your-td> -p <abs-repo-path> -x -t
 ```
 
 ---

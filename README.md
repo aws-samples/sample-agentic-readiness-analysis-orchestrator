@@ -29,7 +29,8 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 ├── scripts/
 │   └── publish-td.sh               # Publish a TD folder to the ATX registry
 ├── demo-scripts/                    # Full demo harness (setup, reset, live-discovery)
-│   ├── 00-full-setup.sh            # Bake env: server + source + discovery + ARA + MODA (~45 min)
+│   ├── 00-full-setup.sh            # Bake env: source + discovery + ARA + MODA + export (~45 min)
+│   ├── 00-push-repos.sh            # [remote mode only] push the pre-baked repos to a GitHub org
 │   ├── 01-live-discovery-push.sh   # Live beat: new repo appears (3 → 4)
 │   ├── 02-reset-live-discovery.sh  # Reset for rehearsal
 │   └── 99-full-reset.sh            # Nuke everything
