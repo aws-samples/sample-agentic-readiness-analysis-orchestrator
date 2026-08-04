@@ -27,6 +27,15 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PORTFOLIO_DIR="$PROJECT_DIR/harness/fixtures/portfolio"
 REPORTS_DIR="$PROJECT_DIR/reports"
 
+# Remediation TD published for the demo. The name is the folder basename (publish-td.sh derives it
+# that way), so renaming the folder renames the TD.
+REMED_TD="containerize-service"
+REMED_TD_DIR="$PROJECT_DIR/definitions/custom/$REMED_TD"
+# Target for the containerize demo: must LACK a Dockerfile, or this additive TD correctly no-ops.
+# legacy-shipping-api and legacy-pricing-cgi already ship a Dockerfile + k8s/, which is why the
+# demo does NOT point at shipping-api despite older docs saying so.
+REMED_REPO="legacy-storefront-rails"
+
 # Pre-baked repos (analyzed) vs held-back (live discovery star)
 PRE_BAKED_REPOS=(legacy-shipping-api legacy-storefront-rails legacy-loan-calculator)
 LIVE_REPO="legacy-pricing-cgi"
@@ -75,7 +84,7 @@ wait_for_analysis() {
 }
 
 # --- Step 0: Pre-flight ---
-echo "==> [0/7] Pre-flight checks"
+echo "==> [0/8] Pre-flight checks"
 aws sts get-caller-identity >/dev/null 2>&1 || { echo "!! AWS creds not active"; exit 1; }
 command -v atx >/dev/null 2>&1 || { echo "!! atx CLI not found"; exit 1; }
 command -v jq  >/dev/null 2>&1 || { echo "!! jq not found (required)"; exit 1; }
@@ -126,7 +135,7 @@ echo
 # --- Step 1: Health check ---
 # There is NO server to start. Analyses run in-process; `atx ct server` still exists but is
 # deprecated and hidden, and starting it just blocks a shell on :8081 for no benefit.
-echo "==> [1/7] Checking ct health"
+echo "==> [1/8] Checking ct health"
 health=$(atx ct status --health 2>&1)
 if [ "$health" != "healthy" ]; then
   echo "!! ct is not healthy: $health"
@@ -136,8 +145,45 @@ fi
 echo "    healthy."
 echo
 
-# --- Step 2: Add source ---
-echo "==> [2/7] Adding source '$SOURCE' ($MODE)"
+# --- Step 2: Publish the remediation TD ---
+# ARA/MOD findings are assessment-only (every one has fix: null), so `remediation create --ids`
+# can never remediate them — a containerization fix always runs a TD you name. There is no
+# built-in containerization transform, so the demo publishes its own and owns the source in-repo.
+#
+# Publish in AWS-credentials auth mode (MIDWAY=false, which publish-td.sh now defaults to). The
+# registry is tenanted by authentication mode — two namespaces behind one endpoint — and the
+# `ct remediation` worker only reads the AWS-credentials one. Publish the other way and the TD is
+# reported "not found in the registry" even though `custom def get` confirms it. Verified
+# 2026-08-04: after re-publishing with MIDWAY=false, `ct remediation create` ran to `completed`.
+#
+# Publishing here (not at demo time) means the name is resolvable before anyone is watching.
+# Registry state is not version-controlled — drafts expire, TDs get deleted, the registry is
+# shared — and re-publishing is idempotent and cheap, so just always do it.
+echo "==> [2/8] Publishing remediation TD '$REMED_TD'"
+if [ ! -d "$REMED_TD_DIR" ]; then
+  echo "!! TD source not found: $REMED_TD_DIR"; exit 1
+fi
+if AWS_REGION=us-east-1 "$PROJECT_DIR/scripts/publish-td.sh" "$REMED_TD_DIR" >/tmp/publish-td.$$.log 2>&1; then
+  echo "    published ($(grep -oE "version: [^)]*" /tmp/publish-td.$$.log | head -1 || echo 'version unknown'))"
+else
+  echo "    !! publish failed — see /tmp/publish-td.$$.log (last lines):"
+  tail -5 /tmp/publish-td.$$.log | sed 's/^/       /'
+  echo "    Continuing: analyses don't need the TD. But the containerize beat will fail until"
+  echo "    this is fixed — retry with: ./scripts/publish-td.sh $REMED_TD_DIR"
+fi
+# `get` is the authoritative resolution check — the list wraps names and invites false positives.
+# MIDWAY=false is required for it to query the same tenant `ct remediation` will.
+td_probe=$(cd "$(mktemp -d)" && MIDWAY=false AWS_REGION=us-east-1 atx custom def get -n "$REMED_TD" </dev/null 2>&1)
+if printf '%s' "$td_probe" | grep -qi "not found"; then
+  echo "    !! '$REMED_TD' does NOT resolve — the containerize beat will fail."
+else
+  echo "    verified: '$REMED_TD' resolves."
+fi
+rm -f /tmp/publish-td.$$.log
+echo
+
+# --- Step 3: Add source ---
+echo "==> [3/8] Adding source '$SOURCE' ($MODE)"
 if atx ct source list --json 2>/dev/null | jq -r '.[].source' 2>/dev/null | grep -qx "$SOURCE"; then
   echo "    Source already exists."
 else
@@ -151,7 +197,7 @@ fi
 echo
 
 # --- Step 3: Discovery + trim to pre-baked set ---
-echo "==> [3/7] Running discovery"
+echo "==> [4/8] Running discovery"
 atx ct discovery scan --source "$SOURCE" 2>&1 | tail -12
 
 REPO_COUNT=$(atx ct repository list --source "$SOURCE" --json 2>/dev/null | jq '.total' 2>/dev/null)
@@ -178,7 +224,7 @@ echo "    Kept $(atx ct repository list --source "$SOURCE" --json 2>/dev/null | 
 echo
 
 # --- Step 4: Run ARA ---
-echo "==> [4/7] Running ARA (agentic-readiness) — ~15-25 min"
+echo "==> [5/8] Running ARA (agentic-readiness) — ~15-25 min"
 ARA_OUT=$(atx ct analysis run --type agentic-readiness --source "$SOURCE" 2>&1)
 echo "    $ARA_OUT"
 ARA_ID=$(echo "$ARA_OUT" | grep -oE '01[A-Z0-9]{24}' | head -1)
@@ -209,7 +255,7 @@ fi
 echo
 
 # --- Step 5: Run MODA ---
-echo "==> [5/7] Running MODA (modernization-readiness) — ~15-30 min"
+echo "==> [6/8] Running MODA (modernization-readiness) — ~15-30 min"
 MODA_OUT=$(atx ct analysis run --type modernization-readiness --source "$SOURCE" 2>&1)
 echo "    $MODA_OUT"
 MODA_ID=$(echo "$MODA_OUT" | grep -oE '01[A-Z0-9]{24}' | head -1)
@@ -242,7 +288,7 @@ fi
 echo
 
 # --- Step 6: Export artifacts ---
-echo "==> [6/7] Exporting report artifacts"
+echo "==> [7/8] Exporting report artifacts"
 mkdir -p "$REPORTS_DIR/ara" "$REPORTS_DIR/moda"
 
 # `analysis list-artifacts` and `get-artifact` were REMOVED (atx 3.9.0: "unknown command").
@@ -287,7 +333,7 @@ EOF
 echo
 
 # --- Step 7: Summary ---
-echo "==> [7/7] Summary"
+echo "==> [8/8] Summary"
 echo "    Mode:       $MODE"
 echo "    Source:     $SOURCE"
 echo "    Repos:      $(atx ct repository list --source "$SOURCE" --json 2>/dev/null | jq '.total')"
@@ -303,17 +349,8 @@ echo "Next steps:"
 echo "  1. Open AWS Transform Console → Continuous Modernization"
 echo "  2. Live discovery: ./demo-scripts/01-live-discovery-push.sh"
 echo "  3. Reset discovery: ./demo-scripts/02-reset-live-discovery.sh"
-echo "  4. Remediation — publish a TD FIRST; there is no built-in containerization transform."
-echo "     ARA/MOD findings are assessment-only (fix: null), so remediation always runs a TD"
-echo "     you name. Any TD works; user-published ones resolve fine. Names go stale, so"
-echo "     verify the exact name in THIS account+region before demoing:"
-echo "       AWS_REGION=us-east-1 atx custom def publish -n <my-td> --sd <td-dir> --description \"...\""
-echo "       (cd \"\$(mktemp -d)\" && AWS_REGION=us-east-1 atx custom def get -n <my-td>)   # ✓ = ready"
-if [ "$MODE" = "local" ]; then
-  echo "     Then ask Claude 'containerize shipping-api' (add --local for local sources)"
-  echo "     → creates a local branch. Show with: git -C <repo> diff main"
-else
-  echo "     Then ask Claude 'containerize shipping-api'"
-  echo "     → opens a PR in GitHub."
-fi
+echo "  4. Containerize:   ./demo-scripts/03-remediate.sh          # TD '$REMED_TD' on $REMED_REPO"
+echo "     (or ask Claude 'containerize $REMED_REPO')"
+echo "     Runs the published TD via 'atx custom def exec' and generates Dockerfile,"
+echo "     .dockerignore and k8s/ into the working tree. Show with: git -C <repo> diff"
 echo

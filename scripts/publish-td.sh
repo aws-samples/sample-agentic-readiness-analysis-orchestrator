@@ -74,6 +74,18 @@ if [[ -z "$DESCRIPTION" ]]; then
   DESCRIPTION="$TD_NAME"
 fi
 
+# The API restricts description to printable ASCII (`[\x20-\x7E\t\r\n]*`) and rejects the whole
+# request otherwise. Markdown headings routinely contain em dashes and smart quotes, so transliterate
+# the common ones and drop anything else non-ASCII rather than failing the publish.
+DESCRIPTION="$(printf '%s' "$DESCRIPTION" \
+  | sed $'s/[—–]/-/g; s/[‘’]/\'/g; s/[“”]/"/g; s/…/.../g' \
+  | tr -d '\000-\010\013\014\016-\037' \
+  | LC_ALL=C tr -cd '\11\15\40-\176')"
+
+if [[ -z "$DESCRIPTION" ]]; then
+  DESCRIPTION="$TD_NAME"
+fi
+
 if ! command -v atx >/dev/null 2>&1; then
   echo "Error: 'atx' CLI not found. Install: curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash" >&2
   exit 1
@@ -84,9 +96,55 @@ if [[ -z "${AWS_REGION:-}" ]]; then
   export AWS_REGION=us-east-1
 fi
 
+# The TD registry is tenanted by authentication mode: one endpoint, two separate namespaces, and a
+# TD published in one is a 404 in the other. `atx` picks the mode in AuthenticationManager
+# .isAWSMode(): MIDWAY=false forces AWS-credentials mode, and when MIDWAY is unset the default
+# flips based on whether TOOLBOX_TOOL_VERSION is set in the environment.
+#
+# That matters because the `ct remediation` worker subprocess always runs in AWS-credentials mode.
+# If a publish defaults the other way, `custom def get` confirms the TD while `remediation create`
+# reports "not found in the registry" — and publishing to one namespace does not backfill the other,
+# so the only fix is to re-publish. Pin AWS-credentials mode here so what we publish is what
+# remediation resolves. An explicit MIDWAY=true still overrides.
+if [[ -z "${MIDWAY:-}" ]]; then
+  export MIDWAY=false
+fi
+
 ACTION="publish"
 if [[ "$DRAFT" == true ]]; then
   ACTION="save-draft"
+fi
+
+# `atx custom def publish` validates the source dir against the schema's allowlist and hard-fails
+# on anything else: "Unsupported file(s) or directory in DEFAULT transformation definition:
+# README.md. Allowed contents are: transformation_definition.md, summaries.md,
+# document_references". A README aimed at contributors is useful to keep beside the TD, so publish
+# from a staged copy containing only the allowed entries rather than from the folder itself.
+SUBMIT_DIR="$TD_DIR"
+if [[ "$SCHEMA" == "DEFAULT" ]]; then
+  ALLOWED=(transformation_definition.md summaries.md document_references)
+else
+  ALLOWED=(SKILL.md references)
+fi
+
+EXCLUDED=()
+while IFS= read -r entry; do
+  [[ -n "$entry" ]] || continue
+  keep=false
+  for a in "${ALLOWED[@]}"; do
+    [[ "$entry" == "$a" ]] && keep=true && break
+  done
+  [[ "$keep" == false ]] && EXCLUDED+=("$entry")
+done < <(ls -A "$TD_DIR")
+
+if [[ ${#EXCLUDED[@]} -gt 0 ]]; then
+  STAGE_DIR="$(mktemp -d)"
+  trap 'rm -rf "$STAGE_DIR"' EXIT
+  for a in "${ALLOWED[@]}"; do
+    [[ -e "$TD_DIR/$a" ]] && cp -R "$TD_DIR/$a" "$STAGE_DIR/"
+  done
+  SUBMIT_DIR="$STAGE_DIR"
+  echo "Excluded:    ${EXCLUDED[*]} (not part of the $SCHEMA schema)"
 fi
 
 echo "TD name:     $TD_NAME"
@@ -97,13 +155,14 @@ echo "Region:      $AWS_REGION"
 echo
 
 OUTPUT_FILE="$(mktemp)"
-trap 'rm -f "$OUTPUT_FILE"' EXIT
+# Preserve any STAGE_DIR cleanup already registered above.
+trap 'rm -f "$OUTPUT_FILE"; [[ -n "${STAGE_DIR:-}" ]] && rm -rf "$STAGE_DIR"' EXIT
 
 set +e
 atx custom def "$ACTION" \
   -n "$TD_NAME" \
   --description "$DESCRIPTION" \
-  --sd "$TD_DIR" \
+  --sd "$SUBMIT_DIR" \
   2>&1 | tee "$OUTPUT_FILE"
 STATUS=${PIPESTATUS[0]}
 set -e

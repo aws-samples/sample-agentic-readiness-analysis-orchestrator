@@ -182,6 +182,12 @@ echo "============================================"
 echo "  RESET COMPLETE"
 echo "============================================"
 echo
+# The published containerize-service TD is deliberately left in the registry. `custom def delete`
+# is PERMANENT and the registry is shared across everyone in the account, so a demo reset is the
+# wrong place to remove it. 00-full-setup.sh re-publishes idempotently anyway.
+echo "Note: the 'containerize-service' TD is left published (the registry is shared;"
+echo "      deletion is permanent). Setup re-publishes it idempotently."
+echo
 echo "To set up again:"
 if [ "$MODE" = "local" ]; then
   echo "  ./demo-scripts/00-full-setup.sh"

@@ -463,53 +463,95 @@ atx ct remediation status --id <remediation-id>   # includes PR/MR link
 > **`atx custom def *` needs `AWS_REGION` set explicitly** even when `atx ct` works fine — otherwise it errors "AWS Transform is not available in region 'us-west-2'". Prefix with `AWS_REGION=us-east-1` (or export it). `atx ct` reads region from AWS config; `atx custom def` does not.
 > **`atx custom def get` writes the fetched TD files into the current directory** — run it from a scratch dir or clean up afterward.
 
-### `remediation create --transformation-name` takes YOUR TD — pick one, publish it, pass its name
+### Running your own TD: `ct remediation` direct-TD mode (verified working)
 
-There is **no fixed containerization transform** to reach for. `--transformation-name` accepts any published TD, and because ARA/MOD findings are assessment-only, authoring one is the *normal* path — not a workaround. So the remediation step is always three moves: decide what the fix should do, publish a TD that does it, run it by name.
+There is **no built-in containerization transform**. A containerization fix always runs a TD *you* author, and since ARA/MOD findings are assessment-only, that's the normal path — not a workaround.
+
+Per the [official docs](https://docs.aws.amazon.com/transform/latest/userguide/continuous-modernization.html), remediation has **three modes**, and the third is the one to know here:
+
+| Mode | Flags | Use |
+|---|---|---|
+| findings-based | `--ids <finding-ids>` | each finding uses its own fix transform — **unavailable for ARA/MOD** (`fix: null`) |
+| TD override | `--ids` + `--transformation-name` | override the fix transform for those findings |
+| **direct TD** | `--transformation-name` + `--repo` | *"run a transformation against a repository without findings"* — **this is the containerize path** |
+
+Direct-TD mode needs **no findings at all**, which is why it works on a fresh source. The documented command:
 
 ```bash
-# 1. publish (permanent; drafts expire in ~30 days)
-AWS_REGION=us-east-1 atx custom def publish -n my-containerize-td \
-  --sd ./my-containerize-td --description "Containerize a PHP/Apache service for EKS (INF-Q1)"
-
-# 2. confirm the runtime can see it — `get` is the real test, not the list
-AWS_REGION=us-east-1 atx custom def get -n my-containerize-td   # run from a scratch dir; writes into CWD
-
-# 3. run it against a repo
 atx ct remediation create --repo <src>::<repo> --source <src> \
-  --transformation-name my-containerize-td --name "containerize" [--local]
+  --transformation-name <your-td> --name "containerize" --local
 ```
 
-> **⚠️ A TD name is only as good as the registry it's in — verify before you build on it.** `--transformation-name` is resolved at run time against the published registry; TD names are **not** stable identifiers you can hardcode across accounts, regions, or time. `atx custom def publish` puts it there, `atx custom def delete` removes it permanently, and drafts expire on their own. Before any demo or scripted workflow, check the exact name resolves **in the account and region you'll run in**:
->
-> ```bash
-> cd "$(mktemp -d)" && AWS_REGION=us-east-1 atx custom def get -n <td-name>
-> # "✓ ... retrieved successfully"  -> resolvable
-> # "Error: ... not found."         -> publish it (or fix the name) before proceeding
-> ```
->
-> Prefer `get -n <name>` over eyeballing `atx custom def list`: the list is long (**793 TDs in this account on 2026-08-04, 761 of them user TDs**, up from 41 the day before — it is shared and it churns), it wraps names across lines, and grepping it invites substring false positives. `get` answers the only question that matters — does *this exact name* resolve.
+`--local` runs against the checked-out working tree and produces a **local branch instead of a PR** (output depends on the provider: GitHub PR / GitLab MR / Bitbucket PR / local branch). `-g/--configuration` is valid only alongside `--transformation-name`.
 
-**`remediation create` resolves user-published TDs.** Earlier notes here claimed the remediation runtime read from a *different catalog* than the CLI and saw only AWS-managed transforms. **That was wrong**, and the evidence for it was misread: `containerize-to-eks` — the name the error message suggested and the one that then worked — was itself listed under **👤 User Transformations** (no `AWS/` prefix, hash version `3gagkofw5feywyss`), not under AWS Managed. A user TD resolving is exactly what the "two catalogs" theory said could not happen.
+### ⚠️ Publish and remediate in the same auth mode, or the TD is invisible
 
-What actually happened is the ordinary case: `containerize-service` was not resolvable under that name at that moment, and `containerize-to-eks` was — a **name/registry-state** mismatch, which the CLI's own *"Did you mean …?"* was telling us plainly. Both are user TDs, so publish-then-run works; treat a "not found in the registry" error as *"this name isn't published here"*, not as a product limitation. See troubleshooting.md.
+**The registry is tenanted by authentication mode.** One endpoint
+(`transform-custom.<region>.api.aws`), two separate namespaces. A TD published in one is a 404 in the
+other — `remediation create` reports *"Transformation \<name\> not found in the registry. Did you mean
+…?"* for a TD that `custom def get` confirms exists.
 
-> `containerize-to-eks` **no longer resolves at all** (verified 2026-08-04: absent from `custom def list`, and `custom def get -n containerize-to-eks` → *"not found"*). Any doc, script, or demo naming it needs a TD you publish yourself. The verified example below is kept only for what it shows about remediation *behavior* — do not copy the name.
+The CLI picks the mode from the environment (3.9.0, `AuthenticationManager.isAWSMode`):
 
-**Worked example (3.9.0, 2026-08-03) — for behavior, not for the name.** A containerization TD run against an already-containerized Node fixture completed and committed its own change:
+| `MIDWAY` | Mode |
+|---|---|
+| `false` | **AWS credentials** |
+| `true` | the alternate identity mode |
+| unset | depends on whether `TOOLBOX_TOOL_VERSION` is set in the environment |
+
+The `ct remediation` worker subprocess **always** runs in AWS-credentials mode — it logs
+`MIDWAY=false detected, using AWS credentials`. So if `atx custom def publish` defaults the other
+way, the publish "succeeds" into a namespace remediation never reads. `custom def get` also answers
+with **no AWS credentials at all** — a tell that it wasn't using them, and the reason it can confirm
+a TD remediation can't resolve.
+
+**Fix: pin AWS-credentials mode for both steps** so the publish and the run agree.
 
 ```bash
-atx ct remediation create --transformation-name <your-published-td> \
-  --repo <src>::legacy-shipping-api --name test-containerize
-# → Remediating with 20 concurrent slot(s) (remote mode)...
-# → status: completed   (~5 min)
+export MIDWAY=false                       # publish into the namespace remediation reads
+./scripts/publish-td.sh definitions/custom/containerize-service
+cd "$(mktemp -d)" && MIDWAY=false atx custom def get -n containerize-service   # now authoritative
 ```
 
-It committed as `ATX Bot <checkpoint@atx.bot>`: *"Fix Dockerfile HEALTHCHECK to use reliable TCP connectivity check via Node.js net module instead of wget --spider which fails on HTTP 401…"* — a 2-line Dockerfile edit. Two lessons: the TD **adapts to an already-containerized repo** rather than no-opping or regenerating scaffolding, and its change set can be far smaller than the finding implies (the MOD `INF-Q1` gap was missing EKS IaC, which this did *not* address). Don't assume a remediation resolved the finding that motivated it — re-analyze and diff.
+Verified 2026-08-04 on 3.9.0: an identical `remediation create` failed pre-fix, and after
+re-publishing with `MIDWAY=false` the same command ran to **`completed`** (~4 min, Console
+**Remediations** tab) and committed branch `atx/containerize-service-<timestamp>` with all four
+expected artifacts. Publishing to one namespace does **not** backfill the other — re-publish, don't
+wait.
+
+To confirm the split rather than guess, diff the two directly:
+
+```bash
+cd "$(mktemp -d)"
+              atx custom def get -n <your-td>   # whatever your environment defaults to
+MIDWAY=false  atx custom def get -n <your-td>   # AWS credentials — the one remediation uses
+```
+
+Don't trust the *"Did you mean …?"* suggestions either: that's a Levenshtein match over the names the
+**remediation** side can see, so it lists neighbors from a namespace your `custom def` may not be
+reading.
+
+Ruled out by experiment before the auth mode was found — don't re-debug these: schema (a
+byte-identical workshop `SKILL.md` failed too), identity, propagation delay (30+ min), publish
+tooling (raw `atx custom def publish` behaves the same), account (three), and region.
+
+**Local fallback: `custom def exec`.** No registry round-trip and no PR — it runs the TD against a
+path and leaves the changes uncommitted. Also mode-sensitive: match the mode you published in.
+Verified end-to-end 2026-08-04 — `containerize-service` against a Rails fixture with no Dockerfile
+produced exactly the four artifacts it specifies, correctly detecting Ruby 1.8.7 as EOL, pinning
+`ruby:3.2-slim`, running as non-root, and targeting port 3000. Application source untouched.
+
+```bash
+AWS_REGION=us-east-1 atx custom def exec -n containerize-service -p <abs-repo-path> -x -t
+```
+
+Trade-off: `ct remediation` gives you ct-managed branch/PR creation, `--slots` concurrency, and a record in the Console's **Remediations** tab; `custom def exec` gives you a reproducible local run that doesn't depend on remediation-side name resolution.
+
+> **TD names are not stable identifiers.** Names are resolved at run time, and registry state isn't version-controlled: `custom def delete` is permanent, drafts expire on their own, and the registry is shared (**802 TDs across many owners on 2026-08-04**). Verify the exact name in the account **and** region you'll run in. Prefer `get -n <name>` over eyeballing `custom def list`: the list wraps names across lines and grepping it invites substring false positives. `get` answers the only question that matters — does *this exact name* resolve.
+
+**Worked `ct remediation` example (3.9.0), for behavior rather than for the name.** `containerize-to-eks` on an already-containerized Node fixture completed and committed as `ATX Bot <checkpoint@atx.bot>`: *"Fix Dockerfile HEALTHCHECK to use reliable TCP connectivity check via Node.js net module instead of wget --spider which fails on HTTP 401…"* — a 2-line Dockerfile edit. Two lessons: a containerization TD **adapts to an already-containerized repo** rather than regenerating scaffolding, and its change set can be far smaller than the finding implies (the MOD `INF-Q1` gap was missing EKS IaC, which this did *not* address). Don't assume a remediation resolved the finding that motivated it — re-analyze and diff. Corollary for demos: **point the containerize beat at a repo with no Dockerfile**, or the honest result is "nothing to do."
 
 **`--local` runs the job on the ct server against the checked-out working tree** instead of delegating to the provider — the right mode for `local` sources, where the result is a local branch rather than a PR. `-g/--configuration` is valid only alongside `--transformation-name`.
-
-**To run a TD without going through `remediation` at all** (no registry round-trip, no PR), execute it directly: `AWS_REGION=us-east-1 atx custom def exec -n <td> -p <abs-repo-path> -x -t`, then raise the PR yourself. Useful while iterating on TD text, since a draft is enough.
 
 ⚠️ **Remediation refuses to run against a repo with a dirty worktree**, and a repo being analyzed right now *is* dirty (`ct` rewrites its report bundle in place). Error: *"Local repository at … has uncommitted changes. Commit or stash them before running remediation."* Don't "fix" this by committing mid-analysis — you'd be racing the writer. Either wait for the analysis to finish, or test against an isolated copy of the fixture registered as its own source.
 
