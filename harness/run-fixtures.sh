@@ -587,6 +587,33 @@ run_unit() {
   return 0
 }
 
+# exec a portfolio TD against PORT_SRC. Same spinner-stripping + per-phase-log capture as
+# run_unit(): atx's 83%-spinner output NEVER reaches the job log (it blew the 4 MB cap and
+# truncated the differ/judge), only our markers and a failure tail do. args: <defname>
+# <phase-label> <report-glob>.
+run_portfolio_exec() {
+  local defname="$1" phase="$2" glob="$3"
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "+ atx custom def exec -n ${defname} -p ${PORT_SRC} --non-interactive --trust-all-tools --do-not-learn --configuration additionalPlanContext=portfolio_name: ${PORTFOLIO_NAME}" >&2
+    return 0
+  fi
+  local ulog="${AFTER_DIR}/_logs/${phase}.log"
+  mkdir -p "${AFTER_DIR}/_logs"
+  set +e
+  atx custom def exec -n "${defname}" -p "${PORT_SRC}" \
+    --non-interactive --trust-all-tools --do-not-learn \
+    --configuration "additionalPlanContext=portfolio_name: ${PORTFOLIO_NAME}" 2>&1 \
+    | grep --line-buffered -vE "${SPINNER_RE}" > "${ulog}"
+  local rc=${PIPESTATUS[0]}
+  set -e
+  [[ ${rc} -ne 0 ]] && echo "warn: ${phase} exec failed (rc=${rc}, see ${ulog})" >&2
+  if ! grep -q "${glob#\*}" "${ulog}" 2>/dev/null; then
+    echo "  (${phase}: no report marker in atx output — last lines:)" >&2
+    tail -8 "${ulog}" 2>/dev/null | sed 's/^/    /' >&2 || true
+  fi
+  return 0
+}
+
 # --- run the whole pool: ALL units (ARA+MOD interleaved), throttled to JOBS, one barrier
 echo "" >&2
 assert_unique_unit_dests
@@ -655,17 +682,13 @@ if [[ "${run_portfolio}" == "true" ]]; then
   if [[ "${run_ara}" == "true" ]]; then
     publish_td "${MANAGED}/portfolio-agentic-readiness-analysis" "portfolio-agentic-readiness-analysis${NAME_SUFFIX}" || true
     echo "" >&2; echo "=== portfolio ARA ===" >&2
-    run atx custom def exec -n "portfolio-agentic-readiness-analysis${NAME_SUFFIX}" -p "${PORT_SRC}" \
-      --non-interactive --trust-all-tools --do-not-learn \
-      --configuration "additionalPlanContext=portfolio_name: ${PORTFOLIO_NAME}"
+    run_portfolio_exec "portfolio-agentic-readiness-analysis${NAME_SUFFIX}" portfolio-ara '*portfolio-ara-report.json'
     collect_report "${PORT_SRC}" '*portfolio-ara-report.json' portfolio-ara
   fi
   if [[ "${run_mod}" == "true" ]]; then
     publish_td "${MANAGED}/portfolio-modernization-readiness-analysis" "portfolio-modernization-readiness-analysis${NAME_SUFFIX}" || true
     echo "" >&2; echo "=== portfolio MOD ===" >&2
-    run atx custom def exec -n "portfolio-modernization-readiness-analysis${NAME_SUFFIX}" -p "${PORT_SRC}" \
-      --non-interactive --trust-all-tools --do-not-learn \
-      --configuration "additionalPlanContext=portfolio_name: ${PORTFOLIO_NAME}"
+    run_portfolio_exec "portfolio-modernization-readiness-analysis${NAME_SUFFIX}" portfolio-mod '*portfolio-mod-report.json'
     collect_report "${PORT_SRC}" '*portfolio-mod-report.json' portfolio-mod
   fi
   assert_repo_head
