@@ -1344,9 +1344,15 @@ def _report_comparison(cmp: dict) -> None:
               f"{u['threshold']:>8.2f}  {u['verdict']}")
     print(f"\n  improved {s['improved']} · regressed {s['regressed']} · "
           f"within-noise {s['within_noise']} · unscored {s['unscored']}")
-    if s["mean_baseline"] is not None:
+    # Both means must exist to print the mean line: a scoring run that errored out
+    # (e.g. Bedrock ExpiredTokenException) leaves every unit unscored, so mean_now is
+    # None while mean_baseline (from the committed baseline) is not — formatting None
+    # then crashed the whole comparison report. Degrade to a note instead.
+    if s["mean_baseline"] is not None and s["mean_now"] is not None:
         print(f"  mean {s['mean_baseline']:.3f} -> {s['mean_now']:.3f} "
               f"({s['mean_delta']:+.3f})")
+    elif s["mean_baseline"] is not None:
+        print(f"  mean {s['mean_baseline']:.3f} -> (no current scores — nothing measured)")
     if s["within_noise"]:
         print("\n  'within-noise' means NOT MEASURED, not 'equal'. The analysis agent moves\n"
               "  10-20 findings per fixture per rerun; a sub-threshold delta is a different\n"
