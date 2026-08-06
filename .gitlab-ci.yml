@@ -411,6 +411,71 @@ harness:impact:
       SEV_BASE="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:+origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
       python3 harness/skill_table.py --base "${SEV_BASE:-origin/main}" -o changed-severity.json || echo '{}' > changed-severity.json
     - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" --changed-severity changed-severity.json -o impact.json
+    # SCORE + JUDGE + REPORT run in the SEPARATE harness:judge job (stage: judge), NOT
+    # here. WHY THE SPLIT: the AWS creds are vended by the shared runner's pre-clone
+    # script and, because the runner assumes our role via ROLE CHAINING, AWS hard-caps
+    # that session at 1 HOUR regardless of the role's MaxSessionDuration. A single
+    # (fixture, analysis) unit's atx exec can eat most of that hour, so the Bedrock
+    # scoring/judge step that used to run here failed with ExpiredTokenException and the
+    # verdict silently degraded to the offline heuristic. Moving score/judge into its own
+    # job gives THAT job its own fresh pre-clone vend (a new 1h token), and scoring is a
+    # few seconds of Bedrock calls, so it comfortably fits. This job just produces the
+    # report tree + impact.json and hands them off as artifacts.
+  artifacts:
+    when: always
+    paths:
+      # The whole "after" tree: the freshly-generated reports the scorer re-scores, plus
+      # edited-questions.txt (judge input) and the per-unit atx logs (spinner already
+      # stripped at write time; the only record of what atx did, since the job log
+      # carries just our concise markers so it can't hit the 4 MB cap again).
+      # Literal path, NOT $AFTER_DIR: artifact globs are resolved by the runner, and a
+      # silently-unexpanded variable here would just drop the artifact with no error.
+      - harness/after/
+      - impact.json
+      - changed-severity.json   # which questions' severity the MR edited (differ gate input)
+    expire_in: 30 days
+  allow_failure: true   # advisory — never blocks the MR
+
+# -----------------------------------------------------------------------------
+# Entry 1b — harness:judge   (auto on MR; consumes harness:impact's artifacts)
+# SCORE the freshly-generated reports for accuracy against the fixture source and
+# classify each against the committed baseline, then run the LLM judge and post the
+# advisory MR comment. Split out of harness:impact so it gets its OWN fresh credential
+# vend: the impact job's atx execs can burn most of the chained-role session's hard 1h
+# cap, leaving the Bedrock steps to die with ExpiredTokenException. This job starts
+# fresh, needs no atx/Node (only boto3 + awscli), and finishes in seconds.
+# -----------------------------------------------------------------------------
+harness:judge:
+  stage: judge
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  needs:
+    - job: harness:impact
+      artifacts: true
+  # If harness:impact SKIPPED (denylisted diff) it produced no impact.json. Nothing to
+  # judge — exit cleanly rather than erroring on the missing input.
+  before_script:
+    # No atx CLI, no Node: this job only re-scores JSON and calls Bedrock. Install just
+    # git (for score-reports' repo-relative paths), awscli (identity check) and the
+    # Python deps (boto3 for the Bedrock call).
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git ca-certificates
+    - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+    # The pre-clone Credential Vendor has ALREADY vended a FRESH token into this job (see
+    # the default before_script note). Confirm it so a missing/rejected role fails loudly.
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    - |
+      if [ -n "${AWS_CREDS_TARGET_ROLE:-}" ]; then
+        aws sts get-caller-identity >/dev/null 2>&1 \
+          && echo "AWS Credential Vendor: fresh creds vended for role ${AWS_CREDS_TARGET_ROLE}" \
+          || echo "WARN: creds not usable — scoring/judge will degrade to heuristic." >&2
+      fi
+  script:
+    - |
+      if [ ! -f impact.json ]; then
+        echo "no impact.json from harness:impact (diff was denylisted, or the analyze job skipped) — nothing to judge."
+        exit 0
+      fi
     # SCORE (accuracy anchor): re-score the freshly-generated reports for groundedness
     # against the fixture SOURCE and classify each against the committed baseline
     # (improved / regressed / within-noise, with a per-fixture noise threshold). This is
@@ -434,16 +499,8 @@ harness:impact:
   artifacts:
     when: always
     paths:
-      - impact.json
       - verdict.json
       - compare.json   # accuracy-vs-baseline anchor the judge scored against
-      - changed-severity.json   # which questions' severity the MR edited (differ gate input)
-      # Per-unit atx logs (spinner already stripped at write time). These are the
-      # only record of what atx actually did — the job log deliberately carries just
-      # our concise markers so it can't hit the 4 MB cap again.
-      # Literal path, NOT $AFTER_DIR: artifact globs are resolved by the runner, and a
-      # silently-unexpanded variable here would just drop the artifact with no error.
-      - harness/after/_logs/
     expire_in: 30 days
   allow_failure: true   # advisory — never blocks the MR
 
