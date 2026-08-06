@@ -147,6 +147,19 @@ def test_full_coverage_note_says_full():
     assert "FULL" in note
 
 
+def test_skipped_portfolio_is_explained_to_the_judge():
+    # When the differ skips the portfolio on a scoped run, the judge must be told so it
+    # neither invents portfolio concerns nor claims "portfolio unchanged".
+    impact = _impact_with_reseverity()
+    impact["coverage"]["portfolio_skipped"] = ["ara/portfolio/harness-portfolio",
+                                               "mod/portfolio/harness-portfolio"]
+    summ = judge.summarize_impact(impact)
+    assert summ["coverage"]["portfolio_skipped_count"] == 2
+    note = judge._coverage_note(summ)
+    assert "portfolio comparison SKIPPED" in note
+    assert "harness:full" in note
+
+
 # --- edit-scope signal (signal vs. nondeterminism noise) -----------------------------
 # The analysis agent is NONDETERMINISTIC: re-running the byte-identical rubric on the same
 # fixture moves ~10-20 findings (measured across two golden refreshes of an unedited
