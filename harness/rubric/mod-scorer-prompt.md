@@ -209,8 +209,17 @@ questions' findings). All three must be mutually consistent for the category.
 ## Per-report resolution — apply these against THIS report's metadata
 
 The question bank above is the DEFAULT. Three mechanisms legitimately move a question off it for a
-particular report. Read `metadata.service_archetype` and `metadata.surface_flags` (or the
-equivalent surface fields), then apply the rules below BEFORE recording any miss or mis-score.
+particular report. Read `metadata.service_archetype`, `metadata.repo_type`, and
+`metadata.surface_flags` (or the equivalent surface fields), then apply the rules below BEFORE
+recording any miss or mis-score.
+
+REPO_TYPE IS INFERRED, NOT SUPPLIED. `metadata.repo_type` is resolved in Step 1.4b — user-provided
+when present, otherwise AUTO-DETECTED from the repository file inventory (the report marks which).
+This TD does not receive `additionalPlanContext`, so a correctly auto-detected `repo_type` is
+CORRECT — judge the N/A mapping and archetype defaults against the resolved type, never against an
+assumption that a type was passed in. A repo whose evidence clearly indicates one type but that was
+classified as another (e.g., a Terraform-only repo classified `application`, inflating its scored
+question set) is a real classification defect.
 
 1. SURFACE GATES (question is N/A when its surface is absent). These questions are scored ONLY
    when the relevant surface exists. When the surface flag is `false` they are recorded "Not
@@ -233,11 +242,19 @@ equivalent surface fields), then apply the rules below BEFORE recording any miss
    - OPS-Q5 Deployment Strategy: Not Evaluated when `has_deployed_workload == false` (no
      Dockerfile+manifests, no compute IaC, no deployment config — source-only repo whose deploy is
      managed in a separate GitOps/deployment-config repo).
-   Do not import infrastructure expectations onto a pure library. Several of these ALSO carry a
-   documented "external context dependency" — IaC/networking/SLO/deployment evidence often lives
-   in a companion repo, so a score of 1 on INF-Q5, INF-Q10, SEC-Q1, OPS-Q2, or OPS-Q5 has a known
-   false-positive rate; a report that scored 2 (not 1) citing that limitation, or that deferred to
-   `additionalPlanContext`, is applying the TD correctly.
+   - OPS-Q7 Incident Response Automation: Not Evaluated when `has_deployed_workload == false` (no
+     running system to automate incident response for — a source-only library/utility).
+   - OPS-Q9 Resource Tagging Governance: Not Evaluated when
+     `has_iac_provisioning_aws_resources == false` (no AWS resources to tag).
+   Do not import infrastructure expectations onto a pure library. IMPORTANT — NO EXTERNAL-CONTEXT
+   DEFER: this TD runs inside AWS Transform Continuous Modernization, which never supplies
+   `additionalPlanContext`. Every classification and scoring signal is inferred from in-repo
+   evidence, and the surface gates above are the ONLY mechanism for scoping out an absent surface.
+   For a gated-IN question (its surface flag is `true`), absence of the looked-for in-repo evidence
+   is a genuine Score 1 — it is NOT softened to a 2 on the theory that the evidence "might live in a
+   companion repo," and a report that hedges to 2 on that basis, or that defers to
+   `additionalPlanContext`, is applying the OLD rubric and is now a mis-score. The surface gate
+   (Not Evaluated) is the correct and only way to handle a genuinely-external surface.
 
 2. ARCHETYPE-KEYED RUBRICS (score criteria differ by archetype). EXACTLY FOUR questions are
    archetype-calibrated — INF-Q3, INF-Q4, APP-Q3, APP-Q4 — and only these four ever carry
@@ -282,9 +299,11 @@ equivalent surface fields), then apply the rules below BEFORE recording any miss
                               workloads must exist.
    - move-to-modern-devops  — Primary: INF-Q10 < 3 OR INF-Q11 < 3. Supporting: OPS-Q5<3, OPS-Q6<3.
    - move-to-ai             — Primary: no AI/agent frameworks, no vector DB, no RAG, no agent-eval
-                              framework. GUARD: requires AI/agent/LLM intent in the portfolio or
-                              service context — a move-to-ai fired on an incidental keyword with no
-                              real AI intent is a defect.
+                              framework. GUARD: requires AI/agent/LLM intent evidenced IN THE REPO
+                              (an AI-related signal term in dependencies, source imports,
+                              configuration/IaC, or documentation) — not in `additionalPlanContext`,
+                              which this TD does not receive. A move-to-ai fired with no in-repo AI
+                              signal, or blocked despite a clear in-repo AI signal, is a defect.
    A pathway fired against a failing guard, on an N/A-gated question, or on a Supporting-only
    signal with no Primary is a deliverable defect. A pathway correctly Not Triggered (threshold met
    or guard blocked) or Not Applicable (wrong repo_type — e.g. move-to-containers for a library) is

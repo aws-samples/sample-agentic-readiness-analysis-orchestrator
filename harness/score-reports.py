@@ -350,11 +350,14 @@ def ara_scope_resolution(rpt: dict) -> str:
     DATA-Q1 is scope-dependent too but uses a Stage-A/B-tier ladder rather than plain bullets,
     so it is described separately rather than reduced to one severity.
 
-    Absent scope => read-only: the TD's documented default (SKILL.md:278, "the safer
-    default", chosen to avoid false escalation). 1 of 12 golden ARA reports omits the field.
+    Scope is normally recorded on every report: the TD resolves agent_scope in Step 1.5,
+    INFERRED from has_write_operations (write-enabled when the repo exposes writes, else
+    read-only) because Continuous Modernization does not supply additionalPlanContext. This
+    block reads whatever the report resolved. Only if the field is entirely absent does it fall
+    back to read-only — the safer resolution, matching the TD's own unknown-surface fallback.
     """
     scope = ((rpt.get("metadata") or {}).get("agent_scope") or "").strip().lower()
-    stated = scope or "read-only (ABSENT from metadata — TD default assumed)"
+    stated = scope or "read-only (ABSENT from metadata — safer fallback assumed)"
     write_enabled = scope == "write-enabled"
     qs = parse_questions("ara")
     lines = []

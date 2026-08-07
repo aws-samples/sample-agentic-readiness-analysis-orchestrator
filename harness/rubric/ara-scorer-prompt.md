@@ -209,9 +209,12 @@ Human-in-the-Loop (HITL, 3 q), Data Accessibility (DATA, 7 q), Discovery & Docum
 (DISC, 3 q), Observability (OBS, 3 q), Engineering Maturity (ENG, 5 q) = 43.)
 
 [C] = CONDITIONAL BLOCKER: resolves to BLOCKER only when `agent_scope` is "write-enabled". Under
-      "read-only" (the TD's DEFAULT, chosen deliberately to avoid false escalation) these resolve
-      to RISK-SAFETY or INFO — see the per-report resolution below for the exact class, which is
-      NOT uniform (API-Q4 goes to INFO, not RISK-SAFETY).
+      "read-only" these resolve to RISK-SAFETY or INFO — see the per-report resolution below for
+      the exact class, which is NOT uniform (API-Q4 goes to INFO, not RISK-SAFETY). `agent_scope`
+      is INFERRED from the write surface (write-enabled when `has_write_operations` is true, else
+      read-only), because this TD runs on Continuous Modernization and does not receive
+      `additionalPlanContext` — so a write-capable repo correctly evaluated at write-enabled
+      severities is applying the TD, not over-escalating.
 [S] = SCOPE-CALIBRATED: counts as RISK-SAFETY when write-enabled, downgrades to INFO under
       read-only scope. A report marking these not-evaluated under read-only scope is following
       the TD.
@@ -243,8 +246,14 @@ particular report. Read `metadata.agent_scope`, `metadata.service_archetype`,
 `metadata.surface_flags`, and `metadata.repo_type`, then apply the rules below BEFORE recording
 any miss, understatement, or over-escalation.
 
-1. AGENT-SCOPE RESOLUTION (the 9 conditional questions). Read `metadata.agent_scope`; if ABSENT,
-   assume read-only (the TD's documented safer default).
+1. AGENT-SCOPE RESOLUTION (the 9 conditional questions). Read `metadata.agent_scope` — it is
+   INFERRED from `has_write_operations` (write-enabled when the repo exposes write endpoints/side
+   effects, else read-only), since Continuous Modernization does not supply `additionalPlanContext`;
+   the report marks it `(inferred | user-provided)`. Judge the conditional resolution against the
+   resolved scope: a write-capable repo (has_write_operations true) evaluated at write-enabled
+   severities is CORRECT, not an over-escalation, and a write-capable repo left at read-only is now
+   an UNDERSTATEMENT of the conditional BLOCKERs. If `agent_scope` is absent AND has_write_operations
+   is unknown, assume read-only (the safer resolution).
    - When "write-enabled": the escalated heading severity is correct. The 5 [C] questions resolve
      to BLOCKER; the 4 [S] questions (STATE-Q3, STATE-Q6, HITL-Q1, HITL-Q2) resolve to RISK-SAFETY.
    - When "read-only", resolve each to the value below (classes are NOT uniform):
@@ -283,13 +292,28 @@ any miss, understatement, or over-escalation.
    path); HITL-Q1, HITL-Q2 (write-enabled); DATA-Q3 (unbounded list/query endpoints); ENG-Q5
    (persistent data stores).
 
-4. REPO-TYPE N/A MAPPING. Read `metadata.repo_type`. For `application` all questions apply. For
-   non-application types some questions are N/A, EXCLUDED from all counts and the readiness
-   profile — CORRECT, not a miss, even if the default severity is BLOCKER — and a FINDING emitted
-   on an N/A question is itself a defect. Representative N/A sets: `infrastructure-only` (the 8 API
-   + AUTH-except-audit questions that presuppose an app surface), `deployment-config` (most
-   API/STATE/DATA/HITL), `library` (the 5 Step-1.5 questions plus API surface questions). Do not
-   import application expectations onto a library.
+   INFORMATIONAL-ABSENCE SUPPRESSION. Six always-INFO questions — API-Q5, API-Q8, DATA-Q7,
+   DISC-Q2, DISC-Q3, OBS-Q3 — are suppressed on total absence: when the repo has NO evidence on
+   either side (nothing to assess and no contrary signal), the report records the question in
+   `evaluations[]` with `status: "pass"` INSTEAD of emitting a Low/INFO finding. This is CORRECT,
+   not a miss — do not penalize a suppressed INFO on a repo that genuinely lacks the surface (e.g.,
+   DATA-Q7/DISC-Q3 on a repo with no data store, API-Q5/API-Q8 on a non-HTTP library, OBS-Q3 on a
+   repo that emits no metrics). Only flag a miss if real positive or contrary evidence EXISTS and
+   the report suppressed anyway. These six never suppress on any repo that has evidence to report,
+   and no non-INFO question is ever suppressed this way.
+
+4. REPO-TYPE N/A MAPPING. Read `metadata.repo_type`. It may be user-provided OR auto-detected in
+   Step 1.4b (the report marks which; `additionalPlanContext` is not required — a correctly
+   auto-detected type is CORRECT, and judge the N/A mapping against the resolved type, not against
+   an assumption that it was supplied). For `application` all questions apply. For non-application
+   types some questions are N/A, EXCLUDED from all counts and the readiness profile — CORRECT, not
+   a miss, even if the default severity is BLOCKER — and a FINDING emitted on an N/A question is
+   itself a defect. Representative N/A sets: `infrastructure-only` (the 8 API + AUTH-except-audit
+   questions that presuppose an app surface), `deployment-config` (most API/STATE/DATA/HITL),
+   `library` (the 5 Step-1.5 questions plus API surface questions). Do not import application
+   expectations onto a library. A repo whose evidence clearly indicates one type but that was
+   scored as another (e.g., a Terraform-only repo scored as `application`) is a real
+   classification defect.
 
 ## Scoring scale
 

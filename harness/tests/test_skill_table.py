@@ -242,8 +242,10 @@ def test_extended_parses_all_18_with_triggers():
 def test_mod_surface_gates_and_archetype_rubrics():
     gates = st.parse_mod_surface_gates()
     assert set(gates) == {"INF-Q2", "SEC-Q2", "INF-Q8", "INF-Q9",
-                          "OPS-Q2", "SEC-Q1", "OPS-Q5"}
+                          "OPS-Q2", "SEC-Q1", "OPS-Q5", "OPS-Q7", "OPS-Q9"}
     assert gates["INF-Q2"]["flag"] == "has_persistent_data_store"
+    assert gates["OPS-Q7"]["flag"] == "has_deployed_workload"
+    assert gates["OPS-Q9"]["flag"] == "has_iac_provisioning_aws_resources"
     assert st.parse_mod_archetype_calibrated() == ["INF-Q3", "INF-Q4", "APP-Q3", "APP-Q4"]
 
 
