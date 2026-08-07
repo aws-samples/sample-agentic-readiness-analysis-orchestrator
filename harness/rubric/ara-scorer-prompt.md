@@ -23,32 +23,38 @@
 > `{{...}}` placeholders filled in: `{{REPO_NAME}}`, `{{REPOSITORY_SOURCE}}` (the complete repo
 > source), and `{{REPORT_JSON}}` (the generated ARA report, pretty-printed JSON).
 >
-> **Filling the two placeholders — BOTH come from the post-run workspace.** This is a
-> *groundedness* check: the grader verifies every report claim against the COMPLETE source the
-> report was generated against. When a benchmark platform captures the post-run workspace as a
-> single bundle (e.g. `code.zip`), unpack it once and take both inputs from it — they are then
-> guaranteed to be the same tree, which is exactly what groundedness needs:
+> **Filling the two placeholders — the two REQUIRED inputs.** This is a *groundedness* check: the
+> grader verifies every report claim against the COMPLETE source the report was generated against.
+> The scorer therefore needs two inputs, and the benchmark pipeline must CAPTURE both as artifacts
+> — however it names or packages them (a retained post-run workspace directory, a source archive,
+> etc.). The exact filenames below are examples; the requirement is the two logical inputs, not any
+> particular artifact name:
 >
-> - **`{{REPOSITORY_SOURCE}}`** = the FULL unpacked source tree. Do **not** substitute a git diff
->   (`git_diff.txt` or similar): a diff is changed-lines-only, so the grader would flag correct
->   findings as fabrications ("the cited file doesn't exist" — because it isn't in the diff) and
->   invent misses. If the source only exists as an archive, unpack it; binary-ness is a reason to
->   unzip, not a reason to fall back to the diff.
+> - **`{{REPOSITORY_SOURCE}}`** = the FULL post-run source tree. Do **not** substitute a git diff:
+>   a diff is changed-lines-only, so the grader would flag correct findings as fabrications ("the
+>   cited file doesn't exist" — because it isn't in the diff) and invent misses. A `git_diff.txt`
+>   is NOT an acceptable proxy. If your pipeline currently retains only the diff, it must be updated
+>   to retain the full tree (e.g. archive the post-run workspace). If the tree is delivered as an
+>   archive, unpack it before filling the placeholder — binary-ness is a reason to unzip, not a
+>   reason to fall back to the diff.
 > - **`{{REPORT_JSON}}`** = the ARA report — the file matching `*-ara-report.json`. Locate it by
 >   **globbing the suffix**, e.g. `**/*-ara-report.json`, NOT by hardcoding the repo name in the
->   path; the on-disk layout is:
+>   path; within the source tree it lives at:
 >   ```
 >   {portfolio-or-repo}/services/{repo-name}/agentic-readiness-analysis/{repo-name}-ara-report.json
 >   ```
 >   where `{repo-name}` is the config slug (lowercased, `[^a-z0-9_-]` → `-`), which may differ from
 >   the on-disk directory name — which is why you match on the suffix. This is NOT the agent's
 >   execution plan (`plan.json`) and NOT the `.md`, `.html`, or `.metadata.json` siblings: the JSON
->   report is the canonical machine-readable contract and the only valid grading input.
+>   report is the canonical machine-readable contract and the only valid grading input. If your
+>   pipeline does not already surface it, copy the generated `*-ara-report.json` into the captured
+>   artifacts at the end of the agent run.
 >
-> **Fail loudly.** If no `*-ara-report.json` is found in the bundle, error out — do NOT fall back
-> to the `.md`/`.html`, to `plan.json`, or to an empty report; any of those produces a meaningless
-> score. A missing report means the run was not scorable, and that should surface as an error, not
-> a low score.
+> **Fail loudly.** If the full source tree or the `*-ara-report.json` is missing, error out — do
+> NOT fall back to a git diff, to the `.md`/`.html`, to `plan.json`, or to an empty report; any of
+> those produces a meaningless score. A missing input means the run was not scorable, and that must
+> surface as a hard error (not a low score, and not a `NO`), so the two required artifacts get fixed
+> upstream rather than silently poisoning results.
 
 ---
 
