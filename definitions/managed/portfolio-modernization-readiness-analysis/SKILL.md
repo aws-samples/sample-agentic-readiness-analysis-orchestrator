@@ -836,18 +836,18 @@ For each of the 7 AWS Modernization Pathways:
 
 For the Move to AI pathway specifically, distinguish between two reasons a service may have status "Not Triggered":
 
-1. **Contextual guard suppression** — The service had no AI/agent/LLM intent in its context, so the pathway was correctly suppressed by the contextual guard. The Not Triggered reason will contain "No AI/agent intent detected in portfolio or service context."
+1. **Contextual guard suppression** — The service had no AI/agent/LLM intent evidenced in its repository, so the pathway was correctly suppressed by the contextual guard. The Not Triggered reason will contain the substring "No AI/agent intent" (the per-repo MOD TD emits "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation).").
 2. **Already present** — AI frameworks were already detected in the service, so the pathway did not need to trigger.
 
 When aggregating Move to AI, count the services in each Not Triggered sub-category separately:
 - `X` = number of services where Move to AI is Triggered
 - `Y` = total number of assessed services
-- `Z` = number of services where Move to AI was Not Triggered due to contextual guard suppression (no AI intent in context)
+- `Z` = number of services where Move to AI was Not Triggered due to contextual guard suppression (no AI intent evidenced in the repository)
 
 Report the Move to AI aggregation as:
 
 ```
-Move to AI: Triggered in X of Y services (Z services had no AI intent in context — pathway correctly suppressed)
+Move to AI: Triggered in X of Y services (Z services had no AI intent evidenced in the repository — pathway correctly suppressed)
 ```
 
 This distinction appears in the pathway detail narrative for Move to AI, not in the repo-level aggregation table structure (Step 7.2). The table continues to show each repo in exactly one column (Triggered, Not Triggered, or Not Applicable).
