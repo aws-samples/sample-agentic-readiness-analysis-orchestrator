@@ -24,16 +24,32 @@
 > `{{...}}` placeholders filled in: `{{REPO_NAME}}`, `{{REPOSITORY_SOURCE}}` (the complete repo
 > source), and `{{REPORT_JSON}}` (the generated MOD report, pretty-printed JSON).
 >
-> **Where the report lives (fill `{{REPORT_JSON}}` from here).** Each MOD run emits a four-artifact
-> bundle. Load the **JSON** artifact — it is the canonical machine-readable contract; the `.md`,
-> `.html`, and `.metadata.json` siblings are NOT the grading input. On disk:
-> ```
-> {portfolio-or-repo}/services/{repo-name}/modernization-readiness-analysis/{repo-name}-mod-report.json
-> ```
-> `{repo-name}` is the config slug (lowercased, `[^a-z0-9_-]` → `-`), which may differ from the
-> on-disk directory name. `{{REPOSITORY_SOURCE}}` is the analyzed repo's complete source — the same
-> tree the report was generated against. If the JSON artifact is missing or unreadable, the run
-> cannot be scored: fail loudly rather than grading against the `.md` or `.html`.
+> **Filling the two placeholders — BOTH come from the post-run workspace.** This is a
+> *groundedness* check: the grader verifies every report claim against the COMPLETE source the
+> report was generated against. When a benchmark platform captures the post-run workspace as a
+> single bundle (e.g. `code.zip`), unpack it once and take both inputs from it — they are then
+> guaranteed to be the same tree, which is exactly what groundedness needs:
+>
+> - **`{{REPOSITORY_SOURCE}}`** = the FULL unpacked source tree. Do **not** substitute a git diff
+>   (`git_diff.txt` or similar): a diff is changed-lines-only, so the grader would flag correct
+>   findings as fabrications ("the cited file doesn't exist" — because it isn't in the diff) and
+>   invent misses. If the source only exists as an archive, unpack it; binary-ness is a reason to
+>   unzip, not a reason to fall back to the diff.
+> - **`{{REPORT_JSON}}`** = the MOD report — the file matching `*-mod-report.json`. Locate it by
+>   **globbing the suffix**, e.g. `**/*-mod-report.json`, NOT by hardcoding the repo name in the
+>   path; the on-disk layout is:
+>   ```
+>   {portfolio-or-repo}/services/{repo-name}/modernization-readiness-analysis/{repo-name}-mod-report.json
+>   ```
+>   where `{repo-name}` is the config slug (lowercased, `[^a-z0-9_-]` → `-`), which may differ from
+>   the on-disk directory name — which is why you match on the suffix. This is NOT the agent's
+>   execution plan (`plan.json`) and NOT the `.md`, `.html`, or `.metadata.json` siblings: the JSON
+>   report is the canonical machine-readable contract and the only valid grading input.
+>
+> **Fail loudly.** If no `*-mod-report.json` is found in the bundle, error out — do NOT fall back
+> to the `.md`/`.html`, to `plan.json`, or to an empty report; any of those produces a meaningless
+> score. A missing report means the run was not scorable, and that should surface as an error, not
+> a low score.
 
 ---
 
