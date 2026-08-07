@@ -418,6 +418,32 @@ def test_full_run_is_not_marked_partial():
     assert cov["compared"] == len(full)
 
 
+def test_scoped_run_skips_the_portfolio_comparison():
+    # A scoped "after" that DOES include a portfolio report (rolled up over only the
+    # analyzed apps) must NOT be diffed against the full-set golden portfolio: that delta
+    # is a mechanical artifact of aggregating fewer apps, not an effect of the edit. The
+    # differ skips it on partial runs and records why under coverage.portfolio_skipped.
+    full = dr.load_tree(GOLDEN)
+    after = _subset(full, 2)  # 2 repos ...
+    pf_key = ("ara", "portfolio", "harness-portfolio")
+    after[pf_key] = copy.deepcopy(full[pf_key])  # ... plus the portfolio rollup
+    impact = dr.build_impact(full, after)
+    assert impact["portfolio"] == {}, "scoped portfolio rollup must not be diffed"
+    assert "ara/portfolio/harness-portfolio" in impact["coverage"]["portfolio_skipped"]
+    # And it must not leak back in as a moved TD.
+    assert "portfolio-agentic-readiness-analysis" not in impact["changed_tds"]
+
+
+def test_full_run_does_compare_the_portfolio():
+    # The skip is scoped-only: on a full sweep the portfolio IS rolled up over the whole
+    # fixture set, so the comparison is valid and must happen (that's where portfolio
+    # roadmap/program quality is validated — see DESIGN.md §10a).
+    full = dr.load_tree(GOLDEN)
+    impact = dr.build_impact(full, copy.deepcopy(full))
+    assert impact["coverage"]["portfolio_skipped"] == []
+    assert "ara" in impact["portfolio"] and "mod" in impact["portfolio"]
+
+
 def test_real_drift_inside_a_partial_run_is_still_detected():
     # The narrowing must not cost sensitivity: drop one finding from the ONE report we
     # analyzed and the differ must still flag it, and only the TD it belongs to.

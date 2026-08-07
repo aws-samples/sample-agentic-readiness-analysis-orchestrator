@@ -178,6 +178,13 @@ def summarize_impact(impact: dict) -> dict:
             # can still hit it, and silence is the failure mode that cost us the most.
             "unbaselined": list(cov.get("unbaselined") or []),
             "unbaselined_count": len(cov.get("unbaselined") or []),
+            # Portfolio reports the differ deliberately did NOT compare on this scoped run
+            # (the rollup aggregates fewer apps than the golden baseline, so the delta is a
+            # mechanical artifact, not an effect of the edit). The judge must not read an
+            # absent portfolio delta as "portfolio unchanged" — portfolio quality is only
+            # assessed on a full sweep. Empty on --scope all.
+            "portfolio_skipped": list(cov.get("portfolio_skipped") or []),
+            "portfolio_skipped_count": len(cov.get("portfolio_skipped") or []),
         },
         # Deterministic, rubric-arithmetic findings from the differ. Carried through
         # VERBATIM and never summarised away: these are the facts the judge is forbidden
@@ -433,7 +440,7 @@ def _coverage_note(impact_summary: dict) -> str:
             )
     if not cov.get("partial"):
         return prefix + "coverage: FULL — every baseline report was re-analyzed.\n"
-    return prefix + (
+    note = prefix + (
         f"coverage: PARTIAL — {cov.get('compared')} of {cov.get('baseline_total')} baseline "
         f"reports were re-analyzed ({cov.get('not_analyzed_count')} not analyzed).\n"
         "  The harness deliberately runs only the fixtures that exercise the edited\n"
@@ -442,6 +449,21 @@ def _coverage_note(impact_summary: dict) -> str:
         "  say so in the rationale; suggest a full sweep (harness:full) if the edit looks\n"
         "  broader than the fixtures covered.\n"
     )
+    # A scoped run's portfolio rollup aggregates only the analyzed apps, so its delta
+    # against the full-set golden is a mechanical artifact (distribution collapse, phantom
+    # removed findings, program/pathway churn). The differ SKIPS it on partial runs; tell
+    # the judge so it neither reports "portfolio unchanged" nor invents concerns about a
+    # comparison that was never made.
+    if cov.get("portfolio_skipped_count"):
+        note += (
+            f"  portfolio comparison SKIPPED ({cov.get('portfolio_skipped_count')} portfolio "
+            "report(s)): a scoped rollup aggregates fewer apps than the baseline, so its\n"
+            "  tier distribution, programs and pathways would shift for purely mechanical\n"
+            "  reasons. Do NOT raise concerns about portfolio distribution/programs/pathways\n"
+            "  here, and do NOT claim the portfolio is unchanged — portfolio roadmap and\n"
+            "  program quality are validated only on a full sweep (harness:full).\n"
+        )
+    return note
 
 
 # The noise rule is UNCONDITIONAL and the limits on it are unconditional too. Only the

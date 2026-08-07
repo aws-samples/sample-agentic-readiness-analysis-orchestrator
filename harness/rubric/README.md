@@ -1,87 +1,109 @@
-# Rubric Contribution Surface
+# Rubric — Source of Truth & Change Workflow
 
-> **What this is:** the **git-visible proposal surface** for the assessment rubric (the
-> questions the ARA and MOD Task Definitions score against, and how gaps map to
-> severity/score). It exists so that adding a new question or re-scoring an existing one is
-> a **normal, reviewable Merge Request** the change-impact harness can run against.
+> **Where the rubric lives:** the **Task Definitions in this repo** are authoritative.
+> The ARA and MOD question sets, severities, scoring logic, archetype calibration, MOD score
+> bands, and the 7 modernization pathways are all defined in:
 >
-> **What this is NOT:** the authoritative rubric. The live rubric — the full question set,
-> scoring logic, category weights, MOD score bands, and the 7 modernization pathways — is
-> **maintained in the AWS Transform managed service and versioned independently**
-> (see every managed `SKILL.md`). The files here are a **proposal mirror**, not the source
-> of truth.
+> - `definitions/managed/agentic-readiness-analysis/` — `SKILL.md` + `references/*.md`
+> - `definitions/managed/modernization-readiness-analysis/` — `SKILL.md` + `references/*.md`
+>
+> **Edit the TD directly to change the rubric.** The harness reads those files at runtime
+> (`skill_table.py::parse_questions` concatenates `SKILL.md` + `references/*.md`), so a TD edit
+> is picked up on the next run with no separate mirror to maintain and no code change — except
+> when you add or remove a question, which needs a one-line count bump (see below).
 
 See [`harness/DESIGN.md`](../DESIGN.md) — especially §2 (what the TDs emit), §3 (the five
-scored dimensions), §5 (change → impact flow), and §8.1 (MR intent capture) — for how this
-surface plugs into the harness.
+scored dimensions), §5 (change → impact flow), and §8.1 (MR intent capture) — for how a rubric
+change flows through the harness.
 
-## Why a git surface at all?
+## Files in this directory
 
-The rubric lives in the Transform service, so a `git diff` of `definitions/managed/**`
-can never *see* a rubric edit. That makes rubric changes invisible to review and impossible
-to test before they ship. This directory fixes that: it gives contributors a place to
-**propose** a rubric change as text, open an MR, and get **automatic, evidence-backed
-feedback** on what the change would actually do to the analysis output — before a maintainer
-commits it into the service.
+| File | Purpose |
+|---|---|
+| [`ara-scorer-prompt.md`](./ara-scorer-prompt.md) | Self-contained ARA report-scoring prompt for the **external benchmarking platform**. A hand-pinned snapshot of the harness grader as a **single prompt** (rubric + baked-in severity/tier tables + per-report resolution rules) that emits `<score>X.X</score>` + a summary — the format the benchmark parses. |
+| [`mod-scorer-prompt.md`](./mod-scorer-prompt.md) | Same, for MOD (1–4 scale, core/non-core mapping, classification thresholds, 7 pathways). |
 
-The split of responsibilities is intentional:
+These `.md` prompts are the ONLY rubric-derived artifacts here that need hand-maintenance —
+see the last section.
 
-| Surface | Role | Owner |
-|---|---|---|
-| `harness/rubric/*.yaml` (this dir) | **Propose + test** a question/score change | Any contributor (mainly internal) |
-| Harness (GitLab CI) | **Run** the change against fixtures, score the delta | Automated |
-| AWS Transform service | **Deploy** — the authoritative rubric | Maintainer (manual sync) |
+## Workflow: change the rubric
 
-## Files
+### Re-score an existing question (severity / wording / scoring criteria)
 
-| File | Analysis | Contents |
-|---|---|---|
-| [`ara-questions.yaml`](./ara-questions.yaml) | Agentic Readiness (ARA) | Question bank across categories `AUTH / API / STATE / DATA / OBS / ENG / HITL / DISC`, each with `severity_guidance` mapping a gap to `native_severity` (`BLOCKER` / `RISK-SAFETY` / `RISK-QUALITY` / `INFO`). |
-| [`mod-questions.yaml`](./mod-questions.yaml) | Modernization Readiness (MOD) | Question bank across categories `APP / DATA / INF / OPS / SEC`, each with `scoring_guidance` mapping a gap to the 0–4 `score` and `score_rating` band (`Not Ready` / `Needs Work` / `Partial` / `Mature`). |
-
-These YAML files are a **representative seed**, not the complete rubric. They mirror real
-`question_id` / `category_id` formats seen in the emitted reports (e.g. `AUTH-Q1`, `INF-Q11`)
-so a machine — and a reviewer — can line a proposal up against actual analysis output.
-
-## Workflow
-
-### Propose a NEW question
-
-1. Open the relevant YAML (`ara-questions.yaml` or `mod-questions.yaml`).
-2. Find the category you want to extend (e.g. `AUTH`). Append a new entry using the **next
-   free Q number** for that category (e.g. if `AUTH-Q7` is the highest, add `AUTH-Q8`). Keep
-   the schema identical to the surrounding entries.
-3. Fill in `title`, `intent` (what the question checks), and the guidance block
-   (`severity_guidance` for ARA, `scoring_guidance` for MOD).
-4. Open a Merge Request using the **`rubric-change`** MR template. Describe *what* you added,
-   *why*, and the *expected impact* (which dimension(s) D1–D5 should move — e.g. "more AUTH
-   findings on token-rotation gaps," "a repo drops a tier," "a pathway newly triggers").
-5. The GitLab pipeline runs the harness (`should-run.sh` → fixtures → `diff-reports.py` →
-   judge) and posts an **advisory** verdict comment: did the delta match your stated intent,
-   and is it a no-op? The comment never blocks the MR.
-6. A maintainer reviews. On approval, the maintainer **manually syncs** the new question into
-   the AWS Transform service and refreshes the golden baselines (a dedicated "baseline update"
-   MR, per DESIGN.md §7).
-
-### Re-score an EXISTING question
-
-1. Locate the question by its `id` in the YAML.
-2. Edit only its guidance block — `severity_guidance` (ARA) or `scoring_guidance` (MOD). Do
-   **not** renumber or delete the entry; changing an `id` breaks the mapping to emitted
+1. Edit the owning `references/*.md` (or `SKILL.md`) in the relevant TD — change the severity
+   heading, the 1–4 criteria, an `agent_scope` resolution, an archetype rubric, a pathway
+   trigger, etc. Do **not** change the question's `id`; that breaks the mapping to emitted
    findings.
-3. Open a `rubric-change` MR and state the intent (e.g. "tighten `AUTH-Q5` so missing rate
-   limiting is `RISK-SAFETY` instead of `INFO`; expect more RISK-SAFETY findings and possible
-   ARA tier drops").
-4. Same as above: the harness runs, the judge posts an advisory verdict, a maintainer syncs
-   the approved change into the service.
+2. Open a Merge Request using the **`rubric-change`** MR template. State the *intent* and the
+   *expected impact* (which of D1–D5 should move — e.g. "tighten AUTH-Q5 so missing rotation is
+   RISK-SAFETY not INFO; expect more RISK-SAFETY findings and possible ARA tier drops").
+3. The GitLab pipeline runs the harness (`should-run.sh` → fixtures → `diff-reports.py` →
+   judge) and posts an **advisory** verdict: did the delta match your intent, and is it a
+   no-op? It never blocks the MR.
+4. **No count bump needed** — re-scoring does not change the number of questions. The judge
+   reflects your edit automatically on the next run.
+
+### Add or remove a question
+
+**IDs are permanent — add at the end, removal leaves a hole, never renumber.** A `question_id`
+(e.g. `AUTH-Q7`) is a stable key, not a position: the parser reads whatever ID the heading
+carries, and everything downstream joins on `(analysis_type, question_id)` — golden baselines,
+the static priority table, portfolio aggregation, the findings/evaluations split. Nothing
+requires the numbers to be contiguous.
+
+- **Adding:** use the next free number in the category and never reuse a retired one — highest
+  `AUTH-Q7` → add `AUTH-Q8`.
+- **Removing:** delete the entry and **leave the gap** (`Q1, Q2, Q4, …`). Do **NOT** slide
+  `Q4→Q3` to close it — that silently reassigns every finding, baseline row, and priority for
+  those questions to a *different* question, and the count assertion won't catch it because the
+  count is unchanged. If a gap bothers you, retire the *question* (mark it deprecated / Not
+  Evaluated in the TD) but keep the ID reserved.
+
+Steps:
+
+1. Add (or delete) the question in the TD — its `references/*.md` section **and** anywhere the
+   count/tables reference it — in one change. Respect the ID rule above.
+2. **Bump the count.** The harness asserts on rubric size:
+   `EXPECTED_QUESTIONS = {"ara": 43, "mod": 37}` in
+   [`harness/skill_table.py`](../skill_table.py). Increment (add) or decrement (remove) the
+   number for the affected analysis, in the same MR.
+3. Open a `rubric-change` MR with intent + expected impact and let the harness post its
+   advisory verdict.
+4. A maintainer refreshes the golden baselines on approval (DESIGN.md §7).
+
+### Why the count is a manual step (and the only one)
+
+The assertion fires on **any** size change — adding (43→44), removing (43→42), or a heading the
+parser can no longer read all trip it. It is deliberate: a rubric that silently parses to the
+wrong size hands the judge a table with questions missing, and the model fills the hole by
+guessing — the exact bug this guard kills. If you forget the bump, **CI fails loudly** and the
+assertion message states the count it parsed plus the two causes (intentional add/remove → bump
+the constant; accidental parse drift → fix the heading, don't score on a partial table).
+
+Everything that is NOT a count change — a severity flip, a reworded title, a changed
+`agent_scope` resolution or archetype rubric, a pathway trigger — is read from the TD at runtime
+and needs **no code edit**.
+
+## The benchmarking scorer prompts need hand-maintenance on EVERY rubric change
+
+Unlike the harness, [`ara-scorer-prompt.md`](./ara-scorer-prompt.md) and
+[`mod-scorer-prompt.md`](./mod-scorer-prompt.md) are **hand-pinned snapshots** — the external
+benchmarking platform can't read the TD at runtime the way the harness does, so the tables are
+baked into the prompt text. That means they have **no runtime coupling and no assertion**: ANY
+rubric change (count *or* severity *or* wording *or* pathway) requires editing them by hand.
+Each file carries a "Maintenance" table mapping which kind of TD change touches which section.
+
+> **Planned:** a deterministic exporter that regenerates these `.md` files from the harness's
+> own `build_prompt()` output, plus a CI drift-check (`git diff --exit-code`) that fails when
+> they fall out of sync — giving them the same "fail loudly when stale" protection the judge's
+> count assertion already has. Until that lands, treat updating the two prompts as a manual
+> follow-up on every rubric MR.
 
 ## Important notes
 
-- **Editing YAML here does not change production behavior.** Nothing is live until a
-  maintainer syncs it into the AWS Transform service. This surface is a proposal + test bed.
-- **If you edited the rubric directly in the AWS Transform service** (not here), there is no
-  git diff for the harness to catch. Tick that box in the MR/issue template so a maintainer
-  runs `harness:full` manually and re-baselines the goldens (DESIGN.md §5, §8).
+- **If you edited the rubric directly in the AWS Transform service** (not in this repo's TDs),
+  there is no git diff for the harness to catch. Tick that box in the MR/issue template so a
+  maintainer runs `harness:full` manually and re-baselines the goldens (DESIGN.md §5, §8).
 - **Keep the two remotes in sync.** Content mirrors between GitHub and GitLab; automation runs
   on **GitLab only**. GitHub stays open for issues/PRs but triggers nothing.
 - Never put credentials, account IDs, or customer data in these files.

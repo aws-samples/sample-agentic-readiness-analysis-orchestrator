@@ -478,11 +478,63 @@ harness/
 
 All work lands on **GitLab `feat/harness`**; GitHub receives mirrored content once a batch is stable (no GitHub automation).
 
+## 10a. Portfolio-quality validation (full-sweep only) — PLANNED
+
+**Problem this addresses.** The harness today answers *"is the TD edit right?"* — a
+change-impact/regression question that works on a scoped MR run (1-2 fixtures that
+exercise the edited questions). It does **not** answer *"does the portfolio roadmap and
+program mix make sense?"* — a **content-quality** question about the absolute soundness of
+the rollup: sequencing, program eligibility (MAP / EBA / SHIP / Immersion Days…), and
+whether the portfolio aggregation correctly combines the corrected component tiers.
+
+**Why it can't ride on the scoped MR path.** A portfolio report is a rollup over *every*
+per-repo report. On a scoped run the "after" portfolio aggregates only the analyzed apps,
+while the golden portfolio was rolled up over the full fixture set — so diffing them is
+apples-to-oranges (tier distribution collapses, un-analyzed apps' findings read as
+"removed", programs/pathways churn). These are mechanical artifacts of aggregating fewer
+apps, not effects of the edit. **As of the scoped-portfolio fix, `diff-reports.py` SKIPS
+the portfolio comparison whenever `coverage.partial` is true** and records the skipped
+reports under `coverage.portfolio_skipped`; `judge.py` is told not to raise portfolio
+concerns (nor claim "portfolio unchanged") in that case. So portfolio quality is simply
+**not assessed on an MR** — it is deferred to the full sweep, which is what this section
+designs.
+
+**Where it runs.** `harness:full` (`--scope all`), where the portfolio *is* rolled up over
+the complete fixture set and the roadmap/programs are real. This is a NEW validation, not a
+delta: it judges the portfolio report on its own merits, not against a baseline.
+
+**Proposed shape (to build):**
+1. **Trigger** — only on a full sweep (`coverage.partial == false`, so `portfolio_skipped`
+   is empty). The scoped MR path stays untouched.
+2. **Inputs** — the freshly generated `<portfolio>-portfolio-{ara,mod}-report.json` plus the
+   per-repo reports they aggregate (already in `AFTER_DIR`), and the portfolio TD's own
+   SKILL.md/references (the documented rules for pathways → programs, sequencing, tiers).
+3. **Checks — two layers, mirroring the per-repo model:**
+   - *Deterministic (rubric arithmetic, like `safety_alerts`):* portfolio tier
+     distribution equals the sum of component tiers; every program recommended is one the
+     TD's pathway→program table actually permits for the triggered pathways; no app is
+     dropped from the rollup; MOD pathways at portfolio level are the union of per-repo
+     triggers. These are cheap, offline, and catch aggregation bugs.
+   - *LLM judgment (a portfolio-quality pass):* is the roadmap sequencing coherent (do
+     prerequisite pathways precede dependents)? are the programs appropriate to the app
+     mix and readiness tiers? is any recommendation internally contradictory? This is the
+     "let the judge reason more" layer — it needs the whole portfolio in context, which is
+     exactly why it can't run on a 2-app scoped rollup.
+4. **Output** — a portfolio section in `verdict.json` (or a sibling `portfolio-verdict.json`)
+   with its own advisory verdict, kept distinct from the per-repo change-impact verdict so
+   the two questions never get conflated.
+5. **Open questions** — does portfolio quality need its own committed baseline (to detect
+   *drift* in roadmap quality across TD versions), or is an absolute per-run judgment
+   enough for now? Start with absolute; add a baseline if run-to-run judgment proves noisy.
+
 ## 11. Non-goals / deferred
 - Scoring the custom TDs (out of scope this cycle).
 - Blocking gates (advisory-only for now).
 - Auto-refreshing golden baselines (manual "baseline update" MR).
 - GitHub Actions / any non-GitLab automation.
+- **Portfolio comparison on a SCOPED run** — deliberately skipped (see §10a): the rollup
+  aggregates fewer apps than the baseline, so the delta is a mechanical artifact. Portfolio
+  quality is validated only on the full sweep, per the §10a design (to be built).
 
 ## 12. Verified report field paths (differ contract)
 

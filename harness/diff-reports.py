@@ -952,6 +952,26 @@ def build_impact(before_tree: dict, after_tree: dict,
         f"{analysis}/{scope}/{key}"
         for (analysis, scope, key) in set(before_tree) - set(after_tree)
     )
+    # A PORTFOLIO report is a rollup over every per-repo report. On a scoped run the
+    # "after" portfolio aggregates only the 1-2 apps we re-analyzed, while the golden
+    # portfolio was rolled up over the FULL fixture set — so diffing them is
+    # apples-to-oranges: the tier DISTRIBUTION collapses (e.g. not_integrable 7->0), the
+    # per-app findings of the 18 un-analyzed apps read as "removed", and programs/pathways
+    # churn — all mechanical artifacts of aggregating fewer apps, NOT effects of the edit.
+    # (This is the same phantom-delta trap the per-repo union fix above solved, but it
+    # lives INSIDE one portfolio report, so the compared_keys skip can't catch it.)
+    # Portfolio ROADMAP/PROGRAM quality is only meaningful over the complete portfolio, so
+    # it belongs to the full sweep (harness:full / --scope all), not a scoped MR. When the
+    # run is partial we therefore skip the portfolio comparison and say why, rather than
+    # feeding the judge a delta it will (correctly, but uselessly) flag as concerns.
+    # See harness/DESIGN.md "Portfolio-quality validation" for the full-sweep design.
+    partial = bool(not_analyzed)
+    portfolio_skipped = sorted(
+        f"{analysis}/{scope}/{key}"
+        for (analysis, scope, key) in compared_keys if scope == "portfolio"
+    ) if partial else []
+    if portfolio_skipped:
+        compared_keys = {k for k in compared_keys if k[1] != "portfolio"}
     # In `after` but not in golden = a genuinely NEW report (e.g. a new fixture). That is
     # real signal and must not be hidden, but it has no baseline to diff against.
     unbaselined = sorted(
@@ -1025,7 +1045,12 @@ def build_impact(before_tree: dict, after_tree: dict,
             "baseline_total": len(before_tree),
             "not_analyzed": not_analyzed,
             "unbaselined": unbaselined,
-            "partial": bool(not_analyzed),
+            "partial": partial,
+            # Portfolio reports deliberately NOT diffed on this scoped run (the rollup
+            # aggregates fewer apps than the baseline, so the delta is meaningless). Empty
+            # on a full sweep, where the portfolio comparison IS valid. The judge is told
+            # not to read this as "portfolio unchanged".
+            "portfolio_skipped": portfolio_skipped,
         },
     }
     impact["no_op"] = not changed_tds

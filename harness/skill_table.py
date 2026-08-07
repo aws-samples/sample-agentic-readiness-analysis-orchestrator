@@ -24,6 +24,32 @@ SKILLS = {
     "mod": REPO / "definitions" / "managed" / "modernization-readiness-analysis" / "SKILL.md",
 }
 
+
+def _skill_text(path: Path) -> str:
+    """The FULL logical TD document: SKILL.md followed by its references/*.md, in the exact
+    order the runtime loads them (filename-sorted).
+
+    The managed TDs were split from one monolithic SKILL.md into an orchestration spine plus
+    `references/NN-*.md` files that the spine loads on demand. Every table this module parses
+    — question headings, scope/calibration prose, extended triggers, N/A map, MOD gates —
+    lives in those references now. Concatenating spine + sorted references reconstructs the
+    original document byte-for-byte in document order, which is exactly what the position-
+    sensitive parsers (`_owning_qid`, first-occurrence dedup) require. The numeric `NN-`
+    prefixes make the sort match authoring order (01-scoring < 02-question-bank < ...), and a
+    TD with no references/ dir (or one that was never split) just returns SKILL.md unchanged.
+
+    A newline joins the parts so a reference that does not end in one cannot glue its last
+    line onto the next file's first heading.
+    """
+    if not path.exists():
+        return ""
+    parts = [path.read_text(encoding="utf-8")]
+    refs = path.parent / "references"
+    if refs.is_dir():
+        for ref in sorted(refs.glob("*.md")):
+            parts.append(ref.read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
 # Rubric sizes. Kept as literals ON PURPOSE even though parse_questions() derives the same
 # numbers from SKILL.md: these are the independent check that the parse is right. If a
 # heading regex drifts and silently yields 41, callers can assert against these.
@@ -71,7 +97,7 @@ def parse_questions(analysis: str) -> dict[str, dict]:
     if not path or not path.exists():
         return {}
     out: dict[str, dict] = {}
-    for qid, title, sev in _Q_HEADING.findall(path.read_text(encoding="utf-8")):
+    for qid, title, sev in _Q_HEADING.findall(_skill_text(path)):
         if qid in out:
             continue
         raw = (sev or "").strip()
@@ -195,7 +221,7 @@ def parse_scope_severities(analysis: str = "ara") -> dict[str, dict[str, str]]:
     path = SKILLS.get(analysis)
     if not path or not path.exists():
         return {}
-    text = path.read_text(encoding="utf-8")
+    text = _skill_text(path)
     out: dict[str, dict[str, str]] = {}
     # Two phrasings carry the same authoritative rule and BOTH must be parsed. Four of the five
     # conditional BLOCKERs (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q2) use the "When ... Evaluate as"
@@ -236,7 +262,7 @@ def parse_calibrations(analysis: str = "ara") -> dict[str, list[dict[str, str]]]
     path = SKILLS.get(analysis)
     if not path or not path.exists():
         return {}
-    text = path.read_text(encoding="utf-8")
+    text = _skill_text(path)
     out: dict[str, list[dict[str, str]]] = {}
     pat = re.compile(r"\*\*(Surface-flag|Archetype) [Cc]alibration:\*\*\s*(.+?)\s*$", re.M)
     for m in pat.finditer(text):
@@ -261,7 +287,7 @@ def parse_extended(analysis: str = "ara") -> dict[str, str]:
     out: dict[str, str] = {}
     # | STATE-Q4 | Service has external dependencies (calls other services or external APIs) |
     for m in re.finditer(rf"^\|\s*({_QID})\s*\|\s*([^|]+?)\s*\|\s*$",
-                         path.read_text(encoding="utf-8"), re.M):
+                         _skill_text(path), re.M):
         out.setdefault(m.group(1), m.group(2).strip())
     return out
 
@@ -281,7 +307,7 @@ def parse_mod_surface_gates() -> dict[str, dict[str, str]]:
     # | **INF-Q2** (Managed Databases) | `has_persistent_data_store` | Not Evaluated ... |
     pat = re.compile(
         rf"^\|\s*\*\*({_QID})\*\*[^|]*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$", re.M)
-    for m in pat.finditer(path.read_text(encoding="utf-8")):
+    for m in pat.finditer(_skill_text(path)):
         out.setdefault(m.group(1), {"flag": m.group(2).strip().replace("`", ""),
                                     "when_false": m.group(3).strip()})
     return out
@@ -298,7 +324,7 @@ def parse_mod_archetype_calibrated() -> list[str]:
     path = SKILLS.get("mod")
     if not path or not path.exists():
         return []
-    text = path.read_text(encoding="utf-8")
+    text = _skill_text(path)
     out: list[str] = []
     for m in re.finditer(r"\*\*Archetype Calibration:\*\*", text):
         qid = _owning_qid(text, m.start())
@@ -317,7 +343,7 @@ def parse_na_map(analysis: str) -> dict[str, list[str]]:
     path = SKILLS.get(analysis)
     if not path or not path.exists():
         return {}
-    text = path.read_text(encoding="utf-8")
+    text = _skill_text(path)
     m = re.search(r"^### N/A Question Mappings by Repo Type\s*$(.+?)^###", text,
                   re.M | re.S)
     if not m:
@@ -442,6 +468,43 @@ def _git_show(ref: str, path: Path) -> Optional[str]:
     return res.stdout if res.returncode == 0 else None
 
 
+def _git_skill_text(ref: str, path: Path) -> Optional[str]:
+    """`_skill_text` for a TD as it existed at a git `ref`: SKILL.md + references/*.md.
+
+    The on-disk `_skill_text` cannot be used for the base side — the base is a past commit,
+    not the working tree. This reconstructs the same concatenation (spine + filename-sorted
+    references) from git blobs so a base/head diff compares like with like.
+
+    It also spans the split itself: a `ref` from BEFORE the monolithic SKILL.md was broken up
+    has no references/ dir, so `git ls-tree` lists nothing and this returns SKILL.md alone —
+    which is the whole document at that ref. So diffing a pre-split base against a post-split
+    head correctly sees zero table movement (the same questions, just relocated), instead of
+    reading every question as removed-then-readded. Returns None only when SKILL.md itself is
+    absent at the ref (a genuinely new TD), preserving the "no before" contract callers rely on.
+    """
+    spine = _git_show(ref, path)
+    if spine is None:
+        return None
+    parts = [spine]
+    try:
+        rel_dir = (path.parent / "references").resolve().relative_to(REPO)
+    except ValueError:
+        return "\n".join(parts)
+    try:
+        listed = subprocess.run(
+            ["git", "-C", str(REPO), "ls-tree", "--name-only", ref, f"{rel_dir.as_posix()}/"],
+            capture_output=True, text=True, check=False)
+    except OSError:
+        return "\n".join(parts)
+    if listed.returncode == 0:
+        names = [ln for ln in listed.stdout.splitlines() if ln.endswith(".md")]
+        for name in sorted(names):
+            blob = _git_show(ref, REPO / name)
+            if blob is not None:
+                parts.append(blob)
+    return "\n".join(parts)
+
+
 def changed_severity_qids(base: str) -> dict[str, list[str]]:
     """{analysis: [qids whose severity/conditional moved between `base` and the work tree]}.
 
@@ -454,8 +517,8 @@ def changed_severity_qids(base: str) -> dict[str, list[str]]:
     """
     out: dict[str, list[str]] = {}
     for analysis, path in SKILLS.items():
-        head_text = path.read_text(encoding="utf-8") if path.exists() else ""
-        base_text = _git_show(base, path)
+        head_text = _skill_text(path)
+        base_text = _git_skill_text(base, path)
         if base_text is None:
             # Base blob unreadable (new file, or unresolved ref). With no `before` there is
             # nothing to have over-escalated against, so treat every current question as
