@@ -119,7 +119,7 @@ Every MOD question has a static `core_question` value that does NOT change per-r
 **Worked severity mapping examples:**
 - `INF-Q1` with score 1 → core=true → **High** finding
 - `INF-Q3` with score 1 → core=false → **Medium** finding (non-core score 1 is not a High because INF-Q3 is archetype-calibrated and may score 1 correctly for some archetypes)
-- `OPS-Q2` with score 1 → core=false → **Medium** finding (OPS-Q2 has `⚠️ Scoring limitation — external context dependency` noted in the rubric, which is why it's non-core)
+- `OPS-Q2` with score 1 → core=false → **Medium** finding (OPS-Q2 is non-core because SLO tooling commonly resides in external monitoring platforms, so the absence of in-repo SLO artifacts is not on its own a reliable signal of operational immaturity)
 - Any question with score 2 → **Medium** finding regardless of core_question
 
 `mod_metadata` preserves scoring detail. The Score Summary table, Scoring Notes arithmetic, pathway trigger logic, and archetype-calibration prose all remain authoritative and unchanged — `mod_metadata` just surfaces the per-finding scoring reasoning in structured JSON so the webapp and the portfolio aggregator can consume it without re-parsing MD.

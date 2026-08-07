@@ -108,7 +108,7 @@ Extract the following fields from `additionalPlanContext`:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `repo_type` | enum | No | `"application"` | Repository classification. One of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`. Determines which questions are scored as N/A and which pathways are Not Applicable. |
+| `repo_type` | enum | No | auto-detected | Repository classification. One of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`. Determines which questions are scored as N/A and which pathways are Not Applicable. If not provided, auto-detected in Step 1.4b. |
 | `context` | string | No | — | Free-text description of the repository (e.g., "Legacy PHP e-commerce app running on EC2 with MySQL"). Used to frame findings and recommendations throughout the report. |
 | `priority` | enum | No | — | Repository priority within the portfolio. One of: `P0`, `P1`, `P2`. Recorded in report metadata. |
 | `tags` | string[] | No | — | User-defined tags for categorization (e.g., `["monolith", "php", "payment-critical"]`). Recorded in report metadata. |
@@ -133,14 +133,14 @@ additionalPlanContext: |
 
 If a field is absent from `additionalPlanContext`, apply these defaults:
 
-- **`repo_type`** → `"application"` — This is the most comprehensive analysis (no questions skipped, all pathways applicable). Defaulting to `application` ensures nothing is missed when classification is unknown.
+- **`repo_type`** → Auto-detected in Step 1.4b from the repository file inventory. If auto-detection is inconclusive, defaults to `"application"` — the most comprehensive analysis (no questions skipped, all pathways applicable) — ensuring nothing is missed when classification is genuinely ambiguous.
 - **`context`** → No default. If absent, findings and recommendations are written without additional framing.
 - **`priority`** → No default. If absent, omitted from report metadata.
 - **`tags`** → No default. If absent, omitted from report metadata.
 - **`preferences`** → No default. If absent, technology recommendations use neutral language without favoring or avoiding specific technologies.
 - **`service_archetype`** → Auto-detected in Step 1.5 based on repository analysis. If auto-detection is inconclusive, defaults to `"stateful-crud"` (the most conservative archetype — applies the strictest rubric on architecture-sensitive questions without false downgrades). Only applies when `repo_type` is `application`. For non-application repo types, this field is ignored.
 
-If `repo_type` is present but not one of the 5 recognized values (`application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`), default to `"application"` and include a warning in the report metadata: **"Unrecognized repo_type '{value}', defaulting to application."**
+If `repo_type` is present but not one of the 5 recognized values (`application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`), auto-detect from the file inventory in Step 1.4b and include a warning in the report metadata: **"Unrecognized repo_type '{value}', auto-detected '{detected}'."**
 
 #### 0.3 Fields NOT Read by This TD
 
@@ -306,6 +306,50 @@ Read all discovered files that are relevant to the analysis. Prioritize reading 
 
 For large repositories, focus on files most relevant to the 37 evaluation questions. Not every source file needs to be read in full — prioritize IaC resources, Kubernetes manifests, database configurations, pipeline definitions, entry points, and inter-service communication patterns.
 
+### Step 1.4b: Repository Type Detection
+
+`repo_type` gates the entire analysis: it determines which of the 37 questions are scored as N/A and which of the 7 pathways are Not Applicable (see the N/A Mapping below). It must be resolved before archetype detection (Step 1.5), surface detection (Step 1.6), and any scoring.
+
+**Resolve `repo_type` in this order — the first rule that applies wins:**
+
+1. If `repo_type` was provided in `additionalPlanContext` and is one of the 5 recognized values (`application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`), use that value directly and skip auto-detection.
+2. If `repo_type` was provided but is **not** a recognized value, auto-detect from the inventory (below) and include a metadata warning: **"Unrecognized repo_type '{value}', auto-detected '{detected}'."**
+3. If `repo_type` was **not** provided, auto-detect from the Step 1.3 file inventory and Step 1.4 file contents using the decision logic below.
+4. If auto-detection is inconclusive, default to `"application"` — the most comprehensive analysis (no questions skipped, all pathways applicable), so nothing is missed when classification is genuinely ambiguous — and include a metadata note: **"repo_type auto-detection inconclusive; defaulted to application."**
+
+`application` is the conservative fallback: it scores the widest question set, so a misclassification can never *silently* suppress a real finding. When the correct type is uncertain, resolve to `application`, never to a narrower type.
+
+#### Auto-Detection Decision Logic
+
+Apply these checks in order against the Step 1.3 inventory. The first check that matches determines the repo type.
+
+| Order | repo_type | Detect when | Inventory signals (from Step 1.3) |
+|-------|-----------|-------------|-----------------------------------|
+| 1 | **monorepo** | Two or more independent deployable service units, each with its own entry point and dependency manifest, under sibling directories | Multiple `services/*/`, `apps/*/`, or `packages/*/` directories each containing a distinct entry point (`main()`, `server.listen()`, `@SpringBootApplication`, etc.) **and** its own dependency manifest; often multiple independent Dockerfiles or Helm charts for distinct services |
+| 2 | **library** | Application source is present, but there is **no deployable entry point** — no Dockerfile, no resource-provisioning IaC, no server/main bootstrap; the repo is packaged for publish/consumption | Dependency manifest present (`package.json`, `pyproject.toml`, `pom.xml`, `Cargo.toml`, etc.) with **library** packaging (declares `main`/`exports`/`[lib]` or publish config; no server start), **combined with** the notable absence (Step 1.3) of Dockerfiles, resource-provisioning IaC, Kubernetes manifests, and deploy pipelines (build/test/publish CI only) |
+| 3 | **deployment-config** | CI/CD and deployment manifests only — **no application source code and no resource-provisioning IaC** | `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `buildspec.yml`, `appspec.yml`, Kubernetes manifests, Helm charts, Kustomize, Ansible, or ArgoCD/Flux configs present, with **no** application source files and **no** `aws_*`/`AWS::*` resource-provisioning IaC |
+| 4 | **infrastructure-only** | IaC that **provisions** resources is present, but there is **no application source code** | Terraform (`.tf`/`.tfvars`), CDK stacks, CloudFormation templates, Pulumi, or SAM present (`has_iac_provisioning_aws_resources` is true); application source with entry points is absent |
+| 5 | **application** | Application source code with a deployable entry point is present (single service). This is the residual case for a runnable app | Application source with entry point(s) and a dependency manifest, typically with a Dockerfile and/or IaC scoped to a single service |
+| — | *(inconclusive)* | No decisive signal above | → default to `application` per resolution rule 4 |
+
+**Ordering rationale:** `monorepo` is checked first because it *contains* apps and libraries and must win before the per-unit rules. `library` is checked before `application` because both have source code, but a library is the source-without-a-deployable-entry-point subset — the discriminator is the deployable entry point. `deployment-config` is checked before `infrastructure-only` because both are source-free, discriminated by *provisions resources* (infrastructure-only) vs *configures deployment* (deployment-config). `application` is the residual runnable-app case.
+
+#### Repo Type Recording
+
+Record the resolved `repo_type` and how it was resolved in the analysis context. Include it in the report metadata header:
+
+```markdown
+**Repo Type**: <repo_type> (auto-detected | user-provided)
+```
+
+If auto-detection was used, include a one- to two-sentence justification referencing the specific signals observed:
+
+```markdown
+**Repo Type Justification**: <e.g., "Resource-provisioning IaC present (main.tf, 4 aws_* resources) with no application entry point or dependency manifest. Classified as infrastructure-only.">
+```
+
+When the inconclusive fallback (rule 4) fires, record the note **"repo_type auto-detection inconclusive; defaulted to application."** in the metadata header in place of the justification.
+
 ### Step 1.5: Service Archetype Detection
 
 Service archetype classifies an application by its **runtime architectural role**, which determines what the "correct" design looks like for communication patterns, persistence, and orchestration. Architecture-sensitive questions in this TD (INF-Q3, INF-Q4, APP-Q3, APP-Q4) score the same evidence differently depending on archetype — synchronous HTTP is correct for a stateless utility and an anti-pattern for an orchestrator.
@@ -395,8 +439,10 @@ Questions marked with a surface gate below evaluate to **"Not Evaluated (archety
 | **INF-Q8** (Backup/Recovery) | `has_persistent_data_store` OR `has_at_rest_data_surface` | Not Evaluated (archetype-N/A). Finding: "This system has no persistent state to back up. INF-Q8 does not apply." |
 | **INF-Q9** (High Availability) | `has_deployed_workload` AND (`has_api_surface` OR `has_persistent_data_store`) | Not Evaluated (archetype-N/A). Finding: "This system has no deployed workload requiring HA evaluation. INF-Q9 does not apply." |
 | **OPS-Q2** (SLOs) | `has_api_surface` OR `has_persistent_data_store` | Not Evaluated (archetype-N/A). Finding: "This system has no user-facing surface for which SLOs are meaningful. OPS-Q2 does not apply." |
-| **SEC-Q1** (Audit Logging) | `has_iac_provisioning_aws_resources` AND evidence of account-level IaC scope | Not Evaluated (archetype-N/A). Finding: "Audit logging (CloudTrail) is an AWS account-level service provisioned once per account or organization — not per-application. This repo contains application-level IaC only (compute, databases, networking for this service) which is the correct scope for an application repo. CloudTrail evaluation belongs in the foundation/account-level infrastructure repo. Future: provide audit logging status via `additionalPlanContext`." |
-| **OPS-Q5** (Deployment Strategy) | `has_deployed_workload` | Not Evaluated (archetype-N/A). Finding: "No deployed workload found in this repo — deployment strategy cannot be assessed from source code alone. Deployment orchestration may exist in a separate deployment-config or GitOps repo. Future: provide deployment strategy evidence via `additionalPlanContext`." |
+| **SEC-Q1** (Audit Logging) | `has_iac_provisioning_aws_resources` AND evidence of account-level IaC scope | Not Evaluated (archetype-N/A). Finding: "Audit logging (CloudTrail) is an AWS account-level service provisioned once per account or organization — not per-application. This repo contains application-level IaC only (compute, databases, networking for this service) which is the correct scope for an application repo. CloudTrail evaluation belongs in the foundation/account-level infrastructure repo." |
+| **OPS-Q5** (Deployment Strategy) | `has_deployed_workload` | Not Evaluated (archetype-N/A). Finding: "No deployed workload found in this repo — deployment strategy cannot be assessed from source code alone. Deployment orchestration may exist in a separate deployment-config or GitOps repo." |
+| **OPS-Q7** (Incident Response Automation) | `has_deployed_workload` | Not Evaluated (archetype-N/A). Finding: "No deployed workload found in this repo — there is no running system to define incident response automation for. Runbooks and self-healing automation may live in a separate operations or deployment-config repo." |
+| **OPS-Q9** (Resource Tagging Governance) | `has_iac_provisioning_aws_resources` | Not Evaluated (archetype-N/A). Finding: "This repo provisions no AWS resources, so there are no resources to tag. Tagging governance belongs in the repo that owns the AWS infrastructure." |
 
 When a flag is `true`, the question is evaluated normally against its rubric — surface flags never downgrade a real Score 1, they only prevent a false Score 1 on a system that does not expose the surface at all. Record the resolved surface flags in the report metadata:
 
