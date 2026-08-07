@@ -172,7 +172,7 @@ The per-repo ARA MD artifact MUST render a classification rationale paragraph im
 The five conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) use conditional-severity resolution. The `ara_metadata.conditional_resolution`, `ara_metadata.agent_scope`, and `ara_metadata.resolution_reasoning` fields surface the reasoning in JSON:
 
 - `conditional_resolution`: Free-text prose that describes which native severity was assigned (e.g., "Resolved to BLOCKER: agent_scope=write-enabled AND no transaction scope").
-- `agent_scope`: The `read-only` or `write-enabled` value that drove the resolution (sourced from `additionalPlanContext.agent_scope`).
+- `agent_scope`: The `read-only` or `write-enabled` value that drove the resolution (inferred from the `has_write_operations` surface flag in Step 1.5 — write-enabled when the repo exposes write operations, else read-only; Continuous Modernization does not supply `additionalPlanContext`).
 - `resolution_reasoning`: Free-text prose explaining WHY the resolution was applied to this repo (e.g., "DATA-Q1 B1 fired because agent-facing APIs return credentials unmasked in HostConfigResource.cs").
 
 The conditional-BLOCKER resolution logic is defined in Steps 2–9 of the analysis process; the JSON fields above surface that reasoning in a structured form.

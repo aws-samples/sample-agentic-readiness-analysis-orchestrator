@@ -58,8 +58,8 @@ Extract the following fields from `additionalPlanContext`:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `repo_type` | enum | No | `"application"` | Repository classification. One of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`. Determines which questions are scored as N/A. |
-| `agent_scope` | enum | No | `"read-only"` | The intended agent access level. One of: `read-only`, `write-enabled`. Determines severity of conditional BLOCKER (⚡) questions. |
+| `repo_type` | enum | No | auto-detected | Repository classification. One of: `application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`. Determines which questions are scored as N/A. If not provided, auto-detected in Step 1.4b. |
+| `agent_scope` | enum | No | inferred | The intended agent access level. One of: `read-only`, `write-enabled`. Determines severity of conditional BLOCKER (⚡) questions. If not provided, inferred in Step 1.5 from the `has_write_operations` surface flag. |
 | `service_archetype` | enum | No | auto-detected | Service archetype for severity calibration. One of: `stateless-utility`, `stateful-crud`, `orchestrator`, `data-gateway`, `event-processor`. If not provided, auto-detected in Step 1.6. Only applies when `repo_type` is `application`. |
 | `context` | string | No | — | Free-text description of the repository (e.g., "Legacy PHP e-commerce app running on EC2 with MySQL"). Used to frame findings and recommendations throughout the report. |
 | `priority` | enum | No | — | Repository priority within the portfolio. One of: `P0`, `P1`, `P2`. Recorded in report metadata. |
@@ -80,21 +80,21 @@ additionalPlanContext: |
 
 If a field is absent from `additionalPlanContext`, apply these defaults:
 
-- **`repo_type`** → `"application"` — This is the most comprehensive analysis (no questions skipped). Defaulting to `application` ensures nothing is missed when classification is unknown.
-- **`agent_scope`** → `"read-only"` — This is the safer default. Conditional BLOCKER questions (⚡) are evaluated as INFO or RISK-SAFETY rather than BLOCKER, avoiding false escalation when the agent use case has not been scoped.
+- **`repo_type`** → Auto-detected in Step 1.4b from the repository file inventory. If auto-detection is inconclusive, defaults to `"application"` — the most comprehensive analysis (no questions skipped), so nothing is missed when classification is genuinely ambiguous.
+- **`agent_scope`** → Inferred in Step 1.5 from the `has_write_operations` surface flag: resolve to `"write-enabled"` when `has_write_operations` is `true` (the target exposes state-mutating endpoints or side effects — precisely where an integrated agent can cause harm), otherwise `"read-only"`. When the surface flag is `unknown`, default to `"read-only"` (the safer resolution — avoids false BLOCKER escalation when write capability genuinely cannot be determined). Rationale: this TD runs inside AWS Transform Continuous Modernization, which does not supply `additionalPlanContext`, so a static `read-only` default would silently downgrade every conditional BLOCKER (⚡) on every run — inferring from write-surface evidence keeps the conditional-BLOCKER escalation live exactly when the repository actually exposes writes.
 - **`service_archetype`** → Auto-detected in Step 1.6 based on repository analysis. If auto-detection is inconclusive, defaults to `"stateful-crud"` (the most conservative archetype — no severity downgrades beyond standard scope calibration). Only applies when `repo_type` is `application`.
 - **`context`** → No default. If absent, findings and recommendations are written without additional framing.
 - **`priority`** → No default. If absent, omitted from report metadata.
 - **`tags`** → No default. If absent, omitted from report metadata.
 
-If `repo_type` is present but not one of the 5 recognized values (`application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`), default to `"application"` and include a warning in the report metadata: **"Unrecognized repo_type '{value}', defaulting to application."**
+If `repo_type` is present but not one of the 5 recognized values (`application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`), auto-detect from the file inventory in Step 1.4b and include a warning in the report metadata: **"Unrecognized repo_type '{value}', auto-detected '{detected}'."**
 
 #### 0.3 How Context Fields Are Used
 
 Record the resolved values from Steps 0.1–0.2 in the analysis context. They will be used in subsequent steps as follows:
 
 - **`repo_type`** → Used in the N/A Mapping (Step 1) to determine which questions are scored as N/A for the detected repo type. Included in the report metadata header.
-- **`agent_scope`** → Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK-SAFETY. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header.
+- **`agent_scope`** → Resolved in Step 1.5 (provided value if present, otherwise inferred from `has_write_operations`). Used in Steps 2–9 (Evaluation) to determine the severity of conditional BLOCKER (⚡) questions: API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, and DATA-Q2. When `agent_scope` is `"write-enabled"`, these are evaluated as BLOCKERs. When `"read-only"`, they are evaluated as INFO or RISK-SAFETY. Also used to calibrate scope-sensitive RISK questions: HITL-Q1, HITL-Q2, STATE-Q3, and STATE-Q6 — these evaluate as RISK when `"write-enabled"` and downgrade to INFO when `"read-only"`. Included in the report metadata header, annotated `(inferred | user-provided)`.
 - **`service_archetype`** → Used in Steps 2–9 (Evaluation) to calibrate severity for archetype-sensitive questions. When a question is calibrated to INFO for the detected archetype, it is recorded as INFO (not RISK) and does not count toward the RISK total. Calibration only downgrades severity — it never upgrades. Included in the report metadata header. Only applies when `repo_type` is `application`.
 - **`context`** → Used throughout the report to frame findings and recommendations with repository-specific context.
 - **`priority`** → Recorded in the report metadata header.
@@ -198,6 +198,50 @@ Read all discovered files that are relevant to the analysis. Prioritize reading 
 
 For large repositories, focus on files most relevant to the 43 evaluation questions. Not every source file needs to be read in full — prioritize entry points, API route definitions, authentication middleware, data access layers, and error handling patterns.
 
+### Step 1.4b: Repository Type Detection
+
+`repo_type` gates the entire analysis: it determines which of the 43 questions are scored as N/A (see the N/A Mapping in Step 1). It must be resolved before surface detection (Step 1.5), archetype detection (Step 1.6), and any scoring.
+
+**Resolve `repo_type` in this order — the first rule that applies wins:**
+
+1. If `repo_type` was provided in `additionalPlanContext` and is one of the 5 recognized values (`application`, `infrastructure-only`, `deployment-config`, `monorepo`, `library`), use that value directly and skip auto-detection.
+2. If `repo_type` was provided but is **not** a recognized value, auto-detect from the inventory (below) and include a metadata warning: **"Unrecognized repo_type '{value}', auto-detected '{detected}'."**
+3. If `repo_type` was **not** provided, auto-detect from the Step 1.3 file inventory and Step 1.4 file contents using the decision logic below.
+4. If auto-detection is inconclusive, default to `"application"` — the most comprehensive analysis (no questions skipped), so nothing is missed when classification is genuinely ambiguous — and include a metadata note: **"repo_type auto-detection inconclusive; defaulted to application."**
+
+`application` is the conservative fallback: it scores the widest question set, so a misclassification can never *silently* suppress a real finding. When the correct type is uncertain, resolve to `application`, never to a narrower type.
+
+#### Auto-Detection Decision Logic
+
+Apply these checks in order against the Step 1.3 inventory. The first check that matches determines the repo type.
+
+| Order | repo_type | Detect when | Inventory signals (from Step 1.3) |
+|-------|-----------|-------------|-----------------------------------|
+| 1 | **monorepo** | Two or more independent deployable service units, each with its own entry point and dependency manifest, under sibling directories | Multiple `services/*/`, `apps/*/`, or `packages/*/` directories each containing a distinct entry point (`main()`, `server.listen()`, `@SpringBootApplication`, etc.) **and** its own dependency manifest; often multiple independent Dockerfiles or Helm charts for distinct services |
+| 2 | **library** | Application source is present, but there is **no deployable entry point** — no Dockerfile, no resource-provisioning IaC, no server/main bootstrap; the repo is packaged for publish/consumption | Dependency manifest present (`package.json`, `pyproject.toml`, `pom.xml`, `Cargo.toml`, etc.) with **library** packaging (declares `main`/`exports`/`[lib]` or publish config; no server start), **combined with** the notable absence (Step 1.3) of Dockerfiles, resource-provisioning IaC, Kubernetes manifests, and deploy pipelines (build/test/publish CI only) |
+| 3 | **deployment-config** | CI/CD and deployment manifests only — **no application source code and no resource-provisioning IaC** | `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `buildspec.yml`, `appspec.yml`, Kubernetes manifests, Helm charts, Kustomize, Ansible, or ArgoCD/Flux configs present, with **no** application source files and **no** `aws_*`/`AWS::*` resource-provisioning IaC |
+| 4 | **infrastructure-only** | IaC that **provisions** resources is present, but there is **no application source code** | Terraform (`.tf`/`.tfvars`), CDK stacks, CloudFormation templates, Pulumi, or SAM present; application source with entry points is absent |
+| 5 | **application** | Application source code with a deployable entry point is present (single service). This is the residual case for a runnable app | Application source with entry point(s) and a dependency manifest, typically with a Dockerfile and/or IaC scoped to a single service |
+| — | *(inconclusive)* | No decisive signal above | → default to `application` per resolution rule 4 |
+
+**Ordering rationale:** `monorepo` is checked first because it *contains* apps and libraries and must win before the per-unit rules. `library` is checked before `application` because both have source code, but a library is the source-without-a-deployable-entry-point subset — the discriminator is the deployable entry point. `deployment-config` is checked before `infrastructure-only` because both are source-free, discriminated by *provisions resources* (infrastructure-only) vs *configures deployment* (deployment-config). `application` is the residual runnable-app case.
+
+#### Repo Type Recording
+
+Record the resolved `repo_type` and how it was resolved in the analysis context. Include it in the report metadata header:
+
+```markdown
+**Repo Type**: <repo_type> (auto-detected | user-provided)
+```
+
+If auto-detection was used, include a one- to two-sentence justification referencing the specific signals observed:
+
+```markdown
+**Repo Type Justification**: <e.g., "Resource-provisioning IaC present (main.tf, 4 aws_* resources) with no application entry point or dependency manifest. Classified as infrastructure-only.">
+```
+
+When the inconclusive fallback (rule 4) fires, record the note **"repo_type auto-detection inconclusive; defaulted to application."** in the metadata header in place of the justification.
+
 ### Step 1.5: Target-System Surface Detection
 
 Before evaluating any question, classify what agent-accessible surfaces this target system actually exposes. The severity of many ARA questions depends on whether the relevant surface exists at all — a build tool that never handles user data should not score BLOCKER for "no PII classification"; a library with no HTTP server should not score RISK-QUALITY for "no machine-readable API spec." This step records the surfaces so downstream evaluation can downgrade or N/A questions that do not apply.
@@ -250,6 +294,15 @@ Record the five surface flags in the report metadata header alongside `repo_type
 ```
 
 These flags feed the N/A / INFO downgrade decisions in Steps 2–9. When a question's evaluation block states "if `has_X_surface` is `false`, record as INFO and skip," obey that instruction.
+
+#### Resolve `agent_scope` from the write surface
+
+If `agent_scope` was provided in `additionalPlanContext`, use that value directly. Otherwise infer it from `has_write_operations` (just recorded above):
+
+- `has_write_operations` is `true` → **`write-enabled`**. The target exposes state-mutating endpoints or side effects, so the conditional BLOCKER (⚡) questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) and scope-calibrated RISK questions (HITL-Q1, HITL-Q2, STATE-Q3, STATE-Q6) evaluate at their write-enabled severities.
+- `has_write_operations` is `false` or `unknown` → **`read-only`** — the safer resolution, which downgrades the conditional questions as their own sections specify.
+
+Record the resolved value and how it was resolved in the report metadata header: `**Agent Scope**: <agent_scope> (inferred | user-provided)`. This inference exists because this TD runs inside AWS Transform Continuous Modernization, which does not supply `additionalPlanContext` — inferring write capability from the detected write surface keeps the conditional-BLOCKER escalation live on genuinely write-capable targets instead of silently defaulting every run to `read-only`. It never *raises* a severity above a question's heading ceiling; it only resolves the documented conditional between the write-enabled and read-only severities already defined for each ⚡ question.
 
 #### Archetype Override for Dev-Library-Applications
 
@@ -482,7 +535,7 @@ Strictly follow these rules at all times:
 - **Conditional BLOCKER rules**: The 5 conditional BLOCKER questions (API-Q4, STATE-Q1, AUTH-Q6, DATA-Q1, DATA-Q2) must be evaluated at the severity determined by `agent_scope`. Do not override the conditional logic.
 - **Evaluation tier rules**: Core questions are always evaluated (unless N/A by repo_type). Extended questions are evaluated only when their trigger condition is met. Use the Evaluation Tier tables in the Summary section to determine which extended questions to trigger based on archetype, scope, and service characteristics.
 - **Archetype classification**: Use the `service_archetype` from `additionalPlanContext` if provided. Otherwise, auto-detect in Step 1.6. If auto-detection is inconclusive, default to `stateful-crud`. The archetype determines which extended questions are triggered — it does NOT override severity of core questions.
-- **Repo type classification**: Use the `repo_type` from `additionalPlanContext`. If not provided, default to `application`. Apply the N/A mapping table exactly as defined.
+- **Repo type classification**: Use the `repo_type` from `additionalPlanContext` if provided. Otherwise, auto-detect in Step 1.4b. If auto-detection is inconclusive, default to `application`. Apply the N/A mapping table exactly as defined.
 - **Report completeness**: The output report must contain all required sections: metadata header (including service archetype), readiness profile, summary counts (including extended question counts), BLOCKERs with remediation, RISKs with compensating controls, INFOs, detailed findings for all 43 questions, and evidence index.
 
 ## Output Contract
