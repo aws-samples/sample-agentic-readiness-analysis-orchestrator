@@ -293,7 +293,12 @@ harness:comment-check:
       }
       JSON
       echo "--- posting ---"
-      harness/post-mr-comment.sh verdict.json
+      # `|| true`: on a web pipeline there is no MR, so post-mr-comment.sh takes its
+      # print-instead-of-post path and exit 1 (by design, so the harness:full caller can
+      # fall back to `cat verdict.json`). That exit code is NOT this job's assertion — the
+      # verify step below is (see the note there). Without this guard every web-triggered
+      # pipeline (e.g. a rebaseline run) red-fails comment-check on the no-MR no-op.
+      harness/post-mr-comment.sh verdict.json || true
     # post-mr-comment.sh is advisory and exits 0 even on a failed POST, so its exit code
     # cannot be the assertion. Re-read the MR's notes and confirm ours is actually there —
     # otherwise this job would go green while posting nothing, which is the exact failure
