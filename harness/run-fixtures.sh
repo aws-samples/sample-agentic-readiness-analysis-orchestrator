@@ -371,7 +371,10 @@ echo "run-fixtures: scope=${SCOPE} ara=${run_ara} mod=${run_mod} fixtures=${#sel
 export AWS_REGION="${HARNESS_AWS_REGION:-us-east-1}"
 export AWS_DEFAULT_REGION="${HARNESS_AWS_REGION:-us-east-1}"
 
-command -v atx >/dev/null 2>&1 || { echo "error: atx CLI not found" >&2; exit 2; }
+# A dry run only PRINTS the atx commands (see run() below) — it never invokes the CLI, so it
+# must not require atx to be installed. This lets the offline test suite exercise the arg
+# parsing / shard partition on a bare runner (the CI test image has no atx).
+[[ "${DRY_RUN}" == "true" ]] || command -v atx >/dev/null 2>&1 || { echo "error: atx CLI not found" >&2; exit 2; }
 
 run() { echo "+ $*" >&2; [[ "${DRY_RUN}" == "true" ]] || "$@"; }
 
