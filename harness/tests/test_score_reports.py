@@ -1028,6 +1028,104 @@ def test_design_doc_describes_the_threshold_as_a_max_not_an_either_or():
         "DESIGN.md must state the threshold as max(2*sd, NOISE_FLOOR)"
 
 
+# --- baseline staleness guard ----------------------------------------------------------
+# The loan-calculator failure class: a baseline row generated from an OLD TD is compared
+# against a report from the CURRENT TD, so the delta measures a TD change that already
+# merged, not this MR. These tests patch the two git-shelling helpers so the guard is
+# exercised deterministically, with no repo state dependency.
+#
+# A self-contained patcher (not pytest's monkeypatch fixture) is used deliberately: the
+# fallback runner at the bottom of this file calls every test with NO args, so a test whose
+# signature demands the `monkeypatch` fixture would TypeError under `python3 <file>`. This
+# context manager restores the originals in finally, so both runners behave identically.
+import contextlib
+
+
+@contextlib.contextmanager
+def _shas(current_sha, ref="origin/main"):
+    """Force td_tree_sha -> current_sha and base_ref -> ref for the duration.
+
+    compare_to_baseline reads the CURRENT sha via td_tree_sha(analysis, ref); the BASELINE
+    sha comes off each row's `td_sha`, which the test sets directly.
+    """
+    orig_ref, orig_sha = sr.base_ref, sr.td_tree_sha
+    sr.base_ref = lambda: ref
+    sr.td_tree_sha = lambda analysis, r=None: current_sha
+    try:
+        yield
+    finally:
+        sr.base_ref, sr.td_tree_sha = orig_ref, orig_sha
+
+
+def test_baseline_from_an_older_td_is_flagged_stale():
+    """A baseline whose td_sha differs from the current base-branch TD is STALE.
+
+    This is exactly legacy-loan-calculator after MR !17: the read-only golden predates the
+    write-inference change, so comparing a write-enabled report against it is meaningless.
+    """
+    with _shas("newsha"):
+        base = [{"repo": "legacy-loan-calculator", "analysis": "ara", "score": 0.82,
+                 "td_sha": "oldsha"}]
+        got = sr.compare_to_baseline(
+            [{"repo": "legacy-loan-calculator", "analysis": "ara", "score": 0.72}], base)
+    u = got["units"][0]
+    assert u["baseline_stale"] is True
+    assert got["summary"]["stale"] == 1
+    assert "legacy-loan-calculator (ARA)" in got["summary"]["stale_units"]
+
+
+def test_baseline_matching_the_current_td_is_not_stale():
+    """Same TD SHA on both sides => the baseline is current, delta is a real measurement."""
+    with _shas("samesha"):
+        base = [{"repo": "a", "analysis": "ara", "score": 0.82, "td_sha": "samesha"}]
+        got = sr.compare_to_baseline(
+            [{"repo": "a", "analysis": "ara", "score": 0.72}], base)
+    assert got["units"][0]["baseline_stale"] is False
+    assert got["summary"]["stale"] == 0
+
+
+def test_a_pre_stamping_baseline_row_is_provenance_unknown_not_stale():
+    """A row with no td_sha predates stamping. We CANNOT prove it is old, so it is NOT stale.
+
+    Flagging every legacy row stale would be as useless as the silent-stale bug being fixed —
+    it would fire on the entire committed baseline until the next re-baseline.
+    """
+    with _shas("newsha"):
+        base = [{"repo": "a", "analysis": "ara", "score": 0.82}]   # no td_sha
+        got = sr.compare_to_baseline(
+            [{"repo": "a", "analysis": "ara", "score": 0.72}], base)
+    assert got["units"][0]["baseline_stale"] is False
+    assert got["summary"]["stale"] == 0
+
+
+def test_staleness_degrades_to_silent_when_git_cannot_resolve_the_current_td():
+    """No resolvable current SHA (git absent / detached) => provenance unknown, never stale.
+
+    A missing SHA must degrade the guard to silence, not crash scoring and not cry wolf.
+    """
+    with _shas(None):
+        base = [{"repo": "a", "analysis": "ara", "score": 0.82, "td_sha": "oldsha"}]
+        got = sr.compare_to_baseline(
+            [{"repo": "a", "analysis": "ara", "score": 0.72}], base)
+    assert got["units"][0]["baseline_stale"] is False
+    assert got["summary"]["stale"] == 0
+
+
+def test_staleness_is_independent_of_the_improve_regress_verdict():
+    """Stale is an ORTHOGONAL axis: a within-noise delta on a stale baseline is still stale.
+
+    The judge needs both facts — the verdict AND whether the baseline it rests on is current.
+    """
+    with _shas("newsha"):
+        base = [{"repo": "a", "analysis": "mod", "score": 0.82, "td_sha": "oldsha"}]
+        # A delta of 0 is within-noise, yet the baseline is still stale.
+        got = sr.compare_to_baseline(
+            [{"repo": "a", "analysis": "mod", "score": 0.82}], base)
+    u = got["units"][0]
+    assert u["verdict"] == "within-noise"
+    assert u["baseline_stale"] is True
+
+
 # --- fallback runner -------------------------------------------------------------------
 # MUST stay the LAST thing in this file. _run_all() collects globals() at call time, so when
 # this block sat mid-file it ran before the remaining tests were defined and silently skipped

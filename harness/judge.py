@@ -640,9 +640,23 @@ def _accuracy_note(compare: Optional[dict]) -> str:
         # threshold_basis says whether the band is real measured variance (2*stddev over N
         # runs) or the fallback floor. The judge must know which: a floor-based band at n=1
         # is a placeholder, and an "improvement" that only clears a placeholder is weak.
+        stale = "  ⚠ STALE-BASELINE" if u.get("baseline_stale") else ""
         lines.append(f"  [{u['verdict']:<12}] {u['repo']} ({str(u['analysis']).upper()}) "
                      f"{u['baseline']} -> {u['score']} (delta {u['delta']:+}, "
-                     f"threshold {u['threshold']} — {u.get('threshold_basis', 'n/a')})")
+                     f"threshold {u['threshold']} — {u.get('threshold_basis', 'n/a')}){stale}")
+    if s.get("stale"):
+        # The exact loan-calculator failure class: a baseline generated from an OLD TD is
+        # compared against a report from the CURRENT TD, so the delta measures the TD CHANGE
+        # THAT ALREADY MERGED, not this MR. It reads identically to a real regression. The
+        # judge must NOT weigh a stale-baseline delta as a regression.
+        lines.append(
+            f"\n  ⚠ STALE BASELINE — {s['stale']} unit(s): {', '.join(s.get('stale_units') or [])}.\n"
+            f"  These baseline rows predate the TD now on {compare.get('base_ref', 'the base branch')}, so\n"
+            "  their delta compares a CURRENT-TD report to an OLD-TD score — it reflects a TD\n"
+            "  change that ALREADY MERGED, not this MR. Treat any 'regressed'/'improved' verdict\n"
+            "  on a STALE unit as ADVISORY ONLY: do NOT count it as a regression caused by this\n"
+            "  change, and DO raise a concern that these fixtures need a re-baseline. Base your\n"
+            "  accuracy judgement on the NON-stale units.")
     lines.append(
         "Weigh a CONFIRMED accuracy regression heavily: it means the reports became less "
         "true of the source, which is the outcome this harness exists to prevent. Weigh a "
