@@ -213,7 +213,7 @@ The guard prevents recommending managed analytics infrastructure to applications
 
 **Trigger Logic:** Triggered when the primary condition is met (no AI/agent frameworks detected). Supporting conditions strengthen the case and expand the scope of recommendations.
 
-**Contextual Guard:** Requires explicit AI/agent/LLM intent in the portfolio or service context. Before evaluating primary trigger conditions, scan both the portfolio-level `context` and the service-level `context` (from `additionalPlanContext`) for AI-related signal terms.
+**Contextual Guard:** Requires explicit AI/agent/LLM intent evidenced in the repository. Before evaluating primary trigger conditions, scan the in-repo evidence gathered during Discovery (Step 1) — dependency manifests, source imports, configuration, IaC, and documentation (README, docs/, ADRs) — for AI-related signal terms.
 
 **AI-Related Signal Terms (case-insensitive, whole-word match):**
 "agentic", "LLM", "machine learning", "Bedrock", "generative AI", "GenAI", "RAG", "vector database", "vector store", "embedding", "copilot", "chatbot", "AI agent", "AI-powered", "large language model"
@@ -227,24 +227,31 @@ ai_signals = ["agentic", "LLM", "machine learning", "Bedrock", "generative AI",
               "GenAI", "RAG", "vector database", "vector store", "embedding",
               "copilot", "chatbot", "AI agent", "AI-powered", "large language model"]
 
-portfolio_context = additionalPlanContext.context  # portfolio-level
-service_context = additionalPlanContext.context     # service-level (from repo config)
+# In-repo evidence surfaces collected during Discovery (Step 1):
+#   - dependency manifests (package.json, requirements.txt, pom.xml, go.mod, *.csproj, etc.)
+#   - source imports / SDK references
+#   - configuration files and IaC (Bedrock/SageMaker/OpenSearch-vector resources, model IDs)
+#   - documentation (README, docs/, ADRs, design notes)
+repo_evidence = discovery.dependency_manifests
+              + discovery.source_imports
+              + discovery.config_and_iac
+              + discovery.documentation
 
 has_ai_intent = false
 for signal in ai_signals:
-    if signal in portfolio_context (case-insensitive) OR signal in service_context (case-insensitive):
+    if signal in repo_evidence (case-insensitive, whole-word):
         has_ai_intent = true
         break
 
 if not has_ai_intent:
     pathway_status = "Not Triggered"
-    reason = "No AI/agent intent detected in portfolio or service context."
+    reason = "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
 else:
     # Proceed with primary trigger evaluation (no AI frameworks detected)
     evaluate_primary_triggers()
 ```
 
-If neither the portfolio-level context nor the service-level context contains any of the AI-related signal terms, the pathway status is set to **Not Triggered** with reason: "No AI/agent intent detected in portfolio or service context." The primary trigger conditions are not evaluated. When at least one context string contains an AI-related signal and the primary trigger conditions are met, the pathway status is set to **Triggered**.
+If none of the in-repo evidence surfaces contain any of the AI-related signal terms, the pathway status is set to **Not Triggered** with reason: "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)." The primary trigger conditions are not evaluated. When the repository evidences an AI-related signal and the primary trigger conditions are met, the pathway status is set to **Triggered**.
 
 **Priority:** Medium — AI adoption is increasingly important but depends on the application's domain and use cases.
 **Est. Effort:** Medium — initial AI integration (e.g., adding Bedrock for a single use case) is moderate effort, but building comprehensive AI infrastructure (vector DBs, RAG, eval frameworks) requires more investment.

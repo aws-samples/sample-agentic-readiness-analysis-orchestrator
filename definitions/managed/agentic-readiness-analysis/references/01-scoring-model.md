@@ -44,6 +44,16 @@ Not all 43 questions are evaluated for every service. Questions are organized in
 | ENG-Q4 | Always evaluated (but INFO for stateless-utility) |
 | ENG-Q5 | Service has persistent data stores |
 
+#### Informational-Absence Suppression (INFO noise reduction)
+
+Six always-INFO questions — **API-Q5, API-Q8, DATA-Q7, DISC-Q2, DISC-Q3, OBS-Q3** — are advisory design signals with no gating impact (severity INFO → Low). When the repository contains **no evidence at all** on either side of the question (nothing in the "Look for" list is present *and* no contrary signal exists), an emitted INFO finding carries no actionable information and is pure noise. In that case, **suppress the finding and record the question in `evaluations[]`** with `status: "pass"` and a reason naming the informational absence (e.g., `"No data-quality tooling or data store present — informational signal, no finding emitted."`).
+
+This is suppression-on-absence, not a severity change:
+- It applies **only** to the six questions listed above, and **only** when evidence is genuinely absent on both sides. When any positive or contrary evidence exists, the question emits its normal INFO finding.
+- It never suppresses a BLOCKER, RISK-SAFETY, or RISK-QUALITY question, and never suppresses an INFO question that has real evidence to report.
+- Coverage stays complete: the question still appears in `evaluations[]`, so every question ID resolves to exactly one of `findings[]` or `evaluations[]`.
+- The 43-question count, the severity vocabulary, and every score→severity mapping are unchanged.
+
 ### Evaluation Tier by Repo Type and Archetype
 
 | Configuration | N/A | Core | Extended Triggered | Total Evaluated |

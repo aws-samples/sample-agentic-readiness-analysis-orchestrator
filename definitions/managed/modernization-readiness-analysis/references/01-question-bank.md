@@ -99,7 +99,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 > **Look for:** `aws_vpc`, `aws_subnet`, `aws_security_group`; subnet tiers (public vs private); security group rules; overly permissive rules (0.0.0.0/0); default-VPC usage; managed networking signals — `aws_vpc_endpoint`, `aws_vpclattice_*`, `aws_vpc_ipam_*`, AWS PrivateLink configurations.
 
-> **⚠️ Scoring limitation — external context dependency:** VPC, subnet, and security group configurations are often managed in a dedicated infrastructure or networking repository rather than in application repos. The absence of network security IaC in the scanned repository does not confirm that the application runs without network isolation — it may be deployed into a VPC managed elsewhere. A Score of 1 has a moderate false-positive rate for application repos that do not own their networking layer. When `additionalPlanContext` provides network security evidence, use that to override the code-scan result.
+> **Scoping note:** Network configuration can live in AWS-provisioning IaC (VPC/subnet/security-group Terraform or CloudFormation) or in deployment manifests (Kubernetes NetworkPolicy, service-mesh rules, security groups referenced by name). Score on whatever network surface the repo actually owns, cross-checking the Step 1.6 surface flags: a repo that provisions AWS network resources (`has_iac_provisioning_aws_resources`) is scored on that IaC — a genuine `0.0.0.0/0` ingress or default-VPC deployment scores 1 or 2 exactly as the table requires; a deployment-config repo is scored on its in-repo network policies and mesh rules. A repo that owns no network surface at all (a pure `library` with no IaC and no deployment manifests) receives the `library` N/A treatment via the repo_type mapping, not a false Score 1. This is decided entirely from in-repo evidence — no external confirmation is required or awaited.
 
 #### INF-Q6: API Entry Point
 
@@ -176,9 +176,7 @@ When the score is 4 for `stateless-utility` or `data-gateway` because synchronou
 
 > **Look for:** Presence and coverage of .tf files, CDK stacks, CloudFormation templates, Helm charts. Check whether IaC covers compute, networking, databases, messaging, and operational resources (CloudWatch alarms, Route 53 health checks, Backup plans, and other DR-related resources).
 
-> **⚠️ Scoring limitation — external context dependency:** Infrastructure as Code is sometimes maintained in a dedicated infrastructure repository (e.g., a Terraform monorepo or a platform team's CDK project) rather than alongside application source code. The absence of IaC files in the scanned repository does not always confirm that infrastructure is manually provisioned — it may be managed in a separate repo. A Score of 1 has a moderate false-positive rate for application repos in organizations that separate IaC from application code. When `additionalPlanContext` provides IaC evidence (e.g., referencing a companion infra repo), use that to override the code-scan result.
-
-> **Scoring guidance for percentages:** The denominator is "infrastructure resources this service depends on" — compute, networking, databases, messaging, monitoring, DNS, and secrets. Count resource categories with IaC definitions vs those without. If only the repo's own resources are visible (no evidence of external infra), score based on what IS present: if all visible infrastructure has IaC definitions, score 3 (not 4, since unobservable resources may be manual) unless `additionalPlanContext` confirms full coverage.
+> **Scoring guidance for percentages:** The denominator is "infrastructure resources this service depends on" — compute, networking, databases, messaging, monitoring, DNS, and secrets. Count resource categories with IaC definitions vs those without, using the surfaces the repo actually exposes (cross-check the Step 1.6 surface flags: e.g., a repo with `has_persistent_data_store` depends on a data-store category; one with `has_api_surface` depends on a networking/entry category). A resource category the repo demonstrably depends on but has no in-repo IaC for is a genuine coverage gap and caps the score accordingly. Award **4** only when in-repo IaC covers every surface the repo actually exposes — compute, networking, data, and operational/DR resources for the categories in scope. A repo whose visible surfaces are fully covered by in-repo IaC legitimately earns 4; a repo that exposes a data or networking surface with no IaC for it is capped at 3 (or lower per the table). This is decided entirely from in-repo evidence — no external confirmation is required or awaited.
 
 #### INF-Q11: CI/CD Automation
 
@@ -397,7 +395,7 @@ These questions evaluate the foundational security posture required for any mode
 
 > **Look for:** `aws_cloudtrail` in IaC; CloudTrail log file validation enabled; S3 bucket with object lock for logs; CloudWatch log retention policies.
 
-> **⚠️ Scoring limitation — external context dependency:** CloudTrail is an AWS account-level service typically configured once per account or organization, not per-application repository. This question is surface-gated — only repos with account/foundation-level IaC are evaluated (see gate note above). Even when evaluated, the absence of `aws_cloudtrail` in a foundation IaC repo may indicate it's managed at the organization level rather than per-account. When `additionalPlanContext` provides audit logging evidence (e.g., confirming account-level CloudTrail exists), use that to override the code-scan result.
+> **Scoping note:** CloudTrail is an AWS account-level service configured once per account or organization, not per-application repository. The surface gate above already scopes this out for application-level IaC repos (Not Evaluated). For a repo that **does** own account/foundation-level IaC and passes the gate, evaluate strictly on the in-repo evidence per the criteria above — the absence of `aws_cloudtrail` in a foundation IaC repo that is the account-infrastructure repo is a genuine Score 1, not a hedge.
 
 #### SEC-Q2: Encryption at Rest
 
@@ -528,9 +526,7 @@ These questions evaluate the operational maturity and observability practices th
 
 > **Look for:** SLO definitions in code or config; CloudWatch alarms on p99/p95 latency; error budget tracking; SLO dashboards.
 
-> **⚠️ Scoring limitation — external context dependency:** SLO definitions typically reside in external monitoring platforms (CloudWatch, Datadog, Grafana, PagerDuty) rather than in source code or IaC. A Score of 1 on this question indicates that no SLO evidence was found *in the repository being scanned* — it does not confirm that SLOs are absent from the operational environment. This question has a high false-positive rate for code-only analyses. When `additionalPlanContext` provides SLO evidence (e.g., via a future `external_observability` field), use that to override the code-scan result. This question is classified as **non-core (P2)** because the absence of in-repo SLO artifacts is not a reliable signal of operational immaturity.
-
-> **Scoring guidance for code-only analyses:** Score 2 (not 1) when CloudWatch alarms on latency/error-rate exist in IaC even without formal SLO naming — the presence of threshold-based alarms implies implicit SLOs. Score 1 only when NO monitoring artifacts exist at all. This prevents systematic Score-1 inflation across portfolios where SLO tooling lives externally.
+> **Scoring guidance (in-repo evidence):** Score from the observability artifacts present in the repo. Score 2 (not 1) when CloudWatch alarms on latency/error-rate exist in IaC even without formal SLO naming — the presence of threshold-based alarms implies implicit SLOs. Score 1 only when NO monitoring artifacts exist at all. This prevents systematic Score-1 inflation for repos whose SLO tooling lives in an external monitoring platform. This question is classified as **non-core (P2)** because SLO tooling commonly resides in external monitoring platforms (CloudWatch, Datadog, Grafana, PagerDuty), so the absence of in-repo SLO artifacts is not on its own a reliable signal of operational immaturity — a Score of 1 reflects only what is observable in the repository.
 
 #### OPS-Q3: Business Metrics
 
@@ -579,7 +575,7 @@ These questions evaluate the operational maturity and observability practices th
 
 > **Look for:** CodeDeploy deployment config; Helm canary; Argo Rollouts; Lambda traffic shifting; ALB weighted target groups; feature flags.
 
-> **⚠️ Scoring limitation — external context dependency:** Deployment strategies are frequently configured in external systems (AWS CodeDeploy, ArgoCD, Spinnaker, Flux CD) or in separate deployment/GitOps repositories rather than in the application source repo. This question is surface-gated by `has_deployed_workload` — repos without deployment artifacts are Not Evaluated. For repos that DO have deployment artifacts, the absence of canary/blue-green evidence does not confirm that deployments are direct-to-production — deployment orchestration may exist in a separate system. When `additionalPlanContext` provides deployment strategy evidence, use that to override the code-scan result.
+> **Scoping note:** Deployment strategies are frequently configured in external systems (AWS CodeDeploy, ArgoCD, Spinnaker, Flux CD) or in a separate deployment/GitOps repo. The surface gate above already scopes this out for source-only repos (Not Evaluated). For a repo that **does** own deployment artifacts and passes the gate, evaluate strictly on the in-repo evidence per the criteria above — score canary/blue-green artifacts as 4/3, rolling-with-health-checks as 2, and direct-to-production with no traffic-shifting artifacts as a genuine Score 1.
 
 #### OPS-Q6: Integration Testing
 
@@ -611,6 +607,8 @@ These questions evaluate the operational maturity and observability practices th
 
 > **Look for:** Runbook files (markdown, YAML, JSON); Systems Manager Automation documents; Lambda-based remediation; Step Functions for incident workflows; self-healing patterns.
 
+> **Note:** This question is **surface-gated** (Step 1.6). If `has_deployed_workload` is `false` — the repo has no deployed compute, no Dockerfile with deployment manifests, and no IaC defining a running system — record the question as **"Not Evaluated (archetype-N/A)"** and skip evaluation. A source-only library or utility with no running system has nothing to define incident response automation for, and should not receive Score 1 for "no runbooks."
+
 #### OPS-Q8: Observability Ownership
 
 **Question:** Does the application have defined observability ownership — service-level dashboards, alarms with named owners, and SLO definitions tied to specific teams?
@@ -640,5 +638,7 @@ These questions evaluate the operational maturity and observability practices th
 | **1** | No tags found on resources; or only Name tags with no cost/ownership attribution. |
 
 > **Look for:** `default_tags` in Terraform provider; `tags` on resources; `required-tags` Config rules; Tag Policies in AWS Organizations. SCPs are generally not recommended for tag enforcement — per-service action variance and policy-size limits make them unreliable for tagging; reserve SCPs for security guardrails.
+
+> **Note:** This question is **surface-gated** (Step 1.6). If `has_iac_provisioning_aws_resources` is `false` — the repo provisions no AWS resources — record the question as **"Not Evaluated (archetype-N/A)"** and skip evaluation. A repo with no AWS resources has nothing to tag, and should not receive Score 1 for "no tags found." When the flag is `true`, the repo owns AWS resources and is scored on the in-repo tagging evidence per the criteria above.
 
 

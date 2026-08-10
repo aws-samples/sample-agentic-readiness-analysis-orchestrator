@@ -18,9 +18,9 @@ Create the report file with exactly this structure. Every section is required. A
 **Date**: <date>
 **Analyzed by**: AWS Transform Custom — Agentic Readiness Analysis
 **TD Version**: <resolved from `atx custom def get -n agentic-readiness-analysis` — the version ID of the published TD that produced this report, e.g., "3g1ef0edkgh173d9yafo0lio">
-**Repository Type**: <resolved repo_type>
+**Repository Type**: <resolved repo_type> (auto-detected | user-provided)
 **Service Archetype**: <resolved service_archetype> (auto-detected | user-provided)
-**Agent Scope**: <resolved agent_scope>
+**Agent Scope**: <resolved agent_scope> (inferred | user-provided)
 **Priority**: <priority if provided, otherwise omit this line>
 **Tags**: <tags if provided, otherwise omit this line>
 **Context**: <context if provided, otherwise omit this line>
@@ -31,9 +31,19 @@ If `service_archetype` was auto-detected, include:
 **Archetype Justification**: <1-2 sentence explanation>
 ```
 
-If `repo_type` was defaulted due to an unrecognized value, include a warning line:
+If `repo_type` was auto-detected (Step 1.4b), include a justification line referencing the observed signals:
 ```markdown
-**Warning**: Unrecognized repo_type '<original value>', defaulted to 'application'.
+**Repo Type Justification**: <1-2 sentence explanation, e.g., "Resource-provisioning IaC present with no application entry point. Classified as infrastructure-only.">
+```
+
+If `repo_type` auto-detection was inconclusive and defaulted, include instead:
+```markdown
+**Repo Type Justification**: repo_type auto-detection inconclusive; defaulted to application.
+```
+
+If a provided `repo_type` was unrecognized and re-detected, include a warning line:
+```markdown
+**Warning**: Unrecognized repo_type '<original value>', auto-detected '<detected>'.
 ```
 
 ---

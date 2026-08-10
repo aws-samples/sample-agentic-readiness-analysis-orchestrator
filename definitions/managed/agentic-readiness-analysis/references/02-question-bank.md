@@ -95,6 +95,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - XML marshaling
 - JSON serialization libraries
 
+**Suppress on absence:** If no API/serialization surface exists at all (no response formatting, no content-type handling — e.g., a non-HTTP library or CLI), record in `evaluations[]` as `pass` instead of emitting an INFO finding. See Informational-Absence Suppression in the scoring model.
+
 ---
 
 #### API-Q6: Asynchronous Operation Support — RISK-QUALITY
@@ -139,6 +141,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Rate limiting middleware
 - `X-RateLimit-Remaining` headers in response code
 - `aws_api_gateway_usage_plan` in IaC
+
+**Suppress on absence:** If the system exposes no API/HTTP surface at all (no endpoints, no gateway, no rate-limiting or throttling surface to document — e.g., a non-HTTP library or CLI), record in `evaluations[]` as `pass` instead of emitting an INFO finding. See Informational-Absence Suppression in the scoring model.
 
 ---
 
@@ -672,6 +676,8 @@ Severity logic for B3:
 - Data freshness SLAs
 - Data quality metrics in observability
 
+**Suppress on absence:** If the repository has no persistent data store and no data-quality tooling at all, record in `evaluations[]` as `pass` instead of emitting an INFO finding. See Informational-Absence Suppression in the scoring model.
+
 
 ### Step 7: Discoverability and Semantic Readiness (3 questions)
 
@@ -712,6 +718,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Data dictionary files
 - Naming convention documentation
 
+**Suppress on absence:** If there are no schemas, data models, or API responses with field names to assess at all, record in `evaluations[]` as `pass` instead of emitting an INFO finding. See Informational-Absence Suppression in the scoring model.
+
 ---
 
 #### DISC-Q3: Data Catalog / Metadata Layer — INFO
@@ -727,6 +735,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - Data dictionaries
 - Schema documentation
 - API catalogs
+
+**Suppress on absence:** If the repository has no persistent data store and no metadata/catalog surface at all, record in `evaluations[]` as `pass` instead of emitting an INFO finding. See Informational-Absence Suppression in the scoring model.
 
 ---
 
@@ -782,6 +792,8 @@ Before evaluating each question, check the N/A mapping for the resolved `repo_ty
 - `cloudwatch.put_metric_data` for business events
 - Custom dashboards tracking resolution rates, conversion, satisfaction
 - Business KPI alarms
+
+**Suppress on absence:** If the system emits no metrics or telemetry of any kind (no observability surface to assess), record in `evaluations[]` as `pass` instead of emitting an INFO finding. See Informational-Absence Suppression in the scoring model.
 
 
 ### Step 9: Engineering and Deployment Maturity (5 questions)

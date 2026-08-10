@@ -32,7 +32,7 @@ The analysis emits a **four-artifact bundle** per the Four-Artifact Output Contr
 | **Repository** | {repo-name} |
 | **Date** | {analysis-date} |
 | **TD Version** | {version ID of the published TD that produced this report — resolve via `atx custom def get -n modernization-readiness-analysis`} |
-| **Repo Type** | {repo_type} |
+| **Repo Type** | {repo_type} ({auto-detected or user-provided}) |
 | **Service Archetype** | {archetype} ({auto-detected or user-provided}) — omit row if repo_type is not `application` |
 | **Priority** | {priority or "—" if not provided} |
 | **Tags** | {tags as comma-separated list or "—" if not provided} |
@@ -40,9 +40,11 @@ The analysis emits a **four-artifact bundle** per the Four-Artifact Output Contr
 | **Overall Score** | {overall-score} / 4.0 |
 ```
 
-If `repo_type` was not provided and defaulted to `application`, include a note: "Repo type defaulted to `application` (not specified in analysis context)."
+If `repo_type` was auto-detected (Step 1.4b), include the one- to two-sentence justification produced in that step immediately below the metadata table under the heading `**Repo Type Justification**:`, referencing the observed inventory signals.
 
-If `repo_type` was provided but unrecognized, include a warning: "Unrecognized repo_type '{value}', defaulted to `application`."
+If `repo_type` auto-detection was inconclusive and defaulted, use the justification: "repo_type auto-detection inconclusive; defaulted to `application`."
+
+If `repo_type` was provided but unrecognized, include a warning: "Unrecognized repo_type '{value}', auto-detected '{detected}'."
 
 If `service_archetype` was auto-detected, include the one- to two-sentence justification produced in Step 1.5 immediately below the metadata table under the heading `**Archetype Justification**:`.
 
