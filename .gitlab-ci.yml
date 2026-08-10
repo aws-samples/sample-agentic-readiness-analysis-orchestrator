@@ -530,6 +530,11 @@ harness:judge:
 harness:full:
   stage: analyze
   rules:
+    # Stand down on a re-baseline web run: harness:rebaseline (below) does the sweep AND
+    # writes the baseline there, so without this guard a REBASELINE=true web pipeline fires
+    # BOTH jobs — two multi-hour full sweeps, one of them pure redundant compute.
+    - if: '$CI_PIPELINE_SOURCE == "web" && $REBASELINE == "true"'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "web"'
   timeout: 12h           # default job timeout (1h) cannot fit a full sweep
   variables:
