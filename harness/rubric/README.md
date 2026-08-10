@@ -1,5 +1,10 @@
 # Rubric — Source of Truth & Change Workflow
 
+> **New to changing rubrics?** The orientation guide is
+> [`docs/contributing/`](../../docs/contributing/README.md) (TD anatomy, decision tree,
+> invariants). **This page is the authoritative change workflow it routes to** — the steps
+> below are canonical.
+
 > **Where the rubric lives:** the **Task Definitions in this repo** are authoritative.
 > The ARA and MOD question sets, severities, scoring logic, archetype calibration, MOD score
 > bands, and the 7 modernization pathways are all defined in:

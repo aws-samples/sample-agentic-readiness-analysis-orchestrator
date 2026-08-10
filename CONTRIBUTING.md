@@ -20,6 +20,10 @@ reported the issue. Please try to include as much information as you can. Detail
 
 ## Changing a Transformation Definition (rubric)
 
+> **New here? Start at [`docs/contributing/`](docs/contributing/README.md)** — the front-door
+> guide to adding, removing, and re-scoring questions, TD anatomy, and the invariants that
+> break silently. This section is the quick summary; that folder is the full map.
+
 Edits under `definitions/managed/*/SKILL.md` change how every assessment scores, so they
 get extra scrutiny — and extra tooling.
 
