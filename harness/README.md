@@ -1,3 +1,4 @@
+<!-- Contributing to a rubric? Start at ../docs/contributing/README.md — this is the operator guide for the harness itself. -->
 # Change-Impact Harness — Operator Guide
 
 ```mermaid

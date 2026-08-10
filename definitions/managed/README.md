@@ -41,13 +41,27 @@ Engagement-program recommendations are produced **only** by the portfolio TDs �
 
 ## Directory structure
 
+Every TD is a lean **`SKILL.md` orchestration spine** plus **`references/*.md`** loaded on
+demand. The harness reads `SKILL.md` + `references/*.md` concatenated at runtime — see
+[`docs/contributing/td-anatomy.md`](../../docs/contributing/td-anatomy.md).
+
 ```
 managed/
 ├── README.md
-├── agentic-readiness-analysis/
-│   └── SKILL.md
-├── modernization-readiness-analysis/
-│   └── SKILL.md
+├── agentic-readiness-analysis/            # per-repo ARA (43 questions)
+│   ├── SKILL.md
+│   └── references/
+│       ├── 01-scoring-model.md
+│       ├── 02-question-bank.md
+│       ├── 03-report-template.md
+│       └── 04-output-contract.md
+├── modernization-readiness-analysis/      # per-repo MOD (37 questions)
+│   ├── SKILL.md
+│   └── references/
+│       ├── 01-question-bank.md
+│       ├── 02-pathways.md
+│       ├── 03-report-template.md
+│       └── 04-output-contract.md
 ├── portfolio-agentic-readiness-analysis/
 │   ├── SKILL.md
 │   └── references/
@@ -57,3 +71,6 @@ managed/
     └── references/
         └── program-library.md
 ```
+
+**Contributing to a TD?** Start at
+[`docs/contributing/`](../../docs/contributing/README.md).
