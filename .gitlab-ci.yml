@@ -392,6 +392,17 @@ harness:impact:
   # reporting nothing. 3h leaves headroom for a slow unit without letting a wedged atx
   # exec burn a runner all day.
   timeout: 3h
+  # Self-heal from a sister-runner death, NOT from our own failures. A single unit costs
+  # ~100-130 agent-min, so a runner reclaim/eviction at (say) the portfolio stage discards
+  # a ~2h sweep and reports nothing. Retry ONLY the infra classes: runner_system_failure
+  # (pod killed / "system failure: aborted") and stuck_or_timeout_failure. A real script,
+  # contract, or rubric fault is script_failure — NOT listed here — so it never silently
+  # re-runs and never hides a genuine defect behind a second attempt.
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
   script:
     # GATE (deterministic, no LLM): exit cleanly as a SKIP when the whole diff is
     # denylisted (docs / license / images / DESIGN.md). Permissive by default (§5).
