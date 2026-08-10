@@ -1275,6 +1275,14 @@ def merge_baseline(prior: list[dict], rows: list[dict],
 # recomputes 2*median_sd from golden-accuracy-baseline.json and fails when this drifts.
 NOISE_FLOOR = {"ara": 0.09, "mod": 0.04}
 
+# Absolute minimum groundedness we accept from a report, INDEPENDENT of the baseline delta.
+# The baseline answers "did this MR make it better or worse?"; this floor answers "is the
+# report good enough in absolute terms?". A change that regresses 0.95 -> 0.88 clears this
+# floor but is caught by the delta; a report that has always sat at 0.70 clears the delta
+# (no regression) but is caught here. Both gates are needed — neither subsumes the other.
+# Set to 0.80: below it a report is judged too ungrounded to trust regardless of history.
+QUALITY_FLOOR = 0.80
+
 
 def compare_to_baseline(rows: list[dict],
                         baseline: Optional[list[dict]] = None) -> dict:
@@ -1321,7 +1329,7 @@ def compare_to_baseline(rows: list[dict],
     _ref = base_ref()
     _cur_sha = {a: td_tree_sha(a, _ref) for a in {b.get("analysis") for b in baseline}}
 
-    units, improved, regressed, noise, unscored, stale = [], 0, 0, 0, 0, 0
+    units, improved, regressed, noise, unscored, stale, low_quality = [], 0, 0, 0, 0, 0, 0
     for r in rows:
         key = (r.get("repo"), r.get("analysis"))
         b = base.get(key)
@@ -1380,12 +1388,19 @@ def compare_to_baseline(rows: list[dict],
         is_stale = bool(base_sha and cur_sha and base_sha != cur_sha)
         if is_stale:
             stale += 1
+        # Absolute quality gate, independent of the delta above: is this report grounded
+        # ENOUGH, regardless of whether it moved? A report can be "within-noise" vs a
+        # baseline that was itself mediocre and still fail here.
+        below = isinstance(now, (int, float)) and now < QUALITY_FLOOR
+        if below:
+            low_quality += 1
         units.append({
             "repo": r.get("repo"), "analysis": r.get("analysis"),
             "score": now, "baseline": was, "delta": delta,
             "threshold": threshold, "threshold_basis": basis, "verdict": verdict,
             "baseline_stale": is_stale,
             "baseline_td_sha": (base_sha[:12] if base_sha else None),
+            "below_quality_floor": below,
         })
 
     def _mean(vals):
@@ -1395,9 +1410,12 @@ def compare_to_baseline(rows: list[dict],
     was_all = [u["baseline"] for u in units if isinstance(u.get("baseline"), (int, float))]
     stale_repos = sorted(f"{u['repo']} ({str(u['analysis']).upper()})"
                          for u in units if u.get("baseline_stale"))
+    low_quality_repos = sorted(f"{u['repo']} ({str(u['analysis']).upper()})"
+                               for u in units if u.get("below_quality_floor"))
     return {
         "baseline_path": _rel(BASELINE),
         "base_ref": _ref,
+        "quality_floor": QUALITY_FLOOR,
         "units": sorted(units, key=lambda u: (u["analysis"] or "", u["repo"] or "")),
         "summary": {
             "improved": improved, "regressed": regressed,
@@ -1407,6 +1425,10 @@ def compare_to_baseline(rows: list[dict],
             # NOT a trustworthy improve/regress signal — the judge must treat it as advisory
             # and call for a re-baseline. This is the exact loan-calculator failure class.
             "stale": stale, "stale_units": stale_repos,
+            # Units scoring below QUALITY_FLOOR in absolute terms, regardless of delta. A
+            # separate axis from improve/regress: a report can hold steady (within-noise)
+            # and still be too ungrounded to trust.
+            "low_quality": low_quality, "low_quality_units": low_quality_repos,
             "mean_now": _mean(now_all), "mean_baseline": _mean(was_all),
             # The mean delta is reported but deliberately NOT classified: averaging over
             # fixtures hides direction (a +0.10 and a -0.10 read as "no change"), so the
@@ -1429,12 +1451,19 @@ def _report_comparison(cmp: dict) -> None:
             print(f"? {u['repo']:<28}{'—':>6}{'—':>7}{'—':>8}{'—':>8}  unscored")
             continue
         stale_mark = "  ⚠ STALE" if u.get("baseline_stale") else ""
+        floor_mark = "  ✗ BELOW FLOOR" if u.get("below_quality_floor") else ""
         print(f"{_VERDICT_MARK[u['verdict']]} {u['repo']:<28}"
               f"{u['baseline']:>6.2f}{u['score']:>7.2f}{u['delta']:>+8.3f}"
-              f"{u['threshold']:>8.2f}  {u['verdict']}{stale_mark}")
+              f"{u['threshold']:>8.2f}  {u['verdict']}{stale_mark}{floor_mark}")
     print(f"\n  improved {s['improved']} · regressed {s['regressed']} · "
           f"within-noise {s['within_noise']} · unscored {s['unscored']}"
-          + (f" · STALE {s['stale']}" if s.get("stale") else ""))
+          + (f" · STALE {s['stale']}" if s.get("stale") else "")
+          + (f" · BELOW-FLOOR {s['low_quality']}" if s.get("low_quality") else ""))
+    if s.get("low_quality"):
+        print(f"\n  ✗ {s['low_quality']} report(s) below the {cmp.get('quality_floor', QUALITY_FLOOR):.2f} "
+              f"quality floor: {', '.join(s['low_quality_units'])}.\n"
+              "  Too ungrounded to trust in ABSOLUTE terms, independent of the baseline delta —\n"
+              "  a report can hold steady vs a mediocre baseline and still fail here.")
     if s.get("stale"):
         print(f"\n  ⚠ {s['stale']} baseline row(s) predate the current TD on "
               f"{cmp.get('base_ref', 'the base branch')}: {', '.join(s['stale_units'])}.\n"
@@ -1484,6 +1513,12 @@ def main() -> int:
                     help=f"write results to {_rel(BASELINE)} (the committed record). "
                          "With --analysis, MERGES: replaces that analysis' rows and keeps "
                          "the other's — a TD edit only invalidates its own prior draws")
+    ap.add_argument("--ratchet", action="store_true",
+                    help="with --update-baseline: REFUSE to overwrite if the fresh scores "
+                         "regressed beyond noise, or fell below the quality floor, vs the "
+                         "OUTGOING baseline (exit 3). For automated post-merge re-baselining: "
+                         "adopt same-or-better numbers freely, halt+alert on a degradation so "
+                         "a bad merge cannot silently enshrine itself as the new baseline")
     ap.add_argument("--show-baseline", action="store_true",
                     help="print the committed baseline scores and exit — no scoring, no cost")
     ap.add_argument("--compare-baseline", action="store_true",
@@ -1608,6 +1643,40 @@ def main() -> int:
             sha = _td_sha.get(r.get("analysis"))
             if sha:
                 r["td_sha"] = sha
+        if args.ratchet:
+            # Compare the fresh scores against the OUTGOING baseline (still on disk — we have
+            # not written yet). Adopt same-or-better freely; refuse on a real regression or a
+            # below-floor report so an unnoticed post-merge degradation cannot become the new
+            # "good" baseline. `regressed` already excludes within-noise movement (the delta
+            # must EXCEED the per-fixture band), and stale rows are expected here (the outgoing
+            # baseline is the previous TD) so they do NOT block — only the delta verdict does.
+            guard = compare_to_baseline(rows)
+            gs = guard["summary"]
+            bad_regressed = [u for u in guard["units"] if u["verdict"] == "regressed"]
+            bad_floor = [u for u in guard["units"] if u.get("below_quality_floor")]
+            if bad_regressed or bad_floor:
+                print("\n✗ RATCHET: refusing to overwrite the baseline — the fresh sweep is "
+                      "WORSE than the committed one.", file=sys.stderr)
+                if bad_regressed:
+                    print(f"  regressed beyond noise ({len(bad_regressed)}): "
+                          + ", ".join(f"{u['repo']} ({str(u['analysis']).upper()}) "
+                                      f"{u['baseline']}->{u['score']} ({u['delta']:+})"
+                                      for u in bad_regressed), file=sys.stderr)
+                if bad_floor:
+                    print(f"  below the {guard.get('quality_floor', QUALITY_FLOOR):.2f} floor "
+                          f"({len(bad_floor)}): "
+                          + ", ".join(f"{u['repo']} ({str(u['analysis']).upper()}) {u['score']}"
+                                      for u in bad_floor), file=sys.stderr)
+                print("  The baseline was NOT changed. Investigate whether a merged change "
+                      "degraded the analysis before re-baselining by hand.", file=sys.stderr)
+                # Emit the comparison so CI can attach/annotate it.
+                if args.compare_out:
+                    args.compare_out.write_text(json.dumps(guard, indent=2) + "\n",
+                                                encoding="utf-8")
+                return 3
+            print(f"✓ RATCHET: fresh sweep is same-or-better "
+                  f"(improved {gs['improved']} · within-noise {gs['within_noise']}) — "
+                  "safe to adopt.", file=sys.stderr)
         if args.analysis:
             # `--analysis` MERGES: rows for this analysis are replaced, rows for the other
             # are carried through untouched.

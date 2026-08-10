@@ -1126,6 +1126,76 @@ def test_staleness_is_independent_of_the_improve_regress_verdict():
     assert u["baseline_stale"] is True
 
 
+# --- absolute quality floor -------------------------------------------------------------
+# The delta answers "did this MR make it better or worse?"; the floor answers "is the report
+# good enough in absolute terms?". They are ORTHOGONAL: a report can hold steady vs a mediocre
+# baseline (within-noise) and still be too ungrounded to trust.
+
+def test_a_report_below_the_quality_floor_is_flagged_regardless_of_delta():
+    """A within-noise report that still sits under the floor is flagged low-quality.
+
+    This is the 'is it good enough?' gate the delta cannot answer: the baseline itself was
+    mediocre, so no regression fires, yet the report is below the absolute bar.
+    """
+    base = [{"repo": "a", "analysis": "ara", "score": 0.75}]
+    got = sr.compare_to_baseline([{"repo": "a", "analysis": "ara", "score": 0.75}], base)
+    u = got["units"][0]
+    assert u["verdict"] == "within-noise"
+    assert u["below_quality_floor"] is True
+    assert got["summary"]["low_quality"] == 1
+    assert "a (ARA)" in got["summary"]["low_quality_units"]
+    assert got["quality_floor"] == sr.QUALITY_FLOOR
+
+
+def test_a_report_at_or_above_the_floor_is_not_flagged():
+    base = [{"repo": "a", "analysis": "ara", "score": 0.80}]
+    got = sr.compare_to_baseline([{"repo": "a", "analysis": "ara", "score": 0.80}], base)
+    assert got["units"][0]["below_quality_floor"] is False
+    assert got["summary"]["low_quality"] == 0
+
+
+def test_the_floor_is_independent_of_the_improve_regress_verdict():
+    """An IMPROVED report can still be below the floor — the two axes do not gate each other."""
+    base = [{"repo": "a", "analysis": "ara", "score": 0.50}]
+    got = sr.compare_to_baseline([{"repo": "a", "analysis": "ara", "score": 0.70}], base)
+    u = got["units"][0]
+    assert u["verdict"] == "improved"           # +0.20 clears the ARA band
+    assert u["below_quality_floor"] is True      # ...but 0.70 < 0.80 floor
+
+
+# --- ratchet guard (decision logic) -----------------------------------------------------
+# The --update-baseline --ratchet path adopts same-or-better numbers and refuses on a
+# regression or below-floor report. These exercise the compare_to_baseline verdicts the
+# guard keys on (the CLI wiring itself is covered by the integration run in CI).
+
+def test_ratchet_would_adopt_an_improvement_or_steady_sweep():
+    base = [{"repo": "a", "analysis": "ara", "score": 0.90},
+            {"repo": "b", "analysis": "ara", "score": 0.88}]
+    got = sr.compare_to_baseline(
+        [{"repo": "a", "analysis": "ara", "score": 0.94},
+         {"repo": "b", "analysis": "ara", "score": 0.88}], base)
+    regressed = [u for u in got["units"] if u["verdict"] == "regressed"]
+    below = [u for u in got["units"] if u.get("below_quality_floor")]
+    assert not regressed and not below
+
+
+def test_ratchet_would_refuse_a_real_regression():
+    base = [{"repo": "a", "analysis": "ara", "score": 0.90}]
+    got = sr.compare_to_baseline([{"repo": "a", "analysis": "ara", "score": 0.70}], base)
+    regressed = [u for u in got["units"] if u["verdict"] == "regressed"]
+    assert [u["repo"] for u in regressed] == ["a"]
+
+
+def test_ratchet_would_refuse_a_below_floor_sweep_even_when_steady():
+    """A degraded merge that holds steady vs an already-low baseline must NOT be adopted."""
+    base = [{"repo": "a", "analysis": "ara", "score": 0.75}]
+    got = sr.compare_to_baseline([{"repo": "a", "analysis": "ara", "score": 0.75}], base)
+    regressed = [u for u in got["units"] if u["verdict"] == "regressed"]
+    below = [u for u in got["units"] if u.get("below_quality_floor")]
+    assert not regressed          # within-noise, so the delta gate alone would ADOPT
+    assert [u["repo"] for u in below] == ["a"]   # ...but the floor gate REFUSES
+
+
 # --- fallback runner -------------------------------------------------------------------
 # MUST stay the LAST thing in this file. _run_all() collects globals() at call time, so when
 # this block sat mid-file it ran before the remaining tests were defined and silently skipped

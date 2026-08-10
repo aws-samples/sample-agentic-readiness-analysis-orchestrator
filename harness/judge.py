@@ -641,9 +641,10 @@ def _accuracy_note(compare: Optional[dict]) -> str:
         # runs) or the fallback floor. The judge must know which: a floor-based band at n=1
         # is a placeholder, and an "improvement" that only clears a placeholder is weak.
         stale = "  ⚠ STALE-BASELINE" if u.get("baseline_stale") else ""
+        floor = "  ✗ BELOW-QUALITY-FLOOR" if u.get("below_quality_floor") else ""
         lines.append(f"  [{u['verdict']:<12}] {u['repo']} ({str(u['analysis']).upper()}) "
                      f"{u['baseline']} -> {u['score']} (delta {u['delta']:+}, "
-                     f"threshold {u['threshold']} — {u.get('threshold_basis', 'n/a')}){stale}")
+                     f"threshold {u['threshold']} — {u.get('threshold_basis', 'n/a')}){stale}{floor}")
     if s.get("stale"):
         # The exact loan-calculator failure class: a baseline generated from an OLD TD is
         # compared against a report from the CURRENT TD, so the delta measures the TD CHANGE
@@ -657,6 +658,20 @@ def _accuracy_note(compare: Optional[dict]) -> str:
             "  on a STALE unit as ADVISORY ONLY: do NOT count it as a regression caused by this\n"
             "  change, and DO raise a concern that these fixtures need a re-baseline. Base your\n"
             "  accuracy judgement on the NON-stale units.")
+    if s.get("low_quality"):
+        # Absolute floor, independent of the delta. A report can be 'within-noise' vs its
+        # baseline and STILL sit below the floor if the baseline itself was mediocre. This is
+        # the 'is it good enough?' gate the delta cannot answer.
+        floor_val = compare.get("quality_floor")
+        floor_str = f"{floor_val:.2f}" if isinstance(floor_val, (int, float)) else "the quality floor"
+        lines.append(
+            f"\n  ✗ BELOW QUALITY FLOOR — {s['low_quality']} report(s) score under {floor_str} in\n"
+            f"  ABSOLUTE terms: {', '.join(s.get('low_quality_units') or [])}. This is a SEPARATE\n"
+            "  axis from improve/regress: a report can hold steady against a mediocre baseline\n"
+            "  and still be too ungrounded to trust. A report below the floor is a quality\n"
+            "  problem on its OWN, even with a within-noise delta — you MUST NOT return LGTM\n"
+            "  while any report sits below the floor. Weigh it as at least a needs-work signal\n"
+            "  and name the offending fixture(s) in a concern.")
     lines.append(
         "Weigh a CONFIRMED accuracy regression heavily: it means the reports became less "
         "true of the source, which is the outcome this harness exists to prevent. Weigh a "
