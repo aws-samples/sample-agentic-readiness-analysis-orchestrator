@@ -561,14 +561,35 @@ harness:full:
   allow_failure: true   # advisory — never blocks
 
 # -----------------------------------------------------------------------------
-# Entry 3 — harness:rebaseline   (scheduled weekly, or web-triggered reset)
+# Entry 3 — re-baseline   (scheduled weekly, or web-triggered reset)
 # Keeps the committed baseline (harness/golden/ report trees + the accuracy
 # baseline) FRESH so it never rots into the silent-stale trap the staleness
 # guard exists to catch. Runs a full sweep against merged main, then proposes
 # the refreshed baseline as an MR — the golden is reviewed like any change, not
 # pushed silently to protected main.
 #
-# TWO MODES, chosen by REBASELINE_RESET:
+# WHY IT IS SHARDED (harness:rebaseline-shard x N  ->  harness:rebaseline-gather):
+#   The AWS Credential Vendor assumes our role via ROLE CHAINING, which AWS
+#   hard-caps at 1 HOUR regardless of MaxSessionDuration. A full sweep is 28 units
+#   (14 fixtures x 2 analyses) at ~110-130 agent-min each; even at RUN_JOBS=6 that
+#   is ~2h wall-clock — so ONE job physically cannot finish before its own creds
+#   expire. The first RESET run proved it: 21/28 units passed, then every later
+#   exec died "security token expired", and the portfolio + golden write never ran.
+#   The fix mirrors the harness:impact -> harness:judge split already in this file:
+#   fan the per-repo sweep out across N PARALLEL shard jobs (GitLab `parallel:`),
+#   each with its OWN fresh 1h vend and a disjoint ~1/N slice of the fixtures
+#   (--shard $CI_NODE_INDEX/$CI_NODE_TOTAL) — each slice finishes well under the
+#   hour. A single gather job (its own fresh vend) then runs the portfolio rollup
+#   over the merged slices, writes golden, ratchet-checks, and opens the MR.
+#
+#   Shards deliberately do NOT --write-golden: a shard only holds its own slice, so
+#   if it wrote golden it would carry the OLD committed baseline for every file it
+#   did not freshen, and GitLab's artifact MERGE across the N parallel instances
+#   could keep an old copy over a fresh one. Instead each shard uploads only its
+#   slice under harness/after/, the gather job merges them (disjoint => clean
+#   union), and ONLY the gather writes golden from the merged set.
+#
+# TWO MODES, chosen by REBASELINE_RESET (set on the gather):
 #   - "false" (DEFAULT, scheduled): --ratchet. Adopt same-or-better numbers
 #     freely; REFUSE (exit 3) if any fixture regressed beyond noise or fell below
 #     the quality floor, so a degraded merge cannot silently enshrine itself as
@@ -579,39 +600,120 @@ harness:full:
 #     so the ratchet would refuse it). A human triggers this and reviews the MR.
 #
 # Schedule it in Settings -> CI/CD -> Pipeline schedules (weekly, on main). The
-# rule gates on $CI_PIPELINE_SOURCE == "schedule" so ONLY the cron (or a manual
-# web run) triggers it — never an MR or a normal push.
+# rules gate on $CI_PIPELINE_SOURCE == "schedule" so ONLY the cron (or a manual
+# web run with REBASELINE=true) triggers it — never an MR or a normal push.
 # -----------------------------------------------------------------------------
-harness:rebaseline:
+harness:rebaseline-shard:
   stage: analyze
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "web" && $REBASELINE == "true"'
-  timeout: 12h           # a full sweep, same as harness:full
+  # Fan the per-repo sweep out across 4 jobs. Each is a SEPARATE GitLab job with its own
+  # pre-clone credential vend (fresh 1h), and runs the disjoint slice CI_NODE_INDEX/of/4.
+  # 14 fixtures / 4 => 4/4/3/3 fixtures => ~6-8 units per shard: comfortably under the hour.
+  # Bump this number if the fixture set grows enough that a slice again approaches ~45 min.
+  parallel: 4
+  # A shard's slice is ~6-8 units; 3h is generous headroom over the ~30-40 min it should
+  # take, without letting a wedged atx exec burn a runner all day.
+  timeout: 3h
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
   variables:
     CHANGED_TD: ""       # restrict to one TD's analysis (ara|mod); empty = both
-    RUN_JOBS: "6"        # concurrent atx execs — see harness:full
+    RUN_JOBS: "6"        # concurrent atx execs WITHIN this shard — see harness:full
     REBASELINE: "true"   # web pipelines must opt in; schedule sets source=schedule
-    REBASELINE_RESET: "false"  # "true" (web only) bypasses the ratchet for a known-bad reset
+    REBASELINE_RESET: "false"  # "true" (web only) bypasses the ratchet in the GATHER job
   before_script:
-    # Inherit the default before_script (Node + atx + AWS vend), then add git identity
-    # for the branch commit below.
+    # Inherit the default before_script (Node + atx + AWS vend). No git identity needed —
+    # a shard never commits; it only produces reports the gather job commits.
     - !reference [default, before_script]
-    - git config user.email "harness-bot@noreply.aws.dev"
-    - git config user.name "harness re-baseline bot"
   script:
-    # Refuse a RESET on a scheduled pipeline — the reset bypasses the safety ratchet, so it
-    # must only ever be a deliberate human web-trigger, never the unattended cron.
+    # Refuse a RESET on a scheduled pipeline — it bypasses the ratchet, so it must only ever
+    # be a deliberate human web-trigger. Checked here too (not just the gather) so an unattended
+    # cron misconfigured with REBASELINE_RESET=true fails FAST, before burning any atx minutes.
     - |
       if [ "$CI_PIPELINE_SOURCE" = "schedule" ] && [ "$REBASELINE_RESET" = "true" ]; then
         echo "REBASELINE_RESET=true is not allowed on a scheduled pipeline — it bypasses the" >&2
         echo "ratchet safety. Trigger a web pipeline with REBASELINE=true REBASELINE_RESET=true." >&2
         exit 1
       fi
-    # Full sweep against the checked-out (merged main) TDs. --write-golden refreshes the
-    # report trees in place; --validate contract-checks each report as it lands.
-    - harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --write-golden --validate --jobs "$RUN_JOBS"
-    # Refresh the accuracy baseline from the same sweep. --ratchet unless this is a reset:
+    # This shard's disjoint slice of the full sweep. --shard implies --no-portfolio (the
+    # rollup needs EVERY per-repo report, so it runs once in the gather job). NO --write-golden:
+    # each shard uploads only its slice under harness/after/ and the gather writes golden from
+    # the merged set (see the header note on the artifact-merge hazard). --validate contract-
+    # checks each report as it lands.
+    - harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --shard "$CI_NODE_INDEX/$CI_NODE_TOTAL" --validate --jobs "$RUN_JOBS"
+  artifacts:
+    when: always
+    paths:
+      # This shard's per-repo report slice + its per-unit atx logs. The gather job's `needs`
+      # merges all N shards' harness/after/ into one dir; slices are disjoint so it is a clean
+      # union with no old-baseline contamination.
+      - harness/after/
+    expire_in: 30 days
+  allow_failure: true   # advisory — a shard death must SURFACE (gather flags the gap), not block
+
+harness:rebaseline-gather:
+  stage: judge   # runs AFTER all shards (analyze stage) complete
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $REBASELINE == "true"'
+  # Merges every shard's slice (all N parallel instances) into one harness/after/ tree.
+  needs:
+    - job: harness:rebaseline-shard
+      artifacts: true
+  # Portfolio rollup (2 execs) + score + MR = well under the fresh 1h vend, but give headroom
+  # for a slow portfolio exec.
+  timeout: 3h
+  variables:
+    CHANGED_TD: ""             # must match the shards' value (ara|mod narrowing); empty = both
+    RUN_JOBS: "6"
+    REBASELINE: "true"
+    REBASELINE_RESET: "false"  # "true" (web only) bypasses the ratchet for a known-bad reset
+  before_script:
+    # Inherit the default before_script (Node + atx + AWS vend — atx is needed for the
+    # portfolio exec), then add git identity for the branch commit below.
+    - !reference [default, before_script]
+    - git config user.email "harness-bot@noreply.aws.dev"
+    - git config user.name "harness re-baseline bot"
+  script:
+    # Same fast RESET-on-schedule guard as the shards (defense in depth: this is where the
+    # ratchet is actually bypassed).
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "schedule" ] && [ "$REBASELINE_RESET" = "true" ]; then
+        echo "REBASELINE_RESET=true is not allowed on a scheduled pipeline — it bypasses the" >&2
+        echo "ratchet safety. Trigger a web pipeline with REBASELINE=true REBASELINE_RESET=true." >&2
+        exit 1
+      fi
+    # COMPLETENESS CHECK: the shards' merged slices should cover every fixture. A shard that
+    # died (allow_failure) drops its slice, and --write-golden below would then leave those
+    # fixtures on the STALE committed baseline while refreshing the rest — a silent partial
+    # rebaseline, the exact rot this job exists to prevent. We can't cheaply fail (allow_failure
+    # + a dead shard is a real possibility), so surface it LOUDLY and flag the MR as PARTIAL.
+    - |
+      REPORTS="$(find harness/after -maxdepth 1 -name '*-report.json' ! -name '*portfolio*' 2>/dev/null | wc -l | tr -d ' ')"
+      FIXTURES="$(python3 -c 'import yaml; print(len(yaml.safe_load(open("harness/usecases.yaml")).get("fixtures",[])))')"
+      # 2 reports (ara+mod) per fixture unless --td narrowed to one analysis.
+      case "${CHANGED_TD:-}" in ara|mod|*readiness-analysis) EXPECT="$FIXTURES" ;; *) EXPECT="$((FIXTURES * 2))" ;; esac
+      echo "gather: merged ${REPORTS} per-repo report(s) from the shards; expected ${EXPECT}."
+      PARTIAL=""
+      if [ "$REPORTS" -lt "$EXPECT" ]; then
+        echo "⚠ PARTIAL SWEEP: a shard likely died — ${REPORTS}/${EXPECT} per-repo reports present." >&2
+        echo "  golden will be refreshed only for the fixtures that ARE present; the rest keep the" >&2
+        echo "  committed baseline. The MR is flagged PARTIAL so a reviewer knows not to trust it as" >&2
+        echo "  a full re-baseline. Re-run the pipeline to get the missing shard(s)." >&2
+        PARTIAL=" [PARTIAL]"
+      fi
+      echo "$PARTIAL" > .rebaseline-partial   # consumed by the MR title/body below
+    # PORTFOLIO ROLLUP over the merged per-repo slices, then --write-golden to refresh the
+    # golden tree from EVERYTHING now in harness/after (all per-repo slices + the fresh
+    # portfolio reports). --portfolio-only skips stage 1 (already done by the shards) and the
+    # clobber guard (the merged slices ARE its input, not an accidental re-run).
+    - harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --portfolio-only --write-golden --validate --jobs "$RUN_JOBS"
+    # Refresh the accuracy baseline from the refreshed golden. --ratchet unless this is a reset:
     # it refuses (exit 3) on a regression/below-floor sweep, leaving the committed baseline
     # untouched so we alert instead of enshrining a degradation. --compare-out captures the
     # comparison even on refusal for the alert.
@@ -639,6 +741,7 @@ harness:rebaseline:
     # Propose the refreshed baseline as an MR (reviewed, never a silent push to main).
     # Needs HARNESS_MR_TOKEN (api scope, can push + open MRs); degrade to artifact-only.
     - |
+      PARTIAL="$(cat .rebaseline-partial 2>/dev/null || echo '')"
       BR="rebaseline/$(date +%Y%m%d)-${CI_PIPELINE_ID}"
       if [ -z "${HARNESS_MR_TOKEN:-}" ]; then
         echo "no HARNESS_MR_TOKEN — cannot open an MR. The refreshed baseline is attached as" >&2
@@ -647,11 +750,11 @@ harness:rebaseline:
       fi
       git checkout -b "$BR"
       git add harness/golden harness/golden-accuracy-baseline.json
-      git commit -m "chore(harness): scheduled re-baseline ($(date +%Y-%m-%d))" \
-                 -m "Automated by harness:rebaseline (pipeline ${CI_PIPELINE_ID}, source ${CI_PIPELINE_SOURCE}, reset=${REBASELINE_RESET}). Ratchet-checked unless reset. Review the score deltas in rebaseline-compare.json before merging."
+      git commit -m "chore(harness): scheduled re-baseline ($(date +%Y-%m-%d))${PARTIAL}" \
+                 -m "Automated by harness:rebaseline-gather (pipeline ${CI_PIPELINE_ID}, source ${CI_PIPELINE_SOURCE}, reset=${REBASELINE_RESET}). Sharded sweep across ${CI_NODE_TOTAL:-N} shards. Ratchet-checked unless reset. Review the score deltas in rebaseline-compare.json before merging.${PARTIAL:+ WARNING: PARTIAL sweep — a shard dropped its slice; some fixtures kept the stale baseline. Do NOT merge as a full re-baseline; re-run first.}"
       git push "https://oauth2:${HARNESS_MR_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
                "$BR" -o merge_request.create -o merge_request.target=main \
-               -o merge_request.title="chore(harness): scheduled re-baseline $(date +%Y-%m-%d)" \
+               -o merge_request.title="chore(harness): scheduled re-baseline $(date +%Y-%m-%d)${PARTIAL}" \
                -o merge_request.remove_source_branch
       echo "pushed $BR and opened an MR to main."
   artifacts:

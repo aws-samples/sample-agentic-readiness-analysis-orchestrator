@@ -55,6 +55,17 @@
 #   --only <name>         Restrict the run to a single fixture (its path basename). Composes
 #                         with any --scope; errors if the name matches no fixture. Use to
 #                         backfill one fixture a transient failure dropped from a batch.
+#   --shard <I/N>         Run only shard I of N of the selected fixture list (round-robin:
+#                         fixture k goes to shard (k mod N)+1). Lets a full sweep be split
+#                         across N CI jobs, each with its OWN fresh 1h credential vend, so no
+#                         single job races the AWS role-chaining 1h cap. IMPLIES --no-portfolio
+#                         (the rollup needs ALL per-repo reports, so it runs in a separate
+#                         gather step — see --portfolio-only). I is 1-based; 1<=I<=N.
+#   --portfolio-only      Skip stage 1 entirely and run ONLY the portfolio rollup over the
+#                         per-repo reports ALREADY present in --after-dir (the "gather" step
+#                         that follows N sharded runs). Requires >=2 per-repo reports in the
+#                         dir. Composes with --write-golden to refresh the baseline from the
+#                         merged shards. Ignores --shard.
 #   --dry-run             Print the atx commands without executing (offline sanity check).
 #
 # Fixture list comes from harness/usecases.yaml (the `fixtures[].path` entries).
@@ -86,6 +97,8 @@ JOBS=1
 MR_FIXTURES="${HARNESS_MR_FIXTURES:-2}"   # changed-only: how many fixtures to select
 DRY_RUN="false"
 ONLY=""                  # restrict the run to one fixture (matched by path basename)
+SHARD=""                 # "I/N": run only this shard of the fixture list (implies --no-portfolio)
+PORTFOLIO_ONLY="false"   # skip stage 1; run ONLY the portfolio rollup over AFTER_DIR's reports
 
 # --- arg parsing ---------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -105,8 +118,10 @@ while [[ $# -gt 0 ]]; do
     --jobs)          JOBS="$2"; shift 2 ;;
     --mr-fixtures)   MR_FIXTURES="$2"; shift 2 ;;
     --only)          ONLY="$2"; shift 2 ;;
+    --shard)         SHARD="$2"; shift 2 ;;
+    --portfolio-only) PORTFOLIO_ONLY="true"; shift ;;
     --dry-run)       DRY_RUN="true"; shift ;;
-    -h|--help)       sed -n '2,48p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help)       sed -n '2,71p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -116,6 +131,24 @@ case "${JOBS}" in
   ''|*[!0-9]*) echo "error: --jobs must be a positive integer, got '${JOBS}'" >&2; exit 2 ;;
 esac
 [[ "${JOBS}" -lt 1 ]] && JOBS=1
+
+# --- validate + parse --shard I/N ----------------------------------------------------
+# A shard is a slice of the fixture list run in its OWN CI job (own fresh 1h vend). Parse
+# it here so a malformed value fails loudly up front rather than silently selecting all
+# fixtures (which would defeat the split and race the credential cap it exists to avoid).
+SHARD_I=0; SHARD_N=0
+if [[ -n "${SHARD}" ]]; then
+  if [[ ! "${SHARD}" =~ ^[0-9]+/[0-9]+$ ]]; then
+    echo "error: --shard must be 'I/N' (e.g. 2/4), got '${SHARD}'" >&2; exit 2
+  fi
+  SHARD_I="${SHARD%/*}"; SHARD_N="${SHARD#*/}"
+  if [[ "${SHARD_N}" -lt 1 || "${SHARD_I}" -lt 1 || "${SHARD_I}" -gt "${SHARD_N}" ]]; then
+    echo "error: --shard 'I/N' needs 1<=I<=N and N>=1, got '${SHARD}'" >&2; exit 2
+  fi
+  # A shard runs per-repo units only; the portfolio rollup needs EVERY per-repo report, so
+  # it runs once in a separate gather step (--portfolio-only), never inside a shard.
+  NO_PORTFOLIO="true"
+fi
 
 # --- normalize TD filter to analysis types -------------------------------------------
 # The 4 managed TDs map to 2 analysis types (each runs per-repo + portfolio).
@@ -307,6 +340,29 @@ if [[ "${SCOPE}" != "all" && ${#selected[@]} -gt "${MR_FIXTURES}" ]]; then
   selected=("${_capped[@]}")
 fi
 
+# --- shard the selection round-robin (applied LAST, after --only/cap) ----------------
+# Partition `selected` so each CI job runs a disjoint slice, each in its own fresh 1h
+# credential vend. Round-robin (index mod N) rather than contiguous blocks so the slices
+# stay balanced when the count doesn't divide evenly AND a heavy fixture doesn't land all
+# in one shard by position. A shard that ends up empty (N > fixture count) is not an
+# error — it just has nothing to do; the empty-selection guard below is bypassed for it.
+SHARD_EMPTY_OK="false"
+if [[ -n "${SHARD}" ]]; then
+  _sharded=()
+  for ((_i = 0; _i < ${#selected[@]}; _i++)); do
+    # 1-based shard id for fixture _i: (_i mod N) + 1
+    if [[ $(( (_i % SHARD_N) + 1 )) -eq "${SHARD_I}" ]]; then
+      _sharded+=("${selected[$_i]}")
+    fi
+  done
+  echo "shard ${SHARD_I}/${SHARD_N}: ${#_sharded[@]} of ${#selected[@]} fixture(s) → this job" >&2
+  [[ ${#_sharded[@]} -eq 0 ]] && SHARD_EMPTY_OK="true"
+  selected=("${_sharded[@]:-}")
+  # `("${_sharded[@]:-}")` yields a 1-element array holding "" when empty (bash 3.2 has no
+  # clean empty-array assignment under set -u); normalize a lone "" back to a real empty set.
+  [[ ${#selected[@]} -eq 1 && -z "${selected[0]}" ]] && selected=()
+fi
+
 echo "run-fixtures: scope=${SCOPE} ara=${run_ara} mod=${run_mod} fixtures=${#selected[@]} after=${AFTER_DIR} (engine: atx custom def exec)" >&2
 
 # AWS Transform custom-def only resolves in us-east-1 — a stray AWS_REGION (e.g. a shell
@@ -383,7 +439,9 @@ if paths:
 # multi-run baseline is only meaningful if each batch stays a SEPARATE, intact draw, so an
 # accidental re-run must not quietly merge two runs into one directory. Opt in with
 # --force to reuse a directory on purpose (e.g. resuming a batch that died part-way).
-if [[ "${DRY_RUN}" != "true" && "${FORCE:-false}" != "true" ]]; then
+# --portfolio-only deliberately REUSES an AFTER_DIR full of per-repo reports (the merged
+# shard slices) — that is its input, not an accidental clobber — so it bypasses this guard.
+if [[ "${DRY_RUN}" != "true" && "${FORCE:-false}" != "true" && "${PORTFOLIO_ONLY}" != "true" ]]; then
   # `find` on a MISSING dir exits non-zero; under `set -euo pipefail` that killed the whole
   # script here with exit 1 and NO message — the guard below never ran, so a brand-new batch
   # dir (the normal case for a fresh sample) silently produced nothing at all. Create the dir
@@ -405,11 +463,15 @@ if [[ "${DRY_RUN}" != "true" ]]; then
 fi
 
 # per-repo | analysis | td-folder | report-glob   (filtered by run_ara/run_mod below)
-if [[ "${run_ara}" == "true" ]]; then
-  publish_td "${MANAGED}/agentic-readiness-analysis" "agentic-readiness-analysis${NAME_SUFFIX}" || exit 2
-fi
-if [[ "${run_mod}" == "true" ]]; then
-  publish_td "${MANAGED}/modernization-readiness-analysis" "modernization-readiness-analysis${NAME_SUFFIX}" || exit 2
+# --portfolio-only skips publishing the PER-REPO defs and all of stage 1 — it consumes the
+# per-repo reports already in AFTER_DIR and only runs the portfolio rollup (published below).
+if [[ "${PORTFOLIO_ONLY}" != "true" ]]; then
+  if [[ "${run_ara}" == "true" ]]; then
+    publish_td "${MANAGED}/agentic-readiness-analysis" "agentic-readiness-analysis${NAME_SUFFIX}" || exit 2
+  fi
+  if [[ "${run_mod}" == "true" ]]; then
+    publish_td "${MANAGED}/modernization-readiness-analysis" "modernization-readiness-analysis${NAME_SUFFIX}" || exit 2
+  fi
 fi
 
 # --- Stage 1: per-repo ARA + MOD over each selected fixture ---------------------------
@@ -479,23 +541,31 @@ stage_unit() {
 # tested nothing, the worst possible failure mode for a guardrail. Every branch above is
 # supposed to pick at least one, so this is a bug, not a valid state: fail loudly.
 # (Also avoids the bash 3.2 `set -u` unbound-variable error on an empty array below.)
-if [[ ${#selected[@]} -eq 0 ]]; then
+# EXCEPTIONS where an empty selection is legitimate, not a bug:
+#   - --portfolio-only: stage 1 is intentionally skipped; there are no per-repo units.
+#   - an empty --shard (N > fixture count): that shard genuinely has nothing to run.
+if [[ ${#selected[@]} -eq 0 && "${PORTFOLIO_ONLY}" != "true" && "${SHARD_EMPTY_OK}" != "true" ]]; then
   echo "FATAL: no fixtures selected — refusing to report success having analyzed nothing." >&2
   echo "       This is a selection bug; check the base-ref resolution warnings above." >&2
   exit 5
 fi
 
-for fx in "${selected[@]}"; do
-  name="$(basename "${fx}")"
-  target="${REPO_ROOT}/${fx}"
-  [[ -e "${target}" ]] || { echo "warn: fixture path missing: ${fx}" >&2; continue; }
-  if [[ "${run_ara}" == "true" ]]; then
-    stage_unit ara "${name}" "agentic-readiness-analysis${NAME_SUFFIX}" '*-ara-report.json' "${target}"
-  fi
-  if [[ "${run_mod}" == "true" ]]; then
-    stage_unit mod "${name}" "modernization-readiness-analysis${NAME_SUFFIX}" '*-mod-report.json' "${target}"
-  fi
-done
+# Stage the per-repo units — unless --portfolio-only (no stage 1) or an empty shard leaves
+# nothing selected. `${selected[@]:-}` yields a lone "" under set -u when empty (bash 3.2),
+# so the length guard both skips the loop cleanly and documents when that is legitimate.
+if [[ "${PORTFOLIO_ONLY}" != "true" && ${#selected[@]} -gt 0 ]]; then
+  for fx in "${selected[@]}"; do
+    name="$(basename "${fx}")"
+    target="${REPO_ROOT}/${fx}"
+    [[ -e "${target}" ]] || { echo "warn: fixture path missing: ${fx}" >&2; continue; }
+    if [[ "${run_ara}" == "true" ]]; then
+      stage_unit ara "${name}" "agentic-readiness-analysis${NAME_SUFFIX}" '*-ara-report.json' "${target}"
+    fi
+    if [[ "${run_mod}" == "true" ]]; then
+      stage_unit mod "${name}" "modernization-readiness-analysis${NAME_SUFFIX}" '*-mod-report.json' "${target}"
+    fi
+  done
+fi
 [[ "${DRY_RUN}" != "true" ]] && mkdir -p "${AFTER_DIR}/_logs"
 
 # Abort the run if our repo's HEAD ever moves (would mean the isolation failed).
@@ -647,9 +717,12 @@ assert_repo_head
 #   (b) on an MR they are only worth their cost if a PORTFOLIO TD actually changed
 #       (HARNESS_CHANGED_PORTFOLIO_TD from should-run.sh). A per-repo-only rubric edit is
 #       fully judged by the per-repo delta.
-# --scope all always runs them (that's a re-baseline); --no-portfolio always skips.
+# --scope all always runs them (that's a re-baseline); --no-portfolio always skips;
+# --portfolio-only forces them on (running the rollup IS the whole point of that mode).
 run_portfolio="${NO_PORTFOLIO:+false}"
-if [[ "${NO_PORTFOLIO}" == "true" ]]; then
+if [[ "${PORTFOLIO_ONLY}" == "true" ]]; then
+  run_portfolio="true"
+elif [[ "${NO_PORTFOLIO}" == "true" ]]; then
   run_portfolio="false"
 elif [[ "${SCOPE}" == "all" ]]; then
   run_portfolio="true"
