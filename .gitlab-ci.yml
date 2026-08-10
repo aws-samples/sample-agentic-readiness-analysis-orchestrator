@@ -554,3 +554,107 @@ harness:full:
       - harness/after/_logs/   # literal — see note on harness:impact
     expire_in: 30 days
   allow_failure: true   # advisory — never blocks
+
+# -----------------------------------------------------------------------------
+# Entry 3 — harness:rebaseline   (scheduled weekly, or web-triggered reset)
+# Keeps the committed baseline (harness/golden/ report trees + the accuracy
+# baseline) FRESH so it never rots into the silent-stale trap the staleness
+# guard exists to catch. Runs a full sweep against merged main, then proposes
+# the refreshed baseline as an MR — the golden is reviewed like any change, not
+# pushed silently to protected main.
+#
+# TWO MODES, chosen by REBASELINE_RESET:
+#   - "false" (DEFAULT, scheduled): --ratchet. Adopt same-or-better numbers
+#     freely; REFUSE (exit 3) if any fixture regressed beyond noise or fell below
+#     the quality floor, so a degraded merge cannot silently enshrine itself as
+#     the new "good" baseline. The scheduled cron runs this mode.
+#   - "true" (web only): NO ratchet. For deliberately RESETTING a baseline that is
+#     known-bad (e.g. the stale read-only loan-calculator golden, whose number is
+#     high but WRONG — the correct new report reads as a "regression" against it,
+#     so the ratchet would refuse it). A human triggers this and reviews the MR.
+#
+# Schedule it in Settings -> CI/CD -> Pipeline schedules (weekly, on main). The
+# rule gates on $CI_PIPELINE_SOURCE == "schedule" so ONLY the cron (or a manual
+# web run) triggers it — never an MR or a normal push.
+# -----------------------------------------------------------------------------
+harness:rebaseline:
+  stage: analyze
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $REBASELINE == "true"'
+  timeout: 12h           # a full sweep, same as harness:full
+  variables:
+    CHANGED_TD: ""       # restrict to one TD's analysis (ara|mod); empty = both
+    RUN_JOBS: "6"        # concurrent atx execs — see harness:full
+    REBASELINE: "true"   # web pipelines must opt in; schedule sets source=schedule
+    REBASELINE_RESET: "false"  # "true" (web only) bypasses the ratchet for a known-bad reset
+  before_script:
+    # Inherit the default before_script (Node + atx + AWS vend), then add git identity
+    # for the branch commit below.
+    - !reference [default, before_script]
+    - git config user.email "harness-bot@noreply.aws.dev"
+    - git config user.name "harness re-baseline bot"
+  script:
+    # Refuse a RESET on a scheduled pipeline — the reset bypasses the safety ratchet, so it
+    # must only ever be a deliberate human web-trigger, never the unattended cron.
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "schedule" ] && [ "$REBASELINE_RESET" = "true" ]; then
+        echo "REBASELINE_RESET=true is not allowed on a scheduled pipeline — it bypasses the" >&2
+        echo "ratchet safety. Trigger a web pipeline with REBASELINE=true REBASELINE_RESET=true." >&2
+        exit 1
+      fi
+    # Full sweep against the checked-out (merged main) TDs. --write-golden refreshes the
+    # report trees in place; --validate contract-checks each report as it lands.
+    - harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --write-golden --validate --jobs "$RUN_JOBS"
+    # Refresh the accuracy baseline from the same sweep. --ratchet unless this is a reset:
+    # it refuses (exit 3) on a regression/below-floor sweep, leaving the committed baseline
+    # untouched so we alert instead of enshrining a degradation. --compare-out captures the
+    # comparison even on refusal for the alert.
+    - |
+      RATCHET="--ratchet"
+      [ "$REBASELINE_RESET" = "true" ] && RATCHET="" && echo "RESET mode: ratchet DISABLED (human-reviewed reset)."
+      set +e
+      harness/score-reports.py --trees harness/golden --update-baseline $RATCHET --compare-out rebaseline-compare.json
+      RC=$?
+      set -e
+      if [ "$RC" = "3" ]; then
+        echo "✗ RATCHET refused: the fresh sweep is worse than the committed baseline (see above)." >&2
+        echo "  The baseline was NOT changed. A merged change may have degraded the analysis." >&2
+        echo "  Investigate, then re-baseline deliberately with a web run + REBASELINE_RESET=true." >&2
+        exit 3
+      elif [ "$RC" != "0" ]; then
+        echo "score-reports.py failed (rc=$RC)" >&2; exit "$RC"
+      fi
+    # Nothing to propose if the sweep reproduced the committed baseline byte-for-byte.
+    - |
+      if git diff --quiet -- harness/golden harness/golden-accuracy-baseline.json; then
+        echo "re-baseline reproduced the committed golden exactly — nothing to propose."
+        exit 0
+      fi
+    # Propose the refreshed baseline as an MR (reviewed, never a silent push to main).
+    # Needs HARNESS_MR_TOKEN (api scope, can push + open MRs); degrade to artifact-only.
+    - |
+      BR="rebaseline/$(date +%Y%m%d)-${CI_PIPELINE_ID}"
+      if [ -z "${HARNESS_MR_TOKEN:-}" ]; then
+        echo "no HARNESS_MR_TOKEN — cannot open an MR. The refreshed baseline is attached as" >&2
+        echo "an artifact; download it and open the MR by hand." >&2
+        exit 0
+      fi
+      git checkout -b "$BR"
+      git add harness/golden harness/golden-accuracy-baseline.json
+      git commit -m "chore(harness): scheduled re-baseline ($(date +%Y-%m-%d))" \
+                 -m "Automated by harness:rebaseline (pipeline ${CI_PIPELINE_ID}, source ${CI_PIPELINE_SOURCE}, reset=${REBASELINE_RESET}). Ratchet-checked unless reset. Review the score deltas in rebaseline-compare.json before merging."
+      git push "https://oauth2:${HARNESS_MR_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
+               "$BR" -o merge_request.create -o merge_request.target=main \
+               -o merge_request.title="chore(harness): scheduled re-baseline $(date +%Y-%m-%d)" \
+               -o merge_request.remove_source_branch
+      echo "pushed $BR and opened an MR to main."
+  artifacts:
+    when: always
+    paths:
+      - rebaseline-compare.json          # score deltas vs the outgoing baseline
+      - harness/golden/                  # the refreshed report trees (for hand-review)
+      - harness/golden-accuracy-baseline.json
+      - harness/after/_logs/
+    expire_in: 30 days
+  allow_failure: true   # a refused ratchet (exit 3) must SURFACE, not block other work
