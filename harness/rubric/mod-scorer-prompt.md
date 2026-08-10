@@ -231,6 +231,12 @@ question set) is a real classification defect.
    `has_api_surface`, `has_multi_instance_deployment`, `has_iac_provisioning_aws_resources`.
    - INF-Q2 Managed Databases: Not Evaluated when `has_persistent_data_store == false` (no DB,
      managed or self-managed — a build tool / pure utility / frontend-only app).
+   - INF-Q8 Backup and Recovery: Not Evaluated when `has_persistent_data_store == false` AND
+     `has_at_rest_data_surface == false` (no persistent state to back up — a library, CLI tool,
+     or frontend-only app).
+   - INF-Q9 High Availability and Fault Isolation: Not Evaluated when `has_deployed_workload ==
+     false`, OR when both `has_api_surface == false` AND `has_persistent_data_store == false`
+     (no deployed workload requiring HA evaluation — a source-only library/utility).
    - SEC-Q1 Audit Logging: Not Evaluated UNLESS the repo contains account/foundation-level IaC
      (CloudTrail, AWS Config, GuardDuty, Org SCPs, centralized logging). Application-level IaC
      repos (single-service ECS/RDS/Lambda) are Not Evaluated — CloudTrail is an account-level

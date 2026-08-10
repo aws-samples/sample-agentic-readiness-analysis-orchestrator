@@ -8,6 +8,7 @@ tests assert the parse is complete and fail loudly when it is not.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -247,6 +248,31 @@ def test_mod_surface_gates_and_archetype_rubrics():
     assert gates["OPS-Q7"]["flag"] == "has_deployed_workload"
     assert gates["OPS-Q9"]["flag"] == "has_iac_provisioning_aws_resources"
     assert st.parse_mod_archetype_calibrated() == ["INF-Q3", "INF-Q4", "APP-Q3", "APP-Q4"]
+
+
+def test_mod_scorer_prompt_lists_every_td_surface_gate():
+    """The pinned MOD benchmarking scorer prompt must name every gated question the TD defines.
+
+    The prompt is a hand-maintained snapshot the *external* benchmark grader scores against —
+    the one rubric-derived artifact that does NOT read the TD at runtime. When a gate was added
+    to SKILL.md but not the prompt (INF-Q8/Q9 was omitted for exactly this reason), the external
+    grader flagged correct "Not Evaluated" markings as defects — the single most frequent
+    false-defect across the ZG external-repo benchmark. This guard fails loudly on that drift so
+    it is caught in CI, not months later in a benchmark batch. The harness's own grader is
+    unaffected: it parses the gates from the TD (parse_mod_surface_gates) on every run.
+    """
+    prompt = (REPO / "harness" / "rubric" / "mod-scorer-prompt.md").read_text(encoding="utf-8")
+    # Scope the check to the SURFACE GATES section only. Every gated qid is ALSO named in the
+    # question-bank enumeration elsewhere in the prompt, so a naive `qid in prompt` would pass
+    # even with the gate bullet deleted — the exact drift we are guarding against.
+    m = re.search(r"^\s*1\. SURFACE GATES\b(.*?)^\s*2\. ARCHETYPE", prompt, re.M | re.S)
+    assert m, "could not locate the '1. SURFACE GATES' section in the MOD scorer prompt"
+    gate_section = m.group(1)
+    gated = set(st.parse_mod_surface_gates())
+    missing = sorted(q for q in gated if q not in gate_section)
+    assert not missing, (
+        f"MOD scorer prompt §1 SURFACE GATES is missing gate(s) the TD defines: {missing}. "
+        f"Sync harness/rubric/mod-scorer-prompt.md §1 with SKILL.md Step 1.6.")
 
 
 def test_na_map_expands_ranges_and_inverts_the_except_row():
