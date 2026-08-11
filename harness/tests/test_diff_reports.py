@@ -484,18 +484,57 @@ def test_report_absent_from_golden_is_unbaselined_not_added():
 LOAN_ARA = ("ara", "repo", "legacy-loan-calculator")
 
 
+def _set_native(rpt: dict, qid: str, sev: str) -> None:
+    """Pin one question's native severity in the findings array, or fail loudly."""
+    for f in rpt["findings"]:
+        if f.get("question_id") == qid:
+            f.setdefault("ara_metadata", {})["native_severity"] = sev
+            return
+    raise AssertionError(f"fixture precondition: {qid} not in the loan-calculator findings")
+
+
+def _loan_boundary(tree: dict) -> dict:
+    """Pin legacy-loan-calculator to a controlled tier-boundary BEFORE state.
+
+    These tests assert the *mechanics* of the tier arithmetic — a lost BLOCKER crossing the
+    `>=3 -> 1-2` boundary that separates `Not Agent-Integrable` from `Remediation Required`.
+    They must therefore SET that boundary explicitly rather than inherit whatever a rebaseline
+    left behind: the 2026-08-11 golden reset reclassified loan-calculator write-enabled and
+    took its blocker_count from 3 to 7, which is nowhere near the boundary, so downgrading one
+    blocker no longer moves the tier. Pinning here decouples the tests from the fixture's
+    arithmetic so a future rebaseline can't silently defeat them.
+
+    blocker_count=3 sits exactly one blocker above the boundary. The three questions the tests
+    move are pinned to the severities their assertions assume:
+      API-Q1  documented UNCONDITIONAL BLOCKER  -> downgrading it is a genuine relaxation
+      AUTH-Q5 documented RISK-SAFETY, seeded here as an over-escalated BLOCKER -> its downgrade
+              is an over-escalation CORRECTION, not a relaxation
+      DATA-Q1 seeded RISK-SAFETY               -> the stricter / risk-safety-downgrade tests
+    """
+    rpt = tree[LOAN_ARA]
+    _set_native(rpt, "API-Q1", "BLOCKER")
+    _set_native(rpt, "AUTH-Q5", "BLOCKER")   # over-escalated on purpose (documented RISK-SAFETY)
+    _set_native(rpt, "DATA-Q1", "RISK-SAFETY")
+    c = rpt["classification"]
+    c["blocker_count"] = 3
+    c["risk_safety_count"] = 1
+    c["tier"] = "Not Agent-Integrable"
+    return tree
+
+
 def _downgrade_a_blocker(tree: dict, qid: str = "API-Q1",
                          to: str = "RISK-SAFETY") -> dict:
     """Mutate an 'after' tree the way MR !14's delta did: one BLOCKER reclassified.
 
     Defaults to API-Q1, which the TD documents as an UNCONDITIONAL BLOCKER — so downgrading
-    it is a genuine safety relaxation that MUST still hold. (AUTH-Q5, the previous default,
-    is documented RISK-SAFETY, so downgrading IT is an over-escalation correction, not a
-    relaxation — that case has its own tests below.)
+    it is a genuine safety relaxation that MUST still hold. (AUTH-Q5, seeded by _loan_boundary
+    as an over-escalated BLOCKER, is documented RISK-SAFETY, so downgrading IT is an
+    over-escalation correction, not a relaxation — that case has its own tests below.)
 
     Also decrements the classification counters and re-applies the rubric's own tier rule,
     because in a real report those move together — a test that changed only the finding
-    would be asserting against a state the analysis agent can never produce.
+    would be asserting against a state the analysis agent can never produce. Expects the tree
+    to have been through _loan_boundary() so the counters sit at the tier boundary.
     """
     rpt = tree[LOAN_ARA]
     for f in rpt["findings"]:
@@ -513,7 +552,7 @@ def _downgrade_a_blocker(tree: dict, qid: str = "API-Q1",
 
 
 def test_lost_blocker_raises_all_three_alerts():
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     before = copy.deepcopy(full)
     after = _downgrade_a_blocker(copy.deepcopy(full))
     impact = dr.build_impact(before, after)
@@ -525,7 +564,7 @@ def test_lost_blocker_raises_all_three_alerts():
 def test_alerts_attribute_the_tier_move_to_the_lost_blocker():
     # The whole point: a reader must not have to rediscover that "blocker lost" and "tier
     # relaxed" are one event. The tier alert names the cause.
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     after = _downgrade_a_blocker(copy.deepcopy(full))
     impact = dr.build_impact(copy.deepcopy(full), after)
     tier_alert = [a for a in impact["safety_alerts"] if a["kind"] == "tier_relaxed"][0]
@@ -545,7 +584,7 @@ def test_a_clean_rerun_raises_no_alerts():
 
 def test_getting_stricter_is_not_a_safety_alert():
     """Direction matters. A question GAINING a blocker is the rubric tightening."""
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     after = copy.deepcopy(full)
     rpt = after[LOAN_ARA]
     for f in rpt["findings"]:
@@ -569,7 +608,7 @@ def test_correcting_an_over_escalation_does_not_hold():
     is an IMPROVEMENT: it must raise NO tier-material alert, even though blocker_count and
     the tier both move — the same mechanical movement that, for a real blocker, WOULD hold.
     """
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
     impact = dr.build_impact(copy.deepcopy(full), after)
     alerts = impact["safety_alerts"]
@@ -586,7 +625,7 @@ def test_a_real_lost_blocker_still_holds_alongside_a_correction():
     """A downgrade of a GENUINE blocker (API-Q1) must still hold even when an over-escalation
     correction (AUTH-Q5) happens in the same delta — the correction must not launder the
     real relaxation."""
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     after = copy.deepcopy(full)
     _downgrade_a_blocker(after, qid="API-Q1")     # genuine relaxation
     _downgrade_a_blocker(after, qid="AUTH-Q5")    # over-escalation correction
@@ -605,7 +644,7 @@ def test_a_severity_edit_in_the_same_mr_defeats_the_correction_exemption():
     stable table' no longer holds — the downgrade must alert as a REAL relaxation instead of
     being waved through as `over_escalation_corrected`.
     """
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
 
     # Without the gate (no MR touched AUTH-Q5's row): a correction, nothing tier-material.
@@ -626,7 +665,7 @@ def test_a_severity_edit_in_the_same_mr_defeats_the_correction_exemption():
 def test_a_severity_edit_to_an_unrelated_question_leaves_the_correction_intact():
     """The gate must be surgical: editing some OTHER question's row does not turn AUTH-Q5's
     genuine over-escalation correction into a false relaxation alert."""
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
     gated = dr.build_impact(copy.deepcopy(full), after,
                             changed_severity_qids={"ara": {"API-Q2"}})
@@ -644,7 +683,11 @@ def test_mod_is_exempt_from_safety_alerts():
     """
     full = dr.load_tree(GOLDEN)
     key = ("mod", "repo", "legacy-loan-calculator")
-    assert full[key]["classification"]["tier"] == "Remediation Required"
+    # Pin the BEFORE tier to a value that IS in the ARA tier rank, so the exemption — not an
+    # unrecognised tier name — is what keeps this quiet. (The 2026-08-11 rebaseline moved MOD
+    # loan-calculator to "Not Ready", a MOD-only band absent from the ARA rank; asserting on
+    # the live value would make this test pass for the wrong reason.)
+    full[key]["classification"]["tier"] = "Remediation Required"
     assert dr._tier_relaxed("Remediation Required", "Pilot-Ready") is True, \
         "fixture precondition: this transition must be one ARA would alert on"
     after = copy.deepcopy(full)
@@ -683,11 +726,12 @@ def test_risk_safety_downgrade_is_reported_but_not_tier_material_while_blockers_
 
     The judge filed `DATA-Q1 RISK-SAFETY -> RISK-QUALITY` as "likely run-to-run variance",
     and the first cut of safety_alerts() — keyed on BLOCKER alone — silently agreed. It IS a
-    tier-driving class (SKILL.md 1571-1573), so it must be reported. But all 11 ARA fixtures
-    sit at blocker_count 1-3, where risk_safety_count does not affect the tier and drifts
-    several findings per rerun, so it must NOT force a hold or the gate fires on every MR.
+    tier-driving class (SKILL.md 1571-1573), so it must be reported. But while blocker_count
+    is above 0 the risk_safety_count does not affect the tier and drifts several findings per
+    rerun, so it must NOT force a hold or the gate fires on every MR. (_loan_boundary pins
+    blocker_count to 3 so this "blockers remain" precondition holds regardless of rebaseline.)
     """
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     after = copy.deepcopy(full)
     rpt = after[LOAN_ARA]
     assert rpt["classification"]["blocker_count"] > 0, "fixture precondition"
@@ -734,7 +778,7 @@ def test_a_genuine_lost_blocker_is_always_tier_material():
     # A downgrade of an UNCONDITIONAL blocker (API-Q1) always holds. Contrast with
     # test_correcting_an_over_escalation_does_not_hold, where an over-escalated "blocker"
     # (AUTH-Q5, documented RISK-SAFETY) does not.
-    full = dr.load_tree(GOLDEN)
+    full = _loan_boundary(dr.load_tree(GOLDEN))
     after = _downgrade_a_blocker(copy.deepcopy(full))
     impact = dr.build_impact(copy.deepcopy(full), after)
     assert all(a["tier_material"] for a in impact["safety_alerts"])

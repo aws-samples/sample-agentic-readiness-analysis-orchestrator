@@ -1,8 +1,9 @@
-# ZG external-repo benchmark — TD defect issue drafts
+# TD defect issue drafts
 
-Source: benchmarking-team grader over ZG-org GitHub repos, 2 runs (batches 1 & 2), 2026-08-10.
-These are the **genuine TD defects** that survived triage — i.e. NOT the two clusters that
-turned out to be grader-side:
+Sources: (1) benchmarking-team grader over ZG-org GitHub repos, 2 runs (batches 1 & 2),
+2026-08-10 — issues #1–#4; (2) the local change-impact harness golden, rebaseline 2026-08-11 —
+issue #5. These are the **genuine TD defects** that survived triage — i.e. NOT the two clusters
+that turned out to be grader-side:
 
 - **Excluded — grader artifact (fixed):** INF-Q8/Q9 "N/A without spec authority" was a stale
   benchmark scorer prompt (`mod-scorer-prompt.md` §1 omitted both gates). Fixed in MR !21; the
@@ -155,9 +156,44 @@ than the real one, or misses the `.github/` path. Dependabot config canonically 
 
 ---
 
+## Issue 5 — ARA `dev_library_override` wrongly applied to an application with an HTTP surface
+
+**Labels:** `bug`, `ara-td`, `repo-type`, `help-wanted`
+
+### Summary
+An ARA report set `dev_library_override=true` and N/A'd the ENG-Q1–Q5 engineering questions on a
+repo whose own `metadata.repo_type` is `application` and whose surface flags show
+`has_http_rpc_surface=true`. The library N/A mapping must not fire on an application with a live
+HTTP/RPC surface — those ENG questions should be evaluated, not suppressed. A misapplied override
+silently drops five scored questions, inflating apparent readiness.
+
+Same report also carries a severity-counter undercount (see issue 1): `info_count=15` while 16
+findings are natively INFO — no exclusion rule may lower a counter below the enumerated findings.
+
+### Evidence (local harness golden, rebaseline 2026-08-11, pipeline 3211348)
+- `legacy-pricing-cgi` (ARA): `repo_type=application`, `has_http_rpc_surface=true`, yet
+  `dev_library_override=true` → ENG-Q1–Q5 marked N/A. Surfaced as a fabrication + a failed
+  `severity_counter_undercount` check when scoring the refreshed golden (0.87 → 0.82). The
+  reset captured the defect into golden, so `legacy-pricing-cgi` now reproduces it as a fixture.
+
+### Suspected root cause
+The `dev_library_override` gate keys off a signal (e.g. presence of a package manifest / lib
+layout) without excluding repos that expose an HTTP/RPC surface. `repo_type=application` +
+`has_http_rpc_surface=true` should be a hard veto on the override.
+
+### Suggested fix direction
+- Gate the override on `repo_type == library` (or `dev-library-application`) AND
+  `has_http_rpc_surface=false`; never apply it when an application HTTP/RPC surface is present.
+- Assert on the `legacy-pricing-cgi` fixture that ENG-Q1–Q5 are evaluated (not N/A) and that
+  `info_count` equals the enumerated native-INFO findings, so both defects stay pinned.
+
+---
+
 ### Filing notes
 - Target: internal GitLab (`gitlab.aws.dev/agentic-readiness-assessment/...`). No `glab`/token
   on the maintainer box at draft time — paste manually, or set a token and file via the API.
 - Recommended sequencing: land the scorer-prompt fix (MR !21), ask the benchmarking team to
   re-run, then file whichever of #1–#4 still reproduce. #1 (counts) and #4 (dependabot) are
   run-stable and safe to file now; #3 (pathways) shows run-variance so confirm on a fresh run.
+- #5 (`dev_library_override`) is reproduced deterministically by the `legacy-pricing-cgi` golden
+  fixture, not the ZG benchmark — safe to file now, independent of the benchmark re-run.
