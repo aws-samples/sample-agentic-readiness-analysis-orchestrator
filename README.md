@@ -174,12 +174,28 @@ The [`orchestrator/SKILL.md`](orchestrator/SKILL.md) skill walks an agent throug
 
 ## Contributing
 
-**Changing a rubric (add / remove / re-score a question)?** Start at
-[`docs/contributing/`](docs/contributing/README.md) — the front-door guide to TD anatomy, the
-change playbook, and the invariants that break silently.
+**Anyone can add, remove, or edit a question or rubric value.** The full front-door guide is
+[`docs/contributing/`](docs/contributing/README.md) — TD anatomy, a use-case matrix of what
+passes/fails and why, and the invariants that break silently. The 30-second version:
 
-For repo-level PR mechanics see [CONTRIBUTING.md](CONTRIBUTING.md). Use the GitHub issue
-templates to report bugs or suggest enhancements.
+| If you… | Follow-up |
+|---|---|
+| **Edit** a question (re-score, reword, change scope/severity/pathway) | nothing extra — the harness reads the TD at runtime; state your intent and trust the judge |
+| **Add** a question | bump the one count literal **and** refresh the golden baseline (the golden can't answer a new question) |
+| **Remove** a question | just decrement the one count literal (the golden still covers the smaller rubric) |
+
+Validate before you push — the same suite the MR pipeline runs, fully offline (no AWS, no `atx`):
+
+```bash
+pip install -r harness/requirements.txt
+python3 -m pytest harness/tests/ -q
+```
+
+Don't rely on the MR validator as your first check — it's the *last* step. For how to refresh the
+golden (locally, or hands-off via CI on your own branch) see
+[the golden-baseline section](docs/contributing/README.md#refreshing-the-golden-baseline--two-ways).
+For repo-level PR mechanics see [CONTRIBUTING.md](CONTRIBUTING.md). Use the GitHub issue templates
+to report bugs or suggest enhancements.
 
 ## Security
 

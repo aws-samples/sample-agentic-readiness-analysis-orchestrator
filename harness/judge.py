@@ -7,6 +7,16 @@ contributor's stated intent (the MR description / --intent) and asks an LLM:
 **is this change GOOD FOR THE ANALYSIS?** The verdict is ADVISORY — it is posted as an
 MR comment and NEVER fails the pipeline (see .gitlab-ci.yml `allow_failure: true`).
 
+SCOPE — this judge only runs on a CHANGE MR (a TD/rubric or fixture edit). It is NOT run
+on a re-baseline MR: should-run.sh SKIPs a golden-only diff (is_baseline), so harness:impact
+never produces an impact.json for the judge to consume. That gate is deliberate — on a
+re-baseline the reports were re-rolled from the UNCHANGED rubric, so every tier/blocker
+movement is draw-vs-draw nondeterminism, and _enforce_safety_floor below would turn it into
+a false SAFETY HOLD. The re-baseline is validated numerically instead, by the ratchet in
+score-reports.py (--update-baseline --ratchet) inside harness:rebaseline-gather. So do NOT
+add "rebaseline-aware" branches here; the judge is only ever handed a real intent-bearing
+change, which is what its intent-match and safety-floor logic assume.
+
 WHAT THE SCORE MEASURES (unified with the scorer — see below):
   score = the freshly-generated report's ACCURACY on the SAME 0-1 scale as the
           committed baseline (groundedness vs the fixture SOURCE).

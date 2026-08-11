@@ -31,7 +31,7 @@ get extra scrutiny — and extra tooling.
 
 ```bash
 pip install -r harness/requirements.txt
-python3 -m pytest harness/tests/ -q          # the full harness suite, ~250 tests, seconds
+python3 -m pytest harness/tests/ -q          # the full harness suite, a few hundred tests, seconds
 ```
 
 Things worth knowing:

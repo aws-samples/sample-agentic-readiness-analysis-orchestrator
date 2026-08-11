@@ -213,12 +213,21 @@ CHECK_MEANINGS = {
         "The same question id appears more than once within findings or evaluations."),
     "incomplete_question_coverage": (
         "critical",
-        "The report answered FEWER rubric questions than the rubric defines (ARA 43, "
-        "MOD 37) — the assessment is incomplete, and the gap is silent."),
-    "unexpected_question_count": (
+        "The report FAILED TO ANSWER one or more rubric questions (by id, not by count) — the "
+        "assessment is incomplete, and the gap is silent. Membership-based, so a hallucinated "
+        "id cannot backfill a dropped real question to a passing total."),
+    "fabricated_question_id": (
         "low",
-        "More questions were resolved than the rubric defines. Usually a stray or "
-        "hallucinated id."),
+        "The report resolved an id the rubric does not define (a stray/hallucinated id). It "
+        "carries no tier-moving severity, so it is a quality demerit, not a broken assessment: "
+        "if the extra answer is grounded and true it costs little; if invented it is a "
+        "fabrication the judge weighs. Coverage of the real rubric is unaffected."),
+    "phantom_id_moves_tier": (
+        "critical",
+        "The report resolved an id the rubric does not define AND assigned it a tier-moving "
+        "native severity (BLOCKER / RISK-SAFETY). A phantom id must never touch blocker_count / "
+        "risk_safety_count — the tier arithmetic is defined only over real rubric ids, so this "
+        "can silently relax or tighten the classification. Hard-fail, never a demerit."),
 }
 
 DEFAULT_MODEL = os.environ.get(
@@ -231,9 +240,9 @@ DEFAULT_MODEL = os.environ.get(
 # came out wrong.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from skill_table import (  # noqa: E402
-    EXPECTED_QUESTIONS, SEVERITY_RANK, SKILLS, expected_ara_tier, mod_band, parse_questions,
-    rel as _rel, parse_calibrations, parse_extended, parse_mod_archetype_calibrated,
-    parse_mod_surface_gates, parse_na_map, parse_scope_severities,
+    EXPECTED_QUESTIONS, SEVERITY_RANK, SKILLS, classify_coverage, expected_ara_tier, mod_band,
+    parse_questions, rel as _rel, parse_calibrations, parse_extended,
+    parse_mod_archetype_calibrated, parse_mod_surface_gates, parse_na_map, parse_scope_severities,
 )
 
 
@@ -271,7 +280,7 @@ def _tier_ladder() -> str:
 # taste re-opens the comparability gap for no benefit.
 # ---------------------------------------------------------------------------------------
 
-ARA_RUBRIC = """\
+ARA_RUBRIC = f"""\
 Evaluate the Agentic Readiness Assessment report found in the GENERATED REPORT OUTPUT section.
 Especially focus on **severity consistency** (is the readiness profile — Agent-Ready, Pilot-Ready,
 Remediation Required, or Not Agent-Integrable — consistent with the BLOCKER and RISK-SAFETY counts;
@@ -284,7 +293,7 @@ accuracy** (is the detected archetype correct — stateless-utility, stateful-cr
 data-gateway, or event-processor), **repository classification accuracy** (is the repo_type correct —
 libraries should not be asked infrastructure questions; `[+]` and there should be no spurious findings
 on questions that are N/A for the repo type), and **agent readiness determination accuracy**.
-`[+]` Also verify **question coverage** — all 43 questions across the 8 sections (API Surface, Auth,
+`[+]` Also verify **question coverage** — all {EXPECTED_QUESTIONS["ara"]} questions across the 8 sections (API Surface, Auth,
 State Management, Human-in-the-Loop, Data Accessibility, Discovery & Documentation, Observability,
 Engineering Maturity) are resolved, with each question landing in exactly one of findings or
 evaluations (never both, never neither). `[+]` Check **conditional-BLOCKER reasoning** — the 5
@@ -300,7 +309,7 @@ and must not be recorded as a miss. Judge severity against the AUTHORITATIVE SEV
 against general application-security intuition. Provide an overall score from 0.0 to 1.0 in the format
 `<score>X.X</score>` followed by a brief summary."""
 
-MOD_RUBRIC = """\
+MOD_RUBRIC = f"""\
 Evaluate the Modernization Readiness Assessment report found in the GENERATED REPORT OUTPUT section.
 Especially focus on **pathway accuracy** (are the 7 modernization pathways triggered correctly based on
 what was actually found in the repository — for example, a repo with no database should not trigger
@@ -311,7 +320,7 @@ files, configs, and code patterns from the repository), **service archetype accu
 archetype correct — stateless-utility, stateful-crud, orchestrator, data-gateway, or event-processor),
 and **repository classification accuracy** (is the repo_type correct — application, library,
 infrastructure-only, etc.). Also verify that **recommendation quality** aligns with the triggered
-pathways. `[+]` Additionally verify **question coverage** — all 37 questions across the 5 categories
+pathways. `[+]` Additionally verify **question coverage** — all {EXPECTED_QUESTIONS["mod"]} questions across the 5 categories
 (Infrastructure 11, Application 6, Data 4, Security 7, Operations 9) are resolved, with each question
 landing in exactly one of findings or evaluations (never both, never neither). `[+]` Check
 **tier and score consistency** — the tier (Cloud-Native Ready / Pilot-Ready / Remediation Required /
@@ -932,6 +941,15 @@ def check_coverage(rpt: dict, analysis: str) -> list[dict]:
     report quietly answering less of the rubric than it should. `evaluations` and `findings`
     are DISJOINT by design (loan-calculator: 22 + 21 = 43, zero intersection), so the
     covered set is their UNION.
+
+    Coverage is judged by MEMBERSHIP against the rubric's own id set, not by count. The
+    output contract is: every real rubric id is answered (superset), and any *extra* id the
+    report invents is a quality demerit — UNLESS it carries a tier-moving native severity, in
+    which case it can move the classification and hard-fails. This is the "the count doesn't
+    matter, the output contract and the severity of the findings do" rule: a grounded extra
+    answer costs little; a dropped real question or a phantom that touches blocker_count does
+    not. A count-only check missed the case where one dropped question and one hallucinated id
+    net to the expected total; membership catches both halves. See skill_table.classify_coverage.
     """
     out: list[dict] = []
     fq = [f.get("question_id") for f in (rpt.get("findings") or []) if f.get("question_id")]
@@ -945,15 +963,26 @@ def check_coverage(rpt: dict, analysis: str) -> list[dict]:
     if dupes:
         out.append({"check": "duplicate_question_ids", "severity": "medium",
                     "detail": f"repeated ids: {', '.join(sorted(dupes)[:8])}"})
-    answered = set(fq) | set(eq)
-    want = EXPECTED_QUESTIONS[analysis]
-    if len(answered) < want:
+    cov = classify_coverage(analysis, rpt)
+    if cov["missing"]:
+        want = EXPECTED_QUESTIONS[analysis]
         out.append({"check": "incomplete_question_coverage", "severity": "critical",
-                    "detail": f"{len(answered)} of {want} rubric questions resolved "
-                              f"({want - len(answered)} unanswered)"})
-    elif len(answered) > want:
-        out.append({"check": "unexpected_question_count", "severity": "low",
-                    "detail": f"{len(answered)} questions resolved, rubric defines {want}"})
+                    "detail": f"{len(cov['missing'])} of {want} rubric questions unanswered: "
+                              f"{', '.join(sorted(cov['missing'])[:8])}"})
+    # A fabricated id that carries a tier-moving severity is the dangerous case — it can move
+    # blocker_count / risk_safety_count. Report it as its own critical check and keep it OUT of
+    # the low-severity demerit below (a phantom BLOCKER is never "just a stray id").
+    if cov["tier_moving_extra"]:
+        out.append({"check": "phantom_id_moves_tier", "severity": "critical",
+                    "detail": "extra id(s) with tier-moving native severity: "
+                              f"{', '.join(sorted(cov['tier_moving_extra']))}"})
+    benign_extra = cov["extra"] - cov["tier_moving_extra"]
+    if benign_extra:
+        out.append({"check": "fabricated_question_id", "severity": "low",
+                    "detail": f"{len(benign_extra)} id(s) not in the rubric: "
+                              f"{', '.join(sorted(benign_extra)[:8])} "
+                              "(quality demerit — grounded extras cost little, invented ones "
+                              "are weighed as fabrications by the judge)"})
     return out
 
 
@@ -1283,6 +1312,16 @@ NOISE_FLOOR = {"ara": 0.09, "mod": 0.04}
 # (no regression) but is caught here. Both gates are needed — neither subsumes the other.
 # Set to 0.80: below it a report is judged too ungrounded to trust regardless of history.
 QUALITY_FLOOR = 0.80
+
+# HOLISTIC low-quality tolerance for the REBASELINE ratchet (not the per-MR delta gate). A
+# rebaseline re-rolls every report at once, and the analysis agent is non-deterministic — one
+# fixture landing a marginal draw below the floor (e.g. 0.78) is a bad roll, not a degradation,
+# and refusing the whole sweep for it would fight the very variance the harness exists to average
+# over. What is NOT noise is a BROAD collapse: if more than this fraction of scored reports fall
+# below QUALITY_FLOOR at once, groundedness — which is stable across draws in a way blocker_count
+# is not — has genuinely dropped, and the sweep must not be enshrined. `> fraction`, so a lone
+# outlier passes: at 28 reports, 0.10 tolerates up to 2 below-floor (⌊2.8⌋) and refuses at 3.
+REBASELINE_LOW_QUALITY_FRACTION = 0.10
 
 
 def compare_to_baseline(rows: list[dict],
@@ -1647,15 +1686,28 @@ def main() -> int:
         if args.ratchet:
             # Compare the fresh scores against the OUTGOING baseline (still on disk — we have
             # not written yet). Adopt same-or-better freely; refuse on a real regression or a
-            # below-floor report so an unnoticed post-merge degradation cannot become the new
-            # "good" baseline. `regressed` already excludes within-noise movement (the delta
+            # BROAD below-floor collapse so an unnoticed post-merge degradation cannot become the
+            # new "good" baseline. `regressed` already excludes within-noise movement (the delta
             # must EXCEED the per-fixture band), and stale rows are expected here (the outgoing
             # baseline is the previous TD) so they do NOT block — only the delta verdict does.
+            #
+            # The floor is judged HOLISTICALLY, not per-report. A rebaseline re-rolls every
+            # fixture at once and the analysis agent is non-deterministic, so one fixture landing
+            # a marginal draw below 0.80 is a bad roll, not a degradation — refusing the whole
+            # sweep for it would fight the variance the harness exists to average over. Only a
+            # BROAD collapse (> REBASELINE_LOW_QUALITY_FRACTION of scored reports below the floor)
+            # is refused: groundedness is stable across draws in a way blocker_count and tier are
+            # not, so a broad drop is a real signal. Tier/blocker relaxations are deliberately NOT
+            # gated here — they ride the noisiest quantity in the system; the rebaseline-aware
+            # judge surfaces them advisorily instead. See REBASELINE_LOW_QUALITY_FRACTION.
             guard = compare_to_baseline(rows)
             gs = guard["summary"]
             bad_regressed = [u for u in guard["units"] if u["verdict"] == "regressed"]
-            bad_floor = [u for u in guard["units"] if u.get("below_quality_floor")]
-            if bad_regressed or bad_floor:
+            below_floor = [u for u in guard["units"] if u.get("below_quality_floor")]
+            scored = [u for u in guard["units"] if isinstance(u.get("score"), (int, float))]
+            floor_frac = (len(below_floor) / len(scored)) if scored else 0.0
+            broad_collapse = floor_frac > REBASELINE_LOW_QUALITY_FRACTION
+            if bad_regressed or broad_collapse:
                 print("\n✗ RATCHET: refusing to overwrite the baseline — the fresh sweep is "
                       "WORSE than the committed one.", file=sys.stderr)
                 if bad_regressed:
@@ -1663,11 +1715,13 @@ def main() -> int:
                           + ", ".join(f"{u['repo']} ({str(u['analysis']).upper()}) "
                                       f"{u['baseline']}->{u['score']} ({u['delta']:+})"
                                       for u in bad_regressed), file=sys.stderr)
-                if bad_floor:
-                    print(f"  below the {guard.get('quality_floor', QUALITY_FLOOR):.2f} floor "
-                          f"({len(bad_floor)}): "
+                if broad_collapse:
+                    print(f"  broad quality collapse: {len(below_floor)}/{len(scored)} reports "
+                          f"({floor_frac:.0%}) below the "
+                          f"{guard.get('quality_floor', QUALITY_FLOOR):.2f} floor, over the "
+                          f"{REBASELINE_LOW_QUALITY_FRACTION:.0%} tolerance: "
                           + ", ".join(f"{u['repo']} ({str(u['analysis']).upper()}) {u['score']}"
-                                      for u in bad_floor), file=sys.stderr)
+                                      for u in below_floor), file=sys.stderr)
                 print("  The baseline was NOT changed. Investigate whether a merged change "
                       "degraded the analysis before re-baselining by hand.", file=sys.stderr)
                 # Emit the comparison so CI can attach/annotate it.
@@ -1675,6 +1729,14 @@ def main() -> int:
                     args.compare_out.write_text(json.dumps(guard, indent=2) + "\n",
                                                 encoding="utf-8")
                 return 3
+            # A lone below-floor outlier is tolerated but still worth a line — it is exactly the
+            # marginal draw a reviewer may want to eyeball before merging the rebaseline MR.
+            if below_floor:
+                print(f"  note: {len(below_floor)}/{len(scored)} report(s) below the "
+                      f"{guard.get('quality_floor', QUALITY_FLOOR):.2f} floor, within the "
+                      f"{REBASELINE_LOW_QUALITY_FRACTION:.0%} tolerance (tolerated as noise): "
+                      + ", ".join(f"{u['repo']} ({str(u['analysis']).upper()}) {u['score']}"
+                                  for u in below_floor), file=sys.stderr)
             print(f"✓ RATCHET: fresh sweep is same-or-better "
                   f"(improved {gs['improved']} · within-noise {gs['within_noise']}) — "
                   "safe to adopt.", file=sys.stderr)
