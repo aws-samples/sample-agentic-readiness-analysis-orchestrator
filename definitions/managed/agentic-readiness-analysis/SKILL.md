@@ -308,7 +308,9 @@ Record the resolved value and how it was resolved in the report metadata header:
 
 Some repositories classify as `application` (have source + entry point) but function as libraries, CLIs, build tools, or frontend scaffolds — examples: build orchestration tools, SDK mocks, CLI utilities, Angular/React admin templates, IaC framework plugins. For these, the N/A mapping of `application` (all 43 questions apply) produces false-positive findings because the repo does not hold data, does not expose an API, and does not execute agent-invoked operations.
 
-When `service_archetype` is detected or declared as `stateless-utility` AND at least three of the five surface flags above are `false`, treat the repo as a **dev-library-application** for N/A and scoring purposes: apply the `library` N/A mapping from Step 1 (only ENG-Q1 through ENG-Q5 are non-N/A) as the baseline, then continue with the surface-flag downgrades for the questions that remain.
+When `service_archetype` is detected or declared as `stateless-utility` AND `has_http_rpc_surface` is `false` AND at least three of the five surface flags above are `false`, treat the repo as a **dev-library-application** for N/A and scoring purposes: apply the `library` N/A mapping from Step 1 (only ENG-Q1 through ENG-Q5 are non-N/A) as the baseline, then continue with the surface-flag downgrades for the questions that remain.
+
+A live HTTP/RPC surface is a hard veto on this override: `has_http_rpc_surface = true` means the repo exposes a callable API that consumers invoke directly, so it is an application regardless of a library-like layout — the API/AUTH/OBS questions must be evaluated, not N/A'd. This is why a CGI or servlet application with a thin utility core does not qualify (its HTTP surface is real), while a pure formatter, SDK mock, or build tool with no callable surface does.
 
 This override affects scoring only; it does not change the recorded `repo_type`. The original `repo_type` value is preserved in the report metadata, and the override with its rationale is recorded as an INFO note in the report preamble.
 
