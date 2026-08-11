@@ -684,6 +684,9 @@ harness:rebaseline-gather:
     - !reference [default, before_script]
     - git config user.email "harness-bot@noreply.aws.dev"
     - git config user.name "harness re-baseline bot"
+    # pytest is NOT in the default before_script (only awscli is). The self-test step below
+    # runs the offline suite against the freshly written golden, so install the harness deps.
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
   script:
     # Same fast RESET-on-schedule guard as the shards (defense in depth: this is where the
     # ratchet is actually bypassed).
@@ -718,6 +721,32 @@ harness:rebaseline-gather:
     # portfolio reports). --portfolio-only skips stage 1 (already done by the shards) and the
     # clobber guard (the merged slices ARE its input, not an accidental re-run).
     - harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --portfolio-only --write-golden --validate --jobs "$RUN_JOBS"
+    # SELF-TEST the refreshed golden BEFORE proposing it. Several tests are coupled to golden's
+    # content — they deep-copy real reports and assert on per-repo counts, tiers, and the
+    # discovered repo set. A rebaseline that changes those (e.g. the 2026-08-11 reset moved
+    # loan-calculator write-enabled and added the modern-* fixtures) left main red until the
+    # tests were repaired by hand. Running the suite HERE, against the just-written golden,
+    # turns that silent post-merge breakage into a loud pre-merge failure in the same job that
+    # produced the baseline. A PARTIAL sweep is exempt: its golden is deliberately incomplete,
+    # so a coverage-count failure would be expected noise, not the drift we're guarding.
+    - |
+      if [ -n "$(cat .rebaseline-partial 2>/dev/null || echo '')" ]; then
+        echo "self-test: SKIPPED on a PARTIAL sweep (golden is intentionally incomplete)."
+      else
+        echo "self-test: running the offline suite against the freshly written golden…"
+        set +e
+        python3 -m pytest harness/tests/ -q
+        RC=$?
+        set -e
+        if [ "$RC" != "0" ]; then
+          echo "✗ SELF-TEST FAILED: the refreshed golden breaks the committed test suite." >&2
+          echo "  This is drift between the fixture-coupled tests and the new baseline — the" >&2
+          echo "  same class that left main red after the 2026-08-11 reset. The baseline is NOT" >&2
+          echo "  proposed. Reproduce locally, update the coupled tests to match the new golden," >&2
+          echo "  and land the test change and the rebaseline together in one MR." >&2
+          exit "$RC"
+        fi
+      fi
     # Refresh the accuracy baseline from the refreshed golden. --ratchet unless this is a reset:
     # it refuses (exit 3) on a regression/below-floor sweep, leaving the committed baseline
     # untouched so we alert instead of enshrining a degradation. --compare-out captures the
