@@ -860,7 +860,7 @@ def test_a_genuine_lost_blocker_is_always_tier_material():
 # The old `test_every_golden_per_repo_report_answers_the_full_rubric` lived here — deleted as
 # redundant. It asserted each golden report answers the full rubric; `test_clean_tree_reports_
 # no_coverage_gaps` below proves the same thing through the PRODUCTION path (build_impact over
-# golden returns a coverage gap the moment any report answers fewer than `_EXPECTED_QUESTIONS`),
+# golden returns a coverage gap the moment any report answers fewer than `EXPECTED_QUESTIONS`),
 # so the direct-count copy added no coverage. What is NOT covered elsewhere — that findings and
 # evaluations never double-list a question — stays, below.
 
@@ -870,7 +870,7 @@ def test_evaluations_and_findings_are_disjoint():
     holds if they never overlap — a qid listed in both would be counted once and could mask a
     genuine gap. Checked on the real golden ARA reports (a property of the analysis output),
     across every repo so a rebaseline can't remove the one being tested; and the total derives
-    from the TD (via _EXPECTED_QUESTIONS, parsed from the rubric) so adding or removing a
+    from the TD (via EXPECTED_QUESTIONS, parsed from the rubric) so adding or removing a
     question can't break it.
     """
     ara_repos = [(k, r) for k, r in dr.load_tree(GOLDEN).items() if k[:2] == ("ara", "repo")]
@@ -880,8 +880,8 @@ def test_evaluations_and_findings_are_disjoint():
         fi = {f["question_id"] for f in rpt.get("findings") or []}
         assert ev & fi == set(), \
             f"{repo}: evaluations and findings overlap — coverage math must change"
-        assert len(ev) + len(fi) == dr._EXPECTED_QUESTIONS["ara"], \
-            f"{repo}: answered {len(ev) + len(fi)}, expected {dr._EXPECTED_QUESTIONS['ara']}"
+        assert len(ev) + len(fi) == dr.EXPECTED_QUESTIONS["ara"], \
+            f"{repo}: answered {len(ev) + len(fi)}, expected {dr.EXPECTED_QUESTIONS['ara']}"
 
 
 def test_clean_tree_reports_no_coverage_gaps():
@@ -912,7 +912,7 @@ def test_dropped_questions_are_reported_as_a_coverage_gap():
     assert len(gaps) == 1, f"expected one gap, got {impact['coverage_gaps']}"
     gap = gaps[0]
     assert gap["after_answered"] == before_answered - len(dropped)
-    assert gap["expected"] == dr._EXPECTED_QUESTIONS["ara"]
+    assert gap["expected"] == dr.EXPECTED_QUESTIONS["ara"]
     assert set(gap["missing_vs_baseline"]) == dropped
     assert "API-Q1" in gap["detail"]
 

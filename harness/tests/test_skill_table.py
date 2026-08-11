@@ -21,10 +21,26 @@ import skill_table as st  # noqa: E402
 
 
 def test_the_severity_table_is_parsed_from_the_td_not_transcribed():
+    """THE question-count tripwire — and the ONLY place a rubric-size change is acknowledged.
+
+    EXPECTED_QUESTIONS is derived from parse_questions (skill_table.py), so every consumer's
+    count follows the TD automatically — adding or removing a question needs NO code edit.
+    That convenience is safe only because this one test still pins the parsed count to a
+    literal: an ACCIDENTAL parse drift (a broken `####` heading, a hyphen where an em-dash
+    belongs, a duplicated row) changes len(parse_questions) but not the literal, so it fails
+    HERE, loudly. Without this literal the derivation would be circular and a silently
+    dropped question would redefine "complete" as the wrong number with nothing to catch it.
+
+    So: if you INTENTIONALLY added or removed a question, this is the single line to update
+    (43 or 37), in the same MR as the TD edit. If you did NOT, a failure here means the parse
+    broke — fix the heading, do not just bump the number.
+    """
     ara, mod = st.parse_questions("ara"), st.parse_questions("mod")
-    assert len(ara) == st.EXPECTED_QUESTIONS["ara"] == 43
+    assert len(ara) == 43, f"ARA parse yielded {len(ara)} questions, expected 43"
     # A naive heading grep returns 38 for MOD — INF-Q1 "Managed Compute" appears twice.
-    assert len(mod) == st.EXPECTED_QUESTIONS["mod"] == 37
+    assert len(mod) == 37, f"MOD parse yielded {len(mod)} questions, expected 37"
+    # EXPECTED_QUESTIONS must mirror the parse it is derived from (guards a bad refactor).
+    assert st.EXPECTED_QUESTIONS == {"ara": len(ara), "mod": len(mod)}
 
 
 def test_auth_q5_is_risk_safety_which_is_the_whole_point():
