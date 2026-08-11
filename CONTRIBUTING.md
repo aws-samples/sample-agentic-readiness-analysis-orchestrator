@@ -20,9 +20,9 @@ reported the issue. Please try to include as much information as you can. Detail
 
 ## Changing a Transformation Definition (rubric)
 
-> **New here? Start at [`docs/contributing/`](docs/contributing/README.md)** — the front-door
+> **New here? Start at [`docs/contributing/`](docs/contributing/README.md)** — the single-page
 > guide to adding, removing, and re-scoring questions, TD anatomy, and the invariants that
-> break silently. This section is the quick summary; that folder is the full map.
+> break silently. This section is the quick summary; that page is the full guide.
 
 Edits under `definitions/managed/*/SKILL.md` change how every assessment scores, so they
 get extra scrutiny — and extra tooling.
@@ -37,11 +37,14 @@ python3 -m pytest harness/tests/ -q          # the full harness suite, ~250 test
 Things worth knowing:
 
 - **Adding or removing a question is a two-line change.** The harness parses the rubric out
-  of `SKILL.md` at runtime and cross-checks the count against
-  `EXPECTED_QUESTIONS` in [`harness/skill_table.py`](harness/skill_table.py) (ARA 43,
-  MOD 37). If you add a question, bump that constant in the same commit or the suite fails
-  with a message telling you so. The speed bump is deliberate: it makes a change in the
-  size of the rubric explicit rather than silent.
+  of `SKILL.md` at runtime; the expected count *derives* from that parse
+  (`EXPECTED_QUESTIONS` in [`harness/skill_table.py`](harness/skill_table.py)), so there is no
+  constant to keep in sync. The one place a size is pinned to a literal (ARA 43, MOD 37) is the
+  test `test_the_severity_table_is_parsed_from_the_td_not_transcribed` in
+  [`harness/tests/test_skill_table.py`](harness/tests/test_skill_table.py). Add or remove a
+  question and you update that one number in the same commit, or the suite fails with a message
+  telling you so. The speed bump is deliberate: it makes a change in the size of the rubric
+  explicit rather than silent.
 - **Never hardcode a threshold, band boundary, or severity.** Every such value is parsed
   from the TD by `harness/skill_table.py`. A second copy goes stale silently — this has
   bitten us twice, and both times a green test was pinning the wrong value.

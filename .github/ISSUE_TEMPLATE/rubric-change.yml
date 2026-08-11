@@ -1,0 +1,78 @@
+name: Rubric / scoring change
+description: Propose adding, removing, or re-scoring a question, pathway, or program in a Transformation Definition
+title: "[Rubric] "
+labels: ["td-change"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this to **float an idea** for changing what an assessment scores — before opening a
+        pull request. Great for proposing a new question, re-scoring an existing one, adjusting a
+        MOD pathway trigger, or flagging a scoring gap.
+
+        **Read first:** [`docs/contributing/README.md`](https://github.com/aws-samples/sample-agentic-readiness-analysis-orchestrator/blob/main/docs/contributing/README.md)
+        — the single-page contributor guide (TD anatomy, the change playbook, the invariants that
+        break silently).
+
+        **How this gets validated:** the change-impact harness — which re-runs the analysis on
+        sample repos, diffs the result, and posts an advisory judge verdict — runs on the internal
+        **AWS GitLab mirror only** (it needs AWS credentials). A GitHub issue/PR gets human review
+        but **no automated harness verdict**; a maintainer runs the harness on the internal mirror
+        and reports back. So this template stays light — capture the *idea*, and a maintainer takes
+        it through the harness.
+  - type: dropdown
+    id: td
+    attributes:
+      label: Which TD?
+      options:
+        - "agentic-readiness-analysis (ARA)"
+        - "modernization-readiness-analysis (MOD)"
+        - "portfolio-agentic-readiness-analysis"
+        - "portfolio-modernization-readiness-analysis"
+        - "Not sure"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of change
+      options:
+        - "Re-score an existing question (severity / wording / criteria / scope)"
+        - "Add a new question"
+        - "Remove / retire a question"
+        - "Pathway trigger (MOD)"
+        - "Program recommendation (portfolio)"
+        - "Threshold / band boundary"
+        - "Other"
+    validations:
+      required: true
+  - type: input
+    id: question_id
+    attributes:
+      label: Question / pathway / program id (if it exists)
+      description: "e.g. AUTH-Q5, INF-Q11, movetocontainers, EBA. Leave blank for a brand-new question."
+    validations:
+      required: false
+  - type: textarea
+    id: problem
+    attributes:
+      label: What does the rubric currently miss or get wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected impact
+      description: |
+        Which dimension(s) should move — a rough guess is fine at the idea stage:
+        D1 more/fewer findings · D2 a tier change · D3 a MOD pathway triggering ·
+        D4 a portfolio program · D5 a MOD score band crossing.
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        **Next step once there's agreement:** open a pull request editing
+        `definitions/managed/<td>/` (and, if you're adding/removing a question, update the single
+        count literal in `harness/tests/test_skill_table.py` — the guide explains why). Internal
+        contributors: push to the GitLab mirror to get the harness verdict.

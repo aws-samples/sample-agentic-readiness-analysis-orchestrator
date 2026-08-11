@@ -15,7 +15,8 @@
 > **Edit the TD directly to change the rubric.** The harness reads those files at runtime
 > (`skill_table.py::parse_questions` concatenates `SKILL.md` + `references/*.md`), so a TD edit
 > is picked up on the next run with no separate mirror to maintain and no code change — except
-> when you add or remove a question, which needs a one-line count bump (see below).
+> when you add or remove a question, which needs a one-line update to a single test literal
+> (see below).
 
 See [`harness/DESIGN.md`](../DESIGN.md) — especially §2 (what the TDs emit), §3 (the five
 scored dimensions), §5 (change → impact flow), and §8.1 (MR intent capture) — for how a rubric
@@ -68,22 +69,28 @@ Steps:
 
 1. Add (or delete) the question in the TD — its `references/*.md` section **and** anywhere the
    count/tables reference it — in one change. Respect the ID rule above.
-2. **Bump the count.** The harness asserts on rubric size:
-   `EXPECTED_QUESTIONS = {"ara": 43, "mod": 37}` in
-   [`harness/skill_table.py`](../skill_table.py). Increment (add) or decrement (remove) the
-   number for the affected analysis, in the same MR.
+2. **Update the count literal.** The rubric size is *derived* from the parse —
+   `EXPECTED_QUESTIONS = {a: len(parse_questions(a)) for a in ("ara", "mod")}` in
+   [`harness/skill_table.py`](../skill_table.py) — so there is no constant to keep in sync. The
+   one place a size is pinned to a literal is the test
+   `test_the_severity_table_is_parsed_from_the_td_not_transcribed` in
+   [`harness/tests/test_skill_table.py`](../tests/test_skill_table.py) (`43` for ARA, `37` for
+   MOD). Increment (add) or decrement (remove) the affected number there, in the same MR.
 3. Open a `rubric-change` MR with intent + expected impact and let the harness post its
    advisory verdict.
 4. A maintainer refreshes the golden baselines on approval (DESIGN.md §7).
 
-### Why the count is a manual step (and the only one)
+### Why the count literal is a manual step (and the only one)
 
-The assertion fires on **any** size change — adding (43→44), removing (43→42), or a heading the
-parser can no longer read all trip it. It is deliberate: a rubric that silently parses to the
-wrong size hands the judge a table with questions missing, and the model fills the hole by
-guessing — the exact bug this guard kills. If you forget the bump, **CI fails loudly** and the
-assertion message states the count it parsed plus the two causes (intentional add/remove → bump
-the constant; accidental parse drift → fix the heading, don't score on a partial table).
+Because the runtime count *derives* from the parse, every consumer follows the TD automatically —
+but that derivation is only safe because one test still pins the expected size to a literal. An
+**accidental** parse drift (a broken `####` heading, a hyphen where an em-dash belongs, a
+duplicated row) changes the parsed count but not the literal, so it trips **there**, loudly — a
+rubric that silently parses to the wrong size would otherwise hand the judge a table with
+questions missing and the model would fill the hole by guessing, the exact bug this guard kills.
+An **intentional** add/remove is the one time you touch the literal. If you forget, **CI fails
+loudly** and the assertion states the count it parsed plus the two causes (intentional add/remove
+→ update the literal; accidental parse drift → fix the heading, don't score on a partial table).
 
 Everything that is NOT a count change — a severity flip, a reworded title, a changed
 `agent_scope` resolution or archetype rubric, a pathway trigger — is read from the TD at runtime
