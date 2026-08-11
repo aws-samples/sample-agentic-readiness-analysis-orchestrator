@@ -222,7 +222,7 @@ Only proceed to the execution command after user confirms.
 ### Why `additionalPlanContext` Is Used Here (and Nowhere Else)
 
 - **ARA/MODA** (`atx ct analysis run`): Built-in types reject `-g`/`--configuration`. No custom context needed — ct handles everything.
-- **EBA** (`atx custom def exec`): Requires execution constraints (capacity, budget, timeline) plus portfolio metadata to produce a phased roadmap. This is the ONLY place `additionalPlanContext` is relevant in this Power.
+- **EBA** (`atx custom def exec`): Requires execution constraints (capacity, budget, timeline) plus portfolio metadata to produce a phased roadmap. This is the ONLY place `additionalPlanContext` is relevant in this orchestrator.
 
 ---
 

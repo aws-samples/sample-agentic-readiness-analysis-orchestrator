@@ -78,7 +78,7 @@ that blocks the shell until killed, and no `atx ct` command needs it.
 atx ct source list
 ```
 
-If no sources are configured, guide the user through `atx ct source add` (see POWER.md "Source Providers").
+If no sources are configured, guide the user through `atx ct source add` (see `../SKILL.md` "Source providers").
 
 If a source shows `SETUP_REQUIRED` → credentials are not configured on this machine. Re-add the source.
 If a source shows `AUTH_REQUIRED` → token is invalid or expired. Re-add with a fresh token.
@@ -201,4 +201,4 @@ For EC2 or Batch setup, ask the agent: "Set up an EC2 instance for continuous mo
 | Report artifacts | on-disk artifact store + repo working tree | Per-repo and portfolio reports (located via `analysis get --json` → `report_paths`) |
 | Execution Plan (EBA) | `atx custom def exec` | Reads report artifacts, generates execution roadmap |
 
-The Power is a thin orchestrator. All analysis logic lives in `ct` itself and the transformation definitions it executes.
+The orchestrator ([`../SKILL.md`](../SKILL.md)) is a thin coordination layer. All analysis logic lives in `ct` itself and the transformation definitions it executes.

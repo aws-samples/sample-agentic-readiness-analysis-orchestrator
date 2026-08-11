@@ -23,7 +23,11 @@ This document provides security guidance for using the Agentic Readiness Analysi
 - TLS encryption for all AWS API communications
 - CloudTrail logging of all Transform API calls
 
-### Kiro IDE Responsibilities
+### Orchestrator / Agent Environment Responsibilities
+
+The orchestrator ([`orchestrator/SKILL.md`](orchestrator/SKILL.md)) runs inside an AI coding
+agent (Claude Code, or any agent host with Read/Bash-equivalent tools). That host is
+responsible for:
 
 - Secure subagent spawning with isolated contexts
 - File system access controls for repository operations
@@ -232,7 +236,7 @@ aws cloudtrail lookup-events \
 
 **Local execution logs:**
 ```bash
-# Kiro IDE logs analysis executions
+# The agent host logs analysis executions; atx ct writes run logs under its report tree.
 # Review logs for anomalous patterns:
 # - Unexpected repository access
 # - Failed authentication attempts
