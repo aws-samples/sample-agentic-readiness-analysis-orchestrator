@@ -472,7 +472,7 @@ These questions evaluate the foundational security posture required for any mode
 | **2** | Manual patching process; default AMIs with no hardening. |
 | **1** | No evidence of patching strategy; no vulnerability scanning. |
 
-> **Look for:** SSM Agent in user-data; `aws_ssm_patch_baseline`; AWS Inspector or Snyk; hardened AMI references (CIS, Bottlerocket); EC2 Image Builder pipelines.
+> **Look for:** SSM Agent in user-data; `aws_ssm_patch_baseline`; AWS Inspector or Snyk; hardened AMI references (CIS, Bottlerocket); EC2 Image Builder pipelines; dependency-update automation that patches transitive OS/library vulnerabilities: `.github/dependabot.yml`, `.github/dependabot.yaml`, `renovate.json`, `.renovaterc`, `.renovaterc.json`, `.github/renovate.json`.
 
 #### SEC-Q7: Application Security Pipeline
 
@@ -487,7 +487,7 @@ These questions evaluate the foundational security posture required for any mode
 | **2** | Dependency scanning configured (e.g., Dependabot, npm audit) and running, but no SAST tool. OR: SAST tool configured but only runs on-demand, not in every pipeline execution. |
 | **1** | No security scanning tools configured — no Dependabot, no SAST, no container scanning. Pipeline has no security validation step. |
 
-> **Look for:** SonarQube, Semgrep, CodeGuru Reviewer in CI/CD; Dependabot config; `npm audit` or `pip-audit` in pipeline; ECR image scanning; `.snyk` policy files.
+> **Look for:** SonarQube, Semgrep, CodeGuru Reviewer in CI/CD; Dependabot/Renovate config at canonical paths (`.github/dependabot.yml`, `.github/dependabot.yaml`, `renovate.json`, `.renovaterc`, `.renovaterc.json`, `.github/renovate.json`); `npm audit` or `pip-audit` in pipeline; ECR image scanning; `.snyk` policy files.
 
 
 ### Step 6: Operations & Observability (OPS-Q1 through OPS-Q9)
