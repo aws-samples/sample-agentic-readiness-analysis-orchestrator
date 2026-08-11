@@ -43,7 +43,7 @@ Engagement-program recommendations are produced **only** by the portfolio TDs â€
 
 Every TD is a lean **`SKILL.md` orchestration spine** plus **`references/*.md`** loaded on
 demand. The harness reads `SKILL.md` + `references/*.md` concatenated at runtime â€” see
-[`docs/contributing/td-anatomy.md`](../../docs/contributing/td-anatomy.md).
+[`docs/contributing/`](../../docs/contributing/README.md#td-anatomy--where-everything-lives).
 
 ```
 managed/

@@ -50,7 +50,7 @@ from typing import Any, Optional
 # Shared read of the managed TDs' severity tables — the SAME parse the judge prompt uses,
 # so "was this BLOCKER correct?" is answered from the rubric, not re-transcribed here.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from skill_table import is_over_escalation_correction, mod_band  # noqa: E402
+from skill_table import EXPECTED_QUESTIONS, is_over_escalation_correction, mod_band  # noqa: E402
 
 # --- score_rating bands, ordered low→high. Band-crossing detection uses the index. -----
 SCORE_BANDS = ["Not Ready", "Needs Work", "Partial", "Mature"]
@@ -863,11 +863,12 @@ def safety_alerts(repo: str, analysis: str, findings: dict, tier: dict,
 # analysis agent's ordinary nondeterministic churn. The judge would then quite reasonably
 # call it noise. So assert coverage structurally instead of hoping the delta reveals it.
 #
-# Counted from the report itself, NOT parsed out of SKILL.md: the rubric prose mentions ids
-# it does not define (MOD's namespace-collision note names ARA's DATA-Q7, which is not a
-# MOD question), so grepping the rubric over-counts. The expected totals are pinned here
-# and asserted against the baseline by the tests.
-_EXPECTED_QUESTIONS = {"ara": 43, "mod": 37}
+# Coverage is counted from the report itself, NOT parsed out of SKILL.md: the rubric prose
+# mentions ids it does not define (MOD's namespace-collision note names ARA's DATA-Q7, which
+# is not a MOD question), so grepping the rubric over-counts. The expected TOTAL, though, is
+# the same single source of truth every consumer uses — imported from skill_table, where it
+# is derived from the parse — so this file no longer keeps its own copy of {43, 37} that
+# could drift from skill_table's.
 
 
 def _answered_question_ids(report: dict) -> set[str]:
@@ -896,7 +897,7 @@ def question_coverage(repo: str, analysis: str,
     BASELINE's own count as well as the expected total, so a baseline that was itself
     incomplete does not mask a further regression.
     """
-    expected = _EXPECTED_QUESTIONS.get(analysis)
+    expected = EXPECTED_QUESTIONS.get(analysis)
     if expected is None:
         return None
     b_ids, a_ids = _answered_question_ids(before), _answered_question_ids(after)

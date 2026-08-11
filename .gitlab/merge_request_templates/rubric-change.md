@@ -10,6 +10,10 @@
   The verdict is advisory only — it never blocks the MR. See harness/DESIGN.md (§6, §8.1).
 
   Fill in every section below — the judge reads them as intent.{what, why, expected_impact}.
+
+  New to rubric changes? Read docs/contributing/README.md first (TD anatomy, the change
+  playbook, invariants). Adding or removing a question? Update the ONE count literal (43/37)
+  in harness/tests/test_skill_table.py in this MR — the guide explains why.
 -->
 
 ## What are you changing?

@@ -50,14 +50,6 @@ def _skill_text(path: Path) -> str:
             parts.append(ref.read_text(encoding="utf-8"))
     return "\n".join(parts)
 
-# Rubric sizes. Kept as literals ON PURPOSE even though parse_questions() derives the same
-# numbers from SKILL.md: these are the independent check that the parse is right. If a
-# heading regex drifts and silently yields 41, callers can assert against these.
-#
-# A NAIVE grep over MOD's headings returns 38, not 37 — INF-Q1 "Managed Compute" appears
-# twice. Dedup by question id (parse_questions does) and the 11/6/4/7/9 split is exact.
-EXPECTED_QUESTIONS = {"ara": 43, "mod": 37}
-
 # Shared by every parser here. Both TDs prefix question ids by section.
 _QID = r"(?:API|AUTH|STATE|HITL|DATA|DISC|OBS|ENG|INF|APP|SEC|OPS)-Q\d+"
 
@@ -110,6 +102,20 @@ def parse_questions(analysis: str) -> dict[str, dict]:
             "conditional": "⚡" in raw,
         }
     return out
+
+
+# Rubric sizes — DERIVED from the parse, not transcribed. This is the single source of
+# truth for "how many questions each TD has": every consumer (score-reports, diff-reports)
+# imports THIS, so adding or removing a question in the TD updates the count everywhere with
+# no code edit. The one place a human still acknowledges a size change is the literal in
+# test_skill_table.py, which pins the parsed count to an expected number — so an ACCIDENTAL
+# parse drift (a broken `####` heading, a stray em-dash, a duplicated row) still trips that
+# one test loudly instead of silently redefining "complete" to the wrong number. Deriving
+# here without that test would remove the tripwire; the test is what keeps the safety.
+#
+# A NAIVE grep over MOD's headings returns 38, not 37 — INF-Q1 "Managed Compute" appears
+# twice. parse_questions dedups by qid, so the 11/6/4/7/9 split is exact.
+EXPECTED_QUESTIONS = {a: len(parse_questions(a)) for a in ("ara", "mod")}
 
 
 def parse_questions_text(text: str) -> dict[str, dict]:

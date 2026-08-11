@@ -7,6 +7,9 @@
   Background: the TD definitions live in definitions/managed/<td>/ (SKILL.md +
   references/) and are directly editable in this repo. AWS Transform Continuous
   Modernization is the deploy surface. See harness/DESIGN.md.
+
+  New to rubric changes? Read docs/contributing/README.md — the single-page guide to
+  TD anatomy, the change playbook, and the invariants that break silently.
 -->
 
 ## What TD / question / category?
