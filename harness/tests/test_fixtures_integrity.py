@@ -156,7 +156,7 @@ def test_no_generated_report_is_committed_inside_a_fixture():
 # --- the CI job that runs these tests must give them git ------------------------------
 
 def test_the_ci_job_running_this_suite_installs_git():
-    """A job that overrides `before_script` inherits NONE of the default's apt installs.
+    """A job that REPLACES `before_script` inherits NONE of the default's apt installs.
 
     `harness:contract-tests` overrides it to skip the atx/Node install (that is most of why
     it is fast) and for a while dropped `git` along with it. The three git-backed tests above
@@ -166,7 +166,13 @@ def test_the_ci_job_running_this_suite_installs_git():
     separate helper image.
 
     So pin the invariant where it is cheap to check: any job whose script runs this pytest
-    suite must install git in its own before_script.
+    suite must have git available in its before_script — EITHER by installing it directly, OR
+    by pulling the default before_script back in with `!reference [default, before_script]`
+    (the default installs git). `harness:rebaseline-gather` does the latter: it needs the
+    default's Node/atx/AWS-vend for the portfolio exec, so it inherits rather than replaces —
+    and that inheritance carries git with it. Treating an inheriting job as an offender would
+    push a redundant second `apt-get install git` into it that falsely implies the default is
+    not pulled in.
     """
     ci = (REPO / ".gitlab-ci.yml").read_text(encoding="utf-8")
     blocks = re.findall(r"^([a-z][\w:.-]*):\n((?:[ \t].*\n|\n)*)", ci, re.M)
@@ -182,13 +188,20 @@ def test_the_ci_job_running_this_suite_installs_git():
         code = "\n".join(re.sub(r"#.*$", "", ln) for ln in body.splitlines())
         runs_suite = "pytest harness/tests" in code
         overrides = "before_script:" in code
-        if runs_suite and overrides and not re.search(r"install[^\n]*\bgit\b", code):
+        installs_git = bool(re.search(r"install[^\n]*\bgit\b", code))
+        # `!reference [default, before_script]` splices the default's steps in verbatim, so
+        # the job inherits the default's `apt-get install ... git`. That is inheritance, not
+        # a replacement, and satisfies the invariant without a duplicate install line.
+        inherits_default = bool(
+            re.search(r"!reference\s*\[\s*default\s*,\s*before_script\s*\]", code))
+        if runs_suite and overrides and not (installs_git or inherits_default):
             offenders.append(name)
     assert not offenders, (
-        "these .gitlab-ci.yml jobs run the harness pytest suite AND override "
+        "these .gitlab-ci.yml jobs run the harness pytest suite AND replace "
         "before_script, but never install git — the git-backed fixture-integrity tests "
         f"will die on FileNotFoundError inside them: {offenders}. Add "
-        "`apt-get install -y --no-install-recommends git` to the job's before_script.")
+        "`apt-get install -y --no-install-recommends git` to the job's before_script, or "
+        "pull the default in with `!reference [default, before_script]`.")
 
 
 if __name__ == "__main__":
