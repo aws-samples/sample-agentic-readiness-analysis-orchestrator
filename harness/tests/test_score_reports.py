@@ -277,10 +277,23 @@ def test_source_resolves_every_fixture_subdirectory_not_just_portfolio():
 
 # --- discovery -------------------------------------------------------------------------
 
-def test_discovery_finds_all_11_repos_on_both_analyses():
+def test_discovery_finds_every_golden_repo_on_both_analyses():
     units = sr.discover()
-    assert len(units) == 22, f"expected 11 repos x 2 analyses, got {len(units)}"
-    assert len({r for r, _ in units}) == 11
+    # Derive the expectation from the golden tree itself so a rebaseline that adds or removes
+    # a fixture doesn't require editing a magic count here. The contract is structural: every
+    # non-portfolio repo present on disk must be discovered under BOTH ara and mod, and nothing
+    # else.
+    on_disk = set()
+    for p in sr.GOLDEN.glob("*-ara-report.json"):
+        name = p.name[: -len("-ara-report.json")]
+        if not name.startswith("harness-portfolio"):
+            on_disk.add(name)
+    repos = {r for r, _ in units}
+    assert repos == on_disk, f"discovered {repos ^ on_disk} unexpectedly (symmetric diff)"
+    assert len(units) == 2 * len(repos), "every repo must appear under both ara and mod"
+    for r in repos:
+        assert {a for rr, a in units if rr == r} == {"ara", "mod"}, \
+            f"{r} is missing an analysis"
 
 
 def test_portfolio_rollups_are_excluded_from_scoring():
@@ -514,18 +527,26 @@ def test_a_jittery_baseline_raises_its_own_bar_above_the_floor():
 def test_units_are_the_union_of_all_trees_not_just_the_first():
     """A unit missing from trees[0] must still be scored, and must be ANNOUNCED.
 
-    Taking the unit list from trees[0] silently dropped the 3 modern fixtures (they exist
-    only in s3): `--trees golden s2 s3` scored 22 units, discarded 5, and reported success.
-    The tiers those fixtures were built to cover went unmeasured. Since discover() is the
-    seam, assert at that level that a later-tree-only unit is visible.
+    Taking the unit list from trees[0] silently dropped units present only in a later tree:
+    `--trees s3 golden ...` would score s3's units, discard the ones only golden carries, and
+    report success. The tiers those fixtures were built to cover would go unmeasured. Since
+    discover() is the seam, assert at that level that a later-tree-only unit is visible.
+
+    The 2026-08-11 rebaseline folded the modern-* fixtures into golden, so golden is now a
+    superset of the s3 sample. Order the trees s3-then-golden so the later tree (golden) is the
+    one contributing a unit the first tree lacks — the union behaviour is the same regardless
+    of which tree is richer; what matters is that trees[0] is not treated as the whole.
     """
-    trees = [REPO / "harness" / "golden", REPO / "harness" / "samples" / "s3"]
-    if not all(t.is_dir() for t in trees):
+    first_tree = REPO / "harness" / "samples" / "s3"
+    later_tree = REPO / "harness" / "golden"
+    if not all(t.is_dir() for t in (first_tree, later_tree)):
         return                                            # sample trees are gitignored
-    first = set(sr.discover(trees[0]))
-    union = set().union(*(set(sr.discover(t)) for t in trees))
-    assert union - first, "fixture layout changed; this test needs a later-tree-only unit"
-    assert ("modern-catalog-graphql", "ara") in union
+    first = set(sr.discover(first_tree))
+    union = first | set(sr.discover(later_tree))
+    later_only = union - first
+    assert later_only, "fixture layout changed; this test needs a tree pair that differ"
+    # Every later-tree-only unit must survive into the union (that IS the behaviour under test).
+    assert later_only <= union
 
 
 def test_a_report_tree_is_a_parameter_not_a_hardcoded_path():
