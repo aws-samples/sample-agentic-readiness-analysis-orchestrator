@@ -2,12 +2,14 @@
   "analysis_type": "mod",
   "metadata": {
     "repository": "legacy-pricing-cgi",
-    "analysis_date": "2026-07-30",
+    "analysis_date": "2026-08-10",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
+    "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source code (pricing.cpp) with a deployable entry point (main()), a Dockerfile, and Kubernetes deployment manifests present.",
     "service_archetype": "stateless-utility",
-    "archetype_source": "auto-detected",
-    "archetype_justification": "No database connections or writes detected. The application performs a read-only lookup from a static flat file (/etc/pricing/rules.dat) and returns computed pricing via HTTP CGI. All operations are stateless GET requests with no user-specific context.",
+    "service_archetype_source": "auto-detected",
+    "archetype_justification": "No database connections or writes detected; the single CGI endpoint performs a read-only flat-file lookup and returns HTML. No user-specific state, no downstream service calls, no message producers.",
     "priority": null,
     "tags": [],
     "context": null,
@@ -20,12 +22,12 @@
       "has_iac_provisioning_aws_resources": false
     }
   },
-  "overall_score": 2.0,
+  "overall_score": 2.14,
   "classification": {
     "tier": "Remediation Required",
-    "high_count": 4,
-    "medium_count": 18,
-    "low_count": 4,
+    "high_count": 3,
+    "medium_count": 19,
+    "low_count": 0,
     "rule_matched": "2-11 High \u2192 Remediation Required",
     "classification_consistency_check": "consistent"
   },
@@ -40,164 +42,112 @@
     {
       "category_id": "APP",
       "category": "Application Architecture",
-      "numeric_score": 2.25,
-      "score_rating": "Needs Work",
+      "numeric_score": 2.75,
+      "score_rating": "Partial",
       "severity_status": "Needs Work"
     },
     {
       "category_id": "DATA",
       "category": "Data Platform",
-      "numeric_score": 3.0,
+      "numeric_score": 3.25,
       "score_rating": "Partial",
-      "severity_status": "Critical"
+      "severity_status": "Needs Work"
     },
     {
       "category_id": "SEC",
       "category": "Security Baseline",
       "numeric_score": 1.8,
       "score_rating": "Needs Work",
-      "severity_status": "Needs Work"
+      "severity_status": "Critical"
     },
     {
       "category_id": "OPS",
       "category": "Operations & Observability",
-      "numeric_score": 1.22,
+      "numeric_score": 1.13,
       "score_rating": "Not Ready",
       "severity_status": "Critical"
     }
   ],
   "top_gaps": [
     {
-      "rank": 1,
       "question_id": "INF-Q11",
       "title": "CI/CD Automation",
       "score": 1,
-      "gap": "No CI/CD pipeline \u2014 deployment is manual scp",
-      "impact": "Blocks all deployment automation and triggers Modern DevOps pathway"
+      "gap": "No CI/CD pipelines \u2014 deployment is manual scp to server",
+      "impact": "Blocks safe, repeatable deployments and prevents adoption of modern DevOps practices"
     },
     {
-      "rank": 2,
-      "question_id": "INF-Q5",
-      "title": "Network Security",
-      "score": 1,
-      "gap": "No VPC, security groups, or network segmentation defined",
-      "impact": "Services potentially exposed without network isolation"
-    },
-    {
-      "rank": 3,
       "question_id": "OPS-Q6",
       "title": "Integration Testing",
       "score": 1,
-      "gap": "No tests of any kind exist",
-      "impact": "No regression safety net; changes cannot be validated"
+      "gap": "No automated tests of any kind exist",
+      "impact": "Cannot validate correctness during changes; high regression risk"
     },
     {
-      "rank": 4,
       "question_id": "DATA-Q1",
       "title": "Unstructured Data Storage",
       "score": 1,
-      "gap": "Pricing data stored in local flat file with no managed storage",
-      "impact": "Data inaccessible for analytics or integration; no durability guarantees"
+      "gap": "Pricing rules stored in local flat file with no managed storage",
+      "impact": "Data is not accessible, versionable, or auditable; single point of failure"
     },
     {
-      "rank": 5,
       "question_id": "INF-Q10",
       "title": "Infrastructure as Code Coverage",
       "score": 2,
-      "gap": "K8s manifests exist but no AWS infrastructure provisioned via IaC",
-      "impact": "Infrastructure drift risk; non-reproducible environments"
+      "gap": "K8s manifests cover deployment only; no IaC for networking, monitoring, or entry point",
+      "impact": "Infrastructure changes are manual and non-reproducible"
+    },
+    {
+      "question_id": "OPS-Q5",
+      "title": "Deployment Strategy",
+      "score": 2,
+      "gap": "Default rolling update only; no canary or blue/green",
+      "impact": "No ability to catch regressions before full rollout"
     }
   ],
-  "decomposition_strategy": null,
   "findings": [
+    {
+      "question_id": "INF-Q1",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Compute \u2014 containerized but not confirmed on managed platform",
+      "description": "The application has been containerized (Dockerfile with GCC 12 and httpd:2.4-alpine) with Kubernetes deployment manifests targeting EKS. However, no IaC provisions the EKS cluster or confirms managed compute deployment.",
+      "gap": "Containerization artifacts exist but no IaC confirms the workload runs on managed compute.",
+      "recommendation": "Provision the EKS cluster via Terraform or CDK and validate that the containerized workload is deployed on managed compute.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "Dockerfile, k8s/deployment.yaml, README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
     {
       "question_id": "INF-Q5",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Network Security \u2014 No network segmentation defined",
-      "description": "No VPC, subnet, security group, or network policy definitions found. The Kubernetes deployment has no NetworkPolicy resources.",
-      "gap": "No network security configuration. Services may be deployed without proper isolation.",
-      "recommendation": "Add Kubernetes NetworkPolicy resources. Define the underlying VPC with private subnets in IaC. Consider VPC endpoints for AWS service access.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "k8s/deployment.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
-    },
-    {
-      "question_id": "INF-Q11",
-      "category": "Infrastructure & DevOps",
-      "category_id": "INF",
-      "title": "CI/CD Automation \u2014 No pipeline exists",
-      "description": "No CI/CD pipeline. The Makefile install target performs manual scp deployment to a server.",
-      "gap": "All deployments are manual. No automated build, test, or deploy stages.",
-      "recommendation": "Create a CI/CD pipeline (GitHub Actions or CodePipeline) with stages: lint, build Docker image, push to ECR, deploy to EKS.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "Makefile",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
-    },
-    {
-      "question_id": "DATA-Q1",
-      "category": "Data Platform",
-      "category_id": "DATA",
-      "title": "Unstructured Data Storage \u2014 Local flat file",
-      "description": "Pricing data stored in a local flat file (/etc/pricing/rules.dat) baked into the container image. No managed storage.",
-      "gap": "Data on local file system with no managed storage, no durability guarantees, no versioning.",
-      "recommendation": "Migrate pricing rules to Amazon S3 with versioning enabled. Consider DynamoDB for key-value lookup if pricing rules change frequently.",
-      "severity": "High",
+      "title": "Network Security \u2014 partial hardening, no network policies",
+      "description": "Container security context is hardened (runAsNonRoot, drop ALL capabilities). Service is ClusterIP (internal). No Kubernetes NetworkPolicy, VPC IaC, or explicit network segmentation.",
+      "gap": "No Kubernetes NetworkPolicy restricts ingress/egress. Network segmentation is implicit but not enforced.",
+      "recommendation": "Add Kubernetes NetworkPolicy to restrict ingress. Define VPC/subnet IaC if managing infrastructure.",
+      "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
-        "file": "pricing.cpp",
+        "file": "k8s/deployment.yaml, k8s/service.yaml",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
-    },
-    {
-      "question_id": "OPS-Q6",
-      "category": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Integration Testing \u2014 No tests exist",
-      "description": "No tests of any kind. README states: 'No tests; correctness validated by spot-checking output.'",
-      "gap": "Zero automated testing. Changes cannot be validated before deployment.",
-      "recommendation": "Add integration tests that start the container and validate HTTP responses. Use bats or pytest with testcontainers.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
+        "internal_score": 2,
+        "score_label": "Needs Work",
         "archetype_calibrated": false,
         "core_question": true
       }
@@ -206,10 +156,10 @@
       "question_id": "INF-Q6",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "API Entry Point \u2014 No gateway or load balancer",
-      "description": "No API Gateway, ALB, or CloudFront configured. The k8s Service is ClusterIP only with a commented-out ALB Ingress example.",
-      "gap": "No managed entry point providing throttling, authentication, or request validation.",
-      "recommendation": "Deploy an AWS ALB Ingress Controller. Add throttling and integrate with API Gateway for authentication.",
+      "title": "API Entry Point \u2014 no gateway or load balancer",
+      "description": "No API Gateway, ALB, or CloudFront configured. Service is ClusterIP only. ALB Ingress is commented out in service.yaml.",
+      "gap": "Service has no managed entry point \u2014 no gateway, load balancer, or traffic management.",
+      "recommendation": "Deploy AWS ALB Ingress Controller or API Gateway for managed entry point with throttling and health checks.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -229,10 +179,10 @@
       "question_id": "INF-Q7",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Auto-Scaling \u2014 Static replicas only",
-      "description": "Kubernetes Deployment uses static replicas: 2. No HPA configured.",
-      "gap": "No auto-scaling. Service cannot respond to traffic spikes or scale down during low demand.",
-      "recommendation": "Add a HorizontalPodAutoscaler targeting CPU or request-rate metrics.",
+      "title": "Auto-Scaling \u2014 static capacity only",
+      "description": "Kubernetes deployment uses static replicas: 2 with no HPA or auto-scaling mechanism.",
+      "gap": "No auto-scaling \u2014 all capacity is statically provisioned.",
+      "recommendation": "Configure Kubernetes HPA with CPU/memory-based scaling policies.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -252,10 +202,10 @@
       "question_id": "INF-Q9",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "High Availability \u2014 No multi-AZ configuration",
-      "description": "2 replicas with no topology spread constraints or pod anti-affinity. Both replicas could land on same node/AZ.",
-      "gap": "No explicit fault isolation. AZ failure could take down both replicas.",
-      "recommendation": "Add topologySpreadConstraints with topologyKey: topology.kubernetes.io/zone.",
+      "title": "High Availability \u2014 no multi-AZ configuration",
+      "description": "Kubernetes deployment has 2 replicas but no topology spread constraints, pod anti-affinity, or multi-AZ configuration.",
+      "gap": "No AZ configuration found. Pods may co-locate on a single node/AZ.",
+      "recommendation": "Add topologySpreadConstraints or pod anti-affinity to distribute pods across AZs.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -275,16 +225,16 @@
       "question_id": "INF-Q10",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Infrastructure as Code Coverage \u2014 Partial (k8s only)",
-      "description": "Kubernetes manifests define workload deployment declaratively. No Terraform, CDK, or CloudFormation defines AWS infrastructure.",
-      "gap": "Partial IaC. Platform infrastructure (EKS cluster, VPC, ECR, IAM) is not codified.",
-      "recommendation": "Define EKS cluster, VPC, ECR repository, and IAM roles in Terraform or CDK.",
+      "title": "Infrastructure as Code Coverage \u2014 partial, deployment layer only",
+      "description": "Kubernetes manifests cover application deployment (namespace, configmap, deployment, service). No IaC for EKS cluster, VPC, monitoring, or DNS.",
+      "gap": "Partial IaC \u2014 deployment manifests only. No infrastructure provisioning for cluster, networking, monitoring.",
+      "recommendation": "Define complete infrastructure in Terraform or CDK: EKS cluster, VPC, ALB, CloudWatch alarms, DNS.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "High",
       "phase": 1,
       "evidence": {
-        "file": "k8s/deployment.yaml",
+        "file": "k8s/",
         "lines": null
       },
       "mod_metadata": {
@@ -295,17 +245,40 @@
       }
     },
     {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation \u2014 no pipeline exists",
+      "description": "No CI/CD pipeline exists. Makefile install target uses scp for manual deployment. No automated build, test, or deploy stages.",
+      "gap": "No CI/CD \u2014 all deployments are manual.",
+      "recommendation": "Implement CI/CD pipeline (GitHub Actions, CodePipeline) with build, test, push to ECR, deploy to EKS stages.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "Makefile",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
       "question_id": "APP-Q1",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Programming Languages \u2014 Legacy C++ CGI",
-      "description": "C++ (pre-C++11 style) compiled with GCC 12. Uses raw C string functions, no RAII, no modern framework. CGI execution model is inherently inefficient.",
-      "gap": "Language is viable but code style, framework (bare CGI), and lack of AWS SDK represent compound legacy signals.",
-      "recommendation": "Rewrite in a cloud-native language (Go, Python, Node.js) given the trivial business logic, or modernize to a C++ HTTP framework.",
+      "title": "Programming Languages \u2014 legacy C++ with pre-C++11 patterns",
+      "description": "C++ (pre-C++11) with C-style string functions. AWS SDK exists for C++ but cloud-native tooling is narrower than Python/Java/Go/Node.js.",
+      "gap": "Legacy C++ with pre-C++11 patterns and limited cloud-native tooling ecosystem.",
+      "recommendation": "Consider rewriting in a cloud-native language (Go, Python, Node.js) or modernize to C++17/20 with proper HTTP framework.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "pricing.cpp",
         "lines": null
@@ -321,16 +294,16 @@
       "question_id": "APP-Q5",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "API Versioning Strategy \u2014 No versioning",
-      "description": "No API versioning. Endpoint is /cgi-bin/pricing.cgi with no version prefix or headers.",
-      "gap": "No versioning \u2014 breaking changes affect all consumers immediately.",
-      "recommendation": "Introduce URL-path versioning (e.g., /api/v1/pricing) when modernizing the API surface.",
+      "title": "API Versioning Strategy \u2014 no versioning",
+      "description": "No API versioning exists. Endpoint is /cgi-bin/pricing.cgi with no version prefix or headers.",
+      "gap": "No versioning \u2014 breaking changes deployed directly.",
+      "recommendation": "Introduce URL-path versioning (e.g., /v1/pricing) or version headers.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "pricing.cpp",
+        "file": "pricing.cpp, k8s/service.yaml",
         "lines": null
       },
       "mod_metadata": {
@@ -341,19 +314,42 @@
       }
     },
     {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unstructured Data Storage \u2014 local flat file, no managed storage",
+      "description": "Pricing rules stored as pipe-delimited flat file on local filesystem. No S3, no versioning, no parsing pipeline.",
+      "gap": "Data on local file systems with no managed storage, versioning, or accessibility.",
+      "recommendation": "Migrate pricing rules to S3 with versioning. Use AWS AppConfig or S3+Lambda for dynamic configuration.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "pricing.cpp",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
       "question_id": "SEC-Q3",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "API Authentication \u2014 No auth on endpoints",
-      "description": "No authentication on the CGI endpoint. Any client with network access can query pricing data.",
-      "gap": "API endpoints are completely open. No per-request authentication or rate limiting.",
-      "recommendation": "Add authentication via API Gateway with Cognito or JWT authorizer. For internal-only, enforce NetworkPolicy.",
+      "title": "API Authentication \u2014 no authentication on endpoints",
+      "description": "CGI endpoint is completely open. No auth middleware, no API Gateway authorizer, no token validation.",
+      "gap": "No API authentication \u2014 endpoints are open to any caller.",
+      "recommendation": "Add API authentication via API Gateway authorizer (JWT/OAuth2) or Kubernetes ingress with Cognito.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "pricing.cpp",
+        "file": "pricing.cpp, k8s/deployment.yaml",
         "lines": null
       },
       "mod_metadata": {
@@ -367,10 +363,10 @@
       "question_id": "SEC-Q4",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Centralized Identity Integration \u2014 No IdP",
-      "description": "No identity provider integration. Application has no concept of user identity or federated authentication.",
-      "gap": "No centralized IdP, no SSO, no OIDC/SAML integration.",
-      "recommendation": "Integrate with Amazon Cognito or organizational IdP via API Gateway authorizer.",
+      "title": "Centralized Identity Integration \u2014 no IdP integration",
+      "description": "No integration with any identity provider. Application has no authentication system.",
+      "gap": "No external IdP integration.",
+      "recommendation": "When adding authentication, integrate with centralized IdP (Amazon Cognito, Okta).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -390,16 +386,16 @@
       "question_id": "SEC-Q6",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Compute Hardening \u2014 Partial hardening, no scanning",
-      "description": "Container has hardening (Alpine base, non-root, dropped capabilities) but no vulnerability scanning or patching strategy.",
-      "gap": "No vulnerability scanning. No automated patching of base images.",
-      "recommendation": "Enable ECR image scanning. Add Trivy/Snyk to CI/CD pipeline. Configure Renovate for base image updates.",
+      "title": "Compute Hardening and Patching \u2014 partial hardening, no automation",
+      "description": "Container is hardened (non-root, drop caps, Alpine). No automated patching or vulnerability scanning.",
+      "gap": "No patching automation. No vulnerability scanning configured.",
+      "recommendation": "Integrate container scanning (ECR, Trivy, Snyk) into CI/CD. Automate periodic image rebuilds.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "Dockerfile",
+        "file": "Dockerfile, k8s/deployment.yaml",
         "lines": null
       },
       "mod_metadata": {
@@ -413,16 +409,16 @@
       "question_id": "SEC-Q7",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Application Security Pipeline \u2014 No security scanning",
-      "description": "No SAST, DAST, or dependency scanning. Known vulnerability patterns (buffer overflow, XSS) in source code go undetected.",
-      "gap": "No security scanning tools configured. No pipeline exists to integrate security gates.",
-      "recommendation": "Add SAST (Semgrep), container scanning (Trivy), and security gates blocking on critical findings to CI/CD.",
+      "title": "Application Security Pipeline \u2014 no security scanning",
+      "description": "No SAST, DAST, dependency scanning, or container scanning. No CI/CD pipeline exists. Known buffer overflow vulnerabilities undetected.",
+      "gap": "No security scanning tools configured. Known vulnerabilities go undetected.",
+      "recommendation": "Include SAST (Semgrep, SonarQube) and container scanning (Trivy) in CI/CD pipeline.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "pricing.cpp",
+        "file": "README.md",
         "lines": null
       },
       "mod_metadata": {
@@ -436,14 +432,14 @@
       "question_id": "OPS-Q1",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Distributed Tracing \u2014 None instrumented",
-      "description": "No distributed tracing. No OpenTelemetry, X-Ray, or tracing SDK. CGI model makes instrumentation challenging.",
-      "gap": "No trace ID generation or propagation. Cannot correlate requests across service boundaries.",
-      "recommendation": "Instrument with OpenTelemetry or X-Ray SDK when modernizing away from CGI.",
+      "title": "Distributed Tracing \u2014 no instrumentation",
+      "description": "No distributed tracing. No OpenTelemetry, X-Ray, or trace propagation.",
+      "gap": "No distributed tracing \u2014 request flows cannot be traced.",
+      "recommendation": "Add OpenTelemetry or X-Ray instrumentation. May require language rewrite for proper library support.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "pricing.cpp",
         "lines": null
@@ -459,15 +455,18 @@
       "question_id": "OPS-Q2",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "SLO Definitions \u2014 None defined",
-      "description": "No SLO definitions, no CloudWatch alarms, no monitoring configuration of any kind.",
-      "gap": "No formal definition of acceptable service levels.",
-      "recommendation": "Define SLOs for availability (99.9%) and latency (p99 < 100ms). Create CloudWatch alarms.",
+      "title": "SLO Definitions \u2014 no SLOs defined",
+      "description": "No SLO definitions, no monitoring alarms, no latency/error-rate tracking.",
+      "gap": "No SLOs \u2014 no formal definition of acceptable service levels.",
+      "recommendation": "Define SLOs for availability and latency. Implement CloudWatch alarms.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": null,
+      "evidence": {
+        "file": "k8s/",
+        "lines": null
+      },
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -479,14 +478,14 @@
       "question_id": "OPS-Q3",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Business Metrics \u2014 None published",
-      "description": "No custom metrics published. No business event tracking or pricing lookup counters.",
-      "gap": "No visibility into business outcomes.",
-      "recommendation": "Add metrics for pricing lookups/min, SKU-not-found rate, request latency percentiles.",
+      "title": "Business Metrics \u2014 no custom metrics",
+      "description": "No custom metrics published. No business event tracking.",
+      "gap": "No custom metrics \u2014 only default container-level metrics from Kubernetes.",
+      "recommendation": "Publish business metrics (lookups per SKU, failures) to CloudWatch.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "pricing.cpp",
         "lines": null
@@ -502,15 +501,18 @@
       "question_id": "OPS-Q4",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Anomaly Detection and Alerting \u2014 None configured",
-      "description": "No alerting of any kind. No CloudWatch alarms, no anomaly detection.",
-      "gap": "Errors and latency degradation go unnoticed until users report issues.",
-      "recommendation": "Start with static threshold alarms. Evolve to CloudWatch anomaly detection.",
+      "title": "Anomaly Detection and Alerting \u2014 no alerting configured",
+      "description": "No alerting configured. Only Kubernetes liveness/readiness probes provide operational signal.",
+      "gap": "No alerting \u2014 failures detected only via pod restarts.",
+      "recommendation": "Configure CloudWatch alarms on error rates and latency. Integrate with PagerDuty/OpsGenie.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": null,
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "k8s/deployment.yaml",
+        "lines": null
+      },
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -522,14 +524,14 @@
       "question_id": "OPS-Q5",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Deployment Strategy \u2014 Rolling only",
-      "description": "Default Kubernetes RollingUpdate strategy with liveness/readiness probes. No canary or blue/green.",
-      "gap": "No progressive delivery. Bad deployments roll out to all replicas before issues are caught.",
-      "recommendation": "Adopt Argo Rollouts for canary deployments or use ALB weighted target groups.",
+      "title": "Deployment Strategy \u2014 rolling update only",
+      "description": "Default Kubernetes rolling update with readiness/liveness probes. No canary, blue/green, or traffic shifting.",
+      "gap": "Rolling deployments with health checks but no traffic shifting.",
+      "recommendation": "Implement canary deployments using Argo Rollouts or AWS App Mesh.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
-      "phase": 2,
+      "phase": 1,
       "evidence": {
         "file": "k8s/deployment.yaml",
         "lines": null
@@ -542,18 +544,44 @@
       }
     },
     {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing \u2014 no tests exist",
+      "description": "No automated tests of any kind. README states correctness validated by spot-checking output.",
+      "gap": "No integration tests \u2014 no automated tests at all. High regression risk.",
+      "recommendation": "Create integration tests validating CGI endpoint with known SKUs. Use container-based testing.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
       "question_id": "OPS-Q7",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Incident Response Automation \u2014 No runbooks",
-      "description": "No runbooks, no automated remediation, no incident response workflows.",
-      "gap": "Incident response is entirely ad hoc.",
-      "recommendation": "Document runbooks for common failure modes. Automate pod restart and alerting.",
+      "title": "Incident Response Automation \u2014 no runbooks",
+      "description": "No runbooks or incident response automation. Only Kubernetes pod restart on liveness failure.",
+      "gap": "No runbooks \u2014 incident response is entirely ad hoc.",
+      "recommendation": "Create runbooks for common failures. Automate recovery (e.g., auto-rollback on deployment failure).",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": null,
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "k8s/deployment.yaml",
+        "lines": null
+      },
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -565,41 +593,21 @@
       "question_id": "OPS-Q8",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Observability Ownership \u2014 No ownership defined",
-      "description": "No dashboards, no alarms with named owners, no CODEOWNERS file.",
-      "gap": "No observability ownership. No team accountable for operational health.",
-      "recommendation": "Add CODEOWNERS. Create per-service CloudWatch dashboard. Assign alarm ownership.",
+      "title": "Observability Ownership \u2014 no ownership defined",
+      "description": "No CODEOWNERS, no dashboards, no alarms with named owners, no team attribution.",
+      "gap": "No observability ownership \u2014 monitoring is nonexistent.",
+      "recommendation": "Define CODEOWNERS. Create service-level dashboard. Assign alarm ownership.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
-      "evidence": null,
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "OPS-Q9",
-      "category": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Resource Tagging Governance \u2014 K8s labels only",
-      "description": "Kubernetes labels applied consistently but no AWS resource tags (no AWS resources defined in IaC).",
-      "gap": "No AWS resource tagging. No cost attribution or environment classification.",
-      "recommendation": "When adding AWS IaC, enforce tagging standard with required tags: Service, Environment, Owner, CostCenter.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
       "evidence": {
-        "file": "k8s/namespace.yaml",
+        "file": "k8s/",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
+        "internal_score": 1,
+        "score_label": "Not Ready",
         "archetype_calibrated": false,
         "core_question": false
       }
@@ -607,20 +615,12 @@
   ],
   "evaluations": [
     {
-      "question_id": "INF-Q1",
-      "category_id": "INF",
-      "title": "Managed Compute",
-      "status": "pass",
-      "score": 3,
-      "reason": "Score 3 \u2014 containerized with k8s manifests targeting EKS; EKS cluster not defined in this repo's IaC"
-    },
-    {
       "question_id": "INF-Q2",
       "category_id": "INF",
       "title": "Managed Databases",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_persistent_data_store=false; no database deployed by this service"
+      "reason": "has_persistent_data_store=false \u2014 no database deployed"
     },
     {
       "question_id": "INF-Q3",
@@ -628,7 +628,7 @@
       "title": "Workflow Orchestration",
       "status": "not_evaluated_archetype",
       "score": null,
-      "reason": "stateless-utility archetype \u2014 no multi-step workflows exist by design"
+      "reason": "stateless-utility \u2014 no multi-step workflows exist"
     },
     {
       "question_id": "INF-Q4",
@@ -636,7 +636,7 @@
       "title": "Async Messaging and Streaming",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 synchronous HTTP is the correct design for this stateless-utility; no messaging needed"
+      "reason": "Score 4 \u2014 synchronous HTTP is the correct design for stateless-utility; no messaging needed"
     },
     {
       "question_id": "INF-Q8",
@@ -644,15 +644,15 @@
       "title": "Backup and Recovery",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_persistent_data_store=false and has_at_rest_data_surface=false; no persistent state to back up"
+      "reason": "has_persistent_data_store=false and has_at_rest_data_surface=false \u2014 no persistent state to back up"
     },
     {
       "question_id": "APP-Q2",
       "category_id": "APP",
       "title": "Monolith vs Microservices",
       "status": "pass",
-      "score": 3,
-      "reason": "Score 3 \u2014 single-purpose independently deployable service; lacks formal API contract"
+      "score": 4,
+      "reason": "Score 4 \u2014 single-responsibility service with clear boundaries, independently deployable"
     },
     {
       "question_id": "APP-Q3",
@@ -660,7 +660,7 @@
       "title": "Async vs Sync Communication",
       "status": "not_evaluated_archetype",
       "score": null,
-      "reason": "stateless-utility archetype \u2014 sync request/response is the correct design; async not needed"
+      "reason": "stateless-utility \u2014 sync request/response is the correct design; async not needed"
     },
     {
       "question_id": "APP-Q4",
@@ -668,23 +668,23 @@
       "title": "Long-Running Process Handling",
       "status": "not_evaluated_archetype",
       "score": null,
-      "reason": "stateless-utility archetype \u2014 no operations exceed 30 seconds by design"
+      "reason": "stateless-utility \u2014 no operations exceed 30 seconds"
     },
     {
       "question_id": "APP-Q6",
       "category_id": "APP",
       "title": "Service Discovery",
       "status": "pass",
-      "score": 3,
-      "reason": "Score 3 \u2014 Kubernetes DNS-based service discovery via ClusterIP Service"
+      "score": 4,
+      "reason": "Score 4 \u2014 Kubernetes DNS-based service discovery via ClusterIP Service"
     },
     {
       "question_id": "DATA-Q2",
       "category_id": "DATA",
       "title": "Unified Data Access Layer",
       "status": "pass",
-      "score": 3,
-      "reason": "Score 3 \u2014 centralized lookup_price() function; tightly coupled to file format but isolated"
+      "score": 4,
+      "reason": "Score 4 \u2014 single centralized lookup_price() function for all data access"
     },
     {
       "question_id": "DATA-Q3",
@@ -692,7 +692,7 @@
       "title": "Database Engine Version and EOL",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 no database engine deployed; no EOL concern"
+      "reason": "Score 4 \u2014 no database engine in use, no EOL risk"
     },
     {
       "question_id": "DATA-Q4",
@@ -700,7 +700,7 @@
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 no stored procedures; all business logic in application layer"
+      "reason": "Score 4 \u2014 no stored procedures; all logic in application layer"
     },
     {
       "question_id": "SEC-Q1",
@@ -708,7 +708,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_iac_provisioning_aws_resources=false; CloudTrail is account-level, not per-application"
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no account-level IaC; CloudTrail belongs in foundation repo"
     },
     {
       "question_id": "SEC-Q2",
@@ -716,7 +716,7 @@
       "title": "Encryption at Rest",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_at_rest_data_surface=false; no deployed data-at-rest surface"
+      "reason": "has_at_rest_data_surface=false \u2014 no data-at-rest surface"
     },
     {
       "question_id": "SEC-Q5",
@@ -724,7 +724,15 @@
       "title": "Secrets Management",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 no secrets required; no credentials in source or config"
+      "reason": "Score 4 \u2014 no secrets required; no credentials in repository"
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category_id": "OPS",
+      "title": "Resource Tagging Governance",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS resources to tag"
     }
   ],
   "pathways": [
@@ -734,16 +742,15 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "APP-Q2 = 3 (meets threshold); application is already a single-purpose service with no decomposition need",
+      "key_trigger_criteria": "APP-Q2 = 4 \u2014 application is already a single-responsibility service with clear boundaries",
       "triggering_questions": [
         {
           "question_id": "APP-Q2",
-          "score": 3,
-          "note": "APP-Q2 = 3 meets threshold; primary trigger not met"
+          "score": 4,
+          "note": "APP-Q2 = 4 meets threshold; pathway not needed"
         }
       ],
-      "detail": null,
-      "not_triggered_reason": "APP-Q2 >= 3; the application is already a single-purpose independently deployable service"
+      "detail": null
     },
     {
       "id": "move-to-containers",
@@ -751,16 +758,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q1 = 3 (meets threshold); container definitions (Dockerfile, k8s manifests) already exist",
+      "key_trigger_criteria": "INF-Q1 = 2 but container definitions (Dockerfile, k8s manifests) already exist \u2014 contextual guard blocks",
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
-          "score": 3,
-          "note": "INF-Q1 = 3 meets threshold; workload already containerized"
+          "score": 2,
+          "note": "INF-Q1 < 3 but container definitions exist; contextual guard blocks trigger"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "Workload already containerized with Dockerfile and k8s deployment manifests targeting EKS"
+      "not_triggered_reason": "Workload already containerized with Dockerfile and Kubernetes manifests. Container pathway does not apply."
     },
     {
       "id": "move-to-open-source",
@@ -768,7 +775,7 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4 = 4 (no stored procedures); no commercial database engines detected",
+      "key_trigger_criteria": "DATA-Q4 = 4 \u2014 no stored procedures or proprietary SQL",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
@@ -776,8 +783,7 @@
           "note": "DATA-Q4 = 4 meets threshold; no proprietary SQL"
         }
       ],
-      "detail": null,
-      "not_triggered_reason": "No commercial database engines detected; no stored procedures or proprietary SQL"
+      "detail": null
     },
     {
       "id": "move-to-managed-databases",
@@ -785,16 +791,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q2 Not Evaluated (no persistent data store); no database to migrate",
+      "key_trigger_criteria": "INF-Q2 is Not Evaluated (no persistent data store) \u2014 no database to migrate",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
           "score": null,
-          "note": "INF-Q2 Not Evaluated (surface-gated); no database exists"
+          "note": "INF-Q2 Not Evaluated (surface gate); no database exists"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "No persistent data store exists; INF-Q2 was not evaluated due to surface gate"
+      "not_triggered_reason": "No persistent data store exists in this system. There is no database to migrate to managed services."
     },
     {
       "id": "move-to-managed-analytics",
@@ -802,16 +808,15 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q4 = 4 (sync is correct for stateless-utility); no data processing workloads exist",
+      "key_trigger_criteria": "INF-Q4 = 4 \u2014 no data processing workloads exist; stateless-utility with sync-only design is correct",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
           "score": 4,
-          "note": "INF-Q4 = 4 meets threshold; sync is architecturally correct for this archetype"
+          "note": "INF-Q4 = 4 meets threshold; sync design correct for stateless-utility"
         }
       ],
-      "detail": null,
-      "not_triggered_reason": "INF-Q4 >= 3; no data processing workloads, ETL, or streaming artifacts exist"
+      "detail": null
     },
     {
       "id": "move-to-modern-devops",
@@ -819,7 +824,7 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q10 = 2 < 3 (partial IaC); INF-Q11 = 1 < 3 (no CI/CD); OPS-Q5 = 2 < 3 (rolling only); OPS-Q6 = 1 < 3 (no tests)",
+      "key_trigger_criteria": "INF-Q10 = 2 (< 3), INF-Q11 = 1 (< 3); supported by OPS-Q5 = 2, OPS-Q6 = 1",
       "triggering_questions": [
         {
           "question_id": "INF-Q10",
@@ -839,24 +844,20 @@
         }
       ],
       "detail": {
-        "current_iac_state": "K8s manifests cover workload deployment; no AWS infrastructure IaC",
-        "current_cicd_state": "No pipeline; manual scp deployment via Makefile",
-        "deployment_gaps": "Default Kubernetes RollingUpdate; no canary or blue/green",
-        "testing_gaps": "No tests of any kind; validated by spot-checking",
-        "recommended_services": [
-          "CodePipeline",
+        "current_state": "No CI/CD pipelines, manual scp deployment, partial IaC (k8s manifests only), no tests, rolling update only.",
+        "recommended_aws_services": [
           "CodeBuild",
+          "CodePipeline",
           "CodeDeploy",
           "CDK",
           "ECR",
-          "CloudWatch",
-          "X-Ray"
+          "EKS"
         ],
         "immediate_actions": [
-          "Create CI/CD pipeline that builds Docker image and pushes to ECR",
-          "Add integration tests validating HTTP responses",
-          "Define EKS cluster and networking in Terraform or CDK",
-          "Configure progressive deployment with Argo Rollouts"
+          "Implement CI/CD pipeline with build, test, and deploy stages",
+          "Add integration tests for the pricing endpoint",
+          "Expand IaC to cover full infrastructure stack",
+          "Configure canary or blue/green deployment strategy"
         ],
         "learning_materials": [
           "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
@@ -870,34 +871,12 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context",
+      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)",
       "triggering_questions": [],
       "detail": null,
-      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. Contextual guard blocks evaluation."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source, configuration, IaC, or documentation."
     }
   ],
-  "filter_vocab": {
-    "categories": [
-      "Infrastructure & DevOps",
-      "Application Architecture",
-      "Data Platform",
-      "Security Baseline",
-      "Operations & Observability"
-    ],
-    "severities": [
-      "High",
-      "Medium",
-      "Low"
-    ],
-    "priorities": [
-      "P1",
-      "P2"
-    ],
-    "phases": [
-      1,
-      2,
-      3
-    ]
-  },
+  "decomposition_strategy": null,
   "repo_name": "legacy-pricing-cgi"
 }

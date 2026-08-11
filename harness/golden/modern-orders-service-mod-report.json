@@ -1,0 +1,1006 @@
+{
+  "analysis_type": "mod",
+  "metadata": {
+    "repository": "modern-orders-service",
+    "analysis_date": "2026-08-10",
+    "td_version": "modernization-readiness-analysis",
+    "repo_type": "application",
+    "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source code with deployable entry point (Fastify server in src/), Dockerfile, and CloudFormation IaC (infra/ecs.yaml) scoped to a single ECS Fargate service.",
+    "service_archetype": "stateful-crud",
+    "service_archetype_source": "auto-detected",
+    "archetype_justification": "Owns a PostgreSQL database with CRUD operations on orders entity (create, get, delete, refund, cancel). Has user-specific data (customerId), entity status lifecycle (placed/shipped/cancelled/refunded), and write endpoints.",
+    "priority": null,
+    "tags": [],
+    "context": null,
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": true,
+      "has_iac_provisioning_aws_resources": true
+    }
+  },
+  "overall_score": 2.17,
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "numeric_score": 1.91,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "numeric_score": 2.17,
+      "score_rating": "Needs Work",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "numeric_score": 3.5,
+      "score_rating": "Mature",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "numeric_score": 2.17,
+      "score_rating": "Needs Work",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "numeric_score": 1.11,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 2,
+    "medium_count": 22,
+    "low_count": 4,
+    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "top_gaps": [
+    {
+      "rank": 1,
+      "question_id": "INF-Q11",
+      "title": "CI/CD Automation",
+      "score": 1,
+      "gap": "No CI/CD pipeline \u2014 all deployments manual",
+      "impact": "Blocks safe, repeatable releases; primary trigger for Modern DevOps pathway"
+    },
+    {
+      "rank": 2,
+      "question_id": "OPS-Q6",
+      "title": "Integration Testing",
+      "score": 1,
+      "gap": "No automated tests found in repository",
+      "impact": "No regression protection; changes carry high risk of undetected breakage"
+    },
+    {
+      "rank": 3,
+      "question_id": "INF-Q4",
+      "title": "Async Messaging and Streaming",
+      "score": 1,
+      "gap": "No messaging \u2014 cross-service calls are fully synchronous",
+      "impact": "Tight coupling to downstream services; cascading failure risk on timeout"
+    },
+    {
+      "rank": 4,
+      "question_id": "OPS-Q1",
+      "title": "Distributed Tracing",
+      "score": 1,
+      "gap": "No distributed tracing instrumented",
+      "impact": "Cannot trace requests across service boundaries; debugging production issues is guesswork"
+    },
+    {
+      "rank": 5,
+      "question_id": "APP-Q3",
+      "title": "Async vs Sync Communication",
+      "score": 1,
+      "gap": "All inter-service communication is synchronous HTTP",
+      "impact": "Cascading failure risk; refund and cancel operations block on downstream response"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Managed Databases \u2014 RDS configuration not verifiable from repo IaC",
+      "description": "PostgreSQL 15 on RDS (managed) per README documentation. Secrets Manager used for DB credentials. However, the RDS resource itself is not defined in this repository's IaC.",
+      "gap": "RDS instance not defined in this repo's IaC; cannot verify failover, encryption, or performance configuration.",
+      "recommendation": "Define the RDS instance in IaC within this repo to enable configuration verification and drift detection.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Workflow Orchestration \u2014 multi-step operations lack managed orchestration",
+      "description": "The service has multi-step operations (refund: update DB then call payment processor; cancel: update DB then recall warehouse dispatch) implemented as sequential code with no dedicated orchestration service.",
+      "gap": "Multi-step operations (refund, cancel) lack structured orchestration \u2014 no retry logic, no compensation on partial failure.",
+      "recommendation": "Evaluate AWS Step Functions for the refund and cancel workflows to provide retry logic, error handling, and compensation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/services/order-service.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Async Messaging \u2014 no messaging for cross-service state changes",
+      "description": "No messaging or streaming infrastructure detected. Cross-service state changes (refund, cancel) are handled via synchronous calls with no event-driven decoupling.",
+      "gap": "No messaging where state changes cross service boundaries \u2014 tight synchronous coupling to payment processor and warehouse.",
+      "recommendation": "Introduce managed messaging (SQS or EventBridge) for the refund and cancel operations.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/services/order-service.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Network Security \u2014 no managed networking services",
+      "description": "ECS service deployed in private subnets (AssignPublicIp: DISABLED). No managed networking services (VPC endpoints, PrivateLink) configured.",
+      "gap": "No VPC endpoints for service-to-AWS communication.",
+      "recommendation": "Add VPC endpoints for Secrets Manager, CloudWatch Logs, and ECR.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "API Entry Point \u2014 no load balancer or API gateway",
+      "description": "No API Gateway, ALB, or CloudFront defined in the IaC. The ECS service exposes port 3000 directly with no managed entry point.",
+      "gap": "No load balancer or API gateway \u2014 service lacks throttling, request validation, and centralized routing.",
+      "recommendation": "Add an ALB or API Gateway to provide health checking, throttling, TLS termination, and access control.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Auto-Scaling \u2014 all capacity statically provisioned",
+      "description": "No auto-scaling configured. ECS service uses static DesiredCount: 2 with no scaling policy.",
+      "gap": "Cannot respond to traffic spikes or scale down during low demand.",
+      "recommendation": "Configure Application Auto Scaling for the ECS service with target tracking on CPU or request count.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Backup and Recovery \u2014 no backup configuration",
+      "description": "No backup configuration found in IaC. RDS instance not defined in this repo so backup settings cannot be verified.",
+      "gap": "No backup configuration for the production database containing order data and customer PII.",
+      "recommendation": "Define RDS with backup_retention_period > 0 and PITR enabled. Add an AWS Backup plan.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "High Availability \u2014 Multi-AZ not verifiable",
+      "description": "ECS tasks distributed across subnet list (potentially multi-AZ) with DesiredCount: 2. RDS Multi-AZ configuration cannot be verified.",
+      "gap": "Cannot verify Multi-AZ for database. No ALB for cross-zone load distribution.",
+      "recommendation": "Define RDS with multi_az: true. Add ALB with cross-zone load balancing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "Infrastructure as Code Coverage \u2014 partial, ~40-50%",
+      "description": "CloudFormation covers ECS cluster, task, service, secrets, IAM. Missing: RDS, ALB, VPC/networking, auto-scaling, monitoring, backup.",
+      "gap": "Significant infrastructure managed outside this repo's IaC \u2014 database, networking, load balancer, monitoring.",
+      "recommendation": "Extend IaC to cover all infrastructure this service depends on. Target 90%+ coverage.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation \u2014 no pipeline exists",
+      "description": "No CI/CD pipeline configuration found. No GitHub Actions, GitLab CI, Jenkins, CodeBuild, or any pipeline definition.",
+      "gap": "No CI/CD automation \u2014 all deployments manual with no automated build, test, or deploy stages.",
+      "recommendation": "Establish a CI/CD pipeline with build, test, container build, and deploy stages.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": ".",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Async vs Sync \u2014 all inter-service communication synchronous",
+      "description": "All inter-service communication is synchronous HTTP. WarehouseClient makes blocking calls to downstream services for refund and cancel operations.",
+      "gap": "All communication synchronous HTTP with no async patterns. Cascading failure risk on downstream timeouts.",
+      "recommendation": "Introduce async communication for state-change propagation via SQS/EventBridge.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/services/order-service.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-Running Process Handling \u2014 all operations synchronous",
+      "description": "Refund and cancel operations make synchronous calls to external services with no timeout management, no async job processing, no status polling.",
+      "gap": "All operations synchronous regardless of duration. No background job infrastructure.",
+      "recommendation": "Implement async job processing for refund and cancel: accept request, return 202, process asynchronously with status polling.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/services/order-service.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "API Versioning \u2014 no versioning strategy",
+      "description": "No API versioning. Endpoints use unversioned paths (/orders, /orders/{id}). No URL prefix, no version headers.",
+      "gap": "No versioning \u2014 breaking changes deployed directly to all consumers.",
+      "recommendation": "Adopt URL-based versioning (/v1/orders) or header-based versioning before the next breaking change.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "openapi/orders.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Service Discovery \u2014 environment variables only",
+      "description": "Service endpoints configured via environment variables (JWKS_URI, JWT_ISSUER). No dynamic service discovery.",
+      "gap": "Static endpoint configuration; no dynamic discovery for scaling or failover.",
+      "recommendation": "Adopt AWS Cloud Map for service-to-service discovery.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/auth.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Database Engine Version \u2014 not pinned in IaC",
+      "description": "README documents PostgreSQL 15 (not at EOL). Engine version not pinned in IaC since no RDS resource is defined in this repo.",
+      "gap": "Database engine version not codified in IaC, creating drift risk.",
+      "recommendation": "Define RDS instance in CloudFormation with explicit EngineVersion pinned to PostgreSQL 15.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption at Rest \u2014 no customer-managed KMS keys",
+      "description": "Secrets Manager encrypted with AWS-managed key. Database encryption cannot be verified. No explicit KMS key resources.",
+      "gap": "No customer-managed KMS keys; database encryption unknown.",
+      "recommendation": "Define customer-managed KMS key for RDS and Secrets Manager. Include RDS with StorageEncrypted: true.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Authentication \u2014 no API Gateway throttling layer",
+      "description": "JWT RS256 authentication on all endpoints with JWKS validation and role-based authorization. No API Gateway for throttling/WAF.",
+      "gap": "Authentication at application level only; no managed throttling or WAF protection.",
+      "recommendation": "Layer an API Gateway or ALB with WAF for throttling and DDoS protection.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/auth.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Centralized Identity \u2014 IdP integration without verifiable SSO",
+      "description": "JWT validation against remote JWKS endpoint with issuer/audience verification. Indicates centralized IdP integration.",
+      "gap": "Cannot verify SSO enablement from application code alone.",
+      "recommendation": "Document the centralized IdP integration. Consider adding Cognito resources to IaC.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/auth.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets Management \u2014 no rotation configured",
+      "description": "Database password in Secrets Manager with auto-generated value. No plaintext credentials. But no rotation configured.",
+      "gap": "No automated rotation on database secret.",
+      "recommendation": "Configure automated rotation with a 30-day schedule using a Secrets Manager rotation Lambda.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Compute Hardening \u2014 default base image, no scanning",
+      "description": "Container uses node:20-slim (not hardened). Runs as non-root. No vulnerability scanning configured.",
+      "gap": "Default base image with no hardening or vulnerability scanning.",
+      "recommendation": "Switch to hardened base image (Distroless/Chainguard). Enable ECR image scanning.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Dockerfile",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Application Security Pipeline \u2014 no security scanning",
+      "description": "No CI/CD pipeline exists, so no security scanning is integrated. No Dependabot, no SAST, no container scanning.",
+      "gap": "No security scanning tools configured. Vulnerabilities reach production undetected.",
+      "recommendation": "Add npm audit/Snyk for dependencies, Semgrep for SAST, ECR scanning for containers when establishing CI/CD.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": ".",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Distributed Tracing \u2014 not instrumented",
+      "description": "No OpenTelemetry SDK, no X-Ray SDK, no trace ID propagation across service boundaries.",
+      "gap": "Cannot trace requests across service boundaries. Debugging cross-service failures is guesswork.",
+      "recommendation": "Instrument OpenTelemetry with X-Ray exporter. Propagate traceparent headers to downstream calls.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "package.json",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "SLO Definitions \u2014 none defined",
+      "description": "No SLO definitions, no CloudWatch alarms, no error budget tracking. No formal definition of acceptable service levels.",
+      "gap": "No SLOs \u2014 cannot measure whether service meets user expectations.",
+      "recommendation": "Define SLOs for critical paths: p99 latency, error rate. Create CloudWatch alarms.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Business Metrics \u2014 none published",
+      "description": "No custom business metrics. Only default Fargate infrastructure metrics available.",
+      "gap": "Cannot measure order throughput, refund patterns, or cancellation trends.",
+      "recommendation": "Publish custom CloudWatch metrics: orders_created, refunded, cancelled counts and order values.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/services/order-service.ts",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Anomaly Detection and Alerting \u2014 no alerting configured",
+      "description": "No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration. Service can fail silently.",
+      "gap": "No alerting \u2014 failures go undetected until users report problems.",
+      "recommendation": "Create alarms for ECS task health, 5xx error rate, p99 latency. Enable anomaly detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Deployment Strategy \u2014 rolling only, no traffic shifting",
+      "description": "ECS uses DeploymentCircuitBreaker with rollback. Rolling deployment with health checks but no blue/green or canary.",
+      "gap": "No canary period \u2014 all tasks receive traffic immediately.",
+      "recommendation": "Integrate CodeDeploy with ECS for blue/green or canary deployments with traffic shifting.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing \u2014 no tests exist",
+      "description": "Vitest configured but no test files in repository. No unit, integration, contract, or e2e tests.",
+      "gap": "No automated tests. Changes carry high regression risk.",
+      "recommendation": "Write integration tests for order creation, retrieval, refund, cancel. Use testcontainers for DB tests.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "package.json",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Incident Response \u2014 no runbooks or automation",
+      "description": "No runbooks, no SSM Automation, no self-healing patterns. Only ECS circuit breaker provides automated recovery.",
+      "gap": "No incident response automation. Response is entirely ad hoc.",
+      "recommendation": "Create runbooks for common failures. Implement SSM Automation for known remediation patterns.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": ".",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Ownership \u2014 no dashboards or alarm ownership",
+      "description": "CloudWatch Logs configured for basic log collection. No dashboards, no alarms with owners, no CODEOWNERS.",
+      "gap": "No observability ownership. Monitoring is reactive with only basic log collection.",
+      "recommendation": "Create service dashboard. Define alarm owners. Add CODEOWNERS for infra/ directory.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Resource Tagging \u2014 no tags on any resources",
+      "description": "No tags on any CloudFormation resources. No cost allocation, ownership, or environment tags.",
+      "gap": "Cannot track costs, identify ownership, or enforce budget controls.",
+      "recommendation": "Add consistent tags (Service, Team, Environment, CostCenter) to all CloudFormation resources.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/ecs.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "INF-Q1",
+      "category_id": "INF",
+      "title": "Managed Compute",
+      "status": "pass",
+      "score": 4,
+      "reason": "All compute on ECS Fargate \u2014 fully managed, no EC2."
+    },
+    {
+      "question_id": "APP-Q1",
+      "category_id": "APP",
+      "title": "Programming Languages",
+      "status": "pass",
+      "score": 4,
+      "reason": "Node.js 20 + TypeScript 5.4 + Fastify 4.26 \u2014 modern language, framework, and runtime."
+    },
+    {
+      "question_id": "APP-Q2",
+      "category_id": "APP",
+      "title": "Monolith vs Microservices",
+      "status": "pass",
+      "score": 4,
+      "reason": "Independent microservice with clean layered architecture and typed interfaces."
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category_id": "DATA",
+      "title": "Unstructured Data Storage",
+      "status": "pass",
+      "score": 4,
+      "reason": "Service stores structured data only; no unstructured data requirements identified."
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category_id": "DATA",
+      "title": "Unified Data Access Layer",
+      "status": "pass",
+      "score": 4,
+      "reason": "All DB access centralized in OrderService class; single point of data contract."
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category_id": "DATA",
+      "title": "Stored Procedures and Schema Complexity",
+      "status": "pass",
+      "score": 4,
+      "reason": "No stored procedures or proprietary SQL; all logic in application layer."
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category_id": "SEC",
+      "title": "Audit Logging",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "Application-level IaC only (ECS, Secrets Manager, IAM). CloudTrail is an account-level concern belonging in foundation infrastructure repo."
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "APP-Q2 = 4 \u2014 application is already a well-decomposed microservice with clear boundaries.",
+      "triggering_questions": [
+        {
+          "question_id": "APP-Q2",
+          "score": 4,
+          "note": "APP-Q2 = 4 meets threshold; application already independently deployable microservice."
+        }
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1 = 4 \u2014 compute already on fully managed Fargate.",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q1",
+          "score": 4,
+          "note": "INF-Q1 = 4 meets threshold; already on ECS Fargate."
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "Workload already runs on ECS Fargate; container pathway does not apply."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4 = 4 \u2014 no stored procedures or proprietary SQL. PostgreSQL is already open source.",
+      "triggering_questions": [
+        {
+          "question_id": "DATA-Q4",
+          "score": 4,
+          "note": "DATA-Q4 = 4 meets threshold; no proprietary SQL constructs."
+        }
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q2 = 3 \u2014 database already on managed RDS.",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q2",
+          "score": 3,
+          "note": "INF-Q2 = 3 meets threshold; database is managed RDS PostgreSQL."
+        }
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q4 = 1 meets score threshold but contextual guard blocks: no data processing workloads exist in this CRUD API service.",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q4",
+          "score": 1,
+          "note": "Score meets threshold but contextual guard prevents trigger \u2014 no streaming, ETL, or analytics workloads found."
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "No data processing workloads exist. This is a CRUD order management API with no streaming, ETL, or analytics responsibilities."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10 = 2 (primary), INF-Q11 = 1 (primary); OPS-Q5 = 2 (supporting), OPS-Q6 = 1 (supporting)",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q10",
+          "score": 2
+        },
+        {
+          "question_id": "INF-Q11",
+          "score": 1
+        },
+        {
+          "question_id": "OPS-Q5",
+          "score": 2
+        },
+        {
+          "question_id": "OPS-Q6",
+          "score": 1
+        }
+      ],
+      "detail": {
+        "current_state": "No CI/CD pipeline. Partial IaC (~40-50% coverage). Rolling deployment only. No automated tests.",
+        "recommended_services": [
+          "AWS CodeBuild",
+          "AWS CodePipeline",
+          "AWS CodeDeploy",
+          "AWS CloudFormation",
+          "AWS CloudWatch"
+        ],
+        "immediate_actions": [
+          "Establish CI/CD pipeline with build, test, and deploy stages",
+          "Write integration tests for critical workflows",
+          "Extend CloudFormation to cover ALB, RDS, auto-scaling, monitoring",
+          "Adopt CodeDeploy for blue/green deployment"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
+        ]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation).",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source, configuration, IaC, or documentation."
+    }
+  ],
+  "decomposition_strategy": null,
+  "repo_name": "modern-orders-service"
+}
