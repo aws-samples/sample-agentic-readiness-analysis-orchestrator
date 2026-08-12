@@ -17,7 +17,8 @@
 > 7 canonical pathways) is **baked in as literal text below** — the grader does NOT read `SKILL.md`
 > or any TD reference file at runtime. That is the difference between this file and the harness's
 > live `score-reports.py`, which parses those tables from the TD on every run. When the TD changes,
-> **this file must be updated by hand** (see *Maintenance* at the bottom). It is pinned to the
+> **`harness/scorer-prompt-sync.py --write` regenerates this file's mechanical tables and `--check`
+> fails CI when it has drifted** (see *Maintenance* at the bottom). It is pinned to the
 > 37-question / 5-category MOD rubric.
 >
 > **How to run it at scale.** Send the `## PROMPT` block as a single message with the three
@@ -143,28 +144,51 @@ test, a runtime scan, or a CVE audit. Each question is scored by its own 1-4 cri
 is then DERIVED from the score via the mapping below. "This is bad" is not by itself grounds for a
 score of 1 — the 1-4 criteria decide.
 
+<!-- GEN:mod-question-catalog (derived from SKILL.md by harness/scorer-prompt-sync.py — do NOT hand-edit; run --write) -->
 INFRASTRUCTURE & DevOps (INF, 11):
-  INF-Q1 Managed Compute, INF-Q2 Managed Databases, INF-Q3 Workflow Orchestration,
-  INF-Q4 Async Messaging and Streaming, INF-Q5 Network Security, INF-Q6 API Entry Point,
-  INF-Q7 Auto-Scaling, INF-Q8 Backup and Recovery, INF-Q9 High Availability and Fault
-  Isolation, INF-Q10 Infrastructure as Code Coverage, INF-Q11 CI/CD Automation.
+  - INF-Q1 Managed Compute
+  - INF-Q2 Managed Databases
+  - INF-Q3 Workflow Orchestration
+  - INF-Q4 Async Messaging and Streaming
+  - INF-Q5 Network Security
+  - INF-Q6 API Entry Point
+  - INF-Q7 Auto-Scaling
+  - INF-Q8 Backup and Recovery
+  - INF-Q9 High Availability and Fault Isolation
+  - INF-Q10 Infrastructure as Code Coverage
+  - INF-Q11 CI/CD Automation
 APPLICATION ARCHITECTURE (APP, 6):
-  APP-Q1 Programming Languages, APP-Q2 Monolith vs Microservices, APP-Q3 Async vs Sync
-  Communication, APP-Q4 Long-Running Process Handling, APP-Q5 API Versioning Strategy,
-  APP-Q6 Service Discovery.
+  - APP-Q1 Programming Languages
+  - APP-Q2 Monolith vs Microservices
+  - APP-Q3 Async vs Sync Communication
+  - APP-Q4 Long-Running Process Handling
+  - APP-Q5 API Versioning Strategy
+  - APP-Q6 Service Discovery
 DATA PLATFORM (DATA, 4):
-  DATA-Q1 Unstructured Data Storage, DATA-Q2 Unified Data Access Layer,
-  DATA-Q3 Database Engine Version and EOL, DATA-Q4 Stored Procedures and Schema Complexity.
-  (Note: MOD DATA-Q1..Q4 are DIFFERENT questions from ARA DATA-Q1..Q7 — do not conflate.)
+  - DATA-Q1 Unstructured Data Storage
+  - DATA-Q2 Unified Data Access Layer
+  - DATA-Q3 Database Engine Version and EOL
+  - DATA-Q4 Stored Procedures and Schema Complexity
 SECURITY BASELINE (SEC, 7):
-  SEC-Q1 Audit Logging, SEC-Q2 Encryption at Rest, SEC-Q3 API Authentication,
-  SEC-Q4 Centralized Identity Integration, SEC-Q5 Secrets Management,
-  SEC-Q6 Compute Hardening and Patching, SEC-Q7 Application Security Pipeline.
+  - SEC-Q1 Audit Logging
+  - SEC-Q2 Encryption at Rest
+  - SEC-Q3 API Authentication
+  - SEC-Q4 Centralized Identity Integration
+  - SEC-Q5 Secrets Management
+  - SEC-Q6 Compute Hardening and Patching
+  - SEC-Q7 Application Security Pipeline
 OPERATIONS & OBSERVABILITY (OPS, 9):
-  OPS-Q1 Distributed Tracing, OPS-Q2 SLO Definitions, OPS-Q3 Business Metrics,
-  OPS-Q4 Anomaly Detection and Alerting, OPS-Q5 Deployment Strategy,
-  OPS-Q6 Integration Testing, OPS-Q7 Incident Response Automation,
-  OPS-Q8 Observability Ownership, OPS-Q9 Resource Tagging Governance.
+  - OPS-Q1 Distributed Tracing
+  - OPS-Q2 SLO Definitions
+  - OPS-Q3 Business Metrics
+  - OPS-Q4 Anomaly Detection and Alerting
+  - OPS-Q5 Deployment Strategy
+  - OPS-Q6 Integration Testing
+  - OPS-Q7 Incident Response Automation
+  - OPS-Q8 Observability Ownership
+  - OPS-Q9 Resource Tagging Governance
+<!-- /GEN:mod-question-catalog -->
+(Note: MOD DATA-Q1..Q4 are DIFFERENT questions from ARA DATA-Q1..Q7 — do not conflate.)
 
 1-4 SCORING SCALE (uniform intent across questions):
   1 = legacy / absent — no cloud-native practice present
@@ -353,23 +377,37 @@ found.>
 
 ## Maintenance
 
-This prompt is **pinned by hand** to the MOD rubric as of the split-managed-tds-modular branch
-(37 questions, 5 categories, 1–4 scale). The live harness (`harness/score-reports.py`) derives the
-same tables from the TD at runtime and will drift from this file the moment a score criterion,
-core designation, surface gate, archetype rubric, classification threshold, score band, or pathway
-changes in `definitions/managed/modernization-readiness-analysis/`. When you edit the TD, update
-the corresponding block here:
+This prompt is pinned to the MOD rubric (37 questions, 5 categories, 1–4 scale). The live harness
+(`harness/score-reports.py`) derives the same tables from the TD at runtime and will drift from
+this file the moment a score criterion, core designation, surface gate, archetype rubric,
+classification threshold, score band, or pathway changes in
+`definitions/managed/modernization-readiness-analysis/`.
 
-| If you change… (in the MOD TD) | Update this section |
-|---|---|
-| A question's 1-4 criteria or the category counts | *Authoritative MOD question bank* |
-| The score → severity mapping | *Score → unified severity mapping* |
-| Which questions are core | *Core question designation* |
-| A surface gate | *Per-report §1* |
-| An archetype-keyed rubric | *Per-report §2* |
-| A pathway ID, trigger, or guard (incl. decomposition / move-to-ai) | *Per-report §3* |
-| The classification thresholds | *Classification* |
-| The overall-score formula or band labels | *Overall score and bands* |
+**`harness/scorer-prompt-sync.py` keeps this file honest** — it derives the parseable TD facts
+from the same parser the live grader uses:
+
+- `python3 harness/scorer-prompt-sync.py --check` (run in CI via the pytest suite) FAILS when a
+  covered fact has drifted, naming it. Its silence means the covered facts still match.
+- `python3 harness/scorer-prompt-sync.py --write` regenerates the `<!-- GEN:… -->` block
+  (*Authoritative MOD question bank*) and refreshes `mod-scorer-facts.lock.json`. **After a
+  change here, re-publish the Optimus scorer.**
+
+Coverage is honest, not total: the question bank, the score bands, the surface gates and the
+archetype calibrations are derived and drift-detected; the score→severity mapping, the core-
+question list, the classification thresholds and the pathway set are NOT parsed by the TD reader,
+so the tool cannot see them — those rows are **hand-only, and a drift there is silent.** Treat
+them with extra care.
+
+| If you change… (in the MOD TD) | Update this section | Kept in sync by |
+|---|---|---|
+| A question's 1-4 criteria or the category counts | *Authoritative MOD question bank* | `--write` (GEN) |
+| The score → severity mapping | *Score → unified severity mapping* | hand-only (NOT detected) |
+| Which questions are core | *Core question designation* | hand-only (NOT detected) |
+| A surface gate | *Per-report §1* | lock detects; hand-edit |
+| An archetype-keyed rubric | *Per-report §2* | lock detects; hand-edit |
+| A pathway ID, trigger, or guard (incl. decomposition / move-to-ai) | *Per-report §3* | hand-only (NOT detected) |
+| The classification thresholds | *Classification* | hand-only (NOT detected) |
+| The overall-score formula or band labels | *Overall score and bands* | lock detects bands; hand-edit |
 
 The scoring policy (the scale, "one root cause = one item", "a score disagreement is not a miss")
 is judging policy, not TD fact — keep it stable unless you are deliberately re-tuning the grader.

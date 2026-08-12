@@ -16,7 +16,8 @@
 > rules, the repo_type N/A mapping) is **baked in as literal text below** — the grader does NOT
 > read `SKILL.md` or any TD reference file at runtime. That is the difference between this file
 > and the harness's live `score-reports.py`, which parses those tables from the TD on every run.
-> When the TD's severities change, **this file must be updated by hand** (see *Maintenance* at the
+> When the TD's severities change, **`harness/scorer-prompt-sync.py --write` regenerates this
+> file's mechanical tables and `--check` fails CI when it has drifted** (see *Maintenance* at the
 > bottom). It is pinned to the 43-question / 8-section ARA rubric.
 >
 > **How to run it at scale.** Send the `## PROMPT` block as a single message with the three
@@ -150,26 +151,27 @@ mechanisms below the table legitimately move a severity OFF this default for a p
 and the repo_type N/A mapping). Those per-report resolutions are spelled out AFTER this table and
 OVERRIDE it — read them before recording any miss.
 
-BLOCKER (5 default, 7 with conditionals):
+<!-- GEN:ara-severity-table (derived from SKILL.md by harness/scorer-prompt-sync.py — do NOT hand-edit; run --write) -->
+BLOCKER (2 default, 7 with conditionals):
   - API-Q1 Documented API Interface
   - AUTH-Q1 Machine Identity Authentication
   - API-Q4 Idempotent Write Operations [C]
-  - STATE-Q1 Compensation and Rollback [C]
   - AUTH-Q6 Immutable Audit Logging [C]
+  - STATE-Q1 Compensation and Rollback [C]
   - DATA-Q1 Sensitive Data Classification [C]
   - DATA-Q2 Data Residency and Sovereignty [C]
-RISK-SAFETY (16):
+RISK-SAFETY (12):
   - AUTH-Q2 Scoped Permissions (Least Privilege)
   - AUTH-Q3 Action-Level Authorization
   - AUTH-Q4 Identity Propagation and Delegation
   - AUTH-Q5 Credential Management
       -> Credential management, including hardcoded secrets.
   - AUTH-Q7 Agent Identity Suspension
-  - STATE-Q3 Concurrency Controls [S]
   - STATE-Q4 Circuit Breakers and Resilience
   - STATE-Q5 Rate Limiting and Throttling
-  - STATE-Q6 Blast Radius and Transaction Limits [S]
   - DATA-Q6 PII Redaction in Logs
+  - STATE-Q3 Concurrency Controls [S]
+  - STATE-Q6 Blast Radius and Transaction Limits [S]
   - HITL-Q1 Draft/Pending State [S]
   - HITL-Q2 Configurable Approval Gates [S]
 RISK-QUALITY (17):
@@ -178,11 +180,11 @@ RISK-QUALITY (17):
   - API-Q6 Asynchronous Operation Support
   - STATE-Q2 Queryable Current State
   - STATE-Q7 Graceful Degradation Signaling
+  - HITL-Q3 Sandbox/Staging Environment
   - DATA-Q3 Selective Query Support
   - DATA-Q4 Input Validation and Schema Enforcement
-      -> OWNS SQL injection, NoSQL injection, XXE, command injection, path
-         traversal and unvalidated input. Its own evaluation criteria list
-         "parameterized queries (protection against injection)".
+      -> OWNS SQL injection, NoSQL injection, XXE, command injection, path traversal and unvalidated input.
+         Its own evaluation criteria list "parameterized queries (protection against injection)".
   - DATA-Q5 Temporal Metadata and Freshness
   - DISC-Q1 Schema Versioning and API Contracts
   - OBS-Q1 Distributed Tracing and Structured Logging
@@ -193,8 +195,7 @@ RISK-QUALITY (17):
   - ENG-Q4 API Test Coverage
   - ENG-Q5 Encryption at Rest for Agent-Accessible Data
       -> Encryption AT REST only — NOT transport security.
-  - HITL-Q3 Sandbox/Staging Environment
-INFO:
+INFO (7):
   - API-Q5 Structured Response Format
   - API-Q7 Event Emission for State Changes
   - API-Q8 Rate Limit Documentation and Headers
@@ -203,10 +204,10 @@ INFO:
   - DISC-Q3 Data Catalog / Metadata Layer
   - OBS-Q3 Business Outcome Metrics
 
-(The severity groupings above are not the 8 rubric sections. The 8 sections are: API Surface
-(API, 8 q), Authentication & Authorization (AUTH, 7 q), State Management (STATE, 7 q),
-Human-in-the-Loop (HITL, 3 q), Data Accessibility (DATA, 7 q), Discovery & Documentation
-(DISC, 3 q), Observability (OBS, 3 q), Engineering Maturity (ENG, 5 q) = 43.)
+(The severity groupings above are not the 8 rubric sections. The 8 sections are: API Surface (API, 8 q), Authentication & Authorization (AUTH, 7 q), State Management (STATE, 7 q),
+Human-in-the-Loop (HITL, 3 q), Data Accessibility (DATA, 7 q), Discovery & Documentation (DISC, 3 q),
+Observability (OBS, 3 q), Engineering Maturity (ENG, 5 q) = 43.)
+<!-- /GEN:ara-severity-table -->
 
 [C] = CONDITIONAL BLOCKER: resolves to BLOCKER only when `agent_scope` is "write-enabled". Under
       "read-only" these resolve to RISK-SAFETY or INFO — see the per-report resolution below for
@@ -232,11 +233,13 @@ legitimate TD coverage gaps, but a report cannot be marked down for a question t
 treat them as rubric gaps, not misses.
 
 TIER ARITHMETIC (deterministic — the readiness profile is a pure function of the counts):
-  - blocker_count 0 AND risk_safety_count 0                 -> Agent-Ready
-  - blocker_count 0 AND risk_safety_count 1-2               -> Pilot-Ready
-  - blocker_count 0 AND risk_safety_count >= 3              -> Pilot-Ready (Safety Concerns)
-  - blocker_count 1-2 (any risk_safety_count)               -> Remediation Required
-  - blocker_count >= 3 (any risk_safety_count)              -> Not Agent-Integrable
+<!-- GEN:ara-tier-arithmetic (derived from SKILL.md by harness/scorer-prompt-sync.py — do NOT hand-edit; run --write) -->
+  - blocker_count 0 AND risk_safety_count 0    -> Agent-Ready
+  - blocker_count 0 AND risk_safety_count 1-2  -> Pilot-Ready
+  - blocker_count 0 AND risk_safety_count >= 3 -> Pilot-Ready (Safety Concerns)
+  - blocker_count 1-2 (any risk_safety_count)  -> Remediation Required
+  - blocker_count >= 3 (any risk_safety_count) -> Not Agent-Integrable
+<!-- /GEN:ara-tier-arithmetic -->
 RISK-QUALITY and INFO counts are tier-INERT — they never change the tier.
 
 ## Per-report severity resolution — apply these against THIS report's metadata
@@ -352,21 +355,33 @@ found.>
 
 ## Maintenance
 
-This prompt is **pinned by hand** to the ARA rubric as of the split-managed-tds-modular branch
-(43 questions, 8 sections). The live harness (`harness/score-reports.py`) derives the same tables
-from the TD at runtime and will drift from this file the moment a severity, conditional marker,
-calibration rule, extended trigger, or tier threshold changes in
-`definitions/managed/agentic-readiness-analysis/`. When you edit the TD, update the corresponding
-block here:
+This prompt is pinned to the ARA rubric (43 questions, 8 sections). The live harness
+(`harness/score-reports.py`) derives the same tables from the TD at runtime and will drift from
+this file the moment a severity, conditional marker, calibration rule, extended trigger, or tier
+threshold changes in `definitions/managed/agentic-readiness-analysis/`.
 
-| If you change… (in the ARA TD) | Update this section |
-|---|---|
-| A question's heading severity | *Authoritative ARA severity table* |
-| A conditional/scope-calibrated marker or its read-only resolution | table `[C]`/`[S]` markers + *Per-report §1* |
-| A surface-flag or archetype calibration rule | *Per-report §2* |
-| An extended-question trigger | *Per-report §3* |
-| The repo_type → N/A mapping | *Per-report §4* |
-| The readiness-profile thresholds | *Tier arithmetic* |
+**`harness/scorer-prompt-sync.py` keeps this file honest** — it derives every baked-in TD fact
+from the same parser the live grader uses and gates the two:
+
+- `python3 harness/scorer-prompt-sync.py --check` (run in CI via the pytest suite) FAILS when
+  this file has drifted from the TD, naming the exact fact that moved. Its silence is the signal
+  that a TD edit did NOT touch the baked-in facts, so the published prompt can stay as-is.
+- `python3 harness/scorer-prompt-sync.py --write` regenerates the `<!-- GEN:… -->` blocks
+  (*Authoritative ARA severity table* and *Tier arithmetic*) and refreshes
+  `ara-scorer-facts.lock.json`. **After a change here, re-publish the Optimus scorer.**
+
+The GEN-marked blocks are MECHANICAL — never hand-edit them; edit the TD and run `--write`.
+Everything else in this table is TUNED PROSE the tool drift-detects (via the lock) but does NOT
+auto-rewrite, so when `--check` reports one of these moved, hand-edit the named section:
+
+| If you change… (in the ARA TD) | Update this section | Kept in sync by |
+|---|---|---|
+| A question's heading severity | *Authoritative ARA severity table* | `--write` (GEN) |
+| A conditional/scope-calibrated marker or its read-only resolution | table `[C]`/`[S]` markers + *Per-report §1* | markers via `--write`; prose by hand |
+| A surface-flag or archetype calibration rule | *Per-report §2* | lock detects; hand-edit |
+| An extended-question trigger | *Per-report §3* | lock detects; hand-edit |
+| The repo_type → N/A mapping | *Per-report §4* | lock detects; hand-edit |
+| The readiness-profile thresholds | *Tier arithmetic* | `--write` (GEN) |
 
 The scoring policy (the scale, "one root cause = one item", "a severity disagreement is not a
 miss", the ownership notes for DATA-Q4 / ENG-Q5 / AUTH-Q5) is judging policy, not TD fact — keep
