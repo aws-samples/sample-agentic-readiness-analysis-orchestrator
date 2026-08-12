@@ -562,6 +562,40 @@ def _scope_note(edited_questions: list[str]) -> str:
     )
 
 
+def _program_scope_note(changed_programs: list[str]) -> str:
+    """Tell the judge which programs' library entries the MR edited — the D4 analogue of
+    _scope_note. Only non-empty on a portfolio-TD MR that touched program-library.md.
+
+    WHY THIS IS SEPARATE FROM THE COVERAGE NOTE: on a normal scoped run the portfolio rollup
+    aggregates fewer apps than the baseline, so its program delta is a mechanical artifact
+    and the coverage note tells the judge to ignore it. A program-library edit is the
+    exception the harness engineers around: run-fixtures.sh backfills the golden per-repo
+    reports so the rollup spans the FULL app set, making the D4 delta a real comparison. This
+    note flips the judge from "ignore program churn" to "score program churn as the signal".
+    """
+    if not changed_programs:
+        return ""
+    return (
+        "\n## Program scope (from the program-library.md diff — authoritative)\n"
+        f"programs whose library entry the MR edited: {', '.join(changed_programs)}\n"
+        "The program library is the catalog the PORTFOLIO recommendation step draws from. A\n"
+        "program-library edit can move ONLY which programs the portfolio recommends and the\n"
+        "`trigger_reason` it cites — it cannot change any per-repo report.\n"
+        "IMPORTANT — how to score this:\n"
+        "  * This run rolled the portfolio up over the FULL baseline app set (the harness\n"
+        "    backfills the golden per-repo reports), so the D4 program delta is a real,\n"
+        "    apples-to-apples comparison — NOT the mechanical scoped-subset artifact the\n"
+        "    coverage note warns about. Weigh it as SIGNAL.\n"
+        "  * Judge whether the program movement is GROUNDED and matches intent: does each\n"
+        "    added/removed program correspond to an edited entry above, and is its\n"
+        "    `trigger_reason` consistent with the library's stated trigger and status? A\n"
+        "    program set to `Retiring` should STOP being recommended; a newly-added or newly\n"
+        "    eligible program should appear only where its trigger is actually met.\n"
+        "  * Program churn on entries NOT listed above is out of edit scope — treat it as\n"
+        "    portfolio run-to-run variance, not a regression.\n"
+    )
+
+
 def _alerts_note(impact_summary: dict) -> str:
     """Render the deterministic safety alerts / coverage gaps as must-address facts.
 
@@ -694,7 +728,8 @@ def _accuracy_note(compare: Optional[dict]) -> str:
 
 def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
                       edited_questions: Optional[list[str]] = None,
-                      compare: Optional[dict] = None) -> str:
+                      compare: Optional[dict] = None,
+                      changed_programs: Optional[list[str]] = None) -> str:
     return (
         "## Contributor intent\n"
         f"What: {intent.get('what') or '(none stated)'}\n"
@@ -702,6 +737,7 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
         f"Expected impact: {intent.get('expected_impact') or '(none stated)'}\n"
         f"Rubric edited directly in the AWS Transform service: {intent.get('edited_in_service')}\n"
         + _scope_note(edited_questions or [])
+        + _program_scope_note(changed_programs or [])
         + "\n## Observed delta (from the deterministic differ)\n"
         f"no_op: {impact_summary['no_op']}\n"
         f"changed_tds: {impact_summary['changed_tds']}\n"
@@ -719,7 +755,8 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
 def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
                        model: str,
                        edited_questions: Optional[list[str]] = None,
-                       compare: Optional[dict] = None) -> Optional[dict]:
+                       compare: Optional[dict] = None,
+                       changed_programs: Optional[list[str]] = None) -> Optional[dict]:
     """Call Bedrock; return a parsed verdict dict, or None if unavailable/failed."""
     try:
         import boto3  # noqa: PLC0415
@@ -734,7 +771,8 @@ def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user",
                           "content": build_user_prompt(intent, impact_summary, diff_text,
-                                                       edited_questions, compare)}],
+                                                       edited_questions, compare,
+                                                       changed_programs)}],
         }
         resp = client.invoke_model(modelId=model, body=json.dumps(body))
         payload = json.loads(resp["body"].read())
@@ -1023,6 +1061,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     # nondeterminism (noise), which for a one-question edit is the larger of the two.
     ap.add_argument("--edited-questions", default="",
                     help="comma-separated question ids the change edited (scope signal)")
+    # The programs whose program-library.md entry the MR edited (comma-separated, e.g.
+    # "MAP,EBA"). run-fixtures.sh extracts these via select-fixtures.py --emit-changed-programs
+    # on a portfolio-TD MR. They are the D4 analogue of --edited-questions: on such an MR the
+    # rollup is backfilled to the full app set, so the program delta is real and this tells
+    # the judge to score it as signal rather than dismiss it as a scoped-subset artifact.
+    ap.add_argument("--changed-programs", default="",
+                    help="comma-separated program identifiers whose library entry changed")
     # The accuracy-vs-baseline comparison written by `score-reports.py --compare-baseline`.
     # This is the judge's only PAST DATA: it re-scores each report's groundedness against the
     # fixture source and diffs it against the committed baseline, with a per-fixture noise
@@ -1052,6 +1097,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                         if q.strip()]
     if edited_questions:
         impact_summary["edited_questions"] = edited_questions
+    # Program identifiers are free-form labels (e.g. "MAP", "AI DLC", "Migration Evaluator"),
+    # so unlike question ids they are NOT upper-cased — that would corrupt the mixed-case names.
+    changed_programs = [p.strip() for p in args.changed_programs.split(",") if p.strip()]
+    if changed_programs:
+        impact_summary["changed_programs"] = changed_programs
 
     compare = None
     if args.compare and args.compare.exists():
@@ -1066,7 +1116,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     verdict = None
     if not args.no_llm:
         verdict = judge_with_bedrock(intent, impact_summary, diff_text, args.model,
-                                     edited_questions, compare)
+                                     edited_questions, compare, changed_programs)
         if verdict is not None:
             verdict["_engine"] = "bedrock"
     if verdict is None:
