@@ -2,14 +2,14 @@
   "analysis_type": "mod",
   "metadata": {
     "repository": "legacy-loan-calculator",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2026-08-12",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Java application source code with deployable entry point (Struts 1.3 Action servlet deployed as WAR to WebLogic). Classified as application.",
+    "repo_type_justification": "Application source code (Java) with a deployable entry point (Struts Action servlet deployed as WAR on WebLogic) and WEB-INF deployment descriptor present.",
     "service_archetype": "stateful-crud",
-    "service_archetype_source": "auto-detected",
-    "archetype_justification": "Database connection with INSERT operations (write endpoints) and loan pricing computation (read operations). Single-service CRUD pattern with persistent state in Oracle. Classified as stateful-crud.",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "Database writes (INSERT INTO applications) via JDBC with CRUD operations on loan entities. User-specific data (applicant, officer).",
     "priority": null,
     "tags": [],
     "context": null,
@@ -22,20 +22,7 @@
       "has_iac_provisioning_aws_resources": false
     }
   },
-  "overall_score": 1.15,
-  "classification": {
-    "tier": "Not Ready",
-    "high_count": 11,
-    "medium_count": 20,
-    "low_count": 0,
-    "rule_matched": "2-11 High \u2192 Remediation Required",
-    "classification_consistency_check": {
-      "status": "divergent",
-      "score_band": "Not Ready",
-      "count_tier": "Remediation Required",
-      "reason": "Score 1.15 yields Not Ready band but 11 High findings (not >=12) maps to Remediation Required tier. The divergence arises because DATA-Q4 scores 4 (passing) while 31 of 32 evaluated questions score 1, producing a near-floor overall score that the count-based rule does not capture. The more conservative Not Ready classification is authoritative."
-    }
-  },
+  "overall_score": 1.22,
   "categories": [
     {
       "category_id": "INF",
@@ -47,7 +34,7 @@
     {
       "category_id": "APP",
       "category": "Application Architecture",
-      "numeric_score": 1.0,
+      "numeric_score": 1.17,
       "score_rating": "Not Ready",
       "severity_status": "Critical"
     },
@@ -61,7 +48,7 @@
     {
       "category_id": "SEC",
       "category": "Security Baseline",
-      "numeric_score": 1.0,
+      "numeric_score": 1.17,
       "score_rating": "Not Ready",
       "severity_status": "Critical"
     },
@@ -73,90 +60,70 @@
       "severity_status": "Critical"
     }
   ],
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 11,
+    "medium_count": 20,
+    "low_count": 0,
+    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "classification_consistency_check": {
+      "status": "divergent",
+      "score_band": "Not Ready",
+      "count_tier": "Remediation Required",
+      "reason": "Score 1.22 yields Not Ready band but 11 High findings (< 12 threshold) maps to Remediation Required tier. The classification count table requires >= 12 High for Not Ready. Count-based tier is authoritative."
+    }
+  },
   "top_gaps": [
     {
+      "rank": 1,
       "question_id": "SEC-Q5",
       "title": "Secrets Management",
       "score": 1,
-      "gap": "Plaintext database credentials hardcoded in Java source code",
+      "gap": "Hardcoded database credentials in source code (password visible in LoanAction.java)",
       "impact": "Critical security vulnerability; credential exposure in version control"
     },
     {
+      "rank": 2,
       "question_id": "INF-Q10",
       "title": "Infrastructure as Code Coverage",
       "score": 1,
-      "gap": "No IaC \u2014 all infrastructure manually managed (ClickOps)",
+      "gap": "Zero IaC \u2014 all infrastructure manually provisioned (ClickOps)",
       "impact": "No reproducibility, no disaster recovery, no environment consistency"
     },
     {
+      "rank": 3,
       "question_id": "INF-Q11",
       "title": "CI/CD Automation",
       "score": 1,
       "gap": "No CI/CD pipeline \u2014 manual WAR upload via WebLogic admin console",
-      "impact": "No automated testing, no deployment safety, human error risk"
+      "impact": "No automated testing, no deployment safety, no rollback capability"
     },
     {
+      "rank": 4,
       "question_id": "APP-Q2",
       "title": "Monolith vs Microservices",
       "score": 1,
-      "gap": "Tightly-coupled monolith with business logic, persistence, and presentation in single Action class",
-      "impact": "Cannot scale independently, no team autonomy, deployment risk"
+      "gap": "Tightly coupled monolith with hardcoded DB, no module boundaries",
+      "impact": "Cannot scale independently, deploy independently, or evolve safely"
     },
     {
+      "rank": 5,
       "question_id": "INF-Q1",
       "title": "Managed Compute",
       "score": 1,
-      "gap": "All compute on bare-metal Solaris 10 with WebLogic 10.3 (both EOL)",
-      "impact": "No elasticity, no managed patching, single point of failure"
+      "gap": "All compute on EOL WebLogic 10.3 / Solaris 10 \u2014 no managed services",
+      "impact": "Unsupported platform, no elasticity, single point of failure"
     }
   ],
-  "decomposition_strategy": {
-    "app_q2_score": 1,
-    "recommended_approach": "conditional_adaptive",
-    "approaches": [
-      {
-        "name": "Strengthen as Modular Monolith",
-        "recommendation": "not_applicable",
-        "rationale": "Codebase too small and lacks any module structure to strengthen"
-      },
-      {
-        "name": "Strangler Fig (Parallel Track)",
-        "recommendation": "consider",
-        "rationale": "Once containerized, new loan features can be built as separate services"
-      },
-      {
-        "name": "Conditional / Adaptive",
-        "recommendation": "recommended",
-        "rationale": "Containerize first, then selectively extract loan-pricing and loan-submission as separate services"
-      },
-      {
-        "name": "Big-Bang Rewrite",
-        "recommendation": "against",
-        "rationale": "Despite small codebase, rewriting introduces risk of feature-parity gaps without tests"
-      }
-    ],
-    "patterns": [
-      "Anti-corruption Layer",
-      "Hexagonal Architecture"
-    ],
-    "effort_factors": {
-      "module_boundaries": "No boundaries \u2014 single class (high effort for extraction)",
-      "data_coupling": "Single table, simple schema (low data complexity)",
-      "stored_procedures": "None (low migration complexity)",
-      "communication_patterns": "Synchronous only (must introduce async)",
-      "cicd_maturity": "None (must build pipeline first)",
-      "test_coverage": "None (must add tests before safe extraction)"
-    }
-  },
   "findings": [
     {
       "question_id": "INF-Q1",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Compute \u2014 all compute on bare-metal Solaris 10 with WebLogic 10.3",
-      "description": "All compute runs on bare-metal Oracle Solaris 10 with Oracle WebLogic Server 10.3. Both the OS and application server are end-of-life. No managed container orchestration, no serverless, no cloud compute.",
-      "gap": "No managed compute services. Entire runtime stack (OS, app server, JVM) is EOL and on-premises.",
-      "recommendation": "Containerize the application and deploy to ECS/Fargate or EKS. Upgrade Java runtime from 5 to 17+ as a prerequisite.",
+      "title": "Managed Compute",
+      "description": "All compute runs on Oracle WebLogic Server 10.3 on Solaris 10. No managed container orchestration (ECS/EKS), no serverless (Lambda), no Fargate.",
+      "gap": "No managed compute. Entire application runs on unsupported proprietary application server on EOL operating system.",
+      "recommendation": "Migrate to managed compute \u2014 containerize on ECS/Fargate or rewrite as Lambda functions behind API Gateway.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -176,17 +143,17 @@
       "question_id": "INF-Q2",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Databases \u2014 self-managed Oracle 11g on-premises",
-      "description": "Database is self-managed Oracle 11g running on-premises (host dbprod01). Connection via raw JDBC with hardcoded connection string. Oracle 11g is end-of-life.",
-      "gap": "All databases self-managed on-premises with no automated failover, no managed patching, no cloud migration.",
-      "recommendation": "Migrate to Amazon RDS for PostgreSQL or Aurora PostgreSQL using AWS SCT and DMS.",
+      "title": "Managed Databases",
+      "description": "Database is self-managed Oracle 11g (EOL) accessed via direct JDBC. No managed database services (RDS, Aurora, DynamoDB).",
+      "gap": "Fully self-managed database on EOL engine with no automated failover, no managed backups, no scaling.",
+      "recommendation": "Migrate to Amazon RDS PostgreSQL or Aurora PostgreSQL using AWS DMS.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "22-24"
+        "lines": null
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -199,10 +166,10 @@
       "question_id": "INF-Q3",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Workflow Orchestration \u2014 no orchestration, all logic hardcoded",
-      "description": "Two-step business workflow (calculate loan pricing \u2192 submit application) entirely hardcoded in LoanAction.execute(). No workflow orchestration service in use.",
-      "gap": "No orchestration \u2014 all workflow logic hardcoded in application code with no retry logic or error handling.",
-      "recommendation": "Implement loan origination workflow using AWS Step Functions when decomposing.",
+      "title": "Workflow Orchestration",
+      "description": "No workflow orchestration service. Loan submission flow hardcoded in LoanAction.execute().",
+      "gap": "All workflow logic hardcoded in application code with no dedicated orchestration service.",
+      "recommendation": "Implement AWS Step Functions for loan submission workflow with retry logic and error handling.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -222,10 +189,10 @@
       "question_id": "INF-Q4",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Async Messaging and Streaming \u2014 no messaging infrastructure",
-      "description": "No messaging or streaming infrastructure. Loan submission is synchronous JDBC INSERT with no event emission. For a stateful-crud service, state changes should emit events for downstream consumers.",
-      "gap": "No messaging where state changes cross service boundaries. Loan submission has no event-driven notification or audit trail.",
-      "recommendation": "Introduce Amazon EventBridge or SNS for loan-application-submitted events.",
+      "title": "Async Messaging and Streaming",
+      "description": "No messaging or streaming infrastructure. All operations synchronous. For a stateful-crud archetype, state changes should propagate via async messaging.",
+      "gap": "No messaging where state changes could benefit from async notification to downstream systems.",
+      "recommendation": "Introduce Amazon SQS or EventBridge for loan application events.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -245,17 +212,17 @@
       "question_id": "INF-Q5",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Network Security \u2014 no network security configuration",
-      "description": "No network security configuration exists. Application runs on bare-metal Solaris with no VPC, no security groups. Database connection uses unencrypted JDBC.",
-      "gap": "No cloud networking, no VPC isolation, no encrypted database connections.",
-      "recommendation": "Deploy in a VPC with private subnets. Use security groups with least-privilege. Enable SSL/TLS on database connections.",
+      "title": "Network Security",
+      "description": "No VPC, no security groups, no network segmentation. Application deployed on Solaris host with no cloud networking.",
+      "gap": "No cloud network security infrastructure. No isolation, no segmentation.",
+      "recommendation": "Deploy in VPC with private subnets, least-privilege security groups, and VPC endpoints.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "22"
+        "file": "README.md",
+        "lines": null
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -268,13 +235,13 @@
       "question_id": "INF-Q6",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "API Entry Point \u2014 no gateway or load balancer",
-      "description": "No API Gateway, ALB, or CloudFront. Struts action exposed directly through WebLogic HTTP listener with no throttling or request validation.",
+      "title": "API Entry Point",
+      "description": "No API Gateway, no ALB, no CloudFront. Application exposed directly through WebLogic HTTP listener.",
       "gap": "Services exposed directly with no gateway or load balancer.",
-      "recommendation": "Deploy API Gateway or ALB as entry point with throttling, authentication, and request validation.",
+      "recommendation": "Implement Amazon API Gateway or ALB as entry point with throttling and auth.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "WEB-INF/struts-config.xml",
@@ -291,10 +258,10 @@
       "question_id": "INF-Q7",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Auto-Scaling \u2014 no auto-scaling, single server",
-      "description": "No auto-scaling. Application runs on a single Solaris 10 host with static capacity.",
-      "gap": "No auto-scaling \u2014 all capacity statically provisioned on a single server.",
-      "recommendation": "Configure auto-scaling on ECS/EKS with target tracking policies when containerized.",
+      "title": "Auto-Scaling",
+      "description": "No auto-scaling. Single Solaris host with static capacity.",
+      "gap": "All capacity statically provisioned. No elasticity.",
+      "recommendation": "Configure auto-scaling with target tracking policies when migrating to ECS/Fargate.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -314,16 +281,16 @@
       "question_id": "INF-Q8",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Backup and Recovery \u2014 no backup configuration",
-      "description": "No backup configuration in the repository. Oracle 11g database has no documented backup strategy, retention policy, or restore procedures.",
-      "gap": "No backup configuration found. Data loss recovery capability unknown.",
-      "recommendation": "Enable automated backups with PITR on RDS/Aurora when migrating. Use AWS Backup for centralized management.",
+      "title": "Backup and Recovery",
+      "description": "No backup configuration found. No backup plans, no retention periods, no PITR.",
+      "gap": "No backup configuration. No defined retention, no tested restore procedures.",
+      "recommendation": "Enable automated backups with 7+ day retention and PITR when migrating to RDS/Aurora.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -337,10 +304,10 @@
       "question_id": "INF-Q10",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Infrastructure as Code Coverage \u2014 no IaC exists",
-      "description": "No infrastructure-as-code. No Terraform, CloudFormation, CDK, Helm charts, or Kustomize. All infrastructure manually provisioned.",
-      "gap": "0% IaC coverage \u2014 all infrastructure is ClickOps. No reproducibility, no audit trail.",
-      "recommendation": "Define all infrastructure in Terraform or CDK. Start with the target AWS environment before migrating the application.",
+      "title": "Infrastructure as Code Coverage",
+      "description": "Zero IaC. No Terraform, CloudFormation, CDK, or Helm charts. All infrastructure manually provisioned.",
+      "gap": "0% IaC coverage. All infrastructure created manually.",
+      "recommendation": "Define all infrastructure in AWS CDK or Terraform \u2014 compute, networking, database.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -360,16 +327,16 @@
       "question_id": "INF-Q11",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "CI/CD Automation \u2014 no CI/CD pipeline",
-      "description": "No CI/CD pipeline. No GitHub Actions, GitLab CI, Jenkins, or CodeBuild. Deployment is manual WAR upload to WebLogic admin console.",
-      "gap": "No CI/CD \u2014 all deployments are manual. No automated build, test, or deploy.",
-      "recommendation": "Implement CI/CD pipeline (CodePipeline + CodeBuild) with build, test, and deploy stages.",
+      "title": "CI/CD Automation",
+      "description": "No CI/CD pipeline. Manual WAR upload via WebLogic admin console. Build via Apache Ant with committed jars.",
+      "gap": "No CI/CD \u2014 all deployments manual. No automated build, test, or deploy.",
+      "recommendation": "Implement CI/CD pipeline with automated build, test, deploy, and rollback stages.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": ".",
+        "file": "README.md",
         "lines": null
       },
       "mod_metadata": {
@@ -383,21 +350,21 @@
       "question_id": "APP-Q1",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Programming Languages \u2014 Java 5 with Struts 1.3 (EOL)",
-      "description": "Java 5 with Apache Struts 1.3 framework. All three axes are EOL: Java 5 (2009), Struts 1.3 (2013), WebLogic 10.3. AWS SDK requires Java 8+ minimum.",
-      "gap": "Language version cannot run the AWS SDK. Framework and runtime are EOL with no upgrade path without migration.",
-      "recommendation": "Upgrade to Java 17+ with Spring Boot 3.x or Quarkus. Adopt AWS SDK for Java v2. Replace Ant with Maven/Gradle.",
+      "title": "Programming Languages",
+      "description": "Java 5 with Apache Struts 1.3 (EOL since 2013). Compound legacy: ancient language version, defunct framework, no AWS SDK.",
+      "gap": "Language version (Java 5), framework (Struts 1.3), and SDK (none) all severely regressed.",
+      "recommendation": "Migrate to Java 17+ with Spring Boot 3.x and AWS SDK v2.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "src/com/acme/loan/LoanAction.java",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
+        "internal_score": 2,
+        "score_label": "Needs Work",
         "archetype_calibrated": false,
         "core_question": false
       }
@@ -406,10 +373,10 @@
       "question_id": "APP-Q2",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Monolith vs Microservices \u2014 tightly-coupled monolith",
-      "description": "Tightly-coupled monolith with no module boundaries. Single class contains business logic, data access, and request routing. Mutable shared state in ActionForm.",
-      "gap": "Tightly-coupled monolith with pervasive shared state. No module boundaries, no separation of concerns.",
-      "recommendation": "See Decomposition Strategy. Containerize first, then extract loan-pricing and loan-submission as separate services.",
+      "title": "Monolith vs Microservices",
+      "description": "Tightly-coupled monolith. Single Action class handles all logic, data access, and flow control. Hardcoded credentials, direct JDBC, no abstraction.",
+      "gap": "Pervasive coupling \u2014 presentation, business logic, and data access all in one class. No separation of concerns.",
+      "recommendation": "Rewrite with Hexagonal Architecture. Separate loan pricing, submission, and persistence into bounded contexts.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -429,10 +396,10 @@
       "question_id": "APP-Q3",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Async vs Sync Communication \u2014 all synchronous",
-      "description": "All communication is synchronous HTTP with no async patterns. Struts action handles requests synchronously with synchronous JDBC operations.",
-      "gap": "All communication synchronous HTTP with no async patterns. State changes not propagated to downstream systems.",
-      "recommendation": "Introduce async messaging (SNS/SQS/EventBridge) for state-change events when decomposing.",
+      "title": "Async vs Sync Communication",
+      "description": "All communication synchronous HTTP. Struts Action does synchronous DB INSERT and returns JSP forward. No async patterns.",
+      "gap": "All communication synchronous with no capability to decouple loan submission from downstream processing.",
+      "recommendation": "Introduce async patterns \u2014 publish loan-submitted event to SQS/EventBridge for downstream consumers.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -452,14 +419,14 @@
       "question_id": "APP-Q4",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Long-Running Process Handling \u2014 all operations synchronous",
-      "description": "All operations synchronous regardless of duration. No background job framework, no async/polling patterns, no status tracking.",
-      "gap": "No infrastructure for async job processing. Synchronous-only pattern will create timeout risks as workflow grows.",
-      "recommendation": "Introduce async job processing (SQS + Lambda workers or Step Functions) for operations exceeding 30 seconds.",
+      "title": "Long-Running Process Handling",
+      "description": "All operations synchronous with no infrastructure for async job processing. No background job framework, no status polling.",
+      "gap": "All operations synchronous regardless of duration. No async job infrastructure.",
+      "recommendation": "Implement async job processing for operations exceeding 30s using SQS + Lambda or Step Functions.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
         "lines": null
@@ -475,14 +442,14 @@
       "question_id": "APP-Q5",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "API Versioning Strategy \u2014 no versioning",
-      "description": "No API versioning. Struts action mapped to /loan with no version prefix, no Accept-Version headers.",
-      "gap": "No versioning \u2014 breaking changes deployed directly to all consumers.",
-      "recommendation": "Implement URL-path versioning (/v1/loans/) from day one when building the new API.",
+      "title": "API Versioning Strategy",
+      "description": "No API versioning. Struts action mapping uses /loan with no version prefix.",
+      "gap": "No versioning \u2014 changes would break all consumers simultaneously.",
+      "recommendation": "Implement URL path versioning (e.g., /v1/loans) with backward compatibility guarantees.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 2,
+      "phase": 3,
       "evidence": {
         "file": "WEB-INF/struts-config.xml",
         "lines": null
@@ -498,9 +465,9 @@
       "question_id": "APP-Q6",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Service Discovery \u2014 all endpoints hard-coded",
-      "description": "All service endpoints hard-coded in Java source. Database host hardcoded as constant. No service registry or environment variable indirection.",
-      "gap": "All service endpoints hard-coded. Cannot change database host without recompiling.",
+      "title": "Service Discovery",
+      "description": "Database endpoint hardcoded in source code. No service discovery, no environment variables for endpoints.",
+      "gap": "All service endpoints hard-coded in application code as compile-time constants.",
       "recommendation": "Externalize endpoints to environment variables or AWS Systems Manager Parameter Store.",
       "severity": "Medium",
       "priority": "P2",
@@ -508,7 +475,7 @@
       "phase": 2,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "22"
+        "lines": null
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -521,14 +488,14 @@
       "question_id": "DATA-Q1",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Unstructured Data Storage \u2014 no managed object storage",
-      "description": "No unstructured data storage capability. No S3, no document management, no file storage for loan documents.",
-      "gap": "No managed object storage for unstructured data (loan contracts, ID verification, income statements).",
-      "recommendation": "Implement S3 for loan document storage with Textract for automated document parsing.",
+      "title": "Unstructured Data Storage",
+      "description": "No managed object storage. No S3 buckets, no document parsing pipeline. Loan data stored in Oracle only.",
+      "gap": "No managed object storage for unstructured data.",
+      "recommendation": "Implement S3 for document storage with Amazon Textract for loan document parsing.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
-      "phase": 2,
+      "phase": 1,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
         "lines": null
@@ -544,17 +511,17 @@
       "question_id": "DATA-Q2",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Unified Data Access Layer \u2014 raw JDBC scattered in business logic",
-      "description": "No data access layer. Raw JDBC in Action class with DriverManager.getConnection() and string-concatenated SQL. No DAO, no ORM, no connection pooling.",
-      "gap": "Database queries directly in business logic with no abstraction. SQL injection vulnerability present.",
-      "recommendation": "Introduce data access layer using Spring Data JPA or repository pattern. Use parameterized queries.",
+      "title": "Unified Data Access Layer",
+      "description": "Database queries directly embedded in Action class via raw JDBC with string-concatenated SQL. SQL injection vulnerability present.",
+      "gap": "Database imports and queries scattered with no pattern. Direct JDBC with string concatenation.",
+      "recommendation": "Implement repository/DAO layer with Spring Data JPA and parameterized queries.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "43-52"
+        "lines": null
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -567,10 +534,10 @@
       "question_id": "DATA-Q3",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Database Engine Version and EOL \u2014 Oracle 11g past EOL",
-      "description": "Oracle 11g well past end-of-life. No version pinning in IaC. No documented version-update procedure.",
-      "gap": "Database engine at EOL with unpatched security vulnerabilities and no lifecycle planning.",
-      "recommendation": "Migrate to Aurora PostgreSQL 15+ or RDS PostgreSQL 15+ using AWS SCT and DMS.",
+      "title": "Database Engine Version and EOL",
+      "description": "Oracle 11g is well past end-of-life. No version pinning in IaC (no IaC exists). Security patches unavailable.",
+      "gap": "Database engine at EOL with no version management or update procedure.",
+      "recommendation": "Migrate to Aurora PostgreSQL or RDS PostgreSQL using AWS SCT and DMS.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -590,17 +557,17 @@
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Encryption at Rest \u2014 no encryption configured",
-      "description": "No encryption at rest. Oracle 11g connection uses unencrypted JDBC. Sensitive financial data stored without encryption.",
-      "gap": "No encryption at rest for sensitive financial data (loan applications, applicant names, rates).",
-      "recommendation": "Enable encryption at rest with customer-managed KMS key on RDS/Aurora when migrating.",
+      "title": "Encryption at Rest",
+      "description": "No encryption at rest. Oracle 11g has no KMS integration. Sensitive loan data stored without encryption.",
+      "gap": "No encryption at rest for any data store.",
+      "recommendation": "Enable encryption at rest with customer-managed KMS keys when migrating to RDS/Aurora.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "22"
+        "lines": null
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -613,10 +580,10 @@
       "question_id": "SEC-Q3",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "API Authentication \u2014 no authentication evidence",
-      "description": "No API authentication configuration in repository. Code uses request.getRemoteUser() but no security constraints or auth config visible.",
-      "gap": "No authentication configuration. Endpoints may be open.",
-      "recommendation": "Implement token-based authentication (OAuth2/JWT) via API Gateway authorizers or Cognito.",
+      "title": "API Authentication",
+      "description": "Container-managed auth (WebLogic) via request.getRemoteUser(). No OAuth2/JWT token-based authentication.",
+      "gap": "No token-based authentication. Auth is container-managed with static credentials.",
+      "recommendation": "Implement OAuth2/JWT via Amazon Cognito with Bearer token validation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -626,8 +593,8 @@
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
+        "internal_score": 2,
+        "score_label": "Needs Work",
         "archetype_calibrated": false,
         "core_question": false
       }
@@ -636,16 +603,16 @@
       "question_id": "SEC-Q4",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Centralized Identity Integration \u2014 no IdP integration",
-      "description": "No centralized identity provider integration. No federation, no SSO, no OIDC/SAML. Relies on WebLogic container-managed auth if configured externally.",
-      "gap": "Application manages its own authentication with no external IdP integration or SSO.",
-      "recommendation": "Integrate with Amazon Cognito or enterprise IdP for centralized authentication and SSO.",
+      "title": "Centralized Identity Integration",
+      "description": "No centralized IdP integration. Authentication managed entirely by WebLogic container with no external IdP.",
+      "gap": "Application manages own authentication with no external IdP integration or SSO.",
+      "recommendation": "Integrate with Amazon Cognito or external IdP for centralized auth with SSO.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "src/com/acme/loan/LoanAction.java",
+        "file": "WEB-INF/struts-config.xml",
         "lines": null
       },
       "mod_metadata": {
@@ -659,17 +626,17 @@
       "question_id": "SEC-Q5",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Secrets Management \u2014 CRITICAL: plaintext credentials in source",
-      "description": "Plaintext database credentials hardcoded in LoanAction.java: DB_USER='loan_app', DB_PASS='loanApp2010'. Committed to version control.",
-      "gap": "Plaintext credentials in source code \u2014 deployment-blocking security issue.",
-      "recommendation": "Immediate: rotate credentials. Store in AWS Secrets Manager with automated rotation. Audit git history.",
+      "title": "Secrets Management",
+      "description": "CRITICAL: Database credentials hardcoded in source code \u2014 DB_PASS = 'loanApp2010' visible in LoanAction.java. Password committed to version control.",
+      "gap": "Plaintext credentials in source code. Password exposed in VCS history.",
+      "recommendation": "Immediately rotate exposed credential. Migrate all secrets to AWS Secrets Manager with automated rotation.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "23-24"
+        "lines": null
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -682,10 +649,10 @@
       "question_id": "SEC-Q6",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Compute Hardening and Patching \u2014 no patching, all EOL",
-      "description": "No patching strategy. All components EOL: Solaris 10, WebLogic 10.3, Java 5, Struts 1.3 (known CVEs).",
-      "gap": "No patching strategy, no vulnerability scanning. All runtime components EOL with unpatched vulnerabilities.",
-      "recommendation": "Use hardened base images (Amazon Linux 2023) when containerizing. Enable Amazon Inspector and Trivy.",
+      "title": "Compute Hardening and Patching",
+      "description": "No patching strategy. Solaris 10, WebLogic 10.3, Java 5 \u2014 all EOL. No vulnerability scanning. Jars committed without version manifest.",
+      "gap": "No patching, no vulnerability scanning. All runtime components past EOL.",
+      "recommendation": "Use hardened container images, implement vulnerability scanning, add Dependabot for dependencies.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -705,17 +672,17 @@
       "question_id": "SEC-Q7",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Application Security Pipeline \u2014 no security scanning",
-      "description": "No security scanning tools. No CI/CD pipeline for integration. Known SQL injection vulnerability exists undetected.",
-      "gap": "No SAST, no dependency scanning, no container scanning. SQL injection vulnerability undetected.",
-      "recommendation": "Integrate SonarQube/CodeGuru for SAST and Snyk for dependency scanning in CI/CD pipeline.",
+      "title": "Application Security Pipeline",
+      "description": "No security scanning. No CI/CD pipeline to integrate into. SQL injection vulnerability undetected in codebase.",
+      "gap": "No SAST, no DAST, no dependency scanning. Known SQL injection exists.",
+      "recommendation": "Integrate SAST (SonarQube, Semgrep) and dependency scanning in CI/CD pipeline.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "src/com/acme/loan/LoanAction.java",
-        "lines": "47-49"
+        "lines": null
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -728,10 +695,10 @@
       "question_id": "OPS-Q1",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Distributed Tracing \u2014 no tracing instrumented",
-      "description": "No distributed tracing. No OpenTelemetry, no X-Ray, no trace ID propagation.",
-      "gap": "No distributed tracing. Cannot trace requests or identify bottlenecks.",
-      "recommendation": "Instrument with AWS X-Ray SDK or OpenTelemetry when modernizing.",
+      "title": "Distributed Tracing",
+      "description": "No distributed tracing. No X-Ray, no OpenTelemetry, no trace propagation.",
+      "gap": "No tracing instrumented. No ability to trace requests or diagnose issues.",
+      "recommendation": "Instrument with AWS X-Ray or OpenTelemetry when migrating to modern stack.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -751,10 +718,10 @@
       "question_id": "OPS-Q2",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "SLO Definitions \u2014 no SLOs defined",
-      "description": "No SLOs defined. No CloudWatch alarms, no latency thresholds, no error rate monitoring.",
+      "title": "SLO Definitions",
+      "description": "No SLOs defined. No CloudWatch alarms, no latency targets, no error budget tracking.",
       "gap": "No SLOs \u2014 no formal definition of acceptable service levels.",
-      "recommendation": "Define SLOs for availability, latency p99, and error rate. Implement CloudWatch alarms.",
+      "recommendation": "Define SLOs for loan quote response time and submission success rate.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -774,10 +741,10 @@
       "question_id": "OPS-Q3",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Business Metrics \u2014 no custom metrics",
-      "description": "No custom metrics. No business metric publication for loan operations.",
-      "gap": "No custom metrics \u2014 cannot measure business outcomes.",
-      "recommendation": "Publish CloudWatch custom metrics for loans_quoted, loans_submitted, average_principal.",
+      "title": "Business Metrics",
+      "description": "No custom metrics. No business outcome tracking (loan submissions, approval rates).",
+      "gap": "No custom metrics \u2014 no visibility into business outcomes.",
+      "recommendation": "Implement CloudWatch metrics for loans quoted, submitted, average principal.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -797,10 +764,10 @@
       "question_id": "OPS-Q4",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Anomaly Detection and Alerting \u2014 no alerting",
-      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection, no incident notification.",
-      "gap": "No alerting \u2014 failures detected only when users report them.",
-      "recommendation": "Configure CloudWatch alarms on error rates, latency, and availability when deployed to AWS.",
+      "title": "Anomaly Detection and Alerting",
+      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection.",
+      "gap": "No alerting. Failures detected only when users report them.",
+      "recommendation": "Implement CloudWatch anomaly detection on error rates and latency.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -820,10 +787,10 @@
       "question_id": "OPS-Q6",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Integration Testing \u2014 no automated tests",
-      "description": "No integration tests. No unit tests. No automated tests of any kind. Testing is a shared UAT environment (manual only).",
-      "gap": "No automated tests at all. No regression safety net.",
-      "recommendation": "Introduce JUnit 5 for unit and integration tests as prerequisite before modernization.",
+      "title": "Integration Testing",
+      "description": "No automated tests of any kind. README states: 'No unit tests; testing is a shared UAT environment.'",
+      "gap": "No tests whatsoever. Extreme regression risk during any modification.",
+      "recommendation": "Implement unit tests (JUnit 5), integration tests, and API tests. Run in CI pipeline.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -843,10 +810,10 @@
       "question_id": "OPS-Q8",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Observability Ownership \u2014 no observability infrastructure",
-      "description": "No observability ownership. No CODEOWNERS, no dashboards, no alarm ownership, no monitoring infrastructure.",
-      "gap": "No observability ownership \u2014 monitoring entirely absent.",
-      "recommendation": "Establish per-service dashboards and alarm ownership when building AWS deployment.",
+      "title": "Observability Ownership",
+      "description": "No observability ownership. No dashboards, no alarms with named owners, no CODEOWNERS.",
+      "gap": "No observability ownership \u2014 monitoring is entirely absent.",
+      "recommendation": "Define observability ownership. Assign dashboard and alarm ownership.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -870,7 +837,7 @@
       "title": "High Availability and Fault Isolation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no deployed workload to assess HA for"
+      "reason": "has_deployed_workload=false \u2014 no deployed workload definition in repo to evaluate HA against."
     },
     {
       "question_id": "DATA-Q4",
@@ -878,7 +845,7 @@
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 no stored procedures or proprietary SQL; all business logic in application layer"
+      "reason": "Score 4 \u2014 No stored procedures, triggers, or proprietary SQL. All business logic in application layer. Standard SQL only."
     },
     {
       "question_id": "SEC-Q1",
@@ -886,7 +853,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_iac_provisioning_aws_resources=false \u2014 no IaC in repo, CloudTrail is account-level"
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS IaC in repo. CloudTrail is an account-level concern."
     },
     {
       "question_id": "OPS-Q5",
@@ -894,7 +861,7 @@
       "title": "Deployment Strategy",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no deployment manifests in repo"
+      "reason": "has_deployed_workload=false \u2014 no deployment artifacts in repo to assess deployment strategy."
     },
     {
       "question_id": "OPS-Q7",
@@ -902,7 +869,7 @@
       "title": "Incident Response Automation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no running system to define incident response for"
+      "reason": "has_deployed_workload=false \u2014 no running system defined in repo for incident response."
     },
     {
       "question_id": "OPS-Q9",
@@ -910,7 +877,7 @@
       "title": "Resource Tagging Governance",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS resources to tag"
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS resources provisioned to tag."
     }
   ],
   "pathways": [
@@ -920,7 +887,7 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "High",
-      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) AND INF-Q1=1 < 3, APP-Q3=1 < 3, APP-Q4=1 < 3 (supporting)",
+      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) + INF-Q1=1, APP-Q3=1, APP-Q4=1 (supporting \u2014 all met)",
       "triggering_questions": [
         {
           "question_id": "APP-Q2",
@@ -930,7 +897,7 @@
         {
           "question_id": "INF-Q1",
           "score": 1,
-          "note": "All compute on bare-metal \u2014 supporting trigger met"
+          "note": "All compute on EOL WebLogic/Solaris \u2014 supporting trigger met"
         },
         {
           "question_id": "APP-Q3",
@@ -940,29 +907,28 @@
         {
           "question_id": "APP-Q4",
           "score": 1,
-          "note": "All operations synchronous \u2014 supporting trigger met"
+          "note": "No async job processing \u2014 supporting trigger met"
         }
       ],
       "detail": {
-        "current_state": "Tightly-coupled Struts 1.3 monolith on bare-metal Solaris/WebLogic",
-        "aws_services": [
+        "current_state": "Tightly-coupled monolith on Struts 1.3/Java 5/WebLogic 10.3",
+        "recommended_services": [
           "Lambda",
           "API Gateway",
           "Step Functions",
           "EventBridge",
           "ECS",
-          "EKS",
           "Fargate"
         ],
-        "patterns": [
+        "recommended_patterns": [
           "Strangler Fig",
           "Anti-corruption Layer",
           "Hexagonal Architecture"
         ],
         "immediate_actions": [
-          "Containerize application",
-          "Extract loan pricing as separate service",
-          "Introduce event-driven communication"
+          "Rewrite on modern framework",
+          "Containerize",
+          "Introduce event-driven patterns"
         ]
       },
       "not_triggered_reason": null
@@ -973,27 +939,27 @@
       "status": "Triggered",
       "priority": "Medium",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q1=1 < 3 AND no container definitions found in discovery",
+      "key_trigger_criteria": "INF-Q1=1 < 3 + no container definitions found; compute is WebLogic/Solaris (not Lambda/Fargate/ECS)",
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
           "score": 1,
-          "note": "All compute on bare-metal Solaris \u2014 no managed compute"
+          "note": "EC2/VM-based compute with no container definitions"
         }
       ],
       "detail": {
-        "current_state": "WAR on WebLogic 10.3 / Solaris 10, no container definitions",
-        "aws_services": [
+        "current_state": "WebLogic 10.3 on Solaris 10 \u2014 proprietary app server on EOL OS",
+        "recommended_services": [
           "ECS",
           "Fargate",
           "ECR",
           "App Runner"
         ],
-        "migration_approach": "Lift-and-containerize: package WAR in Tomcat container, then refactor",
+        "migration_approach": "Refactor-then-containerize (framework migration required first)",
         "immediate_actions": [
-          "Create Dockerfile with Tomcat base",
-          "Externalize configuration",
-          "Upgrade Java to 17+"
+          "Migrate from Struts 1.x to Spring Boot",
+          "Create Dockerfile",
+          "Deploy on ECS/Fargate"
         ]
       },
       "not_triggered_reason": null
@@ -1004,16 +970,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 \u2014 no stored procedures, primary trigger not met (DATA-Q4 must be < 3)",
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures/proprietary SQL) \u2014 primary trigger threshold not met despite Oracle commercial DB",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
           "score": 4,
-          "note": "No stored procedures \u2014 primary trigger threshold not met"
+          "note": "DATA-Q4=4 meets threshold; no proprietary SQL blocking migration"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "DATA-Q4 scores 4 (no stored procedures or proprietary SQL). Although Oracle is a commercial DB, the pathway requires DATA-Q4 < 3 (stored procedure coupling) as the primary trigger. Without stored procedure coupling, the migration blocker is operational (self-managed DB) not structural (logic locked in PL/SQL)."
+      "not_triggered_reason": "DATA-Q4=4 \u2014 no stored procedures or proprietary SQL constructs. While Oracle is a commercial DB, the standard SQL used means database migration does not require the Open Source pathway's stored procedure extraction approach. Database migration is covered by Move to Managed Databases."
     },
     {
       "id": "move-to-managed-databases",
@@ -1021,7 +987,7 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q2=1 < 3 (primary), DATA-Q3=1 < 3 (supporting)",
+      "key_trigger_criteria": "INF-Q2=1 < 3 (primary) + DATA-Q3=1 < 3 (supporting)",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
@@ -1035,21 +1001,18 @@
         }
       ],
       "detail": {
-        "current_state": "Self-managed Oracle 11g on-premises (dbprod01:1521:LOANDB)",
-        "aws_services": [
+        "current_state": "Self-managed Oracle 11g (EOL) accessed via direct JDBC at dbprod01:1521",
+        "recommended_services": [
           "Aurora PostgreSQL",
           "RDS PostgreSQL",
           "DMS",
           "SCT"
         ],
-        "migration_tools": [
-          "AWS Schema Conversion Tool",
-          "AWS Database Migration Service"
-        ],
+        "migration_approach": "Standard SQL means straightforward engine migration via DMS",
         "immediate_actions": [
-          "Assess schema with SCT",
-          "Plan migration to Aurora PostgreSQL",
-          "Update JDBC connection to use IAM auth"
+          "Run AWS SCT for schema analysis",
+          "Set up DMS replication",
+          "Migrate to Aurora PostgreSQL"
         ]
       },
       "not_triggered_reason": null
@@ -1060,16 +1023,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No data processing workloads exist \u2014 contextual guard blocks pathway",
+      "key_trigger_criteria": "No data processing workloads detected (simple CRUD loan app); contextual guard blocks pathway",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
           "score": 1,
-          "note": "Score < 3 but contextual guard blocks: no streaming/ETL/analytics artifacts found"
+          "note": "INF-Q4 < 3 but no analytics/streaming workloads exist \u2014 contextual guard blocks"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "No evidence of data processing workloads in the repository. The application is a simple loan calculator with CRUD operations \u2014 no streaming, ETL, data pipelines, or analytics processing."
+      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found during discovery. Application is a simple loan form CRUD \u2014 no data processing responsibilities."
     },
     {
       "id": "move-to-modern-devops",
@@ -1077,38 +1040,37 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3 (both primary triggers met), OPS-Q6=1 < 3 (supporting)",
+      "key_trigger_criteria": "INF-Q10=1 < 3 + INF-Q11=1 < 3 (both primary triggers met)",
       "triggering_questions": [
         {
           "question_id": "INF-Q10",
           "score": 1,
-          "note": "No IaC \u2014 0% coverage \u2014 primary trigger met"
+          "note": "Zero IaC \u2014 primary trigger met"
         },
         {
           "question_id": "INF-Q11",
           "score": 1,
-          "note": "No CI/CD pipeline \u2014 primary trigger met"
+          "note": "No CI/CD \u2014 primary trigger met"
         },
         {
           "question_id": "OPS-Q6",
           "score": 1,
-          "note": "No integration tests \u2014 supporting trigger met"
+          "note": "No tests \u2014 supporting trigger met"
         }
       ],
       "detail": {
-        "current_state": "No IaC, no CI/CD, no automated tests. Manual WAR upload.",
-        "aws_services": [
+        "current_state": "No IaC, no CI/CD, no automated testing. Manual WAR upload.",
+        "recommended_services": [
           "CodeBuild",
           "CodePipeline",
           "CodeDeploy",
-          "CloudFormation",
-          "CDK"
+          "CDK",
+          "CloudFormation"
         ],
         "immediate_actions": [
-          "Migrate to Maven/Gradle",
           "Create CI/CD pipeline",
-          "Define IaC for target environment",
-          "Add unit and integration tests"
+          "Define infrastructure in CDK/Terraform",
+          "Add automated test suite"
         ]
       },
       "not_triggered_reason": null
@@ -1119,11 +1081,20 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No AI/agent intent evidenced in the repository",
+      "key_trigger_criteria": "No AI/agent intent evidenced in repository (no AI-related signal terms in dependencies, source, configuration, or documentation)",
       "triggering_questions": [],
       "detail": null,
-      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository. README describes a legacy loan pricing calculator \u2014 no mention of agentic, LLM, machine learning, Bedrock, generative AI, or related terms."
     }
   ],
+  "decomposition_strategy": {
+    "recommended_approach": "Conditional / Adaptive",
+    "rationale": "Small codebase (single Action class) with extreme technology debt. Rewrite on modern framework, containerize, then evaluate further decomposition based on business needs.",
+    "patterns": [
+      "Anti-corruption Layer",
+      "Hexagonal Architecture"
+    ],
+    "effort_estimate": "Medium \u2014 3-6 months for full modernization"
+  },
   "repo_name": "legacy-loan-calculator"
 }

@@ -2,14 +2,14 @@
   "analysis_type": "mod",
   "metadata": {
     "repository": "legacy-partner-soap",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2026-08-12",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code with a deployable entry point (@WebService JAX-WS annotation on PurchaseOrderService.java) and a WSDL contract present. Single service with database access via JDBC.",
+    "repo_type_justification": "Application source code (Java) with a deployable entry point (@WebService JAX-WS endpoint deployed on JBoss AS 5.1) and an API contract (WSDL). Classified as application.",
     "service_archetype": "stateful-crud",
-    "service_archetype_source": "auto-detected",
-    "archetype_justification": "The service performs database writes (INSERT INTO partner_orders) via JDBC, owns persistent state in Oracle 11g, and exposes a SOAP endpoint for partner order submission.",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "The service writes to a persistent data store (Oracle 11g via JDBC INSERT into partner_orders) through a synchronous SOAP endpoint. It owns its data and exposes a write operation. Classified as stateful-crud.",
     "priority": null,
     "tags": [],
     "context": null,
@@ -23,19 +23,6 @@
     }
   },
   "overall_score": 1.22,
-  "classification": {
-    "tier": "Remediation Required",
-    "high_count": 11,
-    "medium_count": 20,
-    "low_count": 0,
-    "rule_matched": "2-11 High \u2192 Remediation Required",
-    "classification_consistency_check": {
-      "status": "divergent",
-      "score_band": "Not Ready",
-      "count_tier": "Remediation Required",
-      "reason": "Score 1.22 yields Not Ready band but 11 High findings (below >=12 threshold) resolves to Remediation Required tier. Divergence arises because 20 non-core questions score 1 (Medium severity, not High), keeping High count at 11 while dragging overall numeric score below 1.5. The count-based tier (Remediation Required) is authoritative per the classification table."
-    }
-  },
   "categories": [
     {
       "category_id": "INF",
@@ -73,88 +60,70 @@
       "severity_status": "Critical"
     }
   ],
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 11,
+    "medium_count": 20,
+    "low_count": 0,
+    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "classification_consistency_check": {
+      "status": "divergent",
+      "score_band": "Not Ready",
+      "count_tier": "Remediation Required",
+      "reason": "Score 1.22 yields Not Ready band but 11 High findings (below the 12 threshold) yield Remediation Required tier. Five surface-gated questions (INF-Q9, SEC-Q1, OPS-Q5, OPS-Q7, OPS-Q9) were excluded from evaluation because has_deployed_workload=false and has_iac_provisioning_aws_resources=false. If evaluated, these would likely increase High count to \u226512, aligning both metrics to Not Ready."
+    }
+  },
   "top_gaps": [
     {
-      "question_id": "INF-Q10",
-      "title": "Infrastructure as Code Coverage",
-      "score": 1,
-      "gap": "No IaC \u2014 all infrastructure manually created",
-      "impact": "Blocks reproducible deployments and all other modernization efforts"
-    },
-    {
+      "rank": 1,
       "question_id": "SEC-Q5",
       "title": "Secrets Management",
       "score": 1,
-      "gap": "Hardcoded database credentials in source code",
-      "impact": "Critical security vulnerability; blocks any production deployment"
+      "gap": "Hardcoded database credentials (DB_PASS = \"partner2009\") in source code",
+      "impact": "Critical security vulnerability; credentials exposed in version control history"
     },
     {
+      "rank": 2,
+      "question_id": "INF-Q10",
+      "title": "Infrastructure as Code Coverage",
+      "score": 1,
+      "gap": "Zero IaC \u2014 all infrastructure manually created",
+      "impact": "No reproducibility, no disaster recovery, no environment consistency"
+    },
+    {
+      "rank": 3,
       "question_id": "INF-Q11",
       "title": "CI/CD Automation",
       "score": 1,
       "gap": "No CI/CD pipeline \u2014 all deployments manual",
-      "impact": "Blocks automated testing, security scanning, and safe deployments"
+      "impact": "No automated quality gates, slow and error-prone releases"
     },
     {
+      "rank": 4,
       "question_id": "APP-Q2",
       "title": "Monolith vs Microservices",
       "score": 1,
-      "gap": "Single-class monolith with all logic in one method",
-      "impact": "Prevents independent scaling, limits team autonomy"
+      "gap": "Single-method implementation with zero separation of concerns",
+      "impact": "Cannot scale, test, or evolve independently; all logic in one method"
     },
     {
-      "question_id": "INF-Q1",
-      "title": "Managed Compute",
+      "rank": 5,
+      "question_id": "INF-Q2",
+      "title": "Managed Databases",
       "score": 1,
-      "gap": "JBoss AS 5.1 on RHEL 6 \u2014 no managed compute",
-      "impact": "EOL runtime with no scaling, no patching, no managed services"
+      "gap": "Self-managed Oracle 11g (EOL) on-premises with hardcoded JDBC",
+      "impact": "Manual patching, no failover, no automated backups, EOL engine"
     }
   ],
-  "decomposition_strategy": {
-    "recommended_approach": "Strangler Fig (Parallel Track)",
-    "rationale": "Given the extreme simplicity of this service (single operation, single table, ~50 lines of logic), a full Strangler Fig migration is recommended. Build a new modern service alongside the SOAP endpoint while migrating partners incrementally.",
-    "approaches": [
-      {
-        "name": "Strengthen as Modular Monolith",
-        "applicability": "Not applicable \u2014 the service is already minimal; there are no modules to strengthen.",
-        "effort": "Low",
-        "recommended": false
-      },
-      {
-        "name": "Strangler Fig (Parallel Track)",
-        "applicability": "Build a new modern service (REST/event-driven) alongside the SOAP endpoint. Route new partners to the new API; migrate existing partners incrementally.",
-        "effort": "Medium",
-        "recommended": true
-      },
-      {
-        "name": "Conditional / Adaptive",
-        "applicability": "Containerize first then rewrite. However, JBoss 5.1/Java 6 is too obsolete to containerize without major rework.",
-        "effort": "Medium",
-        "recommended": false
-      },
-      {
-        "name": "Big-Bang Rewrite",
-        "applicability": "Acceptable given minimal scope \u2014 but frame as new service not rewrite.",
-        "effort": "Low",
-        "recommended": false
-      }
-    ],
-    "patterns": [
-      "Anti-corruption Layer",
-      "Event Sourcing",
-      "Hexagonal Architecture"
-    ],
-    "effort_estimate": "Medium (3-6 months total including partner migration)"
-  },
   "findings": [
     {
       "question_id": "INF-Q1",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "No managed compute \u2014 JBoss AS 5.1 on RHEL 6",
-      "description": "All compute runs on JBoss AS 5.1 deployed on RHEL 6 with Java 6. Both the application server and operating system are past end-of-life. No managed container orchestration, no serverless, no Fargate.",
-      "gap": "No managed compute services in use. The entire stack is self-managed and EOL.",
-      "recommendation": "Migrate to managed compute: containerize on ECS/Fargate or rewrite as a Lambda function behind API Gateway. Requires upgrading from Java 6 to Java 17+ and from JBoss to a modern runtime first.",
+      "title": "Managed Compute",
+      "description": "All compute runs on JBoss AS 5.1 deployed on RHEL 6 (both EOL). No managed container orchestration (ECS/EKS), no serverless (Lambda), no Fargate.",
+      "gap": "Zero managed compute adoption. The entire runtime stack is end-of-life with no path to managed services.",
+      "recommendation": "Rewrite the service targeting ECS/Fargate or Lambda. Given the single-endpoint nature, Lambda behind API Gateway is the most cost-effective option.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -174,17 +143,17 @@
       "question_id": "INF-Q2",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Self-managed Oracle 11g database",
-      "description": "Oracle 11g accessed via direct JDBC to jdbc:oracle:thin:@10.0.9.30:1521:PARTDB. The database is self-managed with no managed database services in use.",
-      "gap": "Database is entirely self-managed with no automated failover, no managed backups, and no scaling capabilities. Oracle 11g is past EOL.",
-      "recommendation": "Migrate to Amazon RDS PostgreSQL or Aurora PostgreSQL. The schema is simple (single table) with no stored procedures, making engine migration straightforward via AWS DMS and SCT.",
+      "title": "Managed Databases",
+      "description": "Database is self-managed Oracle 11g accessed via hardcoded JDBC connection string. No managed database services (RDS, Aurora, DynamoDB) in use. Oracle 11g is past EOL.",
+      "gap": "Entirely self-managed database with no automated failover, no managed patching, no automated backups visible.",
+      "recommendation": "Migrate to Amazon RDS for PostgreSQL or Aurora PostgreSQL. The SQL used is standard INSERT \u2014 no proprietary Oracle SQL detected, making migration straightforward.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "21-23"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -197,17 +166,17 @@
       "question_id": "INF-Q3",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "No workflow orchestration",
-      "description": "No workflow orchestration service in use. The single operation is entirely hardcoded in a single method. For the stateful-crud archetype, all workflow logic is hardcoded in application code.",
-      "gap": "No dedicated workflow orchestration. All logic is in a single method with no structure for multi-step operations.",
-      "recommendation": "When modernizing, implement AWS Step Functions for any multi-step order processing workflows.",
+      "title": "Workflow Orchestration",
+      "description": "No workflow orchestration service in use. The entire business operation is implemented as sequential inline code in a single method with a try/catch block.",
+      "gap": "All logic is hardcoded in application code with no orchestration, no retry logic, no error recovery beyond returning raw exception text.",
+      "recommendation": "When rewriting, implement order processing as a Step Functions workflow if additional steps are needed (validation, partner notification, fulfillment).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "27-46"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -220,10 +189,10 @@
       "question_id": "INF-Q4",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "No async messaging or streaming",
-      "description": "No messaging or streaming infrastructure. Partner order submissions are synchronous SOAP calls that block until the database insert completes. For the stateful-crud archetype, there is no messaging where state changes cross service boundaries.",
-      "gap": "No async messaging for cross-service communication. Order events are not propagated to other systems.",
-      "recommendation": "Implement managed messaging (SQS/SNS or EventBridge) to decouple order submission from downstream processing.",
+      "title": "Async Messaging and Streaming",
+      "description": "No messaging or streaming infrastructure exists. The service performs a synchronous SOAP request to DB INSERT to synchronous response with no event emission on state changes.",
+      "gap": "No messaging where state changes cross service boundaries. Order creation events are not published.",
+      "recommendation": "Introduce SQS or EventBridge for order creation events. Publish events that downstream consumers can process asynchronously.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -243,10 +212,10 @@
       "question_id": "INF-Q5",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "No network security configuration",
-      "description": "No network security configuration exists in the repository. No VPC, security groups, NACLs, or network segmentation. Service exposed over plain HTTP.",
-      "gap": "No IaC-defined network security. Service exposed over plain HTTP with no verifiable network isolation.",
-      "recommendation": "Define network infrastructure in IaC: VPC with private subnets, least-privilege security groups, TLS termination at ALB or API Gateway.",
+      "title": "Network Security",
+      "description": "No network security configuration exists. The WSDL specifies a plain HTTP endpoint with no TLS. No VPC definitions, no security groups, no network ACLs.",
+      "gap": "No VPC, no private subnets, no security groups, no TLS. Service exposed over plain HTTP.",
+      "recommendation": "Deploy in a VPC with private subnets. Use an ALB or API Gateway with TLS termination. Configure least-privilege security groups.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -266,13 +235,13 @@
       "question_id": "INF-Q6",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "No API entry point or load balancer",
-      "description": "SOAP service exposed directly on port 8080 with no API Gateway, ALB, or CloudFront. No throttling, no authentication at the entry point.",
-      "gap": "No managed entry point \u2014 service directly exposed with no traffic management.",
-      "recommendation": "Deploy behind API Gateway (for REST migration) or ALB with WAF for throttling, authentication, and request validation.",
+      "title": "API Entry Point",
+      "description": "The SOAP service is exposed directly on JBoss port 8080 with no API Gateway, ALB, or CloudFront in front.",
+      "gap": "No managed entry point \u2014 direct service exposure with no throttling, no rate limiting, no centralized auth.",
+      "recommendation": "Place an API Gateway or ALB in front of the service with request validation, throttling, and WAF integration.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "wsdl/PurchaseOrderService.wsdl",
@@ -289,16 +258,16 @@
       "question_id": "INF-Q7",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "No auto-scaling configured",
+      "title": "Auto-Scaling",
       "description": "No auto-scaling configuration exists. The service runs on a single JBoss instance with static capacity.",
-      "gap": "All capacity is statically provisioned with no ability to scale with demand.",
-      "recommendation": "Configure auto-scaling when migrating to managed compute: ECS service auto-scaling or Lambda concurrency limits.",
+      "gap": "All capacity is statically provisioned. Cannot respond to traffic spikes or scale down during low demand.",
+      "recommendation": "When migrating to managed compute (ECS/Lambda), configure auto-scaling with appropriate thresholds.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -312,16 +281,16 @@
       "question_id": "INF-Q8",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "No backup and recovery configuration",
-      "description": "No backup configuration found. The Oracle 11g database has no visible backup plan, no PITR, no retention policy.",
-      "gap": "No automated backup configuration. Recovery procedures are undocumented.",
-      "recommendation": "When migrating to RDS/Aurora, enable automated backups with >=7-day retention and PITR. Document and test restore procedures.",
+      "title": "Backup and Recovery",
+      "description": "No backup configuration exists in the repository. The Oracle 11g database has no visible backup automation.",
+      "gap": "No automated backups, no defined retention periods, no tested restore procedures.",
+      "recommendation": "When migrating to RDS/Aurora, enable automated backups with 7+ day retention and point-in-time recovery.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -335,10 +304,10 @@
       "question_id": "INF-Q10",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Zero Infrastructure as Code coverage",
-      "description": "0% IaC coverage. No Terraform, CloudFormation, CDK, Helm, or any IaC artifacts exist. All infrastructure is manually created.",
-      "gap": "No Infrastructure as Code \u2014 all infrastructure is manual (ClickOps). Blocks reproducible deployments and disaster recovery.",
-      "recommendation": "Define all infrastructure in IaC (Terraform or CDK): compute, networking, database, monitoring, and operational resources.",
+      "title": "Infrastructure as Code Coverage",
+      "description": "Zero IaC coverage. No Terraform files, no CloudFormation templates, no CDK stacks. All infrastructure is manually provisioned.",
+      "gap": "No IaC \u2014 0% coverage. All infrastructure created manually. No reproducibility, no environment consistency.",
+      "recommendation": "Define all infrastructure in CDK or Terraform: compute, database, networking, and operational resources.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -358,10 +327,10 @@
       "question_id": "INF-Q11",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "No CI/CD automation",
-      "description": "No CI/CD pipeline exists. Builds use Ant with wsgen/wsimport run by hand. Deployments are entirely manual.",
-      "gap": "No CI/CD automation \u2014 all builds and deployments are manual.",
-      "recommendation": "Implement CI/CD pipeline (CodePipeline + CodeBuild): build, test, SAST scan, deploy to staging, integration test, deploy to production.",
+      "title": "CI/CD Automation",
+      "description": "No CI/CD pipeline exists. The README confirms the build process is manual: Ant with wsgen/wsimport run by hand. No build file is even present.",
+      "gap": "No CI/CD automation \u2014 all builds and deployments are manual. No automated testing, no quality gates.",
+      "recommendation": "Implement a CI/CD pipeline (CodePipeline + CodeBuild) with build, test, security scan, and deploy stages.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -381,10 +350,10 @@
       "question_id": "APP-Q1",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Compound legacy Java 6 with JAX-WS",
-      "description": "Java 6 with JAX-WS (javax.jws) framework. No Spring Boot, no modern framework, no AWS SDK. Language version, framework, and SDK all regressed.",
-      "gap": "Java 6 is past EOL. JAX-WS RPC/encoded is deprecated. No modern cloud-native framework or AWS SDK.",
-      "recommendation": "Upgrade to Java 17+ with Spring Boot 3.x (or Quarkus) and AWS SDK v2.",
+      "title": "Programming Languages",
+      "description": "Java 6 (EOL since 2013) with JAX-WS framework (legacy SOAP). No AWS SDK. Compound legacy signals across language version, framework, and SDK axes.",
+      "gap": "Java 6 is 3 major LTS versions behind current. JAX-WS RPC/encoded is deprecated. No modern framework or AWS SDK.",
+      "recommendation": "Upgrade to Java 17+ with Spring Boot 3.x and AWS SDK v2.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
@@ -404,17 +373,17 @@
       "question_id": "APP-Q2",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Tightly-coupled single-class monolith",
-      "description": "Single-class monolith with all logic in one method. No module boundaries, no separation of concerns. XML parsing, database access, and error handling all interleaved.",
-      "gap": "Tightly-coupled monolith with no clear module boundaries and pervasive shared state.",
-      "recommendation": "Decompose into a properly structured service with separation of concerns. See Decomposition Strategy section.",
+      "title": "Monolith vs Microservices",
+      "description": "The application is a single class with a single method performing all operations inline: XML parsing, field extraction, JDBC connection, SQL execution, and error handling. Zero separation of concerns.",
+      "gap": "Tightly-coupled monolith with no clear module boundaries. Business logic, data access, and protocol handling interleaved in a single method.",
+      "recommendation": "Rewrite with clean architecture: separate protocol adapter, domain logic, and data access layer. Use Hexagonal Architecture.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "27-46"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -427,10 +396,10 @@
       "question_id": "APP-Q3",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "All communication synchronous with no async patterns",
-      "description": "All communication is synchronous SOAP over HTTP. For the stateful-crud archetype, this scores 1: all communication synchronous HTTP with no async patterns.",
-      "gap": "100% synchronous communication. State changes are not propagated asynchronously.",
-      "recommendation": "Implement async patterns for cross-service state propagation: emit order events to SQS/SNS/EventBridge after persistence.",
+      "title": "Async vs Sync Communication",
+      "description": "All communication is synchronous SOAP. No async patterns, no message queues, no event publishing. For a stateful-crud service creating order records, no ability to decouple order acceptance from processing.",
+      "gap": "All communication synchronous with no async patterns. No event-driven integration possible.",
+      "recommendation": "Implement async order processing: accept synchronously, process via SQS, emit events to EventBridge.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -450,10 +419,10 @@
       "question_id": "APP-Q4",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "No async job handling for long-running operations",
-      "description": "All operations are synchronous regardless of duration. For the stateful-crud archetype, there is no infrastructure for handling long-running operations.",
-      "gap": "No async job infrastructure. All operations synchronous with no mechanism for long-running processes.",
-      "recommendation": "Implement async job handling: SQS + Lambda workers or Step Functions for batch processing with status polling endpoints.",
+      "title": "Long-Running Process Handling",
+      "description": "All operations are synchronous regardless of duration. No async job processing, no status polling, no callback mechanism. The caller must hold the SOAP connection open for the entire operation.",
+      "gap": "No async job processing. All operations synchronous regardless of duration.",
+      "recommendation": "Implement async submission pattern: accept order (return tracking ID), process asynchronously, provide status endpoint.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -473,10 +442,10 @@
       "question_id": "APP-Q5",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "No API versioning strategy",
-      "description": "No API versioning strategy. WSDL namespace contains no version identifier. No URL patterns, no version headers.",
-      "gap": "No versioning \u2014 breaking changes deployed directly to all consumers.",
-      "recommendation": "Implement URL path versioning (/v1/orders) for the modernized REST API. Maintain legacy SOAP endpoint during migration.",
+      "title": "API Versioning Strategy",
+      "description": "No API versioning. The WSDL defines a single namespace with no version indicator. The endpoint URL has no version segment.",
+      "gap": "No versioning \u2014 breaking changes deployed directly to all partners.",
+      "recommendation": "Implement API versioning in the modernized service (URL path versioning: /v1/orders).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -496,17 +465,17 @@
       "question_id": "APP-Q6",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Hard-coded service endpoint with no discovery",
-      "description": "Service endpoint hard-coded in WSDL: http://partner-svc.acme-corp.internal:8080/po/PurchaseOrderService. No service discovery, no API catalog.",
-      "gap": "All service endpoints hard-coded \u2014 no dynamic discovery.",
-      "recommendation": "Implement service discovery via API Gateway or AWS Cloud Map.",
+      "title": "Service Discovery",
+      "description": "All service endpoints are hardcoded. The WSDL has a hardcoded service address. The database connection string is hardcoded in source code. No service registry or dynamic discovery.",
+      "gap": "All endpoints hardcoded in source and WSDL. Relocating the service or database requires code changes.",
+      "recommendation": "Externalize endpoints to environment variables or Parameter Store. Use Route 53 or Cloud Map for service discovery.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "wsdl/PurchaseOrderService.wsdl",
-        "lines": null
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "21"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -519,17 +488,17 @@
       "question_id": "DATA-Q1",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "No managed object storage for unstructured data",
-      "description": "Partner purchase orders submitted as raw XML are parsed in-memory. Original XML documents are not stored. No S3, no document storage, no parsing pipeline.",
-      "gap": "Unstructured data (purchase order XML) processed transiently with no persistent object storage. Original documents lost.",
-      "recommendation": "Store original purchase order XML in S3 with lifecycle policies. Implement parsing pipeline for structured extraction.",
+      "title": "Unstructured Data Storage",
+      "description": "Partner order XML is received as a raw string, parsed in-memory, and discarded after field extraction. No S3 or managed object storage. Original documents are lost after processing.",
+      "gap": "No document archival. Original purchase order XML not stored in managed object storage.",
+      "recommendation": "Archive original purchase order XML to S3 before processing. Enable versioning and lifecycle policies.",
       "severity": "High",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "31-32"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -542,17 +511,17 @@
       "question_id": "DATA-Q2",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "No unified data access layer",
-      "description": "Database access performed directly in service method via raw JDBC with string-concatenated SQL. No DAO pattern, no repository layer, no ORM, no connection pooling.",
-      "gap": "No data access layer \u2014 database queries scattered in business logic with raw JDBC.",
-      "recommendation": "Implement a unified data access layer using Spring Data JPA or repository pattern.",
+      "title": "Unified Data Access Layer",
+      "description": "No data access layer exists. Database access via raw JDBC directly in the endpoint method with string-concatenated SQL. No ORM, no DAO pattern, no repository abstraction.",
+      "gap": "Database queries directly in the endpoint handler with no abstraction. SQL built via string concatenation.",
+      "recommendation": "Implement a repository/DAO pattern with parameterized queries. Use Spring Data JPA or jOOQ.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "35-40"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -565,17 +534,17 @@
       "question_id": "DATA-Q3",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Database engine past end-of-life",
-      "description": "Oracle 11g in use \u2014 reached end of Extended Support in 2022. No version pinning in IaC (no IaC exists). Engine is past EOL.",
-      "gap": "Database engine past end-of-life. No version management or upgrade procedure.",
-      "recommendation": "Migrate from Oracle 11g to Amazon RDS PostgreSQL or Aurora PostgreSQL via AWS DMS.",
+      "title": "Database Engine Version and EOL",
+      "description": "Oracle 11g detected from JDBC connection string and README. Oracle 11g reached end of extended support in 2021. No IaC version pinning.",
+      "gap": "Database engine past EOL. No version pinning. Running on unsupported engine with known vulnerabilities.",
+      "recommendation": "Migrate to Aurora PostgreSQL (current, fully managed). Use AWS SCT for schema analysis and DMS for migration.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "21"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -588,17 +557,17 @@
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "No encryption at rest",
-      "description": "No encryption at rest configuration. Oracle database accessed via plain JDBC with no TLS/SSL. No KMS keys, no encryption configuration.",
-      "gap": "No encryption at rest configured for the data store.",
-      "recommendation": "When migrating to RDS/Aurora, enable encryption at rest with customer-managed KMS key. Enable TLS for database connections.",
+      "title": "Encryption at Rest",
+      "description": "No encryption at rest configured. Oracle 11g accessed via plain JDBC with no evidence of TDE or encryption. Partner order data stored unencrypted.",
+      "gap": "No encryption at rest \u2014 partner data stored in plaintext.",
+      "recommendation": "Enable encryption at rest with customer-managed KMS key when migrating to RDS/Aurora.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "21-23"
       },
       "mod_metadata": {
         "internal_score": 1,
@@ -611,10 +580,10 @@
       "question_id": "SEC-Q3",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Static credential authentication over plaintext HTTP",
-      "description": "WS-Security username token authentication with passwords in plaintext over HTTP. Static credential authentication without modern token-based auth.",
-      "gap": "Static credential authentication (WS-Security PasswordText) over plain HTTP. No token-based auth.",
-      "recommendation": "Migrate to OAuth2/JWT-based authentication with API Gateway and Cognito authorizer. Enforce TLS.",
+      "title": "API Authentication",
+      "description": "Authentication uses WS-Security username token with password in plaintext over HTTP. Static credential authentication, not token-based.",
+      "gap": "Static credential auth (WS-Security PasswordText) without token-based auth. Credentials in plaintext over HTTP.",
+      "recommendation": "Implement OAuth2/JWT-based authentication. Use API Gateway authorizers with Cognito. Enforce TLS.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -634,10 +603,10 @@
       "question_id": "SEC-Q4",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "No centralized identity integration",
-      "description": "No centralized identity provider integration. Partner credentials stored in a flat properties file. Application manages authentication independently.",
-      "gap": "Application manages its own authentication with no external IdP integration.",
-      "recommendation": "Integrate with Amazon Cognito. Create User Pool for partner credentials with MFA.",
+      "title": "Centralized Identity Integration",
+      "description": "Application manages authentication independently. Partner credentials stored in a flat properties file. No IdP integration, no SSO, no federation.",
+      "gap": "No centralized identity integration. Partner credentials in flat file.",
+      "recommendation": "Integrate with Amazon Cognito or centralized IdP for partner authentication.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -657,10 +626,10 @@
       "question_id": "SEC-Q5",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Hardcoded database credentials in source code",
-      "description": "Database credentials hardcoded directly in source: DB_USER = 'partner_app', DB_PASS = 'partner2009'. Plaintext credentials committed to version control.",
-      "gap": "Plaintext credentials in source code \u2014 critical security vulnerability.",
-      "recommendation": "Immediately remove hardcoded credentials. Store all secrets in AWS Secrets Manager with automated rotation.",
+      "title": "Secrets Management",
+      "description": "Plaintext database credentials hardcoded directly in source code: DB_USER = \"partner_app\" and DB_PASS = \"partner2009\". Committed to version control.",
+      "gap": "Hardcoded plaintext credentials in source code \u2014 most critical secrets management failure.",
+      "recommendation": "Immediately rotate credentials. Store all secrets in AWS Secrets Manager with automated rotation.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
@@ -680,10 +649,10 @@
       "question_id": "SEC-Q6",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "No compute hardening or patching strategy",
-      "description": "No compute hardening or patching. JBoss AS 5.1 and RHEL 6 are past EOL with known unpatched vulnerabilities.",
-      "gap": "No patching strategy. Runtime stack is EOL with no security updates.",
-      "recommendation": "Migrate to managed compute with hardened base images (Bottlerocket for containers, AWS-managed Lambda runtimes). Enable ECR image scanning.",
+      "title": "Compute Hardening and Patching",
+      "description": "No patching strategy or vulnerability scanning. Runtime stack entirely EOL: RHEL 6, JBoss AS 5.1, Java 6. No SSM, no Inspector, no Dependabot.",
+      "gap": "No patching automation, no vulnerability scanning, EOL OS and application server.",
+      "recommendation": "Migrate to managed compute (ECS/Lambda) for automatic OS patching. Enable ECR scanning and Dependabot.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -703,13 +672,13 @@
       "question_id": "SEC-Q7",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "No application security pipeline",
-      "description": "No security scanning tools configured. No CI/CD pipeline to integrate SAST, DAST, or dependency scanning. Known vulnerabilities (XXE, SQL injection) exist undetected.",
-      "gap": "No security scanning \u2014 vulnerabilities remain undetected.",
-      "recommendation": "Integrate SAST (SonarQube/Semgrep), dependency scanning (Dependabot/Snyk), and container scanning into CI/CD with security gates.",
+      "title": "Application Security Pipeline",
+      "description": "No security scanning tools. No CI/CD pipeline exists. Known vulnerabilities (XXE, SQL injection) present and undetected by automated tooling.",
+      "gap": "No SAST, no dependency scanning, no container scanning. Known vulnerabilities undetected.",
+      "recommendation": "Implement SAST (SonarQube/Semgrep) and dependency scanning in CI/CD. Block deployments on critical findings.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": ".",
@@ -726,10 +695,10 @@
       "question_id": "OPS-Q1",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No distributed tracing",
+      "title": "Distributed Tracing",
       "description": "No distributed tracing instrumented. No OpenTelemetry SDK, no X-Ray, no trace ID propagation.",
-      "gap": "No distributed tracing \u2014 request flows are invisible.",
-      "recommendation": "Instrument the modernized service with AWS X-Ray or OpenTelemetry.",
+      "gap": "No ability to trace requests through the service or correlate with downstream systems.",
+      "recommendation": "Instrument with OpenTelemetry SDK or AWS X-Ray. Propagate trace IDs across service boundaries.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -749,10 +718,10 @@
       "question_id": "OPS-Q2",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No SLO definitions",
-      "description": "No SLOs defined. No CloudWatch alarms, no latency thresholds, no error budget tracking.",
-      "gap": "No formal SLO definitions or monitoring \u2014 service levels are unmeasured.",
-      "recommendation": "Define SLOs: order submission latency p99 < 500ms, availability > 99.9%, error rate < 0.1%.",
+      "title": "SLO Definitions",
+      "description": "No SLOs defined. No CloudWatch alarms, no latency targets, no error rate thresholds, no monitoring artifacts.",
+      "gap": "No formal SLO definitions, no error budgets, no monitoring.",
+      "recommendation": "Define SLOs for order submission (p99 latency, availability, error rate). Implement CloudWatch alarms.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -772,10 +741,10 @@
       "question_id": "OPS-Q3",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No business metrics",
-      "description": "No custom metrics published. No business event tracking, no dashboards.",
-      "gap": "No business metrics \u2014 only infrastructure metrics available.",
-      "recommendation": "Publish business metrics: orders per partner, amounts, success/failure rates, processing latency.",
+      "title": "Business Metrics",
+      "description": "No custom metrics published. No business event tracking. Cannot measure business impact or order processing health.",
+      "gap": "No business metrics \u2014 only default JBoss/OS metrics if any monitoring configured externally.",
+      "recommendation": "Publish custom CloudWatch metrics: orders per partner, acceptance rate, processing latency, error rate.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -795,10 +764,10 @@
       "question_id": "OPS-Q4",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No anomaly detection or alerting",
-      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection. Failures only visible when partners report them.",
-      "gap": "No alerting \u2014 failures go undetected.",
-      "recommendation": "Implement CloudWatch alarms with anomaly detection on error rates and latency. Integrate with incident management tool.",
+      "title": "Anomaly Detection and Alerting",
+      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration.",
+      "gap": "No alerting \u2014 no static thresholds, no anomaly detection.",
+      "recommendation": "Configure CloudWatch alarms on error rates and latency. Enable anomaly detection. Integrate with alerting tool.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -818,10 +787,10 @@
       "question_id": "OPS-Q6",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No automated tests of any kind",
-      "description": "No automated tests. No unit tests, no integration tests, no contract tests. Partner onboarding is a manual SOAP-UI session.",
-      "gap": "Zero automated tests \u2014 all validation is manual. Regression risk is extreme.",
-      "recommendation": "Create integration test suite: contract tests, database integration tests, end-to-end order submission tests. Run in CI pipeline.",
+      "title": "Integration Testing",
+      "description": "No automated tests of any kind. README states: 'No tests; partner onboarding is a manual SOAP-UI session.' Zero test coverage.",
+      "gap": "No automated tests \u2014 no integration tests, no unit tests, no contract tests.",
+      "recommendation": "Write integration tests for order submission workflow. Use contract testing for the API interface. Include in CI pipeline.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -841,10 +810,10 @@
       "question_id": "OPS-Q8",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "No observability ownership",
-      "description": "No observability ownership. No CODEOWNERS for monitoring, no per-service dashboards, no alarm ownership.",
-      "gap": "No observability ownership \u2014 monitoring is absent entirely.",
-      "recommendation": "Define observability ownership: per-service dashboards, alarm ownership, SLO accountability.",
+      "title": "Observability Ownership",
+      "description": "No observability ownership. No dashboards, no alarms with named owners, no CODEOWNERS file, no monitoring infrastructure.",
+      "gap": "No observability ownership \u2014 monitoring entirely absent.",
+      "recommendation": "Define service-level dashboards and alarms with named owners. Create CODEOWNERS file.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -868,7 +837,7 @@
       "title": "High Availability and Fault Isolation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no deployed workload found to assess HA."
+      "reason": "has_deployed_workload=false \u2014 no deployment manifests, Dockerfiles, or IaC defining compute resources. HA cannot be assessed from source code alone."
     },
     {
       "question_id": "DATA-Q4",
@@ -876,7 +845,7 @@
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 no stored procedures or proprietary SQL; all business logic in application layer."
+      "reason": "Score 4 \u2014 no stored procedures, triggers, or proprietary SQL. All business logic in application layer. Only standard SQL INSERT used."
     },
     {
       "question_id": "SEC-Q1",
@@ -884,7 +853,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_iac_provisioning_aws_resources=false \u2014 application-level source code only; CloudTrail evaluation belongs in account-level infrastructure repo."
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 this repo contains application-level source code only. CloudTrail evaluation belongs in the account-level infrastructure repo."
     },
     {
       "question_id": "OPS-Q5",
@@ -892,7 +861,7 @@
       "title": "Deployment Strategy",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no deployment manifests to assess deployment strategy."
+      "reason": "has_deployed_workload=false \u2014 no deployment artifacts in repo. Deployment orchestration may exist in a separate repo."
     },
     {
       "question_id": "OPS-Q7",
@@ -900,7 +869,7 @@
       "title": "Incident Response Automation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no running system to define incident response for."
+      "reason": "has_deployed_workload=false \u2014 no running system to define incident response automation for."
     },
     {
       "question_id": "OPS-Q9",
@@ -918,46 +887,43 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "High",
-      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) AND INF-Q1=1 < 3, APP-Q3=1 < 3, APP-Q4=1 < 3 (supporting)",
+      "key_trigger_criteria": "APP-Q2=1 (primary, monolith) AND INF-Q1=1, APP-Q3=1, APP-Q4=1 (all supporting conditions met)",
       "triggering_questions": [
         {
           "question_id": "APP-Q2",
-          "score": 1
+          "score": 1,
+          "note": "Tightly-coupled monolith with zero module boundaries"
         },
         {
           "question_id": "INF-Q1",
-          "score": 1
+          "score": 1,
+          "note": "All compute on EOL JBoss/RHEL with no managed services"
         },
         {
           "question_id": "APP-Q3",
-          "score": 1
+          "score": 1,
+          "note": "All communication synchronous SOAP"
         },
         {
           "question_id": "APP-Q4",
-          "score": 1
+          "score": 1,
+          "note": "All operations synchronous regardless of duration"
         }
       ],
       "detail": {
-        "current_state": "Single-class JAX-WS monolith on JBoss AS 5.1. All logic in one method with no module boundaries.",
-        "aws_services": [
+        "current_state": "Single-class SOAP monolith on JBoss AS 5.1 (EOL) with zero architectural layering",
+        "recommended_services": [
           "Lambda",
           "API Gateway",
           "Step Functions",
           "EventBridge",
-          "ECS",
-          "EKS",
-          "SQS"
-        ],
-        "patterns": [
-          "Strangler Fig",
-          "Anti-corruption Layer",
-          "Event Sourcing",
-          "Hexagonal Architecture"
+          "SQS",
+          "ECS/Fargate"
         ],
         "immediate_actions": [
-          "Define service boundaries",
-          "Upgrade language/framework",
-          "Implement separation of concerns"
+          "Rewrite with Hexagonal Architecture",
+          "Implement REST API alongside SOAP adapter",
+          "Deploy on managed compute"
         ],
         "learning_materials": [
           "https://skillbuilder.aws/learning-plan/CMK2J48MVN",
@@ -971,31 +937,30 @@
       "status": "Triggered",
       "priority": "Medium",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q1=1 < 3 AND no container definitions found in repository",
+      "key_trigger_criteria": "INF-Q1=1 (EC2/VM-based compute) AND no container definitions found in repository",
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
-          "score": 1
+          "score": 1,
+          "note": "All compute on JBoss AS 5.1 on RHEL 6 \u2014 no containers"
         }
       ],
       "detail": {
-        "current_state": "JBoss AS 5.1 on RHEL 6 \u2014 WAR deployment with manual Ant build. No Dockerfile or container definitions.",
-        "aws_services": [
+        "current_state": "JBoss AS 5.1 WAR deployment on RHEL 6 with no containerization",
+        "recommended_services": [
           "ECS",
-          "EKS",
           "Fargate",
           "ECR",
           "App Runner"
         ],
-        "migration_approach": "Refactor-then-containerize \u2014 upgrade Java and framework before containerization",
         "immediate_actions": [
-          "Upgrade to Java 17+",
-          "Migrate to modern framework (Spring Boot/Quarkus)",
-          "Create Dockerfile"
+          "Port to modern Java runtime first (Java 17+ required)",
+          "Create Dockerfile",
+          "Configure ECS task definition"
         ],
         "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR",
-          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM"
+          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM",
+          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR"
         ]
       }
     },
@@ -1005,16 +970,15 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 >= 3 \u2014 no stored procedures or proprietary SQL detected; primary trigger not met",
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures) \u2014 primary condition not met. Although commercial Oracle is detected, the lack of proprietary SQL coupling means migration to open-source PostgreSQL is straightforward without requiring the Open Source pathway's stored-procedure extraction guidance.",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
           "score": 4,
-          "note": "DATA-Q4=4 meets threshold; no stored procedures detected"
+          "note": "No stored procedures or proprietary SQL \u2014 primary trigger threshold not met"
         }
       ],
-      "detail": null,
-      "not_triggered_reason": "DATA-Q4 scores 4 (no stored procedures or proprietary SQL). While Oracle 11g is a commercial engine, the absence of proprietary SQL means migration to open-source PostgreSQL is straightforward and does not require the stored procedure extraction effort this pathway addresses."
+      "detail": null
     },
     {
       "id": "move-to-managed-databases",
@@ -1022,30 +986,31 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q2=1 < 3 (primary), DATA-Q3=1 < 3 (supporting \u2014 EOL engine)",
+      "key_trigger_criteria": "INF-Q2=1 (self-managed Oracle 11g) with supporting DATA-Q3=1 (EOL engine)",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
-          "score": 1
+          "score": 1,
+          "note": "Self-managed Oracle 11g via hardcoded JDBC"
         },
         {
           "question_id": "DATA-Q3",
-          "score": 1
+          "score": 1,
+          "note": "Oracle 11g past EOL (2021)"
         }
       ],
       "detail": {
-        "current_state": "Oracle 11g (EOL) on self-managed infrastructure at 10.0.9.30:1521. No managed backups, no failover.",
-        "aws_services": [
+        "current_state": "Self-managed Oracle 11g at 10.0.9.30:1521:PARTDB with hardcoded JDBC credentials",
+        "recommended_services": [
           "Aurora PostgreSQL",
           "RDS PostgreSQL",
           "DMS",
           "SCT"
         ],
-        "recommended_target": "Amazon RDS PostgreSQL or Aurora PostgreSQL",
         "immediate_actions": [
-          "Assess schema complexity",
+          "Run AWS SCT against Oracle schema",
           "Plan DMS migration",
-          "Update connection configuration"
+          "Update application JDBC to PostgreSQL driver"
         ],
         "learning_materials": [
           "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
@@ -1059,16 +1024,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No data processing workloads detected \u2014 contextual guard prevents trigger",
+      "key_trigger_criteria": "Contextual guard: No data processing workloads exist. This is a simple SOAP order submission service with no streaming, ETL, or analytics responsibilities.",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
           "score": 1,
-          "note": "INF-Q4=1 meets threshold but contextual guard blocks: no streaming, ETL, or analytics artifacts found"
+          "note": "No messaging, but contextual guard prevents trigger \u2014 no data processing workloads"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "No data processing workloads exist. The service performs a single synchronous INSERT; no streaming, ETL, data pipeline, or analytics processing is present."
+      "not_triggered_reason": "No evidence of data processing workloads (streaming, ETL, analytics) in the repository. The service is a simple order submission endpoint."
     },
     {
       "id": "move-to-modern-devops",
@@ -1076,36 +1041,38 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3 (primary); OPS-Q6=1 < 3 (supporting)",
+      "key_trigger_criteria": "INF-Q10=1 (no IaC) AND INF-Q11=1 (no CI/CD) with supporting OPS-Q6=1 (no tests)",
       "triggering_questions": [
         {
           "question_id": "INF-Q10",
-          "score": 1
+          "score": 1,
+          "note": "Zero IaC \u2014 all infrastructure manual"
         },
         {
           "question_id": "INF-Q11",
-          "score": 1
+          "score": 1,
+          "note": "No CI/CD pipeline \u2014 manual Ant builds"
         },
         {
           "question_id": "OPS-Q6",
-          "score": 1
+          "score": 1,
+          "note": "No automated tests of any kind"
         }
       ],
       "detail": {
-        "current_state": "Zero IaC, zero CI/CD, zero tests. Manual Ant builds and manual WAR deployments.",
-        "aws_services": [
+        "current_state": "No IaC, no CI/CD, no tests \u2014 entirely manual development and deployment lifecycle",
+        "recommended_services": [
           "CodeBuild",
           "CodePipeline",
           "CodeDeploy",
-          "CloudFormation",
           "CDK",
-          "X-Ray",
-          "CloudWatch"
+          "CloudWatch",
+          "X-Ray"
         ],
         "immediate_actions": [
-          "Create CI/CD pipeline",
-          "Define IaC for target architecture",
-          "Write integration tests"
+          "Create CDK project for infrastructure",
+          "Set up CodePipeline with build/test/deploy",
+          "Write integration test suite"
         ],
         "learning_materials": [
           "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
@@ -1119,11 +1086,21 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)",
+      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation).",
       "triggering_questions": [],
       "detail": null,
-      "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source code, configuration, IaC, or documentation."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
     }
   ],
+  "decomposition_strategy": {
+    "recommended_approach": "Big-Bang Rewrite (Exception Case)",
+    "rationale": "Single endpoint, entire technology stack EOL, zero tests, critical security vulnerabilities, no build system. Service is small enough (~50 lines of logic) that rewriting is lower-risk than modernizing in place.",
+    "patterns": [
+      "Anti-corruption Layer",
+      "Hexagonal Architecture",
+      "Saga Pattern"
+    ],
+    "effort_estimate": "4-8 weeks for complete rewrite with proper architecture, tests, CI/CD, and IaC"
+  },
   "repo_name": "legacy-partner-soap"
 }

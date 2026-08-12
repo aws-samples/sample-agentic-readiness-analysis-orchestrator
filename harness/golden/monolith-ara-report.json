@@ -1,29 +1,27 @@
 {
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2026-08-12",
     "td_version": "agentic-readiness-analysis",
     "repo_name": "monolith",
-    "target": "/builds/agentic-readiness-assessment/agentic-readiness-assessment/harness/after/_src/ara/monolith",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
-    "portfolio_name": "monolith",
-    "tech_stack": {
-      "language": "PHP",
-      "loc": 1900,
-      "framework": "None (vanilla PHP with PDO)",
-      "architecture": "Monolithic single-file application"
-    },
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
       "has_auth_surface": true,
       "has_write_operations": true,
       "has_logging_of_user_data": false
+    },
+    "tech_stack": {
+      "language": "PHP",
+      "loc": 1100,
+      "framework": "PHP 8.2 Native (no framework)",
+      "architecture": "Monolithic single-file application"
     }
   },
   "classification": {
@@ -32,86 +30,72 @@
     "blocker_count": 5,
     "risk_safety_count": 10,
     "risk_quality_count": 12,
-    "info_count": 5,
+    "info_count": 6,
     "high_count": 5,
     "medium_count": 22,
-    "low_count": 5,
+    "low_count": 6,
     "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
   },
   "counts": {
-    "total": 32,
+    "total": 33,
     "high": 5,
     "medium": 22,
-    "low": 5
+    "low": 6
   },
   "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Machine Identity Authentication",
+      "description": "The application uses PHP session-based authentication with cookie-based login. No OAuth2 client credentials flow, no API key authentication with principal attribution, no mTLS, and no service account mechanism exists.",
+      "gap": "No machine identity authentication mechanism. The only auth path is human-oriented session login.",
+      "recommendation": "Implement OAuth2 client credentials flow or API key authentication with per-agent identity attribution for programmatic callers.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "index.php",
+        "lines": "168-195"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true
+      }
+    },
     {
       "question_id": "API-Q4",
       "category": "API Surface",
       "category_id": "API",
-      "title": "Write endpoints lack idempotency",
-      "description": "Write endpoints (POST /api/orders, POST /api/returns, POST /api/admin/users) use uniqid() for ID generation with no idempotency key support. Repeated calls create duplicate records.",
-      "gap": "No idempotency key parameter accepted on any write endpoint. No unique business-key constraints prevent duplicate creation on retry.",
-      "recommendation": "Implement X-Idempotency-Key header support on all POST endpoints that stores and deduplicates requests within a 24-hour window.",
+      "title": "No Idempotency on Write Operations",
+      "description": "Write endpoints (POST /api/orders, POST /api/returns, etc.) do not support idempotency keys. Each POST creates a new record unconditionally using uniqid() for IDs.",
+      "gap": "No idempotency key support, no deduplication mechanism. Duplicate requests create duplicate records.",
+      "recommendation": "Implement Idempotency-Key header support with server-side deduplication table and TTL.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "200-240"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
         "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency mechanism on write endpoints.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Agents retry on failure and LLM non-determinism causes duplicate tool calls. POST /api/orders creates a new order on every call with no deduplication.",
-        "blocker_remediation": {
-          "immediate": "Add X-Idempotency-Key header check to POST /api/orders",
-          "target_state": "All write endpoints accept and enforce idempotency keys",
-          "estimated_effort": "Medium",
-          "dependencies": []
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q1",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No machine identity authentication",
-      "description": "Authentication is exclusively session-based using PHP sessions with username/password login via HTML form. No OAuth2 client credentials, no API key authentication, no mTLS support.",
-      "gap": "No machine identity mechanism exists. An agent cannot authenticate programmatically with principal attribution.",
-      "recommendation": "Implement API key authentication with principal attribution or OAuth2 client credentials flow for /api/* endpoints.",
-      "severity": "High",
-      "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "blocker_remediation": {
-          "immediate": "Implement API key authentication as parallel auth mechanism for /api/* endpoints",
-          "target_state": "OAuth2 client credentials flow with per-agent identity and audit attribution",
-          "estimated_effort": "High",
-          "dependencies": [
-            "AUTH-Q6"
-          ]
-        }
+        "resolution_reasoning": "API-Q4 resolved as BLOCKER because agent_scope is write-enabled and all write endpoints use uniqid() without idempotency key checks. Agents retrying failed requests will create duplicate records."
       }
     },
     {
       "question_id": "AUTH-Q6",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No immutable audit logging",
-      "description": "Order status changes logged to mutable MySQL table (order_status_history). No immutable log storage, no CloudTrail, no tamper-evident logging.",
-      "gap": "No immutable, tamper-evident audit trail. Database records can be modified or deleted.",
-      "recommendation": "Add CloudTrail with log file validation enabled and route application audit events to CloudWatch Logs with KMS encryption.",
+      "title": "No Immutable Audit Logging",
+      "description": "The application logs order status changes to a mutable MySQL table (order_status_history). No CloudTrail configuration, no immutable log storage (S3 Object Lock), no tamper-evident audit trail.",
+      "gap": "No immutable audit trail for write operations. Existing logs can be modified or deleted.",
+      "recommendation": "Enable CloudTrail with log file validation and configure S3 bucket with Object Lock for immutable audit storage.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -123,219 +107,199 @@
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no immutable audit trail for write operations.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no immutable audit logging exists.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents must have full audit attribution. The order_status_history table is mutable and provides no tamper evidence.",
-        "blocker_remediation": {
-          "immediate": "Add CloudTrail logging with log file validation",
-          "target_state": "Immutable audit trail with CloudTrail + S3 Object Lock recording authenticated principal for every write",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "AUTH-Q1"
-          ]
-        }
+        "resolution_reasoning": "AUTH-Q6 resolved as BLOCKER because agent_scope is write-enabled and the only audit mechanism is a mutable MySQL table. No CloudTrail or immutable log storage is configured."
       }
     },
     {
       "question_id": "STATE-Q1",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No compensation or rollback for multi-step workflows",
-      "description": "Individual operations use DB transactions but the multi-step fulfillment workflow (validate \u2192 assign \u2192 pick \u2192 pack \u2192 QC \u2192 ship \u2192 deliver) has no compensation logic. Each step commits independently.",
-      "gap": "No saga pattern. No compensating transactions. No undo endpoints for fulfillment steps.",
-      "recommendation": "Implement compensation endpoints for each fulfillment step and adopt saga pattern with rollback states.",
+      "title": "No Compensation/Rollback for Multi-Step Workflows",
+      "description": "The fulfillment workflow (validate \u2192 assign-warehouse \u2192 pick \u2192 pack \u2192 quality-check \u2192 ship) has no saga pattern or compensation logic. Each step commits independently with no undo mechanism.",
+      "gap": "No compensation or rollback for multi-step workflows. Partial failures leave the system in an inconsistent state.",
+      "recommendation": "Implement compensating actions for each workflow step or adopt a saga pattern with explicit rollback states.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "460-600"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND multi-step fulfillment workflow has no compensation logic.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no compensation logic for multi-step fulfillment workflow.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "An agent executing the fulfillment workflow may succeed on steps 1-4 and fail on step 5. Without compensation, the system is left in a partial state with no recovery path.",
-        "blocker_remediation": {
-          "immediate": "Add compensation endpoints for each fulfillment step",
-          "target_state": "Saga pattern with compensating actions for each step or Step Functions with error handling",
-          "estimated_effort": "High",
-          "dependencies": []
-        }
+        "resolution_reasoning": "STATE-Q1 resolved as BLOCKER because agent_scope is write-enabled and the multi-step fulfillment workflow has no saga or compensation pattern. Steps commit independently."
       }
     },
     {
       "question_id": "DATA-Q2",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No data residency controls for stored PII",
-      "description": "Customer PII (names, emails, addresses, payment records) stored with no data residency controls or documentation. No mechanism prevents an agent from transmitting PII to an LLM in a different jurisdiction.",
-      "gap": "No data residency policy. No region restrictions. No data classification. No compliance controls.",
-      "recommendation": "Document applicable data residency requirements, classify stored data, and configure AWS region restrictions via SCPs.",
+      "title": "No Data Residency Controls",
+      "description": "The system stores customer PII (names, emails, addresses) in MySQL/RDS with no data residency policies, region restrictions, or compliance framework references. No controls prevent cross-region data transmission.",
+      "gap": "No data residency configuration, no compliance documentation, no controls for cross-boundary data transmission.",
+      "recommendation": "Document data residency requirements, add region constraints to IaC, implement controls preventing cross-boundary data transmission to LLM providers.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "30-50"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
         "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND PII stored without residency controls.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The system stores customer PII subject to privacy regulations. Write-enabled agents could transmit this data to LLM providers in other jurisdictions without guardrails.",
-        "blocker_remediation": {
-          "immediate": "Document applicable data residency requirements and classify stored data",
-          "target_state": "Data residency policy enforced at infrastructure level with guardrails preventing LLM-bound data from crossing jurisdictional boundaries",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "DATA-Q1"
-          ]
-        }
+        "resolution_reasoning": "DATA-Q2 resolved as BLOCKER because agent_scope is write-enabled, the system stores customer PII (email, address), and there are no residency controls or compliance policies. An agent could transmit this data cross-region."
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Coarse-Grained Permissions",
+      "description": "The application has only two roles: admin and customer. No mechanism exists to create a scoped agent identity with read-only access to specific resources.",
+      "gap": "Binary role model. Cannot scope agent to specific resource subsets.",
+      "recommendation": "Implement granular RBAC with agent-specific roles and configurable endpoint access.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "index.php",
+        "lines": "196-200"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
       "question_id": "AUTH-Q3",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No action-level authorization within admin role",
-      "description": "Admin role has unrestricted access to all admin endpoints with no action-level granularity. Cannot grant read orders without delete users.",
-      "gap": "No fine-grained RBAC or ABAC within admin scope. Binary admin/customer distinction only.",
-      "recommendation": "Implement action-level middleware mapping roles to permitted HTTP methods and URL patterns.",
+      "title": "No Action-Level Authorization",
+      "description": "Authorization checks are role-level only. No action-level differentiation within roles \u2014 an admin can perform all operations with no distinction between read, write, and delete.",
+      "gap": "No ABAC or fine-grained action permissions.",
+      "recommendation": "Implement action-level permission checks on each endpoint.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "196-200"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Create dedicated fulfillment-agent role",
-          "Implement per-route action-level middleware"
-        ]
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
       "question_id": "AUTH-Q4",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No identity propagation or delegation",
-      "description": "No identity propagation mechanism exists. Session-based auth with no JWT/OAuth token exchange or on-behalf-of flows.",
-      "gap": "Cannot distinguish agent-as-self vs agent-on-behalf-of-user. No token-based delegation.",
-      "recommendation": "Implement OAuth2 with on-behalf-of token exchange allowing agents to carry delegated user identity.",
+      "title": "No Identity Propagation",
+      "description": "No JWT/OAuth token exchange, no on-behalf-of flows, no identity propagation. PHP sessions only.",
+      "gap": "Cannot distinguish agent-as-self from agent-on-behalf-of-user.",
+      "recommendation": "Implement OAuth2 token exchange or delegation mechanism.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
       "phase": 2,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "168-195"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Require X-On-Behalf-Of headers logged and validated",
-          "Implement service account with explicit user context parameter"
-        ]
+        "remediation_timeline": "90\u2013120 days"
       }
     },
     {
       "question_id": "AUTH-Q5",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "Hardcoded credential fallbacks in source code",
-      "description": "Database credentials have hardcoded fallback values in code (getenv('DB_PASS') ?: 'ecommerce_pass'). No secrets manager integration. No rotation.",
-      "gap": "Hardcoded fallback credentials. No AWS Secrets Manager or Vault. No rotation mechanism.",
-      "recommendation": "Remove hardcoded fallbacks, integrate AWS Secrets Manager with automatic rotation for RDS credentials.",
+      "title": "Hardcoded Credential Fallbacks",
+      "description": "Hardcoded fallback credentials in code (ecommerce_user/ecommerce_pass). No Secrets Manager or Vault integration. No rotation mechanism.",
+      "gap": "No secrets management system, hardcoded defaults in source.",
+      "recommendation": "Integrate AWS Secrets Manager with automatic rotation. Remove hardcoded credential fallbacks.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "14-18"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "Remove hardcoded fallback values immediately",
-          "Use Secrets Manager with automatic rotation"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "AUTH-Q7",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No agent identity suspension mechanism",
-      "description": "User accounts can only be deleted entirely. No mechanism to suspend or disable without destroying the identity record.",
-      "gap": "No active/inactive/suspended status field. Cannot revoke access without destroying audit attribution.",
-      "recommendation": "Add status field (active/suspended/disabled) to users table and check during authentication.",
+      "title": "No Agent Identity Suspension",
+      "description": "No mechanism to suspend or revoke an individual agent identity. Only session_destroy() on logout.",
+      "gap": "Cannot isolate a misbehaving agent without disrupting the entire platform.",
+      "recommendation": "Implement per-identity suspension with immediate effect on active sessions.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "162-165"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Add active boolean column to users table",
-          "Implement API key revocation per AUTH-Q1 remediation"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "STATE-Q3",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No concurrency controls for write operations",
-      "description": "No optimistic or pessimistic locking. Concurrent agent instances could create race conditions on status transitions and inventory operations.",
-      "gap": "No version fields, ETags, If-Match headers, or conditional writes.",
-      "recommendation": "Implement optimistic locking with version fields on the orders table and conditional UPDATE statements.",
+      "title": "No Concurrency Controls",
+      "description": "No optimistic locking, no version fields, no ETags. Concurrent agent requests could create race conditions on order status updates.",
+      "gap": "No concurrency control mechanism for concurrent write operations.",
+      "recommendation": "Add version columns to orders table and implement optimistic locking with conflict detection.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "460-600"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Add version columns for optimistic locking",
-          "Use SELECT FOR UPDATE on critical paths"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "STATE-Q5",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No rate limiting or throttling",
-      "description": "WAF has IP whitelisting but no rate-based rules. No application-level rate limiting. Runaway agent loops would not be throttled.",
-      "gap": "No per-IP or per-user rate limiting at WAF or application level.",
-      "recommendation": "Add WAF rate-based rules and implement application-level per-user request throttling.",
+      "title": "No Rate Limiting",
+      "description": "No API-layer rate limiting. WAF has IP whitelisting but no rate-based rules. No application-level throttling.",
+      "gap": "No protection against runaway agent loops at any layer.",
+      "recommendation": "Add WAF rate-based rules and application-level per-caller throttling.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
@@ -347,21 +311,17 @@
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Add WAF rate-based rules (100 req/5min/IP)",
-          "Implement PHP middleware for per-session throttling"
-        ]
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
       "question_id": "STATE-Q6",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No blast radius or transaction limits",
-      "description": "No configurable transaction limits. An agent with admin access could approve unlimited returns, delete unlimited users, or create unlimited orders without caps.",
-      "gap": "No per-caller business transaction limits. No batch caps. No spend thresholds.",
-      "recommendation": "Implement configurable per-identity business transaction limits enforced at the application layer.",
+      "title": "No Transaction Limits",
+      "description": "No configurable transaction limits. No maximum records per operation, no spend caps, no bulk operation size limits.",
+      "gap": "No business-domain caps on agent operation scope.",
+      "recommendation": "Implement per-caller transaction limits for high-impact operations.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -373,122 +333,64 @@
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Implement per-session operation counters",
-          "Add rate-based business rules (max 10 returns/hour)"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "HITL-Q2",
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
-      "title": "No configurable approval gates",
-      "description": "Return approval is hardcoded. Cannot configure other operations to require approval without code changes.",
-      "gap": "No configurable operation-level approval flags. No approval workflow engine.",
-      "recommendation": "Implement configurable approval framework that allows operations to be flagged for human approval by type or value threshold.",
+      "title": "Approval Gates Not Configurable",
+      "description": "Approval gates exist for returns and order validation but are hardcoded. Cannot dynamically add approval requirements to other operations.",
+      "gap": "Approval gates not configurable by operation type. Cannot extend to new operations without code changes.",
+      "recommendation": "Implement a configurable approval framework where operation types can be flagged as requiring human approval based on rules.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "460-480"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Implement generic approval middleware per endpoint",
-          "Use Step Functions with human approval tasks"
-        ]
-      }
-    },
-    {
-      "question_id": "DATA-Q1",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No access control differentiation for sensitive data",
-      "description": "Stage A=YES (PII stored). B1=CLEAR (passwords excluded from responses). B2=FIRES (admin role grants undifferentiated access to all sensitive data). B3=absent.",
-      "gap": "Single admin role grants undifferentiated access to all data including customer PII and payment records. No OAuth scopes or granular permissions.",
-      "recommendation": "Implement role-based data access scoping with separate authorization for PII-containing endpoints.",
-      "severity": "Medium",
-      "priority": "P0",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "index.php",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "conditional_resolution": "B2 sub-check fires as RISK-SAFETY: no access control differentiation for sensitive data domains.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Admin role grants access to all sensitive data without scope differentiation. An agent granted admin access inherits full PII access.",
-        "data_q1_subchecks": {
-          "b1": {
-            "fired": false,
-            "severity": null,
-            "reasoning": "Passwords properly excluded from GET /api/admin/users response via explicit column selection."
-          },
-          "b2": {
-            "fired": true,
-            "severity": "RISK-SAFETY",
-            "reasoning": "Single admin role grants undifferentiated access to all data. No OAuth scopes or data-domain granularity."
-          },
-          "b3": {
-            "fired": true,
-            "severity": "INFO",
-            "reasoning": "No formal classification metadata (no tags, no annotations, no Macie)."
-          }
-        },
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Create separate endpoints with different auth for sensitive vs non-sensitive data",
-          "Implement OAuth scopes per data domain"
-        ]
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
       "question_id": "DATA-Q6",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No PII redaction in logs or error responses",
-      "description": "PHP error logging enabled with no PII redaction. Exception messages exposed in API responses via json_encode(['error' => $e->getMessage()]).",
-      "gap": "No PII masking. No log scrubbing. Raw exception messages returned to clients and potentially logged.",
-      "recommendation": "Replace raw exception messages with generic errors in API responses. Implement logging wrapper with PII redaction.",
+      "title": "No PII Redaction in Logs",
+      "description": "No PII redaction middleware. PHP error logging enabled. Exception messages could leak connection strings or user data. No log scrubbing or masking.",
+      "gap": "No PII redaction in logging pipeline.",
+      "recommendation": "Implement a logging abstraction with PII redaction for emails, names, and addresses.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "8-10"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Sanitize exception messages before returning in API responses",
-          "Implement structured logging with field allowlist"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "API-Q2",
       "category": "API Surface",
       "category_id": "API",
-      "title": "No machine-readable API specification",
-      "description": "No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy specification. All 25+ API routes defined inline in index.php.",
-      "gap": "No machine-readable API specification file. Agent tool generation requires manual source code inspection.",
-      "recommendation": "Create an OpenAPI 3.0 specification documenting all /api/* endpoints with request/response schemas.",
+      "title": "No Machine-Readable API Specification",
+      "description": "No OpenAPI, Swagger, AsyncAPI, or machine-readable specification exists. Endpoints defined only in PHP code.",
+      "gap": "No machine-readable API spec. Agent tool generation requires manual authoring.",
+      "recommendation": "Create an OpenAPI 3.0 specification documenting all REST endpoints.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "index.php",
@@ -497,17 +399,17 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
       "question_id": "API-Q3",
       "category": "API Surface",
       "category_id": "API",
-      "title": "Unstructured error responses",
-      "description": "Error responses use simple {\"error\": \"message\"} format. No error codes, no retryable classification, no field-level detail.",
-      "gap": "No structured error taxonomy. Agents cannot distinguish retriable from terminal errors.",
-      "recommendation": "Implement structured error envelope: {\"error\": {\"code\": \"...\", \"message\": \"...\", \"retryable\": bool, \"details\": [...]}}.",
+      "title": "Limited Structured Error Responses",
+      "description": "Error responses return JSON with error field and HTTP status codes. No error code taxonomy, no retryable indicator, no field-level detail.",
+      "gap": "No structured error codes or retry classification.",
+      "recommendation": "Implement structured error format with error codes and retryable boolean.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -526,10 +428,10 @@
       "question_id": "DATA-Q3",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No pagination on list endpoints",
-      "description": "List endpoints return all records without pagination: GET /api/products, GET /api/orders/me, GET /api/admin/orders/pending-fulfillment. No limit, offset, or cursor parameters.",
-      "gap": "No pagination. No result size limits. Unbounded result sets.",
-      "recommendation": "Add limit and offset query parameters to all list endpoints with default limit of 50.",
+      "title": "No Pagination Support",
+      "description": "API endpoints return all records without pagination, filtering, or sorting.",
+      "gap": "Unbounded result sets. Agents receive all records regardless of need.",
+      "recommendation": "Add pagination parameters (limit, offset) to all list endpoints.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -548,10 +450,10 @@
       "question_id": "DATA-Q4",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Insufficient input validation with unstructured errors",
-      "description": "Partial validation exists (required field checks, prepared statements) but error responses lack field-level detail. No JSON schema validation middleware.",
-      "gap": "No schema validation. Unstructured validation errors. Agents cannot identify which field failed.",
-      "recommendation": "Implement field-level validation with structured error responses identifying field, constraint, and accepted format.",
+      "title": "Minimal Input Validation",
+      "description": "PDO prepared statements prevent SQL injection. Basic null checks on user creation. No schema validation framework or structured validation error responses.",
+      "gap": "No systematic input validation or structured validation errors.",
+      "recommendation": "Implement JSON schema validation middleware with field-level error responses.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -563,17 +465,17 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30 days"
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "DATA-Q5",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No freshness signaling despite timestamps existing",
-      "description": "Timestamps exist (created_at, updated_at) but no timezone normalization, no Cache-Control headers, no freshness signaling.",
-      "gap": "No explicit UTC storage. No freshness headers. Agents cannot determine data currency.",
-      "recommendation": "Standardize timestamps to UTC with ISO 8601 format and add Last-Modified/Cache-Control headers.",
+      "title": "Limited Temporal Metadata",
+      "description": "created_at/updated_at fields exist but no timezone normalization documented and no freshness signaling headers.",
+      "gap": "No freshness indicators or timezone documentation.",
+      "recommendation": "Normalize to UTC ISO 8601 and add Cache-Control headers.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -592,10 +494,10 @@
       "question_id": "DISC-Q1",
       "category": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No schema versioning or API contracts",
-      "description": "No API versioning, no database migrations, no breaking change detection, no contract testing.",
-      "gap": "No versioning at any layer. Agent tool bindings break silently on any code change.",
-      "recommendation": "Implement /v1/ API versioning and adopt database migration framework.",
+      "title": "No Schema Versioning or API Contracts",
+      "description": "No API versioning, no schema registry, no changelog, no contract tests, no breaking change detection.",
+      "gap": "Agent tool bindings break silently on any API change.",
+      "recommendation": "Implement API versioning and contract tests.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -614,17 +516,17 @@
       "question_id": "OBS-Q1",
       "category": "Observability",
       "category_id": "OBS",
-      "title": "No distributed tracing or structured logging",
-      "description": "No X-Ray, no OpenTelemetry, no structured JSON logging, no correlation IDs. Agent-initiated requests are not traceable.",
-      "gap": "No trace propagation. No structured logs. Cannot debug agent-initiated failures.",
-      "recommendation": "Implement JSON structured logging with correlation IDs and integrate AWS X-Ray.",
+      "title": "No Distributed Tracing or Structured Logging",
+      "description": "No X-Ray, no OpenTelemetry, no structured JSON logging, no correlation IDs.",
+      "gap": "Agent-initiated requests cannot be traced through the system.",
+      "recommendation": "Integrate AWS X-Ray or OpenTelemetry with structured JSON logging.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "index.php",
-        "lines": null
+        "lines": "8-10"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
@@ -636,10 +538,10 @@
       "question_id": "OBS-Q2",
       "category": "Observability",
       "category_id": "OBS",
-      "title": "No alerting on error rates or latency",
-      "description": "No CloudWatch alarms configured. RDS monitoring without alerting. No anomaly detection.",
-      "gap": "No alerting for API degradation. Degradation undetected until agents fail.",
-      "recommendation": "Add CloudWatch alarms for App Runner 5xx rate, P99 latency, and RDS CPU.",
+      "title": "No Alerting Configuration",
+      "description": "No CloudWatch alarms for API error rates or latency. Only RDS Enhanced Monitoring configured.",
+      "gap": "No alerts for API degradation that would affect agents.",
+      "recommendation": "Configure CloudWatch alarms for App Runner HTTP error rates and P99 latency.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -658,13 +560,13 @@
       "question_id": "ENG-Q1",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "Partial infrastructure governance (IaC exists, no review or drift detection)",
-      "description": "CloudFormation template exists but no CI/CD enforces peer review. No drift detection. 1/3 governance sub-checks pass.",
-      "gap": "No review enforcement for IaC changes. No drift detection.",
-      "recommendation": "Implement CI pipeline with cfn-lint, peer review requirement, and AWS Config drift detection.",
+      "title": "IaC Without Governance Controls",
+      "description": "CloudFormation IaC exists but no drift detection, no review process evidence, no change management.",
+      "gap": "Infrastructure governance incomplete \u2014 IaC exists without drift detection or review enforcement.",
+      "recommendation": "Enable AWS Config drift detection and require PR reviews for IaC changes.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "infrastructure/monolith-apprunner.yaml",
@@ -673,17 +575,17 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
       "question_id": "ENG-Q2",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "No CI/CD pipeline",
-      "description": "No CI/CD pipeline exists. Manual deployment via deploy.sh (docker-compose). No automated testing.",
-      "gap": "No CI/CD. No automated tests. No contract testing. No breaking change detection.",
-      "recommendation": "Create CI/CD pipeline with automated API tests and contract validation.",
+      "title": "No CI/CD Pipeline",
+      "description": "No CI/CD pipeline exists. Deployment is manual via deploy.sh (docker-compose up).",
+      "gap": "No automated testing, no contract validation, no deployment automation.",
+      "recommendation": "Implement CI/CD pipeline with API contract testing.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -702,32 +604,32 @@
       "question_id": "ENG-Q3",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "No explicit rollback capability",
-      "description": "No blue/green deployment, no canary, no automated rollback. Deploy.sh uses docker-compose with no versioning.",
-      "gap": "No automated rollback triggers. Manual intervention required.",
-      "recommendation": "Configure App Runner auto-rollback on health check failures with tagged immutable container images.",
+      "title": "No Rollback Capability",
+      "description": "No deployment rollback mechanism. Manual docker-compose deployment with no automated recovery.",
+      "gap": "Cannot roll back broken deployments affecting agent-facing APIs.",
+      "recommendation": "Configure App Runner automatic rollback on health check failure.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
+        "file": "deploy.sh",
         "lines": null
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30 days"
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "ENG-Q4",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "Zero automated test coverage",
-      "description": "No test files, no test framework, no test dependencies. Zero coverage of 25+ API endpoints.",
-      "gap": "No tests at all. No PHPUnit, no Postman collections, no integration tests.",
-      "recommendation": "Add PHPUnit with API integration tests covering order creation, fulfillment, returns, and user management.",
+      "title": "Zero Test Coverage",
+      "description": "No automated tests exist. No PHPUnit, no test directories, no API test suites.",
+      "gap": "No tests. API behavior changes cannot be caught by automation.",
+      "recommendation": "Implement API integration tests with PHPUnit or Newman.",
       "severity": "Medium",
       "priority": "P3",
       "effort": "High",
@@ -746,10 +648,10 @@
       "question_id": "API-Q7",
       "category": "API Surface",
       "category_id": "API",
-      "title": "No event emission for state changes",
-      "description": "No event emission. Order status changes written to database only. No webhooks, SNS, EventBridge, or Kafka.",
-      "gap": "No mechanism for agents to subscribe to state change events.",
-      "recommendation": "Consider adding SNS notifications for order status transitions.",
+      "title": "No Event Emission",
+      "description": "No event emission capability. No webhooks, no SNS/EventBridge integration. State changes recorded in database only.",
+      "gap": "No event-driven notification capability for state changes.",
+      "recommendation": "Implement EventBridge notifications for order status transitions.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
@@ -767,10 +669,10 @@
       "question_id": "API-Q8",
       "category": "API Surface",
       "category_id": "API",
-      "title": "No rate limit documentation or headers",
-      "description": "WAF configured but no rate limit headers returned. No rate limit documentation for agent consumption.",
-      "gap": "No X-RateLimit-Remaining or Retry-After headers.",
-      "recommendation": "Document rate limits and return rate limit headers from the application.",
+      "title": "No Rate Limit Headers",
+      "description": "No rate limit documentation or headers. No X-RateLimit-Remaining or Retry-After in responses.",
+      "gap": "Agents cannot self-throttle based on rate limit visibility.",
+      "recommendation": "Add X-RateLimit-* headers to API responses.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
@@ -785,13 +687,54 @@
       }
     },
     {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Formal Data Classification Metadata",
+      "description": "PII stored (email, address). Passwords excluded from API responses. Role-based access differentiates access. However, no formal field-level classification metadata exists.",
+      "gap": "No formal data classification annotations or sensitivity labels on fields.",
+      "recommendation": "Add field-level classification annotations identifying PII fields.",
+      "severity": "Low",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "index.php",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: B1 clear (passwords excluded from API), B2 clear (role-based differentiation), B3 fires as INFO (no formal classification).",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "DATA-Q1 resolved to INFO because B1 and B2 are both clear (passwords excluded from API responses, role-based access differentiation exists). Only B3 fires (no formal classification metadata), which is INFO severity.",
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Passwords excluded from API responses via explicit column selection and session unset."
+          },
+          "b2": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "Role-based access (admin/customer) differentiates data access levels."
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No formal data classification metadata, field-level sensitivity annotations, or PII detection tooling."
+          }
+        }
+      }
+    },
+    {
       "question_id": "DATA-Q7",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No data quality metrics or monitoring",
-      "description": "No data quality dashboards, profiling, or freshness SLAs. No null rate or duplicate monitoring.",
-      "gap": "No data quality awareness for agent reliability estimation.",
-      "recommendation": "Implement basic data quality monitoring on critical fields.",
+      "title": "No Data Quality Awareness",
+      "description": "No data quality monitoring, completeness metrics, or quality signals.",
+      "gap": "No quality signals for agent consumption.",
+      "recommendation": "Implement basic data quality checks on critical fields.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
@@ -809,10 +752,10 @@
       "question_id": "DISC-Q3",
       "category": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No data catalog or metadata layer",
-      "description": "No data catalog, metadata files, or data dictionary. Schema only discoverable in PHP source code.",
-      "gap": "No structured metadata beyond inline SQL DDL.",
-      "recommendation": "Create data dictionary documenting table schemas and relationships.",
+      "title": "No Data Catalog",
+      "description": "No data catalog, no metadata layer. Schema only in PHP source code.",
+      "gap": "No discoverable metadata for agent tool builders.",
+      "recommendation": "Create a data dictionary documenting tables and business semantics.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
@@ -830,16 +773,16 @@
       "question_id": "OBS-Q3",
       "category": "Observability",
       "category_id": "OBS",
-      "title": "No business outcome metrics",
-      "description": "No custom business metrics. Only infrastructure-level monitoring (VPC Flow Logs, RDS Enhanced Monitoring).",
-      "gap": "Cannot measure whether agent operations produce good business outcomes.",
-      "recommendation": "Publish CloudWatch custom metrics for fulfillment time and order error rates.",
+      "title": "No Business Outcome Metrics",
+      "description": "No custom business metrics published. No fulfillment rate or order completion tracking.",
+      "gap": "Cannot measure agent-driven business outcomes.",
+      "recommendation": "Publish CloudWatch metrics for key business outcomes.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "infrastructure/monolith-apprunner.yaml",
+        "file": "index.php",
         "lines": null
       },
       "ara_metadata": {
@@ -854,77 +797,70 @@
       "category_id": "API",
       "title": "Documented API Interface",
       "status": "pass",
-      "reason": "Application exposes 25+ REST API endpoints under /api/* with JSON responses. Integration is via HTTP REST, not direct database or UI."
+      "reason": "Application exposes ~25 REST API endpoints under /api/* with JSON responses. Integration does not require direct DB access or UI automation."
     },
     {
       "question_id": "API-Q5",
       "category_id": "API",
       "title": "Structured Response Format",
       "status": "pass",
-      "reason": "All API responses are JSON with Content-Type: application/json header."
+      "reason": "All API responses use structured JSON with descriptive keys and Content-Type: application/json."
     },
     {
       "question_id": "API-Q6",
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no individual operations exceed 30 seconds."
-    },
-    {
-      "question_id": "AUTH-Q2",
-      "category_id": "AUTH",
-      "title": "Scoped Permissions (Least Privilege)",
-      "status": "pass",
-      "reason": "Two roles (admin/customer) with differentiated access levels. IAM roles in CloudFormation use least-privilege policies."
+      "reason": "Extended question not triggered \u2014 no evidence of operations exceeding 30 seconds."
     },
     {
       "question_id": "STATE-Q2",
       "category_id": "STATE",
       "title": "Queryable Current State",
       "status": "pass",
-      "reason": "GET endpoints expose current state: products, orders, order history, pending fulfillment."
+      "reason": "Multiple GET endpoints expose current state (products, orders, order history, fulfillment status)."
     },
     {
       "question_id": "STATE-Q4",
       "category_id": "STATE",
       "title": "Circuit Breakers and Resilience",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 monolith only communicates with its own MySQL database, no external service calls."
+      "reason": "Extended question not triggered \u2014 service only calls MySQL, no external service dependencies."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 priority not specified and service not identified as critical path."
+      "reason": "Extended question not triggered \u2014 no P0 priority provided and not on critical path."
     },
     {
       "question_id": "HITL-Q1",
       "category_id": "HITL",
       "title": "Draft/Pending State",
       "status": "pass",
-      "reason": "Returns use pending_review status requiring approval. Orders proceed through multi-step status machine with reviewable intermediate states."
+      "reason": "System has pending/draft states: returns go to pending_review requiring admin approval, order validation is a separate approval step."
     },
     {
       "question_id": "HITL-Q3",
       "category_id": "HITL",
       "title": "Sandbox/Staging Environment",
       "status": "pass",
-      "reason": "Docker Compose provides local testing environment with MySQL and automatic seed data generation."
+      "reason": "docker-compose.yml provides complete local testing environment with MySQL and seed_data() function for production-equivalent data shape."
     },
     {
       "question_id": "DISC-Q2",
       "category_id": "DISC",
       "title": "Semantically Meaningful Field Names",
       "status": "pass",
-      "reason": "Field names are human-readable and semantically meaningful (customer_id, total_amount, stock_quantity). No legacy abbreviations."
+      "reason": "All field names are semantically meaningful (customer_id, order_id, product_name, total_amount). No legacy abbreviations."
     },
     {
       "question_id": "ENG-Q5",
       "category_id": "ENG",
       "title": "Encryption at Rest",
       "status": "pass",
-      "reason": "RDS StorageEncrypted: true, ECR KMS encryption with customer-managed key, VPC Flow Logs KMS-encrypted."
+      "reason": "RDS StorageEncrypted: true, ECR KMS encryption, VPC Flow Log KMS encryption. All persistent data stores encrypted."
     }
   ],
   "remediation_roadmap": {
@@ -943,15 +879,15 @@
           "AUTH-Q6",
           "STATE-Q1",
           "DATA-Q2",
+          "AUTH-Q2",
           "AUTH-Q3",
           "AUTH-Q5",
           "AUTH-Q7",
           "STATE-Q3",
           "STATE-Q5",
-          "DATA-Q1",
           "DATA-Q6"
         ],
-        "summary": "Resolve all 5 BLOCKERs and highest-priority RISK-SAFETY findings to unblock agent pilot consideration."
+        "summary": "Resolve all 5 BLOCKERs and address critical RISK-SAFETY findings related to identity, rate limiting, and PII protection."
       },
       {
         "phase": 2,
@@ -972,7 +908,7 @@
           "ENG-Q2",
           "ENG-Q3"
         ],
-        "summary": "Address remaining RISK-SAFETY and core RISK-QUALITY findings to enable supervised pilot deployment."
+        "summary": "Address remaining RISK-SAFETY and RISK-QUALITY findings to improve agent effectiveness and enable CI/CD governance."
       },
       {
         "phase": 3,
@@ -981,70 +917,68 @@
           "ENG-Q4",
           "API-Q7",
           "API-Q8",
+          "DATA-Q1",
           "DATA-Q7",
           "DISC-Q3",
           "OBS-Q3"
         ],
-        "summary": "Implement quality improvements and observability enhancements for production-grade agent operation."
+        "summary": "Address INFO-level findings and remaining quality improvements for full agent readiness."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Deploy centralized identity provider with machine identity support",
+      "action": "Implement machine identity authentication (OAuth2 or API keys)",
       "question_ids": [
         "AUTH-Q1",
-        "AUTH-Q4",
+        "AUTH-Q2",
+        "AUTH-Q3",
         "AUTH-Q6",
         "AUTH-Q7"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Machine identity is the foundational blocker \u2014 without it, no agent can authenticate, audit trails have no attribution, and identity cannot be suspended."
+      "rationale": "Machine identity is the foundation \u2014 all other auth controls depend on it. Cannot scope permissions, enforce action-level auth, or attribute audit logs without per-agent identity."
     },
     {
-      "action": "Implement idempotency and compensation patterns",
+      "action": "Add idempotency keys to all write endpoints",
       "question_ids": [
-        "API-Q4",
+        "API-Q4"
+      ],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Agents retry on failure and LLMs produce duplicate tool calls. Non-idempotent writes create data integrity risk at machine speed."
+    },
+    {
+      "action": "Implement saga pattern with compensating transactions",
+      "question_ids": [
         "STATE-Q1"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Write safety requires both idempotent endpoints (prevents duplicates on retry) and compensation logic (enables rollback on partial failure)."
+      "rationale": "Multi-step fulfillment workflow has no compensation logic. Agent-driven partial failures leave the system in an inconsistent state."
     },
     {
-      "action": "Establish data governance and residency controls",
-      "question_ids": [
-        "DATA-Q1",
-        "DATA-Q2",
-        "DATA-Q6"
-      ],
-      "priority": "P0",
-      "effort": "Medium",
-      "rationale": "PII is stored without classification, residency controls, or log redaction \u2014 regulatory and reputational risk at agent speed."
-    },
-    {
-      "action": "Add rate limiting and transaction guardrails",
+      "action": "Deploy rate limiting and transaction limits",
       "question_ids": [
         "STATE-Q5",
-        "STATE-Q6",
-        "STATE-Q3"
+        "STATE-Q6"
       ],
       "priority": "P1",
       "effort": "Medium",
-      "rationale": "Prevent runaway agent loops and unbounded blast radius from overwhelming or corrupting the system."
+      "rationale": "No protection against runaway agent loops or unbounded agent operations. Both WAF-level and business-level limits are needed."
     },
     {
-      "action": "Create OpenAPI specification and CI/CD pipeline",
+      "action": "Create OpenAPI specification and implement CI/CD pipeline",
       "question_ids": [
         "API-Q2",
         "ENG-Q2",
-        "ENG-Q4",
+        "ENG-Q3",
         "DISC-Q1"
       ],
       "priority": "P2",
       "effort": "Medium",
-      "rationale": "Machine-readable API spec enables automated tool generation; CI/CD with contract testing prevents silent breakage."
+      "rationale": "Machine-readable API spec enables automated tool generation. CI/CD with contract tests prevents silent agent breakage."
     }
   ],
   "analysis_type": "ara",

@@ -2,14 +2,14 @@
   "analysis_type": "mod",
   "metadata": {
     "repository": "legacy-document-portal",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2026-08-12",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code with entry points (index.cfm, download.cfm) and a database-backed runtime deployed on a single Windows EC2 instance. Classified as application.",
+    "repo_type_justification": "Application source code with entry points (ColdFusion .cfm files serving HTTP requests) and a database connection present. Single deployable unit running on IIS/EC2. Classified as application.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "The application owns a persistent data store (SQL Server 2005 via datasource docportal), exposes CRUD operations on document entities (list, search, download), and manages user sessions. Classified as stateful-crud.",
+    "archetype_justification": "Database connections present (SQL Server via cfquery datasource); application manages document records with implied CRUD operations (search, download, upload implied by schema). Classified as stateful-crud.",
     "priority": null,
     "tags": [],
     "context": null,
@@ -23,14 +23,6 @@
     }
   },
   "overall_score": 1.18,
-  "classification": {
-    "tier": "Not Ready",
-    "high_count": 12,
-    "medium_count": 22,
-    "low_count": 0,
-    "rule_matched": ">=12 High -> Not Ready",
-    "classification_consistency_check": "consistent"
-  },
   "categories": [
     {
       "category_id": "INF",
@@ -68,266 +60,49 @@
       "severity_status": "Critical"
     }
   ],
+  "classification": {
+    "tier": "Not Ready",
+    "high_count": 12,
+    "medium_count": 22,
+    "low_count": 0,
+    "rule_matched": ">=12 High -> Not Ready",
+    "classification_consistency_check": "consistent"
+  },
   "top_gaps": [
     {
       "question_id": "INF-Q10",
       "title": "Infrastructure as Code Coverage",
       "score": 1,
-      "gap": "No IaC \u2014 all infrastructure manually created (ClickOps)",
-      "impact": "Infrastructure changes are manual, non-reproducible, and error-prone; no disaster recovery capability"
+      "gap": "No IaC \u2014 all infrastructure is manually provisioned (ClickOps)",
+      "impact": "Cannot reproduce environments, no disaster recovery, no audit trail for infrastructure changes"
     },
     {
       "question_id": "INF-Q11",
       "title": "CI/CD Automation",
       "score": 1,
-      "gap": "No CI/CD \u2014 deployment by copying files over network share",
-      "impact": "No quality gates, no automated testing, no rollback capability"
+      "gap": "No CI/CD pipeline \u2014 deployment is manual file copy over network share",
+      "impact": "No quality gates, no automated testing, error-prone manual deployments"
     },
     {
       "question_id": "SEC-Q5",
       "title": "Secrets Management",
       "score": 1,
-      "gap": "Plaintext credentials in repository (CF Admin password in README)",
-      "impact": "Credential exposure to anyone with repo access; persists in git history"
-    },
-    {
-      "question_id": "INF-Q1",
-      "title": "Managed Compute",
-      "score": 1,
-      "gap": "Single raw EC2 instance running EOL Windows Server 2008 with ColdFusion 8",
-      "impact": "No scaling, no managed patching, single point of failure"
+      "gap": "Hardcoded credentials (CF Admin password documented in README)",
+      "impact": "Critical security vulnerability \u2014 credentials exposed in version control"
     },
     {
       "question_id": "APP-Q2",
       "title": "Monolith vs Microservices",
       "score": 1,
-      "gap": "Tightly-coupled monolith with no module boundaries; 2 CFML files with pervasive shared state",
-      "impact": "Cannot scale, deploy, or evolve independently; any change risks the entire system"
-    }
-  ],
-  "decomposition_strategy": {
-    "current_state": "APP-Q2 scored 1. Tightly-coupled monolith \u2014 2 CFML files with inline SQL, shared session state, no separation of concerns.",
-    "recommended_approach": "Big-Bang Rewrite (Exception Case)",
-    "rationale": "The application is only 2 files (~60 lines of code total). The runtime (ColdFusion 8), database (SQL Server 2005), and OS (Windows Server 2008) are all past EOL. There is nothing to strangle. A complete rewrite is the lowest-risk path for this minimal application.",
-    "effort_estimate": "Low to Medium \u2014 4-8 weeks for complete rewrite including new infrastructure, CI/CD pipeline, and testing.",
-    "patterns": [
-      "Hexagonal Architecture"
-    ]
-  },
-  "pathways": [
-    {
-      "id": "move-to-cloud-native",
-      "name": "Move to Cloud Native",
-      "status": "Triggered",
-      "priority": "High",
-      "effort": "High",
-      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) AND INF-Q1=1 < 3, APP-Q3=1 < 3, APP-Q4=1 < 3 (supporting)",
-      "triggering_questions": [
-        {
-          "question_id": "APP-Q2",
-          "score": 1,
-          "note": "Tightly-coupled monolith with no module boundaries"
-        },
-        {
-          "question_id": "INF-Q1",
-          "score": 1,
-          "note": "All compute on raw EC2"
-        },
-        {
-          "question_id": "APP-Q3",
-          "score": 1,
-          "note": "All communication synchronous"
-        },
-        {
-          "question_id": "APP-Q4",
-          "score": 1,
-          "note": "All operations synchronous regardless of duration"
-        }
-      ],
-      "detail": {
-        "aws_services": [
-          "Lambda",
-          "API Gateway",
-          "S3",
-          "Aurora PostgreSQL",
-          "Cognito",
-          "Step Functions",
-          "EventBridge"
-        ],
-        "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/CMK2J48MVN"
-        ],
-        "immediate_actions": [
-          "Select target language and framework",
-          "Design service boundaries",
-          "Implement Hexagonal Architecture"
-        ]
-      }
+      "gap": "Tightly-coupled monolith with SQL embedded in presentation layer",
+      "impact": "Cannot independently scale, deploy, or maintain components"
     },
     {
-      "id": "move-to-containers",
-      "name": "Move to Containers",
-      "status": "Triggered",
-      "priority": "Medium",
-      "effort": "Medium",
-      "key_trigger_criteria": "INF-Q1=1 < 3 AND no container definitions found; compute is EC2-based (not Lambda/Fargate/ECS)",
-      "triggering_questions": [
-        {
-          "question_id": "INF-Q1",
-          "score": 1,
-          "note": "All compute on raw EC2 with no containerization"
-        }
-      ],
-      "detail": {
-        "aws_services": [
-          "ECS",
-          "Fargate",
-          "ECR",
-          "App Runner"
-        ],
-        "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR",
-          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM"
-        ],
-        "immediate_actions": [
-          "Rewrite application in modern language",
-          "Create Dockerfile",
-          "Configure ECS/Fargate deployment"
-        ]
-      }
-    },
-    {
-      "id": "move-to-open-source",
-      "name": "Move to Open Source",
-      "status": "Not Triggered",
-      "priority": null,
-      "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures); primary trigger (DATA-Q4 < 3) not met",
-      "triggering_questions": [
-        {
-          "question_id": "DATA-Q4",
-          "score": 4,
-          "note": "DATA-Q4=4 meets threshold; no proprietary SQL detected"
-        }
-      ],
-      "detail": null,
-      "not_triggered_reason": "No stored procedures or proprietary SQL constructs detected. DATA-Q4 scored 4, not meeting the < 3 primary trigger threshold."
-    },
-    {
-      "id": "move-to-managed-databases",
-      "name": "Move to Managed Databases",
-      "status": "Triggered",
-      "priority": "High",
-      "effort": "Medium",
-      "key_trigger_criteria": "INF-Q2=1 < 3 (self-managed SQL Server 2005 on EC2); DATA-Q3=1 < 3 (engine past EOL) strengthens",
-      "triggering_questions": [
-        {
-          "question_id": "INF-Q2",
-          "score": 1,
-          "note": "Self-managed SQL Server 2005 on EC2"
-        },
-        {
-          "question_id": "DATA-Q3",
-          "score": 1,
-          "note": "SQL Server 2005 over 10 years past EOL"
-        }
-      ],
-      "detail": {
-        "aws_services": [
-          "Aurora PostgreSQL",
-          "RDS",
-          "DMS",
-          "SCT"
-        ],
-        "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
-          "https://skillbuilder.aws/learn/ND246G8Y3W"
-        ],
-        "immediate_actions": [
-          "Assess schema for migration compatibility",
-          "Plan DMS migration",
-          "Select target engine (Aurora PostgreSQL recommended)"
-        ]
-      }
-    },
-    {
-      "id": "move-to-managed-analytics",
-      "name": "Move to Managed Analytics",
-      "status": "Not Triggered",
-      "priority": null,
-      "effort": null,
-      "key_trigger_criteria": "No data processing workloads exist; contextual guard prevents trigger",
-      "triggering_questions": [
-        {
-          "question_id": "INF-Q4",
-          "score": 1,
-          "note": "INF-Q4=1 but no data processing workloads exist to migrate"
-        }
-      ],
-      "detail": null,
-      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found. The application is a simple document portal with no data processing responsibilities."
-    },
-    {
-      "id": "move-to-modern-devops",
-      "name": "Move to Modern DevOps",
-      "status": "Triggered",
-      "priority": "High",
-      "effort": "Medium",
-      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3; OPS-Q5=1 < 3, OPS-Q6=1 < 3 (supporting)",
-      "triggering_questions": [
-        {
-          "question_id": "INF-Q10",
-          "score": 1,
-          "note": "No IaC \u2014 all infrastructure manually created"
-        },
-        {
-          "question_id": "INF-Q11",
-          "score": 1,
-          "note": "No CI/CD \u2014 manual file copy deployment"
-        },
-        {
-          "question_id": "OPS-Q5",
-          "score": 1,
-          "note": "Direct-to-production with no staged rollout"
-        },
-        {
-          "question_id": "OPS-Q6",
-          "score": 1,
-          "note": "No automated tests of any kind"
-        }
-      ],
-      "detail": {
-        "aws_services": [
-          "CDK",
-          "CodePipeline",
-          "CodeBuild",
-          "CodeDeploy",
-          "CloudFormation",
-          "CloudWatch",
-          "X-Ray"
-        ],
-        "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
-          "https://skillbuilder.aws/learn/R4B13K95YQ"
-        ],
-        "immediate_actions": [
-          "Define infrastructure in CDK/Terraform",
-          "Create CI/CD pipeline",
-          "Implement automated testing",
-          "Configure blue/green deployments"
-        ]
-      }
-    },
-    {
-      "id": "move-to-ai",
-      "name": "Move to AI",
-      "status": "Not Triggered",
-      "priority": null,
-      "effort": null,
-      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)",
-      "triggering_questions": [],
-      "detail": null,
-      "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source, configuration, IaC, or documentation."
+      "question_id": "SEC-Q2",
+      "title": "Encryption at Rest",
+      "score": 1,
+      "gap": "No encryption at rest \u2014 documents on local disk without encryption",
+      "impact": "Data exposure risk for policy documents and internal forms"
     }
   ],
   "findings": [
@@ -335,10 +110,10 @@
       "question_id": "INF-Q1",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Compute: All compute on raw EC2 with EOL operating system",
-      "description": "All compute runs on a single raw EC2 instance (Windows Server 2008 with IIS 7 and ColdFusion 8). No managed container orchestration, no serverless.",
-      "gap": "No managed compute adoption. Workload runs on EOL operating system with no path to managed services.",
-      "recommendation": "Rewrite the application in a modern language and deploy on ECS/Fargate or Lambda.",
+      "title": "No managed compute \u2014 all workloads on raw EC2",
+      "description": "All compute runs on a single raw EC2 instance (Windows Server 2008) with IIS 7 and Adobe ColdFusion 8. No managed container orchestration or serverless is used.",
+      "gap": "No managed compute services in use. 100% of workload on unmanaged EC2 with an EOL operating system.",
+      "recommendation": "Replatform the application to a modern runtime and deploy on ECS/Fargate or Lambda.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -358,10 +133,10 @@
       "question_id": "INF-Q2",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Databases: Self-managed SQL Server 2005 on EC2",
-      "description": "The database is self-managed SQL Server 2005 running on the same EC2 instance. No RDS, no Aurora, no DynamoDB.",
-      "gap": "Database is entirely self-managed with no automated failover, no managed patching, no automated backups.",
-      "recommendation": "Migrate to Amazon RDS for SQL Server or Aurora PostgreSQL. Use AWS DMS for data migration.",
+      "title": "Self-managed database on EOL engine",
+      "description": "Database is SQL Server 2005 self-managed on EC2. No managed database services (RDS, Aurora, DynamoDB) in use.",
+      "gap": "Self-managed database on an EOL engine with no automated failover, backups, or patching.",
+      "recommendation": "Migrate to Amazon RDS for SQL Server or Aurora PostgreSQL via AWS DMS.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -381,10 +156,10 @@
       "question_id": "INF-Q3",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Workflow Orchestration: No orchestration for document lifecycle operations",
-      "description": "No workflow orchestration exists. Multi-step operations are entirely inline with no orchestration, error handling, or retry logic.",
-      "gap": "All operational logic is hardcoded inline with no structure for error recovery or retry.",
-      "recommendation": "When rewriting, implement document upload workflows using Step Functions or application-level workflow patterns.",
+      "title": "No workflow orchestration",
+      "description": "No workflow orchestration service in use. All logic is inline in CFM files with no multi-step orchestration.",
+      "gap": "No orchestration tooling. Future multi-step workflows would be entirely hardcoded.",
+      "recommendation": "When replatforming, use AWS Step Functions for any multi-step document workflows.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -404,10 +179,10 @@
       "question_id": "INF-Q4",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Async Messaging and Streaming: No messaging infrastructure",
-      "description": "No messaging or streaming infrastructure exists. All operations are tightly coupled and synchronous with no event emission capability.",
-      "gap": "No messaging where state changes should be communicable to other services.",
-      "recommendation": "Implement event publishing (SNS/EventBridge) for document lifecycle events.",
+      "title": "No async messaging infrastructure",
+      "description": "No messaging or streaming infrastructure. All operations are synchronous HTTP. No SQS, SNS, EventBridge, or message broker in use.",
+      "gap": "No async messaging for state changes that would benefit from decoupling.",
+      "recommendation": "Implement SNS/SQS for document lifecycle events when replatforming.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -427,10 +202,10 @@
       "question_id": "INF-Q5",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Network Security: No network security configuration",
-      "description": "No network security configuration exists in the repository. Application runs HTTP only with no HTTPS, no VPC definitions, no security groups.",
-      "gap": "No evidence of VPC, private subnets, security groups, or network segmentation. No TLS/HTTPS.",
-      "recommendation": "Deploy in a VPC with private subnets and security groups. Enable HTTPS via ALB or API Gateway.",
+      "title": "No network security controls",
+      "description": "No evidence of VPC, private subnets, or security groups. Application runs HTTP only with no encryption in transit and no network segmentation.",
+      "gap": "No network isolation, no HTTPS, no security groups. Services deployed without proper network controls.",
+      "recommendation": "Deploy in a VPC with private subnets, least-privilege security groups, and HTTPS via ALB.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -450,13 +225,13 @@
       "question_id": "INF-Q6",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "API Entry Point: No gateway or load balancer",
-      "description": "No API Gateway, ALB, or CloudFront. The ColdFusion application is exposed directly through IIS.",
-      "gap": "Direct service exposure with no gateway or load balancer.",
-      "recommendation": "Place an API Gateway or ALB in front of the application.",
+      "title": "No managed API entry point",
+      "description": "No API Gateway, ALB, CloudFront, or load balancer. Users access the application directly on EC2.",
+      "gap": "No managed entry point providing throttling, auth offload, or request validation.",
+      "recommendation": "Add API Gateway or ALB as entry point with WAF protection.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "README.md",
@@ -473,13 +248,13 @@
       "question_id": "INF-Q7",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Auto-Scaling: No auto-scaling \u2014 single static instance",
-      "description": "No auto-scaling configured. Single EC2 instance with static capacity.",
-      "gap": "All capacity statically provisioned on a single instance.",
-      "recommendation": "Deploy on auto-scaling infrastructure (ECS with service auto-scaling, or Lambda).",
+      "title": "No auto-scaling configured",
+      "description": "No auto-scaling. Single EC2 instance with static capacity. No ASG, no ECS auto-scaling.",
+      "gap": "Workload cannot respond to traffic changes. Single instance \u2014 reboot equals downtime.",
+      "recommendation": "Configure auto-scaling on compute layer when replatforming.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "README.md",
@@ -496,10 +271,10 @@
       "question_id": "INF-Q8",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Backup and Recovery: No backups \u2014 disk loss equals data loss",
-      "description": "No backup configuration. README states 'disk loss = data loss' and 'no backups offsite.'",
-      "gap": "No automated backups for either the database or file storage. Complete data loss risk.",
-      "recommendation": "Migrate files to S3 (with versioning) and database to RDS (with automated backups and PITR).",
+      "title": "No backup and recovery capability",
+      "description": "No backup configuration. README states 'no backups offsite' and 'disk loss = data loss.' Documents on local disk with no replication.",
+      "gap": "Complete absence of backup and recovery. Single disk failure causes permanent data loss.",
+      "recommendation": "Migrate to S3 with versioning and RDS with automated backups and PITR.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -519,10 +294,10 @@
       "question_id": "INF-Q9",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "High Availability: Single instance, single AZ, no failover",
-      "description": "All resources in a single EC2 instance. No multi-AZ, no load balancing, no failover.",
-      "gap": "Single point of failure. Any instance or AZ failure results in complete outage.",
-      "recommendation": "Deploy compute across multiple AZs. Use RDS Multi-AZ. Store files in S3.",
+      "title": "No high availability or fault isolation",
+      "description": "All resources in a single instance with no multi-AZ deployment. Single point of failure for all components.",
+      "gap": "Single point of failure \u2014 any failure takes down the entire application with no automatic recovery.",
+      "recommendation": "Deploy across multiple AZs with ALB, RDS Multi-AZ, and S3 for document storage.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -542,10 +317,10 @@
       "question_id": "INF-Q10",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Infrastructure as Code Coverage: No IaC \u2014 100% manual (ClickOps)",
-      "description": "No Infrastructure as Code exists. All infrastructure manually created.",
-      "gap": "0% IaC coverage. Infrastructure is not reproducible, not version-controlled.",
-      "recommendation": "Define all infrastructure in Terraform or CDK.",
+      "title": "Zero Infrastructure as Code coverage",
+      "description": "No IaC exists. Zero .tf files, CloudFormation templates, CDK stacks, or any IaC artifacts. All infrastructure manually provisioned.",
+      "gap": "0% IaC coverage. Cannot reproduce environment, no audit trail, no disaster recovery from definition.",
+      "recommendation": "Define all infrastructure in CloudFormation or CDK from the start of replatforming.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -565,10 +340,10 @@
       "question_id": "INF-Q11",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "CI/CD Automation: No CI/CD \u2014 manual file copy deployment",
-      "description": "No CI/CD automation. Deployment by copying files over network share.",
-      "gap": "All deployments manual. No build, test, or deploy automation.",
-      "recommendation": "Implement CI/CD pipeline with automated build, test, security scan, and deploy stages.",
+      "title": "No CI/CD automation \u2014 manual deployment",
+      "description": "No CI/CD pipeline exists. Deployment is manual file copy over network share to wwwroot.",
+      "gap": "All deployments manual with no build, test, or approval stages. No rollback capability.",
+      "recommendation": "Implement CI/CD with CodePipeline covering build, test, security scan, and deploy stages.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -588,14 +363,14 @@
       "question_id": "APP-Q1",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Programming Languages: CFML (ColdFusion 8) \u2014 no AWS SDK, no cloud-native tooling",
-      "description": "Application written in CFML targeting ColdFusion 8 (2007, EOL). No AWS SDK, no cloud-native tooling, multiple critical CVEs.",
-      "gap": "Language with no AWS SDK and no cloud-native tooling. Runtime is unsupported.",
-      "recommendation": "Rewrite in Python, Node.js/TypeScript, or Java 17+ with first-class AWS SDK support.",
+      "title": "EOL language with no cloud-native tooling",
+      "description": "Application written in CFML on Adobe ColdFusion 8 (EOL 2014). No AWS SDK, no cloud-native tooling, no container support.",
+      "gap": "ColdFusion 8 has no AWS SDK, no modern frameworks, and no path to cloud-native without full rewrite.",
+      "recommendation": "Replatform to Python 3.12+/FastAPI, Node.js 20+/Express, Java 21/Spring Boot, or .NET 8/ASP.NET Core.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
-      "phase": 2,
+      "phase": 1,
       "evidence": {
         "file": "index.cfm",
         "lines": null
@@ -611,10 +386,10 @@
       "question_id": "APP-Q2",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Monolith vs Microservices: Tightly-coupled monolith with no module boundaries",
-      "description": "2 CFML files with inline SQL, shared session state, shared datasource, no separation of concerns.",
-      "gap": "No module boundaries, pervasive shared state, no separation of concerns.",
-      "recommendation": "Rewrite with clear module boundaries using Hexagonal Architecture.",
+      "title": "Tightly-coupled monolith with no boundaries",
+      "description": "Tightly-coupled monolith with SQL embedded in presentation layer. No module boundaries, no separation of concerns.",
+      "gap": "Pervasive shared state. Presentation, business logic, and data access mixed in same files.",
+      "recommendation": "Replatform with clean architecture \u2014 separate API, business logic, and data access layers.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -634,10 +409,10 @@
       "question_id": "APP-Q3",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Async vs Sync Communication: All communication synchronous",
-      "description": "All communication is synchronous HTTP. No async patterns exist.",
-      "gap": "All communication synchronous HTTP with no async patterns.",
-      "recommendation": "Implement async event publishing for document lifecycle events using SNS or EventBridge.",
+      "title": "All communication synchronous with no async patterns",
+      "description": "All communication is synchronous HTTP. No async patterns, no message queues, no event-driven handlers.",
+      "gap": "No async communication for state changes that cross potential service boundaries.",
+      "recommendation": "Implement event-driven patterns for document lifecycle events using SNS/SQS or EventBridge.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -657,16 +432,16 @@
       "question_id": "APP-Q4",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Long-Running Process Handling: All operations synchronous regardless of duration",
-      "description": "All operations are synchronous regardless of duration. No background processing.",
-      "gap": "All operations synchronous. No async job infrastructure for long-running operations.",
-      "recommendation": "Implement async patterns for file upload processing using SQS + Lambda or Step Functions.",
+      "title": "No long-running process handling",
+      "description": "All operations synchronous regardless of duration. No async job processing, no background workers.",
+      "gap": "No async job infrastructure for operations that may exceed 30 seconds.",
+      "recommendation": "Implement async processing for document uploads using SQS workers or Step Functions.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "download.cfm",
+        "file": "index.cfm",
         "lines": null
       },
       "mod_metadata": {
@@ -680,10 +455,10 @@
       "question_id": "APP-Q5",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "API Versioning Strategy: No API versioning",
-      "description": "No API versioning. Direct .cfm file URLs with no versioning scheme.",
-      "gap": "No versioning \u2014 breaking changes deployed directly.",
-      "recommendation": "Implement URL-path versioning through API Gateway.",
+      "title": "No API versioning strategy",
+      "description": "No versioning. Application serves HTML pages directly with no version headers or URL versioning.",
+      "gap": "No versioning mechanism. Changes deployed directly with no backward compatibility guarantees.",
+      "recommendation": "Implement URL-based versioning (/v1/documents) and OpenAPI specifications when replatforming.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -703,10 +478,10 @@
       "question_id": "APP-Q6",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Service Discovery: All endpoints hard-coded",
-      "description": "All endpoints and configuration hard-coded. Datasource in CF Admin, file path hardcoded.",
-      "gap": "All service endpoints hard-coded in application code.",
-      "recommendation": "Externalize configuration via environment variables or AWS Systems Manager Parameter Store.",
+      "title": "No service discovery \u2014 all endpoints hardcoded",
+      "description": "No service discovery. Database datasource hardcoded in CF Admin. File storage path hardcoded in source.",
+      "gap": "All service endpoints and resource locations hardcoded with no dynamic discovery.",
+      "recommendation": "Externalize configuration via environment variables or Parameter Store. Use Cloud Map for discovery.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -726,10 +501,10 @@
       "question_id": "DATA-Q1",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Unstructured Data Storage: Files on local disk with no object storage",
-      "description": "Documents stored on local file system at D:\\docroot\\files. No S3, no object storage, no parsing.",
-      "gap": "Data on local file system with no accessibility, no durability guarantees, no parsing.",
-      "recommendation": "Migrate all documents to Amazon S3. Implement parsing pipeline with Textract.",
+      "title": "Documents stored on local disk \u2014 no object storage",
+      "description": "Documents stored on local disk (D:\\docroot\\files). No S3, no object storage, no parsing capabilities.",
+      "gap": "Data locked on local filesystem. No accessibility, no parsing pipeline, single point of failure.",
+      "recommendation": "Migrate to Amazon S3 with versioning. Implement Textract for document content extraction.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -749,13 +524,13 @@
       "question_id": "DATA-Q2",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Unified Data Access Layer: Queries scattered in CFML files with no DAL",
-      "description": "Database queries scattered directly in CFML files. No repository pattern, no DAO, no ORM.",
-      "gap": "Database imports and queries scattered with no pattern. SQL built by string concatenation.",
-      "recommendation": "Implement a repository/service layer pattern with parameterized queries.",
+      "title": "No data access layer \u2014 inline SQL in presentation files",
+      "description": "Database queries scattered in presentation-layer .cfm files. No DAO, no repository pattern, no ORM.",
+      "gap": "SQL embedded in page files. No data contract enforcement, no query consistency.",
+      "recommendation": "Implement repository/DAO pattern with centralized data access layer when replatforming.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "index.cfm",
@@ -772,10 +547,10 @@
       "question_id": "DATA-Q3",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Database Engine Version and EOL: SQL Server 2005 \u2014 over 10 years past EOL",
-      "description": "SQL Server 2005 reached EOL April 2016. No security patches, no vendor support.",
-      "gap": "Database engine over 10 years past EOL with known critical vulnerabilities.",
-      "recommendation": "Migrate to Aurora PostgreSQL or RDS SQL Server (latest supported version). Use AWS DMS.",
+      "title": "Database engine critically past EOL",
+      "description": "SQL Server 2005 \u2014 EOL since April 2016. Over 10 years past end-of-life with known critical CVEs.",
+      "gap": "Engine critically past EOL. No security patches available. No version management strategy.",
+      "recommendation": "Migrate to RDS SQL Server 2019/2022 or Aurora PostgreSQL.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -795,10 +570,10 @@
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Encryption at Rest: No encryption on any data surface",
-      "description": "No encryption at rest. Files on unencrypted local disk. SQL Server 2005 has no TDE.",
-      "gap": "No encryption at rest on any data store.",
-      "recommendation": "Migrate to S3 (SSE-KMS) for files and RDS/Aurora (KMS encryption) for database.",
+      "title": "No encryption at rest",
+      "description": "No encryption at rest. Documents on local disk without encryption. Database has no TDE or KMS encryption.",
+      "gap": "Zero encryption at rest. Policy documents stored in plaintext on unencrypted disk.",
+      "recommendation": "Use S3 with SSE-KMS for documents and RDS/Aurora with KMS encryption enabled.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -818,10 +593,10 @@
       "question_id": "SEC-Q3",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "API Authentication: Session-based auth without token-based (OAuth2/JWT)",
-      "description": "ColdFusion session-based authentication. No OAuth2, no JWT, no token rotation.",
-      "gap": "No token-based authentication. Session fixation possible.",
-      "recommendation": "Implement OAuth2/JWT authentication via Amazon Cognito.",
+      "title": "Session-based auth without token-based security",
+      "description": "Application-managed session authentication. No OAuth2/JWT. Vulnerable to session fixation.",
+      "gap": "No token-based auth. Session-based with known session fixation vulnerability.",
+      "recommendation": "Implement OAuth2/JWT via Cognito with API Gateway authorizer.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -841,10 +616,10 @@
       "question_id": "SEC-Q4",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Centralized Identity Integration: No external IdP, application-managed auth",
-      "description": "Application manages its own authentication entirely. No SSO, no external IdP.",
-      "gap": "No centralized IdP integration. No SSO. No federation.",
-      "recommendation": "Integrate with Amazon Cognito. Enable SSO federation with corporate directory.",
+      "title": "No centralized identity integration",
+      "description": "Application manages its own authentication entirely. No external IdP, no SSO, no federation.",
+      "gap": "No centralized identity integration. Separate credentials required.",
+      "recommendation": "Integrate with Amazon Cognito or existing enterprise IdP with SSO.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -864,10 +639,10 @@
       "question_id": "SEC-Q5",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Secrets Management: Plaintext credentials in repository",
-      "description": "README documents CF Admin password as 'cfadmin'. Plaintext credential in version control.",
-      "gap": "Plaintext credential in repository. No secrets management. No rotation.",
-      "recommendation": "Store all secrets in AWS Secrets Manager with automated rotation.",
+      "title": "Hardcoded credentials in version control",
+      "description": "ColdFusion Administrator password 'cfadmin' documented in README. No Secrets Manager, no Vault.",
+      "gap": "Credentials in version-controlled README. No secrets management, no rotation.",
+      "recommendation": "Remove credentials from VCS. Implement AWS Secrets Manager with automated rotation.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
@@ -887,14 +662,14 @@
       "question_id": "SEC-Q6",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Compute Hardening and Patching: Entire stack is EOL with no patching",
-      "description": "No patching strategy. All components EOL: Windows Server 2008, ColdFusion 8, IIS 7.",
-      "gap": "No patching strategy. All components past EOL with known critical vulnerabilities.",
-      "recommendation": "Replace entire stack. Deploy on managed compute (Fargate/Lambda) to eliminate OS patching.",
+      "title": "No compute hardening \u2014 all software EOL",
+      "description": "No patching strategy. All software EOL: Windows Server 2008, ColdFusion 8, SQL Server 2005, IIS 7. Known critical CVEs unpatched.",
+      "gap": "All software past EOL with no patches available. No vulnerability scanning.",
+      "recommendation": "Replatform to supported software. Use managed services to eliminate patching burden.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
-      "phase": 2,
+      "phase": 1,
       "evidence": {
         "file": "README.md",
         "lines": null
@@ -910,10 +685,33 @@
       "question_id": "SEC-Q7",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Application Security Pipeline: No security scanning \u2014 known vulnerabilities undetected",
-      "description": "No security scanning tools. No CI/CD pipeline to integrate them into. Known SQL injection vulnerabilities.",
-      "gap": "No security scanning. Known vulnerabilities in codebase with no detection.",
-      "recommendation": "Include SAST, dependency scanning, and container scanning in CI/CD pipeline.",
+      "title": "No application security pipeline",
+      "description": "No security scanning tools. No CI/CD to integrate them. Known SQL injection and XSS undetected by automation.",
+      "gap": "Zero security automation. No SAST, no DAST, no dependency scanning.",
+      "recommendation": "Integrate SAST and dependency scanning in CI/CD pipeline when built.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": ".",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "No distributed tracing",
+      "description": "No tracing instrumented. No X-Ray, no OpenTelemetry, no trace ID propagation.",
+      "gap": "Zero tracing capability. Cannot trace requests or diagnose production issues.",
+      "recommendation": "Instrument with AWS X-Ray or OpenTelemetry when replatforming.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -930,40 +728,17 @@
       }
     },
     {
-      "question_id": "OPS-Q1",
-      "category": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Distributed Tracing: No tracing instrumented",
-      "description": "No distributed tracing. No X-Ray, no OpenTelemetry.",
-      "gap": "No distributed tracing. No ability to trace requests or diagnose issues.",
-      "recommendation": "Instrument with AWS X-Ray or OpenTelemetry when rewriting.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": ".",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
       "question_id": "OPS-Q2",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "SLO Definitions: No SLOs, no monitoring",
-      "description": "No SLOs defined. No monitoring artifacts. No CloudWatch alarms.",
-      "gap": "No SLOs, no monitoring, no alerting.",
-      "recommendation": "Define SLOs for availability and latency. Implement CloudWatch alarms.",
+      "title": "No SLO definitions",
+      "description": "No SLOs defined. No CloudWatch alarms, no monitoring, no formal service level definitions.",
+      "gap": "Cannot measure whether system meets user expectations or is degrading.",
+      "recommendation": "Define SLOs for availability, latency, and error rate with CloudWatch monitoring.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 2,
+      "phase": 3,
       "evidence": {
         "file": ".",
         "lines": null
@@ -979,10 +754,10 @@
       "question_id": "OPS-Q3",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Business Metrics: No custom metrics published",
-      "description": "No business metrics. No custom CloudWatch metrics. No dashboards.",
-      "gap": "No business metrics. No visibility into value delivery.",
-      "recommendation": "Publish custom metrics for document uploads, downloads, search queries.",
+      "title": "No business metrics",
+      "description": "No custom metrics published. No business metrics tracked for document portal usage.",
+      "gap": "Cannot measure portal usage, popular documents, or user engagement.",
+      "recommendation": "Publish custom CloudWatch metrics for documents_downloaded, search_queries, unique_users.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -1002,10 +777,10 @@
       "question_id": "OPS-Q4",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Anomaly Detection and Alerting: No alerting configured",
-      "description": "No alerting. No anomaly detection. Failures discovered only when users report them.",
-      "gap": "No alerting of any kind. No proactive failure notification.",
-      "recommendation": "Configure CloudWatch alarms and anomaly detection. Integrate with incident management.",
+      "title": "No anomaly detection or alerting",
+      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection. Failures detected only by user reports.",
+      "gap": "No alerting. Failures and degradation go undetected.",
+      "recommendation": "Implement CloudWatch alarms on error rates and latency with anomaly detection.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -1025,10 +800,10 @@
       "question_id": "OPS-Q5",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Deployment Strategy: Direct-to-production file copy",
-      "description": "Direct-to-production deployment by copying files over network share. No staged rollout.",
-      "gap": "No staged rollout, no health checks, no rollback capability.",
-      "recommendation": "Implement blue/green or canary deployments using CodeDeploy.",
+      "title": "No deployment strategy \u2014 direct-to-production file copy",
+      "description": "Direct-to-production deployment via manual file copy to wwwroot. No staged rollout, no health checks.",
+      "gap": "No deployment safety. Changes go live immediately with no validation or rollback.",
+      "recommendation": "Implement blue/green or canary deployments via AWS CodeDeploy.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -1048,10 +823,10 @@
       "question_id": "OPS-Q6",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Integration Testing: No automated tests of any kind",
-      "description": "No unit tests, no integration tests, no end-to-end tests. No test framework.",
-      "gap": "No automated tests. Any change carries unvalidated regression risk.",
-      "recommendation": "Implement integration tests for critical workflows. Run in CI pipeline.",
+      "title": "No automated tests of any kind",
+      "description": "No automated tests \u2014 no unit, integration, or end-to-end tests. No test framework configured.",
+      "gap": "Zero automated test coverage. No regression detection capability.",
+      "recommendation": "Implement integration tests for critical workflows from day one of replatforming.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -1071,16 +846,16 @@
       "question_id": "OPS-Q7",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Incident Response Automation: No runbooks, no automation",
-      "description": "No runbooks, no incident response automation. Recovery is entirely manual.",
-      "gap": "No incident response automation. Recovery from failures is manual and ad hoc.",
-      "recommendation": "Create runbooks. Implement self-healing with ECS task restart or Lambda retry.",
+      "title": "No incident response automation",
+      "description": "No runbooks, no automated remediation, no self-healing. Incident response entirely ad hoc.",
+      "gap": "No documented procedures for common failure scenarios.",
+      "recommendation": "Create runbooks and implement automated recovery via ASG and SSM Automation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
-        "file": "README.md",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -1094,10 +869,10 @@
       "question_id": "OPS-Q8",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Observability Ownership: No observability infrastructure to own",
-      "description": "No observability ownership. No dashboards, no alarms, no team attribution.",
-      "gap": "No observability ownership. Monitoring is entirely absent.",
-      "recommendation": "Establish observability ownership with per-service dashboards and alarms.",
+      "title": "No observability ownership",
+      "description": "No dashboards, no alarms with owners, no CODEOWNERS file. No monitoring infrastructure exists to own.",
+      "gap": "No observability assets exist. No ownership model for service health.",
+      "recommendation": "Establish per-service dashboards with alarm ownership when replatforming.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -1121,7 +896,7 @@
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 No stored procedures or proprietary SQL. All business logic in application layer. Standard ANSI SQL used."
+      "reason": "Score 4 \u2014 No stored procedures or proprietary SQL. All queries are standard SQL in application layer."
     },
     {
       "question_id": "SEC-Q1",
@@ -1129,7 +904,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "Audit logging (CloudTrail) is an AWS account-level service. This repo has no IaC at all. CloudTrail evaluation belongs in the foundation infrastructure repo."
+      "reason": "has_iac_provisioning_aws_resources=false. No IaC exists; CloudTrail is account-level and belongs in foundation repo."
     },
     {
       "question_id": "OPS-Q9",
@@ -1137,8 +912,228 @@
       "title": "Resource Tagging Governance",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "This repo provisions no AWS resources (has_iac_provisioning_aws_resources=false). No resources to tag."
+      "reason": "has_iac_provisioning_aws_resources=false. No AWS resources provisioned from this repo \u2014 nothing to tag."
     }
   ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "High",
+      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) AND INF-Q1=1, APP-Q3=1, APP-Q4=1 (supporting conditions met)",
+      "triggering_questions": [
+        {
+          "question_id": "APP-Q2",
+          "score": 1
+        },
+        {
+          "question_id": "INF-Q1",
+          "score": 1
+        },
+        {
+          "question_id": "APP-Q3",
+          "score": 1
+        },
+        {
+          "question_id": "APP-Q4",
+          "score": 1
+        }
+      ],
+      "detail": {
+        "current_state": "Tightly-coupled ColdFusion 8 monolith on single raw EC2 instance",
+        "recommended_services": [
+          "Lambda",
+          "API Gateway",
+          "Step Functions",
+          "EventBridge",
+          "ECS",
+          "Fargate",
+          "S3"
+        ],
+        "immediate_actions": [
+          "Replatform to modern language",
+          "Design with clean architecture",
+          "Deploy on managed compute"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Triggered",
+      "priority": "Medium",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q1=1 < 3 AND no container definitions found; compute is raw EC2/IIS",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q1",
+          "score": 1
+        }
+      ],
+      "detail": {
+        "current_state": "Single Windows EC2 with IIS 7 and ColdFusion 8 \u2014 no containerization",
+        "recommended_services": [
+          "ECS",
+          "Fargate",
+          "ECR",
+          "App Runner"
+        ],
+        "immediate_actions": [
+          "Rewrite in containerizable runtime",
+          "Create Dockerfile",
+          "Deploy on ECS/Fargate"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM",
+          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures \u2014 primary condition DATA-Q4 < 3 not met)",
+      "triggering_questions": [
+        {
+          "question_id": "DATA-Q4",
+          "score": 4,
+          "note": "DATA-Q4=4 meets threshold; no stored procedure migration blocker"
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "DATA-Q4=4 \u2014 no stored procedures or proprietary SQL detected. The simple standard SQL makes database engine migration straightforward without needing the Open Source pathway's stored procedure extraction guidance."
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q2=1 < 3 (self-managed SQL Server on EC2); DATA-Q3=1 < 3 strengthens",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q2",
+          "score": 1
+        },
+        {
+          "question_id": "DATA-Q3",
+          "score": 1
+        }
+      ],
+      "detail": {
+        "current_state": "SQL Server 2005 self-managed on EC2, EOL since April 2016",
+        "recommended_services": [
+          "Aurora PostgreSQL",
+          "RDS for SQL Server",
+          "DMS",
+          "SCT"
+        ],
+        "immediate_actions": [
+          "Assess schema for Aurora PostgreSQL compatibility",
+          "Plan DMS migration",
+          "Enable automated backups"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
+          "https://skillbuilder.aws/learn/ND246G8Y3W"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No data processing workloads exist \u2014 contextual guard blocks trigger",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q4",
+          "score": 1,
+          "note": "INF-Q4=1 but contextual guard blocks: no streaming, ETL, or analytics artifacts found"
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "No data processing workloads found in the repository. The application is a simple document portal with no streaming, ETL, data pipeline, or analytics processing. The contextual guard requires evidence of data processing workloads."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3; OPS-Q5=1, OPS-Q6=1 strengthen",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q10",
+          "score": 1
+        },
+        {
+          "question_id": "INF-Q11",
+          "score": 1
+        },
+        {
+          "question_id": "OPS-Q5",
+          "score": 1
+        },
+        {
+          "question_id": "OPS-Q6",
+          "score": 1
+        }
+      ],
+      "detail": {
+        "current_state": "Zero IaC, manual file-copy deployment, no tests, no pipeline",
+        "recommended_services": [
+          "CodePipeline",
+          "CodeBuild",
+          "CodeDeploy",
+          "CloudFormation",
+          "CDK"
+        ],
+        "immediate_actions": [
+          "Define infrastructure in IaC",
+          "Create CI/CD pipeline",
+          "Add automated tests",
+          "Implement staged deployments"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
+        ]
+      },
+      "not_triggered_reason": null
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No AI/agent intent evidenced in the repository",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
+    }
+  ],
+  "decomposition_strategy": {
+    "recommended_approach": "Conditional / Adaptive (with replatform)",
+    "rationale": "All-EOL stack (ColdFusion 8, SQL Server 2005, Windows Server 2008) makes Strangler Fig impractical. Application is small enough (2 source files, ~60 lines of logic) for a complete replatform as a well-structured modular application.",
+    "patterns": [
+      "Hexagonal Architecture",
+      "Anti-corruption Layer"
+    ],
+    "effort_estimate": "Medium \u2014 small application scope but requires new infrastructure setup"
+  },
   "repo_name": "legacy-document-portal"
 }
