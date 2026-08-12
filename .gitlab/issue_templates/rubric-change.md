@@ -50,10 +50,17 @@
 ## 4. Fix shape
 <!-- Prefer a DETERMINISTIC offline check over model calibration wherever the defect is
      mechanically checkable (counts, gate-vs-finding consistency, band-vs-tier) — those
-     don't drift and fail loudly. Reach for prose only when judgment is unavoidable. -->
+     don't drift and fail loudly. Reach for prose only when judgment is unavoidable.
+
+     IDs ARE PERMANENT. A question_id is a stable key, not a position — everything
+     downstream (goldens, priority table, portfolio rollup) joins on it. When adding or
+     removing, you MUST update the count literal (43 ARA / 37 MOD) in the same MR or CI
+     fails loudly. See docs/contributing/README.md → "Add or remove a question". -->
 - [ ] Deterministic offline check / grader gate
 - [ ] Calibration or wording prose
-- [ ] New or re-scored question (if adding/removing, update the count literal — 43 ARA / 37 MOD, see docs/contributing/README.md)
+- [ ] Re-score an existing question (severity / wording / criteria — no count change)
+- [ ] **Add** a question — append the next free ID in its category (never reuse a retired one); **+1** the count literal
+- [ ] **Remove** a question — delete it and **leave the gap** (never renumber Q4→Q3, it silently reassigns findings); **−1** the count literal
 
 ## 5. Optimus re-publish on fix?
 <!-- The external scorer prompts are hand-published to Optimus. GEN blocks (severity /
