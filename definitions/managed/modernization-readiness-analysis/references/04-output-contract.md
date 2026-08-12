@@ -252,21 +252,28 @@ The per-repo MOD MD artifact MUST render a classification rationale paragraph im
 
 Every MOD JSON `classification` object MUST include a `classification_consistency_check` field whose value is either:
 
-- The string `"consistent"` when the score-based tier (derived from `overall_score` band) and the count-based tier (derived from High / Medium counts) tell the same story per the equivalence table below:
-  - Score ≥ 3.5 (Mature band) ≡ Cloud-Native Ready
-  - Score 2.5–3.4 (Partial band) ≡ Pilot-Ready
-  - Score 1.5–2.4 (Needs Work band) ≡ Remediation Required
-  - Score < 1.5 (Not Ready band) ≡ Not Ready
+- The string `"consistent"` when BOTH of the following hold:
+  1. **Count reconciliation:** `high_count` equals the number of entries in `findings[]` with `severity == "High"`, `medium_count` equals the count of `severity == "Medium"`, and `low_count` equals the count of `severity == "Low"`. The sum `high_count + medium_count + low_count` MUST equal `len(findings[])`.
+  2. **Score-band equivalence:** The score-based tier (derived from `overall_score` band) and the count-based tier (derived from High / Medium counts) tell the same story per the equivalence table below:
+     - Score ≥ 3.5 (Mature band) ≡ Cloud-Native Ready
+     - Score 2.5–3.4 (Partial band) ≡ Pilot-Ready
+     - Score 1.5–2.4 (Needs Work band) ≡ Remediation Required
+     - Score < 1.5 (Not Ready band) ≡ Not Ready
 
-- A structured divergence object when the equivalence does NOT hold:
+- A structured divergence object when EITHER condition does NOT hold:
   ```json
   {
     "status": "divergent",
     "score_band": "Partial",
     "count_tier": "Remediation Required",
+    "count_reconciliation": "mismatch: high_count=5 but findings[] has 6 High",
     "reason": "Score 2.8 yields Partial band but 4 High findings force Remediation Required tier. Surface gating review recommended on INF-Q2, INF-Q10, SEC-Q1, SEC-Q5."
   }
   ```
+
+**Count reconciliation is a HARD failure** — it MUST be corrected before emitting the report. If `high_count` does not equal the actual count of High findings in `findings[]`, recompute from the array. The `count_reconciliation` field in the divergence object is present only when a count mismatch triggered the divergence; it is omitted when the divergence is purely score-band vs count-tier.
+
+**Deriving counts from findings[] is mandatory.** The classification counts MUST be computed by iterating `findings[]` and tallying severities — NOT by maintaining a separate running counter during evaluation. A running counter drifts when questions are re-scored, surface-gated, or archetype-calibrated mid-analysis. The single-source derivation eliminates this class of bug. See the reconciliation step in `03-report-template.md` §9.
 
 When `classification_consistency_check.status == "divergent"`, the MOD MD artifact MUST render a clearly-labeled warning block naming the divergence, the underlying score-based band, the count-based tier, and the reason. Repo-level divergence is a RELEASE BLOCKER and MUST be either (a) corrected by fixing surface-gating or scoring, or (b) documented in the divergence object and flagged for the maintainer. Silent divergence is not acceptable.
 
