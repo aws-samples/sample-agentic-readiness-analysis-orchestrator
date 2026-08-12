@@ -426,20 +426,68 @@ def test_full_run_is_not_marked_partial():
     assert cov["compared"] == len(full)
 
 
-def test_scoped_run_skips_the_portfolio_comparison():
-    # A scoped "after" that DOES include a portfolio report (rolled up over only the
-    # analyzed apps) must NOT be diffed against the full-set golden portfolio: that delta
-    # is a mechanical artifact of aggregating fewer apps, not an effect of the edit. The
-    # differ skips it on partial runs and records why under coverage.portfolio_skipped.
+def _narrow_portfolio(report: dict, n: int) -> dict:
+    """A portfolio rollup that aggregated only `n` apps (as a scoped MR without the
+    golden-per-repo backfill would produce)."""
+    r = copy.deepcopy(report)
+    if isinstance(r.get("repositories"), list):
+        r["repositories"] = r["repositories"][:n]
+    r.setdefault("metadata", {})["services_analyzed"] = n
+    return r
+
+
+def test_narrow_scoped_rollup_skips_the_portfolio_comparison():
+    # A scoped rollup over FEWER apps than the golden must NOT be diffed against the
+    # full-set golden portfolio: that delta is a mechanical artifact of aggregating fewer
+    # apps, not an effect of the edit. The differ skips it and records why. The skip is now
+    # decided by APP COUNT (after < golden), not merely by "the per-repo run was scoped".
     full = dr.load_tree(GOLDEN)
     after = _subset(full, 2)  # 2 repos ...
     pf_key = ("ara", "portfolio", "harness-portfolio")
-    after[pf_key] = copy.deepcopy(full[pf_key])  # ... plus the portfolio rollup
+    after[pf_key] = _narrow_portfolio(full[pf_key], 2)  # ... plus a 2-app rollup
     impact = dr.build_impact(full, after)
-    assert impact["portfolio"] == {}, "scoped portfolio rollup must not be diffed"
+    assert impact["portfolio"] == {}, "narrow scoped rollup must not be diffed"
     assert "ara/portfolio/harness-portfolio" in impact["coverage"]["portfolio_skipped"]
     # And it must not leak back in as a moved TD.
     assert "portfolio-agentic-readiness-analysis" not in impact["changed_tds"]
+
+
+def test_full_set_rollup_on_a_scoped_run_is_compared_categorically():
+    # The program-verification path: a portfolio-TD (program-library) MR re-analyzes ~0
+    # per-repo but rolls the portfolio up over the golden per-repo reports, so the rollup
+    # aggregates the FULL app set. That rollup IS comparable even though the per-repo run
+    # was scoped — the program membership diff is finally apples-to-apples. Only the
+    # categorical dims (D4 programs, D3 pathways) are surfaced; D1/D2/D5 stay off a sweep.
+    full = dr.load_tree(GOLDEN)
+    after = _subset(full, 2)  # per-repo run stays scoped (2 repos) ...
+    for pf_key in (("ara", "portfolio", "harness-portfolio"),
+                   ("mod", "portfolio", "harness-portfolio")):
+        after[pf_key] = copy.deepcopy(full[pf_key])  # ... full-set rollup (all 14 apps)
+    impact = dr.build_impact(full, after)
+    assert impact["coverage"]["portfolio_skipped"] == [], "full-set rollup must be compared"
+    assert "D4_programs" in impact["portfolio"]["ara"]
+    # Categorical-only: the noisy numeric/distribution dims are NOT computed off a scoped run.
+    assert "D2_distribution" not in impact["portfolio"]["ara"]
+    assert "D5_portfolio_score" not in impact["portfolio"]["mod"]
+    # Identical rollup => no program movement => not a changed TD (a clean no-op verdict).
+    assert "portfolio-agentic-readiness-analysis" not in impact["changed_tds"]
+
+
+def test_full_set_rollup_detects_a_program_membership_change():
+    # Drop a triggered program from the after rollup: on a scoped per-repo run, the full-set
+    # rollup comparison must still catch it as a removed program and flag the portfolio TD.
+    full = dr.load_tree(GOLDEN)
+    after = _subset(full, 2)
+    pf_key = ("ara", "portfolio", "harness-portfolio")
+    after[pf_key] = copy.deepcopy(full[pf_key])
+    actions = after[pf_key].get("recommended_actions") or []
+    assert actions, "fixture precondition: golden ARA portfolio recommends programs"
+    dropped = actions[0].get("acronym")
+    after[pf_key]["recommended_actions"] = actions[1:]
+    impact = dr.build_impact(full, after)
+    assert impact["no_op"] is False
+    assert dropped in impact["portfolio"]["ara"]["D4_programs"]["removed"]
+    assert "portfolio-agentic-readiness-analysis" in impact["changed_tds"]
 
 
 def test_full_run_does_compare_the_portfolio():
