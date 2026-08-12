@@ -15,10 +15,14 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SHAPES = Path(__file__).resolve().parent / "fixtures" / "shapes"
+
+sys.path.insert(0, str(REPO / "harness"))
+import skill_table as st  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location(
     "validate_contract", REPO / "harness" / "validate-contract.py")
@@ -42,13 +46,33 @@ def _finding(qid: str, cat_id: str, meta_key: str) -> dict:
     }
 
 
+# A conforming report answers EVERY rubric id (coverage is part of the contract now — a
+# non-rubric extra is tolerated, but a MISSING rubric id fails). The ids are drawn from the
+# TD via skill_table so the fixtures follow a rubric edit with no test change. The first id
+# is emitted as a full finding (exercises the 12-field shape); the rest as passing
+# evaluations (the cheap shape). None of the evaluated ids carry a native severity, so the
+# tier-moving-phantom rule never trips on a real id.
+def _rubric_ids(analysis: str) -> list[str]:
+    return list(st.parse_questions(analysis))
+
+
+def _full_coverage(meta_key: str, analysis: str) -> tuple[list[dict], list[dict]]:
+    ids = _rubric_ids(analysis)
+    first = ids[0]
+    cat = first.split("-")[0]
+    findings = [_finding(first, cat, meta_key)]
+    evaluations = [{"question_id": q, "category_id": q.split("-")[0],
+                    "status": "pass", "reason": "ok"} for q in ids[1:]]
+    return findings, evaluations
+
+
 def _conforming_ara() -> dict:
+    findings, evaluations = _full_coverage("ara_metadata", "ara")
     return {
         "analysis_type": "ara",
         "repository": "demo",
-        "findings": [_finding("AUTH-Q1", "AUTH", "ara_metadata")],
-        "evaluations": [{"question_id": "API-Q1", "category_id": "API",
-                         "status": "pass", "reason": "ok"}],
+        "findings": findings,
+        "evaluations": evaluations,
         "classification": {"tier": "Pilot-Ready", "blocker_count": 0,
                            "risk_safety_count": 1, "rule_matched": "…"},
         "categories": [],
@@ -56,13 +80,13 @@ def _conforming_ara() -> dict:
 
 
 def _conforming_mod() -> dict:
+    findings, evaluations = _full_coverage("mod_metadata", "mod")
     return {
         "analysis_type": "mod",
         "repository": "demo",
         "overall_score": 2.5,
-        "findings": [_finding("INF-Q1", "INF", "mod_metadata")],
-        "evaluations": [{"question_id": "APP-Q1", "category_id": "APP",
-                         "status": "pass", "reason": "ok"}],
+        "findings": findings,
+        "evaluations": evaluations,
         "categories": [{"category_id": "INF", "numeric_score": 2.5,
                         "score_rating": "Partial", "severity_status": "Needs Work"}],
         "classification": {"tier": "Remediation Required", "high_count": 1,
@@ -149,6 +173,38 @@ def test_missing_finding_field_named():
     v = vc.Violations(Path("x-mod-report.json"), "mod")
     vc.validate_mod(v, bad, strict=False)
     assert any("recommendation" in e for e in v.errors)
+
+
+# --- rubric coverage as a superset contract ------------------------------------------
+
+def test_missing_rubric_id_fails_conformance():
+    # Drop a real rubric question the report should have answered → hard error.
+    bad = _conforming_ara()
+    bad["evaluations"] = bad["evaluations"][:-1]  # one real id now unanswered
+    v = vc.Violations(Path("x-ara-report.json"), "ara")
+    vc.validate_ara(v, bad, strict=False)
+    assert any("incomplete rubric coverage" in e for e in v.errors), v.errors
+
+
+def test_benign_extra_id_is_a_warning_not_a_failure():
+    # A grounded/hallucinated extra id with no tier-moving severity is tolerated: the count
+    # is not the contract. Coverage of the real rubric is intact, so conformance holds.
+    ok = _conforming_ara()
+    ok["evaluations"].append({"question_id": "DATA-Q3-ext", "category_id": "DATA",
+                              "status": "pass", "reason": "extra"})
+    v = vc.Violations(Path("x-ara-report.json"), "ara")
+    vc.validate_ara(v, ok, strict=False)
+    assert v.ok, v.errors
+    assert any("not in the rubric" in w for w in v.warnings), v.warnings
+
+
+def test_phantom_id_with_tier_moving_severity_fails():
+    # An invented id carrying BLOCKER can feed blocker_count → hard error, never a warning.
+    bad = _conforming_ara()
+    bad["findings"].append(_finding("AUTH-Q99", "AUTH", "ara_metadata"))  # native BLOCKER
+    v = vc.Violations(Path("x-ara-report.json"), "ara")
+    vc.validate_ara(v, bad, strict=False)
+    assert any("phantom question id" in e for e in v.errors), v.errors
 
 
 def test_detect_analysis_from_filename_and_field():

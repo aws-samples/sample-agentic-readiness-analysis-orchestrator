@@ -6,10 +6,15 @@
 # This is a PURE PATH CHECK — no LLM, no network, no cost. The LLM is spent only at
 # the judge step, after this gate has already said "run". See harness/DESIGN.md §5.
 #
-# Policy: DEFAULT-RUN. We run UNLESS *every* changed path matches the skip denylist.
-# This is permissive by design so contributors are never boxed in — a rubric edit, a
-# program-library change, a new/edited fixture, or a harness change all run. Only pure
-# docs/license/meta changes skip.
+# Policy: DEFAULT-RUN. We run UNLESS *every* changed path matches the skip denylist OR is
+# a committed-baseline path. This is permissive by design so contributors are never boxed
+# in — a rubric edit, a program-library change, a new/edited fixture, or a harness change
+# all run. Two path classes skip: (1) pure docs/license/meta changes, and (2) a golden-only
+# re-baseline MR (harness/golden/ + the accuracy baseline). The re-baseline case skips
+# because re-analyzing the fixtures would diff a fresh nondeterministic draw against the
+# very golden the MR just wrote — every tier/blocker difference would be draw-vs-draw noise
+# the judge would flag as a false SAFETY HOLD. The golden was already validated upstream by
+# the ratchet in harness:rebaseline-gather; see is_baseline() below.
 #
 # Exit codes:
 #   0  → RUN  (at least one changed path is not denylisted, or diff is empty/unknown)
@@ -120,6 +125,25 @@ is_denylisted() {
   esac
 }
 
+# --- baseline: the committed golden (report trees + accuracy baseline) ----------------
+# A change to ONLY these paths is a re-baseline MR (from harness:rebaseline-gather, or a
+# hand refresh). It is a SKIP candidate for a DIFFERENT reason than the denylist: the
+# golden is not docs, it IS the analysis baseline — but there is nothing for THIS harness
+# to evaluate, because re-analyzing the fixtures would diff a fresh nondeterministic draw
+# against the very golden the MR just wrote. Every tier/blocker difference would be
+# draw-vs-draw noise, which the judge would surface as a false SAFETY HOLD. The golden was
+# already validated upstream by the ratchet in the gather job (score-reports.py --ratchet),
+# so a reviewer reads rebaseline-compare.json + the diff, not a re-run. A golden change
+# accompanied by a TD or fixture edit still RUNS — that edit is the thing to evaluate.
+is_baseline() {
+  local p="$1"
+  case "${p}" in
+    harness/golden/*)                  return 0 ;;
+    harness/golden-accuracy-baseline.json) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # --- classify + decide ---------------------------------------------------------------
 # A path is a watched-TD change if it lives under any configured TD directory prefix.
 is_watched_td() {
@@ -151,6 +175,14 @@ while IFS= read -r path; do
     esac
     continue
   fi
+  # A baseline-only path (committed golden / accuracy baseline) is neither denylisted nor
+  # run-worthy: skip it as a run trigger but do NOT let it fall through to the denylist
+  # branch below, which would treat it as run-worthy (it is not a *.md / meta path). A
+  # rebaseline MR touches only these, so this is what makes it SKIP. If a TD or fixture
+  # path ALSO changed, that path trips `run=true` on its own iteration.
+  if is_baseline "${path}"; then
+    continue
+  fi
   if ! is_denylisted "${path}"; then
     run="true"
     nondenylisted+=("${path}")
@@ -180,6 +212,8 @@ if [[ "${run}" == "true" ]]; then
   fi
   exit 0
 else
-  echo "SKIP — every changed path is docs/meta only (base=${BASE_REF})" >&2
+  echo "SKIP — every changed path is docs/meta or committed-baseline only (base=${BASE_REF})" >&2
+  echo "       (a golden-only diff is a re-baseline, already ratchet-checked upstream —" >&2
+  echo "        nothing for the change-harness to evaluate)" >&2
   exit 1
 fi

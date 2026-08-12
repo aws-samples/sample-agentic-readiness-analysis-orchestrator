@@ -869,10 +869,20 @@ def test_evaluations_and_findings_are_disjoint():
     """Coverage is the UNION of `evaluations` (passed) and `findings` (flagged), which only
     holds if they never overlap — a qid listed in both would be counted once and could mask a
     genuine gap. Checked on the real golden ARA reports (a property of the analysis output),
-    across every repo so a rebaseline can't remove the one being tested; and the total derives
-    from the TD (via EXPECTED_QUESTIONS, parsed from the rubric) so adding or removing a
-    question can't break it.
+    across every repo so a rebaseline can't remove the one being tested.
+
+    Coverage is asserted by MEMBERSHIP, not count. The contract is a SUPERSET: every real
+    rubric id must be answered (a `missing` id is a real coverage gap and fails). An *extra*
+    id the analysis invents does NOT fail this test on its own — the count is not the contract,
+    the rubric coverage and the finding severities are (score-reports weighs a benign extra as
+    a low demerit). The one extra that still hard-fails is a phantom carrying a tier-moving
+    severity, because that can move the classification; that lives in score-reports'
+    `phantom_id_moves_tier` check and is asserted in test_score_reports. Membership also closes
+    the count-only hole where one dropped question plus one hallucinated id net to the expected
+    total. The rubric id set derives from the TD (skill_table), so adding/removing a question
+    can't break this. See skill_table.classify_coverage.
     """
+    import skill_table as st
     ara_repos = [(k, r) for k, r in dr.load_tree(GOLDEN).items() if k[:2] == ("ara", "repo")]
     assert ara_repos, "fixture precondition: golden has at least one per-repo ARA report"
     for (_, _, repo), rpt in ara_repos:
@@ -880,8 +890,11 @@ def test_evaluations_and_findings_are_disjoint():
         fi = {f["question_id"] for f in rpt.get("findings") or []}
         assert ev & fi == set(), \
             f"{repo}: evaluations and findings overlap — coverage math must change"
-        assert len(ev) + len(fi) == dr.EXPECTED_QUESTIONS["ara"], \
-            f"{repo}: answered {len(ev) + len(fi)}, expected {dr.EXPECTED_QUESTIONS['ara']}"
+        cov = st.classify_coverage("ara", rpt)
+        assert not cov["missing"], \
+            f"{repo}: unanswered rubric question(s) {sorted(cov['missing'])} — incomplete coverage"
+        assert not cov["tier_moving_extra"], \
+            f"{repo}: phantom id(s) {sorted(cov['tier_moving_extra'])} carry a tier-moving severity"
 
 
 def test_clean_tree_reports_no_coverage_gaps():

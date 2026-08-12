@@ -11,10 +11,14 @@ out to are the authoritative rubric text (each TD's `SKILL.md`) and the deep des
 1. [What is a Transformation Definition?](#what-is-a-transformation-definition-td)
 2. [TD anatomy — where everything lives](#td-anatomy--where-everything-lives)
 3. [The change playbook](#the-change-playbook)
-4. [The benchmarking scorer prompts](#the-benchmarking-scorer-prompts-hand-maintained)
-5. [Before you open a PR / MR](#before-you-open-a-pr--mr)
-6. [Invariants — what breaks silently](#invariants--what-breaks-silently)
-7. [Where the deeper docs live](#where-the-deeper-docs-live)
+4. [A worked example — re-scoring one question, end to end](#a-worked-example--re-scoring-one-question-end-to-end)
+5. [Reading the verdict you get back](#reading-the-verdict-you-get-back)
+6. [The contributor use-case matrix — what passes, what fails, why](#the-contributor-use-case-matrix--what-passes-what-fails-why)
+7. [Refreshing the golden baseline — two ways](#refreshing-the-golden-baseline--two-ways)
+8. [The benchmarking scorer prompts](#the-benchmarking-scorer-prompts-hand-maintained)
+9. [Before you open a PR / MR](#before-you-open-a-pr--mr)
+10. [Invariants — what breaks silently](#invariants--what-breaks-silently)
+11. [Where the deeper docs live](#where-the-deeper-docs-live)
 
 ---
 
@@ -36,7 +40,8 @@ A TD is the rubric the AWS Transform service runs against a repository. There ar
 Each TD is a lean **`SKILL.md` orchestration spine** plus **`references/*.md`** files loaded on
 demand. The harness reads `SKILL.md` + `references/*.md` concatenated at runtime
 (`harness/skill_table.py::parse_questions`), so **a TD edit takes effect on the next run with no
-code change** — the only exception is a change to the *number* of questions (see
+code change** — the only follow-up is when you change the *number* of questions: that touches one
+count literal, and **adding** one also needs a golden rebaseline (see
 [the change playbook](#the-change-playbook)).
 
 ---
@@ -122,13 +127,22 @@ it is scored end-to-end, see [`harness/DESIGN.md`](../../harness/DESIGN.md) §2�
 
 ## The change playbook
 
-> **The one decision that routes everything: are you changing the *number* of questions?**
->
-> - **No** (re-score, reword, flip a severity, change a scope/archetype/pathway) → edit the TD,
->   open a `rubric-change` MR. **No code change.** The harness picks it up at runtime.
-> - **Yes** (add or remove a question) → same as above **plus** update the count literal in
->   [`harness/tests/test_skill_table.py`](../../harness/tests/test_skill_table.py) in the same
->   MR, or CI fails loudly.
+**Anyone can add, remove, or edit any question or rubric value.** What differs is the *follow-up* —
+and there are only three cases. This table is the whole routing decision; the rest of this section
+is just the detail for each row.
+
+| If you… | Edit the TD | Count literal (`test_skill_table.py`) | Golden rebaseline | Then | See |
+|---|:---:|:---:|:---:|---|---|
+| **Edit a question** (re-score, reword, change scope / severity / archetype / pathway) | ✅ | — | ❌ **no** | validate the specific use case, **trust the judge** on the semantics | [§A](#a-re-score-a-question-severity--wording--criteria--scope--archetype--pathway) |
+| **Add a question** | ✅ | bump (`43→44`) | ✅ **required** | the golden can't answer a question that didn't exist when it was made | [§B](#b-add-a-question) |
+| **Remove a question** | ✅ | decrement (`44→43`) | ❌ **not needed** (optional cleanup) | the golden still covers the *smaller* rubric — it's a superset | [§C](#c-remove-a-question) |
+
+> **The rebaseline rule in one line — and it's the opposite of what intuition suggests:**
+> **ADD needs a rebaseline, REMOVE does not.** The golden must be able to answer *at least* every
+> question in the rubric. Adding grows the rubric past what the golden covers → refresh. Removing
+> shrinks it → the golden still covers everything → fine. Editing a question changes neither the
+> question set nor the count, so the harness picks it up at runtime with **no code change and no
+> rebaseline** — you just state your intent and let the judge weigh the delta.
 
 ### A. Re-score a question (severity / wording / criteria / scope / archetype / pathway)
 
@@ -146,6 +160,14 @@ The common case. **No code change, no count edit.**
 
 ### B. Add a question
 
+Adding a question is the one case that needs a **golden refresh** — and it's worth understanding
+*why*, because [removing](#c-remove-a-question) one does not. The golden report trees under
+`harness/golden/` were generated before your new question existed, so they physically cannot
+answer it. The coverage contract is a **superset check** (`rubric_ids ⊆ answered_ids`): after you
+add `ENG-Q6`, every golden report is *missing* it, and the harness flags an incomplete-coverage
+gap. No test edit can paper over that — it is a real gap until the golden is regenerated against
+your edited TD.
+
 1. Add the question in its `references/*.md` section **and** any count/summary tables that
    reference it, in one change.
 2. **Use the next free number in the category, never reuse a retired one** (highest `AUTH-Q7`
@@ -155,12 +177,20 @@ The common case. **No code change, no count edit.**
    ([`harness/tests/test_skill_table.py`](../../harness/tests/test_skill_table.py)) — `43`→`44`
    for ARA, `37`→`38` for MOD — in the **same MR**. Forget it and CI fails loudly with the count
    it parsed and the two causes.
-4. Open a `rubric-change` MR with intent + expected impact.
-5. A maintainer refreshes the golden baselines on approval (DESIGN.md §7).
+4. **Refresh the golden** so the baseline reports answer the new question — you do NOT hand-edit
+   them; you *regenerate* them with the harness. See
+   [Refreshing the golden baseline](#refreshing-the-golden-baseline--two-ways) for both paths
+   (a local `atx` run, or the no-setup CI path that opens a golden-refresh MR into your own
+   branch).
+5. Open a `rubric-change` MR with intent + expected impact.
 
 ### C. Remove a question
 
-Same as add, but:
+Same as add, but **no golden refresh is required.** After you delete `ENG-Q5`, every golden report
+still answers all the *remaining* questions — it's a strict superset of the smaller rubric, so the
+`rubric_ids ⊆ answered_ids` check still holds and coverage stays green. The one thing that fails is
+the count tripwire, which you fix by decrementing the literal. (You *may* refresh the golden to
+drop the now-orphan answer, but it is optional — the orphan is tolerated as a benign extra.)
 
 - **Leave the gap** (`Q1, Q2, Q4, …`). **Do NOT** slide `Q4→Q3` to close it — that silently
   reassigns every finding, baseline row, and priority to a *different* question, and the count
@@ -179,6 +209,222 @@ wrong value. See [Invariant #2](#2-never-hardcode-a-threshold-band-or-severity-i
 
 ---
 
+## A worked example — re-scoring one question, end to end
+
+The playbook above is the map; here is one whole trip through it, the most common change there
+is: **re-scoring an existing question.** Nothing here is new — it just shows the pieces in order.
+
+Say you want AUTH-Q5 (credential management) to weigh missing rotation more heavily. Today its
+heading reads:
+
+```
+#### AUTH-Q5: Credential Management — RISK-SAFETY
+```
+
+1. **Edit the TD, and only the TD.** Open
+   `definitions/managed/agentic-readiness-analysis/references/02-question-bank.md`, find the
+   AUTH-Q5 block, and adjust its calibration prose (or, if you were changing the *band*, the
+   `— SEVERITY` suffix on that heading). You touch **no** Python, **no** count literal (the
+   question set didn't change), and **no** golden (re-scoring, per [§A](#a-re-score-a-question-severity--wording--criteria--scope--archetype--pathway)).
+2. **Run the offline suite** — the same one CI runs, no AWS, seconds:
+   ```bash
+   python3 -m pytest harness/tests/ -q
+   ```
+   Green means you didn't break the output contract. An edit like this *should* be green with
+   zero test changes; if a test went red, you changed more than you thought (e.g. a heading
+   format the parser depends on).
+3. **Open a `rubric-change` MR** using the template (it auto-loads on GitLab; on GitHub use the
+   PR template). Fill in **What / Why / Expected impact** concretely — e.g. *"tightened AUTH-Q5
+   so an unrotated static credential reads as RISK-SAFETY, not INFO; expect more AUTH RISK-SAFETY
+   findings on `legacy-shipping-api`, and a possible ARA tier drop there."* The judge scores the
+   observed delta **against this intent**, so vague intent → vague verdict.
+4. **Answer the template's one non-obvious question: "Was the rubric edited in the AWS Transform
+   service?"** For a repo edit like this the answer is **no** (the default) — see the box below
+   for why that question exists.
+5. **Read the advisory verdict** the pipeline posts as an MR comment (next section).
+
+> **In-repo vs in-service — why the template asks.** This repo is the *proposal and test* surface;
+> the live rubric runs inside the **AWS Transform service** (Continuous Modernization). The
+> harness fixtures always execute the **repo copy** of the TD. So if you edited the rubric
+> *in-service* instead of here, the fixtures run the unedited repo copy and the delta comes back
+> **empty** — which looks identical to "my edit didn't land." Checking **yes** tells the judge to
+> read an empty delta as *stale goldens*, not *a no-op edit*, and is the cue to fire
+> `harness:full` (web pipeline → **Run pipeline**) to regenerate the goldens from the in-service
+> rubric. For the normal path — you edited `SKILL.md`/`references/` in this repo — the answer is
+> **no**, and the fixtures pick your change up automatically.
+
+## Reading the verdict you get back
+
+The pipeline posts **one advisory comment** on your MR. It never blocks the merge — every harness
+job is `allow_failure: true`. Read it as a **second opinion**, not a gate. Three fields carry the
+signal:
+
+| Field | Values | What it means for you |
+|---|---|---|
+| `analysis_effect` | `improves` / `neutral` / `degrades` | The measured direction: is the assessment more accurate/safer (`improves`), materially unchanged (`neutral`, i.e. within noise — **not** a failure), or did it lose signal / understate risk (`degrades`)? |
+| `verdict` | `LGTM` / `needs-work` | `LGTM` = safe for the analysis and not a regression. `needs-work` = look again (a degrade, an unscored report the harness couldn't measure, or a quality/safety flag fired). |
+| `safety_hold` | `true` / `false` | An independent axis: a **tier-material safety signal moved** (a blocker/RISK-SAFETY relaxation that changes a readiness tier). When true you get `needs-work` regardless of intent — a human must sign off. |
+
+**When the verdict disagrees with your intent, that is the harness doing its job — not a bug to
+route around.** A change can be described perfectly and still degrade the analysis; the judge
+measures the *delta*, and reports your intent only as supporting evidence. Two common cases:
+
+- **`needs-work` + "within noise / unscored":** the delta was too small to measure, or a report
+  failed to score, so the change **can't be validated** — it's reported as a harness error to
+  fix, never as a silent pass. Re-run, or narrow the change so the effect is measurable.
+- **`safety_hold: true` on a change you meant to be safe:** you relaxed a safety signal without
+  saying so. Either it's wrong (restore the severity) or it's deliberate — in which case
+  **state it in the MR intent** ([Invariant #6](#6-dont-silently-relax-a-safety-signal)) so the
+  judge and a reviewer can weigh it on purpose. Never let a demotion ride in unremarked.
+
+The rationale cites specific `question_id`s / pathway ids / program acronyms, so it tells you
+*which* part of the delta drove the call. For the full calibration ladder see
+[`harness/DESIGN.md` §6](../../harness/DESIGN.md).
+
+## The contributor use-case matrix — what passes, what fails, why
+
+The [change playbook](#the-change-playbook) above covers the three things *you* do (add / remove /
+edit). This matrix is the fuller picture: it adds the cases the *harness* decides on its own — how
+a report that invents an id is treated, what a parse typo does, what a safety demotion triggers — so
+you can predict the suite's behavior before you push. You should not have to guess, and you should
+**never** have to hand-edit tests to make a legitimate rubric edit pass: a rubric change touches
+**at most one** test literal (the count tripwire) plus, for an add, a golden refresh. Everything
+else derives from the TD at runtime. This table is the contract — if your change behaves
+differently, that's a bug in the harness, not a cue to edit tests.
+
+| You did this | Count tripwire (`test_skill_table.py`) | Golden refresh | Other test edits | Local check result |
+|---|---|---|---|---|
+| **Edit a question** (re-score / wording / criteria / scope / archetype / pathway) | — | — | none | ✅ green — picked up at runtime |
+| **Add a question** | bump the literal (`43→44`) | **required** (golden can't answer the new id) | none | ❌ until golden refreshed → then ✅ |
+| **Remove a question** | decrement the literal (`44→43`) | optional (superset still covers) | none | ✅ once literal matches |
+| **Rename a question's title** (same id) | — | — | none | ✅ — the id is the key, not the title |
+| **Renumber an id** (`Q4→Q3`) | — (count unchanged) | — | none | ⚠️ **passes but is WRONG** — [Invariant #1](#1-never-renumber-a-question-to-close-a-gap). Don't. |
+| **Report invents an extra id** (`DATA-Q3-ext`), no tier-moving severity | — | — | none | ✅ tolerated as a benign extra (low demerit), *not* a hard fail |
+| **Report invents an extra id carrying BLOCKER / RISK-SAFETY** | — | — | none | ❌ hard fail — a phantom id must not feed `blocker_count`/`risk_safety_count` |
+| **Add a fixture** | — | golden for the new fixture | none | ❌ until the new fixture has a golden |
+| **Accidental parse drift** (hyphen for em-dash, broken `####`) | fails HERE, loudly | — | none | ❌ — fix the heading, don't bump the number |
+| **Demote a safety signal** (RISK-SAFETY→INFO, drop `⚡`) | — | — | none | ✅ mechanically — but [state it in MR intent](#6-dont-silently-relax-a-safety-signal) or the judge can't weigh it |
+
+Two ideas do all the work in that table:
+
+- **The count doesn't matter; the output contract does.** Coverage is a *membership* check
+  (`rubric_ids ⊆ answered_ids`), not a count-equality check. A report that answers every real
+  question passes even if it also emits a grounded extra id; a report that drops a real question
+  fails even if a fabricated id keeps the total looking right. So a fabricated-but-harmless `-ext`
+  id is a low-severity demerit, while a *dropped* real question — or a fabricated id that carries a
+  tier-moving severity — is a hard fail. Severity, not arithmetic, decides.
+- **Trust the judge for the semantics; pin only the one number.** The unit tests assert the
+  *contract* (coverage is complete, findings and evaluations are disjoint, severities are read from
+  the TD not transcribed), not specific finding text. The semantic question — "does this delta
+  match what you said you were changing?" — is the LLM judge's job on the MR, not a brittle literal
+  in a test. That's why re-scoring a question needs **zero** test edits.
+
+## Where the fixtures live (and adding one)
+
+The fixtures are the sample repositories every TD is exercised against. They live under
+[`harness/fixtures/`](../../harness/fixtures/) (`modern/`, `monolith/`, `portfolio/`) and are
+indexed by [`harness/usecases.yaml`](../../harness/usecases.yaml) — that file, not the directory,
+is the source of truth for what runs. Each entry pairs a fixture with its coverage **axes**
+(language, era, api, architecture, …) and per-TD **expectations** (the intent baseline the judge
+scores the delta against — *not* an asserted equality):
+
+```yaml
+- id: legacy-crm-desktop
+  path: harness/fixtures/portfolio/legacy-crm-desktop
+  axes: { language: vb6, era: legacy, has_api: none, architecture: desktop, auth_present: false }
+  expectations:
+    ara: { tier: Not Agent-Integrable, must_have_categories: [AUTH, API, DISC] }
+    mod: { tier: Not Ready, pathways_triggered: [move-to-cloud-native], overall_score_band: Not Ready }
+```
+
+**To add a fixture:** drop the repo under one of the `harness/fixtures/` trees, add its entry to
+`usecases.yaml` (path + axes + expectations), and **generate its golden** — a new fixture has no
+baseline, so coverage fails until one exists ([refresh the golden](#refreshing-the-golden-baseline--two-ways)).
+Pick axes that fill a **gap** the coverage heatmap flags (`harness/coverage-heatmap.py`); a fixture
+that only duplicates axes already covered adds runtime without adding signal. The axis vocab is
+**closed** — add a value to the `axes:` block only alongside a fixture that uses it.
+
+## Refreshing the golden baseline — two ways
+
+The golden report trees under `harness/golden/` are the committed "before" picture the harness
+diffs against. **Never hand-edit them** ([Invariant #4](#4-never-edit-generated-files-by-hand)) —
+they are *regenerated* by running the harness over the fixtures with your edited TD. You only need
+this when [adding a question](#b-add-a-question) or [a fixture](#the-contributor-use-case-matrix--what-passes-what-fails-why);
+re-scoring and removals don't.
+
+There are two paths. Pick by whether you have `atx` + AWS credentials set up locally.
+
+#### Prerequisites at a glance
+
+| | Path 1 (local) | Path 2 (CI, on your branch) |
+|---|---|---|
+| **Python + harness deps** | ✅ `pip install -r harness/requirements.txt` | ✅ (only to run the offline suite / read the diff) |
+| **`atx` CLI** installed | ✅ **required** | ❌ not needed — CI has it |
+| **AWS credentials** (Bedrock access) | ✅ **required** — this is the one step that calls AWS | ❌ not needed — CI vends its own via the Credential Vendor |
+| **Push access to the GitLab mirror** | ✅ to open the MR | ✅ to push your branch + trigger the web pipeline |
+| **Wall-clock** | ~10–20 min/fixture × the sweep, local | pipeline time, hands-off |
+
+If you have neither `atx` nor AWS set up, use **Path 2** — that's exactly what it's for. Everything
+*except* regenerating the golden (editing the TD, bumping the literal, running
+`python3 -m pytest harness/tests/ -q`) is fully offline and needs only Python + the harness deps.
+
+### Path 1 — locally (default, fastest feedback)
+
+**Requires:** `atx` installed **and** AWS credentials with Bedrock access (see
+[`harness/README.md`](../../harness/README.md) for the credential setup CI uses). If you don't have
+these, jump to [Path 2](#path-2--let-ci-do-it-on-your-own-branch-no-local-atx-needed).
+
+Regenerate the golden yourself and commit it alongside your TD edit — no round-trip through CI:
+
+```sh
+# Re-run the harness over every fixture with YOUR edited TD and write the results
+# into the committed golden tree. This publishes the repo's TD folders as CUSTOM defs
+# and runs `atx custom def exec` (NOT `atx ct` — that runs the old service-side TD and
+# can't see your edit). This is the one step that needs AWS. See harness/README.md.
+harness/run-fixtures.sh --scope all --write-golden --validate --jobs 6
+
+# Refresh the accuracy baseline from the new golden, then confirm the suite is green
+# against it — the same self-test CI runs.
+harness/score-reports.py --trees harness/golden --update-baseline --ratchet --markdown
+python3 -m pytest harness/tests/ -q
+```
+
+Commit the TD edit, the count literal, `harness/golden/`, `golden-accuracy-baseline.json`, and
+`SCORES.md` **together** in one MR.
+
+### Path 2 — let CI do it, on your own branch (no local `atx` needed)
+
+If you can't run `atx` locally, you don't have to. Push your TD edit and let the pipeline
+regenerate the golden for you and open a refresh MR **into your own branch**:
+
+1. Edit the TD, bump the count literal, push your feature branch, open your `rubric-change` MR to
+   `main`. It will go **red** — the golden can't answer your new question yet. That's expected; the
+   failure message names the missing id.
+2. On your branch, trigger a **web pipeline** (GitLab → CI/CD → **Run pipeline**, with your branch
+   selected) and set the variable **`REBASELINE=true`**. The rebaseline job re-runs the harness
+   over the fixtures with *your* edited TD.
+3. Because it's a web run on a non-`main` branch, the job opens a golden-refresh MR **targeting your
+   feature branch** (schedules and `main` runs still target `main`). It self-tests the fresh golden
+   before proposing, so a broken refresh never lands.
+4. Merge that refresh MR into your branch. Your original `rubric-change` MR now goes **green**, and
+   you never touched a golden file by hand.
+
+> **The refresh MR itself won't post a harness verdict — that's expected, not a stuck pipeline.** It
+> touches *only* `harness/golden/` + the accuracy baseline, and the run/skip gate (`should-run.sh`)
+> deliberately SKIPs a golden-only MR: re-analyzing the fixtures would just diff a fresh
+> nondeterministic draw against the very golden the MR wrote, so every difference is draw-vs-draw
+> noise, not a signal. The golden was already validated upstream by the ratchet in the rebaseline
+> job before the MR was opened. The verdict you care about is on your `rubric-change` MR, where your
+> TD edit lives.
+
+> Why the refresh targets *your* branch: the weekly automated rebaseline maintains `main`, but a
+> contributor's new question lives on a feature branch and can't merge to `main` until its golden
+> exists. Sending the refresh back to the contributor's branch closes that loop without a
+> maintainer in the middle. (Wired in `.gitlab-ci.yml`, `harness:rebaseline-gather`.)
+
+Either way the golden is *measured*, never authored — see
+[Invariant #4](#4-never-edit-generated-files-by-hand).
+
 ## The benchmarking scorer prompts (hand-maintained)
 
 The two prompts in [`harness/rubric/`](../../harness/rubric/) —
@@ -193,10 +439,20 @@ See the last section of [`harness/rubric/README.md`](../../harness/rubric/README
 
 ## Before you open a PR / MR
 
+**This step is fully offline** — it needs only Python and the harness deps, no `atx` and no AWS.
+Run it on every rubric change, no matter which [golden-refresh path](#refreshing-the-golden-baseline--two-ways)
+you use:
+
 ```bash
-pip install -r harness/requirements.txt
-python3 -m pytest harness/tests/ -q          # the full harness suite, a few hundred tests, seconds
+pip install -r harness/requirements.txt   # one-time; Python 3.11+
+python3 -m pytest harness/tests/ -q        # the full harness suite, a few hundred tests, seconds
 ```
+
+This is the same suite the MR pipeline runs — **run it locally so you don't discover a broken
+contract only at the MR validator (the last step).** A green run here means your change satisfies
+the output contract (coverage, disjoint findings/evaluations, severities read from the TD); a
+red run tells you exactly which invariant you tripped. If you added a question, expect the count
+tripwire and the coverage gap to be red until you [refresh the golden](#refreshing-the-golden-baseline--two-ways).
 
 Then walk the [invariants](#invariants--what-breaks-silently) below — the things that break
 without a red test. That is the highest-leverage part of this page.
@@ -230,6 +486,9 @@ edit is the literal in `test_the_severity_table_is_parsed_from_the_td_not_transc
 fail loudly if you forget — but only for a *count* change. It cannot tell an intentional add from
 an accidental parse drift, so if a heading drifts and the count happens to still match, nothing
 fires. Keep headings in the exact `#### <ID>: <title> — SEVERITY` form (four `#`, em-dash).
+Remember the asymmetry: an **add** also needs a
+[golden refresh](#refreshing-the-golden-baseline--two-ways) (the golden can't answer the new
+question); a **remove** does not (the golden still covers the smaller rubric).
 
 ### 4. Never edit generated files by hand
 
@@ -238,7 +497,9 @@ fires. Keep headings in the exact `#### <ID>: <title> — SEVERITY` form (four `
   rebaseline pipeline.
 
 Hand-editing either makes the baseline lie. Golden report trees under `harness/golden/` are
-likewise refreshed by a maintainer / the rebaseline job, not by hand.
+likewise *regenerated* — by you locally (`run-fixtures.sh --write-golden`) or by the CI rebaseline
+job on your branch — never edited by hand. See
+[Refreshing the golden baseline](#refreshing-the-golden-baseline--two-ways).
 
 ### 5. Keep the benchmarking scorer prompts in sync
 

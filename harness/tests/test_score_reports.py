@@ -43,6 +43,23 @@ def _f(qid: str, native: str) -> dict:
     return {"question_id": qid, "ara_metadata": {"native_severity": native}}
 
 
+def _rubric_ids(analysis: str) -> list[str]:
+    """The REAL rubric ids for this analysis, in document order.
+
+    Coverage is now judged by MEMBERSHIP against the TD's own id set, so a coverage test must
+    answer real ids, not synthetic `Q0..Q42`. Drawn from skill_table so the tests follow the
+    TD the same way EXPECTED_QUESTIONS does — a rubric edit re-derives them with no test edit.
+    """
+    return list(sr.parse_questions(analysis))
+
+
+def _full_report(analysis: str, n_findings: int = 0) -> dict:
+    """A report answering EVERY rubric id — the first `n_findings` as findings, rest as evals."""
+    ids = _rubric_ids(analysis)
+    return {"findings": [{"question_id": q} for q in ids[:n_findings]],
+            "evaluations": [{"question_id": q} for q in ids[n_findings:]]}
+
+
 # --- ARA tier arithmetic (SKILL.md 1569-1573) ------------------------------------------
 
 def test_tier_table_matches_the_rubric_arithmetic():
@@ -149,12 +166,8 @@ def test_blocker_undercount_outranks_a_quality_undercount():
 # --- question coverage -----------------------------------------------------------------
 
 def test_full_coverage_passes_for_both_analyses():
-    ara = {"findings": [{"question_id": f"Q{i}"} for i in range(20)],
-           "evaluations": [{"question_id": f"Q{i}"} for i in range(20, 43)]}
-    assert sr.check_coverage(ara, "ara") == []
-    mod = {"findings": [{"question_id": f"Q{i}"} for i in range(15)],
-           "evaluations": [{"question_id": f"Q{i}"} for i in range(15, 37)]}
-    assert sr.check_coverage(mod, "mod") == []
+    assert sr.check_coverage(_full_report("ara", n_findings=20), "ara") == []
+    assert sr.check_coverage(_full_report("mod", n_findings=15), "mod") == []
 
 
 def test_coverage_is_the_union_not_either_list_alone():
@@ -163,17 +176,71 @@ def test_coverage_is_the_union_not_either_list_alone():
     Measured on loan-calculator: 21 findings + 22 evaluations = 43, zero intersection.
     Counting only one list would report every report as ~50% covered.
     """
-    rpt = {"findings": [{"question_id": f"Q{i}"} for i in range(21)],
-           "evaluations": [{"question_id": f"Q{i}"} for i in range(21, 43)]}
-    assert sr.check_coverage(rpt, "ara") == []
+    assert sr.check_coverage(_full_report("ara", n_findings=21), "ara") == []
 
 
 def test_missing_questions_are_critical():
-    rpt = {"findings": [{"question_id": f"Q{i}"} for i in range(41)], "evaluations": []}
+    # Answer all but two REAL rubric ids — a genuine coverage gap by membership.
+    ids = _rubric_ids("ara")
+    dropped = set(ids[:2])
+    rpt = {"findings": [{"question_id": q} for q in ids if q not in dropped], "evaluations": []}
     hits = [c for c in sr.check_coverage(rpt, "ara")
             if c["check"] == "incomplete_question_coverage"]
     assert hits and hits[0]["severity"] == "critical"
-    assert "41 of 43" in hits[0]["detail"]
+    assert f"2 of {sr.EXPECTED_QUESTIONS['ara']}" in hits[0]["detail"]
+
+
+def test_a_fabricated_id_is_a_low_demerit_not_a_hard_fail():
+    """An extra id the rubric does not define is a quality demerit (low), not a coverage break.
+
+    This is the storefront-rails `-ext` case: every real question is still answered, so the
+    assessment is complete; the stray id is weighed as a possible fabrication, not treated as
+    a broken report. The count is not the contract — rubric coverage + severities are.
+    """
+    rpt = _full_report("ara")
+    rpt["evaluations"].append({"question_id": "DATA-Q3-ext", "status": "pass"})
+    checks = sr.check_coverage(rpt, "ara")
+    names = [c["check"] for c in checks]
+    assert "fabricated_question_id" in names
+    assert "incomplete_question_coverage" not in names  # coverage is intact
+    fab = next(c for c in checks if c["check"] == "fabricated_question_id")
+    assert fab["severity"] == "low"
+    assert "DATA-Q3-ext" in fab["detail"]
+
+
+def test_a_phantom_id_with_a_tier_moving_severity_hard_fails():
+    """A fabricated id that carries BLOCKER / RISK-SAFETY can move blocker_count — hard-fail.
+
+    The safety exception: severity arithmetic is defined only over real rubric ids, so a
+    phantom bearing a tier-moving severity is never a mere demerit. It is reported critical and
+    is NOT folded into the low `fabricated_question_id` demerit.
+    """
+    rpt = _full_report("ara")
+    rpt["findings"].append(_f("AUTH-Q99", "BLOCKER"))
+    checks = sr.check_coverage(rpt, "ara")
+    phantom = [c for c in checks if c["check"] == "phantom_id_moves_tier"]
+    assert phantom and phantom[0]["severity"] == "critical"
+    assert "AUTH-Q99" in phantom[0]["detail"]
+    # It must NOT also be counted as a benign low demerit.
+    assert "AUTH-Q99" not in "".join(
+        c["detail"] for c in checks if c["check"] == "fabricated_question_id")
+
+
+def test_dropped_question_plus_fabricated_id_still_fails_coverage():
+    """The count-only hole: drop one real question, add one phantom → count nets to expected.
+
+    A `len(answered) == expected` check would pass this while a real question went unanswered.
+    Membership catches the dropped id (critical) independently of the extra one (low demerit).
+    """
+    ids = _rubric_ids("ara")
+    dropped = ids[0]
+    rpt = {"findings": [{"question_id": q} for q in ids if q != dropped],
+           "evaluations": [{"question_id": f"{dropped}-ext", "status": "pass"}]}
+    assert len({f["question_id"] for f in rpt["findings"]}
+               | {e["question_id"] for e in rpt["evaluations"]}) == sr.EXPECTED_QUESTIONS["ara"]
+    names = [c["check"] for c in sr.check_coverage(rpt, "ara")]
+    assert "incomplete_question_coverage" in names
+    assert "fabricated_question_id" in names
 
 
 def test_a_question_resolved_twice_is_a_defect():
@@ -183,14 +250,17 @@ def test_a_question_resolved_twice_is_a_defect():
         c["check"] for c in sr.check_coverage(rpt, "ara")]
 
 
-def test_mod_expects_37_not_43():
-    # ARA is 43, MOD is 37. A NAIVE heading grep over MOD returns 38 — INF-Q1 "Managed
-    # Compute" is present twice — so the parse must dedup by qid (see
-    # test_the_severity_table_is_parsed_from_the_td_not_transcribed).
-    assert sr.EXPECTED_QUESTIONS == {"ara": 43, "mod": 37}
-    rpt = {"findings": [{"question_id": f"Q{i}"} for i in range(37)], "evaluations": []}
-    assert sr.check_coverage(rpt, "mod") == []
-    assert [c for c in sr.check_coverage(rpt, "ara")]  # same report is short for ARA
+def test_coverage_is_per_analysis_ara_and_mod_differ():
+    # ARA and MOD are DIFFERENT rubrics (different ids and sizes), so coverage must be judged
+    # per-analysis. A MOD-complete report is NOT ARA-complete. The exact sizes are pinned once
+    # in test_skill_table.py (the single count tripwire); here we only assert they DIFFER and
+    # that coverage keys off the right one — no second hardcoded 43/37 to update on a rubric edit.
+    assert sr.EXPECTED_QUESTIONS["ara"] != sr.EXPECTED_QUESTIONS["mod"]
+    assert sr.check_coverage(_full_report("mod"), "mod") == []
+    # The full MOD id set is short for ARA (different categories) → an ARA coverage gap.
+    mod_ids_as_ara = {"findings": [{"question_id": q} for q in _rubric_ids("mod")],
+                      "evaluations": []}
+    assert [c for c in sr.check_coverage(mod_ids_as_ara, "ara")]
 
 
 # --- MOD score derivation --------------------------------------------------------------
@@ -569,13 +639,15 @@ def test_rubrics_keep_the_benchmark_structure_and_error_weighting():
     contract, and the error-weighting asymmetry that makes a missed blocker cost more than
     a spurious INFO.
     """
-    assert "43 questions across the 8 sections" in sr.ARA_RUBRIC
+    # The COUNT is derived from the TD (EXPECTED_QUESTIONS), not transcribed — assert the
+    # phrase with the derived number so a rubric edit doesn't require touching this literal.
+    assert f"{sr.EXPECTED_QUESTIONS['ara']} questions across the 8 sections" in sr.ARA_RUBRIC
     # Match on a single line: the prompts are carried with their original hard wraps, so a
     # phrase spanning a line break will not appear contiguously.
     assert "missed agent-safety blocker is the" in sr.ARA_RUBRIC
     assert "expensive error" in sr.ARA_RUBRIC
     assert "<score>X.X</score>" in sr.ARA_RUBRIC
-    assert "37 questions across the 5 categories" in sr.MOD_RUBRIC
+    assert f"{sr.EXPECTED_QUESTIONS['mod']} questions across the 5 categories" in sr.MOD_RUBRIC
     assert "missed High" in sr.MOD_RUBRIC
     assert "<score>X.X</score>" in sr.MOD_RUBRIC
 
@@ -606,8 +678,18 @@ def test_the_severity_table_is_parsed_from_the_td_not_transcribed():
     cannot tolerate.
     """
     ara, mod = sr.parse_questions("ara"), sr.parse_questions("mod")
-    assert len(ara) == 43
-    assert len(mod) == 37, "MOD must dedup INF-Q1; a naive heading grep returns 38"
+    # The COUNT tripwire lives in ONE place (test_skill_table.py) so a rubric edit touches a
+    # single literal. Here we assert the parse PROPERTIES that make the count trustworthy: the
+    # MOD dedup (INF-Q1 appears twice in the TD and must collapse to one) as a structural check
+    # rather than a second hardcoded 37, and that the parse found a non-trivial table at all.
+    assert ara and mod, "parse yielded an empty table — the heading format likely broke"
+    # MOD's INF-Q1 heading appears TWICE in the TD; parse_questions must dedup by qid. Assert
+    # that structurally (raw heading hits > deduped ids) instead of hardcoding 38 vs 37, so a
+    # rubric edit that changes the size doesn't need a literal update here.
+    import skill_table as st  # noqa: PLC0415
+    raw_mod_hits = st._Q_HEADING.findall(st._skill_text(st.SKILLS["mod"]))
+    assert len(raw_mod_hits) > len(mod), "expected a duplicate MOD heading (INF-Q1) to dedup"
+    assert "INF-Q1" in mod
     # Severities are read, not assumed.
     assert ara["API-Q1"]["severity"] == "BLOCKER"
     assert ara["DATA-Q4"]["severity"] == "RISK-QUALITY"
@@ -638,7 +720,8 @@ def test_a_broken_parse_fails_loudly_rather_than_scoring_with_a_partial_table():
             sr.ara_context()
         except AssertionError as exc:
             raised = True
-            assert "43" in str(exc)                     # tells you what it expected
+            # Derived from the TD, not transcribed — the message names the count it expected.
+            assert str(sr.EXPECTED_QUESTIONS["ara"]) in str(exc)  # tells you what it expected
             assert "NOPE.md" in str(exc)                # ...and where it looked
         assert raised, "a TD that cannot be parsed must raise, not return a partial table"
     finally:
@@ -667,7 +750,7 @@ def test_ara_context_names_the_rubrics_own_coverage_gaps():
     # Reports were docked for questions the rubric does not contain. Naming them keeps
     # them out of `misses` and in `rubric_gaps`, where they measure the TD instead.
     ctx = sr.ara_context()
-    assert "NOT COVERED BY ANY OF THE 43 QUESTIONS" in ctx
+    assert f"NOT COVERED BY ANY OF THE {sr.EXPECTED_QUESTIONS['ara']} QUESTIONS" in ctx
     assert "session fixation" in ctx
     assert "rubric_gaps" in ctx
 
@@ -1214,7 +1297,58 @@ def test_ratchet_would_refuse_a_below_floor_sweep_even_when_steady():
     regressed = [u for u in got["units"] if u["verdict"] == "regressed"]
     below = [u for u in got["units"] if u.get("below_quality_floor")]
     assert not regressed          # within-noise, so the delta gate alone would ADOPT
-    assert [u["repo"] for u in below] == ["a"]   # ...but the floor gate REFUSES
+    assert [u["repo"] for u in below] == ["a"]   # ...but a whole-sweep collapse REFUSES
+
+
+# The rebaseline ratchet judges the floor HOLISTICALLY: a lone below-floor outlier is a bad
+# roll of a non-deterministic agent and is tolerated; a BROAD collapse (> the fraction) is a
+# real groundedness drop and is refused. These replicate the exact decision the --ratchet block
+# makes so the fraction gate is covered, not just the per-unit `below_quality_floor` primitive.
+
+def _ratchet_would_refuse(got):
+    """Mirror the score-reports --ratchet refuse decision from a compare_to_baseline result."""
+    bad_regressed = [u for u in got["units"] if u["verdict"] == "regressed"]
+    below_floor = [u for u in got["units"] if u.get("below_quality_floor")]
+    scored = [u for u in got["units"] if isinstance(u.get("score"), (int, float))]
+    floor_frac = (len(below_floor) / len(scored)) if scored else 0.0
+    broad_collapse = floor_frac > sr.REBASELINE_LOW_QUALITY_FRACTION
+    return bool(bad_regressed or broad_collapse)
+
+
+def test_ratchet_tolerates_a_lone_below_floor_outlier_in_a_large_sweep():
+    """1/28 below floor (~3.6%) is under the 10% tolerance -> a bad draw, adopt the sweep.
+
+    The outlier is held STEADY (0.78 vs a 0.78 baseline) so it does not trip the regression
+    gate — this isolates the holistic FLOOR gate and proves a lone below-floor report passes.
+    """
+    base = ([{"repo": f"r{i}", "analysis": "ara", "score": 0.88} for i in range(27)]
+            + [{"repo": "out", "analysis": "ara", "score": 0.78}])
+    got = sr.compare_to_baseline(
+        [{"repo": f"r{i}", "analysis": "ara", "score": 0.88} for i in range(27)]
+        + [{"repo": "out", "analysis": "ara", "score": 0.78}], base)
+    regressed = [u for u in got["units"] if u["verdict"] == "regressed"]
+    below = [u for u in got["units"] if u.get("below_quality_floor")]
+    assert not regressed                           # steady -> delta gate would ADOPT
+    assert [u["repo"] for u in below] == ["out"]   # the outlier is still flagged...
+    assert not _ratchet_would_refuse(got)          # ...but the holistic gate ADOPTS
+
+
+def test_ratchet_refuses_a_broad_below_floor_collapse():
+    """5/10 below floor (50%) is a real groundedness drop, over the tolerance -> refuse.
+
+    Held STEADY vs an already-low baseline so nothing trips the regression gate — this
+    isolates the holistic FLOOR gate, proving it refuses on breadth alone.
+    """
+    base = ([{"repo": f"lo{i}", "analysis": "ara", "score": 0.78} for i in range(5)]
+            + [{"repo": f"ok{i}", "analysis": "ara", "score": 0.88} for i in range(5)])
+    got = sr.compare_to_baseline(
+        [{"repo": f"lo{i}", "analysis": "ara", "score": 0.78} for i in range(5)]
+        + [{"repo": f"ok{i}", "analysis": "ara", "score": 0.88} for i in range(5)], base)
+    regressed = [u for u in got["units"] if u["verdict"] == "regressed"]
+    below = [u for u in got["units"] if u.get("below_quality_floor")]
+    assert not regressed           # steady vs baseline -> delta gate alone would ADOPT
+    assert len(below) == 5         # ...but 50% below floor is a broad collapse...
+    assert _ratchet_would_refuse(got)   # ...so the holistic gate REFUSES
 
 
 # --- fallback runner -------------------------------------------------------------------

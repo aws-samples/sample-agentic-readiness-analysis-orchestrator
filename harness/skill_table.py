@@ -117,6 +117,71 @@ def parse_questions(analysis: str) -> dict[str, dict]:
 # twice. parse_questions dedups by qid, so the 11/6/4/7/9 split is exact.
 EXPECTED_QUESTIONS = {a: len(parse_questions(a)) for a in ("ara", "mod")}
 
+# Native severities that FEED the ARA tier arithmetic (blocker_count / risk_safety_count).
+# A resolved question on one of these can move the tier, so a fabricated id carrying one is
+# not a cosmetic extra — it is a phantom that can silently relax or tighten the classification.
+# INFO / RISK-QUALITY do not enter the tier, so an extra id at those levels is a quality
+# demerit only. Keyed off SEVERITY_RANK so the two can't drift.
+TIER_MOVING_SEVERITIES = {s for s, rank in SEVERITY_RANK.items() if rank >= SEVERITY_RANK["RISK-SAFETY"]}
+
+
+def rubric_question_ids(analysis: str) -> set[str]:
+    """The authoritative set of question ids the TD defines for this analysis.
+
+    The single source of truth for "which ids are real" — every membership/superset check
+    (scorer, differ coverage, contract validator) reads THIS, so adding or removing a
+    question in the TD updates every consumer with no code edit.
+    """
+    return set(parse_questions(analysis))
+
+
+def _extra_id_severity(analysis: str, qid: str, report: dict) -> Optional[str]:
+    """Native severity a report assigned to `qid` (ARA only; MOD scores 1-4, no native sev)."""
+    if analysis != "ara":
+        return None
+    for f in report.get("findings") or []:
+        if f.get("question_id") == qid:
+            return ((f.get("ara_metadata") or {}).get("native_severity"))
+    return None
+
+
+def classify_coverage(analysis: str, report: dict) -> dict:
+    """Split a report's answered question ids against the rubric by MEMBERSHIP, not count.
+
+    Returns {present, missing, extra, tier_moving_extra}. `missing` are rubric questions the
+    report failed to answer (a real coverage gap — the assessment is incomplete). `extra` are
+    ids the report answered that the rubric does not define (usually a hallucinated/typo'd id,
+    e.g. the `DATA-Q3-ext` fabrication). `tier_moving_extra` is the subset of `extra` that
+    carries a tier-moving native severity — a phantom that can move the classification and so
+    must hard-fail rather than count as a mere quality demerit.
+
+    Count-based coverage has a latent hole this closes: one dropped real question plus one
+    fabricated id nets to the expected total and passes a `len(answered) == expected` check
+    while the assessment is genuinely incomplete. Membership catches both halves.
+
+    Per-repo scope only. Portfolio reports are rollups, not full-rubric enumerations (a golden
+    portfolio legitimately answers fewer ids), so callers must not run this on portfolio scope.
+    """
+    rubric = rubric_question_ids(analysis)
+    answered: set[str] = set()
+    for arr in ("findings", "evaluations"):
+        for e in report.get(arr) or []:
+            qid = e.get("question_id") if isinstance(e, dict) else None
+            if isinstance(qid, str):
+                answered.add(qid)
+    missing = rubric - answered
+    extra = answered - rubric
+    tier_moving_extra = {
+        qid for qid in extra
+        if _extra_id_severity(analysis, qid, report) in TIER_MOVING_SEVERITIES
+    }
+    return {
+        "present": answered & rubric,
+        "missing": missing,
+        "extra": extra,
+        "tier_moving_extra": tier_moving_extra,
+    }
+
 
 def parse_questions_text(text: str) -> dict[str, dict]:
     """`parse_questions` over a STRING rather than the checked-out TD.

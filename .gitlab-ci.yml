@@ -777,6 +777,18 @@ harness:rebaseline-gather:
     - |
       PARTIAL="$(cat .rebaseline-partial 2>/dev/null || echo '')"
       BR="rebaseline/$(date +%Y%m%d)-${CI_PIPELINE_ID}"
+      # WHERE the refresh MR lands. A SCHEDULE (the weekly auto-rebaseline) always targets main —
+      # that is the maintained baseline. But a CONTRIBUTOR who added a question can't merge to main
+      # directly: their rubric edit lives on a feature branch, and its MR is red until the golden
+      # answers the new question. So when a human triggers a web rebaseline ON their own branch, the
+      # refresh MR targets THAT branch, not main — they merge the golden into their feature branch and
+      # their original rubric MR goes green. This is the "I can't run atx locally" path (see
+      # docs/contributing). Schedules and web runs on main keep targeting main.
+      TARGET="main"
+      if [ "$CI_PIPELINE_SOURCE" = "web" ] && [ "$CI_COMMIT_REF_NAME" != "main" ]; then
+        TARGET="$CI_COMMIT_REF_NAME"
+        echo "web rebaseline on branch '$TARGET' — the refresh MR will target that branch, not main."
+      fi
       if [ -z "${HARNESS_MR_TOKEN:-}" ]; then
         echo "no HARNESS_MR_TOKEN — cannot open an MR. The refreshed baseline is attached as" >&2
         echo "an artifact; download it and open the MR by hand." >&2
@@ -784,13 +796,13 @@ harness:rebaseline-gather:
       fi
       git checkout -b "$BR"
       git add harness/golden harness/golden-accuracy-baseline.json
-      git commit -m "chore(harness): scheduled re-baseline ($(date +%Y-%m-%d))${PARTIAL}" \
-                 -m "Automated by harness:rebaseline-gather (pipeline ${CI_PIPELINE_ID}, source ${CI_PIPELINE_SOURCE}, reset=${REBASELINE_RESET}). Sharded sweep across ${CI_NODE_TOTAL:-N} shards. Ratchet-checked unless reset. Review the score deltas in rebaseline-compare.json before merging.${PARTIAL:+ WARNING: PARTIAL sweep — a shard dropped its slice; some fixtures kept the stale baseline. Do NOT merge as a full re-baseline; re-run first.}"
+      git commit -m "chore(harness): re-baseline ($(date +%Y-%m-%d)) → ${TARGET}${PARTIAL}" \
+                 -m "Automated by harness:rebaseline-gather (pipeline ${CI_PIPELINE_ID}, source ${CI_PIPELINE_SOURCE}, reset=${REBASELINE_RESET}, target ${TARGET}). Sharded sweep across ${CI_NODE_TOTAL:-N} shards. Ratchet-checked unless reset. Review the score deltas in rebaseline-compare.json before merging.${PARTIAL:+ WARNING: PARTIAL sweep — a shard dropped its slice; some fixtures kept the stale baseline. Do NOT merge as a full re-baseline; re-run first.}"
       git push "https://oauth2:${HARNESS_MR_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
-               "$BR" -o merge_request.create -o merge_request.target=main \
-               -o merge_request.title="chore(harness): scheduled re-baseline $(date +%Y-%m-%d)${PARTIAL}" \
+               "$BR" -o merge_request.create -o "merge_request.target=${TARGET}" \
+               -o merge_request.title="chore(harness): re-baseline $(date +%Y-%m-%d) → ${TARGET}${PARTIAL}" \
                -o merge_request.remove_source_branch
-      echo "pushed $BR and opened an MR to main."
+      echo "pushed $BR and opened an MR to ${TARGET}."
   artifacts:
     when: always
     paths:
