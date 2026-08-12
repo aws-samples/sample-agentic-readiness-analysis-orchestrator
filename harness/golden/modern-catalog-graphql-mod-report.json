@@ -2,14 +2,14 @@
   "analysis_type": "mod",
   "metadata": {
     "repository": "modern-catalog-graphql",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2025-07-15",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (TypeScript) with a deployable entry point (Lambda handler in src/server.ts), a dependency manifest (package.json), and resource-provisioning IaC (infra/template.yaml defining Lambda, DynamoDB, and API Gateway). Classified as application.",
+    "repo_type_justification": "Application source code (TypeScript) with a deployable entry point (Lambda handler in src/server.ts), a dependency manifest (package.json), and IaC (infra/template.yaml SAM template) provisioning AWS resources for a single service.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "DynamoDB persistent state with CRUD operations on Product entities (upsert, soft-delete, get, list). Entity lifecycle management (active/inactive status). Classified as stateful-crud.",
+    "archetype_justification": "DynamoDB persistent state with CRUD operations (upsert, soft-delete, read) via GraphQL mutations and queries. Write endpoints present alongside reads. No multi-service orchestration.",
     "priority": null,
     "tags": [],
     "context": null,
@@ -22,46 +22,46 @@
       "has_iac_provisioning_aws_resources": true
     }
   },
-  "overall_score": 2.83,
+  "overall_score": 2.92,
   "classification": {
     "tier": "Remediation Required",
     "high_count": 3,
-    "medium_count": 11,
-    "low_count": 8,
+    "medium_count": 10,
+    "low_count": 7,
     "rule_matched": "2-11 High \u2192 Remediation Required",
     "classification_consistency_check": {
       "status": "divergent",
       "score_band": "Partial",
       "count_tier": "Remediation Required",
-      "reason": "Score 2.83 yields Partial band but 3 High findings force Remediation Required tier. Strong infrastructure/security/data scores mask critically weak operational practices (no CI/CD, no deployment strategy, no integration testing)."
+      "reason": "Score 2.92 yields Partial band (maps to Pilot-Ready) but 3 High findings force Remediation Required tier. The system has strong infrastructure foundations (serverless, managed DB) but critical operational maturity gaps (no CI/CD, no deployment strategy, no tests) that produce High-severity findings."
     }
   },
   "categories": [
     {
       "category_id": "INF",
       "category": "Infrastructure & DevOps",
-      "numeric_score": 3.18,
+      "numeric_score": 3.36,
       "score_rating": "Partial",
       "severity_status": "Critical"
     },
     {
       "category_id": "APP",
       "category": "Application Architecture",
-      "numeric_score": 2.83,
+      "numeric_score": 3.0,
       "score_rating": "Partial",
       "severity_status": "Needs Work"
     },
     {
       "category_id": "DATA",
       "category": "Data Platform",
-      "numeric_score": 3.75,
+      "numeric_score": 4.0,
       "score_rating": "Mature",
-      "severity_status": "Needs Work"
+      "severity_status": "Ready"
     },
     {
       "category_id": "SEC",
       "category": "Security Baseline",
-      "numeric_score": 3.17,
+      "numeric_score": 3.0,
       "score_rating": "Partial",
       "severity_status": "Needs Work"
     },
@@ -79,62 +79,63 @@
       "question_id": "INF-Q11",
       "title": "CI/CD Automation",
       "score": 1,
-      "gap": "No CI/CD pipeline exists \u2014 deployments are manual",
-      "impact": "Blocks safe, repeatable deployments; prevents adoption of deployment strategies and security scanning"
+      "gap": "No CI/CD pipeline \u2014 all deployments manual",
+      "impact": "Blocks safe, repeatable deployments and all Modern DevOps practices"
     },
     {
       "rank": 2,
       "question_id": "OPS-Q5",
       "title": "Deployment Strategy",
       "score": 1,
-      "gap": "No deployment strategy \u2014 direct-to-production with no staged rollout",
-      "impact": "Production changes carry full blast radius; no canary/blue-green safety net"
+      "gap": "No canary/blue-green \u2014 direct-to-production releases",
+      "impact": "Regressions affect all users immediately with no rollback mechanism"
     },
     {
       "rank": 3,
       "question_id": "OPS-Q6",
       "title": "Integration Testing",
       "score": 1,
-      "gap": "No test files exist despite vitest being configured",
-      "impact": "No regression safety net; changes cannot be validated automatically"
+      "gap": "No automated tests in repository",
+      "impact": "No regression safety net; changes deploy without validation"
     },
     {
       "rank": 4,
-      "question_id": "SEC-Q7",
-      "title": "Application Security Pipeline",
-      "score": 1,
-      "gap": "No security scanning \u2014 no SAST, no dependency scanning",
-      "impact": "Dependency vulnerabilities reach production undetected"
-    },
-    {
-      "rank": 5,
       "question_id": "APP-Q5",
       "title": "API Versioning Strategy",
       "score": 1,
-      "gap": "No API versioning strategy for the GraphQL schema",
-      "impact": "Breaking schema changes risk disrupting all consumers simultaneously"
+      "gap": "No API versioning strategy for GraphQL schema",
+      "impact": "Breaking schema changes affect all consumers simultaneously"
+    },
+    {
+      "rank": 5,
+      "question_id": "SEC-Q7",
+      "title": "Application Security Pipeline",
+      "score": 1,
+      "gap": "No SAST, dependency scanning, or security gates",
+      "impact": "Vulnerabilities in dependencies reach production undetected"
     }
   ],
+  "decomposition_strategy": null,
   "findings": [
     {
       "question_id": "INF-Q4",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
       "title": "Async Messaging and Streaming",
-      "description": "No messaging or streaming infrastructure exists. The service mutates product state (upsert, soft-delete) but does not emit domain events.",
-      "gap": "No event emission on state mutations. Product creates, updates, and deletes are silent \u2014 no downstream systems can react to catalog changes without polling.",
-      "recommendation": "Add EventBridge integration to emit ProductCreated, ProductUpdated, and ProductDeleted events on mutations. Use DynamoDB Streams with a Lambda trigger to EventBridge for reliable event emission.",
-      "severity": "Medium",
+      "description": "This stateful-crud service uses synchronous request-response for all operations. No messaging infrastructure (SQS, SNS, EventBridge) is configured. State changes are not propagated via events.",
+      "gap": "No event emission on state changes. A stateful-crud service managing product catalog state should emit domain events for downstream consumers.",
+      "recommendation": "Add EventBridge integration to emit domain events on product mutations for audit trails and downstream service integration.",
+      "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
+      "effort": "Low",
+      "phase": 3,
       "evidence": {
         "file": "infra/template.yaml",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
+        "internal_score": 3,
+        "score_label": "Partial",
         "archetype_calibrated": true,
         "core_question": false
       }
@@ -144,9 +145,9 @@
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
       "title": "Network Security",
-      "description": "Architecture uses API Gateway as sole ingress with Cognito JWT authorization. Lambda runs in AWS-managed networking accessing DynamoDB via IAM-authenticated API calls. No VPC configuration or VPC endpoints.",
-      "gap": "No explicit VPC configuration or VPC endpoints. While not strictly required for this serverless architecture, VPC endpoints for DynamoDB would add defense-in-depth.",
-      "recommendation": "Consider adding a VPC with a DynamoDB VPC endpoint if the service handles sensitive data at scale. Current architecture provides adequate security via API Gateway + Cognito JWT + IAM.",
+      "description": "Architecture uses fully managed services communicating over AWS-internal networking with IAM-based access. No VPC endpoints for DynamoDB access.",
+      "gap": "Lambda-to-DynamoDB traffic traverses the AWS public endpoint rather than a VPC endpoint or PrivateLink.",
+      "recommendation": "Consider placing the Lambda in a VPC with a DynamoDB VPC Gateway Endpoint for enhanced security posture.",
       "severity": "Low",
       "priority": "P1",
       "effort": "Medium",
@@ -163,36 +164,13 @@
       }
     },
     {
-      "question_id": "INF-Q7",
-      "category": "Infrastructure & DevOps",
-      "category_id": "INF",
-      "title": "Auto-Scaling",
-      "description": "Lambda provides automatic concurrency scaling and DynamoDB PAY_PER_REQUEST provides automatic capacity scaling. Both layers scale without manual intervention but no explicit concurrency management is configured.",
-      "gap": "No Lambda concurrency management (ReservedConcurrentExecutions or ProvisionedConcurrency). Traffic spike could exhaust account-level concurrency.",
-      "recommendation": "Add ReservedConcurrentExecutions to protect against runaway scaling. Consider ProvisionedConcurrency if cold starts affect p99 latency.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
       "question_id": "INF-Q8",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
       "title": "Backup and Recovery",
-      "description": "DynamoDB has Point-in-Time Recovery (PITR) enabled providing continuous backups with 35-day retention.",
-      "gap": "No documented restore procedure or tested recovery process. No cross-region backup replication.",
-      "recommendation": "Document a restore procedure. Consider DynamoDB global tables or cross-region backup for disaster recovery.",
+      "description": "DynamoDB has PITR enabled providing continuous backups with 35-day retention. No cross-region backup replication or documented restore procedures.",
+      "gap": "No cross-region backup replication for disaster recovery. No documented restore procedures or regular restore testing.",
+      "recommendation": "Add an AWS Backup plan with cross-region copy rules. Document and periodically test restore procedures.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Low",
@@ -213,9 +191,9 @@
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
       "title": "Infrastructure as Code Coverage",
-      "description": "Core infrastructure (Lambda, DynamoDB, API Gateway, IAM, X-Ray) is fully defined in SAM. Missing IaC for monitoring, alerting, and dashboards.",
-      "gap": "No CloudWatch alarms, dashboards, or operational resources defined in IaC.",
-      "recommendation": "Add CloudWatch alarms and dashboard resources to the SAM template for Lambda errors, duration, and DynamoDB throttles.",
+      "description": "SAM template covers primary resources (Lambda, DynamoDB, HttpApi, Cognito authorizer). Missing operational/DR IaC resources.",
+      "gap": "No CloudWatch alarms, dashboards, SNS topics, or AWS Backup plans in IaC. Estimated 70-80% coverage.",
+      "recommendation": "Add CloudWatch alarms for Lambda errors, DynamoDB throttling, and API Gateway 5xx rates. Add SNS topic for notifications.",
       "severity": "Low",
       "priority": "P1",
       "effort": "Low",
@@ -236,9 +214,9 @@
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
       "title": "CI/CD Automation",
-      "description": "No CI/CD pipeline configuration exists in the repository. Deployments are presumably manual (sam build && sam deploy).",
-      "gap": "All deployments are manual. No automated build, test, or deploy stages. No automated quality gates.",
-      "recommendation": "Implement a CI/CD pipeline with stages: lint \u2192 build \u2192 test \u2192 deploy. Use GitHub Actions or AWS CodePipeline with CodeBuild.",
+      "description": "No CI/CD pipeline configuration found. No GitHub Actions, GitLab CI, CodeBuild, or any pipeline definition. Deployments are entirely manual.",
+      "gap": "Complete absence of CI/CD automation. All deployments require manual execution.",
+      "recommendation": "Implement a CI/CD pipeline with stages: lint, build, test, deploy-staging, integration-test, deploy-production using SAM CLI.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -259,20 +237,20 @@
       "category": "Application Architecture",
       "category_id": "APP",
       "title": "Async vs Sync Communication",
-      "description": "All communication is synchronous. GraphQL queries and mutations execute synchronously against DynamoDB. No async patterns exist for state propagation.",
-      "gap": "State mutations have no async propagation mechanism. Downstream systems cannot react to catalog changes without polling.",
-      "recommendation": "Implement domain event emission on mutations via DynamoDB Streams \u2192 Lambda \u2192 EventBridge.",
-      "severity": "Medium",
+      "description": "Service operates as synchronous request-response. No outbound service calls. No event emission on state changes. Synchronous model is appropriate for the read/write path.",
+      "gap": "State changes (product upsert, delete) are not emitted as domain events. Downstream services cannot react to catalog changes asynchronously.",
+      "recommendation": "Add EventBridge event emission on mutations to enable downstream integration. This is a growth capability, not a structural flaw.",
+      "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
+      "effort": "Low",
+      "phase": 3,
       "evidence": {
         "file": "src/resolvers/catalog.ts",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
+        "internal_score": 3,
+        "score_label": "Partial",
         "archetype_calibrated": true,
         "core_question": false
       }
@@ -282,9 +260,9 @@
       "category": "Application Architecture",
       "category_id": "APP",
       "title": "API Versioning Strategy",
-      "description": "No API versioning strategy is implemented. The GraphQL schema has no version indicator, no @deprecated directives, and no documented evolution strategy.",
-      "gap": "No versioning strategy means breaking schema changes would affect all consumers simultaneously with no migration path.",
-      "recommendation": "Implement GraphQL schema evolution strategy: use @deprecated directives, maintain a schema changelog, and consider Apollo Schema Checks for breaking change detection.",
+      "description": "No API versioning strategy. GraphQL endpoint at /graphql with no version prefix. No @deprecated directives in schema. No changelog.",
+      "gap": "No versioning mechanism. Breaking schema changes affect all consumers simultaneously.",
+      "recommendation": "Adopt a schema evolution strategy: use @deprecated directives, document a changelog, establish a deprecation policy for field removal.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -305,13 +283,13 @@
       "category": "Application Architecture",
       "category_id": "APP",
       "title": "Service Discovery",
-      "description": "Environment variables used for service configuration (TABLE name via SAM, UserPoolId via parameter). No service registry or dynamic discovery.",
-      "gap": "Service endpoints configured via environment variables rather than dynamic discovery. Pattern will not scale as services are added.",
-      "recommendation": "For the current single-service architecture, environment variables are adequate. As ecosystem grows, consider AWS Cloud Map for service discovery.",
+      "description": "DynamoDB table name injected via environment variable from CloudFormation. No hard-coded endpoints. No dynamic service discovery.",
+      "gap": "Environment variable injection only \u2014 no service registry, API catalog, or service mesh for dynamic discovery.",
+      "recommendation": "Register the GraphQL endpoint in AWS Cloud Map or publish as API Gateway stage export for service-to-service discovery.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "infra/template.yaml",
         "lines": null
@@ -324,36 +302,13 @@
       }
     },
     {
-      "question_id": "DATA-Q2",
-      "category": "Data Platform",
-      "category_id": "DATA",
-      "title": "Unified Data Access Layer",
-      "description": "All DynamoDB access centralized in src/resolvers/catalog.ts using DynamoDB Document Client. Consistent SDK usage but no formal repository/DAO abstraction.",
-      "gap": "No explicit data access layer separating business logic from database operations. Resolvers directly couple to DynamoDB SDK specifics.",
-      "recommendation": "Extract DynamoDB operations into a dedicated repository module (e.g., src/repositories/product.ts) to separate data access from resolver logic.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "src/resolvers/catalog.ts",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
       "category_id": "SEC",
       "title": "Encryption at Rest",
-      "description": "DynamoDB has SSE enabled using AWS-managed default encryption key. All data at rest is encrypted.",
-      "gap": "Uses AWS-managed encryption rather than customer-managed KMS keys. No explicit key rotation policy.",
-      "recommendation": "Consider upgrading to customer-managed KMS key with automatic key rotation for sensitive product data.",
+      "description": "DynamoDB table has server-side encryption enabled using AWS-owned default key. All data at rest is encrypted.",
+      "gap": "AWS-managed encryption rather than customer-managed KMS keys. No explicit key rotation policy or access audit.",
+      "recommendation": "Consider upgrading to a customer-managed KMS key for sensitive data with key rotation control and CloudTrail audit.",
       "severity": "Low",
       "priority": "P1",
       "effort": "Low",
@@ -374,10 +329,10 @@
       "category": "Security Baseline",
       "category_id": "SEC",
       "title": "Compute Hardening and Patching",
-      "description": "Lambda runtime (nodejs20.x) is automatically patched by AWS. arm64 Graviton architecture. No application-level dependency vulnerability scanning.",
-      "gap": "No dependency vulnerability scanning. Application dependencies (npm packages) not scanned for known vulnerabilities. No lock file for reproducible builds.",
-      "recommendation": "Add npm audit to build process. Add package-lock.json. Consider Snyk for continuous dependency monitoring.",
-      "severity": "Low",
+      "description": "Lambda runtime (Node.js 20) managed by AWS. ARM64 Graviton architecture. No dependency vulnerability scanning configured.",
+      "gap": "No dependency vulnerability scanning or update automation. Application dependencies have no automated vulnerability monitoring.",
+      "recommendation": "Add Dependabot/Renovate for dependency updates. Add npm audit to the CI pipeline. Consider AWS Inspector for Lambda scanning.",
+      "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
@@ -386,8 +341,8 @@
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 3,
-        "score_label": "Partial",
+        "internal_score": 2,
+        "score_label": "Needs Work",
         "archetype_calibrated": false,
         "core_question": false
       }
@@ -397,13 +352,13 @@
       "category": "Security Baseline",
       "category_id": "SEC",
       "title": "Application Security Pipeline",
-      "description": "No CI/CD pipeline exists, so no security scanning tools are integrated. No SAST, no dependency scanning, no Dependabot configuration.",
-      "gap": "Zero security validation in delivery process. Dependency vulnerabilities and code-level security issues reach production undetected.",
-      "recommendation": "When implementing CI/CD, include npm audit as blocking gate, SAST tool (Semgrep or CodeGuru Reviewer), and Dependabot for automated dependency updates.",
+      "description": "No security scanning tools configured. No CI/CD pipeline exists. No Dependabot, SAST, or container scanning.",
+      "gap": "Complete absence of application security scanning. Vulnerabilities reach production undetected.",
+      "recommendation": "Add npm audit as a pipeline gate, Dependabot for dependency updates, and Semgrep/CodeGuru for SAST.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
-      "phase": 1,
+      "effort": "Low",
+      "phase": 2,
       "evidence": {
         "file": ".",
         "lines": null
@@ -420,9 +375,9 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "Distributed Tracing",
-      "description": "X-Ray tracing enabled at Lambda function level (Tracing: Active). Automatic tracing of Lambda invocations and DynamoDB calls. No custom segments or business-context annotations.",
-      "gap": "Tracing is infrastructure-level only without business-context enrichment (product SKU, operation type annotations).",
-      "recommendation": "Add X-Ray subsegments with annotations in resolver code to enrich traces with business context.",
+      "description": "X-Ray Active tracing enabled on Lambda function. Automatically traces Lambda invocations and DynamoDB calls.",
+      "gap": "No explicit trace context propagation in application code or custom instrumentation for business-level spans.",
+      "recommendation": "Add custom X-Ray subsegments for business operations. Ensure trace headers are propagated if additional services are added.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Low",
@@ -443,12 +398,12 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "SLO Definitions",
-      "description": "No SLO definitions exist. No CloudWatch alarms on latency, error rate, or availability. No error budget tracking.",
-      "gap": "No measurable service-level targets. Cannot determine whether service is meeting user expectations.",
-      "recommendation": "Define SLOs: availability 99.9%, query latency p99 < 200ms, error rate < 0.1%. Implement CloudWatch alarms.",
+      "description": "No SLO definitions found. No CloudWatch alarms on latency or error rates. No monitoring artifacts.",
+      "gap": "No formal SLO definitions for the GraphQL API. No latency targets, availability targets, or error rate thresholds.",
+      "recommendation": "Define SLOs: p99 latency < 200ms, availability > 99.9%, error rate < 0.1%. Add CloudWatch alarms.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "infra/template.yaml",
@@ -466,9 +421,9 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "Business Metrics",
-      "description": "No custom business metrics published. No CloudWatch putMetricData calls for business events. Only default Lambda and DynamoDB infrastructure metrics available.",
-      "gap": "Cannot measure business outcomes \u2014 only infrastructure health. Cannot answer business questions from metrics.",
-      "recommendation": "Publish custom CloudWatch metrics using Embedded Metric Format: products_created, products_updated, products_deleted, catalog_queries.",
+      "description": "No custom business metrics published. Only default Lambda/API Gateway infrastructure metrics available.",
+      "gap": "No business outcome metrics: no tracking of products created/updated/deleted or catalog query rates.",
+      "recommendation": "Add CloudWatch custom metrics for business events using Embedded Metric Format for zero-latency emission.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -489,9 +444,9 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "Anomaly Detection and Alerting",
-      "description": "No alerting configured. No CloudWatch alarms (static or anomaly), no SNS topics, no incident notification integration.",
-      "gap": "Service failures and degradation go undetected until users report issues.",
-      "recommendation": "Add CloudWatch alarms: Lambda Errors > 0, Duration p99 > 5000ms, DynamoDB SystemErrors > 0. Add anomaly detection on latency. Route to SNS topic.",
+      "description": "No alerting configured. No CloudWatch alarms. No integration with notification services.",
+      "gap": "Complete absence of alerting. Service degradation goes unnoticed until users report issues.",
+      "recommendation": "Add CloudWatch alarms for Lambda errors, duration p99, API Gateway 5xx, DynamoDB throttling. Route to SNS.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -512,9 +467,9 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "Deployment Strategy",
-      "description": "No deployment strategy configured. Lambda function has no DeploymentPreference. Deployments are manual sam deploy with no traffic shifting or rollback.",
-      "gap": "Direct-to-production deployments with no staged rollout. Bad deployment affects 100% of traffic immediately.",
-      "recommendation": "Add DeploymentPreference: Type: Canary10Percent5Minutes with CloudWatch alarms as rollback triggers.",
+      "description": "No deployment strategy. Lambda updates deploy all traffic immediately with no staged rollout, canary, or blue/green mechanism.",
+      "gap": "Direct-to-production deployment. A bad deployment affects 100% of traffic immediately with no automated rollback.",
+      "recommendation": "Add SAM DeploymentPreference: Canary10Percent5Minutes with CloudWatch alarms as rollback triggers.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
@@ -535,9 +490,9 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "Integration Testing",
-      "description": "No test files exist despite vitest being configured as devDependency. Zero automated test coverage for GraphQL resolvers and DynamoDB interactions.",
-      "gap": "No regression safety net. Code changes cannot be validated automatically.",
-      "recommendation": "Add integration tests using vitest: test CRUD operations against DynamoDB Local or mocked client. Add contract tests for GraphQL schema.",
+      "description": "No test files exist in the repository. vitest configured in package.json but no test files found.",
+      "gap": "Complete absence of automated tests. No regression safety net.",
+      "recommendation": "Add unit tests for resolver logic, integration tests with DynamoDB local, and include in CI pipeline.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -558,9 +513,9 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "Incident Response Automation",
-      "description": "No incident response automation. No runbooks, no SSM Automation documents, no self-healing workflows.",
-      "gap": "No documented or automated response to common failure scenarios. Recovery depends on manual investigation.",
-      "recommendation": "Create runbooks for common scenarios: DynamoDB throttling, Lambda errors, auth failures. Consider SSM Automation for automated remediation.",
+      "description": "No runbooks, SSM Automation documents, or self-healing patterns found.",
+      "gap": "Incident response is entirely ad hoc. No defined procedures for common failure modes.",
+      "recommendation": "Create runbooks for common failures. Graduate to SSM Automation for automated remediation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -581,13 +536,13 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "Observability Ownership",
-      "description": "No observability ownership artifacts. No CODEOWNERS, no per-service dashboards, no alarms with named owners.",
-      "gap": "No defined ownership of service health. Monitoring gaps likely because no team is accountable.",
-      "recommendation": "Add CODEOWNERS file. Define CloudWatch dashboards in IaC with team attribution tags. Document on-call ownership.",
+      "description": "No observability ownership. No CODEOWNERS file, no service dashboards, no alarm ownership.",
+      "gap": "No clear ownership of monitoring and observability. No responsible party defined.",
+      "recommendation": "Add CODEOWNERS, create a CloudWatch dashboard, define alarm ownership and escalation paths.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": ".",
         "lines": null
@@ -604,9 +559,9 @@
       "category": "Operations & Observability",
       "category_id": "OPS",
       "title": "Resource Tagging Governance",
-      "description": "No resource tags defined on any AWS resource in the SAM template. Lambda, DynamoDB, and API Gateway have no tags.",
-      "gap": "Cannot track costs per workload, identify resource ownership, or enforce environment-based policies.",
-      "recommendation": "Add tags to all resources: Environment, Service, Team, CostCenter. Use SAM Globals or per-resource Tags properties.",
+      "description": "No tags on any AWS resource in the SAM template. No cost allocation, ownership, or environment identification.",
+      "gap": "No tagging governance. Cannot track costs or identify resource ownership.",
+      "recommendation": "Add Tags section to SAM Globals: Service, Team, Environment, CostCenter.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -630,7 +585,7 @@
       "title": "Managed Compute",
       "status": "pass",
       "score": 4,
-      "reason": "All compute on Lambda (serverless) with nodejs20.x on arm64. No EC2."
+      "reason": "All compute on Lambda (serverless) with Node.js 20 ARM64."
     },
     {
       "question_id": "INF-Q2",
@@ -646,7 +601,7 @@
       "title": "Workflow Orchestration",
       "status": "pass",
       "score": 4,
-      "reason": "No multi-step workflows exist in this CRUD service. All operations are single DynamoDB calls."
+      "reason": "No multi-step workflows exist in this stateful-crud service. All operations are single-step DynamoDB calls."
     },
     {
       "question_id": "INF-Q6",
@@ -654,7 +609,15 @@
       "title": "API Entry Point",
       "status": "pass",
       "score": 4,
-      "reason": "HTTP API Gateway with Cognito JWT authorizer, built-in throttling, and request routing."
+      "reason": "API Gateway HttpApi with Cognito JWT authorizer as entry point."
+    },
+    {
+      "question_id": "INF-Q7",
+      "category_id": "INF",
+      "title": "Auto-Scaling",
+      "status": "pass",
+      "score": 4,
+      "reason": "Lambda and DynamoDB PAY_PER_REQUEST both scale automatically."
     },
     {
       "question_id": "INF-Q9",
@@ -662,7 +625,7 @@
       "title": "High Availability and Fault Isolation",
       "status": "pass",
       "score": 4,
-      "reason": "All components (Lambda, DynamoDB, API Gateway) are inherently multi-AZ."
+      "reason": "All services (Lambda, DynamoDB, API Gateway) are inherently multi-AZ."
     },
     {
       "question_id": "APP-Q1",
@@ -670,7 +633,7 @@
       "title": "Programming Languages",
       "status": "pass",
       "score": 4,
-      "reason": "TypeScript 5.4+ on Node.js 20 with AWS SDK v3 and Apollo Server 4."
+      "reason": "Node.js 20 + TypeScript 5.4 + AWS SDK v3 + Apollo Server 4 \u2014 modern cloud-native."
     },
     {
       "question_id": "APP-Q2",
@@ -678,7 +641,7 @@
       "title": "Monolith vs Microservices",
       "status": "pass",
       "score": 4,
-      "reason": "Single-purpose microservice with well-defined boundaries, own data store, clear API contract."
+      "reason": "Single-purpose microservice with dedicated DynamoDB table, independently deployable."
     },
     {
       "question_id": "APP-Q4",
@@ -686,7 +649,7 @@
       "title": "Long-Running Process Handling",
       "status": "pass",
       "score": 4,
-      "reason": "No operations exceed 30 seconds. All operations are single DynamoDB API calls with 30s Lambda timeout."
+      "reason": "All operations are fast DynamoDB point operations completing in milliseconds. No long-running processes."
     },
     {
       "question_id": "DATA-Q1",
@@ -694,7 +657,15 @@
       "title": "Unstructured Data Storage",
       "status": "pass",
       "score": 4,
-      "reason": "Service handles structured product data only. No unstructured data to manage."
+      "reason": "Service stores only structured data in DynamoDB. No unstructured data to manage."
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category_id": "DATA",
+      "title": "Unified Data Access Layer",
+      "status": "pass",
+      "score": 4,
+      "reason": "All database access centralized in single resolver module via context-injected DynamoDB client."
     },
     {
       "question_id": "DATA-Q3",
@@ -702,7 +673,7 @@
       "title": "Database Engine Version and EOL",
       "status": "pass",
       "score": 4,
-      "reason": "DynamoDB is fully managed with no user-configurable engine version. No EOL risk."
+      "reason": "DynamoDB is versionless \u2014 fully managed with no EOL concern."
     },
     {
       "question_id": "DATA-Q4",
@@ -710,7 +681,7 @@
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "No stored procedures. DynamoDB NoSQL with all business logic in application layer."
+      "reason": "No stored procedures. All business logic in application layer. DynamoDB does not support stored procedures."
     },
     {
       "question_id": "SEC-Q1",
@@ -718,7 +689,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "Application-level IaC only. CloudTrail is an account-level concern belonging in foundation infrastructure repo."
+      "reason": "Application-level IaC only. CloudTrail is an account-level service that belongs in foundation infrastructure repo."
     },
     {
       "question_id": "SEC-Q3",
@@ -726,7 +697,7 @@
       "title": "API Authentication",
       "status": "pass",
       "score": 4,
-      "reason": "Two-layer auth: API Gateway Cognito JWT authorizer + resolver scope checks (catalog:write)."
+      "reason": "Cognito JWT authorizer on all endpoints with scope-based mutation authorization."
     },
     {
       "question_id": "SEC-Q4",
@@ -734,7 +705,7 @@
       "title": "Centralized Identity Integration",
       "status": "pass",
       "score": 4,
-      "reason": "Integrates with Amazon Cognito as centralized IdP. External User Pool referenced via parameter."
+      "reason": "Amazon Cognito User Pool for centralized identity with JWT scopes."
     },
     {
       "question_id": "SEC-Q5",
@@ -742,7 +713,7 @@
       "title": "Secrets Management",
       "status": "pass",
       "score": 4,
-      "reason": "No secrets to manage. DynamoDB access via IAM roles. No credentials in code."
+      "reason": "No secrets to manage. IAM role-based access for Lambda-to-DynamoDB. No hardcoded credentials."
     }
   ],
   "pathways": [
@@ -752,12 +723,12 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "APP-Q2 = 4 \u2014 already a well-decomposed microservice",
+      "key_trigger_criteria": "APP-Q2 = 4 \u2014 application is already a well-scoped microservice with independent deployment",
       "triggering_questions": [
         {
           "question_id": "APP-Q2",
           "score": 4,
-          "note": "APP-Q2 = 4 meets threshold; pathway not needed"
+          "note": "APP-Q2 = 4 meets threshold; application already decomposed"
         }
       ],
       "detail": null
@@ -768,12 +739,12 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q1 = 4 \u2014 compute already on Lambda (serverless); contextual guard blocks",
+      "key_trigger_criteria": "INF-Q1 = 4 \u2014 compute already on Lambda (serverless); contextual guard blocks: workload already beyond EC2/VM",
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
           "score": 4,
-          "note": "INF-Q1 = 4 meets threshold; compute already serverless"
+          "note": "INF-Q1 = 4 meets threshold; compute is already Lambda"
         }
       ],
       "detail": null,
@@ -785,12 +756,12 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4 = 4 \u2014 no stored procedures or proprietary SQL; DynamoDB is not a commercial licensed database",
+      "key_trigger_criteria": "DATA-Q4 = 4 \u2014 no stored procedures or proprietary SQL; DynamoDB is not a commercial licensed engine",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
           "score": 4,
-          "note": "DATA-Q4 = 4 meets threshold; no proprietary SQL"
+          "note": "DATA-Q4 = 4; no proprietary SQL detected"
         }
       ],
       "detail": null
@@ -801,12 +772,12 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q2 = 4 \u2014 DynamoDB is fully managed",
+      "key_trigger_criteria": "INF-Q2 = 4 \u2014 database is already fully managed (DynamoDB)",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
           "score": 4,
-          "note": "INF-Q2 = 4 meets threshold; database already fully managed"
+          "note": "INF-Q2 = 4; DynamoDB is fully managed"
         }
       ],
       "detail": null
@@ -817,16 +788,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No data processing workloads exist; contextual guard blocks pathway",
+      "key_trigger_criteria": "INF-Q4 = 3 (meets threshold); no data processing workloads exist in this service",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
-          "score": 2,
-          "note": "INF-Q4 = 2 but contextual guard blocks: no streaming/ETL/analytics workloads in this CRUD API"
+          "score": 3,
+          "note": "INF-Q4 = 3 meets threshold; no data processing workloads"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "No data processing workloads exist. This is a simple CRUD API with no analytics or streaming needs."
+      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found. Service is a CRUD API with no data processing responsibilities."
     },
     {
       "id": "move-to-modern-devops",
@@ -834,42 +805,38 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q11 = 1 (primary: < 3); OPS-Q5 = 1, OPS-Q6 = 1 (supporting)",
+      "key_trigger_criteria": "INF-Q11 = 1 (< 3); supported by OPS-Q5 = 1 and OPS-Q6 = 1",
       "triggering_questions": [
         {
           "question_id": "INF-Q11",
           "score": 1,
-          "note": "No CI/CD pipeline \u2014 primary trigger"
-        },
-        {
-          "question_id": "INF-Q10",
-          "score": 3,
-          "note": "IaC coverage adequate but missing monitoring resources"
+          "note": "No CI/CD pipeline \u2014 all deployments manual"
         },
         {
           "question_id": "OPS-Q5",
           "score": 1,
-          "note": "No deployment strategy \u2014 supporting trigger"
+          "note": "No deployment strategy \u2014 direct-to-production"
         },
         {
           "question_id": "OPS-Q6",
           "score": 1,
-          "note": "No integration tests \u2014 supporting trigger"
+          "note": "No integration tests in repository"
         }
       ],
       "detail": {
+        "current_state": "No CI/CD pipeline. Manual deployments via SAM CLI. No canary/blue-green. No automated tests.",
         "recommended_services": [
-          "CodeBuild",
-          "CodePipeline",
-          "CodeDeploy",
-          "CloudWatch",
-          "X-Ray"
+          "AWS CodeBuild",
+          "AWS CodePipeline",
+          "AWS CodeDeploy (Lambda)",
+          "AWS SAM CLI",
+          "CloudWatch Alarms"
         ],
         "immediate_actions": [
-          "Add CI/CD pipeline with lint, build, test, deploy stages",
-          "Configure SAM DeploymentPreference for Lambda canary deployments",
-          "Add integration tests using vitest with DynamoDB mocks",
-          "Add dependency vulnerability scanning (npm audit) as pipeline gate"
+          "Create CI/CD pipeline with lint, build, test, deploy stages",
+          "Add SAM DeploymentPreference for canary deployments",
+          "Write integration tests for GraphQL resolvers",
+          "Add Dependabot for dependency vulnerability scanning"
         ],
         "learning_materials": [
           "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
@@ -886,9 +853,8 @@
       "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)",
       "triggering_questions": [],
       "detail": null,
-      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source code, configuration, IaC, or documentation."
     }
   ],
-  "decomposition_strategy": null,
   "repo_name": "modern-catalog-graphql"
 }

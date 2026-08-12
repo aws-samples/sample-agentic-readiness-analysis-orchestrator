@@ -1,41 +1,53 @@
 {
   "analysis_type": "mod",
+  "repo_name": "legacy-helpdesk-tickets",
+  "analysis_date": "2025-07-17",
+  "td_version": "modernization-readiness-analysis",
+  "overall_score": 1.20,
   "metadata": {
-    "repository": "legacy-helpdesk-tickets",
-    "analysis_date": "2026-08-10",
-    "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (Python/Django) with a deployable entry point (Django WSGI application served via Apache mod_wsgi on EC2) and a database backend (PostgreSQL). Single-service architecture.",
+    "repo_type_justification": "Application source code with a deployable entry point (Django WSGI app served via Apache/mod_wsgi) and a database dependency present. Single service with no IaC, no Dockerfile, but manual EC2 deployment confirmed in README. Classified as application.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "Database connections present (PostgreSQL via psycopg2), ticket data with status field indicating write operations (CRUD lifecycle), and HTTP views serving user-facing ticket list/search operations.",
+    "archetype_justification": "Django app with PostgreSQL database performing CRUD operations on helpdesk tickets. Views expose read/search endpoints with database writes implied by the ticket lifecycle. Classified as stateful-crud.",
     "priority": null,
     "tags": [],
     "context": null,
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_at_rest_data_surface": true,
-      "has_deployed_workload": true,
+      "has_deployed_workload": false,
       "has_api_surface": true,
       "has_multi_instance_deployment": false,
       "has_iac_provisioning_aws_resources": false
+    },
+    "technology_stack": {
+      "language": "Python 2.7",
+      "framework": "Django 1.4",
+      "database": "PostgreSQL 9.1",
+      "web_server": "Apache 2.2 + mod_wsgi",
+      "os": "Ubuntu 12.04"
     }
   },
-  "overall_score": 1.2,
   "classification": {
-    "tier": "Not Ready",
-    "high_count": 12,
-    "medium_count": 22,
+    "tier": "Remediation Required",
+    "high_count": 11,
+    "medium_count": 21,
     "low_count": 0,
-    "rule_matched": ">=12 High \u2192 Not Ready",
-    "classification_consistency_check": "consistent"
+    "rule_matched": "2-11 High → Remediation Required",
+    "classification_consistency_check": {
+      "status": "divergent",
+      "score_band": "Not Ready",
+      "count_tier": "Remediation Required",
+      "reason": "Overall score 1.20 < 1.5 yields Not Ready band, but 11 High findings (upper boundary of 2-11 range) maps to Remediation Required tier. The divergence arises because this repository scores 1 on nearly every dimension — the overall score is extremely low while the High finding count is at the boundary of the Remediation Required range. The count-based tier (Remediation Required) is authoritative for classification."
+    }
   },
   "categories": [
     {
       "category_id": "INF",
       "category": "Infrastructure & DevOps",
-      "numeric_score": 1.09,
+      "numeric_score": 1.10,
       "score_rating": "Not Ready",
       "severity_status": "Critical"
     },
@@ -56,14 +68,14 @@
     {
       "category_id": "SEC",
       "category": "Security Baseline",
-      "numeric_score": 1.0,
+      "numeric_score": 1.00,
       "score_rating": "Not Ready",
       "severity_status": "Critical"
     },
     {
       "category_id": "OPS",
       "category": "Operations & Observability",
-      "numeric_score": 1.0,
+      "numeric_score": 1.00,
       "score_rating": "Not Ready",
       "severity_status": "Critical"
     }
@@ -73,90 +85,52 @@
       "question_id": "SEC-Q5",
       "title": "Secrets Management",
       "score": 1,
-      "gap": "Plaintext database password and SECRET_KEY committed to source control",
-      "impact": "Critical security vulnerability; credential exposure to anyone with repo access"
+      "gap": "SECRET_KEY and database password hardcoded in settings.py in plaintext",
+      "impact": "Critical security vulnerability; credentials exposed in source control"
     },
     {
       "question_id": "INF-Q10",
       "title": "Infrastructure as Code Coverage",
       "score": 1,
-      "gap": "Zero IaC \u2014 all infrastructure manually provisioned",
-      "impact": "No reproducibility, no disaster recovery, no environment consistency"
+      "gap": "No IaC — all infrastructure created and managed manually",
+      "impact": "Non-reproducible infrastructure; manual deployments; no disaster recovery"
     },
     {
       "question_id": "INF-Q11",
       "title": "CI/CD Automation",
       "score": 1,
-      "gap": "No CI/CD pipeline \u2014 manual git pull + apache restart",
-      "impact": "Error-prone deployments, no quality gates, no automated testing"
+      "gap": "No CI/CD pipeline — deployment is manual git pull + apache restart",
+      "impact": "No automated testing, no deployment safety, high change failure rate"
     },
     {
       "question_id": "INF-Q1",
       "title": "Managed Compute",
       "score": 1,
-      "gap": "Single EC2 instance running EOL Ubuntu 12.04",
-      "impact": "No scaling, no fault tolerance, security vulnerability from unpatched OS"
+      "gap": "All compute on a single raw EC2 instance with no managed services",
+      "impact": "No elasticity, single point of failure, high operational overhead"
     },
     {
       "question_id": "APP-Q2",
       "title": "Monolith vs Microservices",
       "score": 1,
       "gap": "Tightly-coupled monolith with raw SQL in views, no module boundaries",
-      "impact": "Cannot scale, deploy, or evolve independently"
+      "impact": "Cannot scale independently, no team autonomy, high coupling"
     }
   ],
-  "decomposition_strategy": {
-    "recommended_approach": "Conditional / Adaptive",
-    "rationale": "Given the extreme immaturity (EOL runtime, no IaC, no CI/CD, critical security vulnerabilities) and tiny codebase (~50 lines of app logic), a phased approach is recommended: upgrade runtime, containerize, then selectively modernize.",
-    "approaches": [
-      {
-        "name": "Strengthen as Modular Monolith",
-        "effort": "Low",
-        "applicable": false,
-        "reason": "Not applicable \u2014 codebase is too small and degraded for internal refactoring to provide value"
-      },
-      {
-        "name": "Strangler Fig (Parallel Track)",
-        "effort": "Medium to High",
-        "applicable": false,
-        "reason": "Not applicable \u2014 no recognizable module boundaries to extract incrementally"
-      },
-      {
-        "name": "Conditional / Adaptive",
-        "effort": "Low to Medium",
-        "applicable": true,
-        "reason": "Recommended \u2014 containerize as-is after runtime upgrade, then selectively extract services based on business priority"
-      },
-      {
-        "name": "Big-Bang Rewrite",
-        "effort": "Very High",
-        "applicable": true,
-        "reason": "Viable given the tiny codebase size but carries unnecessary risk if business logic is larger than visible"
-      }
-    ],
-    "patterns": [
-      "Anti-corruption Layer",
-      "Hexagonal Architecture"
-    ],
-    "estimated_duration": "3-6 months for full modernization"
-  },
   "findings": [
     {
       "question_id": "INF-Q1",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Compute \u2014 All compute on raw EC2",
-      "description": "All compute runs on a single raw EC2 instance with Apache 2.2 + mod_wsgi on Ubuntu 12.04 (EOL). No managed container orchestration or serverless usage.",
-      "gap": "No managed compute services in use. The entire application depends on a single manually-managed EC2 instance running an end-of-life operating system.",
-      "recommendation": "Migrate to managed compute \u2014 containerize on ECS/Fargate or refactor to Lambda. First upgrade from Python 2.7/Django 1.4 to supported versions.",
+      "title": "No Managed Compute — All workloads on raw EC2",
+      "description": "All compute runs on a single raw EC2 instance (Ubuntu 12.04) with Apache 2.2 + mod_wsgi. No managed container orchestration, no serverless, no Fargate.",
+      "gap": "No managed compute services adopted. Single EC2 instance with no elasticity, no health checks, no automatic recovery.",
+      "recommendation": "Containerize the application and deploy to ECS/Fargate or EKS. Separate the database tier from the application tier.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
       "phase": 1,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -168,18 +142,15 @@
       "question_id": "INF-Q2",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Databases \u2014 Self-managed PostgreSQL on EC2",
-      "description": "PostgreSQL 9.1 is self-managed on the same EC2 instance as the application. Connection string points to 127.0.0.1:5432 confirming co-located database.",
-      "gap": "Database is entirely self-managed on EC2 with no managed service benefits. Co-located with the application on a single instance.",
-      "recommendation": "Migrate PostgreSQL to Amazon RDS for PostgreSQL or Aurora PostgreSQL for automated backups, Multi-AZ failover, and managed patching.",
+      "title": "Self-Managed Database on EC2",
+      "description": "PostgreSQL 9.1 is self-managed on the same EC2 instance as the application. Connection configured to localhost (127.0.0.1:5432).",
+      "gap": "Entirely self-managed database with manual patching, no automated failover, no PITR. Database co-located with application.",
+      "recommendation": "Migrate to Amazon RDS for PostgreSQL with Multi-AZ deployment, automated backups, and PITR. Upgrade from PostgreSQL 9.1 to a supported version.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -191,22 +162,19 @@
       "question_id": "INF-Q3",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Workflow Orchestration \u2014 No orchestration for ticket lifecycle",
-      "description": "No workflow orchestration services in use. The helpdesk system has implicit ticket lifecycle management but all workflow logic is absent or hardcoded.",
-      "gap": "For a stateful-crud helpdesk system, ticket lifecycle transitions represent business workflows that benefit from orchestration. None exists.",
-      "recommendation": "Implement ticket lifecycle as a Step Functions state machine or application-level workflow engine for transitions, notifications, and escalation rules.",
+      "title": "No Workflow Orchestration",
+      "description": "No workflow orchestration service detected. Ticket lifecycle management is entirely through inline view logic and raw SQL.",
+      "gap": "All workflow logic hardcoded in application code with no structured orchestration.",
+      "recommendation": "Introduce proper state machine patterns in application code. Evaluate Step Functions for multi-step ticket workflows as the system grows.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": "tickets/views.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
-        "archetype_calibrated": true,
+        "archetype_calibrated": false,
         "core_question": false
       }
     },
@@ -214,18 +182,15 @@
       "question_id": "INF-Q4",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Async Messaging \u2014 No messaging infrastructure",
-      "description": "No messaging or streaming infrastructure. Email uses synchronous SMTP relay. No SQS, SNS, EventBridge, or message broker. For stateful-crud, managed messaging is expected for state change propagation.",
-      "gap": "No messaging where state changes should trigger notifications and integrations. Ticket status changes have no event publication mechanism.",
-      "recommendation": "Introduce managed messaging (SQS/SNS/EventBridge) for ticket lifecycle events \u2014 notifications, escalation triggers, and integration with other systems.",
+      "title": "No Async Messaging or Streaming",
+      "description": "No messaging or streaming infrastructure. Email notifications are sent synchronously via SMTP. No SQS, SNS, EventBridge, or any message broker.",
+      "gap": "No async messaging for operations that would benefit — email notifications block request processing.",
+      "recommendation": "Introduce SQS or SNS for email notification delivery. Use EventBridge for ticket lifecycle events.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -237,18 +202,15 @@
       "question_id": "INF-Q5",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Network Security \u2014 No network security configuration",
-      "description": "No VPC definitions, no security groups, no subnet configurations. Single EC2 instance with direct exposure. No network segmentation between web and database tiers.",
-      "gap": "No network segmentation. No evidence of security groups, VPC configuration, or network isolation. Application and database co-located on same host.",
-      "recommendation": "Deploy in a custom VPC with private subnets for database, public subnet with restricted security groups for web tier, and NACLs for defense in depth.",
+      "title": "No Network Security Configuration",
+      "description": "No network security configuration found. No VPC definitions, no security groups, no subnet configurations, no network segmentation.",
+      "gap": "No evidence of VPC with private subnets, security groups, or network segmentation.",
+      "recommendation": "Deploy in a custom VPC with private subnets for application and database tiers. Configure least-privilege security groups.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -260,18 +222,15 @@
       "question_id": "INF-Q6",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "API Entry Point \u2014 No gateway or load balancer",
-      "description": "No API Gateway, ALB, or CloudFront. Apache 2.2 serves HTTP traffic directly with no managed entry point providing throttling, auth, or request validation.",
-      "gap": "Services exposed directly via Apache with no managed gateway providing throttling, auth, request validation, or traffic management.",
-      "recommendation": "Add an Application Load Balancer or API Gateway in front of the application for throttling, health checks, TLS termination, and request routing.",
+      "title": "No Managed API Entry Point",
+      "description": "No API Gateway, ALB, CloudFront, or any managed entry point. Application served directly by Apache 2.2 with no throttling or request validation.",
+      "gap": "Services exposed directly via Apache with no managed entry point.",
+      "recommendation": "Place an ALB or API Gateway in front of the application. Configure health checks, throttling, and WAF rules.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -283,18 +242,15 @@
       "question_id": "INF-Q7",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Auto-Scaling \u2014 No scaling configured",
-      "description": "No auto-scaling configured. Single EC2 instance with static capacity. No ASG, no target tracking policies, no Lambda concurrency management.",
-      "gap": "All capacity is statically provisioned on a single instance. Cannot respond to traffic spikes or scale down during low demand.",
-      "recommendation": "After containerizing, configure auto-scaling on the compute layer (ECS service auto-scaling or EKS HPA).",
+      "title": "No Auto-Scaling",
+      "description": "No auto-scaling configured. Single EC2 instance with static capacity.",
+      "gap": "All capacity is statically provisioned. No ability to respond to traffic spikes or scale down.",
+      "recommendation": "Configure auto-scaling when migrating to managed compute (ECS/EKS). Enable RDS storage auto-scaling.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -306,18 +262,15 @@
       "question_id": "INF-Q8",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Backup and Recovery \u2014 Daily pg_dump only",
-      "description": "Backup limited to a daily pg_dump cron job with no defined retention, no PITR, no restore testing, and no backup for non-database assets.",
-      "gap": "No defined retention policy, no PITR, no automated restore testing, no cross-region replication. Only basic daily pg_dump exists.",
-      "recommendation": "Migrating to RDS will provide automated backups with configurable retention and PITR. Until then, implement retention policy and test restore procedures.",
+      "title": "Minimal Backup — pg_dump Only",
+      "description": "A daily pg_dump cron job is the sole backup mechanism. No PITR, no automated retention, no restore testing, no cross-region replication.",
+      "gap": "Backup exists for main database only but lacks PITR, retention policies, and documented restore testing.",
+      "recommendation": "Migrate to RDS with automated backups and PITR. Define retention policies. Document and test restore procedures.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "mod_metadata": {
         "internal_score": 2,
         "score_label": "Needs Work",
@@ -326,44 +279,18 @@
       }
     },
     {
-      "question_id": "INF-Q9",
-      "category": "Infrastructure & DevOps",
-      "category_id": "INF",
-      "title": "High Availability \u2014 Single instance, single AZ",
-      "description": "All resources on a single EC2 instance in a single AZ. No Multi-AZ configuration, no load balancing, database co-located on same host. Single point of failure.",
-      "gap": "Single point of failure \u2014 one instance, one AZ, no redundancy. Any failure results in complete outage with no automatic recovery.",
-      "recommendation": "After modernization, deploy across 2+ AZs with ALB for cross-zone load balancing and RDS Multi-AZ for database failover.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
       "question_id": "INF-Q10",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Infrastructure as Code \u2014 Zero IaC coverage",
-      "description": "No Infrastructure as Code exists. No Terraform, CloudFormation, CDK, Helm, or Kustomize. All infrastructure is manually provisioned and configured.",
-      "gap": "0% IaC coverage. All infrastructure is manually provisioned. No reproducibility, no version control of infrastructure changes.",
-      "recommendation": "Define all infrastructure in Terraform or CDK: VPC, subnets, security groups, RDS instance, ECS/Fargate service, ALB.",
+      "title": "Zero Infrastructure as Code",
+      "description": "No IaC found. No Terraform, CloudFormation, CDK, or Helm. All infrastructure manually provisioned.",
+      "gap": "0% IaC coverage. All infrastructure is ClickOps. Non-reproducible, non-auditable.",
+      "recommendation": "Adopt Terraform or CDK. Start with VPC/networking, compute (ECS), and database (RDS).",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": ".",
-        "lines": null
-      },
+      "evidence": {"file": ".", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -375,18 +302,15 @@
       "question_id": "INF-Q11",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "CI/CD Automation \u2014 No pipeline exists",
-      "description": "No CI/CD pipeline. Deployment is manual git pull + apache restart. No GitHub Actions, GitLab CI, Jenkins, or CodePipeline found.",
-      "gap": "All deployments entirely manual with no automated build, test, or deploy stages. No quality gates, no rollback capability.",
-      "recommendation": "Implement CI/CD pipeline (AWS CodePipeline + CodeBuild or GitHub Actions) with automated build, test, and deploy stages.",
+      "title": "No CI/CD Automation",
+      "description": "No CI/CD pipeline exists. Deployment is entirely manual: SSH to server, git pull, restart Apache.",
+      "gap": "No automated build, test, or deploy stages. No quality gates, no rollback.",
+      "recommendation": "Implement CI/CD pipeline (CodePipeline + CodeBuild or GitHub Actions) with build, test, security scan, and deploy stages.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": ".",
-        "lines": null
-      },
+      "evidence": {"file": ".", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -398,18 +322,15 @@
       "question_id": "APP-Q1",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Programming Languages \u2014 Python 2.7 / Django 1.4 (both EOL)",
-      "description": "Python 2.7 (EOL January 2020) with Django 1.4 (EOL 2015). Both language runtime and framework are end-of-life. Compound legacy signals.",
-      "gap": "Both language and framework are EOL with compound legacy signals. Python 2.7 syntax confirms the runtime version. No AWS SDK usage.",
-      "recommendation": "Upgrade to Python 3.12+ and Django 5.x. This is a prerequisite for all other modernization.",
+      "title": "End-of-Life Language and Framework",
+      "description": "Python 2.7 (EOL January 2020) with Django 1.4 (EOL 2015). Both language runtime and framework are end-of-life with no security patches.",
+      "gap": "Language runtime and framework are both end-of-life. No security updates, limited cloud-native tooling support.",
+      "recommendation": "Upgrade to Python 3.12+ with Django 4.2+ (LTS) or Django 5.x.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
-      "phase": 2,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
-      },
+      "phase": 1,
+      "evidence": {"file": "tickets/views.py", "lines": null},
       "mod_metadata": {
         "internal_score": 2,
         "score_label": "Needs Work",
@@ -421,18 +342,15 @@
       "question_id": "APP-Q2",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Monolith vs Microservices \u2014 Tightly-coupled monolith",
-      "description": "Tightly-coupled monolith with no clear module boundaries. 2 Python files with raw SQL in views. No service decomposition, no interfaces, no ORM.",
-      "gap": "No module boundaries, no abstraction layers. Business logic, presentation, and data access all intermixed in a single file.",
-      "recommendation": "Given the tiny codebase, rewrite with proper layering: repository pattern for data access, service layer for business logic, REST API for presentation.",
+      "title": "Tightly-Coupled Monolith",
+      "description": "Tightly-coupled monolith with no clear module boundaries. Raw SQL in views, no separation of concerns, no service layer, no repository pattern.",
+      "gap": "No module boundaries, no defined interfaces, no data ownership separation. Business logic, data access, and presentation interleaved.",
+      "recommendation": "Modularize within the monolith: introduce Django apps with clean interfaces, use ORM, implement service/repository layer.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
       "phase": 1,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": "tickets/views.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -444,18 +362,15 @@
       "question_id": "APP-Q3",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Async vs Sync Communication \u2014 All synchronous",
-      "description": "All communication is synchronous HTTP. No async patterns exist. For stateful-crud, ticket state changes should publish events but do not.",
-      "gap": "No async communication patterns for a service that should publish ticket lifecycle events and handle notifications asynchronously.",
-      "recommendation": "Introduce async event publication for ticket lifecycle events using SNS/EventBridge. Decouple email notifications from the request path using SQS.",
+      "title": "All Communication Synchronous",
+      "description": "All communication is synchronous HTTP. Email notifications sent synchronously via SMTP during request processing. No async patterns.",
+      "gap": "100% synchronous communication. Email delivery blocks the HTTP request path.",
+      "recommendation": "Introduce async processing for email notifications using SQS or Celery. Decouple notification delivery from request path.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -467,18 +382,15 @@
       "question_id": "APP-Q4",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Long-Running Process Handling \u2014 All synchronous",
-      "description": "All operations synchronous regardless of duration. Unbounded LIKE queries will degrade as data grows. No background job framework or async processing.",
-      "gap": "No async job handling for potentially long-running operations (bulk searches, report generation, email notifications).",
-      "recommendation": "Implement async job processing (Celery with SQS broker, or Lambda) for operations that may exceed 30 seconds as data grows.",
+      "title": "No Async Long-Running Process Handling",
+      "description": "All operations synchronous regardless of duration. No background job framework, no async/polling patterns. Email sending blocks requests.",
+      "gap": "No async job processing for operations that may exceed 30 seconds.",
+      "recommendation": "Introduce background task processing (Celery with SQS, or Lambda for email). Implement status polling for batch operations.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": "tickets/views.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -490,18 +402,15 @@
       "question_id": "APP-Q5",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "API Versioning \u2014 No versioning strategy",
+      "title": "No API Versioning",
       "description": "No API versioning strategy. No /v1/ URL patterns, no version headers, no versioning annotations.",
-      "gap": "No versioning \u2014 any API changes would break all consumers simultaneously.",
-      "recommendation": "When rebuilding, implement URL-path versioning (/v1/tickets/) from the start to enable future evolution.",
+      "gap": "No versioning — breaking changes would be deployed directly with no backward compatibility.",
+      "recommendation": "Implement URL-path versioning (/v1/tickets/) when modernizing the API layer.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -513,18 +422,15 @@
       "question_id": "APP-Q6",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Service Discovery \u2014 All endpoints hardcoded",
-      "description": "All service endpoints hardcoded in settings.py. Database host 127.0.0.1, email server exchange.acme-corp.internal. No environment variables, no service registry.",
-      "gap": "All external service endpoints are hardcoded literals with no dynamic discovery or environment variable substitution.",
-      "recommendation": "Externalize all service endpoints to environment variables. When containerized, use AWS Service Discovery or ECS service connect.",
+      "title": "All Endpoints Hardcoded",
+      "description": "All service endpoints hardcoded. Database on 127.0.0.1:5432, email server hardcoded as exchange.acme-corp.internal. No dynamic discovery.",
+      "gap": "All endpoints hardcoded in source code with no dynamic discovery or environment variable abstraction.",
+      "recommendation": "Externalize configuration to environment variables or AWS Systems Manager Parameter Store. Adopt service discovery when decomposing.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -536,18 +442,15 @@
       "question_id": "DATA-Q1",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Unstructured Data Storage \u2014 Local filesystem only",
-      "description": "Static files served from local disk. No S3 usage, no managed object storage, no document parsing. Any ticket attachments stored on local filesystem.",
-      "gap": "Data on local file system with no managed storage, no backup, no accessibility for other services.",
-      "recommendation": "Migrate static assets and file uploads to Amazon S3. Add CloudFront for static file delivery.",
+      "title": "No Managed Object Storage",
+      "description": "Static files served from local disk. No S3 bucket for document or asset storage. No managed object storage or parsing pipeline.",
+      "gap": "Data on local file systems with no managed storage, no redundancy, no accessibility.",
+      "recommendation": "Migrate static assets and file uploads to Amazon S3. Add CloudFront for delivery.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "phase": 1,
+      "evidence": {"file": "README.md", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -559,18 +462,15 @@
       "question_id": "DATA-Q2",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Unified Data Access Layer \u2014 Raw SQL scattered in views",
-      "description": "No data access layer. Raw SQL queries directly in view functions using connection.cursor(). Django ORM not used despite being available.",
-      "gap": "Database queries scattered in view functions with no abstraction, no repository pattern, no ORM usage.",
-      "recommendation": "Implement a proper data access layer using Django ORM models or a repository pattern with parameterized queries.",
+      "title": "Scattered Raw SQL — No Data Access Layer",
+      "description": "Raw SQL with string formatting scattered in view functions. No ORM usage despite Django providing one. No repository or DAO pattern.",
+      "gap": "Database queries scattered across views with no centralization, no abstraction, no consistent pattern.",
+      "recommendation": "Adopt Django ORM. Implement repository/service layer pattern. Remove all raw SQL string formatting.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": "tickets/views.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -582,18 +482,15 @@
       "question_id": "DATA-Q3",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Database Engine Version \u2014 PostgreSQL 9.1 (EOL 2016)",
-      "description": "PostgreSQL 9.1 reached end-of-life in November 2016 \u2014 nearly 10 years past EOL. No version pinning in IaC (no IaC exists). No security patches available.",
-      "gap": "Database engine 10+ years past EOL with no security patches. No version management, no upgrade path documented.",
-      "recommendation": "Migrate to Amazon RDS for PostgreSQL (version 15 or 16) or Aurora PostgreSQL. Simple schema makes upgrade straightforward.",
+      "title": "Database Engine Past EOL",
+      "description": "PostgreSQL 9.1 reached end-of-life November 2016 — over 8 years past EOL. No version pinning in IaC. No upgrade path defined.",
+      "gap": "Database engine 8+ years past EOL with no security patches and no version management.",
+      "recommendation": "Upgrade to supported PostgreSQL version (15+) when migrating to RDS. Pin version in IaC.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -605,18 +502,15 @@
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Encryption at Rest \u2014 No encryption configured",
-      "description": "No encryption at rest. PostgreSQL on local filesystem with no disk encryption, no KMS keys, no encryption configuration.",
-      "gap": "No encryption at rest for any data store. Database content stored unencrypted.",
-      "recommendation": "When migrating to RDS, enable encryption at rest with customer-managed KMS key. Enable EBS encryption for any volumes.",
+      "title": "No Encryption at Rest",
+      "description": "No encryption at rest configured. PostgreSQL data stored unencrypted on EC2 local disk. No KMS keys, no encrypted volumes.",
+      "gap": "No encryption at rest for any data — database contents and static files stored in plaintext.",
+      "recommendation": "Enable encryption at rest on RDS with customer-managed KMS key. Enable S3 default encryption. Use encrypted EBS volumes.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -628,18 +522,15 @@
       "question_id": "SEC-Q3",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "API Authentication \u2014 No auth enforcement on endpoints",
-      "description": "No authentication enforced. AuthenticationMiddleware loaded but views have no @login_required or permission checks. Endpoints accessible without credentials.",
-      "gap": "API endpoints completely open \u2014 no authentication enforcement. Any user can access ticket data without credentials.",
-      "recommendation": "Add authentication enforcement to all views. When rebuilding, implement token-based auth (OAuth2/JWT) with Cognito.",
+      "title": "No API Authentication Enforcement",
+      "description": "No per-request authentication on view endpoints. AuthenticationMiddleware present but no views enforce authentication. Endpoints accessible without auth.",
+      "gap": "API endpoints effectively open. No authentication enforcement on any view. No token-based auth.",
+      "recommendation": "Add @login_required to all views immediately. Implement OAuth2/JWT when modernizing.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "tickets/views.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -651,18 +542,15 @@
       "question_id": "SEC-Q4",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Centralized Identity \u2014 No external IdP integration",
-      "description": "Django built-in auth only. No OIDC, SAML, Cognito, or external IdP. Authentication entirely self-contained.",
-      "gap": "Application manages its own authentication with no external IdP integration. No SSO, no centralized identity management.",
-      "recommendation": "Integrate with a centralized identity provider (Amazon Cognito or corporate IdP) for SSO and unified access management.",
+      "title": "No Centralized Identity Integration",
+      "description": "Django's built-in auth with no external identity provider. No Cognito, OIDC/SAML, SSO, or federation.",
+      "gap": "Application manages its own authentication entirely with no external IdP integration.",
+      "recommendation": "Integrate with centralized IdP (Amazon Cognito or corporate SAML/OIDC). Enable SSO.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -674,18 +562,15 @@
       "question_id": "SEC-Q5",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Secrets Management \u2014 Plaintext credentials in source",
-      "description": "Plaintext credentials committed to source control. DB password 'helpdesk2012' and SECRET_KEY hardcoded in settings.py, exposed in version control.",
-      "gap": "Critical: Plaintext credentials in source code. Database password and application secret key committed to repository.",
-      "recommendation": "Immediately rotate credentials. Migrate to AWS Secrets Manager with automated rotation. Remove all plaintext credentials from source control and git history.",
+      "title": "Hardcoded Secrets in Source Control",
+      "description": "Plaintext credentials committed to source control. SECRET_KEY and database password ('helpdesk2012') hardcoded in settings.py.",
+      "gap": "Critical: production secrets in plaintext in version control. Anyone with repo access has database credentials.",
+      "recommendation": "Immediately rotate all exposed credentials. Migrate to AWS Secrets Manager with automated rotation.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -697,18 +582,15 @@
       "question_id": "SEC-Q6",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Compute Hardening \u2014 No patching, all EOL components",
-      "description": "No patching strategy. Ubuntu 12.04, Python 2.7, Django 1.4, Apache 2.2, PostgreSQL 9.1 \u2014 all EOL. No SSM, no Inspector, no hardened AMIs.",
-      "gap": "No patching automation, no vulnerability scanning. Entire stack is end-of-life with known unpatched vulnerabilities.",
-      "recommendation": "Replace EOL stack entirely. Use managed compute (ECS/Fargate) or hardened AMIs (Amazon Linux 2023). Enable AWS Inspector.",
+      "title": "No Compute Hardening or Patching",
+      "description": "Running on Ubuntu 12.04 (EOL) with Apache 2.2 (EOL). No SSM Patch Manager, no vulnerability scanning, no hardened images.",
+      "gap": "OS, web server, and all packages past EOL. No patching automation or vulnerability scanning.",
+      "recommendation": "Migrate to supported OS (Amazon Linux 2023). Implement SSM Patch Manager. Enable AWS Inspector.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -720,18 +602,15 @@
       "question_id": "SEC-Q7",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Application Security Pipeline \u2014 No security scanning",
-      "description": "No security scanning. No CI/CD pipeline exists. Active SQL injection and XSS vulnerabilities exist in production code undetected.",
-      "gap": "No security scanning \u2014 SQL injection and XSS vulnerabilities in production undetected.",
-      "recommendation": "When implementing CI/CD, integrate SAST (Semgrep) and dependency scanning. Fix existing SQL injection and XSS immediately.",
+      "title": "No Application Security Pipeline",
+      "description": "No security scanning tools configured. No SAST, no dependency scanning, no container scanning. No CI/CD pipeline exists to integrate tools into.",
+      "gap": "Zero security validation. Known vulnerabilities (SQL injection, XSS, hardcoded secrets) exist with no automated detection.",
+      "recommendation": "Include SAST (Semgrep), dependency scanning (pip-audit), and secrets detection in CI/CD pipeline.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": ".", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -743,18 +622,15 @@
       "question_id": "OPS-Q1",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Distributed Tracing \u2014 No tracing instrumented",
-      "description": "No distributed tracing. No OpenTelemetry, no X-Ray, no trace ID propagation.",
-      "gap": "No tracing \u2014 no ability to trace requests, diagnose latency issues, or correlate failures.",
-      "recommendation": "When rebuilding, instrument with OpenTelemetry or AWS X-Ray SDK for Python.",
+      "title": "No Distributed Tracing",
+      "description": "No tracing instrumented. No X-Ray, no OpenTelemetry. Only a Python 2 print statement in ticket_search.",
+      "gap": "No tracing. No ability to trace requests, identify bottlenecks, or diagnose failures.",
+      "recommendation": "Instrument with AWS X-Ray or OpenTelemetry when modernizing.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": "tickets/views.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -766,18 +642,15 @@
       "question_id": "OPS-Q2",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "SLO Definitions \u2014 No SLOs defined",
-      "description": "No SLOs defined. No CloudWatch alarms, no latency monitoring, no error rate tracking, no availability targets.",
-      "gap": "No SLOs \u2014 no formal definition of acceptable service levels. No monitoring to measure compliance.",
-      "recommendation": "Define SLOs for ticket submission latency, availability, and error rate. Implement CloudWatch alarms.",
+      "title": "No SLO Definitions",
+      "description": "No SLOs defined. No availability targets, latency targets, error budget tracking, or CloudWatch alarms.",
+      "gap": "No SLOs — no formal definition of acceptable service levels.",
+      "recommendation": "Define SLOs for the helpdesk service. Implement CloudWatch alarms to track compliance.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": ".",
-        "lines": null
-      },
+      "evidence": {"file": ".", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -789,18 +662,15 @@
       "question_id": "OPS-Q3",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Business Metrics \u2014 No custom metrics",
-      "description": "No custom metrics published. No business KPI tracking. No visibility into ticket resolution time, volume, or SLA compliance.",
-      "gap": "No business metrics \u2014 cannot measure helpdesk KPIs.",
-      "recommendation": "Publish custom CloudWatch metrics for tickets opened/closed, mean time to resolution, SLA breach count.",
+      "title": "No Business Metrics",
+      "description": "No custom metrics published. No business outcome tracking (ticket resolution time, volume, SLA compliance).",
+      "gap": "No business metrics — only default system metrics (if any). No visibility into business outcomes.",
+      "recommendation": "Implement custom CloudWatch metrics for key business outcomes: tickets created/resolved, mean time to resolution.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": "tickets/views.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -812,64 +682,35 @@
       "question_id": "OPS-Q4",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Anomaly Detection \u2014 No alerting configured",
-      "description": "No alerting. No CloudWatch alarms, no anomaly detection. Debug print statement is the only form of logging.",
-      "gap": "No alerting \u2014 application failures only discovered when users report issues.",
-      "recommendation": "Implement CloudWatch alarms for error rates and latency. Enable anomaly detection after establishing baseline.",
+      "title": "No Anomaly Detection or Alerting",
+      "description": "No alerting configured. No CloudWatch alarms, no PagerDuty/OpsGenie. Failures detected only when users report them.",
+      "gap": "No alerting of any kind. Entirely reactive incident discovery.",
+      "recommendation": "Implement CloudWatch alarms for critical metrics. Add anomaly detection on error rates.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "tickets/views.py",
-        "lines": null
-      },
+      "evidence": {"file": ".", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
         "archetype_calibrated": false,
         "core_question": false
-      }
-    },
-    {
-      "question_id": "OPS-Q5",
-      "category": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Deployment Strategy \u2014 Manual git pull, direct-to-production",
-      "description": "Direct-to-production deployment via manual git pull + apache restart. No blue/green, no canary, no rolling deployment.",
-      "gap": "No deployment safety. Every deployment is full production rollout with no rollback capability beyond manual git revert.",
-      "recommendation": "Implement blue/green or canary deployment via CodeDeploy or ECS rolling deployments with health checks.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
       }
     },
     {
       "question_id": "OPS-Q6",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Integration Testing \u2014 No automated tests",
-      "description": "No integration tests. README mentions stale unit tests but no test files present in the repository. No regression safety net.",
-      "gap": "No automated tests of any kind in the repository. No regression safety net exists.",
-      "recommendation": "Write integration tests for critical workflows before making changes. Use pytest with Django test client. Add to CI pipeline.",
+      "title": "No Integration Tests",
+      "description": "No integration tests. No test files found in repo. README mentions stale unit tests that are not present.",
+      "gap": "No automated tests at all. No regression safety net.",
+      "recommendation": "Implement integration tests for critical workflows. Run in CI pipeline.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": ".", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -878,44 +719,18 @@
       }
     },
     {
-      "question_id": "OPS-Q7",
-      "category": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Incident Response \u2014 No runbooks or automation",
-      "description": "No runbooks, no incident response automation, no self-healing. Incident response is entirely ad hoc.",
-      "gap": "No runbooks \u2014 incident response entirely manual and undocumented.",
-      "recommendation": "Create runbooks for common incidents. After modernization, implement automated remediation via Systems Manager.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": ".",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
       "question_id": "OPS-Q8",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Observability Ownership \u2014 No monitoring assets",
-      "description": "No observability ownership. No dashboards, no alarms, no CODEOWNERS for observability. Only IT Ops email as contact.",
-      "gap": "No observability ownership \u2014 no monitoring assets to own.",
-      "recommendation": "When implementing observability, define per-service dashboards with named owners and alarms with escalation paths.",
+      "title": "No Observability Ownership",
+      "description": "No observability ownership. No dashboards, no alarms with owners, no CODEOWNERS file. Monitoring entirely absent.",
+      "gap": "No observability ownership — monitoring is absent, not just unowned.",
+      "recommendation": "Establish monitoring ownership when implementing observability. Define CODEOWNERS for monitoring configs.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "helpdesk/settings.py",
-        "lines": null
-      },
+      "evidence": {"file": "helpdesk/settings.py", "lines": null},
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -926,12 +741,20 @@
   ],
   "evaluations": [
     {
+      "question_id": "INF-Q9",
+      "category_id": "INF",
+      "title": "High Availability and Fault Isolation",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_deployed_workload=false — no in-repo deployment artifacts to assess HA configuration"
+    },
+    {
       "question_id": "DATA-Q4",
       "category_id": "DATA",
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 No stored procedures or proprietary SQL; all business logic in application layer. Simple SELECT queries only."
+      "reason": "Score 4 — no stored procedures, triggers, or proprietary SQL. All business logic in application layer (standard SQL only)."
     },
     {
       "question_id": "SEC-Q1",
@@ -939,7 +762,23 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "Audit logging (CloudTrail) is an AWS account-level service. This repo contains application-level source code only (has_iac_provisioning_aws_resources=false). CloudTrail evaluation belongs in the foundation infrastructure repo."
+      "reason": "has_iac_provisioning_aws_resources=false — no IaC provisioning AWS resources; CloudTrail evaluation belongs in account-level infrastructure repo"
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category_id": "OPS",
+      "title": "Deployment Strategy",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_deployed_workload=false — no Dockerfile, no deployment manifests, no IaC defining compute"
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category_id": "OPS",
+      "title": "Incident Response Automation",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_deployed_workload=false — no deployed workload to define incident response for"
     },
     {
       "question_id": "OPS-Q9",
@@ -947,7 +786,7 @@
       "title": "Resource Tagging Governance",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "This repo provisions no AWS resources (has_iac_provisioning_aws_resources=false). No resources to tag. Tagging governance belongs in the repo that owns the AWS infrastructure."
+      "reason": "has_iac_provisioning_aws_resources=false — no AWS resources to tag"
     }
   ],
   "pathways": [
@@ -957,53 +796,19 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "High",
-      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) AND INF-Q1=1 < 3, APP-Q3=1 < 3, APP-Q4=1 < 3 (all supporting met)",
+      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) AND INF-Q1=1 < 3, APP-Q3=1 < 3, APP-Q4=1 < 3 (supporting)",
       "triggering_questions": [
-        {
-          "question_id": "APP-Q2",
-          "score": 1,
-          "note": "Tightly-coupled monolith with no module boundaries"
-        },
-        {
-          "question_id": "INF-Q1",
-          "score": 1,
-          "note": "All compute on raw EC2"
-        },
-        {
-          "question_id": "APP-Q3",
-          "score": 1,
-          "note": "All communication synchronous"
-        },
-        {
-          "question_id": "APP-Q4",
-          "score": 1,
-          "note": "All operations synchronous"
-        }
+        {"question_id": "APP-Q2", "score": 1},
+        {"question_id": "INF-Q1", "score": 1},
+        {"question_id": "APP-Q3", "score": 1},
+        {"question_id": "APP-Q4", "score": 1}
       ],
       "detail": {
-        "aws_services": [
-          "Lambda",
-          "API Gateway",
-          "Step Functions",
-          "EventBridge",
-          "ECS",
-          "EKS",
-          "Fargate"
-        ],
-        "patterns": [
-          "Strangler Fig",
-          "Anti-corruption Layer",
-          "Hexagonal Architecture"
-        ],
-        "immediate_actions": [
-          "Upgrade Python runtime",
-          "Containerize application",
-          "Implement proper module boundaries"
-        ],
-        "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/CMK2J48MVN",
-          "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"
-        ]
+        "current_state": "Tightly-coupled Django 1.4 monolith with raw SQL in views, no module boundaries, single EC2 deployment",
+        "recommended_services": ["Lambda", "API Gateway", "Step Functions", "EventBridge", "ECS/EKS", "SQS"],
+        "patterns": ["Strangler Fig", "Anti-corruption Layer", "Event Sourcing", "Hexagonal Architecture"],
+        "immediate_actions": ["Modularize within monolith", "Introduce service layer", "Upgrade Python/Django"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/CMK2J48MVN", "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"]
       }
     },
     {
@@ -1012,34 +817,16 @@
       "status": "Triggered",
       "priority": "Medium",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q1=1 < 3, no container definitions found, compute is EC2-based",
+      "key_trigger_criteria": "INF-Q1=1 < 3 AND no container definitions found in repository",
       "triggering_questions": [
-        {
-          "question_id": "INF-Q1",
-          "score": 1,
-          "note": "All compute on raw EC2 with no container orchestration"
-        }
+        {"question_id": "INF-Q1", "score": 1}
       ],
       "detail": {
-        "aws_services": [
-          "ECS",
-          "Fargate",
-          "ECR",
-          "App Runner"
-        ],
-        "patterns": [
-          "Refactor-then-containerize"
-        ],
-        "immediate_actions": [
-          "Upgrade Python to 3.x",
-          "Create Dockerfile",
-          "Externalize configuration",
-          "Set up ECR repository"
-        ],
-        "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM",
-          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR"
-        ]
+        "current_state": "Single EC2 instance running Ubuntu 12.04 with system-wide Python 2.7, Apache 2.2, mod_wsgi. No container definitions.",
+        "recommended_services": ["ECS", "Fargate", "ECR", "App Runner"],
+        "migration_approach": "Refactor-then-containerize — upgrade Python/Django first, then containerize",
+        "immediate_actions": ["Upgrade Python/Django", "Create Dockerfile", "Configure ECS/Fargate deployment"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/CDA8Y4JRRR", "https://www.eksworkshop.com/"]
       }
     },
     {
@@ -1048,15 +835,12 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures); primary trigger not met. PostgreSQL is already open source.",
+      "key_trigger_criteria": "DATA-Q4=4 — no stored procedures or proprietary SQL detected (primary trigger not met)",
       "triggering_questions": [
-        {
-          "question_id": "DATA-Q4",
-          "score": 4,
-          "note": "Score 4 \u2014 no proprietary SQL or stored procedures; primary trigger requires < 3"
-        }
+        {"question_id": "DATA-Q4", "score": 4, "note": "Score 4 — no proprietary SQL; primary trigger requires DATA-Q4 < 3"}
       ],
-      "detail": null
+      "detail": null,
+      "not_triggered_reason": "PostgreSQL is already open source. No commercial database engines (Oracle, SQL Server) detected. DATA-Q4=4 indicates no proprietary SQL constructs."
     },
     {
       "id": "move-to-managed-databases",
@@ -1064,37 +848,17 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q2=1 < 3 (self-managed PostgreSQL on EC2); DATA-Q3=1 < 3 (PostgreSQL 9.1 EOL) strengthens",
+      "key_trigger_criteria": "INF-Q2=1 < 3 (self-managed PostgreSQL on EC2); DATA-Q3=1 < 3 strengthens",
       "triggering_questions": [
-        {
-          "question_id": "INF-Q2",
-          "score": 1,
-          "note": "PostgreSQL self-managed on same EC2 instance"
-        },
-        {
-          "question_id": "DATA-Q3",
-          "score": 1,
-          "note": "PostgreSQL 9.1 past EOL since 2016"
-        }
+        {"question_id": "INF-Q2", "score": 1},
+        {"question_id": "DATA-Q3", "score": 1}
       ],
       "detail": {
-        "aws_services": [
-          "RDS PostgreSQL",
-          "Aurora PostgreSQL"
-        ],
-        "patterns": [
-          "Lift-and-migrate with DMS"
-        ],
-        "immediate_actions": [
-          "Provision RDS PostgreSQL (v15 or v16)",
-          "Use DMS for data migration",
-          "Update connection strings",
-          "Enable Multi-AZ"
-        ],
-        "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
-          "https://skillbuilder.aws/learn/ND246G8Y3W"
-        ]
+        "current_state": "PostgreSQL 9.1 self-managed on same EC2 instance as application (localhost). EOL since 2016.",
+        "recommended_services": ["RDS PostgreSQL", "Aurora PostgreSQL"],
+        "migration_tools": ["AWS DMS", "pg_dump/pg_restore"],
+        "immediate_actions": ["Separate database to dedicated host", "Migrate to RDS PostgreSQL 15+", "Enable Multi-AZ and PITR"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC", "https://skillbuilder.aws/learn/ND246G8Y3W"]
       }
     },
     {
@@ -1103,16 +867,12 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No data processing workloads exist; contextual guard prevents trigger despite INF-Q4=1",
+      "key_trigger_criteria": "No data processing workloads found (contextual guard blocks trigger)",
       "triggering_questions": [
-        {
-          "question_id": "INF-Q4",
-          "score": 1,
-          "note": "INF-Q4 < 3 but contextual guard blocks \u2014 no streaming, ETL, or analytics workloads found"
-        }
+        {"question_id": "INF-Q4", "score": 1, "note": "INF-Q4=1 meets threshold but contextual guard blocks — no streaming/ETL/analytics workloads exist"}
       ],
       "detail": null,
-      "not_triggered_reason": "No data processing workloads found during discovery. The application is a simple CRUD helpdesk system with no streaming, ETL, or analytics responsibilities."
+      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found. This is a simple CRUD helpdesk app with no data processing responsibilities."
     },
     {
       "id": "move-to-modern-devops",
@@ -1120,52 +880,17 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3 (both primary triggers met); OPS-Q5=1 < 3, OPS-Q6=1 < 3 (supporting)",
+      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3; OPS-Q6=1 < 3 strengthens",
       "triggering_questions": [
-        {
-          "question_id": "INF-Q10",
-          "score": 1,
-          "note": "Zero IaC coverage \u2014 all manual"
-        },
-        {
-          "question_id": "INF-Q11",
-          "score": 1,
-          "note": "No CI/CD \u2014 manual git pull deployment"
-        },
-        {
-          "question_id": "OPS-Q5",
-          "score": 1,
-          "note": "Direct-to-production with no staged rollout"
-        },
-        {
-          "question_id": "OPS-Q6",
-          "score": 1,
-          "note": "No integration tests"
-        }
+        {"question_id": "INF-Q10", "score": 1},
+        {"question_id": "INF-Q11", "score": 1},
+        {"question_id": "OPS-Q6", "score": 1}
       ],
       "detail": {
-        "aws_services": [
-          "CodeCommit",
-          "CodeBuild",
-          "CodePipeline",
-          "CodeDeploy",
-          "CloudFormation",
-          "CDK"
-        ],
-        "patterns": [
-          "Infrastructure as Code first",
-          "CI/CD pipeline with quality gates"
-        ],
-        "immediate_actions": [
-          "Define infrastructure in Terraform/CDK",
-          "Create CI/CD pipeline",
-          "Add automated tests",
-          "Implement deployment strategy"
-        ],
-        "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
-          "https://skillbuilder.aws/learn/R4B13K95YQ"
-        ]
+        "current_state": "Zero IaC coverage, no CI/CD pipeline, manual git pull deployment, no automated tests",
+        "recommended_services": ["CodeBuild", "CodePipeline", "CodeDeploy", "CloudFormation/CDK", "CloudWatch"],
+        "immediate_actions": ["Create CI/CD pipeline", "Write IaC for infrastructure", "Add automated test suite", "Implement deployment automation"],
+        "learning_materials": ["https://skillbuilder.aws/learning-plan/1FGEQKGPQD", "https://skillbuilder.aws/learn/R4B13K95YQ"]
       }
     },
     {
@@ -1180,5 +905,23 @@
       "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source code, configuration, or documentation."
     }
   ],
-  "repo_name": "legacy-helpdesk-tickets"
+  "decomposition_strategy": {
+    "trigger": "APP-Q2=1 < 3",
+    "recommended_approach": "Conditional/Adaptive followed by Strangler Fig",
+    "approaches": [
+      {"name": "Strengthen as Modular Monolith", "effort": "Low (2-6 months)", "recommendation": "Consider as first step"},
+      {"name": "Strangler Fig (Parallel Track)", "effort": "Medium to High (6-18 months)", "recommendation": "Recommended after initial modularization"},
+      {"name": "Conditional / Adaptive", "effort": "Low to Medium", "recommendation": "Recommended given current state"},
+      {"name": "Big-Bang Rewrite", "effort": "Very High (12-24+ months)", "recommendation": "Recommended against"}
+    ],
+    "patterns": ["Anti-corruption Layer", "Saga Pattern", "Event Sourcing", "Hexagonal Architecture"],
+    "effort_factors": {
+      "module_boundaries": "High effort — no clear boundaries",
+      "data_coupling": "High effort — single shared database, raw SQL",
+      "stored_procedures": "Low effort — none detected (positive)",
+      "communication_patterns": "Medium effort — all synchronous",
+      "cicd_maturity": "High effort — no pipeline exists",
+      "test_coverage": "High effort — no tests"
+    }
+  }
 }

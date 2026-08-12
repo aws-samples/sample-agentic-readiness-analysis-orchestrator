@@ -1,49 +1,48 @@
 {
+  "analysis_type": "ara",
+  "repo_name": "legacy-storefront-rails",
   "metadata": {
-    "analysis_type": "ara",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2025-07-15",
     "td_version": "agentic-readiness-analysis",
-    "repo_name": "legacy-storefront-rails",
-    "target": "/builds/agentic-readiness-assessment/agentic-readiness-assessment/harness/after/_src/ara/legacy-storefront-rails",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (Ruby controller) with deployable entry point (Rails 2.3 on Mongrel/EC2), MySQL database. Classified as application.",
+    "repo_type_justification": "Application source code (Ruby) with a Rails controller entry point and MySQL database backend. Single-service e-commerce storefront.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "MySQL database with CRUD operations (create/read orders), user-specific data, and entity lifecycle management.",
+    "archetype_justification": "MySQL database with CRUD operations on orders (create, show, index), entity lifecycle management with payment processing side effects.",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
+    "portfolio_name": null,
+    "tech_stack": {
+      "language": "Ruby 1.8.7",
+      "loc": 36,
+      "framework": "Rails 2.3",
+      "architecture": "Monolithic MVC"
+    },
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
       "has_auth_surface": false,
       "has_write_operations": true,
       "has_logging_of_user_data": "unknown"
-    },
-    "tech_stack": {
-      "language": "Ruby",
-      "loc": 35,
-      "framework": "Rails 2.3",
-      "architecture": "Monolithic MVC"
-    },
-    "portfolio_name": "legacy-storefront-rails"
+    }
   },
   "classification": {
     "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
     "blocker_count": 7,
-    "risk_safety_count": 11,
-    "risk_quality_count": 15,
+    "risk_safety_count": 12,
+    "risk_quality_count": 16,
     "info_count": 6,
     "high_count": 7,
-    "medium_count": 26,
+    "medium_count": 28,
     "low_count": 6,
-    "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
+    "rule_matched": "≥3 BLOCKER → Not Agent-Integrable"
   },
   "counts": {
-    "total": 39,
+    "total": 41,
     "high": 7,
-    "medium": 26,
+    "medium": 28,
     "low": 6
   },
   "findings": [
@@ -51,18 +50,15 @@
       "question_id": "API-Q1",
       "category": "API Surface",
       "category_id": "API",
-      "title": "Undocumented REST API Interface",
-      "description": "The application exposes REST endpoints via a Rails 2.3 controller (GET /orders, POST /orders, GET /orders/:id), but these are entirely undocumented. No API documentation exists.",
-      "gap": "No API documentation. Integration requires reading source code.",
-      "recommendation": "Create an OpenAPI 3.0 specification documenting all endpoints, request/response schemas, and error responses.",
+      "title": "No Documented API Interface",
+      "description": "The application exposes a Rails 2.3 controller with implicit routes (index, create, show) but has no documented API interface. Integration requires reverse-engineering controller code.",
+      "gap": "No API documentation. Endpoints discoverable only via code inspection.",
+      "recommendation": "Document existing controller endpoints as an OpenAPI 3.0 specification. Add explicit REST API layer with versioned routes.",
       "severity": "High",
       "priority": "P0",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true
@@ -73,17 +69,14 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Machine-Readable API Specification",
-      "description": "No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy model exists. No machine-readable API specification of any kind.",
-      "gap": "No machine-readable spec for automated tool generation.",
-      "recommendation": "Create an OpenAPI 3.0 specification for the three endpoints.",
+      "description": "No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy model exists. The API surface is defined only implicitly through Rails controller code.",
+      "gap": "No machine-readable spec. Agent tool definitions require manual authoring from code inspection.",
+      "recommendation": "Create an OpenAPI 3.0 specification documenting orders endpoints, request/response schemas, and error codes.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -94,17 +87,14 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Structured Error Responses",
-      "description": "No structured error responses. Controller renders HTML views on failure. No JSON error bodies, no error codes, no retryable indicators.",
-      "gap": "Agents cannot distinguish retriable from terminal errors.",
-      "recommendation": "Implement consistent JSON error response format with error code, message, and retryable flag.",
+      "description": "Errors render HTML forms. No JSON error bodies, no error codes, no retryable indicators. Agents cannot distinguish retriable from terminal errors.",
+      "gap": "No structured error response format for machine consumption.",
+      "recommendation": "Implement consistent JSON error format with error code, message, and retryable boolean across all endpoints.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "19"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "20"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -114,50 +104,36 @@
       "question_id": "API-Q4",
       "category": "API Surface",
       "category_id": "API",
-      "title": "Non-Idempotent Write Operations",
-      "description": "POST /orders creates a new order and charges the card with no idempotency protection. No idempotency keys, no duplicate detection.",
-      "gap": "Agent retries would create duplicate orders and duplicate charges.",
-      "recommendation": "Implement idempotency key support (Idempotency-Key header) on write endpoints.",
+      "title": "No Idempotent Write Operations",
+      "description": "POST /orders has no idempotency key support. Retries create duplicate orders and trigger duplicate payment charges to the SOAP gateway.",
+      "gap": "No idempotency mechanism on write endpoints. Duplicate requests create duplicate records and charges.",
+      "recommendation": "Add idempotency key parameter with server-side deduplication and unique constraint enforcement.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "14-22"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "15-22"},
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency keys on write endpoints.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency controls on write endpoints.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "POST /orders creates orders and charges cards without idempotency protection. Write-enabled agents retrying on failure would create duplicate orders and charges.",
-        "blocker_remediation": {
-          "immediate": "Add Idempotency-Key header support to POST /orders",
-          "target_state": "All write endpoints enforce idempotency keys with duplicate response caching",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "AUTH-Q1"
-          ]
-        }
+        "resolution_reasoning": "The create action saves an order and charges a payment card with no deduplication. Agent retries would create duplicate orders and duplicate charges."
       }
     },
     {
       "question_id": "API-Q5",
       "category": "API Surface",
       "category_id": "API",
-      "title": "HTML Response Format Only",
-      "description": "Application returns HTML responses via Rails ERB rendering. No JSON serialization observed.",
-      "gap": "HTML responses are not machine-parseable by agents.",
-      "recommendation": "Add respond_to blocks returning JSON for API consumers.",
+      "title": "HTML-Only Response Format",
+      "description": "Rails 2.3 application renders HTML views by default. No JSON serialization configured. API surface serves HTML, not machine-readable structured data.",
+      "gap": "Responses are HTML, not machine-readable structured data suitable for agent consumption.",
+      "recommendation": "Add respond_to blocks with JSON format support, or create dedicated API namespace with JSON-only controllers.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "19-20"},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -167,18 +143,15 @@
       "question_id": "API-Q6",
       "category": "API Surface",
       "category_id": "API",
-      "title": "Synchronous Payment Processing Without Async Support",
-      "description": "Payment gateway call is synchronous with no timeout or async pattern. SOAP calls to legacy gateways can exceed 30 seconds.",
-      "gap": "Long-running payment operations may hit agent timeout limits.",
-      "recommendation": "Implement asynchronous payment processing with job queue and status polling.",
+      "title": "No Asynchronous Operation Support",
+      "description": "Payment SOAP call is synchronous within the HTTP request cycle. No background jobs, no async/polling pattern, no job status API.",
+      "gap": "Long-running payment operations block HTTP requests with no async alternative.",
+      "recommendation": "Move payment processing to async workflow with job status polling endpoint.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "28-33"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "30-35"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -189,17 +162,14 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Event Emission for State Changes",
-      "description": "No event emission capability. No webhooks, no SNS/EventBridge integration. State changes are not broadcast.",
-      "gap": "Agents cannot react proactively to state changes.",
-      "recommendation": "Add event emission for order lifecycle events.",
+      "description": "No event emission capability. No webhooks, no SNS/EventBridge/SQS integration, no CDC pipelines.",
+      "gap": "State changes (order creation, payment charge) are not observable by external systems.",
+      "recommendation": "Add event emission (SNS or EventBridge) for order state changes.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
       "phase": 3,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -210,17 +180,14 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Rate Limit Documentation or Headers",
-      "description": "No rate limits documented. No rate limit headers in responses. No API Gateway usage plans.",
-      "gap": "Agents cannot self-throttle.",
-      "recommendation": "Document rate limits and implement X-RateLimit headers.",
+      "description": "No rate limits documented. No X-RateLimit-Remaining headers, no Retry-After headers in responses.",
+      "gap": "Agents cannot self-throttle based on rate limit feedback.",
+      "recommendation": "Expose rate limit headers when server-side rate limiting is implemented.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -231,26 +198,17 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Machine Identity Authentication",
-      "description": "No authentication mechanism exists. Controller comments confirm no auth filters. No OAuth2, no API keys, no mTLS, no service accounts.",
-      "gap": "No machine identity. Any caller can access all endpoints without identification.",
-      "recommendation": "Implement OAuth2 client credentials flow with per-agent service accounts.",
+      "description": "No authentication mechanism exists. Comment explicitly states missing before_filter for auth. Any caller can access any endpoint without identification.",
+      "gap": "Complete absence of authentication. No machine identity, no principal attribution.",
+      "recommendation": "Implement OAuth2 client credentials flow or API key authentication with per-caller principal attribution.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "4"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "4"},
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "blocker_remediation": {
-          "immediate": "Implement API key authentication with principal attribution",
-          "target_state": "OAuth2 client credentials flow with per-agent service accounts attributable in audit logs",
-          "estimated_effort": "High",
-          "dependencies": []
-        }
+        "safety_impact": true
       }
     },
     {
@@ -258,25 +216,17 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Scoped Permissions",
-      "description": "No authorization model exists. No IAM policies, no role definitions. All callers have identical unrestricted access.",
-      "gap": "Cannot create scoped agent permissions.",
-      "recommendation": "Implement role-based access control with at minimum read-only and read-write roles.",
+      "description": "No authorization model exists. All callers have identical unrestricted access to all endpoints and data.",
+      "gap": "No permission scoping mechanism. Cannot differentiate access levels.",
+      "recommendation": "Implement RBAC with scoped roles for agent callers after establishing authentication.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Deploy API Gateway with resource-level IAM policies",
-          "Implement reverse proxy with path-based access control"
-        ],
-        "remediation_timeline": "60\u201390 days"
+        "safety_impact": true
       }
     },
     {
@@ -284,25 +234,17 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Action-Level Authorization",
-      "description": "No action-level authorization. No ABAC, no fine-grained RBAC. Any caller can perform all operations.",
-      "gap": "Cannot restrict an agent to specific actions within a resource.",
-      "recommendation": "Implement before_filter authorization enforcing action-level permissions per principal.",
+      "description": "No action-level authorization. Any caller can perform any action (read, create, charge payment).",
+      "gap": "Cannot restrict agent to read-only access within the same resource type.",
+      "recommendation": "Implement fine-grained RBAC with action-level permissions.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "4"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "API Gateway method-level authorization",
-          "Network-level controls restricting write endpoints"
-        ],
-        "remediation_timeline": "60\u201390 days"
+        "safety_impact": true
       }
     },
     {
@@ -310,51 +252,35 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Identity Propagation",
-      "description": "No identity propagation. No JWT parsing, no OAuth token exchange, no user context headers.",
-      "gap": "Cannot distinguish agent-as-self vs agent-on-behalf-of-user.",
-      "recommendation": "Implement JWT-based identity propagation supporting service-to-service and on-behalf-of-user flows.",
+      "description": "No identity propagation. No JWT parsing, no OAuth2 token exchange, no on-behalf-of flows.",
+      "gap": "Cannot distinguish agent-as-self from agent-on-behalf-of-user.",
+      "recommendation": "Implement JWT-based identity propagation after establishing machine identity.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Limit agent to service-level operations only",
-          "Gateway-level header injection for user context"
-        ],
-        "remediation_timeline": "90\u2013120 days"
+        "safety_impact": true
       }
     },
     {
       "question_id": "AUTH-Q5",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "Hardcoded Credentials in Source Control",
-      "description": "Payment gateway credentials hardcoded in config/payment.yml committed to source control: merchant_id and api_password in plaintext.",
-      "gap": "Credentials exposed in repository. No secrets management or rotation.",
-      "recommendation": "Immediately rotate exposed credentials. Migrate to AWS Secrets Manager with automatic rotation.",
+      "title": "Credentials in Source Control",
+      "description": "Live payment gateway credentials (merchant_id, api_password) stored in plaintext in version-controlled config/payment.yml.",
+      "gap": "Credentials in source control. No secrets management. No rotation capability.",
+      "recommendation": "Rotate credentials immediately. Migrate to AWS Secrets Manager with automatic rotation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 1,
-      "evidence": {
-        "file": "config/payment.yml",
-        "lines": "2-3"
-      },
+      "evidence": {"file": "config/payment.yml", "lines": "2-3"},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Immediately rotate exposed credentials",
-          "Move to environment variables as interim step"
-        ],
-        "remediation_timeline": "30\u201360 days"
+        "safety_impact": true
       }
     },
     {
@@ -362,82 +288,77 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Immutable Audit Logging",
-      "description": "No audit logging of any kind. Write operations are not logged with authenticated principal. No CloudTrail, no application audit trail.",
-      "gap": "Agent-initiated actions are undetectable and unattributable.",
-      "recommendation": "Implement immutable audit logging (CloudTrail + S3 Object Lock) with principal attribution for every write operation.",
+      "description": "No audit logging of any kind. Write operations (order creation, payment charges) not logged with caller identity. No CloudTrail, no immutable log storage.",
+      "gap": "Complete absence of audit logging and immutable log storage.",
+      "recommendation": "Implement audit logging with CloudTrail and S3 Object Lock for immutable storage.",
       "severity": "High",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "High",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "14-22"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
         "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write operations (order creation, card charging) have no audit trail. Agent-initiated writes cannot be attributed or forensically investigated.",
-        "blocker_remediation": {
-          "immediate": "Add application-level audit logging for all write operations",
-          "target_state": "Immutable, tamper-evident audit trail with principal attribution for every write",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "AUTH-Q1"
-          ]
-        }
+        "resolution_reasoning": "Write operations (order creation, payment charging) have no audit trail. Cannot prove compliance or conduct forensics for agent-initiated actions."
       }
     },
     {
       "question_id": "AUTH-Q7",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Agent Identity Suspension Capability",
-      "description": "No authentication surface exists (has_auth_surface is false). Identity suspension is not applicable at the application layer.",
-      "gap": "No identity lifecycle management. Suspension is a consumer responsibility.",
-      "recommendation": "Include revocation capability when implementing AUTH-Q1.",
-      "severity": "Low",
+      "title": "No Agent Identity Suspension",
+      "description": "No identity management exists. No mechanism to suspend or revoke agent access without full application shutdown.",
+      "gap": "Cannot isolate misbehaving agent without taking down entire application.",
+      "recommendation": "Implement API key-based auth with immediate revocation capability.",
+      "severity": "Medium",
       "priority": "P1",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "4"
-      },
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true
       }
     },
     {
       "question_id": "STATE-Q1",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No Compensation or Rollback for Multi-Step Operations",
-      "description": "Multi-step create+charge workflow has no compensation logic. If charge fails after order save, order remains in inconsistent state.",
-      "gap": "No rollback or compensation for partial failures in create+charge workflow.",
-      "recommendation": "Implement transactional boundary or saga pattern for the create+charge workflow.",
+      "title": "No Compensation or Rollback",
+      "description": "Multi-step create+charge workflow has no compensation logic. Failed payment after order save leaves orphaned database record with no reversal mechanism.",
+      "gap": "No compensation or rollback for multi-step write operations.",
+      "recommendation": "Implement saga pattern with compensation logic for order-create-then-charge workflow.",
       "severity": "High",
       "priority": "P0",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "14-22"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "15-22"},
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND multi-step write workflow lacks compensation.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no compensation exists for multi-step write workflows.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The create action saves an order then charges a card. If the charge fails, the order persists with no undo mechanism. Agent-initiated writes could leave data in partial, inconsistent states.",
-        "blocker_remediation": {
-          "immediate": "Wrap create+charge in a database transaction with rollback on charge failure",
-          "target_state": "Saga pattern with explicit compensation endpoints",
-          "estimated_effort": "Medium",
-          "dependencies": []
-        }
+        "resolution_reasoning": "The create action saves an order then charges payment. If charge fails, the order remains with no rollback. Agent-initiated workflows would leave inconsistent state."
+      }
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "SQL-Injection Vulnerable Query Interface",
+      "description": "Index action queries by status via SQL injection-vulnerable code. Show returns individual order. Query interface is rudimentary and unsafe.",
+      "gap": "Query interface uses direct string interpolation in SQL. Unsafe for agent consumption.",
+      "recommendation": "Replace SQL injection-vulnerable query with parameterized queries. Add safe filter and pagination.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "8-12"},
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false
       }
     },
     {
@@ -445,25 +366,17 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "No Concurrency Controls",
-      "description": "No optimistic locking, no pessimistic locking, no ETags, no version fields. Multiple agent instances could create race conditions.",
-      "gap": "Concurrent write operations from multiple agents could corrupt order data.",
-      "recommendation": "Add optimistic locking via a version column on the orders table.",
+      "description": "No optimistic locking, no version fields, no ETags, no conditional writes. Concurrent agent instances could cause race conditions.",
+      "gap": "No concurrency controls. Concurrent agent writes could corrupt state.",
+      "recommendation": "Add optimistic locking (version column) and idempotency keys.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Limit to single agent instance during pilot",
-          "Database-level unique constraints on order identifiers"
-        ],
-        "remediation_timeline": "60\u201390 days"
+        "safety_impact": true
       }
     },
     {
@@ -471,51 +384,35 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "No Circuit Breakers for External Dependencies",
-      "description": "No circuit breakers, retry logic, or timeout on the external payment gateway call. Synchronous SOAP call with no failure handling.",
-      "gap": "Payment gateway outage cascades to all order creation requests.",
-      "recommendation": "Implement circuit breaker on payment gateway calls with timeout and exponential backoff.",
+      "description": "External SOAP payment gateway call has no circuit breaker, no retry logic, no timeout configuration. Gateway failures cascade to all callers.",
+      "gap": "No resilience patterns for external dependency calls.",
+      "recommendation": "Implement circuit breaker with configurable timeout, retry with exponential backoff, and fallback behavior.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "28-33"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "30-35"},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Connection timeout on payment gateway HTTP client",
-          "Health check detecting gateway unavailability"
-        ],
-        "remediation_timeline": "30\u201360 days"
+        "safety_impact": true
       }
     },
     {
       "question_id": "STATE-Q5",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No Rate Limiting or Throttling",
-      "description": "No rate limiting at any layer. No API Gateway, no WAF, no application middleware. Endpoints directly exposed.",
-      "gap": "Runaway agent loops could overwhelm the application at machine speed.",
-      "recommendation": "Deploy API Gateway with usage plans and per-caller rate limits.",
+      "title": "No Rate Limiting",
+      "description": "No rate limiting at any layer. No API Gateway, no WAF rate rules, no application middleware. Mongrel behind Apache with no throttling.",
+      "gap": "Runaway agent loops can overwhelm the application and downstream payment gateway.",
+      "recommendation": "Deploy API Gateway with per-caller throttling configuration.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "API Gateway or WAF with rate limiting",
-          "Apache mod_evasive for basic DDoS protection"
-        ],
-        "remediation_timeline": "30\u201360 days"
+        "safety_impact": true
       }
     },
     {
@@ -523,25 +420,17 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "No Blast Radius or Transaction Limits",
-      "description": "No configurable transaction limits. No maximum orders per hour, no spend caps, no bulk operation limits.",
-      "gap": "Agent operations have unbounded business impact.",
-      "recommendation": "Implement per-caller transaction limits (max orders per hour, max spend per session).",
+      "description": "No transaction limits. No per-caller caps, no maximum spend limits, no bulk operation size constraints. Agent error could trigger unlimited payment charges.",
+      "gap": "No blast radius caps. Unbounded agent-initiated operations.",
+      "recommendation": "Implement per-caller transaction limits (max orders/hour, max charge/session).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Per-caller daily order limits at gateway level",
-          "Maximum transaction amount check before charging"
-        ],
-        "remediation_timeline": "60\u201390 days"
+        "safety_impact": true
       }
     },
     {
@@ -549,25 +438,17 @@
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
       "title": "No Draft/Pending State",
-      "description": "No draft or pending state. Order creation immediately persists and charges the card with no intermediate reviewable state.",
-      "gap": "No reviewable intermediate state for human oversight of agent-initiated writes.",
-      "recommendation": "Add PENDING_REVIEW status to orders enabling human approval before card charging.",
+      "description": "No draft or pending state. Orders immediately committed and payment charged in single request with no intermediate review.",
+      "gap": "No reviewable intermediate state for agent-proposed writes.",
+      "recommendation": "Add PENDING status to order lifecycle before payment processing.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "15-20"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "16-22"},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Limit agent to read-only during initial pilot",
-          "External approval queue gating order creation"
-        ],
-        "remediation_timeline": "60\u201390 days"
+        "safety_impact": true
       }
     },
     {
@@ -575,25 +456,17 @@
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
       "title": "No Configurable Approval Gates",
-      "description": "No approval workflow mechanism. No configurable operation-level flags, no confirmation steps.",
-      "gap": "Cannot configure operations to require human approval.",
-      "recommendation": "Implement configurable approval gates for high-risk operations.",
+      "description": "No approval gates. All operations execute immediately without oversight. Cannot require human confirmation for high-risk operations.",
+      "gap": "No configurable approval gates for high-risk agent-initiated operations.",
+      "recommendation": "Implement configurable approval gates by operation type and amount threshold.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "High",
-      "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Step Functions with human approval tasks",
-          "Restrict agent to low-value operations only"
-        ],
-        "remediation_timeline": "90\u2013120 days"
+        "safety_impact": true
       }
     },
     {
@@ -601,17 +474,14 @@
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
       "title": "No Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment. No docker-compose, no environment-specific configurations, no seed data.",
-      "gap": "No safe environment to test agent behavior before production.",
-      "recommendation": "Create staging environment with production-equivalent data shape and docker-compose for local testing.",
+      "description": "No staging environment documented. Payment gateway configured for live mode only. No docker-compose, no seed data.",
+      "gap": "No safe environment to test agent behavior. First bug discovery in production.",
+      "recommendation": "Create staging environment with payment test mode and seed data.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "config/payment.yml", "lines": "4"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -621,48 +491,25 @@
       "question_id": "DATA-Q1",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Unscoped Sensitive Data in API Responses",
-      "description": "System stores PCI card data (card_number, card_exp). SELECT * returns all fields including card data in API responses. No field filtering, no access control differentiation.",
-      "gap": "Agent-facing responses include unmasked credit card numbers. No access control differentiation. No classification metadata.",
-      "recommendation": "Exclude sensitive fields from API responses. Implement separate scoped endpoints for payment operations.",
+      "title": "Sensitive Data Exposed in API Responses",
+      "description": "Stage A: System processes PCI-regulated credit card data (card_number, card_exp). Stage B: B1 fires — Order.find returns all fields including card data with no filtering. B2 fires — no access differentiation exists.",
+      "gap": "B1: Card data exposed in API responses. B2: No access control differentiation. B3: No classification metadata.",
+      "recommendation": "Add field filtering to exclude card_number/card_exp from API responses. Implement tokenized card storage.",
       "severity": "High",
       "priority": "P0",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "8-12"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "26"},
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND B1 fired \u2014 SELECT * returns card numbers in API responses.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND sensitive data (credit card numbers) exposed unfiltered in API responses.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The index action uses SELECT * FROM orders which returns card_number and card_exp in responses. Write-enabled agents consuming this endpoint receive unmasked PCI data.",
+        "resolution_reasoning": "Order.find returns all fields including card_number and card_exp. Agent-facing APIs expose raw credit card data.",
         "data_q1_subchecks": {
-          "b1": {
-            "fired": true,
-            "severity": "BLOCKER",
-            "reasoning": "SELECT * returns card_number and card_exp. No field exclusion, no response DTO, no serialization filtering."
-          },
-          "b2": {
-            "fired": true,
-            "severity": "RISK-SAFETY",
-            "reasoning": "No access control differentiation. No OAuth scopes, no role-based access, no permission matrix."
-          },
-          "b3": {
-            "fired": true,
-            "severity": "INFO",
-            "reasoning": "No formal classification metadata, no field-level annotations, no PII detection tooling."
-          }
-        },
-        "blocker_remediation": {
-          "immediate": "Replace SELECT * with explicit column selection excluding card_number and card_exp",
-          "target_state": "Response DTOs excluding PCI fields; separate authorized endpoints for payment data",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "AUTH-Q2"
-          ]
+          "b1": {"fired": true, "severity": "BLOCKER", "reasoning": "Order.find(params[:id]) returns all fields including card_number, card_exp with no exclusion. Write-enabled scope."},
+          "b2": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "No access control differentiation — all callers see all fields including sensitive data."},
+          "b3": {"fired": true, "severity": "INFO", "reasoning": "No formal classification metadata, tags, or PII detection tooling."}
         }
       }
     },
@@ -671,49 +518,35 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "No Data Residency Controls for PCI Data",
-      "description": "PCI-regulated card data with no residency controls or documentation. No mechanisms prevent cross-boundary data transmission.",
-      "gap": "No data residency controls for PCI-regulated card data.",
-      "recommendation": "Document residency requirements. Implement tokenization for card data. Prevent regulated data from leaving compliance boundaries.",
+      "description": "PCI-regulated payment card data stored in MySQL on EC2 with no residency controls, no region constraints, no data sovereignty policies.",
+      "gap": "No data residency policies for PCI data. No controls preventing cross-jurisdiction data transmission.",
+      "recommendation": "Implement region-locked storage with data sovereignty policies. Prevent card data from reaching LLM providers.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
       "phase": 1,
-      "evidence": {
-        "file": "config/payment.yml",
-        "lines": null
-      },
+      "evidence": {"file": "config/payment.yml", "lines": null},
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND PCI card data has no residency controls.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND PCI-regulated data with no residency controls.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The system processes PCI-regulated card numbers with no residency enforcement. A write-enabled agent could transmit card data to an LLM in a non-compliant jurisdiction.",
-        "blocker_remediation": {
-          "immediate": "Document data residency requirements for PCI card data",
-          "target_state": "Tokenization of card data with residency enforcement and documented compliance boundaries",
-          "estimated_effort": "High",
-          "dependencies": [
-            "DATA-Q1"
-          ]
-        }
+        "resolution_reasoning": "Credit card numbers stored and processed with no region constraints. Agent sending this data to an LLM provider in another jurisdiction would violate PCI-DSS."
       }
     },
     {
       "question_id": "DATA-Q3",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No Pagination or Result Limits",
-      "description": "GET /orders returns unbounded result sets. No pagination, no LIMIT, no cursor-based retrieval.",
-      "gap": "Agent queries could return thousands of records, exceeding LLM context windows.",
-      "recommendation": "Implement cursor-based pagination with configurable page size.",
+      "title": "No Pagination or Result Size Limits",
+      "description": "Index action returns all matching orders with no pagination, no LIMIT clause, no cursor support. Unbounded result sets.",
+      "gap": "No pagination. Agent queries could return unbounded result sets exceeding context windows.",
+      "recommendation": "Implement pagination with limit/offset or cursor-based navigation and result size caps.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "8-11"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "9-11"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -723,18 +556,15 @@
       "question_id": "DATA-Q4",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No Input Validation \u2014 SQL Injection and Mass Assignment",
-      "description": "No input validation. SQL injection via direct string interpolation. Mass assignment vulnerability (no attr_accessible). No parameterized queries.",
-      "gap": "Malformed or malicious inputs accepted without rejection. SQL injection allows arbitrary database access.",
+      "title": "No Input Validation — SQL Injection and Mass Assignment",
+      "description": "No input validation. SQL injection via direct string interpolation in find_by_sql. Mass assignment via Order.new(params[:order]) with no attr_accessible.",
+      "gap": "No validation at any layer. SQL injection and mass assignment vulnerabilities.",
       "recommendation": "Fix SQL injection with parameterized queries. Add attr_accessible. Implement request validation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "8-11"
-      },
+      "phase": 2,
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "10"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -744,18 +574,15 @@
       "question_id": "DATA-Q5",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Partial Temporal Metadata, No Freshness Signaling",
-      "description": "Partial temporal metadata (created_at referenced) but no freshness signaling, no Cache-Control headers, no timezone normalization evidence.",
-      "gap": "No freshness indication to agents.",
-      "recommendation": "Add updated_at timestamps, normalize to UTC, include Last-Modified/Cache-Control headers.",
+      "title": "Minimal Temporal Metadata",
+      "description": "created_at field exists (referenced in ORDER BY). No updated_at evidence, no timezone normalization, no freshness signaling to callers.",
+      "gap": "Minimal temporal metadata. No update tracking or freshness signaling.",
+      "recommendation": "Ensure created_at/updated_at exposed in responses. Add Cache-Control headers.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": "10"
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "11"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -766,25 +593,17 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "No PII Redaction in Logs",
-      "description": "No PII redaction. Rails 2.3 default logging would expose card numbers in request parameters. No filter_parameter_logging, no masking.",
-      "gap": "Credit card numbers likely appear in application logs.",
-      "recommendation": "Implement parameter filtering for sensitive fields (card_number, card_exp, api_password).",
+      "description": "System processes credit card numbers. Rails 2.3 default logging logs request parameters including card data. No filter_parameter_logging, no PII masking.",
+      "gap": "No PII redaction. Credit card numbers likely appear in default Rails request logs.",
+      "recommendation": "Add filter_parameter_logging for sensitive fields. Implement log scrubbing middleware.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "16"},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Add filter_parameter_logging for card fields",
-          "Implement log rotation with short retention"
-        ],
-        "remediation_timeline": "30\u201360 days"
+        "safety_impact": true
       }
     },
     {
@@ -792,17 +611,14 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "No Data Quality Awareness",
-      "description": "No data quality metrics, profiling, or monitoring for MySQL order data.",
-      "gap": "Agents cannot detect data quality issues.",
-      "recommendation": "Implement basic data quality monitoring for the orders table.",
+      "description": "No data quality metrics, completeness scoring, or null rate monitoring for the MySQL datastore.",
+      "gap": "No data quality awareness for the persistent data store.",
+      "recommendation": "Implement data quality monitoring for critical fields after modernization.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -813,19 +629,34 @@
       "category": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "No Schema Versioning or API Contracts",
-      "description": "No schema versioning, no API contracts, no breaking change detection, no changelog, no versioned URLs.",
-      "gap": "Agent tool bindings would break silently on any API change.",
-      "recommendation": "Implement API versioning and add breaking change detection.",
+      "description": "No versioned URLs, no Accept-Version headers, no changelog, no database migrations, no breaking change detection, no contract tests.",
+      "gap": "Agent tool bindings could break silently on any deployment.",
+      "recommendation": "Implement URL-based API versioning and breaking change detection in CI.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Semantically Clear Field Names",
+      "description": "Visible field names are semantically meaningful: status, created_at, card_number, card_exp, total. No legacy abbreviations evident.",
+      "gap": "Full schema not visible but observed fields are agent-friendly.",
+      "recommendation": "Maintain clear naming conventions during modernization.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": "10-11"},
+      "ara_metadata": {
+        "native_severity": "INFO",
         "safety_impact": false
       }
     },
@@ -834,17 +665,14 @@
       "category": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog or metadata layer for the MySQL database. No AWS Glue, no documentation of schema semantics.",
-      "gap": "Building agent tools requires reverse-engineering the database schema.",
-      "recommendation": "Create a data dictionary documenting the orders table schema.",
+      "description": "No data catalog, no schema documentation, no metadata layer. Schema known only from code inspection.",
+      "gap": "No centralized metadata describing available data and its semantics.",
+      "recommendation": "Create data dictionary documenting orders table schema during modernization.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -855,17 +683,14 @@
       "category": "Observability",
       "category_id": "OBS",
       "title": "No Distributed Tracing or Structured Logging",
-      "description": "No distributed tracing (no X-Ray, no OpenTelemetry). No structured logging (no JSON, no correlation IDs). Rails 2.3 text logging only.",
-      "gap": "Agent-initiated request failures cannot be traced through the system.",
-      "recommendation": "Implement OpenTelemetry instrumentation and structured JSON logging with correlation IDs.",
+      "description": "No OpenTelemetry, no X-Ray, no trace ID propagation. No structured logging — Rails 2.3 uses unstructured text logs. No correlation IDs.",
+      "gap": "Agent-initiated request failures not debuggable.",
+      "recommendation": "Implement structured JSON logging with correlation IDs and distributed tracing.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "app/controllers/orders_controller.rb",
-        "lines": null
-      },
+      "evidence": {"file": "app/controllers/orders_controller.rb", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -876,17 +701,14 @@
       "category": "Observability",
       "category_id": "OBS",
       "title": "No Alerting on Error Rates or Latency",
-      "description": "No alerting thresholds configured. No CloudWatch alarms, no anomaly detection, no incident management integration.",
-      "gap": "System degradation goes undetected.",
-      "recommendation": "Implement CloudWatch alarms on error rate and p95 latency.",
+      "description": "No alerting configuration. No CloudWatch alarms, no anomaly detection, no monitoring.",
+      "gap": "System degradation undetectable until agent failures cascade.",
+      "recommendation": "Implement CloudWatch alarms on error rates and latency for all endpoints.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -897,17 +719,14 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "No Infrastructure as Code",
-      "description": "No IaC. Manual deployment via Capistrano 2 to fixed EC2 hosts. No Terraform, CloudFormation, or CDK.",
-      "gap": "Infrastructure not defined as code, not peer-reviewed, no drift detection.",
-      "recommendation": "Define infrastructure as Terraform or CloudFormation.",
+      "description": "No IaC. Manual EC2 management via Capistrano 2 to fixed hosts. No Terraform, CloudFormation, or CDK.",
+      "gap": "No infrastructure governance. Manual error-prone changes. No drift detection.",
+      "recommendation": "Define all infrastructure as IaC using Terraform or CloudFormation with PR-based review.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -917,18 +736,15 @@
       "question_id": "ENG-Q2",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "No CI/CD or Contract Testing",
-      "description": "No CI/CD pipeline. No GitHub Actions, GitLab CI, Jenkins, or CodeBuild. No automated testing in deployment.",
-      "gap": "API changes cannot be caught before agents are affected.",
-      "recommendation": "Implement CI/CD pipeline with API contract testing.",
+      "title": "No CI/CD Pipeline",
+      "description": "No CI/CD pipeline. Manual Capistrano deployment. No contract testing, no automated testing in pipeline.",
+      "gap": "No automated testing or contract validation. Changes deployed without verification.",
+      "recommendation": "Implement CI/CD pipeline with automated testing and API contract validation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -938,18 +754,15 @@
       "question_id": "ENG-Q3",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "Rollback Capability Unverifiable",
-      "description": "Capistrano 2 has implicit rollback but no deployment configuration exists in the repository to confirm.",
-      "gap": "Rollback capability not verifiable from repository contents.",
-      "recommendation": "Add deployment configuration to repository. Implement automated rollback triggers.",
+      "title": "Limited Rollback Capability",
+      "description": "Capistrano 2 provides basic code rollback. No automated triggers, no database rollback, no traffic shifting, no canary deployments.",
+      "gap": "Rollback limited to Capistrano code revert. No automated rollback triggers.",
+      "recommendation": "Implement blue/green deployment with automated rollback triggers on error rate metrics.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "High",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -959,18 +772,15 @@
       "question_id": "ENG-Q4",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "No Working Test Suite",
-      "description": "No working test suite. README states tests are stale and non-functional. No test files in repository.",
-      "gap": "No automated verification of API behavior.",
-      "recommendation": "Create integration test suite covering all endpoints.",
+      "title": "No API Test Coverage",
+      "description": "Stale Test::Unit suite that no longer runs. No test files present. No API tests, integration tests, or contract tests.",
+      "gap": "No working test coverage. Agent-facing behavior changes unverifiable.",
+      "recommendation": "Create automated API test suite covering order operations. Run in CI.",
       "severity": "Medium",
       "priority": "P3",
       "effort": "Medium",
       "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -981,17 +791,14 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "No Encryption at Rest",
-      "description": "No encryption at rest for MySQL 5.1 storing PCI card data. No KMS, no encrypted storage configuration.",
-      "gap": "PCI-regulated card data likely stored unencrypted at rest.",
-      "recommendation": "Enable encryption at rest via KMS or migrate to RDS with encryption.",
+      "description": "MySQL 5.1 on EC2 with no encryption at rest. Credit card data stored unencrypted. No KMS, no encrypted EBS volumes.",
+      "gap": "No encryption at rest for PCI-regulated card data.",
+      "recommendation": "Migrate to RDS with KMS encryption at rest. Encrypt EBS volumes.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false
@@ -1000,170 +807,85 @@
   ],
   "evaluations": [
     {
-      "question_id": "STATE-Q2",
-      "category_id": "STATE",
-      "title": "Queryable Current State",
+      "question_id": "OBS-Q3",
+      "category_id": "OBS",
+      "title": "Business Outcome Metrics",
       "status": "pass",
-      "reason": "State is queryable via GET /orders (index) and GET /orders/:id (show). Agents can inspect current state before action."
+      "reason": "No metrics or telemetry surface exists to assess — informational signal, no finding emitted."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no P0 priority specified and no evidence of critical path designation."
-    },
-    {
-      "question_id": "DISC-Q2",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
-      "status": "pass",
-      "reason": "Field names are semantically meaningful: status, created_at, card_number, card_exp, total. No legacy abbreviations observed."
-    },
-    {
-      "question_id": "OBS-Q3",
-      "category_id": "OBS",
-      "title": "Business Outcome Metrics",
-      "status": "pass",
-      "reason": "No metrics or telemetry surface exists to assess \u2014 informational signal, no finding emitted."
+      "reason": "Extended question not triggered — service is not P0 priority and no priority was provided."
     }
   ],
   "remediation_roadmap": {
-    "phases": [
-      1,
-      2,
-      3
-    ],
+    "phases": [1, 2, 3],
     "items": [
       {
         "phase": 1,
         "phase_name": "Blockers",
-        "findings": [
-          "API-Q1",
-          "API-Q4",
-          "AUTH-Q1",
-          "AUTH-Q6",
-          "STATE-Q1",
-          "DATA-Q1",
-          "DATA-Q2",
-          "AUTH-Q2",
-          "AUTH-Q3",
-          "AUTH-Q5",
-          "STATE-Q3",
-          "STATE-Q4",
-          "STATE-Q5",
-          "HITL-Q1",
-          "DATA-Q4",
-          "DATA-Q6"
-        ],
-        "summary": "Resolve all 7 BLOCKERs and critical RISK-SAFETY findings. Focus on identity (AUTH-Q1), data scoping (DATA-Q1), audit logging (AUTH-Q6), and write safety (API-Q4, STATE-Q1)."
+        "findings": ["API-Q1", "API-Q4", "AUTH-Q1", "AUTH-Q6", "STATE-Q1", "DATA-Q1", "DATA-Q2", "AUTH-Q2", "AUTH-Q3", "AUTH-Q5", "AUTH-Q7", "STATE-Q3", "STATE-Q4", "STATE-Q5", "DATA-Q6", "HITL-Q1", "HITL-Q2"],
+        "summary": "Resolve all 7 BLOCKERs and critical RISK-SAFETY findings. Establish authentication, audit logging, data protection, and idempotency before any agent integration."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
-        "findings": [
-          "AUTH-Q4",
-          "STATE-Q6",
-          "HITL-Q2",
-          "HITL-Q3",
-          "API-Q2",
-          "API-Q3",
-          "API-Q6",
-          "DATA-Q3",
-          "DATA-Q5",
-          "DISC-Q1",
-          "OBS-Q1",
-          "OBS-Q2",
-          "ENG-Q1",
-          "ENG-Q2",
-          "ENG-Q3",
-          "ENG-Q5"
-        ],
-        "summary": "Address remaining RISK-SAFETY findings and RISK-QUALITY improvements for engineering maturity, observability, and API quality."
+        "findings": ["API-Q2", "API-Q3", "API-Q6", "AUTH-Q4", "STATE-Q2", "STATE-Q6", "DATA-Q3", "DATA-Q4", "DATA-Q5", "DISC-Q1", "OBS-Q1", "OBS-Q2", "ENG-Q1", "ENG-Q2", "ENG-Q3", "ENG-Q5", "HITL-Q3"],
+        "summary": "Address RISK-QUALITY findings to improve agent effectiveness. Implement observability, IaC, CI/CD, and proper data handling."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
-        "findings": [
-          "API-Q5",
-          "API-Q7",
-          "API-Q8",
-          "AUTH-Q7",
-          "DATA-Q7",
-          "DISC-Q3",
-          "ENG-Q4"
-        ],
-        "summary": "Address INFO-level improvements and remaining quality items for full agent optimization."
+        "findings": ["API-Q5", "API-Q7", "API-Q8", "DATA-Q7", "DISC-Q2", "DISC-Q3", "ENG-Q4"],
+        "summary": "Address INFO and low-priority quality findings. Add event emission, rate limit headers, data catalog, and test coverage."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Deploy centralized identity provider with machine identity support",
-      "question_ids": [
-        "AUTH-Q1",
-        "AUTH-Q2",
-        "AUTH-Q3",
-        "AUTH-Q7"
-      ],
+      "action": "Implement authentication and authorization framework",
+      "question_ids": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q7"],
       "priority": "P0",
       "effort": "High",
-      "rationale": "AUTH-Q1 is the foundational BLOCKER. All other auth controls depend on machine identity being established first."
+      "rationale": "Foundation for all security controls. Without authentication, no other security mechanism can function."
     },
     {
-      "action": "Implement PCI data tokenization and response scoping",
-      "question_ids": [
-        "DATA-Q1",
-        "DATA-Q2",
-        "DATA-Q6"
-      ],
+      "action": "Migrate credentials to secrets management and rotate",
+      "question_ids": ["AUTH-Q5"],
       "priority": "P0",
-      "effort": "High",
-      "rationale": "Card data exposure in API responses (DATA-Q1) and lack of residency controls (DATA-Q2) are compliance-critical BLOCKERs."
-    },
-    {
-      "action": "Add idempotency and transactional integrity to write operations",
-      "question_ids": [
-        "API-Q4",
-        "STATE-Q1",
-        "STATE-Q3"
-      ],
-      "priority": "P0",
-      "effort": "Medium",
-      "rationale": "Write safety (idempotency, compensation, concurrency) prevents data corruption from agent retries and concurrent access."
-    },
-    {
-      "action": "Implement immutable audit logging with principal attribution",
-      "question_ids": [
-        "AUTH-Q6"
-      ],
-      "priority": "P0",
-      "effort": "Medium",
-      "rationale": "Audit logging is required for compliance and forensics of agent-initiated write operations."
-    },
-    {
-      "action": "Deploy API Gateway with rate limiting and documentation",
-      "question_ids": [
-        "STATE-Q5",
-        "STATE-Q6",
-        "API-Q8"
-      ],
-      "priority": "P1",
-      "effort": "Medium",
-      "rationale": "Rate limiting and blast radius controls prevent agent traffic storms and unbounded operation impact."
-    },
-    {
-      "action": "Create OpenAPI specification and structured error responses",
-      "question_ids": [
-        "API-Q1",
-        "API-Q2",
-        "API-Q3"
-      ],
-      "priority": "P1",
       "effort": "Low",
-      "rationale": "Machine-readable API documentation enables automated tool generation and proper error handling by agents."
+      "rationale": "Live credentials in source control represent immediate security exposure."
+    },
+    {
+      "action": "Implement PCI-compliant data handling",
+      "question_ids": ["DATA-Q1", "DATA-Q2", "DATA-Q6", "ENG-Q5"],
+      "priority": "P0",
+      "effort": "High",
+      "rationale": "Credit card data exposed in API responses and stored unencrypted violates PCI-DSS."
+    },
+    {
+      "action": "Add idempotency and transaction safety",
+      "question_ids": ["API-Q4", "STATE-Q1", "STATE-Q3"],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Write operations that duplicate on retry create financial risk at machine speed."
+    },
+    {
+      "action": "Deploy API Gateway with rate limiting and audit logging",
+      "question_ids": ["AUTH-Q6", "STATE-Q5", "STATE-Q6", "API-Q8"],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Provides audit trail, rate limiting, and blast radius protection in a single deployment."
+    },
+    {
+      "action": "Modernize infrastructure with IaC and CI/CD",
+      "question_ids": ["ENG-Q1", "ENG-Q2", "ENG-Q3"],
+      "priority": "P2",
+      "effort": "High",
+      "rationale": "Manual infrastructure and deployment prevent safe, repeatable changes."
     }
-  ],
-  "analysis_type": "ara",
-  "repo_name": "legacy-storefront-rails"
+  ]
 }

@@ -1,66 +1,85 @@
 {
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2026-08-12",
     "td_version": "agentic-readiness-analysis",
     "repo_name": "legacy-timesheet-webforms",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (VB.NET) with a deployable entry point (ASP.NET WebForms Page_Load lifecycle) and SQL Server dependency. Single-service application with CRUD operations.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "Persistent SQL Server database with INSERT operations (timesheet entries), user-specific data via Session(EmployeeId), and entity lifecycle management.",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
-    "surface_flags": {
-      "has_persistent_data_store": true,
-      "has_http_rpc_surface": false,
-      "has_auth_surface": true,
-      "has_write_operations": true,
-      "has_logging_of_user_data": false
-    },
+    "portfolio_name": null,
     "tech_stack": {
       "language": "VB.NET",
       "loc": 45,
       "framework": "ASP.NET WebForms (.NET Framework 2.0)",
-      "architecture": "Monolithic WebForms with direct SQL Server access"
+      "architecture": "Monolithic WebForms with SQL Server backend"
     },
-    "portfolio_name": "legacy-timesheet-webforms"
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": true,
+      "has_write_operations": true,
+      "has_logging_of_user_data": false
+    }
   },
   "classification": {
     "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
-    "blocker_count": 6,
-    "risk_safety_count": 12,
-    "risk_quality_count": 9,
-    "info_count": 12,
-    "high_count": 6,
-    "medium_count": 21,
-    "low_count": 12,
+    "blocker_count": 5,
+    "risk_safety_count": 13,
+    "risk_quality_count": 15,
+    "info_count": 4,
+    "high_count": 5,
+    "medium_count": 28,
+    "low_count": 4,
     "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
   },
   "counts": {
-    "total": 39,
-    "high": 6,
-    "medium": 21,
-    "low": 12
+    "total": 37,
+    "high": 5,
+    "medium": 28,
+    "low": 4
   },
   "findings": [
     {
       "question_id": "API-Q1",
       "category": "API Surface",
       "category_id": "API",
-      "title": "No Documented API Interface",
-      "description": "The application is a legacy ASP.NET WebForms UI (VB.NET code-behind). It exposes no REST, GraphQL, or AsyncAPI interface. The only interaction model is browser-based form submission with rendered HTML responses. No machine-consumable integration surface exists.",
-      "gap": "No programmatic API exists. Agent integration would require UI automation or direct database access \u2014 both are brittle, non-auditable coupling patterns.",
-      "recommendation": "Build a REST API exposing GET/POST /timesheets endpoints with JSON responses. Implement OAuth2 client credentials for machine access.",
+      "title": "No Programmatic API \u2014 WebForms Only",
+      "description": "The application is a legacy ASP.NET WebForms app that renders server-side HTML pages. No REST, GraphQL, or AsyncAPI interface exists. Integration requires UI automation or direct database access.",
+      "gap": "No programmatic API. Only browser-rendered WebForms UI.",
+      "recommendation": "Build a REST API layer exposing timesheet read/write operations.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": null
+        "lines": "13-44"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true
+      }
+    },
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Machine Identity Authentication",
+      "description": "The application uses ASP.NET Forms authentication with browser-based session cookies. No support for service account authentication, client credentials OAuth 2.0, API keys, or mTLS.",
+      "gap": "No machine identity mechanism. Authentication is exclusively human-interactive.",
+      "recommendation": "Introduce OAuth 2.0 client credentials or API key authentication for programmatic access with principal attribution.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "web.config",
+        "lines": "8-11"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
@@ -71,147 +90,72 @@
       "question_id": "API-Q4",
       "category": "API Surface",
       "category_id": "API",
-      "title": "Write Operations Not Idempotent",
-      "description": "The write operation (btnSave_Click) performs a direct INSERT INTO timesheets with no idempotency key, no duplicate detection, and no unique constraint on business keys. Submitting the same timesheet entry multiple times creates duplicate records.",
-      "gap": "No idempotency mechanism exists. Agent retries or LLM non-determinism would create duplicate timesheet records.",
-      "recommendation": "Add unique constraint on (employee_id, entry_date, project). Implement idempotency key support in write operations.",
+      "title": "Non-Idempotent Write Operations",
+      "description": "INSERT operations have no idempotency key, no unique constraints, no duplicate detection. Repeated submissions create duplicate timesheet entries.",
+      "gap": "Non-idempotent writes \u2014 repeated submissions create duplicates.",
+      "recommendation": "Add idempotency keys and unique business-key constraints on (employee_id, entry_date, project).",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": "32-40"
+        "lines": "33-40"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND write operations lack idempotency.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency mechanism.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The system performs direct INSERT operations without idempotency keys. Under write-enabled scope, agent retries create duplicate records.",
-        "blocker_remediation": {
-          "immediate": "Add unique constraint on (employee_id, entry_date, project) at database level",
-          "target_state": "Write endpoints accept idempotency key; duplicates return original result",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "API-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q1",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Machine Identity Authentication",
-      "description": "The application uses only ASP.NET Forms Authentication (human credential-based login). No machine identity authentication exists \u2014 no OAuth2 client credentials, no API key authentication, no mTLS, no service account mechanism.",
-      "gap": "No machine identity mechanism. An agent cannot authenticate without using human credentials, preventing audit attribution.",
-      "recommendation": "Implement API key or OAuth2 client credentials for programmatic access with per-agent principal attribution.",
-      "severity": "High",
-      "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "web.config",
-        "lines": "8-10"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "AUTH-Q6",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Immutable Audit Logging",
-      "description": "No audit logging exists. Write operations execute without recording the authenticated principal, timestamp, or any audit trail. No CloudTrail, no application-level logging, no immutable log storage.",
-      "gap": "Zero audit trail for any operation. Cannot prove who performed any action or conduct forensics.",
-      "recommendation": "Implement structured audit logging with principal attribution for all write operations stored in immutable medium.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": "31-40"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists for write operations.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write operations in btnSave_Click execute without any logging. Under write-enabled scope, agent actions cannot be attributed or forensically investigated.",
-        "blocker_remediation": {
-          "immediate": "Add structured audit logging for all write operations recording principal, action, timestamp",
-          "target_state": "Immutable audit trail with principal attribution for every write, distinguishing human vs agent",
-          "estimated_effort": "Medium",
-          "dependencies": [
-            "AUTH-Q1"
-          ]
-        }
+        "resolution_reasoning": "The application exposes write operations (INSERT INTO timesheets) with no idempotency protection. Agents retry on failure and LLM non-determinism causes duplicate calls."
       }
     },
     {
       "question_id": "STATE-Q1",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No Compensation or Rollback",
-      "description": "Write operations execute as direct SQL INSERT statements with no transaction management, no compensation logic, and no rollback capability. Partial state persists with no recovery mechanism.",
-      "gap": "No saga pattern, no undo endpoints, no compensating transactions. Cannot reverse a completed write operation.",
-      "recommendation": "Implement transaction management, soft-delete patterns, and compensation endpoints.",
+      "title": "No Compensation or Rollback for Write Operations",
+      "description": "Direct SQL INSERT with no transaction management, no saga pattern, no compensation logic, and no undo endpoints. Once inserted, entries cannot be reversed.",
+      "gap": "No compensation or rollback capability. INSERT operations immediately committed.",
+      "recommendation": "Implement SQL transactions and soft-delete/status lifecycle for reversal capability.",
       "severity": "High",
       "priority": "P0",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": "32-40"
+        "lines": "33-40"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no compensation/rollback mechanism exists.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no compensation mechanism.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Direct INSERT with ExecuteNonQuery has no transaction, no error handling, no compensation. Agent-initiated multi-step failures leave partial state.",
-        "blocker_remediation": {
-          "immediate": "Wrap writes in database transactions. Add status field allowing logical reversal",
-          "target_state": "All operations support compensation or rollback; no partial state on failure",
-          "estimated_effort": "High",
-          "dependencies": [
-            "API-Q1"
-          ]
-        }
+        "resolution_reasoning": "Write-enabled agents executing multi-step workflows have no rollback path. Failed operations leave partial state."
       }
     },
     {
-      "question_id": "DATA-Q2",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Data Residency Controls",
-      "description": "Employee work data stored in SQL Server with no data residency controls, no compliance documentation, no region enforcement. No guardrails prevent agent transmission of employee data across jurisdictions.",
-      "gap": "No data residency configuration, no sovereignty documentation, no controls preventing cross-border data transmission.",
-      "recommendation": "Document residency requirements for employee data. Implement guardrails to prevent cross-border LLM transmission.",
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Audit Logging",
+      "description": "No audit logging of any kind. Write operations have no principal attribution, no timestamp recording, no immutable log trail.",
+      "gap": "Complete absence of audit logging and immutable log storage.",
+      "recommendation": "Implement audit logging with principal attribution and immutable storage (CloudWatch Logs, S3 with object lock).",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "web.config",
-        "lines": "4-6"
+        "file": "Timesheet.aspx.vb",
+        "lines": "33-40"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND employee data has no residency controls.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Employee timesheet data (employee_id, hours, project) may be subject to labor regulations. Under write-enabled scope, no guardrails prevent an agent from transmitting this to an LLM in another jurisdiction.",
-        "blocker_remediation": {
-          "immediate": "Document data residency requirements. Add data classification tags",
-          "target_state": "Documented residency policy with technical controls enforcing jurisdiction boundaries",
-          "estimated_effort": "Medium",
-          "dependencies": []
-        }
+        "resolution_reasoning": "Write-enabled agents must have full audit attribution. No logging exists to track agent-initiated operations."
       }
     },
     {
@@ -219,9 +163,9 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Scoped Permissions",
-      "description": "Single database user (ts_app) with full access to all data. No mechanism to scope permissions per caller. All authenticated users share the same database-level access.",
-      "gap": "No authorization model supports scoped permissions. Cannot grant read-only agent access without inheriting write access.",
-      "recommendation": "Implement role-based access control with separate database credentials per role.",
+      "description": "Single database user for all operations. No role-based access control differentiation. All authenticated users share identical permissions.",
+      "gap": "No mechanism to scope down agent access per capability.",
+      "recommendation": "Implement role-based authorization with separate read/write database roles.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
@@ -233,11 +177,7 @@
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": [
-          "Proxy layer enforcing read-only for agent identities",
-          "Separate database users with restricted permissions"
-        ],
-        "remediation_timeline": "60-90 days"
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
@@ -245,61 +185,53 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Action-Level Authorization",
-      "description": "No action-level authorization exists. Any authenticated user can perform any operation. No distinction between read, write, or delete permissions.",
-      "gap": "Cannot restrict an agent to read-only without granting insert capability. No ABAC, no fine-grained RBAC.",
-      "recommendation": "Implement action-level authorization middleware with canRead/canWrite checks.",
+      "description": "No action-level authorization. All authenticated users can read and write equally with no permission differentiation.",
+      "gap": "No fine-grained RBAC or ABAC policies.",
+      "recommendation": "Implement action-level authorization (separate read vs write permissions).",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": null
+        "lines": "13-44"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": [
-          "Write-intercepting middleware",
-          "API Gateway method-level authorization"
-        ],
-        "remediation_timeline": "60-90 days"
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
       "question_id": "AUTH-Q4",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Identity Propagation",
-      "description": "Session-based identity (Session(\"EmployeeId\")) cannot propagate through service calls. No JWT, no OAuth2 on-behalf-of flows, no token exchange. Cannot distinguish agent-as-self vs agent-on-behalf-of-user.",
-      "gap": "No identity delegation framework for agent-on-behalf-of-user workflows.",
-      "recommendation": "Replace session identity with JWT tokens supporting on-behalf-of delegation flows.",
+      "title": "No Identity Propagation or Delegation",
+      "description": "InProc session-based identity only. No JWT parsing, no OAuth2 token exchange, no on-behalf-of flow.",
+      "gap": "No identity propagation mechanism for agent-on-behalf-of-user scenarios.",
+      "recommendation": "Implement JWT/OAuth-based identity propagation distinguishing agent-as-self from agent-on-behalf-of-user.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
       "phase": 2,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": "20"
+        "lines": "17"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": [
-          "User context headers in API requests",
-          "JWT-based auth with delegation claims"
-        ],
-        "remediation_timeline": "90-120 days"
+        "remediation_timeline": "90\u2013120 days"
       }
     },
     {
       "question_id": "AUTH-Q5",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "Plaintext Credentials in Source Control",
-      "description": "Database credentials stored in plaintext in web.config committed to source control (Password=Time2006!). No secrets management, no rotation, no encryption.",
-      "gap": "Hardcoded credentials in source control. No Secrets Manager, no rotation mechanism.",
-      "recommendation": "Migrate credentials to AWS Secrets Manager with rotation. Rotate compromised password immediately.",
+      "title": "Plaintext Credentials in Configuration",
+      "description": "Database credentials embedded in plaintext in web.config (User ID=ts_app;Password=Time2006!). No secrets management, no rotation.",
+      "gap": "Hardcoded plaintext credentials with no rotation or encryption.",
+      "recommendation": "Migrate to AWS Secrets Manager with automated rotation. Remove plaintext credentials.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -311,37 +243,29 @@
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": [
-          "Move credentials to AWS Secrets Manager immediately",
-          "Encrypt connectionStrings section as stopgap"
-        ],
-        "remediation_timeline": "30-60 days"
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "AUTH-Q7",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Agent Identity Suspension",
-      "description": "No mechanism to suspend or revoke individual agent identities. No concept of agent identity exists. Cannot isolate a misbehaving agent without disrupting all authentication.",
-      "gap": "No identity lifecycle management or revocation capability.",
-      "recommendation": "Implement agent identity lifecycle with immediate suspension when building machine identity layer.",
+      "title": "No Agent Identity Suspension Mechanism",
+      "description": "No mechanism to suspend or revoke individual identities. Cannot isolate a misbehaving agent.",
+      "gap": "No identity suspension mechanism.",
+      "recommendation": "Implement per-agent-identity revocation capability (API key deletion or IAM role deactivation).",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "web.config",
-        "lines": "8-10"
+        "lines": "8-11"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": [
-          "API key revocation when machine identity is added",
-          "API Gateway per-agent keys with individual disable"
-        ],
-        "remediation_timeline": "90-120 days"
+        "remediation_timeline": "90\u2013120 days"
       }
     },
     {
@@ -349,51 +273,43 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "No Concurrency Controls",
-      "description": "No concurrency controls. No optimistic locking, no version fields, no ETags, no If-Match headers. Multiple concurrent agent instances could write simultaneously without conflict detection.",
-      "gap": "No mechanism prevents race conditions from concurrent agent writes.",
-      "recommendation": "Add version column and implement optimistic locking for write operations.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": "32-40"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Database-level unique constraints on business keys",
-          "Version columns for optimistic locking"
-        ],
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "STATE-Q4",
-      "category": "State Management",
-      "category_id": "STATE",
-      "title": "No Circuit Breakers or Resilience",
-      "description": "No resilience patterns for SQL Server dependency. No circuit breaker, no retry logic, no timeout configuration. Database failures cascade unhandled.",
-      "gap": "No circuit breaker, no retry, no timeout. Failures propagate unhandled.",
-      "recommendation": "Implement connection timeouts, retry with exponential backoff, and circuit breaker patterns.",
+      "description": "No optimistic locking, no version fields, no ETags, no conditional writes. Multiple agents can submit overlapping entries with no conflict detection.",
+      "gap": "Complete absence of concurrency controls.",
+      "recommendation": "Add version fields and optimistic locking. Implement ETag-based concurrency in API layer.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": "19-29"
+        "lines": "33-40"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": [
-          "Connection timeout on connection string",
-          "Retry logic at data access layer"
-        ],
-        "remediation_timeline": "30-60 days"
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No Rate Limiting",
+      "description": "No rate limiting at any layer. No API Gateway, no WAF, no application middleware. Runaway agent loop could overwhelm SQL Server.",
+      "gap": "Complete absence of rate limiting.",
+      "recommendation": "Deploy API Gateway with usage plans and throttling before exposing endpoints to agents.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "web.config",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -401,38 +317,119 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "No Blast Radius or Transaction Limits",
-      "description": "No configurable limits on write operations. An agent could INSERT unlimited timesheet entries without any cap on records, hours, or operations per session.",
-      "gap": "No business-domain transaction limits. No per-session operation caps.",
-      "recommendation": "Implement per-caller business limits (max entries/day, max hours/entry).",
+      "description": "No configurable transaction limits. Agent could submit unlimited timesheet entries with no per-session or per-caller caps.",
+      "gap": "No business-domain caps on operation scope.",
+      "recommendation": "Implement configurable per-agent transaction limits (e.g., max_entries_per_day).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": "31-40"
+        "lines": "33-40"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": [
-          "Application-level limits on writes per employee per day",
-          "Database triggers rejecting excess inserts"
-        ],
-        "remediation_timeline": "60-90 days"
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Draft/Pending State",
+      "description": "No draft or pending state. INSERT commits immediately with no intermediate reviewable state.",
+      "gap": "All write operations immediately committed with no reviewable intermediate state.",
+      "recommendation": "Add status-based lifecycle (DRAFT \u2192 PENDING \u2192 APPROVED) to timesheet entries.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": "33-40"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Configurable Approval Gates",
+      "description": "No approval gates. All operations execute immediately upon form submission.",
+      "gap": "No mechanism to require human approval for specific operations.",
+      "recommendation": "Implement configurable approval gates for agent-initiated write operations.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": "33-40"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
       "question_id": "DATA-Q1",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No Access Control Differentiation for Sensitive Data",
-      "description": "Employee data stored (employee_id, hours, project). Single DB user with undifferentiated access to all employee data. No mechanism to distinguish sensitive from non-sensitive access.",
-      "gap": "No access control differentiation. All data equally accessible to any authenticated caller.",
-      "recommendation": "Implement row-level security and access scoping. Create separate views for agent access.",
+      "title": "No Data Access Differentiation",
+      "description": "Employee timesheet data stored with no access control differentiation. Single database user can access all employee records. B2 fires: no access differentiation.",
+      "gap": "No access differentiation between sensitive data domains. Single permission grants access to all employee data.",
+      "recommendation": "Implement row-level security and OAuth scope differentiation for employee data access.",
       "severity": "Medium",
       "priority": "P0",
       "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": "21-29"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Stage A: Yes (employee-specific timesheet data). B1: CLEAR (no highly sensitive fields like SSN/financial instruments returned). B2: RISK-SAFETY (no access differentiation). B3: INFO (no classification metadata). Overall: RISK-SAFETY.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "B2 fires because a single database user (ts_app) has undifferentiated access to all employee records. No OAuth scopes or role granularity exists.",
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": false,
+            "severity": "CLEAR",
+            "reasoning": "Data returned (entry_date, hours, project) does not include highly sensitive fields. Employee_id is an identifier but not PII like SSN or financial data."
+          },
+          "b2": {
+            "fired": true,
+            "severity": "RISK-SAFETY",
+            "reasoning": "Single database user with no row-level security. No OAuth scopes distinguishing own-data vs all-data access."
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No formal classification metadata exists."
+          }
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Undocumented Data Residency",
+      "description": "No data residency documentation or configuration. Database at fixed IP (10.0.6.15) with no region/compliance context. Unknown whether sending employee data to LLM in another region violates regulations.",
+      "gap": "Unknown residency constraints for employee data. No compliance documentation.",
+      "recommendation": "Document data residency requirements. Configure same-region LLM endpoints.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "web.config",
@@ -441,304 +438,31 @@
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "data_q1_subchecks": {
-          "b1": {
-            "fired": false,
-            "severity": null,
-            "reasoning": "No agent-facing API responses exist (WebForms only). B1 is CLEAR."
-          },
-          "b2": {
-            "fired": true,
-            "severity": "RISK-SAFETY",
-            "reasoning": "Single database user (ts_app) has access to all employee data with no differentiation between sensitive and non-sensitive access."
-          },
-          "b3": {
-            "fired": true,
-            "severity": "INFO",
-            "reasoning": "No formal classification metadata exists."
-          }
-        },
-        "compensating_controls": [
-          "Row-level security in SQL Server",
-          "Separate database views with filtered columns for agent access"
-        ],
-        "remediation_timeline": "60-90 days"
+        "conditional_resolution": "Resolved to RISK-SAFETY: residency is undocumented rather than actively violated. No evidence of cross-region data transfer. Finding is absence of documentation, not presence of violation.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "While agent_scope is write-enabled (which would normally resolve to BLOCKER), the absence is of documentation/configuration rather than evidence of active violation. The database is on-premises at a fixed IP with no evidence it crosses jurisdictional boundaries."
       }
     },
     {
       "question_id": "DATA-Q6",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No PII Redaction in Logs",
-      "description": "No PII redaction mechanism. Debug mode enabled and custom errors disabled expose sensitive data in error responses. No log scrubbing framework exists.",
-      "gap": "No PII protection infrastructure. Error disclosure exposes sensitive data paths.",
-      "recommendation": "Disable debug mode, enable custom errors. Implement PII redaction when adding logging.",
+      "title": "No PII Redaction Controls \u2014 Error Pages Expose Data",
+      "description": "No PII redaction. customErrors disabled exposes sensitive data (employee IDs, SQL queries) in error pages. Debug mode enabled amplifies exposure.",
+      "gap": "No PII redaction controls. Error pages expose sensitive data.",
+      "recommendation": "Enable customErrors. Implement PII masking middleware when adding logging.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "web.config",
-        "lines": "9-13"
+        "lines": "12-13"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "compensating_controls": [
-          "Disable debug mode and enable custom errors immediately",
-          "Implement logging framework with PII redaction"
-        ],
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q1",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Draft/Pending State",
-      "description": "No draft or pending state. INSERT immediately commits records permanently. No intermediate state for human review before finalization.",
-      "gap": "No mechanism for agent to propose entries for human review before commitment.",
-      "recommendation": "Add status column with PENDING/APPROVED states. Implement two-step workflow.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": "32-40"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Add status column (DRAFT/PENDING/APPROVED)",
-          "Implement supervisor approval workflow"
-        ],
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q2",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Configurable Approval Gates",
-      "description": "No configurable approval gates. All operations execute immediately without human approval step. No operation-level configuration for requiring approval.",
-      "gap": "Cannot configure operations to require human approval before execution.",
-      "recommendation": "Implement configurable approval gates for high-risk operations (unusual hours, retroactive entries).",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": "31-40"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Business rules flagging unusual entries for review",
-          "Approval workflow at orchestration layer"
-        ],
-        "remediation_timeline": "90-120 days"
-      }
-    },
-    {
-      "question_id": "STATE-Q2",
-      "category": "State Management",
-      "category_id": "STATE",
-      "title": "State Not Programmatically Queryable",
-      "description": "Current state is queried by BindGrid() but only rendered as HTML grid. No programmatic query endpoint for agent inspection.",
-      "gap": "Agent cannot programmatically inspect current state before taking action.",
-      "recommendation": "Expose GET /timesheets endpoint returning JSON when building API layer.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": "18-29"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment. Single production server only. Testing agents means testing against production data.",
-      "gap": "No non-production environment for safe agent testing.",
-      "recommendation": "Create containerized staging environment with synthetic data.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q3",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Pagination or Filtering",
-      "description": "BindGrid() retrieves all entries with no pagination, no filtering beyond employee_id, no result size limits.",
-      "gap": "Unbounded result sets returned. Years of history in single query.",
-      "recommendation": "Implement cursor-based pagination and date-range filtering.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": "22"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q4",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Input Validation \u2014 SQL Injection Vulnerable",
-      "description": "Zero input validation. User input concatenated directly into SQL strings. Critical SQL injection vulnerabilities. System accepts any input shape.",
-      "gap": "No type checking, no range validation, no parameterized queries. SQL injection is critical.",
-      "recommendation": "Replace all string-concatenated SQL with parameterized queries immediately. Add input validation.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": "32-38"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "DATA-Q5",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Temporal Metadata",
-      "description": "Only user-provided entry_date. No system timestamps (created_at, updated_at). No freshness signaling.",
-      "gap": "Cannot determine when records were created or modified. No data currency signals.",
-      "recommendation": "Add created_at/updated_at columns with UTC defaults.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": "34"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
-      }
-    },
-    {
-      "question_id": "DISC-Q1",
-      "category": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Schema Versioning or API Contracts",
-      "description": "No schema versioning, no migration files, no API contracts, no breaking change detection. Database schema only inferable from SQL strings in code.",
-      "gap": "Schema changes untracked and undetectable.",
-      "recommendation": "Implement schema migration tooling (Flyway/DbUp) with versioned files.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q1",
-      "category": "Engineering Maturity",
-      "category_id": "ENG",
-      "title": "No Infrastructure as Code",
-      "description": "No IaC exists. Manual provisioning on end-of-life Windows Server 2003 / IIS 6. No peer review, no drift detection.",
-      "gap": "Zero infrastructure governance. Manual provisioning with no auditability.",
-      "recommendation": "Define all resources as IaC (Terraform/CDK) when modernizing infrastructure.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "90-180 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q4",
-      "category": "Engineering Maturity",
-      "category_id": "ENG",
-      "title": "No Automated Test Coverage",
-      "description": "No automated tests of any kind. No unit tests, integration tests, API tests, or contract tests. Zero test coverage.",
-      "gap": "Cannot validate behavior, catch regressions, or verify agent paths.",
-      "recommendation": "Build test suite covering API endpoints, input validation, and error responses.",
-      "severity": "Medium",
-      "priority": "P3",
-      "effort": "High",
-      "phase": 3,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60-90 days"
-      }
-    },
-    {
-      "question_id": "ENG-Q5",
-      "category": "Engineering Maturity",
-      "category_id": "ENG",
-      "title": "No Encryption at Rest",
-      "description": "SQL Server 2005 does not support TDE. No encryption at rest. Employee data stored unencrypted.",
-      "gap": "Data at rest unencrypted. Accessible to anyone with storage-level access.",
-      "recommendation": "Migrate to modern database (RDS) with encryption at rest via KMS.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "90-180 days"
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -746,20 +470,21 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Machine-Readable API Specification",
-      "description": "No HTTP/RPC surface \u2014 machine-readable spec is not applicable to a WebForms UI.",
-      "gap": "No API surface to document with machine-readable spec.",
-      "recommendation": "Generate OpenAPI spec from annotations when building REST API layer.",
-      "severity": "Low",
+      "description": "No OpenAPI, AsyncAPI, GraphQL schema, or machine-readable specification exists.",
+      "gap": "Complete absence of machine-readable specifications.",
+      "recommendation": "Generate OpenAPI spec when building the new REST API layer.",
+      "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "Timesheet.aspx.vb",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "90\u2013120 days"
       }
     },
     {
@@ -767,34 +492,321 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Structured Error Responses",
-      "description": "No HTTP/RPC surface. Error display is unstructured HTML with raw stack traces (customErrors mode=Off).",
-      "gap": "No structured error format for agent consumption.",
-      "recommendation": "Implement consistent structured JSON error responses when building API.",
-      "severity": "Low",
+      "description": "No structured error handling. customErrors disabled exposes raw stack traces. No error codes or retryable indicators.",
+      "gap": "No error codes, no machine-readable error bodies.",
+      "recommendation": "Implement consistent structured JSON error responses in the new API layer.",
+      "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "web.config",
         "lines": "12"
       },
       "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "State Only Queryable Through WebForms UI",
+      "description": "BindGrid provides read-before-write capability but only through browser UI interaction, not programmatic API.",
+      "gap": "State queryable only through WebForms UI, not programmatic API.",
+      "recommendation": "Expose GET endpoints for timesheet state in the new API layer.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": "19-29"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Pagination or Query Filtering",
+      "description": "BindGrid retrieves all records for an employee with no pagination, filtering, or result size limits. Results are unbounded.",
+      "gap": "No pagination, filtering, or result size limits.",
+      "recommendation": "Add pagination (limit/offset or cursor), date range filtering, and sorting to the API.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": "21-28"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "No Input Validation \u2014 SQL Injection Vulnerable",
+      "description": "Zero input validation. User inputs concatenated directly into SQL statements. SQL injection vulnerability present. No type checking or sanitization.",
+      "gap": "Complete absence of input validation. SQL injection via string concatenation.",
+      "recommendation": "Replace string-concatenated SQL with parameterized queries. Implement schema-based input validation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": "34-37"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Incomplete Temporal Metadata",
+      "description": "Schema includes entry_date but no created_at, updated_at, or event_time. No timezone handling. No freshness signaling.",
+      "gap": "Incomplete temporal metadata. No audit timestamps. No freshness signaling.",
+      "recommendation": "Add created_at and updated_at timestamps with UTC normalization to the data model.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": "22-23"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Schema Versioning or API Contracts",
+      "description": "No schema documentation, versioning, or API contracts. Database schema only visible through inline SQL strings.",
+      "gap": "Complete absence of schema versioning and contract management.",
+      "recommendation": "Document schema, implement migration tooling, add versioned API contracts.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": "22-23"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Distributed Tracing or Structured Logging",
+      "description": "No tracing, no OpenTelemetry, no X-Ray, no structured logging, no correlation IDs. Zero observability instrumentation.",
+      "gap": "Complete absence of observability.",
+      "recommendation": "Implement OpenTelemetry SDK with X-Ray and structured JSON logging with correlation IDs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "Timesheet.aspx.vb",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Alerting Configuration",
+      "description": "No alerting. No CloudWatch alarms, no anomaly detection, no monitoring integration.",
+      "gap": "Complete absence of alerting.",
+      "recommendation": "Configure CloudWatch alarms on API error rates and P95 latency.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Infrastructure as Code",
+      "description": "No IaC. Manual Visual Studio publish to network share on Windows Server 2003/IIS 6. No peer review, no drift detection.",
+      "gap": "Complete absence of infrastructure governance.",
+      "recommendation": "Define infrastructure as code (Terraform/CDK) with PR-based review and drift detection.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "90\u2013120 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No CI/CD Pipeline",
+      "description": "No CI/CD. Manual deployment. No automated testing or contract testing.",
+      "gap": "Complete absence of CI/CD and contract testing.",
+      "recommendation": "Implement CI/CD pipeline with API contract testing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Rollback Capability",
+      "description": "No rollback capability. Manual file-copy deployment. No blue/green, no canary, no CodeDeploy.",
+      "gap": "No automated rollback mechanism.",
+      "recommendation": "Implement automated deployment with rollback triggers (CodeDeploy, blue/green).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "Zero Test Coverage",
+      "description": "No automated tests of any kind. No unit tests, integration tests, or API tests.",
+      "gap": "Zero test coverage.",
+      "recommendation": "Implement comprehensive API test suite as part of new API layer development.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_id": "ENG",
+      "title": "No Encryption at Rest",
+      "description": "No encryption at rest. SQL Server 2005 does not support TDE. No KMS keys configured.",
+      "gap": "Data at rest unencrypted. Database predates encryption support.",
+      "recommendation": "Migrate to Amazon RDS for SQL Server with KMS encryption at rest.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "web.config",
+        "lines": "4-6"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "90\u2013120 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Sandbox/Staging Environment",
+      "description": "No sandbox or staging environment. Single-server production deployment with no non-production environments.",
+      "gap": "No safe environment for agent testing.",
+      "recommendation": "Create sandbox environment with synthetic timesheet data.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "API-Q5",
       "category": "API Surface",
       "category_id": "API",
-      "title": "HTML-Only Response Format",
-      "description": "Application returns server-rendered HTML (WebForms with ViewState). No structured JSON or XML API responses.",
-      "gap": "Response format is HTML \u2014 unusable for agent consumption without parsing.",
-      "recommendation": "Expose structured JSON responses through new API layer.",
+      "title": "HTML/ViewState Response Format",
+      "description": "Application returns rendered HTML with ViewState blobs. No JSON or structured data format for programmatic consumption.",
+      "gap": "No structured API response format. Only HTML rendering.",
+      "recommendation": "Ensure new API layer returns JSON with consistent schema.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
-      "phase": 2,
+      "phase": 3,
       "evidence": {
         "file": "Timesheet.aspx.vb",
         "lines": "26-27"
@@ -809,16 +821,16 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Event Emission for State Changes",
-      "description": "No event emission capability. Writes complete without publishing events. No webhooks, SNS, EventBridge, or CDC.",
-      "gap": "No event-driven integration possible. Proactive agents require polling.",
-      "recommendation": "Implement event emission (SNS/EventBridge) for timesheet events when modernizing.",
+      "description": "No event emission capability. No webhooks, no SNS/EventBridge/SQS. State changes produce no events.",
+      "gap": "No event-driven integration possible.",
+      "recommendation": "Add event emission (SNS/EventBridge) for timesheet status changes.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": "31-40"
+        "lines": "33-40"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -830,9 +842,9 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Rate Limit Documentation or Headers",
-      "description": "No rate limiting at any layer. No API Gateway, WAF, or middleware throttling configured.",
-      "gap": "No rate limit documentation or headers. Agent traffic could overwhelm single server.",
-      "recommendation": "Implement rate limiting at API gateway layer when modernizing.",
+      "description": "No rate limits documented. No rate limit headers. No API Gateway usage plans.",
+      "gap": "No rate awareness signals for agents.",
+      "recommendation": "Document rate limits and return standard headers in new API.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
@@ -847,146 +859,20 @@
       }
     },
     {
-      "question_id": "STATE-Q5",
-      "category": "State Management",
-      "category_id": "STATE",
-      "title": "No API-Layer Rate Limiting",
-      "description": "No HTTP/RPC API surface \u2014 API-layer rate limiting is not applicable. WebForms UI served by IIS.",
-      "gap": "No API-layer rate limiting applicable.",
-      "recommendation": "Implement API Gateway with usage plans when building API layer.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "web.config",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DATA-Q7",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Data Quality Awareness",
-      "description": "No data quality metrics, completeness monitoring, or freshness SLAs. Data quality entirely unmanaged.",
-      "gap": "No visibility into data completeness or accuracy.",
-      "recommendation": "Implement data quality monitoring when modernizing data layer.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DISC-Q3",
+      "question_id": "DISC-Q2",
       "category": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog or metadata layer. Schema only inferable from SQL queries in code.",
-      "gap": "No formal description of data holdings or semantic meaning.",
-      "recommendation": "Document data model when modernizing.",
+      "title": "Semantically Meaningful Field Names",
+      "description": "Field names are semantically meaningful (employee_id, entry_date, hours, project). No data dictionary required.",
+      "gap": "None \u2014 field names are agent-interpretable.",
+      "recommendation": "Maintain semantic naming in the new API.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
-      "phase": 3,
+      "phase": 4,
       "evidence": {
         "file": "Timesheet.aspx.vb",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "OBS-Q1",
-      "category": "Observability",
-      "category_id": "OBS",
-      "title": "No Distributed Tracing or Structured Logging",
-      "description": "No HTTP/RPC surface for agent requests to trace. No tracing, structured logging, or correlation IDs. Zero observability.",
-      "gap": "No observability infrastructure.",
-      "recommendation": "Implement OpenTelemetry and structured JSON logging when building API.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "Timesheet.aspx.vb",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "OBS-Q2",
-      "category": "Observability",
-      "category_id": "OBS",
-      "title": "No Alerting on Error Rates or Latency",
-      "description": "No HTTP/RPC surface. No alerting infrastructure whatsoever. No CloudWatch alarms, no anomaly detection.",
-      "gap": "No monitoring or alerting.",
-      "recommendation": "Implement CloudWatch alarms on agent-facing endpoints when modernizing.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "web.config",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "ENG-Q2",
-      "category": "Engineering Maturity",
-      "category_id": "ENG",
-      "title": "No CI/CD or Contract Testing",
-      "description": "No HTTP/RPC surface \u2014 API contract testing not applicable. No CI/CD pipeline. Manual VS publish deployment.",
-      "gap": "No pipeline. Manual deployment only.",
-      "recommendation": "Implement CI/CD with contract testing when building API layer.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "ENG-Q3",
-      "category": "Engineering Maturity",
-      "category_id": "ENG",
-      "title": "No Rollback Capability",
-      "description": "No deployed HTTP/RPC surface to roll back. No deployment pipeline, no blue/green, no feature flags. Manual file copy.",
-      "gap": "No rollback mechanism. Manual deployment only.",
-      "recommendation": "Implement deployment pipeline with automated rollback when modernizing.",
-      "severity": "Low",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
+        "lines": "22-23"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -1000,28 +886,42 @@
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no evidence of long-running operations (>30s) in this service."
+      "reason": "Extended question not triggered \u2014 no evidence of operations >30s or long-running workflows."
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category_id": "STATE",
+      "title": "Circuit Breakers and Resilience",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 no external service dependencies detected."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no P0 priority provided and no evidence of critical-path designation."
+      "reason": "Extended question not triggered \u2014 not P0 priority, not on critical path."
     },
     {
-      "question_id": "DISC-Q2",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
+      "question_id": "DATA-Q7",
+      "category_id": "DATA",
+      "title": "Data Quality Awareness",
       "status": "pass",
-      "reason": "Field names (employee_id, entry_date, hours, project) are human-readable and semantically meaningful. No legacy abbreviations."
+      "reason": "Informational-Absence Suppression: No data-quality tooling or metrics present and no contrary signal. INFO finding suppressed per scoring model."
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category_id": "DISC",
+      "title": "Data Catalog / Metadata Layer",
+      "status": "pass",
+      "reason": "Informational-Absence Suppression: No data catalog or metadata layer present and no contrary signal. INFO finding suppressed per scoring model."
     },
     {
       "question_id": "OBS-Q3",
       "category_id": "OBS",
       "title": "Business Outcome Metrics",
       "status": "pass",
-      "reason": "No metrics or telemetry of any kind \u2014 informational signal, no finding emitted."
+      "reason": "Informational-Absence Suppression: No metrics or telemetry surface exists at all. INFO finding suppressed per scoring model."
     }
   ],
   "remediation_roadmap": {
@@ -1036,121 +936,134 @@
         "phase_name": "Blockers",
         "findings": [
           "API-Q1",
-          "API-Q4",
           "AUTH-Q1",
-          "AUTH-Q6",
+          "API-Q4",
           "STATE-Q1",
-          "DATA-Q2",
+          "AUTH-Q6",
           "AUTH-Q2",
           "AUTH-Q3",
           "AUTH-Q5",
           "AUTH-Q7",
-          "STATE-Q3",
+          "STATE-Q5",
+          "DATA-Q2",
+          "DATA-Q6",
           "DATA-Q1",
-          "DATA-Q4",
-          "DATA-Q6"
+          "DATA-Q4"
         ],
-        "summary": "Resolve all 6 BLOCKERs and critical safety risks. Build API surface, implement machine identity, add audit logging, implement rollback/idempotency, establish data residency controls, fix SQL injection."
+        "summary": "Resolve all 5 BLOCKERs and address critical safety controls: build API layer, implement machine identity, add idempotency, implement compensation logic, and establish audit logging."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
         "findings": [
           "AUTH-Q4",
-          "STATE-Q4",
+          "STATE-Q3",
           "STATE-Q6",
           "HITL-Q1",
           "HITL-Q2",
+          "API-Q2",
+          "API-Q3",
           "STATE-Q2",
-          "HITL-Q3",
           "DATA-Q3",
           "DATA-Q5",
           "DISC-Q1",
-          "STATE-Q5",
-          "API-Q2",
-          "API-Q3",
-          "API-Q5",
           "OBS-Q1",
-          "OBS-Q2"
+          "OBS-Q2",
+          "ENG-Q1",
+          "ENG-Q2",
+          "ENG-Q3",
+          "ENG-Q5",
+          "HITL-Q3"
         ],
-        "summary": "Address remaining RISK-SAFETY items and key RISK-QUALITY gaps. Implement identity propagation, circuit breakers, transaction limits, HITL workflows, pagination, temporal metadata, and observability."
+        "summary": "Address remaining RISK-SAFETY findings (identity propagation, concurrency, blast radius, HITL) and RISK-QUALITY gaps (observability, engineering maturity, schema versioning)."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
         "findings": [
-          "ENG-Q1",
           "ENG-Q4",
-          "ENG-Q5",
+          "API-Q5",
           "API-Q7",
-          "API-Q8",
-          "DATA-Q7",
-          "DISC-Q3",
-          "ENG-Q2",
-          "ENG-Q3"
+          "API-Q8"
         ],
-        "summary": "Address engineering maturity and informational gaps. Implement IaC, test coverage, encryption at rest, event emission, CI/CD, and documentation."
+        "summary": "Address remaining INFO-level architecture decisions and quality improvements (test coverage, event emission, response format)."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Build REST API layer with machine identity authentication",
+      "action": "Build REST API layer over existing database",
       "question_ids": [
         "API-Q1",
+        "API-Q2",
+        "API-Q3",
+        "API-Q5"
+      ],
+      "priority": "P0",
+      "effort": "High",
+      "rationale": "The fundamental blocker \u2014 no programmatic interface exists. All other remediations depend on having an API surface."
+    },
+    {
+      "action": "Deploy centralized identity provider with machine credentials",
+      "question_ids": [
         "AUTH-Q1",
-        "API-Q4",
+        "AUTH-Q2",
+        "AUTH-Q3",
+        "AUTH-Q7"
+      ],
+      "priority": "P0",
+      "effort": "High",
+      "rationale": "Machine identity is required for any agent integration. Cannot enforce scoped permissions or audit without identity."
+    },
+    {
+      "action": "Implement audit logging with immutable storage",
+      "question_ids": [
         "AUTH-Q6"
       ],
       "priority": "P0",
-      "effort": "High",
-      "rationale": "Foundational blocker \u2014 no agent integration possible without a programmatic API and machine identity. All other remediations depend on this."
+      "effort": "Medium",
+      "rationale": "Write-enabled agent operations require full audit attribution for compliance and forensics."
     },
     {
-      "action": "Migrate credentials to Secrets Manager and fix SQL injection",
+      "action": "Add idempotency and compensation to write operations",
       "question_ids": [
-        "AUTH-Q5",
-        "DATA-Q4"
-      ],
-      "priority": "P0",
-      "effort": "Low",
-      "rationale": "Critical security vulnerabilities that can be addressed immediately with low effort. Plaintext credentials and SQL injection are active security risks."
-    },
-    {
-      "action": "Implement audit logging and compensation mechanisms",
-      "question_ids": [
-        "AUTH-Q6",
-        "STATE-Q1",
-        "STATE-Q3"
+        "API-Q4",
+        "STATE-Q1"
       ],
       "priority": "P0",
       "effort": "Medium",
-      "rationale": "Write safety \u2014 agents must have audit trails and systems must support rollback before write-enabled agent deployment."
+      "rationale": "Agent retries and LLM non-determinism create duplicate operations without idempotency. No rollback path for failed multi-step sequences."
     },
     {
-      "action": "Establish data residency and access controls",
+      "action": "Migrate credentials to AWS Secrets Manager",
       "question_ids": [
-        "DATA-Q2",
-        "DATA-Q1",
-        "AUTH-Q2",
-        "AUTH-Q3"
+        "AUTH-Q5"
       ],
       "priority": "P1",
-      "effort": "Medium",
-      "rationale": "Data governance \u2014 employee data needs residency documentation and access differentiation before agent access."
+      "effort": "Low",
+      "rationale": "Plaintext credentials in config are exposed to prompt injection or agent bugs."
     },
     {
-      "action": "Modernize infrastructure with IaC and CI/CD",
+      "action": "Deploy API Gateway with rate limiting and throttling",
+      "question_ids": [
+        "STATE-Q5",
+        "STATE-Q6",
+        "API-Q8"
+      ],
+      "priority": "P1",
+      "effort": "Low",
+      "rationale": "Prevent runaway agent loops from overwhelming the application."
+    },
+    {
+      "action": "Implement infrastructure as code and CI/CD pipeline",
       "question_ids": [
         "ENG-Q1",
         "ENG-Q2",
-        "ENG-Q3",
-        "ENG-Q4",
-        "ENG-Q5"
+        "ENG-Q3"
       ],
       "priority": "P2",
       "effort": "High",
-      "rationale": "Engineering foundation \u2014 IaC, CI/CD, testing, and encryption are prerequisites for safe ongoing operation."
+      "rationale": "Manual deployment prevents reliable rollback and contract testing."
     }
   ],
   "analysis_type": "ara",

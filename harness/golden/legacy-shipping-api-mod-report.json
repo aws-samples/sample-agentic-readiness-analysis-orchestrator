@@ -2,14 +2,14 @@
   "analysis_type": "mod",
   "metadata": {
     "repository": "legacy-shipping-api",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2026-08-12",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (server.js) with deployable entry point (app.listen(8080)), dependency manifest (package.json), Dockerfile, and Kubernetes deployment manifests present. Single service classified as application.",
-    "service_archetype": "stateful-crud",
-    "archetype_source": "auto-detected",
-    "archetype_justification": "MongoDB persistent data store with read endpoint (GET /rates) and compute endpoint (POST /quote). Service owns state and exposes CRUD-like operations. Classified as stateful-crud.",
+    "repo_type_justification": "Application source code with a deployable entry point (server.js with Express listener), Dockerfile, and Kubernetes deployment manifests present for a single service.",
+    "service_archetype": "data-gateway",
+    "service_archetype_source": "auto-detected",
+    "archetype_justification": "GET /rates endpoint queries MongoDB with filtering parameters (read-heavy data access). POST /quote performs stateless calculation with no database writes. No CUD operations, no entity lifecycle management. Read-heavy traffic with minimal business logic.",
     "priority": null,
     "tags": [],
     "context": null,
@@ -22,33 +22,20 @@
       "has_iac_provisioning_aws_resources": false
     }
   },
-  "overall_score": 1.42,
-  "classification": {
-    "tier": "Remediation Required",
-    "high_count": 8,
-    "medium_count": 26,
-    "low_count": 0,
-    "rule_matched": "2-11 High \u2192 Remediation Required",
-    "classification_consistency_check": {
-      "status": "divergent",
-      "score_band": "Not Ready",
-      "count_tier": "Remediation Required",
-      "reason": "Overall score 1.42 falls below the 1.5 threshold for Needs Work band, yielding Not Ready by score. However, the 8 High findings (below the 12 threshold for Not Ready by counts) place this in Remediation Required by the count-based classification. The divergence reflects an extremely legacy system where nearly every question scores 1-2, but only 8 of 34 evaluated questions hit the High threshold (core questions at score 1). The count-based tier (Remediation Required) is authoritative per the classification table."
-    }
-  },
+  "overall_score": 1.66,
   "categories": [
     {
       "category_id": "INF",
       "category": "Infrastructure & DevOps",
-      "numeric_score": 1.55,
+      "numeric_score": 1.91,
       "score_rating": "Needs Work",
       "severity_status": "Critical"
     },
     {
       "category_id": "APP",
       "category": "Application Architecture",
-      "numeric_score": 1.33,
-      "score_rating": "Not Ready",
+      "numeric_score": 2.33,
+      "score_rating": "Needs Work",
       "severity_status": "Critical"
     },
     {
@@ -61,7 +48,7 @@
     {
       "category_id": "SEC",
       "category": "Security Baseline",
-      "numeric_score": 1.33,
+      "numeric_score": 1.17,
       "score_rating": "Not Ready",
       "severity_status": "Critical"
     },
@@ -73,93 +60,76 @@
       "severity_status": "Critical"
     }
   ],
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 8,
+    "medium_count": 21,
+    "low_count": 1,
+    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
   "top_gaps": [
     {
+      "rank": 1,
       "question_id": "SEC-Q5",
       "title": "Secrets Management",
       "score": 1,
-      "gap": "Hardcoded API key and MongoDB connection string in source code",
-      "impact": "Critical security vulnerability; credentials exposed in version control"
+      "gap": "API key hardcoded in source code; MongoDB connection string in plaintext ConfigMap",
+      "impact": "Critical security vulnerability \u2014 credentials exposed in version control"
     },
     {
-      "question_id": "INF-Q2",
-      "title": "Managed Databases",
-      "score": 1,
-      "gap": "Self-managed MongoDB 2.4 with no auth, no encryption, no failover",
-      "impact": "Single point of failure; no automated patching or backup"
-    },
-    {
+      "rank": 2,
       "question_id": "INF-Q11",
       "title": "CI/CD Automation",
       "score": 1,
-      "gap": "No CI/CD pipeline; deployments via manual SSH + forever restart",
-      "impact": "Error-prone manual deployments; no quality gates"
+      "gap": "No CI/CD pipeline exists \u2014 no automated build, test, or deploy",
+      "impact": "All deployments are manual; blocks adoption of modern DevOps practices"
     },
     {
+      "rank": 3,
+      "question_id": "INF-Q2",
+      "title": "Managed Databases",
+      "score": 1,
+      "gap": "MongoDB is self-managed with no IaC \u2014 connection via URL only",
+      "impact": "Operational burden: manual patching, backup, scaling, no failover"
+    },
+    {
+      "rank": 4,
       "question_id": "APP-Q2",
       "title": "Monolith vs Microservices",
       "score": 1,
-      "gap": "Single file with all logic; no module boundaries or separation of concerns",
-      "impact": "Cannot scale, deploy, or maintain independently"
+      "gap": "Single 45-line file with all concerns mixed",
+      "impact": "No separation of concerns; cannot independently test or modify components"
     },
     {
+      "rank": 5,
       "question_id": "OPS-Q6",
       "title": "Integration Testing",
       "score": 1,
-      "gap": "No automated tests of any kind",
-      "impact": "No regression protection; changes risk breaking production"
+      "gap": "No tests of any kind exist",
+      "impact": "No regression safety net; changes risk breaking production"
     }
   ],
-  "decomposition_strategy": {
-    "recommended_approach": "Strengthen as Modular Monolith",
-    "rationale": "The service is tiny (2 endpoints, ~45 lines). Full microservice decomposition would be over-engineering. Focus on internal modular structure with clear separation of concerns.",
-    "approaches": [
-      {
-        "name": "Strengthen as Modular Monolith",
-        "effort": "Low",
-        "recommended": true
-      },
-      {
-        "name": "Strangler Fig (Parallel Track)",
-        "effort": "Medium",
-        "recommended": false
-      },
-      {
-        "name": "Conditional / Adaptive",
-        "effort": "Low to Medium",
-        "recommended": true
-      },
-      {
-        "name": "Big-Bang Rewrite",
-        "effort": "Low",
-        "recommended": false
-      }
-    ],
-    "patterns": [
-      "Hexagonal Architecture",
-      "Repository Pattern"
-    ]
-  },
   "findings": [
     {
       "question_id": "INF-Q1",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Compute \u2014 transitioning from EC2 to EKS",
-      "description": "The service was historically deployed on a single EC2 instance with forever process manager. Containerization artifacts now exist (Dockerfile, K8s manifests) targeting EKS, but no IaC provisions the EKS cluster and the legacy EC2 model is documented as current.",
-      "gap": "Compute is transitioning from raw EC2 to managed container orchestration but the transition is incomplete \u2014 no EKS cluster IaC, no proof of production deployment on managed compute.",
-      "recommendation": "Complete the EKS migration by provisioning the EKS cluster via Terraform/CDK, deploying the containerized workload, and decommissioning the EC2 instance.",
-      "severity": "Medium",
+      "title": "Managed Compute",
+      "description": "The application is fully containerized with a multi-stage Dockerfile (node:18-alpine) and deployed via Kubernetes manifests (Deployment with 2 replicas, resource limits, security context hardening). No IaC confirms the cluster is managed (EKS).",
+      "gap": "No IaC confirms the cluster is managed (EKS). K8s cluster provisioning is not visible in this repository.",
+      "recommendation": "Define EKS cluster provisioning in IaC (Terraform or CDK). Consider Fargate profiles for serverless container execution.",
+      "severity": "Low",
       "priority": "P1",
-      "effort": "High",
-      "phase": 1,
+      "effort": "Medium",
+      "phase": 2,
       "evidence": {
         "file": "k8s/deployment.yaml",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
+        "internal_score": 3,
+        "score_label": "Partial",
         "archetype_calibrated": false,
         "core_question": true
       }
@@ -168,16 +138,16 @@
       "question_id": "INF-Q2",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Databases \u2014 self-managed MongoDB 2.4",
-      "description": "MongoDB 2.4 is self-managed on an internal IP (10.0.8.20:27017). No RDS, DocumentDB, DynamoDB, or any AWS managed database service found. K8s configmap references mongo-service:27017 \u2014 also self-managed.",
-      "gap": "All database infrastructure is self-managed with no automated backups, failover, patching, or encryption. MongoDB 2.4 is a decade past EOL.",
-      "recommendation": "Migrate to Amazon DocumentDB (MongoDB-compatible) with Multi-AZ, automated backups, encryption at rest, and IAM authentication. Use AWS DMS for data migration.",
+      "title": "Managed Databases",
+      "description": "MongoDB is referenced via a connection URL (MONGO_URL in k8s/configmap.yaml). No IaC provisions or manages the database. The mongodb driver version (1.4.7) targets MongoDB 2.4 era. No managed database service is configured.",
+      "gap": "Database is entirely self-managed with no automated failover, backups, or patching. No IaC defines the database infrastructure.",
+      "recommendation": "Migrate to Amazon DocumentDB (MongoDB-compatible) or MongoDB Atlas on AWS. Provision via IaC with Multi-AZ, automated backups, encryption at rest.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "server.js",
+        "file": "k8s/configmap.yaml",
         "lines": null
       },
       "mod_metadata": {
@@ -188,59 +158,13 @@
       }
     },
     {
-      "question_id": "INF-Q3",
-      "category": "Infrastructure & DevOps",
-      "category_id": "INF",
-      "title": "Workflow Orchestration \u2014 business logic inline in handlers",
-      "description": "No workflow orchestration services present. Business logic (pricing formula) is hardcoded in HTTP handler. Operations are simple (DB read, price calculation) and do not represent multi-step workflows requiring orchestration.",
-      "gap": "Business logic hardcoded directly in HTTP handler with no structure. Orchestration cannot be layered in if processes grow.",
-      "recommendation": "Extract business logic into dedicated module. If rate calculations become multi-step, adopt Step Functions.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "server.js",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
-        "archetype_calibrated": true,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "INF-Q4",
-      "category": "Infrastructure & DevOps",
-      "category_id": "INF",
-      "title": "Async Messaging \u2014 no messaging infrastructure",
-      "description": "No messaging or streaming infrastructure exists. The service is entirely synchronous with per-request MongoDB connections. No SQS, SNS, EventBridge, or any async capability.",
-      "gap": "Complete absence of async capability. Per-request database connection pattern creates latency. No messaging for potential future cross-service communication.",
-      "recommendation": "Implement connection pooling (upgrade MongoDB driver). If cross-service communication is needed later, adopt SQS/SNS/EventBridge.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "server.js",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
-        "archetype_calibrated": true,
-        "core_question": false
-      }
-    },
-    {
       "question_id": "INF-Q5",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Network Security \u2014 no NetworkPolicy",
-      "description": "K8s manifests deploy with ClusterIP and hardened securityContext. However, no Kubernetes NetworkPolicy restricts pod-to-pod traffic. Any pod in the cluster can reach this service and MongoDB.",
-      "gap": "No NetworkPolicy restricts traffic to/from the shipping-rate-api pods. No egress restrictions.",
-      "recommendation": "Add Kubernetes NetworkPolicy to restrict ingress to authorized consumers and egress to MongoDB only.",
+      "title": "Network Security",
+      "description": "K8s service uses ClusterIP (internal-only). Deployment has hardened securityContext. No NetworkPolicy restricts pod-to-pod traffic. No Ingress with TLS configured.",
+      "gap": "No Kubernetes NetworkPolicy limits ingress/egress traffic. No TLS termination configured.",
+      "recommendation": "Add a Kubernetes NetworkPolicy to restrict ingress to authorized sources and egress to MongoDB only. Configure Ingress with TLS.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
@@ -260,10 +184,10 @@
       "question_id": "INF-Q6",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "API Entry Point \u2014 no gateway or load balancer",
-      "description": "No API Gateway, ALB, or CloudFront configured. K8s service exposes directly on ClusterIP. Commented-out ALB Ingress exists but is not active.",
-      "gap": "Service exposed directly with no gateway or load balancer. No throttling, request validation, or centralized auth at the edge.",
-      "recommendation": "Deploy AWS ALB Ingress Controller or API Gateway with rate limiting, request validation, and WAF integration.",
+      "title": "API Entry Point",
+      "description": "No API Gateway, ALB, or CloudFront configured. K8s service is ClusterIP with no Ingress resource. No throttling, gateway-level auth, or request validation.",
+      "gap": "Service exposed directly with no managed gateway or load balancer providing throttling, auth, or request validation.",
+      "recommendation": "Deploy an Ingress controller with API Gateway for throttling, authentication, and request validation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -283,10 +207,10 @@
       "question_id": "INF-Q7",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Auto-Scaling \u2014 static replicas",
-      "description": "K8s Deployment has static replicas: 2 with no HPA. Resource requests/limits defined but scaling is entirely static.",
-      "gap": "No auto-scaling configured. Cannot respond to traffic spikes or scale down during low demand.",
-      "recommendation": "Add HPA based on CPU/custom metrics. Define minReplicas: 2, maxReplicas: 10 with target CPU at 70%.",
+      "title": "Auto-Scaling",
+      "description": "K8s Deployment specifies static replica count of 2. No HorizontalPodAutoscaler configured.",
+      "gap": "All capacity is statically provisioned \u2014 cannot respond to traffic spikes or scale down.",
+      "recommendation": "Add HorizontalPodAutoscaler targeting CPU utilization or request rate.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -306,13 +230,13 @@
       "question_id": "INF-Q8",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Backup and Recovery \u2014 no backup configuration",
-      "description": "No backup configuration exists for self-managed MongoDB. No backup plans, no snapshot policies, no mongodump scripts. Data loss would be unrecoverable.",
-      "gap": "No backup or recovery capability for the database.",
-      "recommendation": "Migrate to DocumentDB with automated continuous backups and PITR. Interim: implement mongodump to S3.",
+      "title": "Backup and Recovery",
+      "description": "No backup configuration for MongoDB. No aws_backup_plan, no backup_retention_period, no PITR. Database infrastructure not defined in IaC.",
+      "gap": "No automated backup or recovery mechanism. Data loss event would be unrecoverable.",
+      "recommendation": "Migrate to managed database with automated backups and PITR. If self-managed, implement automated backup scripts with S3 storage.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "k8s/configmap.yaml",
@@ -329,21 +253,21 @@
       "question_id": "INF-Q9",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "High Availability \u2014 single-instance database",
-      "description": "K8s Deployment with 2 replicas provides compute redundancy. However, MongoDB is single-instance with no replica set or Multi-AZ. Database failure causes total service failure.",
-      "gap": "Database is single-instance with no failover. No pod anti-affinity to guarantee AZ spread.",
-      "recommendation": "Migrate to DocumentDB Multi-AZ. Add pod anti-affinity for AZ spread.",
+      "title": "High Availability and Fault Isolation",
+      "description": "K8s Deployment has 2 replicas but no topology spread constraints, pod anti-affinity, or explicit multi-AZ config. Both replicas could schedule in same AZ.",
+      "gap": "No AZ distribution enforced. Database HA unknown/unconfigured.",
+      "recommendation": "Add topologySpreadConstraints to distribute replicas across AZs. Migrate to managed database with Multi-AZ.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "k8s/deployment.yaml",
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
+        "internal_score": 1,
+        "score_label": "Not Ready",
         "archetype_calibrated": false,
         "core_question": false
       }
@@ -352,13 +276,13 @@
       "question_id": "INF-Q10",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "IaC Coverage \u2014 partial, K8s manifests only",
-      "description": "K8s manifests define deployment topology (Deployment, Service, ConfigMap, Namespace) covering ~20-30% of infrastructure by resource category. No IaC for EKS cluster, VPC, database, monitoring, or secrets management.",
-      "gap": "Significant infrastructure not in IaC: compute cluster, networking, database, monitoring, operational resources.",
-      "recommendation": "Adopt Terraform or CDK for full stack: VPC, EKS, DocumentDB, CloudWatch alarms, backup plans. Target 90%+ coverage.",
+      "title": "Infrastructure as Code Coverage",
+      "description": "K8s manifests define application deployment (Deployment, Service, ConfigMap, Namespace). No IaC for database, networking, cluster, monitoring, or DNS. Coverage ~30-40%.",
+      "gap": "No IaC for database provisioning, cluster management, networking, monitoring, or backup.",
+      "recommendation": "Define IaC (Terraform or CDK) for all infrastructure dependencies: database, networking, monitoring, backup.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "k8s/",
@@ -375,16 +299,16 @@
       "question_id": "INF-Q11",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "CI/CD Automation \u2014 no pipeline",
-      "description": "No CI/CD pipeline definitions. README documents deployment as git pull + forever restart over SSH. CONTAINERIZE.md shows manual kubectl commands.",
-      "gap": "All deployments fully manual. No automated build, test, security scan, or deploy steps.",
-      "recommendation": "Implement CI/CD pipeline (CodePipeline+CodeBuild or GitHub Actions) with lint, test, build, push to ECR, deploy to EKS stages.",
+      "title": "CI/CD Automation",
+      "description": "No CI/CD pipeline configuration exists. No GitHub Actions, Jenkinsfile, buildspec.yml, or .gitlab-ci.yml. All builds and deployments are manual.",
+      "gap": "No automated build, test, or deploy pipeline.",
+      "recommendation": "Implement CI/CD pipeline with stages for lint, test, build Docker image, push to ECR, deploy to K8s.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "README.md",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -398,10 +322,10 @@
       "question_id": "APP-Q1",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Programming Languages \u2014 EOL Node.js and Express",
-      "description": "Node.js 0.10.x (EOL 2016), Express 3.4.8 (EOL 2015), MongoDB driver 1.4.7 (2014). Compound legacy: language runtime, framework, and driver all end-of-life with known CVEs.",
-      "gap": "Language runtime, framework, and database driver are all end-of-life. Uses deprecated APIs (express.bodyParser()).",
-      "recommendation": "Upgrade to Node.js 20 LTS, Express 4.x or Fastify, MongoDB driver 6.x. Refactor callbacks to async/await.",
+      "title": "Programming Languages",
+      "description": "Node.js with engines declared as 0.10.x (EOL). Dependencies: express@3.4.8 (unmaintained), mongodb@1.4.7 (EOL). Container runs Node 18 but code uses 0.10 patterns (callbacks, no async/await). No AWS SDK.",
+      "gap": "Compound legacy: EOL engine declaration, unmaintained Express 3.x, EOL MongoDB driver 1.x, no cloud-native SDK.",
+      "recommendation": "Upgrade to Node.js 20 LTS with Express 4.x, mongodb 6.x with async/await, and AWS SDK v3.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -421,10 +345,10 @@
       "question_id": "APP-Q2",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Monolith vs Microservices \u2014 single-file monolith",
-      "description": "Entire application is a single file (server.js) with routing, authentication, data access, and business logic interleaved. No module boundaries, no separation of concerns.",
-      "gap": "Tightly-coupled single-file application with no module boundaries. Cannot scale or maintain components independently.",
-      "recommendation": "Refactor into modular structure: separate routes, middleware (auth), data access (repository layer), and business logic (pricing). See Decomposition Strategy.",
+      "title": "Monolith vs Microservices",
+      "description": "Single 45-line server.js file contains all logic: Express app, middleware, routes, DB access, and business logic. No module boundaries or separation of concerns.",
+      "gap": "Tightly-coupled single-file application with all concerns interleaved. Cannot independently test, scale, or modify individual concerns.",
+      "recommendation": "Refactor into modular structure: separate routes, services, repositories, and middleware. This is structural refactoring, not microservices decomposition.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
@@ -441,59 +365,13 @@
       }
     },
     {
-      "question_id": "APP-Q3",
-      "category": "Application Architecture",
-      "category_id": "APP",
-      "title": "Async vs Sync Communication \u2014 all synchronous",
-      "description": "All communication is synchronous. HTTP handlers make callback-based MongoDB calls blocking the request lifecycle. No async messaging or event patterns.",
-      "gap": "All communication patterns are synchronous with no async capabilities. Per-request MongoDB connections with no pooling.",
-      "recommendation": "Upgrade MongoDB driver to 6.x with connection pooling. Adopt SQS/SNS for any future inter-service communication.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "server.js",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": true,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "APP-Q4",
-      "category": "Application Architecture",
-      "category_id": "APP",
-      "title": "Long-Running Process Handling \u2014 all synchronous",
-      "description": "All operations are synchronous with no timeout protection or async job handling. Per-request MongoDB connections provide no protection against slow queries or network issues.",
-      "gap": "No async processing capability. No timeout or async fallback exists for database operations.",
-      "recommendation": "Add request timeouts to MongoDB operations. If operations grow in complexity, implement async job patterns with SQS workers.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "server.js",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": true,
-        "core_question": false
-      }
-    },
-    {
       "question_id": "APP-Q5",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "API Versioning Strategy \u2014 no versioning",
-      "description": "No API versioning. Endpoints are /rates and /quote with no version prefix, no Accept-Version header, no versioning annotations.",
-      "gap": "No versioning \u2014 breaking changes deployed directly to consumers with no migration path.",
-      "recommendation": "Add URL-based versioning (/v1/rates, /v1/quote). Document versioning contract and deprecation policy.",
+      "title": "API Versioning Strategy",
+      "description": "No API versioning. Endpoints are /rates and /quote with no version prefix, no Accept-Version headers.",
+      "gap": "No versioning \u2014 breaking changes affect all consumers simultaneously.",
+      "recommendation": "Implement URL-path versioning (e.g., /v1/rates, /v1/quote). Document API contracts in OpenAPI specification.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -513,10 +391,10 @@
       "question_id": "APP-Q6",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Service Discovery \u2014 environment variables via ConfigMap",
-      "description": "Source code has hardcoded MongoDB IP. K8s deployment externalizes to ConfigMap using K8s DNS-based discovery (mongo-service). No dynamic service discovery.",
-      "gap": "Environment variables for endpoints but no dynamic discovery. Database endpoint is static.",
-      "recommendation": "Use AWS Cloud Map or service mesh for dynamic endpoint resolution when migrating to DocumentDB.",
+      "title": "Service Discovery",
+      "description": "MongoDB endpoint externalized via MONGO_URL env var (K8s ConfigMap). Service discoverable within cluster via K8s DNS. No formal service registry or API catalog.",
+      "gap": "Environment variables for endpoints but no dynamic discovery beyond K8s DNS. No API catalog.",
+      "recommendation": "K8s DNS provides adequate discovery for current scale. Publish OpenAPI spec to an API catalog for consumer discoverability.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -536,16 +414,16 @@
       "question_id": "DATA-Q1",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Unstructured Data Storage \u2014 data in self-managed MongoDB",
-      "description": "All data stored in self-managed MongoDB 2.4. No S3, no object storage, no parsing capabilities.",
-      "gap": "No managed object storage. Data locked in self-managed MongoDB instance that is EOL and unencrypted.",
-      "recommendation": "When migrating database, evaluate S3 for rate data exports, archival, or analytics access.",
+      "title": "Unstructured Data Storage",
+      "description": "No S3 or managed object storage configured. Rate data stored in MongoDB. Service does not currently handle unstructured documents but has no infrastructure to support it if needed.",
+      "gap": "No managed object storage infrastructure.",
+      "recommendation": "If unstructured document handling is needed (shipping labels, customs documents), provision S3 with lifecycle policies. Primary gap is addressed by DocumentDB migration.",
       "severity": "High",
       "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
+      "effort": "Low",
+      "phase": 2,
       "evidence": {
-        "file": "server.js",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -559,10 +437,10 @@
       "question_id": "DATA-Q2",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Unified Data Access Layer \u2014 queries inline in handlers",
-      "description": "MongoClient.connect() called inside route handlers with inline query construction. No repository pattern, no DAO, no data access abstraction. Unvalidated params passed directly to MongoDB filter (NoSQL injection vector).",
-      "gap": "Database queries scattered in HTTP handlers with no abstraction. NoSQL injection vulnerability. Testing impossible without live DB.",
-      "recommendation": "Extract RateRepository module encapsulating all MongoDB operations with input validation and typed interface.",
+      "title": "Unified Data Access Layer",
+      "description": "Database access is inline within the route handler. MongoClient.connect called inside GET /rates handler \u2014 new connection per request, no pooling, no repository pattern.",
+      "gap": "No data access layer \u2014 connections opened per-request inside route handlers. Connection exhaustion risk, untestable without live database.",
+      "recommendation": "Implement repository pattern with a dedicated data access module managing a connection pool.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -582,16 +460,16 @@
       "question_id": "DATA-Q3",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Database Engine Version \u2014 MongoDB 2.4 EOL since 2016",
-      "description": "MongoDB 2.4 referenced in README (EOL October 2016). Driver version 1.4.7 targets MongoDB 2.4-2.6. No version pinning in IaC (no database IaC exists).",
-      "gap": "Database engine is a decade past EOL with known security vulnerabilities and no modern features.",
-      "recommendation": "Migrate to Amazon DocumentDB (MongoDB 5.0 compatible) with automatic minor version upgrades and automated patching.",
+      "title": "Database Engine Version and EOL",
+      "description": "No database engine version pinned in any configuration. The mongodb driver 1.4.7 targets MongoDB 2.4/2.6, both long past EOL (2016). No version-update procedure exists.",
+      "gap": "Database engine version unknown/unpinned and implied to be severely EOL. No lifecycle management.",
+      "recommendation": "Pin database engine version in IaC when migrating to DocumentDB. Upgrade mongodb driver to version 6.x.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "README.md",
+        "file": "package.json",
         "lines": null
       },
       "mod_metadata": {
@@ -605,16 +483,16 @@
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Encryption at Rest \u2014 no encryption",
-      "description": "No encryption at rest configured. MongoDB 2.4 does not support encryption at rest natively. No KMS keys, no encrypted volumes. Database stores data in plaintext.",
-      "gap": "Zero encryption at rest. All data stored completely unencrypted on disk with no access control.",
-      "recommendation": "Migrate to DocumentDB which provides encryption at rest by default using KMS.",
+      "title": "Encryption at Rest",
+      "description": "No encryption at rest configured for MongoDB. No KMS keys, no encryption parameters. Database referenced only by connection URL with no security parameters.",
+      "gap": "No encryption at rest for the persistent data store.",
+      "recommendation": "Migrate to Amazon DocumentDB which provides encryption at rest by default using AWS KMS.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "README.md",
+        "file": "k8s/configmap.yaml",
         "lines": null
       },
       "mod_metadata": {
@@ -628,10 +506,10 @@
       "question_id": "SEC-Q3",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "API Authentication \u2014 static shared API key",
-      "description": "Static API key (ship-2013-abc123-static) checked via x-api-key header. No OAuth2, JWT, or token-based auth. Single shared key for all consumers.",
-      "gap": "Static API key without per-user identity, rotation, or token-based auth. No audit trail per consumer.",
-      "recommendation": "Implement JWT/OAuth2 via API Gateway authorizer or Cognito. Each consumer should receive unique credentials.",
+      "title": "API Authentication",
+      "description": "Static shared API key checked via x-api-key header middleware. Basic API key auth \u2014 not token-based (OAuth2/JWT). No identity attribution, expiration, or scope-based authorization.",
+      "gap": "Static API key authentication with no rotation, no per-consumer identity, no expiration.",
+      "recommendation": "Migrate to token-based auth (JWT/OAuth2) via Amazon Cognito or API Gateway authorizer.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -651,10 +529,10 @@
       "question_id": "SEC-Q4",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Centralized Identity Integration \u2014 no IdP",
-      "description": "No external identity provider integration. Authentication is entirely self-managed via hardcoded static API key. No Cognito, OIDC, SAML.",
-      "gap": "Application manages its own authentication with no external IdP, SSO, or federation.",
-      "recommendation": "Integrate with Amazon Cognito or enterprise IdP for OAuth2/OIDC-based authentication.",
+      "title": "Centralized Identity Integration",
+      "description": "Application manages its own authentication via hardcoded API key. No external IdP (Cognito, Okta, OIDC, SAML). No SSO or federated authentication.",
+      "gap": "No centralized IdP integration \u2014 authentication island with static credential scheme.",
+      "recommendation": "Integrate with Amazon Cognito or organizational IdP for centralized authentication.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -674,10 +552,10 @@
       "question_id": "SEC-Q5",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Secrets Management \u2014 plaintext credentials in source",
-      "description": "Hardcoded API key and MongoDB connection string in server.js committed to git. K8s deployment externalizes to Secret/ConfigMap but application code does not read environment variables.",
-      "gap": "Critical: plaintext secrets in source code. Credentials exposed in repository history regardless of K8s externalization.",
-      "recommendation": "Remove hardcoded secrets, read from env vars, rotate compromised key, store in AWS Secrets Manager with rotation, use External Secrets Operator.",
+      "title": "Secrets Management",
+      "description": "API key is HARDCODED in source code (server.js). MongoDB connection string stored in K8s ConfigMap (not Secret) as plaintext. Credentials in version control history.",
+      "gap": "Plaintext credentials in source code. API key visible to anyone with repo access.",
+      "recommendation": "Remove hardcoded credentials. Store in AWS Secrets Manager with automated rotation. Use K8s External Secrets Operator.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
@@ -697,10 +575,10 @@
       "question_id": "SEC-Q6",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Compute Hardening \u2014 hardened container, no scanning",
-      "description": "Dockerfile uses node:18-alpine with multi-stage build. K8s enforces non-root, read-only FS, drop ALL caps. But no vulnerability scanning or patching strategy.",
-      "gap": "Container hardened but no vulnerability scanning or automated patching. EOL dependencies have known CVEs undetected.",
-      "recommendation": "Add ECR image scanning or Trivy. Implement Dependabot for dependency alerts. Monthly base image rebuilds.",
+      "title": "Compute Hardening and Patching",
+      "description": "No patching automation or vulnerability scanning. Dockerfile uses node:18-alpine (major version only). No Dependabot, no Renovate, no container scanning. Known-vulnerable dependencies in use.",
+      "gap": "No automated patching. No vulnerability scanning. Dependencies have known vulnerabilities.",
+      "recommendation": "Add Dependabot or Renovate. Enable ECR image scanning. Pin base image to digest. Upgrade dependencies.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -710,8 +588,8 @@
         "lines": null
       },
       "mod_metadata": {
-        "internal_score": 2,
-        "score_label": "Needs Work",
+        "internal_score": 1,
+        "score_label": "Not Ready",
         "archetype_calibrated": false,
         "core_question": false
       }
@@ -720,16 +598,16 @@
       "question_id": "SEC-Q7",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Application Security Pipeline \u2014 no security scanning",
-      "description": "No CI/CD pipeline exists, therefore no security scanning integrated. No SAST, DAST, dependency scanning, or container scanning.",
-      "gap": "No security scanning. Known vulnerabilities in dependencies and application code (NoSQL injection) go undetected.",
-      "recommendation": "When building CI/CD, include npm audit, Semgrep for SAST, Trivy for container scanning, with gates blocking on critical findings.",
+      "title": "Application Security Pipeline",
+      "description": "No security scanning tools configured. No CI/CD pipeline exists. No SAST, DAST, dependency scanning, or container scanning.",
+      "gap": "Zero security scanning \u2014 vulnerabilities in outdated dependencies go undetected.",
+      "recommendation": "Include npm audit, SAST (Semgrep), and ECR scanning in CI/CD. Add Dependabot for automated updates.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "package.json",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -743,10 +621,10 @@
       "question_id": "OPS-Q1",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Distributed Tracing \u2014 not instrumented",
-      "description": "No distributed tracing. No X-Ray, OpenTelemetry, or trace ID propagation. Only console.log for startup.",
-      "gap": "No tracing capability. Cannot trace requests or identify bottlenecks.",
-      "recommendation": "Add OpenTelemetry SDK with auto-instrumentation for Express and MongoDB. Enable X-Ray on EKS.",
+      "title": "Distributed Tracing",
+      "description": "No distributed tracing instrumentation. No OpenTelemetry, no X-Ray, no trace ID propagation.",
+      "gap": "No tracing \u2014 cannot diagnose latency or trace requests to MongoDB.",
+      "recommendation": "Add OpenTelemetry SDK with automatic Express and MongoDB instrumentation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -766,16 +644,16 @@
       "question_id": "OPS-Q2",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "SLO Definitions \u2014 none defined",
-      "description": "No SLOs defined. No CloudWatch alarms, no latency targets, no error rate thresholds. No monitoring infrastructure in this repository.",
-      "gap": "No formal service level definitions. No way to measure service health.",
-      "recommendation": "Define SLOs: availability 99.9%, p99 latency <500ms, error rate <0.1%. Implement CloudWatch alarms.",
+      "title": "SLO Definitions",
+      "description": "No SLO definitions, no CloudWatch alarms, no monitoring configuration. No defined acceptable service levels.",
+      "gap": "No SLOs \u2014 cannot measure whether service meets user expectations.",
+      "recommendation": "Define SLOs for p99 latency, availability, and error rate. Implement monitoring to track compliance.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "server.js",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -789,10 +667,10 @@
       "question_id": "OPS-Q3",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Business Metrics \u2014 no custom metrics",
-      "description": "No custom metrics published. No CloudWatch put_metric_data, no business event tracking.",
-      "gap": "No business metrics. No visibility into quotes generated, rate lookups, or usage patterns.",
-      "recommendation": "Publish custom CloudWatch metrics: quote_requests_total, rate_lookups_total, quote_amount_average.",
+      "title": "Business Metrics",
+      "description": "No custom metrics published. No CloudWatch, StatsD, or Prometheus metrics. Only default container-level metrics from K8s platform.",
+      "gap": "No business metrics \u2014 cannot track quote volume, rate lookups, or error rates by endpoint.",
+      "recommendation": "Publish custom metrics: quotes/min, rate lookups/min, error rates, response time percentiles.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -812,16 +690,16 @@
       "question_id": "OPS-Q4",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Anomaly Detection and Alerting \u2014 no alerting",
-      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection, no incident notification integration.",
-      "gap": "No alerting. Service failures go undetected until consumers report issues.",
-      "recommendation": "Implement CloudWatch alarms for 5xx rate, p99 latency, pod restarts, MongoDB connection failures. Enable anomaly detection.",
+      "title": "Anomaly Detection and Alerting",
+      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration.",
+      "gap": "No alerting \u2014 degradation or outage has no automated detection or notification.",
+      "recommendation": "Configure CloudWatch alarms on error rate and p99 latency with anomaly detection. Set up alerting integration.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "k8s/",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -835,10 +713,10 @@
       "question_id": "OPS-Q5",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Deployment Strategy \u2014 basic rolling update",
-      "description": "K8s Deployment with 2 replicas uses default RollingUpdate strategy with TCP health probes. No canary, blue/green, or traffic shifting.",
-      "gap": "Rolling only. No ability to test with subset of traffic. No automated rollback on error rate increase.",
-      "recommendation": "Implement canary deployments via Argo Rollouts or App Mesh with progressive traffic shifting and automated rollback.",
+      "title": "Deployment Strategy",
+      "description": "K8s Deployment uses default RollingUpdate with readiness/liveness probes on TCP port 8080. Rolling deploys with health checks but no traffic shifting.",
+      "gap": "No canary or blue/green. Cannot validate new versions with subset of traffic.",
+      "recommendation": "Implement canary deployments using Argo Rollouts or Flagger with progressive traffic shifting.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
@@ -858,16 +736,16 @@
       "question_id": "OPS-Q6",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Integration Testing \u2014 no tests",
-      "description": "No automated tests of any kind. README states 'No tests; no linting.' No test files, no test framework, no test scripts.",
-      "gap": "Complete absence of automated testing. Any change risks silent regression.",
-      "recommendation": "Add Jest/Mocha for unit tests, Supertest for API tests, testcontainers for MongoDB integration testing.",
+      "title": "Integration Testing",
+      "description": "No tests of any kind. No unit tests, integration tests, or e2e tests. No test script in package.json, no test framework dependency.",
+      "gap": "Zero automated test coverage. Regression risk is maximum.",
+      "recommendation": "Add integration tests with Jest/Supertest for /rates and /quote endpoints. Run in CI pipeline.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "README.md",
+        "file": "package.json",
         "lines": null
       },
       "mod_metadata": {
@@ -881,16 +759,16 @@
       "question_id": "OPS-Q7",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Incident Response Automation \u2014 no runbooks",
-      "description": "No runbooks, no incident response automation, no self-healing patterns. Incident response is entirely ad hoc.",
-      "gap": "No runbooks or procedures. Response to incidents is undocumented and manual.",
-      "recommendation": "Create runbooks for MongoDB connection failure, high error rate, pod crash loops. Consider Lambda-based auto-remediation.",
+      "title": "Incident Response Automation",
+      "description": "No runbooks, no incident response automation, no self-healing patterns beyond K8s liveness probe restarts.",
+      "gap": "Incident response entirely ad hoc \u2014 no documented procedures for common failure modes.",
+      "recommendation": "Create runbooks for common incidents: DB connectivity loss, pod OOM, high latency.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "k8s/",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -904,16 +782,16 @@
       "question_id": "OPS-Q8",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Observability Ownership \u2014 no ownership defined",
-      "description": "No observability ownership. No CODEOWNERS, no dashboards, no named alarm owners, no team attribution.",
-      "gap": "No dashboards, no alarm owners, no team accountability for service health.",
-      "recommendation": "Define CODEOWNERS. Create CloudWatch dashboard. Assign alarm notification targets.",
+      "title": "Observability Ownership",
+      "description": "No observability ownership. No CODEOWNERS, no per-service dashboards, no alarms with owners, no SLO definitions with team attribution.",
+      "gap": "No one explicitly responsible for monitoring service health.",
+      "recommendation": "Define CODEOWNERS. Create service-level dashboard. Assign alarm ownership.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "server.js",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -926,12 +804,44 @@
   ],
   "evaluations": [
     {
+      "question_id": "INF-Q3",
+      "category_id": "INF",
+      "title": "Workflow Orchestration",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 data-gateway archetype. No multi-step workflows exist in the read path. Workflow orchestration is not applicable by design."
+    },
+    {
+      "question_id": "INF-Q4",
+      "category_id": "INF",
+      "title": "Async Messaging and Streaming",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 data-gateway archetype. Synchronous reads dominate and are the correct design. No write-back or indexing flows exist."
+    },
+    {
+      "question_id": "APP-Q3",
+      "category_id": "APP",
+      "title": "Async vs Sync Communication",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 data-gateway archetype. Sync reads are correct; no write-back or cache invalidation flows exist."
+    },
+    {
+      "question_id": "APP-Q4",
+      "category_id": "APP",
+      "title": "Long-Running Process Handling",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 data-gateway archetype. No user-facing operations exceed 30 seconds. Simple query and calculation only."
+    },
+    {
       "question_id": "DATA-Q4",
       "category_id": "DATA",
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 no stored procedures or proprietary SQL. All business logic in application layer. MongoDB used as simple document store."
+      "reason": "Score 4 \u2014 No stored procedures or proprietary SQL. All business logic in application layer."
     },
     {
       "question_id": "SEC-Q1",
@@ -939,7 +849,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "Audit logging (CloudTrail) is an AWS account-level service. This repo contains application-level K8s deployment manifests only. has_iac_provisioning_aws_resources=false."
+      "reason": "has_iac_provisioning_aws_resources=false. This repo contains application-level K8s manifests only. CloudTrail evaluation belongs in foundation infrastructure repo."
     },
     {
       "question_id": "OPS-Q9",
@@ -947,57 +857,41 @@
       "title": "Resource Tagging Governance",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "This repo provisions no AWS resources (has_iac_provisioning_aws_resources=false). No resources to tag."
+      "reason": "has_iac_provisioning_aws_resources=false. This repo provisions no AWS resources \u2014 nothing to tag."
     }
   ],
   "pathways": [
     {
       "id": "move-to-cloud-native",
       "name": "Move to Cloud Native",
-      "status": "Triggered",
-      "priority": "High",
-      "effort": "High",
-      "key_trigger_criteria": "APP-Q2=1 < 3 (primary), INF-Q1=2 < 3, APP-Q3=1 < 3, APP-Q4=1 < 3 (supporting)",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "APP-Q2=1 (primary met) but no supporting condition met: INF-Q1=3, APP-Q3=4, APP-Q4=4. Archetype calibration (data-gateway) makes sync patterns correct by design.",
       "triggering_questions": [
         {
           "question_id": "APP-Q2",
-          "score": 1
+          "score": 1,
+          "note": "Primary trigger met but requires at least one supporting condition"
         },
         {
           "question_id": "INF-Q1",
-          "score": 2
+          "score": 3,
+          "note": "INF-Q1=3 meets threshold; supporting condition not met"
         },
         {
           "question_id": "APP-Q3",
-          "score": 1
+          "score": 4,
+          "note": "APP-Q3=4 meets threshold; sync correct for data-gateway"
         },
         {
           "question_id": "APP-Q4",
-          "score": 1
+          "score": 4,
+          "note": "APP-Q4=4 meets threshold; no long-running ops"
         }
       ],
-      "detail": {
-        "current_state": "Single-file monolith (server.js) with all logic interleaved. No module boundaries.",
-        "recommended_services": [
-          "Lambda",
-          "API Gateway",
-          "Step Functions",
-          "EventBridge",
-          "ECS/EKS",
-          "DocumentDB"
-        ],
-        "patterns": [
-          "Strangler Fig",
-          "Anti-corruption Layer",
-          "Hexagonal Architecture"
-        ],
-        "immediate_actions": [
-          "Modularize into separate concerns",
-          "Add tests before refactoring",
-          "Build CI/CD pipeline"
-        ]
-      },
-      "not_triggered_reason": null
+      "detail": null,
+      "not_triggered_reason": "Primary condition met (APP-Q2=1) but none of the supporting conditions are met. INF-Q1=3 (containerized), APP-Q3=4 and APP-Q4=4 (sync patterns correct for data-gateway archetype). Compound trigger requires primary AND at least one supporting."
     },
     {
       "id": "move-to-containers",
@@ -1005,16 +899,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "Container definitions found (Dockerfile, k8s/ manifests). Contextual guard: service already has containerization artifacts.",
+      "key_trigger_criteria": "INF-Q1=3 (threshold not met); container definitions already exist (Dockerfile, K8s manifests).",
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
-          "score": 2,
-          "note": "INF-Q1=2 < 3 meets threshold, but container definitions already exist (Dockerfile, k8s/deployment.yaml). Guard blocks trigger."
+          "score": 3,
+          "note": "INF-Q1=3 meets threshold; not triggered"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "Container definitions (Dockerfile, k8s/ manifests) already exist. The service is already containerized and targeting EKS deployment."
+      "not_triggered_reason": "Workload is already containerized with Dockerfile and Kubernetes deployment manifests. INF-Q1=3 meets the threshold."
     },
     {
       "id": "move-to-open-source",
@@ -1022,16 +916,21 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 \u2014 no stored procedures or proprietary SQL detected. MongoDB is already open-source.",
+      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures); MongoDB is already open source \u2014 no commercial database engines detected.",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
           "score": 4,
-          "note": "DATA-Q4=4 does not meet < 3 threshold. No proprietary SQL or stored procedures."
+          "note": "DATA-Q4=4 meets threshold; no proprietary SQL"
+        },
+        {
+          "question_id": "INF-Q2",
+          "score": 1,
+          "note": "Database is self-managed MongoDB (open source); no commercial engine"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "DATA-Q4=4, no commercial database engines detected. MongoDB is already open-source."
+      "not_triggered_reason": "DATA-Q4=4 (no stored procedures). MongoDB is an open-source database engine \u2014 no commercial licensing to migrate away from."
     },
     {
       "id": "move-to-managed-databases",
@@ -1039,33 +938,35 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q2=1 < 3 (self-managed MongoDB), DATA-Q3=1 < 3 (EOL engine, supporting)",
+      "key_trigger_criteria": "INF-Q2=1 (self-managed MongoDB); DATA-Q3=1 (no version pinning, EOL engine)",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
-          "score": 1
+          "score": 1,
+          "note": "Primary trigger: database entirely self-managed"
         },
         {
           "question_id": "DATA-Q3",
-          "score": 1
+          "score": 1,
+          "note": "Supporting: engine version EOL and unpinned"
         }
       ],
       "detail": {
-        "current_state": "Self-managed MongoDB 2.4 (EOL 2016), single instance, no auth, no encryption, no backups.",
+        "current_state": "MongoDB referenced via MONGO_URL in K8s ConfigMap. No IaC, no managed service. Driver version 1.4.7 targets MongoDB 2.x (EOL).",
         "recommended_services": [
           "Amazon DocumentDB",
-          "Amazon DynamoDB",
+          "MongoDB Atlas on AWS",
           "AWS DMS"
         ],
-        "migration_approach": "Provision DocumentDB Multi-AZ, use DMS to migrate, update connection string, upgrade driver.",
         "immediate_actions": [
-          "Provision DocumentDB cluster",
-          "Migrate data via DMS",
-          "Update K8s ConfigMap",
-          "Upgrade mongodb driver"
+          "Provision DocumentDB cluster via IaC",
+          "Upgrade mongodb driver to 6.x",
+          "Migrate data using DMS or mongodump/mongorestore"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC"
         ]
-      },
-      "not_triggered_reason": null
+      }
     },
     {
       "id": "move-to-managed-analytics",
@@ -1073,16 +974,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No data processing workloads found. Contextual guard: service has no streaming, ETL, or analytics responsibilities.",
+      "key_trigger_criteria": "INF-Q4=4 (sync correct for data-gateway); no data processing workloads exist in this repository.",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
-          "score": 2,
-          "note": "INF-Q4=2 < 3 meets threshold, but contextual guard blocks \u2014 no data processing workloads exist in this service."
+          "score": 4,
+          "note": "INF-Q4=4 meets threshold; sync correct for archetype"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found. The service is a simple rate lookup API with no data processing responsibilities."
+      "not_triggered_reason": "INF-Q4=4 (sync is correct design for data-gateway). No streaming, ETL, or analytics workloads detected."
     },
     {
       "id": "move-to-modern-devops",
@@ -1090,43 +991,49 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q10=2 < 3, INF-Q11=1 < 3 (primary), OPS-Q5=2 < 3, OPS-Q6=1 < 3 (supporting)",
+      "key_trigger_criteria": "INF-Q10=2, INF-Q11=1 (primary triggers met); OPS-Q5=2, OPS-Q6=1 (supporting conditions met)",
       "triggering_questions": [
         {
           "question_id": "INF-Q10",
-          "score": 2
+          "score": 2,
+          "note": "Primary: partial IaC coverage (~30-40%)"
         },
         {
           "question_id": "INF-Q11",
-          "score": 1
+          "score": 1,
+          "note": "Primary: no CI/CD pipeline at all"
         },
         {
           "question_id": "OPS-Q5",
-          "score": 2
+          "score": 2,
+          "note": "Supporting: rolling update only, no canary/blue-green"
         },
         {
           "question_id": "OPS-Q6",
-          "score": 1
+          "score": 1,
+          "note": "Supporting: no tests of any kind"
         }
       ],
       "detail": {
-        "current_state": "No CI/CD pipeline, partial IaC (K8s manifests only), manual deployments, no tests.",
+        "current_state": "No CI/CD. K8s manifests only (~30-40% IaC coverage). Rolling updates with probes but no canary. Zero tests.",
         "recommended_services": [
-          "CodePipeline",
-          "CodeBuild",
-          "CodeDeploy",
-          "ECR",
-          "CDK",
-          "CloudWatch"
+          "AWS CodeBuild",
+          "AWS CodePipeline",
+          "AWS CodeDeploy",
+          "Amazon ECR",
+          "CDK/Terraform",
+          "ArgoCD"
         ],
         "immediate_actions": [
-          "Create CI/CD pipeline",
-          "Expand IaC with Terraform/CDK",
+          "Create CI pipeline for build/test/push",
           "Add integration tests",
-          "Implement canary deployments"
+          "Define IaC for database and networking",
+          "Implement GitOps deployment"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD"
         ]
-      },
-      "not_triggered_reason": null
+      }
     },
     {
       "id": "move-to-ai",
@@ -1137,8 +1044,17 @@
       "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation).",
       "triggering_questions": [],
       "detail": null,
-      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source code, configuration, or documentation."
     }
   ],
+  "decomposition_strategy": {
+    "recommended_approach": "Strengthen as Modular Monolith",
+    "rationale": "The application is a 45-line single-file micro-service with 2 endpoints. Microservices decomposition would be over-engineering. Refactoring into separated concerns (routes, services, repositories) is the appropriate level of modularization.",
+    "patterns": [
+      "Hexagonal Architecture (Ports and Adapters)",
+      "Anti-corruption Layer"
+    ],
+    "effort_estimate": "Low (2-4 weeks)"
+  },
   "repo_name": "legacy-shipping-api"
 }

@@ -1,20 +1,20 @@
 {
-  "repo_name": "modern-orders-service",
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2026-08-10",
+    "analysis_date": "2025-07-15",
     "td_version": "agentic-readiness-analysis",
+    "repo_name": "modern-orders-service",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
-    "portfolio_name": null,
+    "portfolio_name": "modern-orders-service",
     "tech_stack": {
       "language": "TypeScript",
-      "loc": 120,
-      "framework": "Fastify 4.x",
+      "loc": 150,
+      "framework": "Fastify 4.26",
       "architecture": "Microservice (ECS Fargate)"
     },
     "surface_flags": {
@@ -28,20 +28,20 @@
   "classification": {
     "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
-    "blocker_count": 5,
+    "blocker_count": 4,
     "risk_safety_count": 10,
-    "risk_quality_count": 12,
-    "info_count": 5,
-    "high_count": 5,
-    "medium_count": 22,
-    "low_count": 5,
+    "risk_quality_count": 11,
+    "info_count": 6,
+    "high_count": 4,
+    "medium_count": 21,
+    "low_count": 6,
     "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
   },
   "counts": {
-    "total": 32,
-    "high": 5,
-    "medium": 22,
-    "low": 5
+    "total": 31,
+    "high": 4,
+    "medium": 21,
+    "low": 6
   },
   "findings": [
     {
@@ -49,26 +49,26 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "Idempotent Write Operations",
-      "description": "Write endpoints POST /orders, POST /orders/:id/refund, and POST /orders/:id/cancel lack idempotency key support. The refund endpoint explicitly risks double-refunding on retry.",
-      "gap": "No idempotency mechanism exists for any write operation. Agent retries or LLM duplicate tool calls will create duplicate orders, issue double refunds, or trigger duplicate warehouse cancellations.",
-      "recommendation": "Add Idempotency-Key header support to POST /orders and POST /orders/:id/refund using a deduplication table or cache with TTL.",
+      "description": "Write endpoints (POST /orders, DELETE /orders/{id}, POST /orders/{id}/refund, POST /orders/{id}/cancel) have no idempotency key support. The code explicitly documents: 'No Idempotency-Key => a retry double-refunds.'",
+      "gap": "No idempotency middleware, no Idempotency-Key header support, no unique constraint enforcement on business keys for write operations.",
+      "recommendation": "Add Idempotency-Key header support to all state-mutating endpoints using a Fastify plugin that stores idempotency keys in PostgreSQL.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/routes.ts",
-        "lines": "30-42"
+        "lines": "29-45"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND write endpoints lack idempotency keys.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency keys on write endpoints.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "POST /orders/:id/refund explicitly risks double-refunding. Agent retries at machine speed create data integrity risk.",
+        "resolution_reasoning": "The service exposes POST/DELETE write endpoints that execute real money movement (refund) and irreversible deletions. An agent retrying a timed-out call will double-refund or duplicate operations.",
         "blocker_remediation": {
-          "immediate": "Add Idempotency-Key header support with deduplication table.",
-          "target_state": "All write endpoints enforce idempotency; duplicate requests return original response.",
+          "immediate": "Add Idempotency-Key header support to POST /orders, POST /orders/{id}/refund, and POST /orders/{id}/cancel.",
+          "target_state": "All state-mutating endpoints accept and enforce an Idempotency-Key header; duplicate requests return cached response.",
           "estimated_effort": "Medium",
           "dependencies": []
         }
@@ -79,26 +79,26 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Immutable Audit Logging",
-      "description": "No application-level audit logging exists. Write operations do not log the authenticated principal, action taken, or affected resource. CloudWatch logs configured but no structured audit events emitted.",
-      "gap": "Cannot attribute any write action to a specific agent or user identity. No tamper-evident audit trail for compliance or forensics.",
-      "recommendation": "Add structured audit log emission on every write operation capturing: principal (from JWT), action, resource_id, timestamp, and outcome. Store in immutable log (S3 Object Lock).",
+      "description": "The ECS task definition configures CloudWatch logging (awslogs driver) but the application does not log the authenticated principal (JWT subject/roles) for write operations. No CloudTrail configuration exists. CloudWatch Logs are not configured with immutability controls.",
+      "gap": "Authenticated principal not logged per write operation. No immutable/tamper-evident log storage. No CloudTrail.",
+      "recommendation": "Attach JWT sub claim to Fastify request context in auth middleware; configure structured logging to include principal. Export logs to S3 with Object Lock.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "src/routes.ts",
-        "lines": null
+        "file": "src/auth.ts",
+        "lines": "12-25"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists for write operations.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging of authenticated principal per write operation.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents performing irreversible operations (refund, delete, cancel) require immutable audit trails for compliance and forensics.",
+        "resolution_reasoning": "Write-enabled agents executing DELETE, refund, and cancel operations must have full audit attribution. The system logs to CloudWatch but does not include the JWT principal in log entries.",
         "blocker_remediation": {
-          "immediate": "Add structured audit log emission on every write operation.",
-          "target_state": "Immutable audit trail capturing authenticated principal for every state-mutating operation.",
+          "immediate": "Attach JWT sub claim to Fastify log context; configure structured logging with principal on every request.",
+          "target_state": "Every write operation logs the authenticated principal to an immutable store (S3 with Object Lock or CloudTrail with log file validation).",
           "estimated_effort": "Medium",
           "dependencies": []
         }
@@ -109,80 +109,28 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Compensation and Rollback",
-      "description": "All three write operations are explicitly irreversible: hardDelete removes the row permanently, refund issues real money movement, cancelAndRecallShipment triggers physical warehouse dispatch recall. No saga pattern, no compensating transactions, no undo endpoints.",
-      "gap": "An agent executing a multi-step workflow that fails mid-sequence leaves the system in an unrecoverable partial state. No rollback or compensation mechanism exists.",
-      "recommendation": "Implement soft-delete for orders. Add idempotency to refund. Implement saga pattern with compensating transactions for multi-step operations.",
-      "severity": "High",
-      "priority": "P0",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "src/services/order-service.ts",
-        "lines": "29-47"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND all write operations are irreversible with no compensation.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "Hard delete, refund, and cancel are explicitly noted as irreversible in code comments. No undo mechanism exists.",
-        "blocker_remediation": {
-          "immediate": "Implement soft-delete for orders (status='deleted' instead of row removal).",
-          "target_state": "Saga pattern with compensating transactions; soft-delete with retention; refund reversals.",
-          "estimated_effort": "High",
-          "dependencies": [
-            "API-Q4",
-            "HITL-Q1"
-          ]
-        }
-      }
-    },
-    {
-      "question_id": "DATA-Q1",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "Sensitive Data Classification",
-      "description": "System stores customer PII (customerId) and financial data (totalCents). GET /orders/:id uses SELECT * returning all columns without field filtering. No DTOs or field-level exclusion. Single orders:write role grants access to all data.",
-      "gap": "Agent-facing API returns all database fields including PII without scoping. No access control differentiates sensitive from non-sensitive data access.",
-      "recommendation": "Replace SELECT * with explicit column selection excluding PII. Create separate authorized endpoints for PII access. Add OAuth scopes for data-domain differentiation.",
+      "description": "Multi-step write operations (refund: update DB + call payment; cancel: update DB + call warehouse) perform sequential mutations without compensation logic. If downstream call fails after DB update, system is left in inconsistent state.",
+      "gap": "No saga pattern, no compensating transactions, no atomic multi-step execution.",
+      "recommendation": "Wrap multi-step operations in database transactions; commit only after downstream success, or implement compensating actions.",
       "severity": "High",
       "priority": "P0",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/services/order-service.ts",
-        "lines": "18-20"
+        "lines": "36-50"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND B1 fired (sensitive fields returned in API responses).",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND multi-step write operations have no compensation logic.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Code comments confirm PII in orders table. SELECT * returns all fields. No field filtering for agent-facing responses.",
-        "data_q1_subchecks": {
-          "b1": {
-            "fired": true,
-            "severity": "BLOCKER",
-            "reasoning": "SELECT * returns all fields including PII. No DTOs or field exclusion. agent_scope=write-enabled."
-          },
-          "b2": {
-            "fired": true,
-            "severity": "RISK-SAFETY",
-            "reasoning": "Single orders:write role grants access to all data. No differentiation between sensitive and non-sensitive access."
-          },
-          "b3": {
-            "fired": true,
-            "severity": "INFO",
-            "reasoning": "No formal data classification metadata (tags, annotations, or Macie integration)."
-          }
-        },
+        "resolution_reasoning": "The refund method updates order status then calls warehouse.issueRefund(); cancel updates status then calls warehouse.recallDispatch(). If downstream fails after DB commit, the order is left in an inconsistent state with no rollback mechanism.",
         "blocker_remediation": {
-          "immediate": "Replace SELECT * with explicit column selection excluding PII fields.",
-          "target_state": "Field-level response filtering with separate OAuth scopes for PII access.",
+          "immediate": "Wrap refund and cancel in database transactions; only commit after downstream call succeeds.",
+          "target_state": "All multi-step write operations either succeed atomically or roll back/compensate.",
           "estimated_effort": "Medium",
-          "dependencies": [
-            "AUTH-Q3"
-          ]
+          "dependencies": []
         }
       }
     },
@@ -191,48 +139,23 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Data Residency and Sovereignty",
-      "description": "Customer PII and financial data stored in RDS with no documented residency controls. No GDPR/LGPD compliance references. No region-specific data controls. CloudFormation deploys to AWS::Region but imposes no cross-region constraints.",
-      "gap": "No documented data residency policy, no technical controls preventing cross-region data transmission for customer financial/PII data.",
-      "recommendation": "Document data residency requirements. Add region-restriction tags to IaC resources. Implement VPC endpoints for LLM APIs ensuring data stays in-region.",
+      "description": "The system stores customer-identifiable data (customerId, order transaction amounts) in PostgreSQL. No data residency documentation, sovereignty policies, or cross-boundary transfer restrictions exist.",
+      "gap": "No data residency policy documented. No boundary controls restricting data transmission to specific regions or jurisdictions.",
+      "recommendation": "Document data residency requirements for customer order data. Identify applicable regulations based on customer base geography. Add data classification tags to infrastructure resources.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "infra/ecs.yaml",
-        "lines": null
+        "file": "src/services/order-service.ts",
+        "lines": "8-13"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND customer financial/PII data has no residency controls.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND customer-identifiable data stored without explicit residency controls.",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Service stores customer IDs and financial amounts. An agent transmitting this data to an LLM in a different jurisdiction has no documented controls to prevent compliance violation."
-      }
-    },
-    {
-      "question_id": "AUTH-Q3",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "Action-Level Authorization",
-      "description": "Authorization uses orders:read and orders:write roles. All write operations share a single role. An agent authorized to create orders inherits ability to hard-delete, refund, and cancel.",
-      "gap": "No action-level granularity within write operations. Cannot grant create without also granting delete and refund.",
-      "recommendation": "Split orders:write into granular roles: orders:create, orders:delete, orders:refund, orders:cancel.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/auth.ts",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "compensating_controls": [
-          "Implement orchestration-layer permission scoping at API Gateway level",
-          "Add application-level sub-claims within orders:write role"
-        ]
+        "resolution_reasoning": "DATA-Q2 fired because the system stores customer-identifiable data (customerId, totalCents) with no documented residency policy or boundary controls. An agent could transmit this data to an LLM in a different jurisdiction without restriction."
       }
     },
     {
@@ -240,24 +163,24 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Identity Propagation and Delegation",
-      "description": "JWT verified but no on-behalf-of flow. Cannot distinguish agent-as-self from agent-on-behalf-of-user. No identity propagation to downstream warehouse calls.",
-      "gap": "No identity propagation to downstream services. Cannot attribute warehouse operations to originating user.",
-      "recommendation": "Implement OAuth2 token exchange for agent-on-behalf-of-user operations. Propagate user identity to warehouse calls.",
+      "description": "JWT tokens verified with issuer/audience validation but no on-behalf-of flow exists. No distinction between agent acting under own identity vs. on behalf of a user.",
+      "gap": "No identity propagation through service calls. No actor/user distinction.",
+      "recommendation": "Implement separate OAuth2 client credentials for agent identities with distinct JWT claims (actor_type, on_behalf_of).",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/auth.ts",
-        "lines": null
+        "lines": "12-25"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60-90 days",
+        "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Require agent-initiated requests to include user-context claim in JWT",
-          "Add request correlation headers to downstream calls"
+          "Scope agent permissions to read-only initially; require agent requests to include a user context header",
+          "Enforce separate JWT audiences for agent vs human callers"
         ]
       }
     },
@@ -266,24 +189,24 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Agent Identity Suspension",
-      "description": "Authentication relies entirely on external JWKS JWT verification. No application-level token blocklist or identity suspension mechanism.",
-      "gap": "Cannot immediately block a compromised agent identity at the application layer.",
-      "recommendation": "Add token/principal blocklist middleware with Redis-backed cache. Expose admin endpoint to add principals to blocklist.",
+      "description": "No mechanism for immediate agent identity suspension. JWT-only auth with no token denylist or per-agent disable mechanism.",
+      "gap": "Cannot suspend a specific agent identity without affecting all tokens signed by the same key.",
+      "recommendation": "Add a token denylist (Redis or DynamoDB) checked in auth middleware, or implement OAuth2 token introspection.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/auth.ts",
-        "lines": null
+        "lines": "12-25"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30-60 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Use short-lived JWT tokens (5-minute expiry)",
-          "Implement token blocklist cache"
+          "Use short-lived JWTs (< 5 minutes)",
+          "Add a token denylist check for emergency revocation"
         ]
       }
     },
@@ -292,24 +215,24 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Concurrency Controls",
-      "description": "No optimistic locking, version fields, ETag support, or conditional updates. UPDATE statements execute without checking current state.",
-      "gap": "Race conditions between concurrent agent instances will corrupt order state.",
-      "recommendation": "Add version column with optimistic locking. Return 409 Conflict on version mismatch.",
+      "description": "No optimistic locking, version fields, ETags, or SELECT FOR UPDATE patterns. Multiple concurrent agent instances could silently overwrite each other's changes.",
+      "gap": "No concurrency controls on write operations. Race conditions possible.",
+      "recommendation": "Add a version column to the orders table and implement optimistic locking in UPDATE queries.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/services/order-service.ts",
-        "lines": "33-44"
+        "lines": "36-50"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30-60 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Add version column with WHERE clause on UPDATE",
-          "Use SELECT FOR UPDATE on critical transitions"
+          "Limit agent concurrency to single instance per order",
+          "Add optimistic locking via version column"
         ]
       }
     },
@@ -318,24 +241,24 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Circuit Breakers and Resilience",
-      "description": "OrderService calls external WarehouseClient with no circuit breaker, no retry logic, no timeout configuration, and no fallback handling.",
-      "gap": "No resilience patterns on external dependency calls. Runaway agent loops cascade failures to warehouse.",
-      "recommendation": "Add circuit breaker library (opossum) around WarehouseClient calls. Configure timeouts and retry with backoff.",
+      "description": "External calls to WarehouseClient (issueRefund, recallDispatch) have no circuit breaker, retry logic, or timeout configuration.",
+      "gap": "No resilience patterns on external dependency calls. Failures cascade directly.",
+      "recommendation": "Wrap WarehouseClient calls with circuit breaker (opossum) and configure timeouts with exponential backoff.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/services/order-service.ts",
-        "lines": "37-47"
+        "lines": "36-50"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30-60 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Add HTTP client timeouts on warehouse calls",
-          "Implement circuit breaker at infrastructure level"
+          "Set HTTP client timeouts on warehouse client",
+          "Implement circuit breaker on external calls"
         ]
       }
     },
@@ -344,24 +267,24 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Rate Limiting and Throttling",
-      "description": "No rate limiting at any layer. No API Gateway, no application-level rate limiting middleware, no WAF rules.",
-      "gap": "No protection against agent traffic storms overwhelming the service.",
-      "recommendation": "Add @fastify/rate-limit middleware. Deploy API Gateway with throttling for production.",
+      "description": "No rate limiting configured at any layer. No rate limiting middleware, no API Gateway throttling, no WAF rate rules. SAFETY.md explicitly identifies this gap.",
+      "gap": "No rate limiting. An agent loop could overwhelm the service at machine speed.",
+      "recommendation": "Add @fastify/rate-limit plugin and/or API Gateway throttling configuration.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
-        "file": "package.json",
+        "file": "SAFETY.md",
         "lines": null
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30-60 days",
+        "remediation_timeline": "14\u201330 days",
         "compensating_controls": [
-          "Add @fastify/rate-limit for immediate protection",
-          "Deploy API Gateway with usage plans"
+          "Add fastify-rate-limit middleware",
+          "Deploy API Gateway with throttling"
         ]
       }
     },
@@ -370,24 +293,24 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Blast Radius and Transaction Limits",
-      "description": "No business-domain transaction limits. Agent could issue unlimited refunds, delete unlimited orders, or cancel unlimited shipments without per-session or per-hour caps.",
-      "gap": "Agent error blast radius is unbounded. No configurable limits on business impact of agent operations.",
-      "recommendation": "Add per-caller transaction limits: max_refunds_per_hour, max_deletes_per_session, max_refund_amount_per_day.",
+      "description": "No configurable transaction limits. No caps on refund amounts, delete operations, or bulk operation sizes per session or caller.",
+      "gap": "No per-caller business transaction limits. Unlimited refunds/deletes possible.",
+      "recommendation": "Implement per-agent-identity transaction limits: max refund per hour, max deletions per day.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "src/services/order-service.ts",
-        "lines": null
+        "lines": "36-50"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60-90 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Implement per-caller refund caps at application level",
-          "Add bulk operation size limits on delete"
+          "Add per-token daily refund cap",
+          "Implement max-deletions-per-session counter"
         ]
       }
     },
@@ -396,24 +319,24 @@
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
       "title": "Draft/Pending State",
-      "description": "Order status limited to placed/shipped/cancelled/refunded. No draft or pending_review state. All writes execute immediately and irrevocably.",
-      "gap": "No mechanism for agent-proposed changes to await human approval before commitment.",
-      "recommendation": "Add pending status values (pending_refund, pending_cancel) and confirm/reject endpoints.",
+      "description": "No draft or pending state for agent-proposed writes. All write operations commit immediately. Order status values (placed, shipped, cancelled, refunded) have no PENDING_REVIEW or PROPOSED state.",
+      "gap": "No mechanism for agent to propose changes for human review before execution.",
+      "recommendation": "Add pending status values (pending_refund, pending_cancel, pending_delete) for agent-initiated destructive operations.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/services/order-service.ts",
-        "lines": "10"
+        "lines": "8-13"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30-60 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Add pending status values requiring explicit confirmation",
-          "Implement orchestration-layer approval gates"
+          "Add PENDING_APPROVAL status for destructive operations",
+          "Route agent requests through approval queue at orchestration layer"
         ]
       }
     },
@@ -422,25 +345,68 @@
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
       "title": "Configurable Approval Gates",
-      "description": "No approval workflow. High-risk operations (refund, cancel, delete) execute immediately without configurable approval step.",
-      "gap": "Cannot configure high-risk operations to require human approval before execution.",
-      "recommendation": "Add configurable approval gates for refund (amount threshold) and cancel (always for shipped orders).",
+      "description": "No operations require human approval. DELETE, refund, and cancel endpoints execute immediately upon receiving a valid authenticated request.",
+      "gap": "No configurable approval gates on high-risk operations.",
+      "recommendation": "Add per-operation approval configuration with threshold-based gates (e.g., refund > $100 requires approval).",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/routes.ts",
-        "lines": "30-42"
+        "lines": "29-45"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60-90 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Implement Step Functions with human task tokens for refund/cancel",
-          "Add threshold-based approval triggers"
+          "Route agent requests through approval service at orchestration layer",
+          "Add requires_approval config flag per operation"
         ]
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Sensitive Data Classification",
+      "description": "Stage A: System stores customer-identifiable data. Stage B: B1 CLEAR (no credentials exposed in API), B2 RISK-SAFETY (single orders:read scope grants access to all order data for all customers \u2014 no data-domain differentiation), B3 INFO (no formal classification metadata).",
+      "gap": "B2: No access control differentiation between sensitive and non-sensitive data domains.",
+      "recommendation": "Introduce granular OAuth scopes differentiating metadata from financial data. Implement row-level security for customer segmentation.",
+      "severity": "Medium",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/auth.ts",
+        "lines": "12-25"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Implement OAuth scopes separating data domains",
+          "Add row-level filtering for agent customer segments"
+        ],
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": false,
+            "severity": null,
+            "reasoning": "API responses return business-operational fields (id, customerId, status, totalCents) needed for order management. No passwords, card numbers, or credentials exposed."
+          },
+          "b2": {
+            "fired": true,
+            "severity": "RISK-SAFETY",
+            "reasoning": "Single orders:read scope grants access to all order data for all customers. No granular scope separation between financial data and metadata."
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No formal data classification tags, no PII detection tooling, no field-level sensitivity annotations."
+          }
+        }
       }
     },
     {
@@ -448,12 +414,12 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "PII Redaction in Logs",
-      "description": "CloudWatch logs configured but no PII redaction or log scrubbing. System handles customer PII with no log-level protection.",
-      "gap": "No PII redaction middleware or log scrubbing configuration.",
-      "recommendation": "Add structured logging configuration excluding sensitive fields. Integrate PII detection on CloudWatch log group.",
+      "description": "CloudWatch logging configured with no PII masking middleware. CustomerId and order data could appear in error logs. No log scrubbing, no CloudWatch data protection policies.",
+      "gap": "No PII redaction in logging pipeline.",
+      "recommendation": "Add Fastify logger serializer that redacts PII fields. Consider CloudWatch Log data protection policies.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "infra/ecs.yaml",
@@ -462,33 +428,11 @@
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30-60 days",
+        "remediation_timeline": "14\u201330 days",
         "compensating_controls": [
-          "Configure Fastify logger to exclude request/response bodies",
-          "Add CloudWatch log subscription filter for PII detection"
+          "Add Fastify serializer hooks that redact sensitive fields",
+          "Configure CloudWatch Log subscription filter for PII detection"
         ]
-      }
-    },
-    {
-      "question_id": "API-Q2",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "Machine-Readable API Specification",
-      "description": "OpenAPI 3.0.3 specification exists at openapi/orders.yaml but lacks request body and response body schemas. Only status codes and descriptions provided.",
-      "gap": "Spec is incomplete \u2014 no request/response schemas for automated agent tool generation.",
-      "recommendation": "Add request body schemas and response schemas using $ref components. Consider auto-generating from Fastify route schemas.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "openapi/orders.yaml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
       }
     },
     {
@@ -496,21 +440,43 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "Structured Error Responses",
-      "description": "Consistent {code, message} error structure present for 401, 403, and 404 responses. No retryable boolean or error category included.",
-      "gap": "Missing retryable/terminal distinction. Agents must guess whether to retry on failure.",
-      "recommendation": "Add retryable boolean and error category to error response format.",
+      "description": "Error responses include structured JSON with code and message fields but lack a retryable indicator or error category.",
+      "gap": "No retryable boolean or error category. Agent cannot determine retry strategy from response body.",
+      "recommendation": "Extend error schema to include retryable boolean and error category.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "src/auth.ts",
-        "lines": "14-24"
+        "file": "src/routes.ts",
+        "lines": "18-20"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14-30 days"
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging Environment",
+      "description": "No sandbox or staging environment configuration. No docker-compose, no environment-specific IaC, no seed data.",
+      "gap": "No safe environment for agent testing without risk to live systems.",
+      "recommendation": "Create docker-compose.yml with PostgreSQL and seed data for local agent testing.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "Dockerfile",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -518,21 +484,21 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Input Validation and Schema Enforcement",
-      "description": "Request bodies cast without validation (req.body as Record<string, unknown>). No validation library in dependencies. Parameterized queries prevent SQL injection only.",
-      "gap": "No input validation at API boundary. Malformed agent payloads reach database layer.",
-      "recommendation": "Add typebox or zod schemas to Fastify route definitions with field-level validation.",
+      "description": "No input validation libraries. Request bodies cast with TypeScript 'as' assertions without runtime validation. No structured validation error responses.",
+      "gap": "No runtime input validation at API boundary. Malformed payloads accepted without rejection.",
+      "recommendation": "Add @sinclair/typebox or zod for runtime validation with Fastify schema support.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "src/routes.ts",
-        "lines": "22-34"
+        "lines": "22-45"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14-30 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
@@ -540,21 +506,21 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Temporal Metadata and Freshness",
-      "description": "Order interface defines only id, customerId, status, totalCents. No created_at, updated_at, or event_time fields. No Cache-Control headers.",
-      "gap": "No temporal metadata on records. Agents cannot determine data freshness.",
-      "recommendation": "Add created_at and updated_at columns. Include in API responses with Last-Modified header.",
+      "description": "No temporal fields (created_at, updated_at) in Order entity. No freshness headers in API responses.",
+      "gap": "No timestamps. Agents cannot determine data currency.",
+      "recommendation": "Add created_at/updated_at columns and Last-Modified response headers.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "src/services/order-service.ts",
-        "lines": "7-12"
+        "lines": "8-13"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14-30 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
@@ -562,9 +528,9 @@
       "category": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "Schema Versioning and API Contracts",
-      "description": "OpenAPI spec versioned (2.1.0) and node-pg-migrate for DB migrations present. No API URL versioning, no breaking change detection, no contract tests, no CI pipeline.",
-      "gap": "No API versioning strategy. Agent tool bindings could break silently on deployment.",
-      "recommendation": "Add URL-based API versioning. Add OpenAPI diff tools and consumer-driven contract tests.",
+      "description": "OpenAPI spec has version 2.1.0 but no runtime versioning enforcement, no breaking change detection tools, and no contract tests.",
+      "gap": "No versioning strategy enforced at runtime. No breaking change detection in CI.",
+      "recommendation": "Add URL prefix versioning and integrate oasdiff in CI for breaking change detection.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -576,7 +542,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30-60 days"
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -584,9 +550,9 @@
       "category": "Observability",
       "category_id": "OBS",
       "title": "Distributed Tracing and Structured Logging",
-      "description": "No OpenTelemetry/X-Ray instrumentation. No structured logging. No correlation IDs. CloudWatch receives unstructured container stdout.",
-      "gap": "Agent-initiated requests cannot be traced through the system.",
-      "recommendation": "Add @opentelemetry/sdk-node with auto-instrumentation and Fastify request ID generation.",
+      "description": "CloudWatch logging configured but no distributed tracing (OpenTelemetry, X-Ray), no trace ID propagation, and no correlation IDs.",
+      "gap": "No distributed tracing. No correlation IDs linking log entries for a single request.",
+      "recommendation": "Add OpenTelemetry SDK or AWS X-Ray instrumentation with request correlation IDs.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -598,7 +564,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30-60 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
@@ -606,9 +572,9 @@
       "category": "Observability",
       "category_id": "OBS",
       "title": "Alerting on Error Rates and Latency",
-      "description": "No CloudWatch alarms defined. No alerting thresholds for error rates or latency. No PagerDuty/OpsGenie integration.",
-      "gap": "Service degradation affecting agents goes undetected.",
-      "recommendation": "Add CloudWatch alarms for ALB 5XX count and target response time P99.",
+      "description": "No alerting thresholds configured. No CloudWatch Alarms in IaC. Error rate and latency degradation would not trigger automated alerts.",
+      "gap": "No automated alerting for error rates or latency on agent-facing APIs.",
+      "recommendation": "Add CloudWatch Alarms for ALB 5xx rate and p99 latency to CloudFormation template.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -620,7 +586,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30-60 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
@@ -628,12 +594,12 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "Infrastructure Governance",
-      "description": "CloudFormation IaC exists (infra/ecs.yaml) but no automated change review and no drift detection configured.",
-      "gap": "1 of 3 governance sub-checks pass (IaC exists, but no review process or drift detection).",
-      "recommendation": "Add CI pipeline with IaC plan review on PRs. Enable CloudFormation drift detection.",
+      "description": "IaC exists (CloudFormation in infra/ecs.yaml) but no peer review enforcement or drift detection configured.",
+      "gap": "IaC present but no governance controls beyond definition.",
+      "recommendation": "Add AWS Config drift detection and PR review requirements for infra/ changes.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "infra/ecs.yaml",
@@ -642,7 +608,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30-60 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
@@ -650,9 +616,9 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "CI/CD with API Contract Testing",
-      "description": "No CI/CD pipeline exists in the repository. No GitHub Actions, GitLab CI, Jenkinsfile, or buildspec.yml found.",
-      "gap": "No automated mechanism to detect API-breaking changes before production.",
-      "recommendation": "Create CI pipeline with lint, type-check, test, OpenAPI validation, and deployment gating.",
+      "description": "No CI/CD pipeline configuration in repository. Build/test/lint scripts exist in package.json but no automation runs them.",
+      "gap": "No CI/CD pipeline. No automated contract testing or breaking change detection.",
+      "recommendation": "Add CI pipeline (GitHub Actions or GitLab CI) that runs build, test, lint, and OpenAPI validation on PRs.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -664,7 +630,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30-60 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
@@ -672,9 +638,9 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "API Test Coverage",
-      "description": "Vitest configured in package.json but no test files exist. Zero test coverage for API endpoints.",
-      "gap": "No automated tests for any API endpoint.",
-      "recommendation": "Create test files for all routes. Test error cases. Add to CI pipeline.",
+      "description": "Vitest configured as test framework but no test files exist in repository. Zero API test coverage.",
+      "gap": "No test files. No API tests validating endpoint behavior.",
+      "recommendation": "Write Vitest integration tests for all endpoints covering valid/invalid inputs, auth failures, and error responses.",
       "severity": "Medium",
       "priority": "P3",
       "effort": "Medium",
@@ -686,7 +652,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30-60 days"
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -694,9 +660,9 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "Encryption at Rest",
-      "description": "RDS resource not defined in available CloudFormation template. No StorageEncrypted or KmsKeyId properties visible for the database storing customer data.",
-      "gap": "No encryption at rest configuration verifiable for customer data store.",
-      "recommendation": "Define RDS in IaC with StorageEncrypted: true and customer-managed KMS key.",
+      "description": "No KMS encryption configuration for data store. RDS not provisioned in this CloudFormation template. Encryption status of external database unknown.",
+      "gap": "Encryption at rest status unknown for PostgreSQL database.",
+      "recommendation": "Document or configure encryption for the external RDS instance (StorageEncrypted: true with KMS key).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -708,29 +674,28 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14-30 days"
+        "remediation_timeline": "14\u201330 days"
       }
     },
     {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "Sandbox/Staging Environment",
-      "description": "No staging environment, docker-compose, seed data, or environment-specific configurations found.",
-      "gap": "No safe environment to test agent behavior before production.",
-      "recommendation": "Create docker-compose.yml with PostgreSQL and seed data. Add staging environment parameter to CloudFormation.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Structured Response Format",
+      "description": "All responses are JSON (Fastify default content-type application/json). Well-suited for LLM consumption.",
+      "gap": "None \u2014 JSON is optimal for agent tool integration.",
+      "recommendation": "No action needed.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
       "evidence": {
-        "file": "package.json",
+        "file": "src/routes.ts",
         "lines": null
       },
       "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "30-60 days"
+        "native_severity": "INFO",
+        "safety_impact": false
       }
     },
     {
@@ -738,9 +703,9 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "Event Emission for State Changes",
-      "description": "No event emission or webhook support. State changes are persisted to database only, not published to any event bus.",
-      "gap": "Agents cannot react to order state changes proactively without polling.",
-      "recommendation": "Consider adding SNS/EventBridge event publication on order status transitions.",
+      "description": "State changes (order status transitions) occur but no events emitted. No SNS/SQS/EventBridge integration.",
+      "gap": "No event emission. Agents must poll to detect state changes.",
+      "recommendation": "Add EventBridge events for order status transitions.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
@@ -759,9 +724,9 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "Rate Limit Documentation and Headers",
-      "description": "No rate limit documentation or headers. Agents have no visibility into consumption limits.",
-      "gap": "Agents cannot self-throttle based on rate limit awareness.",
-      "recommendation": "Add X-RateLimit-Remaining and Retry-After headers once rate limiting is implemented.",
+      "description": "No rate limits documented in OpenAPI spec. No X-RateLimit-Remaining or Retry-After headers returned.",
+      "gap": "No rate limit documentation or headers for agent self-throttling.",
+      "recommendation": "Once rate limiting is implemented, document limits in OpenAPI spec and return rate limit headers.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
@@ -780,13 +745,13 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Data Quality Awareness",
-      "description": "No data quality metrics, profiling, or completeness monitoring. No database constraints beyond parameterized INSERT.",
-      "gap": "No signal about data completeness or quality for agent reasoning.",
-      "recommendation": "Add database constraints (NOT NULL, CHECK) and consider data quality monitoring.",
+      "description": "No data quality metrics, profiling, or completeness monitoring exist for the orders data.",
+      "gap": "No data quality visibility for agents.",
+      "recommendation": "Consider adding data quality checks (orphaned orders, incomplete records) as service matures.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
-      "phase": 3,
+      "phase": 4,
       "evidence": {
         "file": "src/services/order-service.ts",
         "lines": null
@@ -801,13 +766,13 @@
       "category": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "Data Catalog / Metadata Layer",
-      "description": "No data catalog, metadata layer, or data dictionary describing the orders schema semantically.",
-      "gap": "No self-service discovery path for building agent tools.",
-      "recommendation": "Add schema documentation. Consider AWS Glue Data Catalog for the RDS database.",
+      "description": "No data catalog or metadata layer. Schema documented implicitly via TypeScript interface and OpenAPI spec only.",
+      "gap": "No formal data catalog describing what data the system holds.",
+      "recommendation": "Add lightweight data dictionary in repository documentation.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
+      "effort": "Low",
+      "phase": 4,
       "evidence": {
         "file": "openapi/orders.yaml",
         "lines": null
@@ -822,15 +787,15 @@
       "category": "Observability",
       "category_id": "OBS",
       "title": "Business Outcome Metrics",
-      "description": "No custom business metrics published. No order volume, refund rate, or cancellation rate tracking.",
-      "gap": "Cannot measure agent interaction business outcomes.",
-      "recommendation": "Add custom CloudWatch metrics for order/refund/cancel volumes.",
+      "description": "No custom business outcome metrics published. Only infrastructure-level CloudWatch logging configured.",
+      "gap": "No business-level signal for agent interaction outcomes.",
+      "recommendation": "Add CloudWatch custom metrics for orders_created, orders_refunded, cancellation rates.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "package.json",
+        "file": "infra/ecs.yaml",
         "lines": null
       },
       "ara_metadata": {
@@ -845,77 +810,84 @@
       "category_id": "API",
       "title": "Documented API Interface",
       "status": "pass",
-      "reason": "REST API exposed via Fastify with OpenAPI 3.0.3 specification at openapi/orders.yaml."
+      "reason": "REST API exposed via Fastify with OpenAPI 3.0.3 spec at openapi/orders.yaml documenting all endpoints."
     },
     {
-      "question_id": "API-Q5",
+      "question_id": "API-Q2",
       "category_id": "API",
-      "title": "Structured Response Format",
+      "title": "Machine-Readable API Specification",
       "status": "pass",
-      "reason": "JSON responses (Fastify default) \u2014 standard structured format. Informational absence suppressed."
+      "reason": "OpenAPI 3.0.3 specification exists at openapi/orders.yaml with all endpoints, operation IDs, and security scheme defined."
     },
     {
       "question_id": "API-Q6",
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no evidence of operations >30s or long-running workflows."
+      "reason": "Extended question not triggered \u2014 no evidence of operations exceeding 30 seconds or long-running workflows."
     },
     {
       "question_id": "AUTH-Q1",
       "category_id": "AUTH",
       "title": "Machine Identity Authentication",
       "status": "pass",
-      "reason": "JWT RS256 with JWKS, issuer/audience validation, and role claims supporting machine identity."
+      "reason": "JWT RS256 auth with remote JWKS, issuer/audience verification, and role claims. Supports machine identity via OAuth2 client credentials flow."
     },
     {
       "question_id": "AUTH-Q2",
       "category_id": "AUTH",
       "title": "Scoped Permissions",
       "status": "pass",
-      "reason": "Authorization supports scoped permissions: orders:read (read-only) vs orders:write (write operations)."
+      "reason": "Role-based authorization with distinct scopes: orders:read for reads, orders:write for mutations. Supports least-privilege agent identities."
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category_id": "AUTH",
+      "title": "Action-Level Authorization",
+      "status": "pass",
+      "reason": "Action-level enforcement: GET requires orders:read, POST/DELETE require orders:write. Agent can read without write access."
     },
     {
       "question_id": "AUTH-Q5",
       "category_id": "AUTH",
       "title": "Credential Management",
       "status": "pass",
-      "reason": "Database credentials managed via AWS Secrets Manager with auto-generated passwords."
+      "reason": "Credentials managed via AWS Secrets Manager (DbSecret with auto-generated password, injected as ECS task secret). No hardcoded credentials."
     },
     {
       "question_id": "STATE-Q2",
       "category_id": "STATE",
       "title": "Queryable Current State",
       "status": "pass",
-      "reason": "GET /orders/:id returns current state with status field (placed/shipped/cancelled/refunded)."
+      "reason": "GET /orders/:id provides queryable current state (id, customerId, status, totalCents) for agent inspection before action."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no P0 priority or critical path designation."
+      "reason": "Extended question not triggered \u2014 no P0 priority assigned, not identified as critical path service."
     },
     {
       "question_id": "DATA-Q3",
       "category_id": "DATA",
       "title": "Selective Query Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no list/query endpoints with potentially unbounded results (only single-item GET /orders/:id)."
+      "reason": "Extended question not triggered \u2014 service has no list/query endpoints with potentially unbounded results (only single-item GET by ID)."
     },
     {
       "question_id": "DISC-Q2",
       "category_id": "DISC",
       "title": "Semantically Meaningful Field Names",
       "status": "pass",
-      "reason": "Field names are semantically meaningful: customerId, totalCents, status (TypeScript); customer_id, total_cents (database)."
+      "reason": "All field names are semantically meaningful: customerId, totalCents, status, amountCents. No legacy abbreviations."
     },
     {
       "question_id": "ENG-Q3",
       "category_id": "ENG",
       "title": "Rollback Capability",
       "status": "pass",
-      "reason": "ECS DeploymentCircuitBreaker with Rollback: true configured in CloudFormation."
+      "reason": "ECS service configured with DeploymentCircuitBreaker: Enable: true, Rollback: true \u2014 automatic rollback on failed deployments."
     }
   ],
   "remediation_roadmap": {
@@ -929,21 +901,20 @@
         "phase": 1,
         "phase_name": "Blockers",
         "findings": [
-          "STATE-Q1",
-          "DATA-Q1",
           "API-Q4",
           "AUTH-Q6",
+          "STATE-Q1",
           "DATA-Q2",
-          "AUTH-Q3",
           "AUTH-Q7",
           "STATE-Q3",
           "STATE-Q4",
           "STATE-Q5",
           "HITL-Q1",
           "HITL-Q2",
+          "DATA-Q1",
           "DATA-Q6"
         ],
-        "summary": "Resolve all 5 BLOCKERs and address critical RISK-SAFETY findings to unblock agent pilot consideration."
+        "summary": "Resolve all BLOCKERs (idempotency, audit logging, compensation, data residency) and critical RISK-SAFETY findings (rate limiting, concurrency, HITL controls, PII redaction) to unblock agent deployment."
       },
       {
         "phase": 2,
@@ -951,8 +922,8 @@
         "findings": [
           "AUTH-Q4",
           "STATE-Q6",
-          "API-Q2",
           "API-Q3",
+          "HITL-Q3",
           "DATA-Q4",
           "DATA-Q5",
           "DISC-Q1",
@@ -960,88 +931,83 @@
           "OBS-Q2",
           "ENG-Q1",
           "ENG-Q2",
-          "ENG-Q5",
-          "HITL-Q3"
+          "ENG-Q5"
         ],
-        "summary": "Address remaining RISK-SAFETY and RISK-QUALITY findings to improve agent effectiveness and operational readiness."
+        "summary": "Address remaining RISK-SAFETY (identity propagation, transaction limits) and RISK-QUALITY findings (validation, observability, CI/CD, encryption) to enable controlled pilot."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
         "findings": [
+          "ENG-Q4",
           "API-Q7",
           "API-Q8",
-          "DATA-Q7",
-          "DISC-Q3",
           "OBS-Q3",
-          "ENG-Q4"
+          "DATA-Q7",
+          "DISC-Q3"
         ],
-        "summary": "Address INFO findings and remaining quality improvements for optimal agent integration."
+        "summary": "Improve agent effectiveness with test coverage, event emission, business metrics, and documentation."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Implement idempotency and compensation patterns for write operations",
+      "action": "Implement idempotency keys on all write endpoints",
       "question_ids": [
-        "API-Q4",
-        "STATE-Q1"
+        "API-Q4"
       ],
       "priority": "P0",
-      "effort": "High",
-      "rationale": "Two BLOCKERs (API-Q4, STATE-Q1) are directly coupled: idempotency keys prevent duplicate writes, compensation enables rollback. Resolving both unlocks write-enabled agent safety."
+      "effort": "Medium",
+      "rationale": "Prevents duplicate refunds and operations when agents retry on timeout \u2014 the highest-impact BLOCKER."
     },
     {
-      "action": "Deploy structured audit logging with immutable storage",
+      "action": "Add audit logging with principal attribution and immutable storage",
       "question_ids": [
         "AUTH-Q6"
       ],
       "priority": "P0",
       "effort": "Medium",
-      "rationale": "BLOCKER \u2014 compliance requirement for write-enabled agents. Cannot prove or disprove agent actions without audit trail."
+      "rationale": "Required for compliance and forensics when agents execute write operations."
     },
     {
-      "action": "Implement field-level data scoping and residency controls",
+      "action": "Implement compensation/rollback for multi-step operations",
       "question_ids": [
-        "DATA-Q1",
+        "STATE-Q1"
+      ],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Prevents inconsistent state when downstream calls fail after local DB commits."
+    },
+    {
+      "action": "Document data residency policy and add boundary controls",
+      "question_ids": [
         "DATA-Q2"
       ],
       "priority": "P0",
       "effort": "Medium",
-      "rationale": "Two BLOCKERs addressing data protection: field filtering prevents PII leakage, residency controls prevent cross-jurisdiction violations."
+      "rationale": "Customer-identifiable data needs explicit residency controls before agent transmission to LLMs."
     },
     {
-      "action": "Add rate limiting and transaction limits",
+      "action": "Deploy rate limiting and transaction caps",
       "question_ids": [
         "STATE-Q5",
         "STATE-Q6"
       ],
       "priority": "P1",
-      "effort": "Medium",
-      "rationale": "Prevents runaway agent loops from overwhelming the service and limits blast radius of agent errors."
+      "effort": "Low",
+      "rationale": "Prevents agent loops from overwhelming the service or executing unbounded operations."
     },
     {
-      "action": "Implement human-in-the-loop approval for high-risk operations",
+      "action": "Add human-in-the-loop controls for irreversible operations",
       "question_ids": [
         "HITL-Q1",
         "HITL-Q2"
       ],
       "priority": "P1",
-      "effort": "High",
-      "rationale": "Refund, cancel, and delete operations involve real money and physical actions. Draft states and approval gates provide defense in depth."
-    },
-    {
-      "action": "Establish CI/CD pipeline with observability",
-      "question_ids": [
-        "ENG-Q2",
-        "OBS-Q1",
-        "OBS-Q2",
-        "ENG-Q4"
-      ],
-      "priority": "P2",
       "effort": "Medium",
-      "rationale": "Foundation for deployment safety and agent-interaction debugging. Enables contract testing and performance monitoring."
+      "rationale": "DELETE, refund, and cancel operations need draft states and approval gates for agent safety."
     }
   ],
-  "analysis_type": "ara"
+  "analysis_type": "ara",
+  "repo_name": "modern-orders-service"
 }
