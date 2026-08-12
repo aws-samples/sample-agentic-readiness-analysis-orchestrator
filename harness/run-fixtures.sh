@@ -182,7 +182,11 @@ selected=()
 # to ${AFTER_DIR}/edited-questions.txt for the judge step; empty on a full sweep (nothing was
 # "edited" in particular) or when no TD changed.
 _edited_q_file="$(mktemp "${TMPDIR:-/tmp}/harness-edited-q.XXXXXX")"
-trap 'rm -f "${_edited_q_file}"' EXIT
+# Program identifiers whose program-library.md entry changed (see the selector branch). The
+# portfolio program recommendation is the ONLY thing a program-library edit can move, so this
+# is the judge's scope hint for a portfolio-TD MR — the D4 analogue of edited-questions.txt.
+_changed_prog_file="$(mktemp "${TMPDIR:-/tmp}/harness-changed-prog.XXXXXX")"
+trap 'rm -f "${_edited_q_file}" "${_changed_prog_file}"' EXIT
 if [[ "${SCOPE}" == "all" ]]; then
   selected=("${ALL_FIXTURES[@]}")
 else
@@ -221,6 +225,13 @@ else
     if [[ "${HARNESS_CHANGED_PORTFOLIO_TD:-false}" == "true" && "${MR_FIXTURES}" -lt 2 ]]; then
       echo "changed-only: portfolio TD changed → raising --mr-fixtures ${MR_FIXTURES} → 2" >&2
       MR_FIXTURES=2
+    fi
+    # Record WHICH programs the edit touched, so the judge can weigh D4 program movement as
+    # signal (the program-recommendation analogue of edited-questions.txt). Only meaningful
+    # when a portfolio TD — where program-library.md lives — actually changed.
+    if [[ "${HARNESS_CHANGED_PORTFOLIO_TD:-false}" == "true" ]]; then
+      python3 "${HARNESS_DIR}/select-fixtures.py" --emit-changed-programs \
+        --base "${sel_base}" >> "${_changed_prog_file}" 2>/dev/null || true
     fi
     selected=()
     # Biggest single MR saving: only run the analysis types the MR actually touched.
@@ -753,6 +764,30 @@ if [[ "${run_portfolio}" == "true" ]]; then
   if [[ "${DRY_RUN}" != "true" ]]; then
     rm -rf "${PORT_SRC}"; mkdir -p "${PORT_SRC}"
     cp -f "${AFTER_DIR}"/*-ara-report.json "${AFTER_DIR}"/*-mod-report.json "${PORT_SRC}/" 2>/dev/null || true
+    # Full-set rollup on a scoped program-library edit: a portfolio TD edit can't change any
+    # per-repo report, so roll the portfolio up over the FULL golden app set — backfill the
+    # golden per-repo reports for every fixture NOT freshly analyzed this run (no-clobber:
+    # a freshly-run report of the same name always wins). This makes the after-rollup's app
+    # set match golden's exactly, so the differ compares program membership apples-to-apples
+    # (see diff-reports.py::_portfolio_app_count) instead of discarding it as a scoped subset.
+    # Guarded to scoped MR runs driven by a portfolio TD change; --scope all and
+    # --write-golden already aggregate the full set from freshly-run reports.
+    if [[ "${SCOPE}" != "all" && "${WRITE_GOLDEN}" != "true" \
+          && "${HARNESS_CHANGED_PORTFOLIO_TD:-false}" == "true" ]]; then
+      _golden_dir="${HARNESS_DIR}/golden"
+      if [[ -d "${_golden_dir}" ]]; then
+        _backfilled=0
+        for _g in "${_golden_dir}"/*-ara-report.json "${_golden_dir}"/*-mod-report.json; do
+          [[ -e "${_g}" ]] || continue                       # no match → literal glob, skip
+          case "${_g}" in *portfolio*) continue ;; esac       # per-repo reports only
+          if [[ ! -e "${PORT_SRC}/$(basename "${_g}")" ]]; then
+            cp -n "${_g}" "${PORT_SRC}/" && _backfilled=$((_backfilled + 1))
+          fi
+        done
+        echo "portfolio: full-set rollup — backfilled ${_backfilled} golden per-repo report(s)" >&2
+        echo "           so the program-recommendation diff matches the golden app set." >&2
+      fi
+    fi
     git_init_stage "${PORT_SRC}"
   fi
   if [[ "${run_ara}" == "true" ]]; then
@@ -793,6 +828,11 @@ if [[ -s "${_edited_q_file}" ]]; then
   mkdir -p "${AFTER_DIR}"
   sort -u "${_edited_q_file}" | paste -sd, - > "${AFTER_DIR}/edited-questions.txt"
   echo "edit scope: $(cat "${AFTER_DIR}/edited-questions.txt") → ${AFTER_DIR}/edited-questions.txt" >&2
+fi
+if [[ -s "${_changed_prog_file}" ]]; then
+  mkdir -p "${AFTER_DIR}"
+  sort -u "${_changed_prog_file}" | paste -sd, - > "${AFTER_DIR}/changed-programs.txt"
+  echo "program scope: $(cat "${AFTER_DIR}/changed-programs.txt") → ${AFTER_DIR}/changed-programs.txt" >&2
 fi
 
 echo "done." >&2
