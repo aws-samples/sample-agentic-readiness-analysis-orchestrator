@@ -8,7 +8,11 @@ information to effectively respond to your bug report or contribution.
 
 ## Reporting Bugs/Feature Requests
 
-We welcome you to use the GitHub issue tracker to report bugs or suggest features.
+We welcome you to use the issue tracker to report bugs or suggest features — on **GitHub**
+(public `aws-samples`, with bug-report / feature-request / rubric-change templates) or, if you
+work off the internal **GitLab** mirror (`gitlab.aws.dev`, where the change-impact harness runs),
+its issue tracker with the `rubric-change` template. Either is fine; pick the one where you'll
+open the PR/MR.
 
 When filing an issue, please check existing open, or recently closed, issues to make sure somebody else hasn't already
 reported the issue. Please try to include as much information as you can. Details like these are incredibly useful:

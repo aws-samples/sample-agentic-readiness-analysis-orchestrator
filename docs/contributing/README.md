@@ -11,12 +11,14 @@ out to are the authoritative rubric text (each TD's `SKILL.md`) and the deep des
 1. [What is a Transformation Definition?](#what-is-a-transformation-definition-td)
 2. [TD anatomy — where everything lives](#td-anatomy--where-everything-lives)
 3. [The change playbook](#the-change-playbook)
-4. [The contributor use-case matrix — what passes, what fails, why](#the-contributor-use-case-matrix--what-passes-what-fails-why)
-5. [Refreshing the golden baseline — two ways](#refreshing-the-golden-baseline--two-ways)
-6. [The benchmarking scorer prompts](#the-benchmarking-scorer-prompts-hand-maintained)
-7. [Before you open a PR / MR](#before-you-open-a-pr--mr)
-8. [Invariants — what breaks silently](#invariants--what-breaks-silently)
-9. [Where the deeper docs live](#where-the-deeper-docs-live)
+4. [A worked example — re-scoring one question, end to end](#a-worked-example--re-scoring-one-question-end-to-end)
+5. [Reading the verdict you get back](#reading-the-verdict-you-get-back)
+6. [The contributor use-case matrix — what passes, what fails, why](#the-contributor-use-case-matrix--what-passes-what-fails-why)
+7. [Refreshing the golden baseline — two ways](#refreshing-the-golden-baseline--two-ways)
+8. [The benchmarking scorer prompts](#the-benchmarking-scorer-prompts-hand-maintained)
+9. [Before you open a PR / MR](#before-you-open-a-pr--mr)
+10. [Invariants — what breaks silently](#invariants--what-breaks-silently)
+11. [Where the deeper docs live](#where-the-deeper-docs-live)
 
 ---
 
@@ -207,6 +209,78 @@ wrong value. See [Invariant #2](#2-never-hardcode-a-threshold-band-or-severity-i
 
 ---
 
+## A worked example — re-scoring one question, end to end
+
+The playbook above is the map; here is one whole trip through it, the most common change there
+is: **re-scoring an existing question.** Nothing here is new — it just shows the pieces in order.
+
+Say you want AUTH-Q5 (credential management) to weigh missing rotation more heavily. Today its
+heading reads:
+
+```
+#### AUTH-Q5: Credential Management — RISK-SAFETY
+```
+
+1. **Edit the TD, and only the TD.** Open
+   `definitions/managed/agentic-readiness-analysis/references/02-question-bank.md`, find the
+   AUTH-Q5 block, and adjust its calibration prose (or, if you were changing the *band*, the
+   `— SEVERITY` suffix on that heading). You touch **no** Python, **no** count literal (the
+   question set didn't change), and **no** golden (re-scoring, per [§A](#a-re-score-a-question-severity--wording--criteria--scope--archetype--pathway)).
+2. **Run the offline suite** — the same one CI runs, no AWS, seconds:
+   ```bash
+   python3 -m pytest harness/tests/ -q
+   ```
+   Green means you didn't break the output contract. An edit like this *should* be green with
+   zero test changes; if a test went red, you changed more than you thought (e.g. a heading
+   format the parser depends on).
+3. **Open a `rubric-change` MR** using the template (it auto-loads on GitLab; on GitHub use the
+   PR template). Fill in **What / Why / Expected impact** concretely — e.g. *"tightened AUTH-Q5
+   so an unrotated static credential reads as RISK-SAFETY, not INFO; expect more AUTH RISK-SAFETY
+   findings on `legacy-shipping-api`, and a possible ARA tier drop there."* The judge scores the
+   observed delta **against this intent**, so vague intent → vague verdict.
+4. **Answer the template's one non-obvious question: "Was the rubric edited in the AWS Transform
+   service?"** For a repo edit like this the answer is **no** (the default) — see the box below
+   for why that question exists.
+5. **Read the advisory verdict** the pipeline posts as an MR comment (next section).
+
+> **In-repo vs in-service — why the template asks.** This repo is the *proposal and test* surface;
+> the live rubric runs inside the **AWS Transform service** (Continuous Modernization). The
+> harness fixtures always execute the **repo copy** of the TD. So if you edited the rubric
+> *in-service* instead of here, the fixtures run the unedited repo copy and the delta comes back
+> **empty** — which looks identical to "my edit didn't land." Checking **yes** tells the judge to
+> read an empty delta as *stale goldens*, not *a no-op edit*, and is the cue to fire
+> `harness:full` (web pipeline → **Run pipeline**) to regenerate the goldens from the in-service
+> rubric. For the normal path — you edited `SKILL.md`/`references/` in this repo — the answer is
+> **no**, and the fixtures pick your change up automatically.
+
+## Reading the verdict you get back
+
+The pipeline posts **one advisory comment** on your MR. It never blocks the merge — every harness
+job is `allow_failure: true`. Read it as a **second opinion**, not a gate. Three fields carry the
+signal:
+
+| Field | Values | What it means for you |
+|---|---|---|
+| `analysis_effect` | `improves` / `neutral` / `degrades` | The measured direction: is the assessment more accurate/safer (`improves`), materially unchanged (`neutral`, i.e. within noise — **not** a failure), or did it lose signal / understate risk (`degrades`)? |
+| `verdict` | `LGTM` / `needs-work` | `LGTM` = safe for the analysis and not a regression. `needs-work` = look again (a degrade, an unscored report the harness couldn't measure, or a quality/safety flag fired). |
+| `safety_hold` | `true` / `false` | An independent axis: a **tier-material safety signal moved** (a blocker/RISK-SAFETY relaxation that changes a readiness tier). When true you get `needs-work` regardless of intent — a human must sign off. |
+
+**When the verdict disagrees with your intent, that is the harness doing its job — not a bug to
+route around.** A change can be described perfectly and still degrade the analysis; the judge
+measures the *delta*, and reports your intent only as supporting evidence. Two common cases:
+
+- **`needs-work` + "within noise / unscored":** the delta was too small to measure, or a report
+  failed to score, so the change **can't be validated** — it's reported as a harness error to
+  fix, never as a silent pass. Re-run, or narrow the change so the effect is measurable.
+- **`safety_hold: true` on a change you meant to be safe:** you relaxed a safety signal without
+  saying so. Either it's wrong (restore the severity) or it's deliberate — in which case
+  **state it in the MR intent** ([Invariant #6](#6-dont-silently-relax-a-safety-signal)) so the
+  judge and a reviewer can weigh it on purpose. Never let a demotion ride in unremarked.
+
+The rationale cites specific `question_id`s / pathway ids / program acronyms, so it tells you
+*which* part of the delta drove the call. For the full calibration ladder see
+[`harness/DESIGN.md` §6](../../harness/DESIGN.md).
+
 ## The contributor use-case matrix — what passes, what fails, why
 
 The [change playbook](#the-change-playbook) above covers the three things *you* do (add / remove /
@@ -244,6 +318,31 @@ Two ideas do all the work in that table:
   the TD not transcribed), not specific finding text. The semantic question — "does this delta
   match what you said you were changing?" — is the LLM judge's job on the MR, not a brittle literal
   in a test. That's why re-scoring a question needs **zero** test edits.
+
+## Where the fixtures live (and adding one)
+
+The fixtures are the sample repositories every TD is exercised against. They live under
+[`harness/fixtures/`](../../harness/fixtures/) (`modern/`, `monolith/`, `portfolio/`) and are
+indexed by [`harness/usecases.yaml`](../../harness/usecases.yaml) — that file, not the directory,
+is the source of truth for what runs. Each entry pairs a fixture with its coverage **axes**
+(language, era, api, architecture, …) and per-TD **expectations** (the intent baseline the judge
+scores the delta against — *not* an asserted equality):
+
+```yaml
+- id: legacy-crm-desktop
+  path: harness/fixtures/portfolio/legacy-crm-desktop
+  axes: { language: vb6, era: legacy, has_api: none, architecture: desktop, auth_present: false }
+  expectations:
+    ara: { tier: Not Agent-Integrable, must_have_categories: [AUTH, API, DISC] }
+    mod: { tier: Not Ready, pathways_triggered: [move-to-cloud-native], overall_score_band: Not Ready }
+```
+
+**To add a fixture:** drop the repo under one of the `harness/fixtures/` trees, add its entry to
+`usecases.yaml` (path + axes + expectations), and **generate its golden** — a new fixture has no
+baseline, so coverage fails until one exists ([refresh the golden](#refreshing-the-golden-baseline--two-ways)).
+Pick axes that fill a **gap** the coverage heatmap flags (`harness/coverage-heatmap.py`); a fixture
+that only duplicates axes already covered adds runtime without adding signal. The axis vocab is
+**closed** — add a value to the `axes:` block only alongside a fixture that uses it.
 
 ## Refreshing the golden baseline — two ways
 

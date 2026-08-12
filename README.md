@@ -194,8 +194,8 @@ python3 -m pytest harness/tests/ -q
 Don't rely on the MR validator as your first check — it's the *last* step. For how to refresh the
 golden (locally, or hands-off via CI on your own branch) see
 [the golden-baseline section](docs/contributing/README.md#refreshing-the-golden-baseline--two-ways).
-For repo-level PR mechanics see [CONTRIBUTING.md](CONTRIBUTING.md). Use the GitHub issue templates
-to report bugs or suggest enhancements.
+For repo-level PR mechanics see [CONTRIBUTING.md](CONTRIBUTING.md). To report a bug or suggest an
+enhancement, use the issue templates — on GitHub (`aws-samples`) or the internal GitLab mirror.
 
 ## Security
 
