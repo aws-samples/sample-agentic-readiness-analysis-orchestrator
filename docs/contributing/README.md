@@ -422,6 +422,15 @@ regenerate the golden for you and open a refresh MR **into your own branch**:
 > exists. Sending the refresh back to the contributor's branch closes that loop without a
 > maintainer in the middle. (Wired in `.gitlab-ci.yml`, `harness:rebaseline-gather`.)
 
+> **The refresh MR *does* carry a whole-picture digest** — posted as a note by the rebaseline job
+> itself, not by a harness run on the MR. It renders a go/no-go headline (overall mean groundedness
+> vs the 0.80 floor: a healthy mean is merge-safe even with a below-floor outlier), the accuracy
+> table (`was → now → Δ` per fixture), and any **potential issues to review** — reports below the
+> floor and deterministic-check failures (count/tier reconciliation, severity undercounts) — framed
+> as candidate TD issues, not merge blockers. It's a read-only join of `rebaseline-compare.json` +
+> `rebaseline-results.json` (both job artifacts). See [`harness/rebaseline-digest.py`](../../harness/rebaseline-digest.py).
+> This is distinct from the change-impact judge, which still does not run on a golden-only MR.
+
 Either way the golden is *measured*, never authored — see
 [Invariant #4](#4-never-edit-generated-files-by-hand).
 

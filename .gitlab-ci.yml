@@ -798,9 +798,26 @@ harness:rebaseline-gather:
       RATCHET="--ratchet"
       [ "$REBASELINE_RESET" = "true" ] && RATCHET="" && echo "RESET mode: ratchet DISABLED (human-reviewed reset)."
       set +e
-      harness/score-reports.py --trees harness/golden --update-baseline $RATCHET --compare-out rebaseline-compare.json
+      # -o writes the FULL per-report results (LLM rationale + the deterministic offline
+      # checks); --compare-out writes the score deltas. The digest below joins the two. Both
+      # are written on the clean AND the ratchet-refused (rc=3) path, so the digest renders
+      # either way.
+      harness/score-reports.py --trees harness/golden --update-baseline $RATCHET \
+        --compare-out rebaseline-compare.json -o rebaseline-results.json
       RC=$?
       set -e
+      # Render the whole-picture digest NOW, while both JSONs exist — a refused ratchet exits
+      # just below before any later step runs, and that is exactly the case a reviewer most
+      # needs the synthesis for. Guarded on the compare file (a hard crash may write neither).
+      # Advisory: a render failure must not fail the re-baseline.
+      if [ -f rebaseline-compare.json ]; then
+        python3 harness/rebaseline-digest.py --compare rebaseline-compare.json \
+          --results rebaseline-results.json --out rebaseline-digest.md \
+          --reset "$REBASELINE_RESET" --partial "$(cat .rebaseline-partial 2>/dev/null || true)" \
+          || echo "WARN: digest render failed (non-fatal)." >&2
+        echo "----- re-baseline digest -----"; cat rebaseline-digest.md 2>/dev/null || true
+        echo "------------------------------"
+      fi
       if [ "$RC" = "3" ]; then
         echo "✗ RATCHET refused: the fresh sweep is worse than the committed baseline (see above)." >&2
         echo "  The baseline was NOT changed. A merged change may have degraded the analysis." >&2
@@ -846,10 +863,29 @@ harness:rebaseline-gather:
                -o merge_request.title="chore(harness): re-baseline $(date +%Y-%m-%d) → ${TARGET}${PARTIAL}" \
                -o merge_request.remove_source_branch
       echo "pushed $BR and opened an MR to ${TARGET}."
+      # Post the whole-picture digest as a note on the MR just opened. `-o merge_request.create`
+      # does not return the IID, so look it up by source branch. Advisory: a failed lookup/POST
+      # must never fail the re-baseline — the digest is also attached as a job artifact.
+      if [ -f rebaseline-digest.md ]; then
+        IID="$(curl -sS --max-time 30 --header "PRIVATE-TOKEN: ${HARNESS_MR_TOKEN}" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests?source_branch=${BR}&state=opened" \
+          | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["iid"] if d else "")' 2>/dev/null || true)"
+        if [ -n "$IID" ]; then
+          curl -sS --max-time 30 --header "PRIVATE-TOKEN: ${HARNESS_MR_TOKEN}" \
+            --data-urlencode "body@rebaseline-digest.md" \
+            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${IID}/notes" >/dev/null \
+            && echo "posted the whole-picture digest to MR !${IID}." \
+            || echo "WARN: could not post the digest note to MR !${IID} (MR still opened; digest is an artifact)." >&2
+        else
+          echo "WARN: could not resolve the MR IID for ${BR} — digest not posted (see the job artifact)." >&2
+        fi
+      fi
   artifacts:
     when: always
     paths:
       - rebaseline-compare.json          # score deltas vs the outgoing baseline
+      - rebaseline-results.json          # full per-report results (rationale + failed checks)
+      - rebaseline-digest.md             # the whole-picture reviewer digest (also posted to the MR)
       - harness/golden/                  # the refreshed report trees (for hand-review)
       - harness/golden-accuracy-baseline.json
       - harness/after/_logs/

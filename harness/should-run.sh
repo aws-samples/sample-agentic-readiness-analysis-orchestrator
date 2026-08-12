@@ -124,6 +124,13 @@ is_denylisted() {
     # commit touches only the prompt .md (already caught above) and this lock. The scorer
     # prompt .md is itself covered by the *.md arm.
     harness/rubric/*-scorer-facts.lock.json) return 0 ;;
+    # The rebaseline DIGEST renderer (harness/rebaseline-digest.py). It is a render-only
+    # consumer of JSON the gather job already produced (rebaseline-compare.json +
+    # rebaseline-results.json) and runs ONLY in the rebaseline gather/post path — never in the
+    # analyze path — so it provably cannot move analysis output. Denylisting it keeps a
+    # digest-only edit from triggering the ~2h atx sweep; its own correctness is covered by
+    # harness/tests/test_rebaseline_digest.py in harness:contract-tests.
+    harness/rebaseline-digest.py) return 0 ;;
     .github/*)                return 0 ;;   # GitHub templates run nothing here
     .gitignore|.gitattributes|.editorconfig) return 0 ;;
     *.png|*.jpg|*.jpeg|*.gif|*.svg|*.ico|*.pdf) return 0 ;;
