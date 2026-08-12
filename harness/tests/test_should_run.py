@@ -124,5 +124,25 @@ def test_docs_only_change_skips(repo):
     assert _decide(repo, {"README.md": "base\nmore\n"}) is False
 
 
+def test_scorer_sync_bot_commit_skips(repo):
+    """The harness:scorer-sync bot's auto-commit touches ONLY the external Optimus scorer
+    prompt (.md, caught by the docs arm) and its facts-lock (.json). Neither feeds the
+    in-repo grader, so this must SKIP — otherwise every auto-sync would re-trigger a full,
+    hours-long atx sweep on a change that provably cannot move analysis output."""
+    assert _decide(repo, {
+        "harness/rubric/ara-scorer-prompt.md": "regenerated\n",
+        "harness/rubric/ara-scorer-facts.lock.json": '{"n": 1}\n',
+    }) is False
+
+
+def test_scorer_lock_riding_with_td_change_runs(repo):
+    """The lock is only inert on its OWN. A lock change accompanying a real TD edit still
+    RUNS — the TD edit is the thing to evaluate, and both land together on the branch."""
+    assert _decide(repo, {
+        "harness/rubric/ara-scorer-facts.lock.json": '{"n": 2}\n',
+        "definitions/managed/agentic-readiness-analysis/SKILL.md": "td1\n",
+    }) is True
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

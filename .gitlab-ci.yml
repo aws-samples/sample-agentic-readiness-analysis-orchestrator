@@ -855,3 +855,118 @@ harness:rebaseline-gather:
       - harness/after/_logs/
     expire_in: 30 days
   allow_failure: true   # a refused ratchet (exit 3) must SURFACE, not block other work
+
+# -----------------------------------------------------------------------------
+# harness:scorer-sync   (auto on any MR that touches the TD or the sync sources)
+# Regenerate the EXTERNAL Optimus scorer prompts from the TD and COMMIT THEM BACK
+# to the MR branch, so a contributor who edits a severity/count/tier never has to
+# remember to run `scorer-prompt-sync.py --write` by hand.
+#
+# WHY A COMMIT-BACK AND NOT JUST A RED GATE
+# harness:contract-tests already runs test_committed_prompts_are_in_sync_with_the_td
+# on every MR — that is the drift *detector*. It fails red when the TD moved but the
+# prompt didn't, telling the contributor to run --write. This job is the *fixer*: it
+# runs --write for them and pushes the result onto their branch, turning that red into
+# a green with no manual step (offline, seconds — pure TD parse + render).
+#
+# THE ONE THING THIS MUST NOT DO is silently swallow the "re-publish to Optimus" signal.
+# Regenerating the in-repo .md is only half the job — the Optimus platform serves a COPY
+# of that prompt, and nothing here can push to it. So when this job commits a change it
+# shouts (job log + a persistent MR note + the commit message) that a human MUST re-publish
+# the regenerated prompt to Optimus. The committed file is the record; the note is the nag.
+#
+# LOOP SAFETY: the bot's commit touches only harness/rubric/*-scorer-prompt.md and
+# *-scorer-facts.lock.json. Neither is in this job's `changes:` trigger (which watches the
+# TD + the derivation sources), so the auto-commit does NOT re-run this job. It also cannot
+# re-trigger the expensive harness:impact sweep — should-run.sh denylists both paths.
+# -----------------------------------------------------------------------------
+harness:scorer-sync:
+  stage: test
+  rules:
+    # Only when something that FEEDS derive_facts changed: the two managed TDs (SKILL.md +
+    # references/) or the derivation code itself. Deliberately excludes the generated
+    # prompt .md and the lock .json, so the bot's own commit-back never re-triggers this job.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - definitions/managed/agentic-readiness-analysis/**/*
+        - definitions/managed/modernization-readiness-analysis/**/*
+        - harness/skill_table.py
+        - harness/score-reports.py
+        - harness/scorer-prompt-sync.py
+  before_script:
+    # Offline: no atx, no Node, no AWS vend. git (to commit + push back) + curl (to post the
+    # re-publish MR note) + the harness Python deps (skill_table parses the TD with PyYAML).
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git curl ca-certificates
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+    - git config user.email "harness-bot@noreply.aws.dev"
+    - git config user.name "harness scorer-sync bot"
+  script:
+    # A fork MR runs in the fork's project, and HARNESS_MR_TOKEN cannot push to a fork
+    # branch. There is nothing to commit back to, so leave the (already-red) contract-test
+    # as the fork contributor's signal to run --write themselves, and exit cleanly.
+    - |
+      if [ -n "${CI_MERGE_REQUEST_SOURCE_PROJECT_ID:-}" ] \
+         && [ "${CI_MERGE_REQUEST_SOURCE_PROJECT_ID}" != "${CI_PROJECT_ID}" ]; then
+        echo "fork MR (source project ${CI_MERGE_REQUEST_SOURCE_PROJECT_ID} != ${CI_PROJECT_ID}) —" >&2
+        echo "cannot push a commit back to a fork branch. Run 'python3 harness/scorer-prompt-sync.py" >&2
+        echo "--write' locally, commit, and re-publish the prompt to Optimus." >&2
+        exit 0
+      fi
+    # Work on the SOURCE-branch tip, not the detached merge-result HEAD, so what we regenerate
+    # and push is exactly the contributor's branch content (no target-branch bleed-in).
+    - |
+      SRC="${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-$CI_COMMIT_REF_NAME}"
+      git fetch --quiet origin "$SRC"
+      git checkout -B "$SRC" "origin/$SRC"
+    # Regenerate the GEN blocks + rewrite the facts-lock from the live TD.
+    - python3 harness/scorer-prompt-sync.py --write
+    # Commit back ONLY if --write actually changed something. If the contributor already ran
+    # --write (or the TD edit didn't touch a baked-in fact), there is nothing to do — same
+    # "reproduced byte-for-byte, nothing to propose" guard the rebaseline job uses.
+    - |
+      RUBRIC="harness/rubric/ara-scorer-prompt.md harness/rubric/mod-scorer-prompt.md \
+              harness/rubric/ara-scorer-facts.lock.json harness/rubric/mod-scorer-facts.lock.json"
+      if git diff --quiet -- $RUBRIC; then
+        echo "scorer prompts already in sync with the TD — nothing to commit."
+        exit 0
+      fi
+      echo "=============================================================================="
+      echo "TD drift regenerated the EXTERNAL Optimus scorer prompt(s):"
+      git --no-pager diff --stat -- $RUBRIC
+      echo "=============================================================================="
+      if [ -z "${HARNESS_MR_TOKEN:-}" ]; then
+        echo "✗ no HARNESS_MR_TOKEN — cannot push the regenerated prompt back to the branch." >&2
+        echo "  Run 'python3 harness/scorer-prompt-sync.py --write', commit, and re-publish to" >&2
+        echo "  Optimus by hand. (Settings -> CI/CD -> Variables: a Project Access Token with" >&2
+        echo "  'api' scope, Reporter or above, Masked ok, Protected OFF.)" >&2
+        exit 1
+      fi
+      SRC="${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-$CI_COMMIT_REF_NAME}"
+      git add $RUBRIC
+      git commit -m "chore(harness): auto-sync Optimus scorer prompt to the TD" \
+        -m "Regenerated by harness:scorer-sync (pipeline ${CI_PIPELINE_ID}) because this MR moved a TD fact the external scorer bakes in. ACTION REQUIRED: the Optimus platform serves a COPY of this prompt — re-publish the regenerated harness/rubric/*-scorer-prompt.md there, or the benchmark scorer stays stale."
+      git push "https://oauth2:${HARNESS_MR_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
+               "HEAD:${SRC}"
+      echo "pushed the regenerated scorer prompt onto ${SRC}."
+    # LOUD, PERSISTENT nag: the commit fixed the in-repo copy, but a human still has to
+    # re-publish to Optimus. An MR note survives after the job log scrolls away. Advisory —
+    # a failed POST must not fail the job (the commit is already the durable record).
+    - |
+      if [ -n "${CI_MERGE_REQUEST_IID:-}" ] && [ -n "${HARNESS_MR_TOKEN:-}" ]; then
+        # printf keeps every source line indented (so the YAML block scalar stays intact)
+        # while emitting real newlines, so the rendered markdown has no stray code-block
+        # indentation. Blank "" args are the paragraph breaks.
+        BODY="$(printf '%s\n' \
+          "⚠️ **Scorer prompt auto-synced to the TD — action required.**" \
+          "" \
+          "This MR moved a TD fact that the **external Optimus scorer prompt** bakes in, so \`harness:scorer-sync\` regenerated \`harness/rubric/*-scorer-prompt.md\` (+ the facts-lock) and committed it to this branch." \
+          "" \
+          "**The in-repo copy is now correct, but the Optimus platform still serves the OLD prompt.** Before/after merge, re-publish the regenerated prompt to Optimus, or the benchmark scorer keeps grading against stale rubric facts. This note is the only signal that a re-publish is owed — it is not automated.")"
+        curl -sS --max-time 30 \
+          --header "PRIVATE-TOKEN: ${HARNESS_MR_TOKEN}" \
+          --data-urlencode "body=${BODY}" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" \
+          >/dev/null && echo "posted the re-publish reminder to MR !${CI_MERGE_REQUEST_IID}." \
+          || echo "WARN: could not post the re-publish MR note (the commit still landed)." >&2
+      fi
+  allow_failure: true   # advisory — mirrors the rest of the harness; never blocks a merge

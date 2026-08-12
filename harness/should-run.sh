@@ -117,6 +117,13 @@ is_denylisted() {
   case "${p}" in
     LICENSE|LICENSE.*|NOTICE) return 0 ;;
     *.md)                     return 0 ;;   # docs, incl. DESIGN.md / READMEs
+    # The EXTERNAL Optimus scorer facts-lock (harness/rubric/*-scorer-facts.lock.json).
+    # It is an input to the OFFLINE Optimus prompt, never to the in-repo grader, so it
+    # provably cannot move analysis output. Denylisting it is what keeps the scorer-sync
+    # bot's auto-commit (see harness:scorer-sync) from re-triggering a full atx sweep — the
+    # commit touches only the prompt .md (already caught above) and this lock. The scorer
+    # prompt .md is itself covered by the *.md arm.
+    harness/rubric/*-scorer-facts.lock.json) return 0 ;;
     .github/*)                return 0 ;;   # GitHub templates run nothing here
     .gitignore|.gitattributes|.editorconfig) return 0 ;;
     *.png|*.jpg|*.jpeg|*.gif|*.svg|*.ico|*.pdf) return 0 ;;
