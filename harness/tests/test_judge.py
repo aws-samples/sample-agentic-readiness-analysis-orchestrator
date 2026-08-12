@@ -254,7 +254,8 @@ def test_prompt_carries_the_program_scope_when_programs_changed():
         {"what": "retire MAP"},
         judge.summarize_impact(_impact_with_reseverity()), "",
         edited_questions=[], compare=None, changed_programs=["MAP"])
-    assert "programs whose library entry the MR edited: MAP" in prompt
+    assert "programs whose library entry the MR edited" in prompt
+    assert "  - MAP\n" in prompt
 
 
 def test_prompt_omits_the_program_scope_by_default():
@@ -262,6 +263,103 @@ def test_prompt_omits_the_program_scope_by_default():
     prompt = judge.build_user_prompt(
         {"what": "x"}, judge.summarize_impact(_impact_with_reseverity()), "")
     assert "Program scope" not in prompt
+
+
+# --- whole-token program matching: MAP is NOT MAP AI ---------------------------------
+# The catalog carries a shared-prefix family: "MAP (Migration Acceleration Program)" and
+# "MAP for AI Modernization" (which a report abbreviates "MAP AI"). Editing one must never
+# be credited with moving the other. The note must (a) instruct whole-token matching and
+# (b) pre-classify the programs that actually moved, naming shared-prefix siblings.
+
+def test_program_scope_note_instructs_whole_token_matching():
+    low = judge._program_scope_note(["MAP"]).lower()
+    assert "whole token" in low
+    # The shared-prefix family is called out by name so the judge can't prefix-conflate.
+    assert "map ai" in low
+    assert "exactly" in low
+
+
+def test_leading_acronym_extracts_short_caps_tokens_only():
+    assert judge._leading_acronym("MAP for AI Modernization") == "MAP"
+    assert judge._leading_acronym("MAP (Migration Acceleration Program)") == "MAP"
+    assert judge._leading_acronym("AWS Modernization Assurance") == "AWS"
+    assert judge._leading_acronym("Migration Evaluator") == ""
+
+
+def test_collision_roots_are_standalone_acronyms_not_leading_words():
+    # A bare acronym IS a root; a multi-word label is NOT, so editing "AWS Modernization
+    # Assurance (AMA)" must not turn every "AWS ..." program into a flagged sibling.
+    assert judge._collision_roots(["MAP"]) == {"MAP"}
+    assert judge._collision_roots(
+        ["MAP", "MAP (Migration Acceleration Program)"]) == {"MAP"}
+    assert judge._collision_roots(["AWS Modernization Assurance (AMA)"]) == set()
+
+
+def test_classify_program_move_matches_whole_token_never_prefix():
+    edited_norm = {"map", "map (migration acceleration program)"}
+    roots = {"MAP"}
+    # Exact whole-token match -> in scope.
+    assert judge._classify_program_move("MAP", edited_norm, roots) == "in_scope"
+    # Shares the "MAP" root but is a different program -> sibling, NOT in scope.
+    assert judge._classify_program_move("MAP AI", edited_norm, roots) == "prefix_sibling"
+    # Unrelated program -> out of scope.
+    assert judge._classify_program_move("EBA", edited_norm, roots) == "out_of_scope"
+
+
+def test_shared_leading_word_is_not_a_sibling_when_no_bare_acronym_edited():
+    # Editing "AWS Modernization Assurance (AMA)" (roots derive only "AMA", not "AWS")
+    # must NOT flag a moved "AWS OLA" as a sibling — they merely share the word "AWS".
+    note = judge._program_scope_note(
+        ["AWS Modernization Assurance (AMA)", "AMA"], moved_programs=["AWS OLA"])
+    assert "share an acronym prefix" not in note.lower()
+
+
+def test_program_scope_note_flags_a_moved_prefix_sibling_as_out_of_scope():
+    # An edit to MAP that coincides with a "MAP AI" move must tell the judge, in computed
+    # terms, that MAP AI is a DIFFERENT program and its movement is not this edit's effect.
+    note = judge._program_scope_note(["MAP"], moved_programs=["MAP AI", "EBA"])
+    low = note.lower()
+    assert "share an acronym prefix" in low
+    assert "not the edited program" in low
+    # The computed caution names the sibling (MAP AI) but not the unrelated move (EBA).
+    sibling_line = [ln for ln in note.splitlines() if "delta moved" in ln][0]
+    assert "MAP AI" in sibling_line
+    assert "EBA" not in sibling_line
+
+
+def test_program_scope_note_does_not_invent_a_sibling_note_without_a_collision():
+    # A clean in-scope move (MAP edited, MAP moved) must not grow the sibling caution.
+    note = judge._program_scope_note(["MAP"], moved_programs=["MAP"])
+    assert "share an acronym prefix" not in note.lower()
+
+
+def test_moved_programs_are_collected_from_the_d4_delta():
+    impact = {
+        "no_op": False, "changed_tds": ["portfolio-agentic-readiness-analysis"],
+        "per_repo": {},
+        "portfolio": {"ara": {"D4_programs": {"added": ["MAP AI"], "removed": ["MAP"]}}},
+        "coverage": {"compared": 0, "baseline_total": 0, "partial": False,
+                     "not_analyzed": [], "unbaselined": []},
+    }
+    summary = judge.summarize_impact(impact)
+    assert set(summary["moved_programs"]) == {"MAP", "MAP AI"}
+
+
+def test_prompt_end_to_end_disambiguates_map_from_map_ai():
+    # The full path: a MAP library edit whose portfolio rollup moved MAP AI must reach the
+    # judge with MAP AI explicitly labelled a non-edited, shared-prefix program.
+    impact = {
+        "no_op": False, "changed_tds": ["portfolio-agentic-readiness-analysis"],
+        "per_repo": {},
+        "portfolio": {"ara": {"D4_programs": {"added": ["MAP AI"], "removed": []}}},
+        "coverage": {"compared": 12, "baseline_total": 12, "partial": False,
+                     "not_analyzed": [], "unbaselined": []},
+    }
+    prompt = judge.build_user_prompt(
+        {"what": "retire MAP"}, judge.summarize_impact(impact), "",
+        edited_questions=[], compare=None, changed_programs=["MAP"])
+    assert "MAP AI" in prompt
+    assert "share an acronym prefix" in prompt.lower()
 
 
 def test_prompt_carries_scope_and_reseverity_together():

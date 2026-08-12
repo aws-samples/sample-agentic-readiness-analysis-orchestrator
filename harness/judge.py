@@ -214,6 +214,19 @@ def summarize_impact(impact: dict) -> dict:
             _note_dimension(key, d, f"portfolio-{analysis}", moved, summary["highlights"])
 
     summary["dimensions_moved"] = sorted(moved)
+
+    # D4 program identifiers that actually moved (added or removed) across every scope. The
+    # program-scope note uses this to tell an EXACT in-scope program move apart from a
+    # shared-prefix sibling: an edit to "MAP" must never be credited with moving "MAP AI".
+    program_moves: set[str] = set()
+    scoped = list((impact.get("portfolio") or {}).values()) \
+        + list((impact.get("per_repo") or {}).values())
+    for entry in scoped:
+        for key, d in entry.items():
+            if _dim_of(key) == "D4" and isinstance(d, dict):
+                program_moves.update(d.get("added") or [])
+                program_moves.update(d.get("removed") or [])
+    summary["moved_programs"] = sorted(program_moves)
     return summary
 
 
@@ -562,7 +575,41 @@ def _scope_note(edited_questions: list[str]) -> str:
     )
 
 
-def _program_scope_note(changed_programs: list[str]) -> str:
+def _norm_program(s: str) -> str:
+    """Casefolded, whitespace-collapsed program identifier for whole-token comparison."""
+    return " ".join(str(s).split()).casefold()
+
+
+def _leading_acronym(s: str) -> str:
+    """The leading whitespace token if it is acronym-ish (short, all-caps, has a letter),
+    else ''. This is the shared root behind a family like 'MAP' / 'MAP AI'."""
+    parts = str(s).split()
+    head = parts[0] if parts else ""
+    return head if (0 < len(head) <= 8 and head == head.upper()
+                    and any(c.isalpha() for c in head)) else ""
+
+
+def _collision_roots(changed_programs: list[str]) -> set[str]:
+    """Edited tokens that are THEMSELVES a standalone acronym (e.g. 'MAP') — the only tokens
+    that can legitimately prefix a sibling. A multi-word label like 'AWS Modernization
+    Assurance' is NOT a root, or every 'AWS ...' program would be flagged a sibling of every
+    other. select-fixtures never emits a bare 'AWS', so a real root is always a true acronym."""
+    return {p.strip() for p in changed_programs if _leading_acronym(p) == p.strip()}
+
+
+def _classify_program_move(moved: str, edited_norm: set[str], roots: set[str]) -> str:
+    """'in_scope' iff the moved program identifier equals an edited one as a WHOLE token
+    (never by prefix); 'prefix_sibling' iff it only shares an acronym root with an edited
+    entry (a DIFFERENT program — e.g. 'MAP AI' when 'MAP' was edited); else 'out_of_scope'."""
+    if _norm_program(moved) in edited_norm:
+        return "in_scope"
+    if roots and _leading_acronym(moved) in roots:
+        return "prefix_sibling"
+    return "out_of_scope"
+
+
+def _program_scope_note(changed_programs: list[str],
+                        moved_programs: Optional[list[str]] = None) -> str:
     """Tell the judge which programs' library entries the MR edited — the D4 analogue of
     _scope_note. Only non-empty on a portfolio-TD MR that touched program-library.md.
 
@@ -572,16 +619,38 @@ def _program_scope_note(changed_programs: list[str]) -> str:
     exception the harness engineers around: run-fixtures.sh backfills the golden per-repo
     reports so the rollup spans the FULL app set, making the D4 delta a real comparison. This
     note flips the judge from "ignore program churn" to "score program churn as the signal".
+
+    WHOLE-TOKEN MATCHING: programs are matched by whole-token equality, never by prefix. The
+    catalog carries families that share a leading acronym — "MAP (Migration Acceleration
+    Program)" and "MAP for AI Modernization" (which a report may abbreviate "MAP AI"). An
+    edit to one must not be credited with moving the other, so we (a) instruct the judge in
+    those terms and (b) pre-classify the programs that actually moved, naming any that merely
+    share a prefix with an edited entry as OUT of scope.
     """
     if not changed_programs:
         return ""
-    return (
+    edited_norm = {_norm_program(p) for p in changed_programs}
+    roots = _collision_roots(changed_programs)
+    edited_lines = "".join(f"  - {p}\n" for p in changed_programs)
+
+    siblings = sorted({
+        m for m in (moved_programs or [])
+        if _classify_program_move(m, edited_norm, roots) == "prefix_sibling"
+    })
+
+    note = (
         "\n## Program scope (from the program-library.md diff — authoritative)\n"
-        f"programs whose library entry the MR edited: {', '.join(changed_programs)}\n"
+        "programs whose library entry the MR edited (match these as WHOLE tokens):\n"
+        + edited_lines +
         "The program library is the catalog the PORTFOLIO recommendation step draws from. A\n"
         "program-library edit can move ONLY which programs the portfolio recommends and the\n"
         "`trigger_reason` it cites — it cannot change any per-repo report.\n"
         "IMPORTANT — how to score this:\n"
+        "  * Match program identifiers as WHOLE tokens, NOT by prefix. A shared leading word\n"
+        "    is NOT a match: 'MAP' ≠ 'MAP AI' ≠ 'MAP-AI' — 'MAP' (Migration Acceleration\n"
+        "    Program) and 'MAP for AI Modernization' are DIFFERENT programs. Score a\n"
+        "    program's movement as in-scope ONLY if its identifier EXACTLY equals one of the\n"
+        "    edited identifiers above.\n"
         "  * This run rolled the portfolio up over the FULL baseline app set (the harness\n"
         "    backfills the golden per-repo reports), so the D4 program delta is a real,\n"
         "    apples-to-apples comparison — NOT the mechanical scoped-subset artifact the\n"
@@ -594,6 +663,14 @@ def _program_scope_note(changed_programs: list[str]) -> str:
         "  * Program churn on entries NOT listed above is out of edit scope — treat it as\n"
         "    portfolio run-to-run variance, not a regression.\n"
     )
+    if siblings:
+        note += (
+            "  * NOTE (computed by the differ): the delta moved "
+            f"{', '.join(siblings)}, which share an acronym prefix with an edited entry but\n"
+            "    are NOT the edited program. Do NOT attribute their movement to this edit or\n"
+            "    ground a verdict in it.\n"
+        )
+    return note
 
 
 def _alerts_note(impact_summary: dict) -> str:
@@ -737,7 +814,7 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
         f"Expected impact: {intent.get('expected_impact') or '(none stated)'}\n"
         f"Rubric edited directly in the AWS Transform service: {intent.get('edited_in_service')}\n"
         + _scope_note(edited_questions or [])
-        + _program_scope_note(changed_programs or [])
+        + _program_scope_note(changed_programs or [], impact_summary.get("moved_programs"))
         + "\n## Observed delta (from the deterministic differ)\n"
         f"no_op: {impact_summary['no_op']}\n"
         f"changed_tds: {impact_summary['changed_tds']}\n"
