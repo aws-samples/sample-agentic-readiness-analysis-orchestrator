@@ -144,5 +144,13 @@ def test_scorer_lock_riding_with_td_change_runs(repo):
     }) is True
 
 
+def test_rebaseline_digest_only_change_skips(repo):
+    """The digest renderer is a render-only consumer of JSON the gather job already produced,
+    and runs only in the rebaseline gather/post path — never in the analyze path — so it
+    cannot move analysis output. A digest-only edit must SKIP the atx sweep; its correctness
+    is covered by harness/tests/test_rebaseline_digest.py, not the sweep."""
+    assert _decide(repo, {"harness/rebaseline-digest.py": "print('x')\n"}) is False
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
