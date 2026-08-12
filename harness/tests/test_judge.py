@@ -222,6 +222,48 @@ def test_scope_note_with_no_questions_explains_the_differ_ignores_evidence():
     assert "near-empty delta" in low or "empty delta" in low
 
 
+# --- program-scope signal (portfolio-TD program-library edits) -----------------------
+# A program-library.md edit can move only the portfolio's program recommendation. On such
+# an MR run-fixtures.sh backfills the rollup to the full app set, so the D4 program delta is
+# real — and the judge must be told to score it as signal, the D4 analogue of _scope_note.
+
+def test_program_scope_note_names_the_edited_programs():
+    note = judge._program_scope_note(["MAP", "EBA"])
+    assert "MAP" in note and "EBA" in note
+    low = note.lower()
+    assert "trigger_reason" in low
+    assert "grounded" in low
+
+
+def test_program_scope_note_flips_the_judge_from_ignore_to_score():
+    # It must explicitly override the coverage note's "ignore program churn" instruction by
+    # telling the judge THIS rollup spans the full app set, so the delta is signal.
+    low = judge._program_scope_note(["MAP"]).lower()
+    assert "full" in low and "signal" in low
+    # And out-of-scope program churn is still noise.
+    assert "run-to-run" in low or "variance" in low
+
+
+def test_program_scope_note_is_empty_without_changed_programs():
+    # No program edit => no note (a rubric-only or prose MR must not grow a program section).
+    assert judge._program_scope_note([]) == ""
+
+
+def test_prompt_carries_the_program_scope_when_programs_changed():
+    prompt = judge.build_user_prompt(
+        {"what": "retire MAP"},
+        judge.summarize_impact(_impact_with_reseverity()), "",
+        edited_questions=[], compare=None, changed_programs=["MAP"])
+    assert "programs whose library entry the MR edited: MAP" in prompt
+
+
+def test_prompt_omits_the_program_scope_by_default():
+    # Back-compat: the new arg is optional and absent on a normal rubric MR.
+    prompt = judge.build_user_prompt(
+        {"what": "x"}, judge.summarize_impact(_impact_with_reseverity()), "")
+    assert "Program scope" not in prompt
+
+
 def test_prompt_carries_scope_and_reseverity_together():
     impact = _impact_with_reseverity()
     prompt = judge.build_user_prompt(

@@ -225,6 +225,85 @@ def test_question_re_ignores_non_question_tokens():
     assert cats == {"API"}
 
 
+# --- program-library parsing (portfolio-TD scope signal) ------------------------------
+
+def test_program_tokens_derives_the_acronym_a_report_uses():
+    # Leading acronym.
+    assert "MAP" in sf._program_tokens("MAP (Migration Acceleration Program)")
+    assert "AI DLC" in sf._program_tokens("AI DLC (AI Driven Development Lifecycle)")
+    # Trailing parenthetical acronym.
+    assert "AMA" in sf._program_tokens("AWS Modernization Assurance (AMA)")
+    # Full label is always present so the judge can match by name too.
+    assert "Migration Evaluator" in sf._program_tokens("Migration Evaluator")
+
+
+def test_program_tokens_does_not_emit_prose_words_as_acronyms():
+    # "AWS Modernization Assurance" must not leak "AWS" as a standalone program id.
+    assert sf._program_tokens("AWS Modernization Assurance (AMA)") == {
+        "AWS Modernization Assurance (AMA)", "AMA"}
+    # A plain descriptive name derives nothing beyond itself.
+    assert sf._program_tokens("Well-Architected Review") == {"Well-Architected Review"}
+
+
+def test_program_names_reads_a_tagged_heading():
+    line = "### MAP (Migration Acceleration Program) `[ARA+MOD]` `Active`"
+    names = sf._program_names(line)
+    assert "MAP" in names
+    assert "MAP (Migration Acceleration Program)" in names
+
+
+def test_program_names_ignores_section_headers_without_a_tag():
+    # "### Status Key" / "### Workload-Specific Programs" are structure, not programs.
+    assert sf._program_names("### Status Key") == set()
+    assert sf._program_names("### Workload-Specific Programs") == set()
+
+
+def test_program_names_reads_a_tagged_index_row_but_not_the_header_or_mapping_table():
+    row = "| SAP on AWS | `[MOD]` | Active | SAP workloads detected | Funded SAP migration |"
+    assert "SAP on AWS" in sf._program_names(row)
+    # The column header row is not a program.
+    assert sf._program_names("| Program | Tag | Status | When to Surface | What Customer Gets |") == set()
+    # The pathway->workshop mapping table has no `[TAG]` cell, so it is never a program.
+    assert sf._program_names(
+        "| `Move to Managed Databases` + Oracle | MMA Workshop (Oracle track) | https://x |") == set()
+
+
+def test_acronymish_accepts_short_caps_rejects_prose():
+    assert sf._acronymish("MAP") and sf._acronymish("AI DLC") and sf._acronymish("AMA")
+    assert not sf._acronymish("Migration Evaluator")
+    assert not sf._acronymish("AWS Modernization Assurance")
+    assert not sf._acronymish("")
+
+
+def test_changed_programs_reads_the_real_diff(tmp_path):
+    # End-to-end over a throwaway git repo: edit a program heading and confirm the tool
+    # reports that program (and only it) as the changed scope.
+    import subprocess as sp
+    repo = tmp_path / "repo"
+    lib = repo / "definitions" / "managed" / "portfolio-agentic-readiness-analysis" / "references"
+    lib.mkdir(parents=True)
+    f = lib / "program-library.md"
+    base = ("### MAP (Migration Acceleration Program) `[ARA+MOD]` `Active`\n"
+            "Some prose about MAP.\n")
+    f.write_text(base)
+    env = {**__import__("os").environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    sp.run(["git", "init", "-q"], cwd=repo, check=True, env=env)
+    sp.run(["git", "add", "-A"], cwd=repo, check=True, env=env)
+    sp.run(["git", "commit", "-qm", "base"], cwd=repo, check=True, env=env)
+    f.write_text(base.replace("`Active`", "`Retiring`"))
+    sp.run(["git", "add", "-A"], cwd=repo, check=True, env=env)
+    sp.run(["git", "commit", "-qm", "retire map"], cwd=repo, check=True, env=env)
+    # changed_programs diffs against REPO_ROOT-relative paths, so point it at this repo.
+    orig = sf.REPO_ROOT
+    try:
+        sf.REPO_ROOT = repo
+        got = sf.changed_programs([f], "HEAD~1")
+    finally:
+        sf.REPO_ROOT = orig
+    assert "MAP" in got
+
+
 # --- axis tie-breaker -----------------------------------------------------------------
 
 def test_axis_bonus_rewards_the_relevant_axis():

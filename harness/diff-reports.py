@@ -133,6 +133,14 @@ def load_tree(root: Path) -> dict[tuple[str, str, str], dict]:
     if not root.exists():
         return tree
     for path in sorted(root.rglob("*.json")):
+        # Skip harness scratch/staging dirs (`_src`, `_logs`, `_portfolio_src`, ...). They
+        # hold non-canonical copies and, crucially, portfolio ROLLUP INPUTS — e.g. the
+        # golden per-repo reports staged to roll a full-set portfolio for a portfolio-TD
+        # MR. Those must NOT be indexed as freshly-analyzed "after" reports (that would
+        # zero out `not_analyzed` and mis-read a scoped MR as a full sweep). Only the
+        # canonical reports collected to the tree root count.
+        if any(part.startswith("_") for part in path.relative_to(root).parts[:-1]):
+            continue
         try:
             data = _load_json(path)
         except (json.JSONDecodeError, OSError):
@@ -462,6 +470,26 @@ def diff_pathways(before: dict, after: dict) -> dict:
 # ---------------------------------------------------------------------------------------
 # D4 — programs (portfolio only)
 # ---------------------------------------------------------------------------------------
+
+def _portfolio_app_count(report: dict) -> int:
+    """How many per-repo apps a portfolio rollup aggregated.
+
+    Used to decide whether a portfolio comparison is apples-to-apples: a rollup over the
+    FULL app set is comparable to the full-set golden; a scoped rollup over fewer apps is
+    not (its distribution/findings/programs churn for purely mechanical reasons). Reads
+    `repositories[]` first, then metadata counts; returns 0 when it can't tell (an absent
+    count is treated as "unknown, don't skip on this basis" by the caller).
+    """
+    repos = report.get("repositories")
+    if isinstance(repos, list):
+        return len(repos)
+    meta = report.get("metadata") or {}
+    for k in ("services_analyzed", "consumed_per_repo_json_files"):
+        v = meta.get(k)
+        if isinstance(v, int):
+            return v
+    return 0
+
 
 def _program_status_map(report: dict) -> dict[str, str]:
     """acronym -> status from recommended_actions[], plus pathway recommended_aws_programs."""
@@ -967,12 +995,29 @@ def build_impact(before_tree: dict, after_tree: dict,
     # feeding the judge a delta it will (correctly, but uselessly) flag as concerns.
     # See harness/DESIGN.md "Portfolio-quality validation" for the full-sweep design.
     partial = bool(not_analyzed)
-    portfolio_skipped = sorted(
-        f"{analysis}/{scope}/{key}"
-        for (analysis, scope, key) in compared_keys if scope == "portfolio"
-    ) if partial else []
+    full_sweep = not partial   # every baseline per-repo report was re-analyzed this run
+    # A portfolio rollup is comparable to the golden ONLY when it aggregates the SAME app
+    # set. We decide this PER portfolio report by app COUNT, not by whether every per-repo
+    # report was re-analyzed. A portfolio-TD edit (e.g. program-library.md) changes only
+    # the rollup's program-recommendation step, NEVER a per-repo report — so run-fixtures.sh
+    # rolls the portfolio up over the golden per-repo reports (reused as input) and produces
+    # a FULL-set rollup while re-analyzing ~0 per-repo. That full-set rollup IS comparable
+    # even though `partial` (per-repo) is true; a genuinely scoped rollup over fewer apps is
+    # not, and is skipped (its programs/pathways/distribution churn is a mechanical artifact
+    # of aggregating fewer apps — see the note above). "Can't tell the count" => don't skip.
+    portfolio_skipped = []
+    matched_portfolio: set[tuple[str, str, str]] = set()
+    for (analysis, scope, key) in [k for k in compared_keys if k[1] == "portfolio"]:
+        before_ct = _portfolio_app_count(before_tree.get((analysis, scope, key), {}))
+        after_ct = _portfolio_app_count(after_tree.get((analysis, scope, key), {}))
+        if before_ct and after_ct and after_ct < before_ct:
+            portfolio_skipped.append(f"{analysis}/{scope}/{key}")
+        else:
+            matched_portfolio.add((analysis, scope, key))
+    portfolio_skipped = sorted(portfolio_skipped)
     if portfolio_skipped:
-        compared_keys = {k for k in compared_keys if k[1] != "portfolio"}
+        compared_keys = {k for k in compared_keys
+                         if k[1] != "portfolio" or k in matched_portfolio}
     # In `after` but not in golden = a genuinely NEW report (e.g. a new fixture). That is
     # real signal and must not be hidden, but it has no baseline to diff against.
     unbaselined = sorted(
@@ -1009,22 +1054,35 @@ def build_impact(before_tree: dict, after_tree: dict,
                     or sc["overall"]["band_crossed"] or bool(sc["categories"])
             if moved:
                 changed_tds.add(_td_name(analysis, scope))
-        else:  # portfolio
+        else:  # portfolio (only app-set-matched rollups reach here; see above)
             entry = portfolio.setdefault(analysis, {})
-            fd = diff_findings(before, after)
-            dist = diff_distribution(before, after, analysis)
+            # Categorical program/pathway MEMBERSHIP is the stable portfolio signal and the
+            # whole point of comparing a scoped-but-full-set rollup: a program-library edit
+            # moves exactly these. Always compute them.
             prog = diff_programs(before, after)
-            entry["D1_findings"] = fd
-            entry["D2_distribution"] = dist
             entry["D4_programs"] = prog
-            moved = _nonempty_findings(fd) or dist["changed"] or prog["added"] or prog["removed"]
+            moved = bool(prog["added"] or prog["removed"])
             if analysis == "mod":
                 pw = diff_pathways(before, after)
-                sc = diff_score_portfolio(before, after)
                 entry["D3_pathways"] = pw
-                entry["D5_portfolio_score"] = sc
-                moved = moved or pw["newly_triggered"] or pw["newly_suppressed"] \
-                    or sc["band_crossed"] or bool(sc["band_distribution_shift"])
+                moved = moved or bool(pw["newly_triggered"] or pw["newly_suppressed"])
+            # The NUMERIC / distribution dims (D1 findings, D2 tier distribution, D5 score
+            # band) are only trustworthy on a full re-analysis sweep. Over a rollup that
+            # reuses golden per-repo inputs they reflect the analysis agent's run-to-run
+            # nondeterminism, not the edit (the portfolio rollup is unstable run-to-run —
+            # the portfolio diff is deliberately categorical-only off a sweep). Restrict
+            # them to full_sweep so a portfolio-TD MR gets the clean program signal only.
+            if full_sweep:
+                fd = diff_findings(before, after)
+                dist = diff_distribution(before, after, analysis)
+                entry["D1_findings"] = fd
+                entry["D2_distribution"] = dist
+                moved = moved or _nonempty_findings(fd) or dist["changed"]
+                if analysis == "mod":
+                    sc = diff_score_portfolio(before, after)
+                    entry["D5_portfolio_score"] = sc
+                    moved = moved or sc["band_crossed"] \
+                        or bool(sc["band_distribution_shift"])
             if moved:
                 changed_tds.add(_td_name(analysis, scope))
 
