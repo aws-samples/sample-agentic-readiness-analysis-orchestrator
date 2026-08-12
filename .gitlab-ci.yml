@@ -169,6 +169,33 @@ harness:auth-check:
   script:
     - |
       if [ -z "${AWS_CREDS_TARGET_ROLE:-}" ]; then
+        # A FORK merge request runs in the fork's OWN project, which cannot see this
+        # parent-project CI/CD variable — that is GitLab's secret firewall, not a
+        # misconfiguration a contributor can fix. Detect that case (source project id
+        # differs from the target project id), explain how to get the full harness, and
+        # pass GREEN so a fork contributor is not greeted by a red pipeline.
+        if [ -n "${CI_MERGE_REQUEST_SOURCE_PROJECT_ID:-}" ] && \
+           [ "${CI_MERGE_REQUEST_SOURCE_PROJECT_ID:-}" != "${CI_MERGE_REQUEST_PROJECT_ID:-}" ]; then
+          echo "NOTE: this merge request is from a FORK, so the AWS credential-vendor role"
+          echo "      (AWS_CREDS_TARGET_ROLE) is intentionally not available here — GitLab does"
+          echo "      not hand a fork's pipeline the parent project's secrets. This is expected;"
+          echo "      it is NOT a failure you can fix from the fork."
+          echo ""
+          echo "      The offline contract tests still ran (see harness:contract-tests) and are"
+          echo "      the quality gate. The FULL change-impact analysis (atx re-run + judge"
+          echo "      verdict) needs those credentials, so it WAITS for a project DEVELOPER to"
+          echo "      trigger it in the parent project:"
+          echo "          MR  ->  Pipelines tab  ->  Run pipeline   (accept the one-time warning)"
+          echo ""
+          echo "      Anyone can request Developer access to run it themselves — with that access"
+          echo "      you can press Run pipeline on your own MR, or push your branch directly to"
+          echo "      this repo (no fork) and the whole harness runs automatically. See"
+          echo "      CONTRIBUTING.md -> 'Opening from a GitLab fork'."
+          exit 0
+        fi
+        # NOT a fork: the variable really should be here. Fail loudly — this is exactly
+        # the misconfiguration auth-check exists to catch (Protected var on an unprotected
+        # branch, a Masked/Hidden var the vendor cannot read, or the var simply unset).
         echo "FAIL: AWS_CREDS_TARGET_ROLE is unset — the variable is not reaching this job." >&2
         echo "      (Is it Protected while the branch is not? Is the branch tag/name matched?)" >&2
         exit 1
@@ -390,7 +417,13 @@ harness:contract-tests:
 harness:impact:
   stage: analyze
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # Gate on the credential-vendor role actually being present in THIS pipeline. A fork's
+    # detached MR pipeline runs in the fork and cannot see this parent-project variable, so
+    # this job is simply NOT created there — no red "impact" a fork contributor can't fix.
+    # It appears the instant the MR is run in the parent project (MR -> Pipelines -> Run
+    # pipeline), where the vend resolves. Internal same-project MRs always have it, so they
+    # are unaffected. (A truthy bare "$VAR" rule = defined and non-empty.)
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $AWS_CREDS_TARGET_ROLE'
   # A single (fixture, analysis) unit costs ~108 agent-min, and HARNESS_JOBS runs the
   # MR's 2 units concurrently — so wall-clock is ~one unit, ~2h with install + judge.
   # GitLab's 1h DEFAULT would kill every MR run mid-sweep, discarding the analysis and
@@ -464,10 +497,18 @@ harness:impact:
 harness:judge:
   stage: judge
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # Same gate as harness:impact: the judge has no impact.json to score without it and
+    # calls Bedrock itself, so it needs the same creds. Skipped on a fork's detached
+    # pipeline; runs when the MR is executed in the parent project. Keeping the two rules
+    # identical means the `needs` below is always satisfiable.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $AWS_CREDS_TARGET_ROLE'
   needs:
+    # optional: harness:impact shares this job's rule so it is normally present, but mark
+    # the dependency optional so a future rule change can never turn a missing upstream
+    # job into a pipeline-creation (YAML) error.
     - job: harness:impact
       artifacts: true
+      optional: true
   # If harness:impact SKIPPED (denylisted diff) it produced no impact.json. Nothing to
   # judge — exit cleanly rather than erroring on the missing input.
   before_script:
