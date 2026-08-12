@@ -1,57 +1,58 @@
 {
-  "repo_name": "legacy-document-portal",
   "metadata": {
     "analysis_type": "ara",
     "analysis_date": "2026-08-12",
     "td_version": "agentic-readiness-analysis",
+    "repo_name": "legacy-document-portal",
+    "target": "/builds/agentic-readiness-assessment/agentic-readiness-assessment/harness/after/_src/ara/legacy-document-portal",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
-    "portfolio_name": "legacy-document-portal",
-    "tech_stack": {
-      "language": "CFML (ColdFusion Markup Language)",
-      "loc": 45,
-      "framework": "Adobe ColdFusion 8",
-      "architecture": "Monolithic server-rendered web application on IIS 7 / Windows Server 2008"
-    },
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
       "has_auth_surface": true,
       "has_write_operations": true,
-      "has_logging_of_user_data": true
-    }
+      "has_logging_of_user_data": "unknown"
+    },
+    "tech_stack": {
+      "language": "CFML (ColdFusion Markup Language)",
+      "loc": 62,
+      "framework": "Adobe ColdFusion 8",
+      "architecture": "Monolithic single-server (Windows EC2 + IIS 7 + SQL Server 2005)"
+    },
+    "portfolio_name": null
   },
   "classification": {
     "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
     "blocker_count": 5,
-    "risk_safety_count": 13,
-    "risk_quality_count": 16,
-    "info_count": 6,
+    "risk_safety_count": 12,
+    "risk_quality_count": 15,
+    "info_count": 7,
     "high_count": 5,
-    "medium_count": 29,
-    "low_count": 6,
+    "medium_count": 27,
+    "low_count": 7,
     "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
   },
   "counts": {
-    "total": 40,
+    "total": 39,
     "high": 5,
-    "medium": 29,
-    "low": 6
+    "medium": 27,
+    "low": 7
   },
   "findings": [
     {
       "question_id": "API-Q1",
       "category": "API Surface",
       "category_id": "API",
-      "title": "No Documented API Interface",
-      "description": "The application does not expose a documented REST, GraphQL, or AsyncAPI interface. It is a legacy ColdFusion 8 server-rendered web application with two .cfm pages accessed via browser HTTP requests. Integration would require direct database access or UI automation.",
-      "gap": "No API layer exists. The only integration surface is server-rendered HTML pages or direct SQL Server database access.",
-      "recommendation": "Define a REST API layer with OpenAPI documentation for document search and download functionality.",
+      "title": "No Programmatic API \u2014 HTML Pages Only",
+      "description": "The application exposes only HTML-rendered ColdFusion pages (index.cfm, download.cfm) served by IIS. There is no REST, GraphQL, or AsyncAPI interface. Integration requires UI automation or direct database access.",
+      "gap": "No programmatic API exists. The only integration surface is HTML pages rendered by ColdFusion 8.",
+      "recommendation": "Build a REST API with JSON responses exposing document search and download functionality.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
@@ -62,7 +63,15 @@
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Expose document search and download as REST API with JSON responses",
+          "target_state": "Documented REST API separate from HTML UI layer",
+          "estimated_effort": "High",
+          "dependencies": [
+            "AUTH-Q1"
+          ]
+        }
       }
     },
     {
@@ -70,9 +79,9 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Machine-Readable API Specification",
-      "description": "No OpenAPI, AsyncAPI, GraphQL schema, or Smithy model files exist. The application has no formal API to document.",
-      "gap": "No machine-readable specification for agent tool generation.",
-      "recommendation": "Create an OpenAPI specification as part of API modernization.",
+      "description": "No OpenAPI, AsyncAPI, GraphQL schema, or machine-readable specification found in the repository.",
+      "gap": "Agent tool generation requires manual reverse-engineering of ColdFusion page behavior.",
+      "recommendation": "Create OpenAPI 3.x specification for any new API surface using annotation-driven generation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -83,7 +92,8 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -91,9 +101,9 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Structured Error Responses",
-      "description": "ColdFusion 8 returns default HTML error pages on failure. No structured error codes, no machine-readable error bodies, no retryable/terminal classification.",
-      "gap": "Agents cannot distinguish error types. All failures appear as HTML error pages.",
-      "recommendation": "Implement structured JSON error responses with error codes, messages, and retryable classification.",
+      "description": "No structured error responses. ColdFusion throws raw exceptions or displays HTML error pages with no error codes or machine-readable bodies.",
+      "gap": "Agents cannot distinguish retriable from terminal errors.",
+      "recommendation": "Implement structured JSON error responses with error code, message, and retryable flag in new API layer.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -104,44 +114,53 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "API-Q4",
       "category": "API Surface",
       "category_id": "API",
-      "title": "No Idempotent Write Operations",
-      "description": "Write operations have no idempotency controls. No idempotency keys, no unique constraints, no deduplication logic.",
-      "gap": "No idempotency key support. Duplicate agent calls would create duplicate records.",
-      "recommendation": "Add idempotency key support to all write endpoints with unique constraint enforcement.",
+      "title": "No Idempotency Controls on Write Operations",
+      "description": "Write operations (file uploads) have no idempotency keys, no unique constraints on business keys, and no deduplication logic.",
+      "gap": "Agent retries or duplicate calls would create duplicate records/files.",
+      "recommendation": "Implement idempotency key support for all write operations.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "index.cfm",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency controls exist.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency controls exist",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The system exposes write operations (document uploads) with no idempotency mechanism. Agent retries would duplicate records."
+        "resolution_reasoning": "The system performs write operations (document uploads) with no idempotency mechanism. Agent retries at machine speed would create duplicates.",
+        "blocker_remediation": {
+          "immediate": "Add idempotency key support to upload operations",
+          "target_state": "All write endpoints accept idempotency key; duplicate submissions return original result",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "API-Q1"
+          ]
+        }
       }
     },
     {
       "question_id": "API-Q5",
       "category": "API Surface",
       "category_id": "API",
-      "title": "HTML Response Format Only",
-      "description": "Responses are HTML (server-rendered pages) and application/octet-stream for file downloads. No JSON or structured data format.",
-      "gap": "Not machine-parseable without HTML scraping.",
-      "recommendation": "Modernize to JSON API responses.",
+      "title": "HTML-Only Response Format",
+      "description": "All responses are rendered as HTML by ColdFusion templates. No structured data format (JSON, XML) is returned.",
+      "gap": "LLMs cannot directly parse HTML table responses. Agent integration requires HTML parsing or translation layer.",
+      "recommendation": "Use JSON as default format in new API layer.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 3,
       "evidence": {
         "file": "index.cfm",
@@ -153,40 +172,19 @@
       }
     },
     {
-      "question_id": "API-Q6",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "No Asynchronous Operation Support",
-      "description": "No async patterns exist. File downloads served synchronously. No background job framework, no polling endpoints, no webhook callbacks.",
-      "gap": "Large file downloads could timeout for agent callers with no async fallback.",
-      "recommendation": "Implement async download patterns (signed URLs, job-based retrieval) for large files.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "download.cfm",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
-      }
-    },
-    {
       "question_id": "API-Q7",
       "category": "API Surface",
       "category_id": "API",
       "title": "No Event Emission for State Changes",
-      "description": "No event emission capability. No webhooks, SNS, EventBridge, SQS, Kafka, or CDC pipelines.",
-      "gap": "Agents cannot react to state changes proactively. Polling is the only option.",
-      "recommendation": "Consider EventBridge integration for document lifecycle events.",
+      "description": "No event emission capability exists. No webhooks, SNS, EventBridge, SQS, or Kafka integration.",
+      "gap": "Agents must poll for state changes. No proactive notification of document lifecycle events.",
+      "recommendation": "Implement EventBridge events for document lifecycle changes when building new architecture.",
       "severity": "Low",
-      "priority": "P3",
+      "priority": "P2",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
-        "file": "index.cfm",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
@@ -199,9 +197,9 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "No Rate Limit Documentation or Headers",
-      "description": "No rate limit documentation or headers. No X-RateLimit-Remaining, no Retry-After headers, no API Gateway usage plans.",
-      "gap": "Agents have no visibility into rate limits and cannot self-throttle.",
-      "recommendation": "Implement rate limit headers when API layer is built.",
+      "description": "No rate limits documented and no rate limit headers (X-RateLimit-Remaining, Retry-After) returned.",
+      "gap": "Agents have no self-throttling signals.",
+      "recommendation": "Configure API Gateway usage plans with rate limit headers when deploying new API.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
@@ -220,20 +218,28 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Machine Identity Authentication",
-      "description": "The application uses only session-based browser authentication. No OAuth2 client credentials, no API key authentication, no mTLS, no service accounts.",
-      "gap": "No machine identity mechanism. Agents cannot authenticate without browser-based session cookies.",
-      "recommendation": "Implement API key or OAuth2 client credentials flow for machine-to-machine authentication.",
+      "description": "The application supports only session-based human authentication. No OAuth2 client credentials, API key authentication, mTLS, or service accounts exist.",
+      "gap": "Agents cannot authenticate without human credentials.",
+      "recommendation": "Implement OAuth2 client credentials or API key authentication with principal attribution.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": "3-5"
+        "lines": "4-6"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Deploy API Gateway with Cognito/OAuth2 or implement API key authentication",
+          "target_state": "Machine identity with principal attribution in audit logs",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1"
+          ]
+        }
       }
     },
     {
@@ -241,20 +247,25 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Scoped Permissions",
-      "description": "Binary auth check (logged in or not). No role differentiation, no resource-level permissions, no action-level scoping.",
-      "gap": "All authenticated users have identical access. No mechanism to scope down agent access.",
-      "recommendation": "Implement role-based access control with scoped permissions per resource type and action.",
+      "description": "Binary authenticated/unauthenticated authorization only. All authenticated users have identical, unrestricted access.",
+      "gap": "Cannot grant agent read-only access to specific resources without granting full access.",
+      "recommendation": "Implement RBAC with minimum viewer/editor/admin roles enforced at query level.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": "4-5"
+        "lines": "4-6"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Deploy API Gateway with IAM-based per-method authorization",
+          "Implement role-based access at the application level"
+        ]
       }
     },
     {
@@ -262,20 +273,25 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Action-Level Authorization",
-      "description": "No action-level authorization. Single session check is the only gate. Cannot enforce read-but-not-delete.",
-      "gap": "Cannot enforce differential access by action type.",
-      "recommendation": "Implement RBAC or ABAC with per-action permission checks.",
+      "description": "No action-level authorization exists. The only security check is session existence with no distinction between read and write permissions.",
+      "gap": "Cannot restrict an agent to read-only operations within the same resource type.",
+      "recommendation": "Add per-action permission checks (canRead, canWrite, canDelete) enforced before operations.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": "4-5"
+        "lines": "4-6"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Enforce action-level authorization at API Gateway (GET allowed, POST/DELETE blocked per API key)",
+          "Implement middleware permission checks"
+        ]
       }
     },
     {
@@ -283,30 +299,35 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Identity Propagation or Delegation",
-      "description": "No identity propagation mechanism. Session-only, no JWT, no token exchange, no on-behalf-of flows.",
-      "gap": "Cannot distinguish agent-as-self vs agent-on-behalf-of-user.",
-      "recommendation": "Implement OAuth2/JWT with on-behalf-of token exchange support.",
+      "description": "No identity propagation mechanism (JWT, OAuth2 on-behalf-of, token exchange). System cannot distinguish agent-as-self vs agent-on-behalf-of-user.",
+      "gap": "Cannot implement delegated access patterns or bound agent permissions by user permissions.",
+      "recommendation": "Implement OAuth2/JWT-based identity propagation supporting service-to-service and on-behalf-of flows.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
       "phase": 2,
       "evidence": {
         "file": "index.cfm",
-        "lines": "3-5"
+        "lines": "4-6"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "90\u2013120 days",
+        "compensating_controls": [
+          "Require agents to pass user context header validated against session store",
+          "Implement OAuth2 token exchange at API Gateway"
+        ]
       }
     },
     {
       "question_id": "AUTH-Q5",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "Insecure Credential Management",
-      "description": "Datasource password is 'cfadmin' documented in README. No secrets management system. No rotation capability.",
-      "gap": "Hardcoded/weak credentials with no secure management or rotation.",
-      "recommendation": "Migrate credentials to AWS Secrets Manager with automatic rotation. Remove from README.",
+      "title": "Hardcoded Credentials \u2014 No Secrets Management",
+      "description": "Credentials managed in ColdFusion Administrator with known password 'cfadmin'. No secrets management system, no rotation.",
+      "gap": "Static credentials vulnerable to leakage via prompt injection or insider threat.",
+      "recommendation": "Migrate to AWS Secrets Manager with automatic rotation. Remove all hardcoded passwords.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -317,17 +338,22 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Rotate CF Admin password and restrict network access immediately",
+          "Move datasource credentials to Secrets Manager"
+        ]
       }
     },
     {
       "question_id": "AUTH-Q6",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Immutable Audit Logging",
-      "description": "No audit logging of any kind. No CloudTrail, no application-level logging, no immutable storage. The application does not log who performed what action.",
-      "gap": "No audit trail. Cannot prove compliance or conduct forensics.",
-      "recommendation": "Implement immutable audit logging with principal attribution stored in append-only storage.",
+      "title": "No Audit Logging",
+      "description": "No audit logging of any kind exists. No CloudTrail, no application-level audit trail, no immutable log storage.",
+      "gap": "Cannot determine who accessed or modified documents. Zero accountability trail.",
+      "recommendation": "Enable CloudTrail and implement application audit logging with immutable storage (S3 Object Lock).",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -339,9 +365,17 @@
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agent operations require immutable audit trails for compliance. No logging of any kind exists."
+        "resolution_reasoning": "Write-enabled agent scope requires immutable audit trails for compliance. Zero logging means no forensics for agent actions.",
+        "blocker_remediation": {
+          "immediate": "Enable CloudTrail; implement application-level audit logging",
+          "target_state": "Immutable audit log recording every operation with principal attribution",
+          "estimated_effort": "Medium",
+          "dependencies": [
+            "AUTH-Q1"
+          ]
+        }
       }
     },
     {
@@ -349,65 +383,80 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Agent Identity Suspension Mechanism",
-      "description": "No mechanism to suspend or revoke individual agent identities. Session invalidation is the only option.",
-      "gap": "Cannot isolate a misbehaving agent without affecting all users.",
-      "recommendation": "Implement per-agent API key management with instant revocation capability.",
+      "description": "No mechanism to suspend or revoke individual identities. Session-based auth with no revocation beyond timeout.",
+      "gap": "Cannot isolate misbehaving agent without shutting down entire application.",
+      "recommendation": "Implement API key or OAuth2 client credential system with immediate revocation capability.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "4-6"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Implement API Gateway with revocable API keys",
+          "Add deny-list table that blocks specific principals"
+        ]
       }
     },
     {
       "question_id": "STATE-Q1",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No Compensation or Rollback",
-      "description": "No compensation or rollback mechanisms. No sagas, no undo endpoints, no transactional boundaries. Write operations are immediate and irreversible.",
-      "gap": "Failed multi-step operations leave partial state with no recovery mechanism.",
-      "recommendation": "Implement transactional boundaries with rollback support for write operations.",
+      "title": "No Compensation or Rollback Logic",
+      "description": "No compensation or rollback logic exists. No saga patterns, undo endpoints, or compensating transactions. Writes commit immediately with no reversal mechanism.",
+      "gap": "Failed multi-step operations leave partial state with no recovery path.",
+      "recommendation": "Implement two-phase commit pattern with compensation logic for write operations.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
-        "file": "index.cfm",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no rollback/compensation exists.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no compensation/rollback exists",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents executing multi-step workflows need rollback. No compensation logic exists anywhere in the application."
+        "resolution_reasoning": "Write-enabled agents executing multi-step workflows with no rollback leave data in inconsistent state on failure.",
+        "blocker_remediation": {
+          "immediate": "Implement two-phase upload: staging \u2192 pending \u2192 active with cleanup on failure",
+          "target_state": "All write operations support compensation or rollback",
+          "estimated_effort": "High",
+          "dependencies": [
+            "API-Q1",
+            "API-Q4"
+          ]
+        }
       }
     },
     {
       "question_id": "STATE-Q2",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "State Not Queryable via API",
-      "description": "State queryable only through HTML search interface. No machine-readable state query API exists.",
-      "gap": "State inspection requires HTML parsing. No dedicated state-query endpoints.",
-      "recommendation": "Expose document state via REST endpoints with full metadata.",
+      "title": "State Not Machine-Readable",
+      "description": "Document state is queryable via SQL (index.cfm search) but rendered only as HTML \u2014 not accessible in structured format for agent consumption.",
+      "gap": "State is only accessible via HTML rendering, not machine-readable API.",
+      "recommendation": "Expose document state via JSON API with query, filter, and pagination.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "19-28"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -415,33 +464,38 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "No Concurrency Controls",
-      "description": "No concurrency controls. No optimistic locking, no version fields, no ETags, no conflict resolution logic.",
-      "gap": "Multiple concurrent agent instances could create race conditions on document records.",
-      "recommendation": "Add version fields and implement optimistic locking with conflict detection.",
+      "description": "No optimistic locking, version fields, ETags, or conditional writes exist. Concurrent agent instances could corrupt data through race conditions.",
+      "gap": "Multiple agents writing simultaneously could overwrite each other or create duplicates.",
+      "recommendation": "Add version fields and implement optimistic locking on write operations.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "19-22"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Add version columns with optimistic locking",
+          "Serialize agent access through queue-based pattern"
+        ]
       }
     },
     {
       "question_id": "STATE-Q5",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No Rate Limiting or Throttling",
-      "description": "No rate limiting at any layer. No API Gateway throttling, no WAF, no application middleware.",
-      "gap": "A runaway agent loop could overwhelm the single-instance application.",
-      "recommendation": "Deploy API Gateway or WAF with rate limiting in front of the application.",
+      "title": "No Rate Limiting at Any Layer",
+      "description": "No rate limiting at any layer. No API Gateway, WAF, or application-level throttling. Application runs directly on IIS with no protection.",
+      "gap": "Runaway agent loops could overwhelm the application and database with unlimited requests.",
+      "recommendation": "Deploy AWS WAF with rate-based rules or API Gateway with throttling.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "README.md",
@@ -449,7 +503,12 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Deploy WAF with rate-based rules",
+          "Deploy API Gateway with usage plans and throttling"
+        ]
       }
     },
     {
@@ -457,20 +516,25 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "No Blast Radius or Transaction Limits",
-      "description": "No transaction limits. Unbounded query results, no per-session caps, no maximum records per operation.",
-      "gap": "Agent errors could affect unlimited records with no safeguards.",
-      "recommendation": "Implement per-caller transaction limits.",
+      "description": "No transaction limits or per-caller caps. SQL injection vulnerability enables unbounded data operations. No bulk operation size caps.",
+      "gap": "Agent errors could result in mass deletion or modification with no safeguards.",
+      "recommendation": "Implement per-caller transaction limits for all write operations.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "19-22"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Implement per-session operation limits",
+          "Add bulk operation size caps in new API layer"
+        ]
       }
     },
     {
@@ -478,20 +542,25 @@
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
       "title": "No Draft/Pending State",
-      "description": "No draft or pending state concept. Documents are immediately available upon upload with no review step.",
-      "gap": "No mechanism for agent-proposed changes with human review before committing.",
-      "recommendation": "Add a status field (DRAFT/PENDING/PUBLISHED) to the documents table.",
+      "description": "No draft or pending state exists. All operations are immediately committed with no reviewable intermediate state.",
+      "gap": "Agent cannot propose changes for human review before committing.",
+      "recommendation": "Implement PENDING/DRAFT status for document uploads requiring human approval.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "19-22"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Add status column with PENDING/APPROVED/REJECTED states",
+          "Implement review queue for agent-submitted documents"
+        ]
       }
     },
     {
@@ -499,9 +568,9 @@
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
       "title": "No Configurable Approval Gates",
-      "description": "No approval gate mechanism. All operations execute immediately with no configurable approval steps.",
+      "description": "No approval gates or configurable operation-level flags. All operations execute immediately without human-in-the-loop option.",
       "gap": "Cannot require human approval for high-risk agent operations.",
-      "recommendation": "Implement approval workflow endpoints for high-risk operations.",
+      "recommendation": "Implement configurable approval gates for destructive operations in new API layer.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
@@ -512,7 +581,12 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Build approval workflow using status-based state machines",
+          "Use Step Functions with human approval tasks"
+        ]
       }
     },
     {
@@ -520,9 +594,9 @@
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
       "title": "No Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment. Single EC2 instance is the only runtime.",
-      "gap": "No safe environment to test agent behavior without risk to live systems.",
-      "recommendation": "Create a staging environment with synthetic document data for agent testing.",
+      "description": "No sandbox or staging environment. Single production EC2 instance with no environment separation.",
+      "gap": "No safe environment to test agent behavior before production.",
+      "recommendation": "Create containerized local environment and staging with production-equivalent data shape.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -533,135 +607,144 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "DATA-Q1",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No Sensitive Data Access Differentiation",
-      "description": "User data present (uploaded_by, session.fullname, session.userid). No access control differentiation \u2014 all authenticated users see all data identically.",
-      "gap": "No differentiated access for sensitive vs non-sensitive data. Single permission grants access to everything.",
-      "recommendation": "Implement role-based field filtering and access control differentiation in API responses.",
+      "title": "No Access Control Differentiation for Documents",
+      "description": "System stores documents accessible to all authenticated users without access differentiation. No role-based or category-based access controls. Stage A: Yes (user-specific data). B1: CLEAR (metadata fields not sensitive). B2: FIRES (no access differentiation). B3: Absent.",
+      "gap": "Single permission level grants access to all documents regardless of sensitivity classification.",
+      "recommendation": "Implement document sensitivity classification with role-based access enforcement.",
       "severity": "Medium",
       "priority": "P0",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "19-22"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: Stage A = Yes (user-specific data present). B1 = RISK-SAFETY (limited sensitive fields in HTML, no formal API). B2 = RISK-SAFETY (no access differentiation). Overall = RISK-SAFETY.",
+        "conditional_resolution": "Resolved to RISK-SAFETY: B1 CLEAR (no sensitive fields leaked in metadata), B2 FIRES (no access differentiation), B3 absent (INFO)",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "B1 evaluates as RISK-SAFETY because while user identity fields are displayed, there is no formal API and the exposure is limited to document metadata. B2 fires because no access control differentiation exists.",
+        "resolution_reasoning": "DATA-Q1 B2 fired because all authenticated users access all documents without differentiation \u2014 no mechanism exists to scope agent access to non-sensitive document categories.",
         "data_q1_subchecks": {
           "b1": {
-            "fired": true,
-            "severity": "RISK-SAFETY",
-            "reasoning": "User identity fields (uploaded_by, session.fullname) displayed in HTML output. No formal API with scoped response filtering."
+            "fired": false,
+            "severity": null,
+            "reasoning": "API responses show document metadata (title, category, uploaded_by, date) \u2014 no sensitive fields leaked"
           },
           "b2": {
             "fired": true,
             "severity": "RISK-SAFETY",
-            "reasoning": "Single binary auth check. No differentiation between sensitive and non-sensitive data access."
+            "reasoning": "No access control differentiation \u2014 single permission grants access to all documents"
           },
           "b3": {
             "fired": true,
             "severity": "INFO",
-            "reasoning": "No formal data classification metadata, tags, or PII detection tooling."
+            "reasoning": "No formal classification metadata exists"
           }
-        }
+        },
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Implement document classification labels (public, internal, confidential)",
+          "Add category-based access controls per role"
+        ]
       }
     },
     {
       "question_id": "DATA-Q2",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Undefined Data Residency Posture",
-      "description": "Data residency posture is undefined. Documents stored on local EC2 disk with no documented region or jurisdiction constraints.",
-      "gap": "No residency policy documented. Unknown whether stored documents are subject to regulatory requirements.",
-      "recommendation": "Audit stored documents for regulatory classification. Document data residency requirements.",
-      "severity": "Medium",
+      "title": "Data Residency \u2014 No Regulated Data Identified",
+      "description": "Corporate policy documents on single EC2 instance. No evidence of GDPR/HIPAA/LGPD regulated data requiring residency controls.",
+      "gap": "No data classification exists to confirm absence of residency requirements.",
+      "recommendation": "Conduct data classification exercise to confirm no documents are subject to residency requirements.",
+      "severity": "Low",
       "priority": "P1",
       "effort": "Low",
-      "phase": 1,
+      "phase": 2,
       "evidence": {
         "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=write-enabled but no confirmed regulatory mandate. Residency posture undefined rather than violated.",
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: No regulated data identified in repository evidence",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "No explicit data residency requirements documented. Documents stored on EC2 local disk but no regulatory framework (GDPR, LGPD, HIPAA) referenced. Risk exists but is unconfirmed, so RISK-SAFETY rather than BLOCKER."
+        "resolution_reasoning": "The system stores corporate policy documents and forms. No evidence of PII, PHI, financial instruments, or data subject to jurisdictional residency requirements."
       }
     },
     {
       "question_id": "DATA-Q3",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No Pagination or Selective Query Support",
-      "description": "Search query returns all matching results with no pagination, no limit/offset, no cursor. Unbounded result sets.",
-      "gap": "No pagination, no result size limits. Large result sets exhaust agent context windows.",
-      "recommendation": "Implement pagination with configurable page size and cursor-based navigation.",
+      "title": "No Pagination \u2014 Unbounded Result Sets",
+      "description": "Basic title search exists but no pagination, result limits, sorting options, or field selection. All matching documents returned in unbounded result set.",
+      "gap": "Agent queries return unbounded results, exhausting LLM context windows.",
+      "recommendation": "Implement cursor-based pagination with configurable result size limits.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "19-22"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "DATA-Q4",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No Input Validation \u2014 SQL Injection Vulnerable",
-      "description": "No input validation. SQL injection via string concatenation in both .cfm files. No parameterized queries, no sanitization, no type checking.",
-      "gap": "Malformed/malicious inputs accepted without rejection. Critical security vulnerability.",
-      "recommendation": "Implement cfqueryparam for parameterized queries immediately. Add input validation with structured error responses.",
+      "title": "SQL Injection \u2014 Zero Input Validation",
+      "description": "Zero input validation. SQL queries use string concatenation (WHERE title LIKE '%#url.q#%' and WHERE doc_id = #url.id#) \u2014 directly vulnerable to SQL injection.",
+      "gap": "System accepts arbitrary input without validation, enabling SQL injection attacks.",
+      "recommendation": "Replace string-concatenated SQL with cfqueryparam parameterized queries immediately. Add input validation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "19-22"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "DATA-Q5",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Limited Temporal Metadata",
-      "description": "Only uploaded_on field exists. No updated_at, no freshness signaling, no timezone handling.",
-      "gap": "Cannot determine data freshness or detect stale data.",
-      "recommendation": "Add updated_at timestamps with UTC storage and freshness signaling headers.",
+      "title": "Incomplete Temporal Metadata",
+      "description": "Only uploaded_on field exists, displayed without timezone. No updated_at, no Cache-Control headers, no freshness signaling.",
+      "gap": "Incomplete temporal metadata without modification tracking or freshness indicators.",
+      "recommendation": "Add UTC timestamps with updated_at and expose freshness metadata in API responses.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "30"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -669,36 +752,41 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "No PII Redaction in Logs",
-      "description": "No PII redaction. No structured logging. User data (session.fullname, uploaded_by) flows unprotected. ColdFusion 8 error pages expose variable values.",
-      "gap": "No log scrubbing or PII masking. User data could leak into logs.",
-      "recommendation": "Implement structured logging with PII redaction before any agent integration.",
+      "description": "No PII redaction exists. User names rendered in responses (session.fullname). Search queries (url.q) visible in IIS access logs.",
+      "gap": "User data and search queries logged without PII protection.",
+      "recommendation": "Implement PII masking in application logs and sanitize IIS request logging.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "index.cfm",
-        "lines": null
+        "lines": "10"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Implement log sanitization middleware",
+          "Configure IIS to exclude query strings from access logs"
+        ]
       }
     },
     {
       "question_id": "DATA-Q7",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No Data Quality Awareness",
-      "description": "No data quality metrics, dashboards, profiling, or completeness monitoring for the documents dataset.",
-      "gap": "Agents may act on incomplete or stale data without awareness.",
-      "recommendation": "Implement data quality monitoring (null rates, completeness) for the documents table.",
+      "title": "No Data Quality Metrics",
+      "description": "No data quality metrics, profiling, or monitoring exist for the document repository.",
+      "gap": "Cannot assess data completeness or reliability.",
+      "recommendation": "Implement basic data quality monitoring (document count trends, completeness).",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "index.cfm",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
@@ -711,9 +799,9 @@
       "category": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "No Schema Versioning or API Contracts",
-      "description": "No schema versioning, no API contracts, no breaking change detection, no contract tests.",
-      "gap": "No versioning strategy. Changes could break agent integrations silently.",
-      "recommendation": "Implement API versioning with breaking change detection in CI.",
+      "description": "No schema versioning, migration files, API contracts, changelog, or breaking change detection.",
+      "gap": "Schema and API changes undetectable by agent consumers. Tool bindings break silently.",
+      "recommendation": "Implement database migration tooling and API versioning for new API surface.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -724,28 +812,8 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DISC-Q2",
-      "category": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
-      "description": "Field names are semantically meaningful and human-readable: doc_id, title, category, uploaded_by, uploaded_on, filename. Positive signal.",
-      "gap": "None \u2014 positive signal for agent integration.",
-      "recommendation": "Maintain this naming convention in modernization.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 4,
-      "evidence": {
-        "file": "index.cfm",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -753,15 +821,15 @@
       "category": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog or metadata layer. Schema knowledge exists only implicitly in SQL queries.",
-      "gap": "No discoverable metadata about what data the system holds.",
-      "recommendation": "Document the data model and consider a lightweight data catalog.",
+      "description": "No data catalog, metadata layer, or semantic descriptions of document data.",
+      "gap": "No self-service discovery for tool builders.",
+      "recommendation": "Document database schema and consider AWS Glue Data Catalog.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "index.cfm",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
@@ -773,10 +841,10 @@
       "question_id": "OBS-Q1",
       "category": "Observability",
       "category_id": "OBS",
-      "title": "No Distributed Tracing or Structured Logging",
-      "description": "No tracing, no structured logging, no correlation IDs. No OpenTelemetry, no X-Ray, no JSON logging.",
-      "gap": "Agent-initiated requests are completely undebuggable.",
-      "recommendation": "Implement structured JSON logging with correlation IDs and integrate with X-Ray or OpenTelemetry.",
+      "title": "No Tracing or Structured Logging",
+      "description": "No distributed tracing, structured logging, correlation IDs, or trace ID propagation. Zero observability instrumentation.",
+      "gap": "Agent-initiated requests cannot be traced or correlated for debugging.",
+      "recommendation": "Implement OpenTelemetry with trace ID propagation and JSON structured logging.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -787,17 +855,18 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
       "question_id": "OBS-Q2",
       "category": "Observability",
       "category_id": "OBS",
-      "title": "No Alerting on Error Rates or Latency",
-      "description": "No alerting configuration. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration.",
-      "gap": "No automated detection of degraded service affecting agents.",
-      "recommendation": "Implement CloudWatch alarms for error rates, latency, and availability.",
+      "title": "No Alerting Configuration",
+      "description": "No alerting configured. No CloudWatch alarms, anomaly detection, or incident management integration.",
+      "gap": "System degradation undetectable until users report failures.",
+      "recommendation": "Deploy CloudWatch alarms for error rates, latency, and resource utilization.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -808,6 +877,28 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No Business Outcome Metrics",
+      "description": "No business outcome metrics published. No custom CloudWatch metrics or KPI dashboards.",
+      "gap": "Cannot measure agent interaction effectiveness.",
+      "recommendation": "Implement custom metrics for document access patterns and search effectiveness.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
         "safety_impact": false
       }
     },
@@ -816,9 +907,9 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "No Infrastructure as Code",
-      "description": "No IaC. Manually configured EC2 with manual deployment via file copy. No Terraform, CloudFormation, or CDK.",
-      "gap": "No IaC, no peer review of infrastructure changes, no drift detection.",
-      "recommendation": "Define infrastructure as code with peer review and drift detection.",
+      "description": "No IaC (Terraform, CloudFormation, CDK). Infrastructure manually provisioned. Deployment via manual file copy over network share.",
+      "gap": "No governance, no peer review of infrastructure changes, no drift detection.",
+      "recommendation": "Define infrastructure as CloudFormation/Terraform with PR-based review.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
@@ -829,17 +920,18 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "90\u2013120 days"
       }
     },
     {
       "question_id": "ENG-Q2",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "No CI/CD or Contract Testing",
-      "description": "No CI/CD pipeline. Manual file copy deployment. No automated testing, no contract testing, no breaking change detection.",
-      "gap": "No CI/CD, no automated testing, no breaking change detection.",
-      "recommendation": "Implement CI/CD pipeline with automated API contract testing.",
+      "title": "No CI/CD Pipeline",
+      "description": "No CI/CD pipeline. No GitHub Actions, GitLab CI, Jenkins, or CodeBuild. Manual file copy deployment.",
+      "gap": "No automated testing or contract validation before production deployment.",
+      "recommendation": "Implement CI/CD with automated testing and API contract validation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -850,7 +942,8 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
@@ -858,9 +951,9 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "No Rollback Capability",
-      "description": "No rollback capability. Manual file copy is the only deployment method. No blue/green, no CodeDeploy, no canary.",
-      "gap": "No automated rollback. Recovery from bad deployments is manual.",
-      "recommendation": "Implement automated deployment with rollback capability.",
+      "description": "No rollback capability. Deployment is manual file copy with no versioning, blue/green, canary, or feature flags.",
+      "gap": "Broken deployments cannot be quickly reversed.",
+      "recommendation": "Implement automated deployment with rollback (CodeDeploy, ECS blue/green).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -871,28 +964,30 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
       "question_id": "ENG-Q4",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "No API Test Coverage",
-      "description": "No automated tests of any kind. Zero test files in repository.",
-      "gap": "No test coverage. Changes cannot be validated automatically.",
-      "recommendation": "Implement API test suite as part of modernization.",
+      "title": "Zero Test Coverage",
+      "description": "No automated tests of any kind. No API tests, unit tests, integration tests, or contract tests.",
+      "gap": "API behavior changes undetectable before affecting agent consumers.",
+      "recommendation": "Implement API test suites covering input validation, output format, errors, and edge cases.",
       "severity": "Medium",
       "priority": "P3",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
-        "file": "index.cfm",
+        "file": "README.md",
         "lines": null
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
@@ -900,12 +995,12 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "No Encryption at Rest",
-      "description": "No encryption at rest. Local disk storage unencrypted. SQL Server 2005 does not support TDE. No KMS keys.",
-      "gap": "Data at rest is unencrypted \u2014 both files on disk and database contents.",
-      "recommendation": "Migrate to encrypted storage (S3 with SSE-KMS, RDS with encryption enabled).",
+      "description": "No encryption at rest. SQL Server 2005 (no TDE). Files stored on unencrypted local disk. No KMS, no EBS encryption.",
+      "gap": "All data stored unencrypted. Disk breach exposes everything.",
+      "recommendation": "Enable EBS encryption. Migrate to RDS with KMS and S3 with SSE-KMS.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "README.md",
@@ -913,31 +1008,39 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days"
       }
     }
   ],
   "evaluations": [
     {
+      "question_id": "API-Q6",
+      "category_id": "API",
+      "title": "Asynchronous Operation Support",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 no evidence of operations >30s or long-running workflows"
+    },
+    {
       "question_id": "STATE-Q4",
       "category_id": "STATE",
       "title": "Circuit Breakers and Resilience",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 service does not call other services or external APIs."
+      "reason": "Extended question not triggered \u2014 no evidence of external dependency calls"
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no P0 priority assigned and not identified as critical path."
+      "reason": "Extended question not triggered \u2014 no P0 priority specified and no evidence of critical path"
     },
     {
-      "question_id": "OBS-Q3",
-      "category_id": "OBS",
-      "title": "Business Outcome Metrics",
+      "question_id": "DISC-Q2",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
       "status": "pass",
-      "reason": "Informational-absence suppression: system emits no metrics or telemetry of any kind \u2014 no observability surface to assess. No finding emitted."
+      "reason": "Database field names are human-readable and semantically meaningful (doc_id, title, category, uploaded_by, uploaded_on, filename). No legacy codes requiring data dictionary."
     }
   ],
   "remediation_roadmap": {
@@ -952,35 +1055,33 @@
         "phase_name": "Blockers",
         "findings": [
           "API-Q1",
-          "AUTH-Q1",
           "API-Q4",
-          "STATE-Q1",
+          "AUTH-Q1",
           "AUTH-Q6",
+          "STATE-Q1",
           "AUTH-Q2",
           "AUTH-Q3",
           "AUTH-Q5",
           "AUTH-Q7",
           "STATE-Q3",
           "STATE-Q5",
-          "DATA-Q1",
-          "DATA-Q2",
+          "DATA-Q4",
           "DATA-Q6",
           "HITL-Q1",
-          "HITL-Q2",
-          "DATA-Q4"
+          "HITL-Q2"
         ],
-        "summary": "Resolve all BLOCKERs and critical RISK-SAFETY findings. Focus on establishing an API layer, machine identity, audit logging, and foundational safety controls."
+        "summary": "Resolve all BLOCKERs (API surface, machine identity, audit logging, rollback) and critical RISK-SAFETY findings (permissions, rate limiting, PII). This phase establishes the minimum viable secure integration surface."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
         "findings": [
-          "API-Q2",
-          "API-Q3",
-          "API-Q6",
           "AUTH-Q4",
           "STATE-Q2",
           "STATE-Q6",
+          "HITL-Q3",
+          "DATA-Q1",
+          "DATA-Q2",
           "DATA-Q3",
           "DATA-Q5",
           "DISC-Q1",
@@ -989,42 +1090,44 @@
           "ENG-Q1",
           "ENG-Q2",
           "ENG-Q3",
-          "ENG-Q5",
-          "HITL-Q3"
+          "ENG-Q5"
         ],
-        "summary": "Address RISK-QUALITY findings that improve agent effectiveness. Implement observability, CI/CD, encryption, and API quality improvements."
+        "summary": "Address remaining RISK-SAFETY and RISK-QUALITY findings: identity propagation, observability, schema versioning, staging environments, and engineering maturity."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
         "findings": [
+          "API-Q2",
+          "API-Q3",
           "API-Q5",
           "API-Q7",
           "API-Q8",
           "DATA-Q7",
-          "DISC-Q2",
           "DISC-Q3",
+          "OBS-Q3",
           "ENG-Q4"
         ],
-        "summary": "Address informational findings and remaining quality improvements. Implement event emission, data quality monitoring, and comprehensive test coverage."
+        "summary": "Polish the integration surface: API specification, structured errors, business metrics, data quality monitoring, and comprehensive test coverage."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Build REST API layer with OpenAPI specification",
+      "action": "Build REST API layer with JSON responses",
       "question_ids": [
         "API-Q1",
         "API-Q2",
         "API-Q3",
-        "API-Q5"
+        "API-Q5",
+        "STATE-Q2"
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "The application has no API \u2014 this is the fundamental BLOCKER. All other improvements depend on having a callable API surface."
+      "rationale": "The most fundamental blocker \u2014 without a programmatic API, no agent integration is possible. All other remediations build on this."
     },
     {
-      "action": "Implement machine identity and OAuth2/JWT authentication",
+      "action": "Deploy centralized identity provider (Cognito/OAuth2)",
       "question_ids": [
         "AUTH-Q1",
         "AUTH-Q2",
@@ -1034,26 +1137,17 @@
       ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Agents cannot authenticate. Machine identity must be established before any agent integration is possible."
+      "rationale": "Machine identity is required for any agent to authenticate. Scoped permissions and suspension capability depend on this."
     },
     {
-      "action": "Deploy immutable audit logging with CloudTrail and S3 Object Lock",
+      "action": "Implement immutable audit logging (CloudTrail + application logs)",
       "question_ids": [
-        "AUTH-Q6"
+        "AUTH-Q6",
+        "DATA-Q6"
       ],
       "priority": "P0",
       "effort": "Medium",
-      "rationale": "Write-enabled agent operations require immutable audit trails for compliance and forensics."
-    },
-    {
-      "action": "Implement idempotency keys and transaction rollback",
-      "question_ids": [
-        "API-Q4",
-        "STATE-Q1"
-      ],
-      "priority": "P0",
-      "effort": "High",
-      "rationale": "Agent retries and multi-step workflows require idempotent operations and compensation mechanisms."
+      "rationale": "Compliance requirement for write-enabled agents. Cannot prove what agents did without audit trail."
     },
     {
       "action": "Migrate credentials to AWS Secrets Manager",
@@ -1062,28 +1156,29 @@
       ],
       "priority": "P1",
       "effort": "Low",
-      "rationale": "Hardcoded weak credentials create immediate security risk. Quick remediation."
+      "rationale": "Known hardcoded password ('cfadmin') is an immediate security vulnerability regardless of agent integration."
     },
     {
-      "action": "Deploy API Gateway with rate limiting and WAF",
+      "action": "Deploy WAF/API Gateway rate limiting",
       "question_ids": [
         "STATE-Q5",
-        "STATE-Q6",
         "API-Q8"
       ],
       "priority": "P1",
-      "effort": "Medium",
-      "rationale": "Protects the single-instance application from agent traffic storms."
+      "effort": "Low",
+      "rationale": "Protects against agent traffic storms. Can be deployed independently of other changes."
     },
     {
-      "action": "Fix SQL injection and implement input validation",
+      "action": "Fix SQL injection vulnerabilities",
       "question_ids": [
-        "DATA-Q4"
+        "DATA-Q4",
+        "STATE-Q6"
       ],
       "priority": "P1",
       "effort": "Low",
-      "rationale": "Critical security vulnerability. Fix with cfqueryparam immediately regardless of agent readiness."
+      "rationale": "Critical security vulnerability independent of agent readiness. Enables unbounded data modification."
     }
   ],
-  "analysis_type": "ara"
+  "analysis_type": "ara",
+  "repo_name": "legacy-document-portal"
 }
