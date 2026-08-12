@@ -43,12 +43,13 @@ Things worth knowing:
 - **Adding or removing a question is a two-line change.** The harness parses the rubric out
   of `SKILL.md` at runtime; the expected count *derives* from that parse
   (`EXPECTED_QUESTIONS` in [`harness/skill_table.py`](harness/skill_table.py)), so there is no
-  constant to keep in sync. The one place a size is pinned to a literal (ARA 43, MOD 37) is the
-  test `test_the_severity_table_is_parsed_from_the_td_not_transcribed` in
-  [`harness/tests/test_skill_table.py`](harness/tests/test_skill_table.py). Add or remove a
-  question and you update that one number in the same commit, or the suite fails with a message
-  telling you so. The speed bump is deliberate: it makes a change in the size of the rubric
-  explicit rather than silent.
+  constant to keep in sync. The one place a size is pinned to a literal is the
+  `EXPECTED_QUESTION_COUNTS = {"ara": 43, "mod": 37}` constant at the **top** of
+  [`harness/tests/test_skill_table.py`](harness/tests/test_skill_table.py) — the first thing in
+  the file, right where you'd look for it. **Adding** a question bumps the count (43→44);
+  **removing** one decrements it (44→43). Either way you update that one number in the same
+  commit, or the suite fails with a message telling you so. The speed bump is deliberate: it
+  makes a change in the size of the rubric explicit rather than silent.
 - **Never hardcode a threshold, band boundary, or severity.** Every such value is parsed
   from the TD by `harness/skill_table.py`. A second copy goes stale silently — this has
   bitten us twice, and both times a green test was pinning the wrong value.
