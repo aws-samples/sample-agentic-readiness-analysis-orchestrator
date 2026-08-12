@@ -114,10 +114,10 @@ The parsed count is then the **single source of truth**: `EXPECTED_QUESTIONS` in
 (`{a: len(parse_questions(a)) for a in ("ara", "mod")}`), so every consumer's count follows the
 TD automatically — **no code constant to keep in sync.**
 
-That derivation is safe only because **one** literal still pins the expected number: the test
-`test_the_severity_table_is_parsed_from_the_td_not_transcribed` in
-[`harness/tests/test_skill_table.py`](../../harness/tests/test_skill_table.py) asserts
-`len(parse_questions("ara")) == 43` and `... ("mod") == 37`. An **accidental** parse drift (a
+That derivation is safe only because **one** literal still pins the expected number: the
+constant `EXPECTED_QUESTION_COUNTS = {"ara": 43, "mod": 37}` at the top of
+[`harness/tests/test_skill_table.py`](../../harness/tests/test_skill_table.py) — the single,
+greppable place a rubric-size change is acknowledged. An **accidental** parse drift (a
 broken `####` heading, a hyphen where an em-dash belongs, a duplicated row) changes the parsed
 count but not the literal, so it fails **loudly, there**. An **intentional** add/remove is the
 one time you touch that literal — in the same MR as the TD edit. For what the TD emits and how
@@ -172,11 +172,10 @@ your edited TD.
    reference it, in one change.
 2. **Use the next free number in the category, never reuse a retired one** (highest `AUTH-Q7`
    → add `AUTH-Q8`).
-3. **Update the count literal:** bump the affected number in
-   `test_the_severity_table_is_parsed_from_the_td_not_transcribed`
-   ([`harness/tests/test_skill_table.py`](../../harness/tests/test_skill_table.py)) — `43`→`44`
-   for ARA, `37`→`38` for MOD — in the **same MR**. Forget it and CI fails loudly with the count
-   it parsed and the two causes.
+3. **Update the count:** bump the affected number in `EXPECTED_QUESTION_COUNTS` at the top of
+   [`harness/tests/test_skill_table.py`](../../harness/tests/test_skill_table.py) — `43`→`44`
+   for ARA, `37`→`38` for MOD — in the **same MR**. It's the first thing in the file, above the
+   tests. Forget it and CI fails loudly with the count it parsed and the two causes.
 4. **Refresh the golden** so the baseline reports answer the new question — you do NOT hand-edit
    them; you *regenerate* them with the harness. See
    [Refreshing the golden baseline](#refreshing-the-golden-baseline--two-ways) for both paths
@@ -198,7 +197,8 @@ drop the now-orphan answer, but it is optional — the orphan is tolerated as a 
   [Invariant #1](#1-never-renumber-a-question-to-close-a-gap).
 - If the gap bothers you, retire the *question* (mark deprecated / Not Evaluated) but keep the
   ID reserved.
-- **Decrement the count literal** in `test_skill_table.py`, same MR.
+- **Decrement `EXPECTED_QUESTION_COUNTS`** at the top of `harness/tests/test_skill_table.py`
+  (`44`→`43`), same MR — the same constant an [add](#b-add-a-question) bumps, decremented instead.
 
 ### D. Change a threshold, band boundary, or severity display name
 
@@ -481,8 +481,8 @@ TD; let the parser read it.
 ### 3. Update the count literal when you add or remove a question
 
 The count now *derives* from the parse, so you never edit `skill_table.py`. The one thing you do
-edit is the literal in `test_the_severity_table_is_parsed_from_the_td_not_transcribed`
-([`harness/tests/test_skill_table.py`](../../harness/tests/test_skill_table.py)). It **does**
+edit is the `EXPECTED_QUESTION_COUNTS` constant at the top of
+[`harness/tests/test_skill_table.py`](../../harness/tests/test_skill_table.py). It **does**
 fail loudly if you forget — but only for a *count* change. It cannot tell an intentional add from
 an accidental parse drift, so if a heading drifts and the count happens to still match, nothing
 fires. Keep headings in the exact `#### <ID>: <title> — SEVERITY` form (four `#`, em-dash).

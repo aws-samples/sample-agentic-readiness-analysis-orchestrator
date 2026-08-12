@@ -20,6 +20,23 @@ sys.path.insert(0, str(REPO / "harness"))
 import skill_table as st  # noqa: E402
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# THE ONE NUMBER TO CHANGE when you add or remove a question.
+#   ADD a question    → bump the count (43 → 44).
+#   REMOVE a question → decrement it (44 → 43).
+# in the SAME MR as the TD edit (definitions/managed/<td>/references/*.md).
+#
+# It is hand-typed ON PURPOSE — independent of parse_questions(). That independence
+# is the whole tripwire: everything downstream DERIVES its count from the parse
+# (skill_table.EXPECTED_QUESTIONS), so only this literal can catch an ACCIDENTAL
+# parse drift (a broken `#### <ID>: <title> — SEVERITY` heading, a hyphen where an
+# em-dash belongs, a duplicated row) that the parser would otherwise accept silently.
+#
+# If this test fails but you did NOT resize the rubric, do NOT just bump the number —
+# your heading drifted; fix it (four `#`, em-dash `—`). See docs/contributing/README.md.
+EXPECTED_QUESTION_COUNTS = {"ara": 43, "mod": 37}
+
+
 def test_the_severity_table_is_parsed_from_the_td_not_transcribed():
     """THE question-count tripwire — and the ONLY place a rubric-size change is acknowledged.
 
@@ -31,14 +48,21 @@ def test_the_severity_table_is_parsed_from_the_td_not_transcribed():
     HERE, loudly. Without this literal the derivation would be circular and a silently
     dropped question would redefine "complete" as the wrong number with nothing to catch it.
 
-    So: if you INTENTIONALLY added or removed a question, this is the single line to update
-    (43 or 37), in the same MR as the TD edit. If you did NOT, a failure here means the parse
-    broke — fix the heading, do not just bump the number.
+    So: if you INTENTIONALLY added or removed a question, the single value to update is the
+    module-level EXPECTED_QUESTION_COUNTS above (bump for add, decrement for remove), in the
+    same MR as the TD edit. If you did NOT, a failure here means the parse broke — fix the
+    heading, do not just change the number.
     """
     ara, mod = st.parse_questions("ara"), st.parse_questions("mod")
-    assert len(ara) == 43, f"ARA parse yielded {len(ara)} questions, expected 43"
+    _hint = ("If you added/removed a question this was intentional — update "
+             "EXPECTED_QUESTION_COUNTS at the top of this file. If not, the parse drifted: "
+             "fix the `#### <ID>: <title> — SEVERITY` heading (four #, em-dash), don't just "
+             "change the number.")
+    assert len(ara) == EXPECTED_QUESTION_COUNTS["ara"], (
+        f"ARA parse yielded {len(ara)} questions, expected {EXPECTED_QUESTION_COUNTS['ara']}. {_hint}")
     # A naive heading grep returns 38 for MOD — INF-Q1 "Managed Compute" appears twice.
-    assert len(mod) == 37, f"MOD parse yielded {len(mod)} questions, expected 37"
+    assert len(mod) == EXPECTED_QUESTION_COUNTS["mod"], (
+        f"MOD parse yielded {len(mod)} questions, expected {EXPECTED_QUESTION_COUNTS['mod']}. {_hint}")
     # EXPECTED_QUESTIONS must mirror the parse it is derived from (guards a bad refactor).
     assert st.EXPECTED_QUESTIONS == {"ara": len(ara), "mod": len(mod)}
 
