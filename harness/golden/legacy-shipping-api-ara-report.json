@@ -1,34 +1,28 @@
 {
+  "repo_name": "legacy-shipping-api",
   "metadata": {
     "analysis_type": "ara",
     "analysis_date": "2025-07-17",
     "td_version": "agentic-readiness-analysis",
-    "repo_name": "legacy-shipping-api",
-    "target": "/builds/agentic-readiness-assessment/agentic-readiness-assessment/harness/after/_src/ara/legacy-shipping-api",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code with deployable entry point (server.js with app.listen(8080)), Dockerfile, and Kubernetes manifests present. Single-service application.",
     "service_archetype": "data-gateway",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "Read-heavy data access layer \u2014 GET /rates queries MongoDB with filters, POST /quote performs stateless computation. No database write operations. Minimal business logic.",
     "agent_scope": "read-only",
     "agent_scope_source": "inferred",
+    "tech_stack": {
+      "language": "JavaScript",
+      "loc": 39,
+      "framework": "Express 3.4.8",
+      "architecture": "Monolithic REST API"
+    },
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
       "has_auth_surface": true,
       "has_write_operations": false,
       "has_logging_of_user_data": false
-    },
-    "tech_stack": {
-      "language": "JavaScript",
-      "loc": 50,
-      "framework": "Express.js 3.4.8",
-      "architecture": "Monolithic REST API",
-      "runtime": "Node.js (0.10.x declared, 18 in container)",
-      "database": "MongoDB 2.4"
-    },
-    "portfolio_name": "legacy-shipping-api"
+    }
   },
   "classification": {
     "tier": "Remediation Required",
@@ -36,17 +30,17 @@
     "blocker_count": 1,
     "risk_safety_count": 8,
     "risk_quality_count": 14,
-    "info_count": 10,
+    "info_count": 7,
     "high_count": 1,
     "medium_count": 22,
-    "low_count": 10,
+    "low_count": 7,
     "rule_matched": "1-2 BLOCKER \u2192 Remediation Required"
   },
   "counts": {
-    "total": 33,
+    "total": 30,
     "high": 1,
     "medium": 22,
-    "low": 10
+    "low": 7
   },
   "findings": [
     {
@@ -54,26 +48,25 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Machine Identity Authentication",
-      "description": "The application uses a single hardcoded static API key (ship-2013-abc123-static) checked via x-api-key header middleware. There is no per-caller identity, no OAuth2 client credentials flow, no mTLS, and no principal attribution.",
-      "gap": "No machine identity authentication mechanism exists. A single shared secret provides no caller attribution \u2014 impossible to distinguish which agent or service made a request.",
-      "recommendation": "Replace the static shared API key with an API Gateway authorizer using per-caller API keys or OAuth2 client credentials. Each agent identity should receive a unique credential attributable in access logs.",
+      "description": "The application uses a single static shared API key ('ship-2013-abc123-static') hardcoded in server.js. All callers share the same key. There is no per-principal attribution \u2014 the system cannot distinguish which agent or service made a request.",
+      "gap": "No machine identity mechanism with principal attribution. A generic shared API key with no caller differentiation is insufficient for audit and forensics.",
+      "recommendation": "Replace the shared static API key with per-caller API keys issued through AWS API Gateway or a centralized identity provider (Cognito app clients with client_credentials flow).",
       "severity": "High",
       "priority": "P0",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "server.js",
-        "lines": "10-19"
+        "lines": "10-18"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
         "blocker_remediation": {
-          "immediate": "Replace the static shared API key with an API Gateway authorizer using per-caller API keys or OAuth2 client credentials.",
-          "target_state": "Each agent/service has a unique identity that is attributable in access logs.",
+          "immediate": "Replace shared static API key with per-caller API keys via API Gateway",
+          "target_state": "Each agent identity has a unique credential attributable in audit logs",
           "estimated_effort": "Medium",
           "dependencies": [
-            "AUTH-Q5",
             "AUTH-Q6"
           ]
         }
@@ -84,24 +77,24 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Scoped Permissions (Least Privilege)",
-      "description": "A single shared API key grants identical access to all callers. No mechanism to differentiate access levels \u2014 all requests with the valid key can access both GET /rates and POST /quote equally.",
-      "gap": "No scoped permission model exists. Cannot grant an agent read-only access to /rates without also granting access to /quote.",
-      "recommendation": "Introduce API Gateway with usage plans that scope each caller to specific endpoints and methods.",
+      "description": "The application has a single shared API key that grants identical access to all endpoints (GET /rates, POST /quote) for all callers. No mechanism exists to scope down permissions per caller.",
+      "gap": "No authorization model supporting scoped permissions. All callers get the same broad access.",
+      "recommendation": "Introduce API Gateway with resource-level policies or implement RBAC middleware in the application.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "server.js",
-        "lines": "10-19"
+        "lines": "14-18"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Deploy API Gateway with separate API keys per consumer and resource-level policies",
-          "Use service mesh with per-service authorization policies"
+          "Deploy API Gateway with usage plans and per-agent API keys",
+          "Implement route-level middleware with permission checks"
         ]
       }
     },
@@ -110,24 +103,24 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Action-Level Authorization",
-      "description": "No action-level authorization exists. The API key middleware applies uniformly \u2014 any valid key holder can call any endpoint with any HTTP method.",
-      "gap": "Cannot restrict an agent to read operations (GET) while blocking computation (POST) at the authorization layer.",
-      "recommendation": "Implement method-level authorization \u2014 either at API Gateway or as application middleware mapping caller identity to allowed HTTP methods and paths.",
+      "description": "No action-level authorization exists. The API key middleware grants blanket access to all operations. There is no distinction between read and write permissions.",
+      "gap": "Cannot restrict an agent to read-only access (GET /rates) while denying POST /quote access.",
+      "recommendation": "Implement method-level authorization, either at API Gateway or application middleware layer.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "server.js",
-        "lines": "15-19"
+        "lines": "14-18"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "API Gateway method-level authorization with separate policies per HTTP method",
-          "Application middleware checking caller identity against allowed-actions list"
+          "API Gateway method-level authorization",
+          "Route-level permission checks in Express middleware"
         ]
       }
     },
@@ -136,9 +129,9 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Credential Management",
-      "description": "API key hardcoded in source: var API_KEY = 'ship-2013-abc123-static'. MongoDB URL hardcoded: var MONGO_URL = 'mongodb://10.0.8.20:27017/shipping'. No secrets management system is used.",
-      "gap": "Credentials embedded in source code. No rotation capability. Exposure risk via repository access.",
-      "recommendation": "Refactor application to read credentials from environment variables. Store in AWS Secrets Manager with rotation. K8s deployment already references a Secret \u2014 connect the application to consume it.",
+      "description": "The API key is hardcoded in source code: var API_KEY = 'ship-2013-abc123-static'. The MongoDB connection URL is also hardcoded: var MONGO_URL = 'mongodb://10.0.8.20:27017/shipping'. While the K8s deployment externalizes these via Secret and ConfigMap, the hardcoded values persist in the source repository.",
+      "gap": "Credentials embedded in source code are exposed to anyone with repository access and persist in git history. No secrets management system with rotation.",
+      "recommendation": "Remove all hardcoded credentials from server.js. Read API_KEY and MONGO_URL exclusively from environment variables. Integrate AWS Secrets Manager for credential storage and rotation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -152,8 +145,8 @@
         "safety_impact": true,
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Modify application to read from environment variables",
-          "Migrate secrets to AWS Secrets Manager with automatic rotation"
+          "K8s Secret partially mitigates at runtime",
+          "Remove hardcoded values and rely on environment variables"
         ]
       }
     },
@@ -162,27 +155,27 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Immutable Audit Logging",
-      "description": "No audit logging exists. Only output is console.log('Shipping API listening on 8080'). No request logging, no principal attribution, no immutable storage.",
-      "gap": "Zero audit trail for API access. Cannot determine who accessed what, when.",
-      "recommendation": "Add structured request logging middleware with caller attribution. Ship to CloudWatch Logs with retention policy. Configure S3 log archival with Object Lock for immutability.",
+      "description": "No audit logging exists. The application has no structured logging of authenticated principals, no request logging, and no immutable log storage configuration. The only logging is console.log('Shipping API listening on 8080').",
+      "gap": "No audit trail for any API call. Cannot determine who called what endpoint or when.",
+      "recommendation": "Implement structured request logging with caller identity. Deploy CloudTrail or CloudWatch Logs with immutable retention.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "server.js",
-        "lines": "47"
+        "lines": "39"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, downgraded from conditional BLOCKER",
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, audit logging important but not deployment blocker for read-only scope",
         "agent_scope": "read-only",
-        "resolution_reasoning": "AUTH-Q6 resolved as RISK-SAFETY because agent_scope is read-only (inferred from has_write_operations=false). Audit logging remains important but is not a deployment blocker for read-only access.",
+        "resolution_reasoning": "AUTH-Q6 evaluated as RISK-SAFETY because agent_scope is read-only. No write operations means audit trail is important for read accountability but not a compliance blocker.",
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Add request-logging middleware with caller identity to CloudWatch Logs",
-          "Deploy API Gateway with access logging to immutable S3 destination"
+          "Deploy API Gateway with CloudWatch access logging",
+          "Add request logging middleware"
         ]
       }
     },
@@ -191,9 +184,9 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Agent Identity Suspension",
-      "description": "Single shared API key means no per-agent suspension capability. Revoking access affects all consumers simultaneously.",
-      "gap": "Cannot isolate a misbehaving agent without disrupting all service consumers.",
-      "recommendation": "Resolve AUTH-Q1 first (per-caller identity), which naturally enables per-identity suspension via API Gateway key deletion.",
+      "description": "No mechanism to suspend or revoke individual agent identities. The single shared API key means suspending one caller requires changing the key for all callers, causing a service disruption.",
+      "gap": "Cannot isolate a misbehaving agent without affecting all API consumers.",
+      "recommendation": "Migrate to per-agent API keys via API Gateway with ability to disable individual keys, or implement OAuth2 client credentials with token revocation.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
@@ -207,8 +200,8 @@
         "safety_impact": true,
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Issue per-agent API keys via API Gateway \u2014 individual keys can be disabled",
-          "Deploy WAF rule to block specific source IPs as interim measure"
+          "API Gateway API key management with per-key disable",
+          "IP-based blocking as interim"
         ]
       }
     },
@@ -217,27 +210,27 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Compensation and Rollback",
-      "description": "No compensation or rollback mechanisms exist. The system performs no write operations \u2014 GET reads from MongoDB, POST computes a value. No saga patterns or undo endpoints.",
-      "gap": "No transactional framework exists. Low practical impact given read-only operations.",
-      "recommendation": "Lower priority given no write operations. Implement saga patterns if write endpoints are added.",
+      "description": "No compensation or rollback mechanism exists for any operation. The application has no transaction management, no saga patterns, and no undo endpoints.",
+      "gap": "If agent scope expands to write-enabled, there is no mechanism to reverse or compensate failed multi-step operations.",
+      "recommendation": "Before expanding to write-enabled agent scope, implement compensation logic or two-phase commit patterns for any write operations.",
       "severity": "Medium",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "server.js",
-        "lines": "21-45"
+        "lines": null
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, downgraded from conditional BLOCKER",
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, no write workflows to compensate currently",
         "agent_scope": "read-only",
-        "resolution_reasoning": "STATE-Q1 resolved as RISK-SAFETY because agent_scope is read-only (inferred from has_write_operations=false). The system has no multi-step write workflows to compensate.",
+        "resolution_reasoning": "STATE-Q1 evaluated as RISK-SAFETY because agent_scope is read-only. The service has no write operations currently, but compensation capability is relevant for system maturity and future scope expansion.",
         "remediation_timeline": "60\u201390 days",
         "compensating_controls": [
-          "Scope agent access to read-only endpoints at API Gateway level",
-          "The current read-only nature naturally limits blast radius"
+          "Current read-only scope limits impact",
+          "Scope future writes to require explicit confirmation"
         ]
       }
     },
@@ -246,24 +239,24 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Circuit Breakers and Resilience",
-      "description": "No circuit breakers, retry logic, or timeout configurations for MongoDB dependency. New connection opened per request with no pooling or timeout.",
-      "gap": "MongoDB failures cascade to all callers with no protection or graceful degradation.",
-      "recommendation": "Implement MongoDB connection pooling, add timeouts, and introduce circuit breaker pattern (opossum library).",
+      "description": "The application connects to MongoDB on every request with no connection pooling, no retry logic, no timeout configuration, and no circuit breaker pattern. A MongoDB outage causes all requests to hang or fail with generic 500 errors.",
+      "gap": "No resilience patterns for the external MongoDB dependency. Agent traffic during a MongoDB outage accumulates pending connections.",
+      "recommendation": "Implement MongoDB connection pooling, connection timeouts, and circuit breaker logic. Add exponential backoff for retries.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "server.js",
-        "lines": "22-23"
+        "lines": "20-35"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
         "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "K8s liveness/readiness probes restart unhealthy pods",
-          "Implement connection pooling and timeouts as immediate code changes"
+          "K8s resource limits contain blast radius at container level",
+          "K8s readiness probe removes unhealthy pods"
         ]
       }
     },
@@ -272,9 +265,9 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Rate Limiting and Throttling",
-      "description": "No rate limiting at any layer. No middleware, no API Gateway, no WAF rules. Express app has no protection against traffic storms.",
-      "gap": "No protection against agent-driven traffic storms. A runaway agent loop could overwhelm the service.",
-      "recommendation": "Add express-rate-limit middleware immediately. Deploy API Gateway or NGINX Ingress with throttling for production.",
+      "description": "No rate limiting exists at any layer. No API Gateway throttling, no WAF rules, no application-level rate limiting middleware. The K8s service is exposed as ClusterIP with no ingress rate controls.",
+      "gap": "A runaway agent loop can overwhelm the service at machine speed. Each request opens a new MongoDB connection, amplifying the impact.",
+      "recommendation": "Deploy API Gateway with throttling configuration (requests/second per key). Alternatively, add express-rate-limit middleware.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
@@ -286,10 +279,10 @@
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "14\u201330 days",
+        "remediation_timeline": "30\u201360 days",
         "compensating_controls": [
-          "Add express-rate-limit middleware as immediate code change",
-          "Deploy API Gateway or Ingress controller with throttling rules"
+          "K8s resource limits provide basic compute bounds",
+          "Deploy API Gateway with usage plans and throttling"
         ]
       }
     },
@@ -298,9 +291,9 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "Machine-Readable API Specification",
-      "description": "No OpenAPI, Swagger, AsyncAPI, or machine-readable specification found. API endpoints only discoverable by reading source code.",
-      "gap": "Agent frameworks cannot auto-generate tool definitions from this API.",
-      "recommendation": "Create an openapi.yaml specification documenting both endpoints with request/response schemas.",
+      "description": "No OpenAPI, Swagger, AsyncAPI, GraphQL schema, or Smithy specification exists in the repository. The API surface (GET /rates, POST /quote) is defined only in server.js code.",
+      "gap": "Agent frameworks cannot auto-generate tool definitions. Every integration requires manual tool authoring.",
+      "recommendation": "Create an OpenAPI 3.0 specification documenting the two endpoints, their parameters, and response schemas.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -312,11 +305,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Write OpenAPI spec manually",
-          "Use swagger-jsdoc annotations in Express routes"
-        ]
+        "remediation_timeline": "30 days"
       }
     },
     {
@@ -324,51 +313,21 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "Structured Error Responses",
-      "description": "Error responses are minimal unstructured objects: { error: 'db error' }, { error: 'invalid api key' }. No error codes, no retryable indicators.",
-      "gap": "Agents cannot distinguish retriable from terminal errors. All failures look the same.",
-      "recommendation": "Implement consistent error format with error_code, message, and retryable fields.",
+      "description": "Error responses are minimal JSON objects with only a message string: { error: 'invalid api key' }, { error: 'db error' }, { error: 'query error' }. No error codes, no retryable indicator, no consistent error schema.",
+      "gap": "Agents cannot distinguish retriable errors from terminal errors.",
+      "recommendation": "Implement structured error responses with error code, message, and retryable boolean.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "server.js",
-        "lines": "16-30"
+        "lines": "15-28"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Document error strings in agent tool description",
-          "Add API Gateway error mapping"
-        ]
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment configuration. No docker-compose, no seed data scripts, no environment-specific configs.",
-      "gap": "No safe environment to test agent behavior without affecting production.",
-      "recommendation": "Create docker-compose.yml with MongoDB and seed data for local testing.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "package.json",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Create docker-compose.yml with MongoDB for local testing",
-          "Deploy K8s manifests to separate staging namespace"
-        ]
+        "remediation_timeline": "30 days"
       }
     },
     {
@@ -376,25 +335,21 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Selective Query Support",
-      "description": "GET /rates supports origin/dest filtering but has no pagination, sorting, or result size limits. All matching documents returned as full array.",
-      "gap": "Unbounded result sets possible from broad queries. Agent queries may exhaust LLM context.",
-      "recommendation": "Add limit/offset parameters with default (100) and maximum (1000) limits.",
+      "description": "GET /rates returns all matching documents from MongoDB via .find(filter).toArray() with no pagination, no limit parameter, no cursor-based pagination, and no result size cap.",
+      "gap": "An agent querying rates for a broad origin/destination pair could receive an unbounded result set.",
+      "recommendation": "Add limit and offset (or cursor) query parameters to GET /rates. Enforce a maximum result size.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "server.js",
-        "lines": "27-28"
+        "lines": "25-33"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "7\u201314 days",
-        "compensating_controls": [
-          "Add hardcoded limit to MongoDB find query",
-          "Document expected result set sizes in tool definitions"
-        ]
+        "remediation_timeline": "30 days"
       }
     },
     {
@@ -402,25 +357,21 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Input Validation and Schema Enforcement",
-      "description": "No input validation. Query params passed directly to MongoDB filter without sanitization. POST /quote reads weight/zone without type checking. NoSQL injection risk present.",
-      "gap": "Malformed agent inputs accepted without rejection or structured error feedback.",
-      "recommendation": "Add validation library (joi/express-validator). Sanitize MongoDB query inputs. Return structured validation errors.",
+      "description": "No input validation exists. GET /rates passes req.query.origin and req.query.dest directly into the MongoDB filter with no sanitization \u2014 a potential NoSQL injection vector. POST /quote uses req.body.weight and req.body.zone in arithmetic with no type checking.",
+      "gap": "Malformed agent inputs are not rejected. The system accepts arbitrary query shapes without validation.",
+      "recommendation": "Add input validation (joi or express-validator) for all endpoints. Sanitize MongoDB query inputs. Return structured validation errors.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "server.js",
-        "lines": "27-39"
+        "lines": "25-37"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Add mongo-sanitize middleware for injection prevention",
-          "Validate at API Gateway with request validators"
-        ]
+        "remediation_timeline": "30 days"
       }
     },
     {
@@ -428,25 +379,21 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Temporal Metadata and Freshness",
-      "description": "No temporal metadata in API responses. No timestamps, no Cache-Control headers, no data freshness signaling.",
-      "gap": "Agents cannot determine when shipping rates were last updated or if data is stale.",
-      "recommendation": "Add updated_at timestamps to rate documents. Return Cache-Control and Last-Modified headers.",
+      "description": "No temporal metadata in API responses. MongoDB documents returned as-is with no timestamps indicating when rates were last updated. No Cache-Control or freshness headers.",
+      "gap": "Agent cannot determine whether shipping rates are current or stale.",
+      "recommendation": "Add updated_at timestamp fields to rate documents. Include Cache-Control or X-Data-Age response headers.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "server.js",
-        "lines": "28-34"
+        "lines": "25-33"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Add last_updated field to rates collection",
-          "Add Cache-Control response headers"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -454,25 +401,21 @@
       "category": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "Schema Versioning and API Contracts",
-      "description": "No API versioning (no /v1/ prefix, no Accept-Version header). No schema documentation, no changelog, no breaking change detection, no contract tests.",
-      "gap": "Agent tool bindings break silently if API response format changes.",
-      "recommendation": "Add URL-based versioning (/v1/rates). Document response schemas. Add contract tests.",
+      "description": "No API versioning (no /v1/ prefix, no Accept-Version header). No schema files, no changelog, no contract tests, no migration files.",
+      "gap": "Agent tool bindings break silently when API changes are deployed.",
+      "recommendation": "Introduce URL-based API versioning (/v1/rates, /v1/quote). Add OpenAPI diff checks to CI.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "server.js",
-        "lines": "21-37"
+        "lines": "20-33"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Pin agent tool definitions to specific response field expectations",
-          "Version URL path before any schema changes"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -480,25 +423,21 @@
       "category": "Observability",
       "category_id": "OBS",
       "title": "Distributed Tracing and Structured Logging",
-      "description": "No distributed tracing, no structured logging, no correlation IDs. Only a single console.log startup message.",
-      "gap": "Agent-initiated requests are completely opaque. Cannot diagnose failures.",
-      "recommendation": "Add pino (structured JSON logger) with request-id middleware. Instrument with OpenTelemetry SDK.",
+      "description": "No distributed tracing (no X-Ray, no OpenTelemetry SDK). No structured logging \u2014 the only log statement is console.log('Shipping API listening on 8080'). No correlation IDs, no JSON logging.",
+      "gap": "Agent-initiated request failures are completely undebuggable.",
+      "recommendation": "Add structured JSON logging with request_id correlation. Integrate AWS X-Ray or OpenTelemetry SDK.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "server.js",
-        "lines": "47"
+        "lines": "39"
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Add pino with JSON output and request-id middleware",
-          "Instrument with OpenTelemetry Node.js SDK"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -506,9 +445,9 @@
       "category": "Observability",
       "category_id": "OBS",
       "title": "Alerting on Error Rates and Latency",
-      "description": "No alerting configuration. No CloudWatch alarms, no monitoring integration, no SLO-based alerting.",
-      "gap": "Service degradation undetectable until agents report failures.",
-      "recommendation": "Deploy CloudWatch Container Insights. Configure alarms on 5xx error rate and p99 latency.",
+      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection, no PagerDuty/OpsGenie integration.",
+      "gap": "Target system degradation affecting agents will not be detected until cascading failures occur.",
+      "recommendation": "Configure CloudWatch alarms for 5xx error rate and p99 latency.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -520,21 +459,17 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "K8s liveness/readiness probes provide basic health detection",
-          "Add CloudWatch Container Insights for EKS metrics"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "ENG-Q1",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "Infrastructure Governance",
-      "description": "K8s manifests provide partial IaC (namespace, configmap, deployment, service). No API Gateway, IAM, or networking defined as code. No PR review requirements or drift detection.",
-      "gap": "Agent-facing integration surface not fully governed as code.",
-      "recommendation": "Adopt GitOps for K8s manifests. Define API Gateway and IAM as Terraform/CDK.",
+      "title": "Infrastructure Governance for Agent-Facing Surface",
+      "description": "Kubernetes manifests exist (deployment.yaml, service.yaml, configmap.yaml, namespace.yaml) providing partial IaC. No PR/review requirements configured, no drift detection active.",
+      "gap": "IaC partially defines deployment surface but lacks peer review enforcement and drift detection. No API Gateway or IAM definitions.",
+      "recommendation": "Implement GitOps (ArgoCD or Flux) for K8s manifest deployment with PR-based review. Add API Gateway and IAM definitions to IaC.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -546,11 +481,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Store K8s manifests in GitOps workflow (ArgoCD/Flux)",
-          "Add Terraform modules for API Gateway and IAM"
-        ]
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
@@ -558,9 +489,9 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "CI/CD with API Contract Testing",
-      "description": "No CI/CD pipeline exists. No GitHub Actions, GitLab CI, Jenkins, or buildspec.yml. No automated testing or contract testing.",
-      "gap": "API breaking changes cannot be caught before deployment.",
-      "recommendation": "Create CI pipeline with Docker build and API contract tests.",
+      "description": "No CI/CD pipeline exists. No GitHub Actions, GitLab CI, Jenkinsfile, or buildspec.yml found.",
+      "gap": "API contract changes cannot be caught before agents are affected.",
+      "recommendation": "Establish a CI/CD pipeline with automated API contract tests using the OpenAPI specification.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -572,11 +503,7 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Manual testing against Dockerfile-based build",
-          "Add minimal CI workflow with API smoke tests"
-        ]
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
@@ -584,25 +511,21 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "Rollback Capability",
-      "description": "No rollback strategy configured. K8s Deployment uses :latest tag with default RollingUpdate. No blue/green, canary, or automated rollback.",
-      "gap": "Cannot reliably roll back to previous version if change breaks agent APIs.",
-      "recommendation": "Pin image tags to specific versions. Configure automated rollback on failed health checks.",
+      "description": "Kubernetes Deployment provides native rollback capability via kubectl rollout undo. However, no automated rollback triggers, no blue/green deployment, no canary strategy.",
+      "gap": "Rollback is available but entirely manual. No health-based automatic rollback.",
+      "recommendation": "Configure deployment strategy with automatic rollback triggers (Argo Rollouts or CodeDeploy).",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": "k8s/deployment.yaml",
-        "lines": "29"
+        "lines": null
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "K8s native kubectl rollout undo as manual fallback",
-          "Pin image tags for deterministic rollback"
-        ]
+        "remediation_timeline": "60\u201390 days"
       }
     },
     {
@@ -610,9 +533,9 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "API Test Coverage",
-      "description": "Zero automated tests. No test framework, no test files, no test dependencies in package.json.",
-      "gap": "No verification of API behavior for agent consumption.",
-      "recommendation": "Add jest + supertest integration tests for both endpoints covering valid/invalid inputs and error responses.",
+      "description": "No test files exist in the repository. No test framework in dependencies. No test directory.",
+      "gap": "Zero automated test coverage for agent-facing APIs.",
+      "recommendation": "Add API integration tests using supertest/jest validating GET /rates and POST /quote.",
       "severity": "Medium",
       "priority": "P3",
       "effort": "Medium",
@@ -624,21 +547,17 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Write minimal Postman/Newman collection",
-          "Add mocha/jest with supertest for API tests"
-        ]
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
       "question_id": "ENG-Q5",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "Encryption at Rest",
-      "description": "MongoDB connection uses plaintext (no TLS). No encryption-at-rest configuration. No KMS references. MongoDB has no authentication.",
-      "gap": "Data at rest and in transit is unencrypted.",
-      "recommendation": "Enable MongoDB TLS. Enable encryption at rest. Consider migration to Amazon DocumentDB.",
+      "title": "Encryption at Rest for Agent-Accessible Data",
+      "description": "No encryption at rest configuration for the MongoDB data store. The MongoDB connection string uses no TLS options. No KMS key references.",
+      "gap": "Data at rest in MongoDB is not demonstrably encrypted.",
+      "recommendation": "Migrate to a managed database service (DocumentDB or MongoDB Atlas) with encryption at rest enabled.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -650,11 +569,29 @@
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Enable MongoDB TLS and WiredTiger encryption",
-          "Migrate to Amazon DocumentDB (encrypted by default)"
-        ]
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging Environment",
+      "description": "No sandbox or staging environment configuration exists. No docker-compose for local testing, no seed data scripts, no multi-environment K8s overlays.",
+      "gap": "No safe environment to test agent behavior against production-equivalent data.",
+      "recommendation": "Create a docker-compose.yml for local development with MongoDB container and seed data. Add K8s overlays for staging.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "package.json",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
       }
     },
     {
@@ -662,23 +599,23 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "Idempotent Write Operations",
-      "description": "POST /quote performs stateless computation without database writes. No write endpoints exist requiring idempotency controls.",
-      "gap": "No idempotency mechanism, but none needed for current read-only operations.",
-      "recommendation": "No action at current scope. Add idempotency keys if write endpoints are introduced.",
+      "description": "POST /quote is a pure computation endpoint (calculates shipping cost from weight and zone). It does not write to any persistent store. No idempotency concerns for the current read-only surface.",
+      "gap": "No idempotency mechanism exists if write operations are added in the future.",
+      "recommendation": "When expanding to write operations, implement idempotency key support.",
       "severity": "Low",
       "priority": "P1",
       "effort": "Low",
       "phase": 3,
       "evidence": {
         "file": "server.js",
-        "lines": "37-43"
+        "lines": "33-38"
       },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, no write operations exist",
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, no write operations to require idempotency",
         "agent_scope": "read-only",
-        "resolution_reasoning": "API-Q4 resolved as INFO because agent_scope is read-only (inferred from has_write_operations=false). POST /quote is pure computation without database writes."
+        "resolution_reasoning": "API-Q4 evaluated as INFO because agent_scope is read-only. POST /quote is pure computation with no persistent state mutation."
       }
     },
     {
@@ -686,9 +623,9 @@
       "category": "API Surface",
       "category_id": "API",
       "title": "Rate Limit Documentation and Headers",
-      "description": "No rate limit documentation. No X-RateLimit-Remaining or Retry-After headers returned. No API Gateway usage plan.",
-      "gap": "Agents cannot self-throttle based on remaining quota.",
-      "recommendation": "When rate limiting is implemented (STATE-Q5), include X-RateLimit headers in responses.",
+      "description": "No rate limit documentation or rate limit headers (X-RateLimit-Remaining, Retry-After) in responses. No API Gateway usage plan configured.",
+      "gap": "Agents have no self-throttling signal.",
+      "recommendation": "When rate limiting is implemented, expose rate limit headers and document limits in the API specification.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
@@ -707,37 +644,16 @@
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "Identity Propagation and Delegation",
-      "description": "No identity propagation. No JWT, no on-behalf-of flows. Archetype calibration: data-gateway serving reference data \u2014 identity propagation has minimal security impact.",
-      "gap": "No caller context propagation, but not a safety concern for reference data.",
-      "recommendation": "No action required for data-gateway archetype. Reassess if user-specific data introduced.",
+      "description": "No identity propagation or delegation flows exist. No JWT parsing, no OAuth2 on-behalf-of, no user context headers. Downgraded to INFO for data-gateway archetype \u2014 service returns reference data where caller identity has minimal security impact.",
+      "gap": "No identity propagation mechanism, but limited impact for data-gateway serving reference data.",
+      "recommendation": "Implement JWT-based identity propagation if the service evolves to handle user-specific data.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 3,
       "evidence": {
         "file": "server.js",
-        "lines": "15-19"
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "STATE-Q3",
-      "category": "State Management",
-      "category_id": "STATE",
-      "title": "Concurrency Controls",
-      "description": "No concurrency controls (no optimistic locking, ETags, or version fields). Not applicable for read-only operations.",
-      "gap": "No write-contention controls, but none needed for read-only scope.",
-      "recommendation": "No action at read-only scope. Implement optimistic locking if write endpoints introduced.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "server.js",
-        "lines": null
+        "lines": "14-18"
       },
       "ara_metadata": {
         "native_severity": "INFO",
@@ -749,54 +665,12 @@
       "category": "State Management",
       "category_id": "STATE",
       "title": "Blast Radius and Transaction Limits",
-      "description": "No transaction limits. Not applicable for read-only operations \u2014 no records modified, no spend triggered.",
-      "gap": "N/A for read-only scope.",
-      "recommendation": "No action required. Implement per-caller limits if write endpoints introduced.",
+      "description": "No configurable transaction limits exist. However, the service performs no write operations, so blast radius from agent errors is limited to read load.",
+      "gap": "No per-agent transaction limits for future write scope expansion.",
+      "recommendation": "When expanding to write scope, add configurable per-caller limits on write operations.",
       "severity": "Low",
       "priority": "P2",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "server.js",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "HITL-Q1",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "Draft/Pending State",
-      "description": "No draft/pending state concept. The application has no state-mutating operations.",
-      "gap": "N/A for read-only scope.",
-      "recommendation": "No action required at read-only scope.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "server.js",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "HITL-Q2",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "Configurable Approval Gates",
-      "description": "No approval gates. Not applicable for read-only operations.",
-      "gap": "N/A for read-only scope.",
-      "recommendation": "No action required at read-only scope.",
-      "severity": "Low",
-      "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 3,
       "evidence": {
         "file": "server.js",
@@ -812,23 +686,23 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Sensitive Data Classification",
-      "description": "System stores shipping rates (origin, destination, price) \u2014 business reference data. No PII, PHI, financial instruments, or credentials in the data store. Stage A = No \u2014 not a data-handling target.",
-      "gap": "N/A \u2014 not a sensitive data system.",
-      "recommendation": "No action required. Monitor for scope creep if customer-specific data introduced.",
+      "description": "The system stores and serves shipping rates (origin, destination, rate amounts) \u2014 business reference data. Not PII, PHI, financial instruments, or credentials. Stage A = No: not a data-handling target for sensitive information.",
+      "gap": "No classification needed for current data scope.",
+      "recommendation": "Re-evaluate if customer-specific data is added to the service.",
       "severity": "Low",
       "priority": "P0",
       "effort": "Low",
       "phase": 3,
       "evidence": {
         "file": "server.js",
-        "lines": "27-28"
+        "lines": "25-26"
       },
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: Stage A = No \u2014 system stores shipping rates (business reference data), not sensitive data",
+        "conditional_resolution": "Stage A = No: system stores shipping rates (reference data), not sensitive data",
         "agent_scope": "read-only",
-        "resolution_reasoning": "DATA-Q1 resolved as INFO because Stage A determined the system is not a data-handling target. MongoDB stores shipping rates by origin/destination \u2014 business reference data without PII, PHI, or financial instruments.",
+        "resolution_reasoning": "DATA-Q1 Stage A evaluated as No because the system stores shipping rates (origin, destination, rate) \u2014 business reference data with no PII, PHI, financial instruments, or credentials.",
         "data_q1_subchecks": {
           "b1": {
             "fired": false,
@@ -853,15 +727,15 @@
       "category": "Data Accessibility",
       "category_id": "DATA",
       "title": "Data Quality Awareness",
-      "description": "No data quality metrics or monitoring for the shipping rates dataset. No profiling, null rate detection, or freshness SLAs.",
-      "gap": "Rate data quality is opaque \u2014 no completeness or freshness monitoring.",
-      "recommendation": "Add basic data quality checks for the rates collection.",
+      "description": "No data quality metrics, profiling, or completeness monitoring for the shipping rates data in MongoDB.",
+      "gap": "No visibility into data completeness or accuracy.",
+      "recommendation": "Establish data freshness SLAs and basic completeness monitoring for the rates collection.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "server.js",
+        "file": "package.json",
         "lines": null
       },
       "ara_metadata": {
@@ -874,15 +748,15 @@
       "category": "Discovery & Documentation",
       "category_id": "DISC",
       "title": "Data Catalog / Metadata Layer",
-      "description": "No data catalog or metadata layer. No AWS Glue catalog, no data dictionary, no schema documentation for MongoDB collections.",
-      "gap": "Data model must be reverse-engineered from source code.",
-      "recommendation": "Document MongoDB collection schema in README or separate schema file.",
+      "description": "No data catalog or metadata layer describing the shipping rates data schema or semantics.",
+      "gap": "Teams building agent tools must reverse-engineer data structure from code.",
+      "recommendation": "Document the rates collection schema in a schema file or the API specification.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
       "evidence": {
-        "file": "README.md",
+        "file": "server.js",
         "lines": null
       },
       "ara_metadata": {
@@ -897,14 +771,14 @@
       "category_id": "API",
       "title": "Documented API Interface",
       "status": "pass",
-      "reason": "Application exposes REST API via Express.js with two HTTP endpoints (GET /rates, POST /quote). Integration is via HTTP."
+      "reason": "Application exposes REST endpoints (GET /rates, POST /quote) via Express. Integration does not require direct database access, file exchange, or UI automation."
     },
     {
       "question_id": "API-Q5",
       "category_id": "API",
       "title": "Structured Response Format",
       "status": "pass",
-      "reason": "Both endpoints return JSON responses. Express serializes JavaScript objects to JSON by default."
+      "reason": "All responses are JSON (Express default serialization). Agent-friendly structured format."
     },
     {
       "question_id": "API-Q6",
@@ -918,42 +792,63 @@
       "category_id": "API",
       "title": "Event Emission for State Changes",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 data-gateway archetype has no state changes requiring event emission."
+      "reason": "Extended question not triggered \u2014 data-gateway archetype with no state changes."
     },
     {
       "question_id": "STATE-Q2",
       "category_id": "STATE",
       "title": "Queryable Current State",
       "status": "pass",
-      "reason": "GET /rates endpoint allows querying current shipping rate state by origin and destination filters."
+      "reason": "GET /rates provides queryable access to current shipping rate state in MongoDB. Agents can inspect rates before deciding on quotes."
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category_id": "STATE",
+      "title": "Concurrency Controls",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 agent_scope is read-only AND service has no write operations."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 service is not P0 priority and not on critical path."
+      "reason": "Extended question not triggered \u2014 no P0 priority assigned and not identified as critical path."
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category_id": "HITL",
+      "title": "Draft/Pending State",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 agent_scope is read-only."
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category_id": "HITL",
+      "title": "Configurable Approval Gates",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 agent_scope is read-only."
     },
     {
       "question_id": "DATA-Q2",
       "category_id": "DATA",
       "title": "Data Residency and Sovereignty",
       "status": "pass",
-      "reason": "System stores shipping rate reference data \u2014 not subject to GDPR, LGPD, HIPAA, or other data residency regulations. No personal or regulated data."
+      "reason": "Data stored is shipping rates \u2014 reference/business data with no regulatory residency requirements. No GDPR/LGPD/HIPAA compliance references. No residency constraints apply."
     },
     {
       "question_id": "DATA-Q6",
       "category_id": "DATA",
       "title": "PII Redaction in Logs",
       "status": "pass",
-      "reason": "System handles no PII. Data stored is shipping rates. No user-specific data enters the system. Only logging is a startup message."
+      "reason": "System does not handle PII (stores shipping rates \u2014 reference data). Only log statement is startup message. No user data enters the logging pipeline."
     },
     {
       "question_id": "DISC-Q2",
       "category_id": "DISC",
       "title": "Semantically Meaningful Field Names",
       "status": "pass",
-      "reason": "Field names are human-readable and semantically meaningful: origin, dest, weight, zone, quote. No legacy codes requiring data dictionary."
+      "reason": "Field names are reasonably semantic: origin, dest, weight, zone, quote, error. Meanings are clear without a data dictionary."
     },
     {
       "question_id": "OBS-Q3",
@@ -972,7 +867,7 @@
     "items": [
       {
         "phase": 1,
-        "phase_name": "Blockers",
+        "phase_name": "Blockers and Safety",
         "findings": [
           "AUTH-Q1",
           "AUTH-Q2",
@@ -984,15 +879,14 @@
           "STATE-Q4",
           "STATE-Q5"
         ],
-        "summary": "Resolve the identity blocker and address critical safety risks: implement per-caller machine identity, scoped permissions, credential management, audit logging, and resilience patterns."
+        "summary": "Resolve the identity BLOCKER and address all RISK-SAFETY findings. Deploy API Gateway with per-agent identity, implement rate limiting, and add resilience patterns."
       },
       {
         "phase": 2,
-        "phase_name": "Quality",
+        "phase_name": "Quality and Operability",
         "findings": [
           "API-Q2",
           "API-Q3",
-          "HITL-Q3",
           "DATA-Q3",
           "DATA-Q4",
           "DATA-Q5",
@@ -1002,85 +896,91 @@
           "ENG-Q1",
           "ENG-Q2",
           "ENG-Q3",
-          "ENG-Q5"
+          "ENG-Q5",
+          "HITL-Q3"
         ],
-        "summary": "Improve agent integration quality: add API specification, structured errors, input validation, pagination, observability, CI/CD, and encryption."
+        "summary": "Improve API quality, observability, and engineering maturity. Create OpenAPI spec, add structured errors, implement CI/CD, and configure monitoring."
       },
       {
         "phase": 3,
-        "phase_name": "Optimization",
+        "phase_name": "Optimization and Future-Proofing",
         "findings": [
-          "ENG-Q4",
           "API-Q4",
           "API-Q8",
           "AUTH-Q4",
-          "STATE-Q3",
           "STATE-Q6",
-          "HITL-Q1",
-          "HITL-Q2",
           "DATA-Q1",
           "DATA-Q7",
-          "DISC-Q3"
+          "DISC-Q3",
+          "ENG-Q4"
         ],
-        "summary": "Address informational items and build long-term maturity: test coverage, documentation, and future-proofing for write-enabled scope expansion."
+        "summary": "Address informational findings and prepare for future scope expansion. Add test coverage, documentation, and write-operation readiness."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Deploy centralized identity provider with per-caller credentials",
+      "action": "Deploy API Gateway with per-agent identity and throttling",
       "question_ids": [
         "AUTH-Q1",
         "AUTH-Q2",
         "AUTH-Q3",
-        "AUTH-Q7"
+        "AUTH-Q7",
+        "STATE-Q5",
+        "API-Q8"
       ],
       "priority": "P0",
       "effort": "Medium",
-      "rationale": "Resolves the only BLOCKER and simultaneously addresses 4 RISK-SAFETY findings. Deploy API Gateway with per-caller API keys or OAuth2 client credentials."
+      "rationale": "Resolves the AUTH-Q1 BLOCKER and simultaneously addresses scoped permissions, action-level auth, identity suspension, and rate limiting."
     },
     {
-      "action": "Externalize secrets and implement rotation",
+      "action": "Remove hardcoded credentials and integrate Secrets Manager",
       "question_ids": [
         "AUTH-Q5"
       ],
       "priority": "P1",
       "effort": "Low",
-      "rationale": "Hardcoded credentials in source code are an immediate security risk. K8s manifests already reference secrets \u2014 connect the application to consume them."
+      "rationale": "Eliminates credential exposure in source code and git history. Quick win with low effort."
     },
     {
-      "action": "Add structured logging and audit trail",
+      "action": "Implement structured logging and audit trail",
       "question_ids": [
         "AUTH-Q6",
         "OBS-Q1"
       ],
       "priority": "P1",
       "effort": "Medium",
-      "rationale": "No audit trail and no observability make agent operations completely opaque. Add pino with request-id middleware and ship to CloudWatch."
+      "rationale": "Provides audit accountability and request tracing for agent-initiated operations."
     },
     {
-      "action": "Implement rate limiting and circuit breakers",
+      "action": "Add MongoDB connection pooling and circuit breaker",
       "question_ids": [
-        "STATE-Q4",
-        "STATE-Q5"
+        "STATE-Q4"
       ],
       "priority": "P1",
-      "effort": "Low",
-      "rationale": "Prevents agent traffic storms from cascading failures. express-rate-limit and opossum can be added with minimal code changes."
+      "effort": "Medium",
+      "rationale": "Prevents cascading failures from MongoDB outages affecting agent operations."
     },
     {
-      "action": "Create OpenAPI specification and add input validation",
+      "action": "Create OpenAPI specification and API versioning",
       "question_ids": [
         "API-Q2",
-        "API-Q3",
-        "DATA-Q4",
         "DISC-Q1"
       ],
       "priority": "P2",
       "effort": "Low",
-      "rationale": "Enables agent tool auto-generation and prevents malformed inputs. Foundation for contract testing."
+      "rationale": "Enables automated agent tool generation and breaking change detection."
+    },
+    {
+      "action": "Establish CI/CD pipeline with testing",
+      "question_ids": [
+        "ENG-Q2",
+        "ENG-Q4"
+      ],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Provides automated quality gates and API contract validation before deployment."
     }
   ],
-  "analysis_type": "ara",
-  "repo_name": "legacy-shipping-api"
+  "analysis_type": "ara"
 }

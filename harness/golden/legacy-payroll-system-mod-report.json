@@ -2,16 +2,16 @@
   "analysis_type": "mod",
   "metadata": {
     "repository": "legacy-payroll-system",
-    "analysis_date": "2025-07-18",
+    "analysis_date": "2025-07-17",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
-    "repo_type_justification": "Application source code (COBOL) with a deployable entry point (PROGRAM-ID. PAYRUN) executed via JCL job scheduling on z/OS mainframe. Single service with persistent data access.",
-    "service_archetype": "stateful-crud",
+    "repo_type_justification": "Application source code (COBOL program PAYRUN.cbl) with a deployable entry point (JCL job PAYRUN.jcl executed on z/OS mainframe via CA-7 scheduler). Classified as application.",
+    "service_archetype": "event-processor",
     "service_archetype_source": "auto-detected",
-    "archetype_justification": "Reads from indexed employee master file (persistent state) and writes payroll output (state mutation). No message queue consumers, no multi-service orchestration.",
+    "archetype_justification": "Batch processing system triggered by schedule (CA-7 biweekly), reads employee data, computes payroll, writes output file, and transfers via FTP. No synchronous API surface. Matches event-processor detection signals: batch processing patterns with no synchronous API.",
     "priority": null,
-    "tags": [],
+    "tags": null,
     "context": null,
     "surface_flags": {
       "has_persistent_data_store": true,
@@ -22,7 +22,7 @@
       "has_iac_provisioning_aws_resources": false
     }
   },
-  "overall_score": 1.15,
+  "overall_score": 1.2,
   "categories": [
     {
       "category_id": "INF",
@@ -41,7 +41,7 @@
     {
       "category_id": "DATA",
       "category": "Data Platform",
-      "numeric_score": 1.75,
+      "numeric_score": 2.0,
       "score_rating": "Needs Work",
       "severity_status": "Critical"
     },
@@ -70,7 +70,7 @@
       "status": "divergent",
       "score_band": "Not Ready",
       "count_tier": "Remediation Required",
-      "reason": "Overall score 1.15 yields Not Ready band (< 1.5) but 11 High findings maps to Remediation Required tier (2-11 High). The divergence occurs because the classification table requires \u226512 High for Not Ready tier, while this repo has 11 High \u2014 just under the threshold. Both perspectives are valid."
+      "reason": "Overall score 1.20 yields Not Ready band (< 1.5) but 11 High findings map to Remediation Required tier (2-11 High). The divergence arises because nearly all questions score 1, driving the overall score below 1.5, while the count-based classification caps Remediation Required at 2-11 High. Both signals confirm this system requires comprehensive modernization."
     }
   },
   "top_gaps": [
@@ -79,40 +79,40 @@
       "question_id": "SEC-Q5",
       "title": "Secrets Management",
       "score": 1,
-      "gap": "Plaintext FTP credentials hardcoded in JCL committed to source control",
-      "impact": "Critical security vulnerability \u2014 PII transmitted over plaintext FTP with exposed credentials"
+      "gap": "Plaintext credentials (FTP password) hardcoded in JCL source",
+      "impact": "Critical security vulnerability; immediate credential exposure risk"
     },
     {
       "rank": 2,
-      "question_id": "INF-Q1",
-      "title": "Managed Compute",
-      "score": 1,
-      "gap": "All compute on z/OS mainframe with no cloud-native managed services",
-      "impact": "Blocks all cloud modernization; no elasticity, vendor lock-in"
-    },
-    {
-      "rank": 3,
       "question_id": "INF-Q10",
       "title": "Infrastructure as Code Coverage",
       "score": 1,
-      "gap": "Zero IaC \u2014 all infrastructure manually provisioned",
-      "impact": "No reproducibility, no disaster recovery automation"
+      "gap": "No IaC exists; all infrastructure manual (mainframe + EC2 gateway)",
+      "impact": "No reproducibility, no disaster recovery, no environment consistency"
+    },
+    {
+      "rank": 3,
+      "question_id": "INF-Q11",
+      "title": "CI/CD Automation",
+      "score": 1,
+      "gap": "No CI/CD pipeline; all deployments manual",
+      "impact": "No automated quality gates, error-prone manual process"
     },
     {
       "rank": 4,
       "question_id": "APP-Q2",
       "title": "Monolith vs Microservices",
       "score": 1,
-      "gap": "Single tightly-coupled COBOL batch program with no module boundaries",
-      "impact": "Cannot scale or deploy independently, single point of failure"
+      "gap": "Single COBOL program with no module boundaries",
+      "impact": "Cannot independently scale, deploy, or evolve components"
     },
     {
       "rank": 5,
-      "question_id": "DATA-Q3",
-      "title": "Database Engine Version and EOL",
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
       "score": 1,
-      "gap": "IBM DB2 for z/OS v10 past end-of-support since April 2020",
-      "impact": "No security patches, compliance risk, growing vulnerability exposure"
+      "gap": "All compute on z/OS mainframe with thin EC2 file gateway",
+      "impact": "High operational overhead, scarce skills, no elasticity"
     }
   ],
   "findings": [
@@ -120,10 +120,10 @@
       "question_id": "INF-Q1",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Compute \u2014 all compute on z/OS mainframe",
-      "description": "All compute runs on an IBM z/OS mainframe (COBOL batch) with an EC2 m4.large file gateway. No managed container orchestration or serverless.",
-      "gap": "Zero adoption of managed compute services. Mainframe runtime requires full platform shift.",
-      "recommendation": "Rewrite payroll logic in modern language and deploy to ECS Fargate or Lambda. Replace EC2 file gateway with AWS Transfer Family.",
+      "title": "Managed Compute",
+      "description": "All compute runs on IBM z/OS mainframe (COBOL batch via JCL). The only AWS presence is a single EC2 m4.large instance serving as a plaintext FTP file gateway. No managed container orchestration or serverless.",
+      "gap": "No managed compute services. Mainframe requires specialized skills and cannot scale elastically.",
+      "recommendation": "Rewrite batch processing in a modern language and deploy on AWS Batch, ECS/Fargate, or Lambda.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -143,10 +143,10 @@
       "question_id": "INF-Q2",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Managed Databases \u2014 self-managed DB2 on mainframe",
-      "description": "Database is IBM DB2 for z/OS v10, self-managed on mainframe. Application reads from indexed VSAM file.",
-      "gap": "All persistent data on self-managed mainframe storage. No managed database with automated failover or patching.",
-      "recommendation": "Migrate employee data to Amazon Aurora PostgreSQL or RDS PostgreSQL. Use AWS DMS and SCT.",
+      "title": "Managed Databases",
+      "description": "Database is IBM DB2 for z/OS v10, self-managed on mainframe. The COBOL program reads from VSAM indexed files. No managed AWS database services in use.",
+      "gap": "All data storage is self-managed on mainframe with manual patching, no automated failover, and end-of-support engine.",
+      "recommendation": "Migrate to Amazon Aurora PostgreSQL or RDS PostgreSQL using AWS SCT and DMS.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -166,10 +166,10 @@
       "question_id": "INF-Q3",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Workflow Orchestration \u2014 hardcoded in JCL",
-      "description": "Workflow orchestration handled entirely by JCL job steps and CA-7 mainframe scheduler. Two-step sequential workflow with no managed orchestration service.",
-      "gap": "All workflow logic hardcoded in JCL. No retry logic, no error handling, no visual workflow management.",
-      "recommendation": "Implement payroll workflow using AWS Step Functions with error handling and retry logic.",
+      "title": "Workflow Orchestration",
+      "description": "Batch orchestration is entirely hardcoded in JCL (STEP010: run PAYRUN, STEP020: FTP). No managed workflow orchestration. Event-processor archetype expects managed orchestration for multi-step processing.",
+      "gap": "No dedicated orchestration service. JCL provides only primitive sequential execution with no retry logic or error handling.",
+      "recommendation": "Implement AWS Step Functions for batch workflow orchestration with retry logic and execution visibility.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -189,10 +189,10 @@
       "question_id": "INF-Q4",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Async Messaging \u2014 no messaging, file-based FTP only",
-      "description": "No messaging or streaming infrastructure. Cross-system integration via plaintext FTP file transfer to EC2 gateway.",
-      "gap": "No managed messaging for cross-system state propagation. File-based FTP is sole integration mechanism.",
-      "recommendation": "Replace FTP with event-driven patterns: EventBridge/SNS for notifications, S3 for file delivery with event notifications.",
+      "title": "Async Messaging and Streaming",
+      "description": "No messaging or streaming infrastructure. File-based I/O and plaintext FTP for data transfer. For event-processor archetype, absence of managed event sources is a significant gap.",
+      "gap": "No event-driven architecture. Data transfer relies on plaintext FTP rather than managed messaging services.",
+      "recommendation": "Replace FTP with managed messaging (SQS/EventBridge) or S3 event notifications. Use EventBridge Scheduler for job triggering.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -212,10 +212,10 @@
       "question_id": "INF-Q5",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Network Security \u2014 no VPC, plaintext FTP with PII",
-      "description": "No VPC, subnet, or security group configuration. EC2 gateway receives plaintext FTP with PII (SSN, bank accounts). No network segmentation or encryption in transit.",
-      "gap": "No network security controls. Plaintext FTP transmits sensitive payroll data with no encryption.",
-      "recommendation": "Deploy in VPC with private subnets. Replace FTP with AWS Transfer Family (SFTP) or S3 over HTTPS. Implement least-privilege security groups.",
+      "title": "Network Security",
+      "description": "No VPC, security groups, or network segmentation. Plaintext FTP transmits PII (SSN, bank accounts) to hardcoded IP without encryption or isolation.",
+      "gap": "No network security configuration. Sensitive PII transmitted over plaintext FTP with no network isolation.",
+      "recommendation": "Deploy all workloads in VPC with private subnets, least-privilege security groups, and encrypted transfer (AWS Transfer Family).",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -235,10 +235,10 @@
       "question_id": "INF-Q6",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "API Entry Point \u2014 no gateway or load balancer",
-      "description": "No API Gateway, ALB, or managed entry point. Batch system with direct FTP exposure to EC2 gateway.",
-      "gap": "No managed entry point providing throttling, authentication, or traffic management.",
-      "recommendation": "Expose migrated services behind API Gateway with Cognito auth. Use AWS Transfer Family for file transfers.",
+      "title": "API Entry Point",
+      "description": "No API Gateway, ALB, or managed entry point. System is batch-only with outbound FTP as the only external communication.",
+      "gap": "No managed entry point for external communication.",
+      "recommendation": "Implement API Gateway or ALB with authentication and throttling when modernizing to expose API surface.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -258,16 +258,16 @@
       "question_id": "INF-Q7",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Auto-Scaling \u2014 all capacity statically provisioned",
-      "description": "No auto-scaling. Compute statically provisioned on z/OS mainframe and single EC2 m4.large. Batch window overruns indicate capacity constraints.",
-      "gap": "All capacity statically provisioned with no dynamic scaling to address growing workload.",
-      "recommendation": "Deploy on ECS Fargate or Lambda for inherent auto-scaling. If EC2, configure ASG with scaling policies.",
+      "title": "Auto-Scaling",
+      "description": "No auto-scaling. Mainframe batch with statically allocated resources (REGION=0M). EC2 m4.large gateway has no scaling configuration.",
+      "gap": "All capacity statically provisioned. No ability to scale with workload changes.",
+      "recommendation": "Configure auto-scaling for compute (ECS/Fargate or AWS Batch) appropriate for batch workload patterns.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "jcl/PAYRUN.jcl",
         "lines": null
       },
       "mod_metadata": {
@@ -281,10 +281,10 @@
       "question_id": "INF-Q8",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Backup and Recovery \u2014 no backup configuration",
-      "description": "No backup configuration found. JCL uses GDG for output versioning but no formal backup strategy, no PITR, no cross-region replication.",
-      "gap": "No automated backups, no retention policy, no restore procedures documented.",
-      "recommendation": "Enable automated backups on managed databases with minimum 7-day retention and PITR. Enable S3 versioning.",
+      "title": "Backup and Recovery",
+      "description": "No backup configuration found. GDG format provides basic output versioning but no comprehensive backup/recovery strategy.",
+      "gap": "No automated backup or recovery procedures for employee data or payroll outputs.",
+      "recommendation": "Enable automated backups with PITR for managed databases and cross-region replication for critical payroll data.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -304,10 +304,10 @@
       "question_id": "INF-Q10",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "Infrastructure as Code \u2014 zero coverage",
-      "description": "Zero IaC coverage. No Terraform, CloudFormation, CDK, or any IaC. All infrastructure manually provisioned.",
-      "gap": "0% IaC coverage. Infrastructure changes manual, non-reproducible, undocumented in code.",
-      "recommendation": "Define all AWS infrastructure in Terraform or CDK: VPC, subnets, compute, database, security groups.",
+      "title": "Infrastructure as Code Coverage",
+      "description": "No IaC exists. Zero IaC files found. All infrastructure is manually created and maintained.",
+      "gap": "0% IaC coverage. All infrastructure changes are manual, non-reproducible, and undocumented.",
+      "recommendation": "Define all infrastructure in IaC (CDK or Terraform) starting with the modernized architecture.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -327,10 +327,10 @@
       "question_id": "INF-Q11",
       "category": "Infrastructure & DevOps",
       "category_id": "INF",
-      "title": "CI/CD Automation \u2014 no pipeline exists",
-      "description": "No CI/CD automation. No GitHub Actions, GitLab CI, Jenkins, or CodePipeline. All deployments manual via mainframe JCL and CA-7.",
-      "gap": "All deployments manual. No build, test, or deployment automation.",
-      "recommendation": "Implement CI/CD with AWS CodePipeline + CodeBuild. Include build, test, and deploy stages with automated rollback.",
+      "title": "CI/CD Automation",
+      "description": "No CI/CD pipeline exists. All deployments to mainframe are manual. No automated build, test, or deploy stages.",
+      "gap": "No automated quality gates. Manual process is error-prone with no reproducibility.",
+      "recommendation": "Implement CI/CD pipeline (CodePipeline + CodeBuild or GitHub Actions) with automated build, test, and deploy stages.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -350,14 +350,14 @@
       "question_id": "APP-Q1",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Programming Languages \u2014 COBOL with no cloud-native tooling",
-      "description": "Enterprise COBOL 4.2 on z/OS. No AWS SDK, no cloud-native tooling, no modern framework ecosystem. Requires mainframe runtime.",
-      "gap": "COBOL fundamentally incompatible with cloud-native development. No AWS SDK, no containerization support.",
-      "recommendation": "Rewrite in modern cloud-native language: Python, Java 17+, or TypeScript with first-class AWS SDK support.",
+      "title": "Programming Languages",
+      "description": "Primary language is COBOL (Enterprise COBOL 4.2) with JCL. COBOL has no AWS SDK, no cloud-native tooling, and scarce skills (original authors retired).",
+      "gap": "COBOL has no path to cloud-native development. No AWS SDK, no container compatibility, no modern frameworks.",
+      "recommendation": "Rewrite in a modern cloud-native language: Java 17+ (Spring Boot 3.x), Python 3.10+, or TypeScript (Node.js 18+).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
-      "phase": 2,
+      "phase": 1,
       "evidence": {
         "file": "src/PAYRUN.cbl",
         "lines": null
@@ -373,10 +373,10 @@
       "question_id": "APP-Q2",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Monolith \u2014 tightly-coupled single COBOL program",
-      "description": "Single COBOL program with all business logic in one linear flow. No module boundaries, no interfaces, no separation of concerns.",
-      "gap": "No module boundaries, no service interfaces, no independent deployment or scaling capability.",
-      "recommendation": "Rewrite as separate services: data access, calculation engine, output generation. See Decomposition Strategy.",
+      "title": "Monolith vs Microservices",
+      "description": "Single COBOL program handles all payroll processing. No module boundaries, no service separation, pervasive shared state in WORKING-STORAGE.",
+      "gap": "Tightly-coupled monolith. Cannot independently scale, deploy, or evolve components.",
+      "recommendation": "During rewrite, decompose into bounded contexts: employee data, tax calculation, payment processing, reporting.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -396,10 +396,10 @@
       "question_id": "APP-Q3",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Async vs Sync \u2014 all communication synchronous",
-      "description": "For stateful-crud archetype: all communication synchronous. Sequential file I/O and synchronous FTP. No async messaging or event-driven patterns.",
-      "gap": "All communication synchronous. State changes cross system boundaries via blocking file transfer.",
-      "recommendation": "Implement event-driven patterns: publish payroll events to EventBridge/SNS, deliver results via S3 with event notifications.",
+      "title": "Async vs Sync Communication",
+      "description": "Entirely file-based batch I/O with synchronous FTP transfer. No async patterns, no message queues. Anti-pattern for event-processor archetype which should use async event sources.",
+      "gap": "No async communication. File-based FTP creates tight coupling. Anti-pattern for event-processor archetype.",
+      "recommendation": "Replace file-based FTP with async patterns: SQS/SNS for results, S3 event notifications, EventBridge Scheduler for triggering.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -419,16 +419,16 @@
       "question_id": "APP-Q4",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "Long-Running Process \u2014 5-7 hour batch with no checkpointing",
-      "description": "For stateful-crud archetype: batch job runs 5-7 hours with no async processing, no status polling, no checkpointing, no resume capability.",
-      "gap": "Long-running batch handled as single synchronous operation. No checkpointing or resume-from-failure.",
-      "recommendation": "Implement chunked processing with checkpointing. Use Step Functions or SQS fan-out for parallel processing.",
+      "title": "Long-Running Process Handling",
+      "description": "Batch job runs 5-7 hours with no checkpointing. Sequential processing of all employees with no resume capability. Failure requires full restart.",
+      "gap": "Long-running batch (5-7 hours) with no checkpointing or progress tracking. Sometimes overruns batch window.",
+      "recommendation": "Implement checkpoint/restart with AWS Step Functions Map state or AWS Batch array jobs for partitioned parallel processing.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "src/PAYRUN.cbl",
         "lines": null
       },
       "mod_metadata": {
@@ -442,79 +442,10 @@
       "question_id": "APP-Q5",
       "category": "Application Architecture",
       "category_id": "APP",
-      "title": "API Versioning \u2014 no versioning on any interface",
-      "description": "No API exists. Only interface is 120-byte fixed-width flat file with no schema definition or versioning.",
-      "gap": "No versioning on any interface. Flat file format undocumented and unversioned.",
-      "recommendation": "Implement API versioning from day one. For file outputs during migration, define schema with version headers.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "APP-Q6",
-      "category": "Application Architecture",
-      "category_id": "APP",
-      "title": "Service Discovery \u2014 all endpoints hardcoded",
-      "description": "Hardcoded IP address (10.0.7.40) for EC2 gateway FTP. Hardcoded dataset names in JCL. No service discovery or DNS-based routing.",
-      "gap": "All endpoints and resource locations hardcoded in JCL.",
-      "recommendation": "Use environment variables or SSM Parameter Store for endpoints. Implement Cloud Map for service discovery.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "jcl/PAYRUN.jcl",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "DATA-Q1",
-      "category": "Data Platform",
-      "category_id": "DATA",
-      "title": "Unstructured Data \u2014 locked in mainframe file systems",
-      "description": "All data on mainframe file systems (VSAM) and transferred via FTP to local EC2 storage. No S3, no managed object storage.",
-      "gap": "Data locked in mainframe VSAM files and local EC2. Not accessible for analytics or modern workloads.",
-      "recommendation": "Migrate data to S3. Use S3 event notifications for downstream processing. Implement Athena/Glue for analytics.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "jcl/PAYRUN.jcl",
-        "lines": null
-      },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": true
-      }
-    },
-    {
-      "question_id": "DATA-Q2",
-      "category": "Data Platform",
-      "category_id": "DATA",
-      "title": "Data Access Layer \u2014 no abstraction",
-      "description": "Data access directly embedded in COBOL program. File I/O interleaved with business logic. No repository pattern or DAO layer.",
-      "gap": "No data access abstraction. File access, record parsing, and business logic all mixed in single program.",
-      "recommendation": "Implement clear data access layer (repository pattern) separating data retrieval from calculation logic.",
+      "title": "API Versioning Strategy",
+      "description": "No API versioning. No API surface exists. Output file format (120-byte fixed-width) has no schema versioning.",
+      "gap": "No versioning strategy for any interface. Format changes are breaking for all downstream consumers.",
+      "recommendation": "Implement API versioning and schema versioning (Avro/Protobuf) for data exchange formats.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -531,13 +462,82 @@
       }
     },
     {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_id": "APP",
+      "title": "Service Discovery",
+      "description": "All endpoints hard-coded. EC2 gateway IP (10.0.7.40) and dataset names (ACME.PAYROLL.*) hardcoded directly in JCL.",
+      "gap": "Hard-coded endpoints create deployment coupling. Cannot relocate services without source code changes.",
+      "recommendation": "Externalize endpoints into configuration. Use AWS Service Discovery or Parameter Store.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unstructured Data Storage",
+      "description": "All data stored on mainframe file systems \u2014 VSAM indexed files and GDG datasets. No cloud storage (S3). Data locked in mainframe-specific formats inaccessible to modern systems.",
+      "gap": "Data on mainframe file systems is inaccessible for modern workloads, analytics, or integration.",
+      "recommendation": "Migrate data to Amazon S3 with structured formats (Parquet/JSON) and schema definitions.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_id": "DATA",
+      "title": "Unified Data Access Layer",
+      "description": "Single COBOL program with inline file I/O. No formal data access layer or repository pattern. Business logic tightly coupled to file format.",
+      "gap": "No abstraction between business logic and data access. File format changes require changes throughout the program.",
+      "recommendation": "Implement repository/DAO pattern in the rewritten application to abstract data access behind interfaces.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
       "question_id": "DATA-Q3",
       "category": "Data Platform",
       "category_id": "DATA",
-      "title": "Database Engine EOL \u2014 DB2 v10 past end-of-support",
-      "description": "IBM DB2 for z/OS v10 past end-of-support since April 2020. No version pinning in IaC (no IaC exists). Unsupported for 5+ years.",
-      "gap": "Database engine past EOL 5+ years. No security patches, no vendor support, compliance risk.",
-      "recommendation": "Migrate to supported managed engine: Aurora PostgreSQL or RDS PostgreSQL. Use AWS SCT and DMS.",
+      "title": "Database Engine Version and EOL",
+      "description": "IBM DB2 for z/OS v10 \u2014 end of support since April 2020 (5+ years past EOL). No security patches or vendor support available.",
+      "gap": "Database engine 5+ years past end-of-life with no upgrade or migration plan documented.",
+      "recommendation": "Migrate to Aurora PostgreSQL or RDS PostgreSQL using AWS SCT for schema conversion and DMS for data migration.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -557,13 +557,13 @@
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Encryption at Rest \u2014 no encryption on PII data",
-      "description": "No encryption at rest. Employee PII (SSN, bank accounts) stored unencrypted on mainframe and EC2 gateway.",
-      "gap": "Zero encryption at rest. Sensitive PII stored unencrypted.",
-      "recommendation": "Encrypt all data stores with customer-managed KMS keys. Enable encryption on RDS, S3, EBS.",
+      "title": "Encryption at Rest",
+      "description": "No encryption at rest. Sensitive PII (SSN, bank accounts) stored unencrypted in VSAM files and transmitted via plaintext FTP.",
+      "gap": "Highly sensitive PII stored and transmitted without encryption. Critical compliance violation.",
+      "recommendation": "Encrypt all data at rest using customer-managed KMS keys. Enable storage encryption on databases and S3.",
       "severity": "High",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/PAYRUN.cbl",
@@ -580,10 +580,10 @@
       "question_id": "SEC-Q3",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "API Authentication \u2014 plaintext FTP credentials only",
-      "description": "No API authentication. FTP uses plaintext username/password hardcoded in JCL. No OAuth2, JWT, or token-based auth.",
-      "gap": "No modern authentication. FTP credentials hardcoded and transmitted in cleartext.",
-      "recommendation": "Implement OAuth2/JWT via API Gateway + Cognito. Use AWS Transfer Family with IAM for file transfers.",
+      "title": "API Authentication",
+      "description": "No API authentication. FTP uses hardcoded credentials (username: payroll, password in clear text) embedded in JCL.",
+      "gap": "No modern authentication mechanism. Plaintext credentials provide no security assurance.",
+      "recommendation": "Implement OAuth2/JWT authentication on all endpoints. Replace FTP with SFTP or S3 presigned URLs.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -603,10 +603,10 @@
       "question_id": "SEC-Q4",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Centralized Identity \u2014 no IdP integration",
-      "description": "No centralized identity provider. Single hardcoded username/password for FTP. No Cognito, OIDC/SAML, or SSO.",
-      "gap": "No identity provider integration. Single shared credential with no user attribution.",
-      "recommendation": "Integrate with centralized IdP (Cognito or corporate directory). Implement per-user RBAC.",
+      "title": "Centralized Identity Integration",
+      "description": "No identity provider integration. Authentication is a hardcoded username/password in JCL with no Cognito, Okta, or SAML/OIDC.",
+      "gap": "No centralized identity. Credentials are local, static, with no rotation or MFA.",
+      "recommendation": "Integrate with centralized IdP (Amazon Cognito or organizational IdP). Implement IAM roles for service auth.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -626,10 +626,10 @@
       "question_id": "SEC-Q5",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Secrets Management \u2014 plaintext credentials in source control",
-      "description": "Plaintext credentials committed to source control: FTP password 'PayR0ll2003!' in JCL. No secrets manager or vault.",
-      "gap": "Critical: plaintext password in version-controlled source file. Deployment-blocking security issue.",
-      "recommendation": "Immediately rotate exposed credential. Store all secrets in AWS Secrets Manager with automated rotation.",
+      "title": "Secrets Management",
+      "description": "Plaintext credentials hardcoded in JCL: FTP username 'payroll' and password 'PayR0ll2003!' committed to Git repository.",
+      "gap": "Critical security vulnerability. Plaintext password in version-controlled source. No secrets management or rotation.",
+      "recommendation": "Immediately rotate exposed credentials. Store all secrets in AWS Secrets Manager with automated rotation.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
@@ -649,16 +649,16 @@
       "question_id": "SEC-Q6",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Compute Hardening \u2014 no patching or scanning",
-      "description": "No patching strategy or vulnerability scanning. EC2 gateway has no SSM, no Inspector. Running unsupported DB2 v10.",
-      "gap": "No patching strategy, no vulnerability scanning, no compute hardening.",
-      "recommendation": "Use hardened images (Bottlerocket, AL2023), enable SSM Patch Manager, integrate Inspector/Snyk, configure Dependabot.",
+      "title": "Compute Hardening and Patching",
+      "description": "No patching strategy or vulnerability scanning. Source warns 'DO NOT RECOMPILE WITHOUT CONTACTING MAINFRAME TEAM' indicating no safe patching process.",
+      "gap": "No automated patching or vulnerability scanning. Fear of recompilation indicates no safe update path.",
+      "recommendation": "Implement SSM Patch Manager, vulnerability scanning (Inspector/Snyk), and hardened base images.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "src/PAYRUN.cbl",
         "lines": null
       },
       "mod_metadata": {
@@ -672,13 +672,13 @@
       "question_id": "SEC-Q7",
       "category": "Security Baseline",
       "category_id": "SEC",
-      "title": "Security Pipeline \u2014 no scanning tools",
-      "description": "No SAST, DAST, dependency scanning, or container scanning. No CI/CD pipeline to integrate security tools into.",
-      "gap": "Zero security scanning. No automated vulnerability detection.",
-      "recommendation": "Integrate SAST (Semgrep), dependency scanning (Dependabot/Snyk), container scanning (ECR) with blocking gates.",
+      "title": "Application Security Pipeline",
+      "description": "No CI/CD pipeline exists, therefore no security scanning. No SAST, DAST, dependency scanning, or container scanning.",
+      "gap": "No security validation at any stage. Vulnerabilities cannot be detected before production.",
+      "recommendation": "Integrate SAST, dependency scanning, and container scanning with blocking gates in CI/CD pipeline.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 2,
       "evidence": {
         "file": ".",
@@ -695,14 +695,14 @@
       "question_id": "OPS-Q1",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Distributed Tracing \u2014 no instrumentation",
-      "description": "No distributed tracing. No X-Ray, OpenTelemetry, or trace ID propagation. COBOL program has no observability.",
-      "gap": "No tracing. Failures diagnosed only via mainframe SYSOUT logs.",
-      "recommendation": "Instrument with AWS X-Ray or OpenTelemetry from the start when building new service.",
+      "title": "Distributed Tracing",
+      "description": "No distributed tracing. No OpenTelemetry, no X-Ray. Batch job has no observability beyond mainframe job logs.",
+      "gap": "No tracing capability. Cannot trace data flow or diagnose failures within the batch run.",
+      "recommendation": "Instrument with OpenTelemetry or AWS X-Ray in the modernized application.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "src/PAYRUN.cbl",
         "lines": null
@@ -718,14 +718,14 @@
       "question_id": "OPS-Q2",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "SLO Definitions \u2014 no formal SLOs",
-      "description": "No SLOs defined. Only implicit SLO is batch window constraint which is informal and not monitored. Batch 'sometimes overruns.'",
-      "gap": "No formal SLO definitions. SLO violations occurring without tracking or alerting.",
-      "recommendation": "Define SLOs: batch completion time, error rate (zero tolerance for payroll errors), availability targets.",
+      "title": "SLO Definitions",
+      "description": "No SLOs defined. No monitoring artifacts. Batch window constraint (5-7 hours) is informal and not monitored.",
+      "gap": "No formal SLO definitions. Batch overruns discovered reactively.",
+      "recommendation": "Define SLOs for batch completion time, data accuracy, and transfer success rate with CloudWatch alarms.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "README.md",
         "lines": null
@@ -741,16 +741,16 @@
       "question_id": "OPS-Q3",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Business Metrics \u2014 no custom metrics",
-      "description": "No custom metrics published. No tracking of employees processed, payroll amounts, processing time, or error rates.",
-      "gap": "No business metrics. Cannot measure outcomes, detect anomalies, or track efficiency.",
-      "recommendation": "Publish business metrics to CloudWatch: employees processed, total disbursed, errors, duration.",
+      "title": "Business Metrics",
+      "description": "No custom business metrics. No tracking of employees processed, payroll amounts, error counts, or tax calculation accuracy.",
+      "gap": "No visibility into business outcomes without manual file inspection.",
+      "recommendation": "Publish business metrics: employees processed, payroll disbursed, FICA calculations, error counts via CloudWatch.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": "src/PAYRUN.cbl",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -764,16 +764,16 @@
       "question_id": "OPS-Q4",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Anomaly Detection \u2014 no alerting configured",
-      "description": "No alerting. No CloudWatch alarms, no anomaly detection. Batch overruns detected manually the next business day.",
-      "gap": "No alerting. Failures detected only when downstream consumers notice missing output.",
-      "recommendation": "Implement CloudWatch alarms on completion time, error rates, record count anomalies. Configure PagerDuty.",
+      "title": "Anomaly Detection and Alerting",
+      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection. Failures discovered manually.",
+      "gap": "No automated alerting. Failures and data quality issues discovered reactively.",
+      "recommendation": "Implement CloudWatch alarms for batch completion, processing duration, and record count anomalies.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": ".",
         "lines": null
       },
       "mod_metadata": {
@@ -787,10 +787,10 @@
       "question_id": "OPS-Q6",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Integration Testing \u2014 no automated tests exist",
-      "description": "No automated tests of any kind. README: 'No automated tests; changes validated in a shared QA region only.' Zero test coverage.",
-      "gap": "Zero automated testing. Changes to payroll calculations have no automated verification.",
-      "recommendation": "Document expected outputs for known inputs. Build comprehensive test suite covering all tax calculations and edge cases.",
+      "title": "Integration Testing",
+      "description": "No automated tests. README states changes validated in shared QA region only. Source warns against recompilation.",
+      "gap": "Zero automated test coverage. Changes carry high regression risk.",
+      "recommendation": "Implement comprehensive test suites in the rewritten application: unit, integration, and output comparison tests.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -810,16 +810,16 @@
       "question_id": "OPS-Q8",
       "category": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Observability Ownership \u2014 no monitoring assets exist",
-      "description": "No observability ownership. No CODEOWNERS, no dashboards, no alarms with owners, no SLO definitions.",
-      "gap": "No observability assets exist to own.",
-      "recommendation": "Establish observability ownership from day one: per-service dashboards, alarms with team owners, SLOs.",
+      "title": "Observability Ownership",
+      "description": "No observability ownership. No CODEOWNERS, no dashboards, no alarms with named owners. Original authors retired.",
+      "gap": "No observability ownership or monitoring responsibility defined.",
+      "recommendation": "Establish per-service dashboards, named alarm owners, CODEOWNERS, and on-call responsibilities.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
-        "file": ".",
+        "file": "README.md",
         "lines": null
       },
       "mod_metadata": {
@@ -837,7 +837,7 @@
       "title": "High Availability and Fault Isolation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no deployed cloud workload requiring HA evaluation"
+      "reason": "has_deployed_workload=false \u2014 no deployed AWS workload to evaluate for HA."
     },
     {
       "question_id": "DATA-Q4",
@@ -845,7 +845,7 @@
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 no stored procedures or proprietary SQL; all business logic in application layer (COBOL PROCEDURE DIVISION)"
+      "reason": "Score 4 \u2014 no stored procedures or proprietary SQL; all business logic in COBOL application layer."
     },
     {
       "question_id": "SEC-Q1",
@@ -853,7 +853,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS infrastructure provisioning in this repo; CloudTrail belongs in account-level IaC"
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS resources provisioned; CloudTrail belongs in account-level IaC repo."
     },
     {
       "question_id": "OPS-Q5",
@@ -861,7 +861,7 @@
       "title": "Deployment Strategy",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no deployment manifests or IaC compute definitions in repo"
+      "reason": "has_deployed_workload=false \u2014 no deployment artifacts in repo."
     },
     {
       "question_id": "OPS-Q7",
@@ -869,7 +869,7 @@
       "title": "Incident Response Automation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_deployed_workload=false \u2014 no running system to define incident response for"
+      "reason": "has_deployed_workload=false \u2014 no running system to define incident response for."
     },
     {
       "question_id": "OPS-Q9",
@@ -877,7 +877,7 @@
       "title": "Resource Tagging Governance",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS resources to tag"
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS resources to tag."
     }
   ],
   "pathways": [
@@ -887,44 +887,50 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "High",
-      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) AND INF-Q1=1 < 3, APP-Q3=1 < 3, APP-Q4=1 < 3 (supporting)",
+      "key_trigger_criteria": "APP-Q2=1 < 3 (primary) AND INF-Q1=1, APP-Q3=1, APP-Q4=1 (all supporting conditions met)",
       "triggering_questions": [
         {
           "question_id": "APP-Q2",
-          "score": 1
+          "score": 1,
+          "note": "Tightly-coupled COBOL monolith with no module boundaries"
         },
         {
           "question_id": "INF-Q1",
-          "score": 1
+          "score": 1,
+          "note": "All compute on z/OS mainframe"
         },
         {
           "question_id": "APP-Q3",
-          "score": 1
+          "score": 1,
+          "note": "No async communication patterns"
         },
         {
           "question_id": "APP-Q4",
-          "score": 1
+          "score": 1,
+          "note": "5-7 hour batch with no checkpointing"
         }
       ],
       "detail": {
-        "current_state": "Single COBOL batch program on z/OS mainframe with no module boundaries",
         "recommended_services": [
           "Lambda",
           "API Gateway",
           "Step Functions",
           "EventBridge",
           "ECS",
-          "EKS"
+          "EKS",
+          "Fargate"
         ],
         "immediate_actions": [
-          "Rewrite payroll logic in modern language",
-          "Define service boundaries",
-          "Deploy to managed compute"
+          "Rewrite COBOL business logic in modern language",
+          "Decompose into bounded contexts",
+          "Deploy on managed compute"
         ],
         "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/CMK2J48MVN"
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN",
+          "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/introduction.html"
         ]
-      }
+      },
+      "not_triggered_reason": null
     },
     {
       "id": "move-to-containers",
@@ -936,28 +942,28 @@
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
-          "score": 1
+          "score": 1,
+          "note": "Mainframe compute with no containerization"
         }
       ],
       "detail": {
-        "current_state": "z/OS mainframe COBOL batch with EC2 file gateway \u2014 no containers",
         "recommended_services": [
           "ECS",
-          "EKS",
           "Fargate",
           "ECR",
-          "App Runner"
+          "AWS Batch"
         ],
         "immediate_actions": [
-          "Rewrite in containerizable language",
+          "Rewrite application in containerizable language",
           "Create Dockerfile",
-          "Deploy to ECS Fargate"
+          "Deploy on ECS/Fargate or AWS Batch"
         ],
         "learning_materials": [
           "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM",
           "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR"
         ]
-      }
+      },
+      "not_triggered_reason": null
     },
     {
       "id": "move-to-open-source",
@@ -965,16 +971,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures) \u2014 primary trigger threshold not met (requires DATA-Q4 < 3)",
+      "key_trigger_criteria": "DATA-Q4=4 meets threshold (no stored procedures or proprietary SQL detected)",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
           "score": 4,
-          "note": "DATA-Q4 = 4 \u2014 no stored procedures; threshold not met"
+          "note": "All business logic in application layer; no stored procedures"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "DATA-Q4 scores 4 (no stored procedures or proprietary SQL). The primary trigger requires DATA-Q4 < 3."
+      "not_triggered_reason": "DATA-Q4 = 4 (no stored procedures or proprietary SQL). While DB2 is a commercial database, the absence of proprietary SQL constructs means the Open Source pathway's primary trigger (DATA-Q4 < 3) is not met."
     },
     {
       "id": "move-to-managed-databases",
@@ -982,35 +988,38 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q2=1 < 3 (primary) AND DATA-Q3=1 < 3 (supporting \u2014 DB2 v10 past EOL)",
+      "key_trigger_criteria": "INF-Q2=1 < 3 (primary), DATA-Q3=1 < 3 (supporting \u2014 EOL database engine)",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
-          "score": 1
+          "score": 1,
+          "note": "Self-managed DB2 on mainframe"
         },
         {
           "question_id": "DATA-Q3",
-          "score": 1
+          "score": 1,
+          "note": "DB2 v10 is 5+ years past EOL"
         }
       ],
       "detail": {
-        "current_state": "IBM DB2 for z/OS v10 (EOL April 2020) self-managed on mainframe",
         "recommended_services": [
           "Aurora PostgreSQL",
           "RDS PostgreSQL",
           "DynamoDB",
-          "DMS",
-          "SCT"
+          "AWS DMS",
+          "AWS SCT"
         ],
         "immediate_actions": [
-          "Assess DB2 schema with SCT",
-          "Plan migration to Aurora PostgreSQL",
-          "Use DMS for data migration"
+          "Assess DB2 schema for SCT conversion",
+          "Plan data migration with DMS",
+          "Provision Aurora PostgreSQL"
         ],
         "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC"
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
+          "https://skillbuilder.aws/learn/ND246G8Y3W"
         ]
-      }
+      },
+      "not_triggered_reason": null
     },
     {
       "id": "move-to-managed-analytics",
@@ -1018,16 +1027,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "INF-Q4=1 < 3 but contextual guard blocks: no data processing/analytics/streaming workloads found",
+      "key_trigger_criteria": "No streaming, ETL, or analytics artifacts found; payroll batch is transactional, not analytics",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
           "score": 1,
-          "note": "INF-Q4 = 1 meets threshold but contextual guard prevents trigger \u2014 no analytics workloads exist"
+          "note": "Score < 3 but contextual guard blocks: no analytics/streaming workloads"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found during discovery. The application is a transactional batch processor, not a data processing workload."
+      "not_triggered_reason": "Contextual guard: no streaming, ETL, data pipeline, or analytics artifacts found during discovery. The payroll batch is a transactional processing workload, not an analytics workload."
     },
     {
       "id": "move-to-modern-devops",
@@ -1035,39 +1044,44 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3 (primary) AND OPS-Q6=1 < 3 (supporting)",
+      "key_trigger_criteria": "INF-Q10=1 < 3 AND INF-Q11=1 < 3 (both primary conditions met), OPS-Q6=1 (supporting)",
       "triggering_questions": [
         {
           "question_id": "INF-Q10",
-          "score": 1
+          "score": 1,
+          "note": "0% IaC coverage"
         },
         {
           "question_id": "INF-Q11",
-          "score": 1
+          "score": 1,
+          "note": "No CI/CD pipeline"
         },
         {
           "question_id": "OPS-Q6",
-          "score": 1
+          "score": 1,
+          "note": "No automated tests"
         }
       ],
       "detail": {
-        "current_state": "Zero IaC, zero CI/CD, zero automated testing. All manual.",
         "recommended_services": [
-          "CodePipeline",
           "CodeBuild",
+          "CodePipeline",
           "CodeDeploy",
           "CloudFormation",
-          "CDK"
+          "CDK",
+          "CloudWatch"
         ],
         "immediate_actions": [
-          "Implement CI/CD pipeline",
-          "Define infrastructure as code",
-          "Build automated test suite"
+          "Implement CI/CD pipeline for modernized application",
+          "Define all infrastructure as IaC",
+          "Create automated test suites"
         ],
         "learning_materials": [
-          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD"
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
         ]
-      }
+      },
+      "not_triggered_reason": null
     },
     {
       "id": "move-to-ai",
@@ -1075,35 +1089,35 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)",
+      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms found)",
       "triggering_questions": [],
       "detail": null,
-      "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source, configuration, or documentation."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)."
     }
   ],
   "decomposition_strategy": {
-    "app_q2_score": 1,
-    "recommended_approach": "Big-Bang Rewrite (exception case \u2014 justified by tiny codebase, COBOL incompatibility, simple logic)",
-    "approaches": [
+    "recommended_approach": "Conditional / Adaptive (parallel build with phased cutover)",
+    "rationale": "COBOL mainframe with no module boundaries, no API surface, and no modern tooling cannot be incrementally strangled. Parallel rewrite with output comparison is the only viable path.",
+    "phases": [
       {
-        "name": "Strengthen as Modular Monolith",
-        "applicable": false,
-        "reason": "COBOL has no module system compatible with cloud deployment"
+        "phase": 1,
+        "action": "Rewrite payroll logic in modern language with automated tests",
+        "effort": "High"
       },
       {
-        "name": "Strangler Fig",
-        "applicable": "partial",
-        "reason": "Possible but complex \u2014 no API surface to intercept"
+        "phase": 2,
+        "action": "Containerize and deploy on ECS/Fargate with managed database",
+        "effort": "Medium"
       },
       {
-        "name": "Conditional / Adaptive",
-        "applicable": false,
-        "reason": "Cannot containerize COBOL without z/OS runtime"
+        "phase": 3,
+        "action": "Parallel run comparing outputs for correctness",
+        "effort": "Medium"
       },
       {
-        "name": "Big-Bang Rewrite",
-        "applicable": true,
-        "reason": "Small codebase (~60 lines), simple logic, language incompatibility"
+        "phase": 4,
+        "action": "Cutover and decommission mainframe job",
+        "effort": "Low"
       }
     ],
     "patterns": [
@@ -1111,7 +1125,15 @@
       "Event Sourcing",
       "Hexagonal Architecture"
     ],
-    "effort_estimate": "Medium (3-6 months)"
+    "effort_factors": {
+      "module_boundaries": "No boundaries \u2014 single COBOL program",
+      "data_coupling": "VSAM indexed files + DB2 on z/OS \u2014 high platform coupling",
+      "stored_procedures": "None \u2014 low effort on this dimension",
+      "communication_patterns": "File-based FTP \u2014 must replace with managed services",
+      "cicd_maturity": "None \u2014 must build from scratch",
+      "test_coverage": "None \u2014 must create alongside rewrite"
+    },
+    "overall_effort": "High \u2014 estimated 6-12 months for complete modernization"
   },
   "repo_name": "legacy-payroll-system"
 }

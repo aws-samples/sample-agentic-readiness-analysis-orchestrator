@@ -1,61 +1,62 @@
 {
+  "repo_name": "legacy-partner-soap",
   "metadata": {
     "analysis_type": "ara",
-    "analysis_date": "2026-08-12",
+    "analysis_date": "2025-07-15",
     "td_version": "agentic-readiness-analysis",
-    "target": "/builds/agentic-readiness-assessment/agentic-readiness-assessment/harness/after/_src/ara/legacy-partner-soap",
-    "repo_name": "legacy-partner-soap",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source code with deployable JAX-WS entry point and Oracle database backend. Single-service application.",
     "service_archetype": "stateful-crud",
     "service_archetype_source": "auto-detected",
+    "archetype_justification": "Service owns persistent state (Oracle DB with INSERT operations) and exposes a write endpoint (submitOrder). No multi-service orchestration or event consumption patterns.",
     "agent_scope": "write-enabled",
     "agent_scope_source": "inferred",
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_http_rpc_surface": true,
-      "has_auth_surface": "unknown",
+      "has_auth_surface": false,
       "has_write_operations": true,
       "has_logging_of_user_data": false
     },
     "tech_stack": {
       "language": "Java",
       "loc": 45,
-      "framework": "JAX-WS (SOAP)",
-      "architecture": "Monolithic WAR on JBoss AS 5.1"
+      "framework": "JAX-WS (JBoss AS 5.1)",
+      "architecture": "SOAP Monolith"
     },
     "portfolio_name": "legacy-partner-soap"
   },
   "classification": {
     "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
-    "blocker_count": 7,
+    "blocker_count": 5,
     "risk_safety_count": 12,
-    "risk_quality_count": 14,
-    "info_count": 6,
-    "high_count": 7,
-    "medium_count": 26,
-    "low_count": 6,
+    "risk_quality_count": 8,
+    "info_count": 5,
+    "high_count": 5,
+    "medium_count": 20,
+    "low_count": 5,
     "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
   },
   "counts": {
-    "total": 39,
-    "high": 7,
-    "medium": 26,
-    "low": 6
+    "total": 30,
+    "high": 5,
+    "medium": 20,
+    "low": 5
   },
   "findings": [
     {
       "question_id": "API-Q1",
       "category": "API Surface",
       "category_id": "API",
-      "title": "No Agent-Consumable API Interface",
-      "description": "The application exposes a SOAP 1.1 RPC/encoded endpoint defined by a hand-maintained WSDL that drifts from implementation. No REST, GraphQL, or AsyncAPI interface exists. Modern agent frameworks cannot bind to SOAP/WSDL natively.",
-      "gap": "No REST, GraphQL, or AsyncAPI interface. SOAP RPC/encoded is deprecated and not consumable by agent tool frameworks.",
-      "recommendation": "Create a REST API wrapper (e.g., Spring Boot @RestController) exposing POST /orders with JSON request/response and auto-generated OpenAPI specification.",
+      "title": "No modern API interface \u2014 SOAP-only endpoint",
+      "description": "The service exposes a SOAP 1.1 RPC/encoded endpoint via JAX-WS. The WSDL is hand-maintained and drifts from implementation. No REST, GraphQL, or AsyncAPI interface exists. Modern agent frameworks cannot bind to SOAP natively.",
+      "gap": "No REST or modern API interface. SOAP RPC/encoded is deprecated. Agent tool frameworks cannot consume WSDL/SOAP natively.",
+      "recommendation": "Expose submitOrder as a REST POST endpoint with JSON request/response. Generate OpenAPI spec. Deprecate SOAP endpoint.",
       "severity": "High",
       "priority": "P0",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "wsdl/PurchaseOrderService.wsdl",
@@ -64,145 +65,16 @@
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true
-      }
-    },
-    {
-      "question_id": "API-Q2",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "Unreliable Machine-Readable Spec",
-      "description": "A WSDL file exists but is hand-maintained, drifts from the implementation, and uses deprecated RPC/encoded style that is not WS-I compliant.",
-      "gap": "Machine-readable spec exists but is unreliable (known drift from implementation) and uses deprecated format.",
-      "recommendation": "Auto-generate OpenAPI spec from annotations in the replacement REST API to ensure spec stays current.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "wsdl/PurchaseOrderService.wsdl",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "API-Q3",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "Unstructured Error Responses",
-      "description": "Error responses are unstructured strings: 'ACCEPTED:<poNumber>' or 'ERROR:<raw exception message>'. No error codes, no structured bodies, no retryable/terminal distinction.",
-      "gap": "No structured error format. Agents cannot distinguish retriable from terminal errors.",
-      "recommendation": "Implement structured JSON error responses with error code, message, and retryable boolean in the replacement REST API.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "38-40"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "API-Q4",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "Non-Idempotent Write Endpoint",
-      "description": "The submitOrder endpoint performs INSERT INTO partner_orders with no idempotency key, no duplicate detection, and no unique constraint enforcement. Same request creates duplicate records.",
-      "gap": "No idempotency key support, no unique constraint on (partner_id, po_number), no deduplication logic.",
-      "recommendation": "Add UNIQUE constraint on (partner_id, po_number) and implement idempotency key support in the replacement API.",
-      "severity": "High",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "33-37"
-      },
-      "ara_metadata": {
-        "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency mechanism exists.",
-        "agent_scope": "write-enabled",
-        "resolution_reasoning": "The submitOrder endpoint performs a raw INSERT with no deduplication. Under write-enabled scope, agent retries will create duplicate purchase orders."
-      }
-    },
-    {
-      "question_id": "API-Q5",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "SOAP XML Response Format",
-      "description": "Responses are SOAP XML (RPC/encoded style) with simple string content. Complex for LLM consumption.",
-      "gap": "SOAP envelope adds unnecessary complexity for agent consumption.",
-      "recommendation": "Use JSON as the response format in the replacement REST API.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "wsdl/PurchaseOrderService.wsdl",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "API-Q7",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "No Event Emission for State Changes",
-      "description": "No event emission. Order submissions produce no events, webhooks, or message queue publications.",
-      "gap": "State changes invisible to external systems. Event-driven agent patterns impossible.",
-      "recommendation": "Publish order events to SNS/EventBridge in the replacement architecture.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "API-Q8",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "No Rate Limit Documentation",
-      "description": "No rate limits documented. No rate limit headers returned. Agents have no signal to self-throttle.",
-      "gap": "Agents cannot self-regulate call frequency.",
-      "recommendation": "Document rate limits and return X-RateLimit-Remaining and Retry-After headers.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
       }
     },
     {
       "question_id": "AUTH-Q1",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Machine Identity Authentication",
-      "description": "No machine identity authentication mechanism exists in the codebase. README mentions WS-Security username token (plaintext) but no implementation is present. No OAuth2, API keys, or mTLS.",
-      "gap": "No agent-attributable machine identity mechanism.",
-      "recommendation": "Implement OAuth2 client credentials flow or API key authentication with principal attribution.",
+      "title": "No machine identity authentication",
+      "description": "No authentication mechanism exists in the source code. README mentions WS-Security but no implementation is committed. Any caller with network access can invoke the endpoint without authentication.",
+      "gap": "No machine identity authentication. No principal attribution. Service is completely unauthenticated.",
+      "recommendation": "Implement OAuth2 client credentials flow or API key authentication with distinct agent identities and principal attribution in audit logs.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
@@ -217,232 +89,192 @@
       }
     },
     {
-      "question_id": "AUTH-Q2",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Scoped Permissions",
-      "description": "All callers share the same database credential. No IAM policies, no role differentiation, no mechanism to scope agent access.",
-      "gap": "Cannot limit agent access to specific operations or resources.",
-      "recommendation": "Implement OAuth2 scopes or IAM-based RBAC in the replacement REST API.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "21-23"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "AUTH-Q3",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Action-Level Authorization",
-      "description": "No permission checks on the submitOrder method. Any caller can execute any operation without restriction.",
-      "gap": "Cannot enforce action-level access control (read vs write vs delete).",
-      "recommendation": "Implement action-level authorization checks in the replacement service.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "AUTH-Q4",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Identity Propagation",
-      "description": "No identity propagation. Cannot distinguish agent-as-self from agent-on-behalf-of-user. All requests treated identically.",
-      "gap": "No user context propagation through the service.",
-      "recommendation": "Implement JWT-based identity propagation or OAuth2 token exchange.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "AUTH-Q5",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "Hardcoded Credentials in Source Code",
-      "description": "Database credentials hardcoded in source: DB_PASS = 'partner2009', DB_USER = 'partner_app'. No secrets management, no rotation. Credentials in version control.",
-      "gap": "Hardcoded credentials with no rotation. Exposed to anyone with repository access.",
-      "recommendation": "Migrate to AWS Secrets Manager with automatic rotation. Remove hardcoded values.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "21-23"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "AUTH-Q6",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Audit Logging",
-      "description": "No audit logging of any kind. No logging framework, no CloudTrail, no write-operation attribution. Cannot determine who initiated operations.",
-      "gap": "No audit trail for agent write operations. Cannot prove compliance or conduct forensics.",
-      "recommendation": "Implement structured audit logging with immutable storage (CloudTrail or S3 Object Lock).",
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Write operations are not idempotent",
+      "description": "The submitOrder operation performs an unconditional INSERT with no idempotency key, no duplicate detection, and no unique constraint. Duplicate submissions create duplicate records.",
+      "gap": "No idempotency mechanism. No unique constraints on business keys. Retry creates duplicates.",
+      "recommendation": "Add UNIQUE constraint on (partner_id, po_number) and implement idempotency key support in the API contract.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "36-39"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no idempotency mechanism",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "Write-enabled agents must have full audit attribution. No logging framework or audit trail exists for any operation in this service."
-      }
-    },
-    {
-      "question_id": "AUTH-Q7",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Agent Identity Suspension Mechanism",
-      "description": "No mechanism to suspend or revoke individual agent identities. Cannot isolate misbehaving agents without taking down the entire service.",
-      "gap": "Cannot isolate a misbehaving agent without disrupting all callers.",
-      "recommendation": "Implement per-agent API key management with revocation capability.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "resolution_reasoning": "submitOrder performs unconditional INSERT with no duplicate detection \u2014 agent retries will create duplicate orders."
       }
     },
     {
       "question_id": "STATE-Q1",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No Compensation or Rollback",
-      "description": "Immediate INSERT with no compensation or rollback capability. No saga pattern, no undo endpoint, no compensating transactions.",
-      "gap": "Cannot reverse agent-initiated writes. Failed multi-step workflows leave partial state.",
-      "recommendation": "Add order status lifecycle (PENDING \u2192 CONFIRMED \u2192 CANCELLED) with cancel/void endpoint.",
+      "title": "No compensation or rollback for write operations",
+      "description": "The submitOrder operation performs a single INSERT with no transaction management, no rollback capability, and no compensation logic. Submitted orders cannot be reversed programmatically.",
+      "gap": "No compensation or rollback. No cancel/void endpoint. No transaction management.",
+      "recommendation": "Add database transaction management and a cancelOrder endpoint. Implement saga-pattern compensation with status-based order lifecycle.",
       "severity": "High",
       "priority": "P0",
-      "effort": "Medium",
+      "effort": "High",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "33-37"
+        "lines": "35-39"
       },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no rollback/compensation mechanism exists.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no rollback mechanism",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The submitOrder method immediately commits an INSERT with no compensation logic. Under write-enabled scope, agent-initiated writes cannot be undone."
+        "resolution_reasoning": "Write-enabled agents executing multi-step workflows cannot reverse failed operations \u2014 submitted orders are permanently committed."
       }
     },
     {
-      "question_id": "STATE-Q2",
-      "category": "State Management",
-      "category_id": "STATE",
-      "title": "Write-Only Interface \u2014 No Queryable State",
-      "description": "No query endpoints. The service is write-only \u2014 accepts orders but provides no way to inspect current state.",
-      "gap": "Agents cannot read before writing. No GET/query endpoints.",
-      "recommendation": "Add query endpoints (GET /orders/{id}, GET /orders?partnerId=X) in replacement API.",
-      "severity": "Medium",
-      "priority": "P2",
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No audit logging for write operations",
+      "description": "No logging of any kind exists. No logging framework imported. Write operations leave no trace of who performed them. Complete absence of audit capability.",
+      "gap": "Zero audit logging. No logging framework. Impossible to identify who performed what action.",
+      "recommendation": "Add structured logging with caller identity on every write. Deploy to immutable store (CloudWatch with retention or S3 with Object Lock).",
+      "severity": "High",
+      "priority": "P1",
       "effort": "Medium",
-      "phase": 2,
+      "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
         "lines": null
       },
       "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "Write-enabled agents must have full audit attribution. No logging exists at all \u2014 cannot prove compliance or conduct forensics."
       }
     },
     {
-      "question_id": "STATE-Q3",
-      "category": "State Management",
-      "category_id": "STATE",
-      "title": "No Concurrency Controls",
-      "description": "No optimistic locking, no version fields, no ETags. Concurrent submitOrder calls create duplicate or conflicting records.",
-      "gap": "No protection against race conditions from concurrent agent instances.",
-      "recommendation": "Implement optimistic locking with version columns or unique constraints.",
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No scoped permissions \u2014 all callers have unlimited access",
+      "description": "No authorization model exists. No IAM policies, no role definitions, no permission checks. Any caller has full access to all operations with no mechanism to scope down.",
+      "gap": "Cannot scope agent permissions. No differentiation between callers.",
+      "recommendation": "Implement API Gateway with IAM authorization policies supporting per-caller scoping.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "API Gateway with IAM-based authorization and scoped policies per caller",
+          "Network-level access control to limit which agents can reach the service"
+        ],
+        "remediation_timeline": "60-90 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No action-level authorization",
+      "description": "Single write operation with no mechanism to allow read-only access. No RBAC, ABAC, or permission matrix exists.",
+      "gap": "Cannot differentiate read vs write access per caller identity.",
+      "recommendation": "Add separate read endpoints with distinct authorization requirements enforced at gateway or application layer.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "33-37"
+        "lines": null
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "compensating_controls": [
+          "API Gateway method-level authorization",
+          "Proxy layer that blocks unauthorized operations"
+        ],
+        "remediation_timeline": "60-90 days"
       }
     },
     {
-      "question_id": "STATE-Q4",
-      "category": "State Management",
-      "category_id": "STATE",
-      "title": "No Circuit Breakers or Resilience",
-      "description": "No circuit breakers, no retry logic, no timeout configuration. Raw JDBC connection with no pooling. Database failures cascade directly to callers.",
-      "gap": "No resilience patterns. Runaway agent loops cascade through database dependency.",
-      "recommendation": "Implement connection pooling (HikariCP) and circuit breaker pattern (Resilience4j).",
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Credentials hardcoded in source code",
+      "description": "Database credentials are hardcoded in plaintext: DB_USER='partner_app', DB_PASS='partner2009'. Committed to git with no secrets management or rotation.",
+      "gap": "Credentials in source code. No rotation. Exposed in git history.",
+      "recommendation": "Migrate to AWS Secrets Manager with automatic rotation. Rotate the exposed password immediately.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "21-22"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Rotate compromised credentials immediately",
+          "Restrict database network access"
+        ],
+        "remediation_timeline": "30 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Cannot suspend individual agent identities",
+      "description": "No identity management exists. No mechanism to suspend or revoke individual agent access without taking down the service.",
+      "gap": "No identity lifecycle management. Cannot isolate misbehaving agents.",
+      "recommendation": "Implement API key management with revocation capability per agent identity.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "33-34"
+        "lines": null
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "compensating_controls": [
+          "Network-level IP blocking",
+          "API Gateway with API key revocation"
+        ],
+        "remediation_timeline": "60-90 days"
       }
     },
     {
       "question_id": "STATE-Q5",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No Rate Limiting",
-      "description": "No rate limiting at any layer. No API Gateway, no WAF, no application-level throttling. Agent traffic storms would overwhelm the database.",
-      "gap": "No protection against runaway agent loops.",
-      "recommendation": "Deploy API Gateway with usage plans and throttling. Add WAF rate rules.",
+      "title": "No rate limiting or throttling",
+      "description": "No rate limiting at any layer. No API Gateway, no WAF, no application throttling. Runaway agent loop would hit Oracle directly without protection.",
+      "gap": "No protection against traffic storms from runaway agents.",
+      "recommendation": "Deploy API Gateway with throttling configuration before agent integration.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
@@ -450,17 +282,22 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "compensating_controls": [
+          "API Gateway with usage plans and throttling",
+          "WAF rate rules"
+        ],
+        "remediation_timeline": "30-60 days"
       }
     },
     {
       "question_id": "STATE-Q6",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "No Transaction Limits \u2014 Unbounded Blast Radius",
-      "description": "No transaction limits. No maximum records per caller, no spend limits, no bulk operation caps. Agent error blast radius is unbounded.",
-      "gap": "No configurable limits on agent-initiated actions.",
-      "recommendation": "Implement per-caller transaction limits (max orders per hour, max amount per order).",
+      "title": "No transaction limits on agent operations",
+      "description": "No transaction limits exist. No cap on orders per session, per hour, or per caller. An agent error could submit thousands of purchase orders.",
+      "gap": "No business-domain limits on agent operations. Unbounded write capability.",
+      "recommendation": "Implement per-caller order submission limits at the application or gateway layer.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -471,109 +308,51 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "HITL-Q1",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Draft/Pending State",
-      "description": "No draft or pending state. All writes immediately committed. Orders cannot be proposed for human review.",
-      "gap": "No mechanism for agent-proposed writes to await human confirmation.",
-      "recommendation": "Add order status lifecycle (PENDING \u2192 CONFIRMED) with confirmation endpoint.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "HITL-Q2",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Configurable Approval Gates",
-      "description": "No approval gates. No configurable operation-level flags, no approval workflows. All operations execute immediately.",
-      "gap": "Cannot require human approval for high-risk agent operations.",
-      "recommendation": "Implement configurable approval gates (e.g., orders above threshold require confirmation).",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment. Manual SOAP-UI testing only. No safe environment for agent testing.",
-      "gap": "First agent bug discovered in production.",
-      "recommendation": "Create containerized staging environment with synthetic test data.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": true,
+        "compensating_controls": [
+          "API Gateway usage plan with daily/monthly quota",
+          "Application-level counter per partner per time window"
+        ],
+        "remediation_timeline": "30-60 days"
       }
     },
     {
       "question_id": "DATA-Q1",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Sensitive Data Exposed in Error Responses",
-      "description": "Stage A: YES \u2014 partner financial data and hardcoded DB credentials. B1: Raw exception messages expose DB connection strings and infrastructure details to callers. B2: No access control differentiation. B3: No classification metadata.",
-      "gap": "B1: Raw exceptions expose DB details. B2: Single shared credential for all callers. B3: No classification.",
-      "recommendation": "Immediately sanitize error responses. Implement access differentiation. Add data classification tags.",
-      "severity": "High",
+      "title": "No access control differentiation for data access",
+      "description": "Stage A: System stores partner-specific data (partner IDs, PO numbers, amounts). B1: CLEAR \u2014 response is a simple string. B2: FIRES \u2014 no access control differentiation, all callers get identical access. B3: No formal classification (INFO).",
+      "gap": "No access control differentiation. Raw exception messages may leak internal details.",
+      "recommendation": "Implement access control differentiation. Sanitize error responses to exclude internal details.",
+      "severity": "Medium",
       "priority": "P0",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "40"
+        "lines": "41-42"
       },
       "ara_metadata": {
-        "native_severity": "BLOCKER",
+        "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND B1 fired (sensitive infrastructure details in error responses).",
+        "conditional_resolution": "Resolved to RISK-SAFETY: B2 fires (no access control differentiation), B1 CLEAR (response is not structured payload with sensitive fields)",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "DATA-Q1 B1 fired because error responses return raw Java exceptions containing DB connection strings (jdbc:oracle:thin:@10.0.9.30:1521:PARTDB) and potentially SQL statements with partner data.",
+        "resolution_reasoning": "DATA-Q1 B2 fired because all callers receive identical responses with no scope differentiation. B1 CLEAR because response format is a simple string, not a structured data payload with sensitive fields to exclude.",
         "data_q1_subchecks": {
           "b1": {
-            "fired": true,
-            "severity": "BLOCKER",
-            "reasoning": "Raw exception messages returned to callers expose DB_URL, table names, and potentially SQL with partner data."
+            "fired": false,
+            "severity": null,
+            "reasoning": "Response is a simple string (ACCEPTED/ERROR), not a structured data payload with sensitive fields to exclude."
           },
           "b2": {
             "fired": true,
             "severity": "RISK-SAFETY",
-            "reasoning": "Single shared DB credential (partner_app/partner2009) for all callers. No OAuth scopes, no role differentiation."
+            "reasoning": "No access control differentiation exists. All callers have identical access with no mechanism to scope."
           },
           "b3": {
             "fired": true,
             "severity": "INFO",
-            "reasoning": "No formal data classification metadata, tags, or PII detection tooling."
+            "reasoning": "No formal data classification metadata exists."
           }
         }
       }
@@ -582,118 +361,112 @@
       "question_id": "DATA-Q2",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "No Data Residency Controls",
-      "description": "Partner financial transaction data stored with no residency documentation, no region-specific configuration, no sovereignty controls.",
-      "gap": "No jurisdictional classification for financial transaction data. Cannot assess compliance risk for agent LLM transmission.",
-      "recommendation": "Document data residency requirements. Classify whether data falls under GDPR, LGPD, PCI-DSS.",
-      "severity": "High",
+      "title": "Data residency requirements undefined",
+      "description": "Data stored at hardcoded internal IP with no residency documentation. No region constraints, no sovereignty documentation. Compliance posture for cross-border data transmission is undefined.",
+      "gap": "No data residency documentation or controls. Compliance posture unknown.",
+      "recommendation": "Document data residency requirements. Implement region controls if partners are in regulated jurisdictions.",
+      "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "21"
+        "lines": "20"
       },
       "ara_metadata": {
-        "native_severity": "BLOCKER",
+        "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND partner financial data has no residency controls.",
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=write-enabled but no explicit regulated data indicators (GDPR, HIPAA, PCI) found",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "The system stores partner purchase orders with monetary amounts in Oracle DB. Under write-enabled scope, an agent transmitting this financial data to an LLM in another jurisdiction cannot assess compliance risk."
-      }
-    },
-    {
-      "question_id": "DATA-Q4",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Input Validation \u2014 Active Injection Vulnerabilities",
-      "description": "No input validation. SQL injection via string concatenation with partnerId and XML-parsed values. XXE vulnerability via unprotected DocumentBuilderFactory. No schema enforcement or size limits.",
-      "gap": "Active SQL injection and XXE vulnerabilities. No validation at API boundary.",
-      "recommendation": "Use parameterized queries (PreparedStatement). Disable external entities. Add XML schema validation and input size limits.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "28-37"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "DATA-Q5",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Temporal Metadata",
-      "description": "No timestamps in database records (no created_at, updated_at, event_time). No freshness signaling in responses.",
-      "gap": "Cannot determine when data was created or its freshness.",
-      "recommendation": "Add created_at (UTC) and updated_at columns. Include timestamps in API responses.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "36"
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "resolution_reasoning": "Write-enabled scope would normally resolve to BLOCKER, but no explicit regulated data indicators are present \u2014 partner order data without documented PII classification. Evaluated as RISK-SAFETY."
       }
     },
     {
       "question_id": "DATA-Q6",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Sensitive Data Leaked in Error Responses",
-      "description": "Raw exception messages returned to callers can expose DB connection strings, SQL statements, and partner data. No PII/sensitive-data redaction.",
-      "gap": "No redaction in error responses. Infrastructure details and potentially PII leaked.",
-      "recommendation": "Replace raw exception returns with generic error codes. Log full details server-side only.",
+      "title": "No PII redaction capability \u2014 error messages leak internal details",
+      "description": "No logging framework exists. Error messages return raw exception text to callers including potential connection strings and credentials. When logging is added, PII redaction must be built in from day one.",
+      "gap": "No logging exists. When added, PII redaction needed. Error responses currently leak internal info.",
+      "recommendation": "Implement PII redaction in logging pipeline from the start. Sanitize error responses immediately.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "40"
+        "lines": "41-42"
       },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
-        "safety_impact": true
+        "safety_impact": true,
+        "compensating_controls": [
+          "Structured logging with field-level redaction",
+          "Sanitize exception messages immediately"
+        ],
+        "remediation_timeline": "30-60 days"
       }
     },
     {
-      "question_id": "DATA-Q7",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Data Quality Awareness",
-      "description": "No data quality monitoring, no completeness metrics, no duplicate detection logic.",
-      "gap": "No signal about data accuracy or completeness for agents.",
-      "recommendation": "Implement data quality metrics in replacement architecture.",
-      "severity": "Low",
-      "priority": "P3",
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No draft/pending state for agent-proposed writes",
+      "description": "submitOrder immediately commits to database. No two-step create-then-confirm pattern, no status field, no approval workflow. All writes are immediately committed.",
+      "gap": "No reviewable intermediate state for agent-proposed actions.",
+      "recommendation": "Add order status lifecycle (PENDING \u2192 CONFIRMED) with separate confirmation endpoint.",
+      "severity": "Medium",
+      "priority": "P1",
       "effort": "Medium",
-      "phase": 3,
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "36-39"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Agent-side confirmation flow before calling submitOrder",
+          "PENDING status with separate confirm endpoint"
+        ],
+        "remediation_timeline": "60-90 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No configurable approval gates",
+      "description": "No approval gates. No configurable operation-level flags. All operations execute immediately without human approval option.",
+      "gap": "Cannot require human approval for high-risk agent operations.",
+      "recommendation": "Implement configurable approval gates \u2014 orders above threshold require human confirmation.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
         "lines": null
       },
       "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "Agent orchestration layer approval gate",
+          "Manual review for orders above threshold"
+        ],
+        "remediation_timeline": "60-90 days"
       }
     },
     {
-      "question_id": "DISC-Q1",
-      "category": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Schema Versioning or Contract Stability",
-      "description": "No schema versioning. WSDL has no version identifier. No breaking change detection, no contract tests, no CI/CD.",
-      "gap": "No API versioning or contract stability guarantees. Agent tool bindings break silently.",
-      "recommendation": "Implement API versioning and contract tests (Pact) in replacement service.",
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Machine-readable spec is outdated and unreliable",
+      "description": "WSDL exists but uses deprecated RPC/encoded style, is hand-maintained, and drifts from implementation. No OpenAPI or modern spec.",
+      "gap": "No reliable modern machine-readable spec. WSDL is deprecated and inaccurate.",
+      "recommendation": "Generate OpenAPI spec from REST endpoint code annotations after API modernization.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -704,59 +477,40 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days"
       }
     },
     {
-      "question_id": "DISC-Q2",
-      "category": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "Partially Meaningful Field Names",
-      "description": "Field names partially meaningful (partnerId, amount) with some abbreviations (po, poXml). Database columns readable but poXml schema undocumented.",
-      "gap": "poXml opaque about expected XML structure.",
-      "recommendation": "Use fully descriptive names and structured JSON fields in replacement API.",
-      "severity": "Low",
-      "priority": "P3",
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Unstructured error responses",
+      "description": "Errors returned as 'ERROR:' + raw exception message. No structured error format, no error codes, no retryable classification.",
+      "gap": "Agents cannot distinguish retriable vs terminal errors. Raw exception messages exposed.",
+      "recommendation": "Implement structured error responses with error codes and retryable indicators.",
+      "severity": "Medium",
+      "priority": "P2",
       "effort": "Low",
-      "phase": 3,
+      "phase": 2,
       "evidence": {
         "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
+        "lines": "41-42"
       },
       "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days"
       }
     },
     {
-      "question_id": "DISC-Q3",
-      "category": "Discovery & Documentation",
-      "category_id": "DISC",
-      "title": "No Data Catalog or Metadata Layer",
-      "description": "No data catalog, no metadata layer. Data model only inferable from INSERT statement in source code.",
-      "gap": "Building agent tools requires reverse-engineering data model from source.",
-      "recommendation": "Document data model and publish to data catalog as part of modernization.",
-      "severity": "Low",
-      "priority": "P3",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "INFO",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "OBS-Q1",
-      "category": "Observability",
-      "category_id": "OBS",
-      "title": "Zero Observability \u2014 No Tracing or Structured Logging",
-      "description": "No distributed tracing, no structured logging, no correlation IDs. No OpenTelemetry, no X-Ray, no logging framework. Agent-initiated requests completely opaque.",
-      "gap": "Cannot trace, correlate, or diagnose agent-initiated requests.",
-      "recommendation": "Implement OpenTelemetry SDK with trace ID propagation and structured JSON logging.",
+      "question_id": "STATE-Q2",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "Write-only interface \u2014 cannot query current state",
+      "description": "No read/query endpoints. Only submitOrder (write). Agent cannot inspect state before acting.",
+      "gap": "Agent cannot read state before deciding next steps.",
+      "recommendation": "Add getOrder and listOrders query endpoints.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -767,17 +521,110 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "30-60 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_id": "STATE",
+      "title": "No circuit breakers or resilience patterns",
+      "description": "Raw JDBC connection with no timeout, no retry logic, no circuit breaker. Database failures cascade directly to callers.",
+      "gap": "No resilience patterns. No circuit breakers. No timeouts.",
+      "recommendation": "Add JDBC timeouts, circuit breaker pattern, and retry policies for transient failures.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "35-36"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "compensating_controls": [
+          "JDBC connection timeout",
+          "API Gateway integration timeout"
+        ],
+        "remediation_timeline": "30-60 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Zero input validation \u2014 XXE and SQL injection vulnerabilities",
+      "description": "No input validation. XML parsed without XXE protection. Values concatenated into SQL (injection). No schema enforcement. No structured validation errors.",
+      "gap": "Accepts arbitrary input. Multiple injection vulnerabilities. No validation error responses.",
+      "recommendation": "Add XXE protection, parameterized queries (PreparedStatement), input validation, and structured error responses.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "29-39"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30 days"
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No API versioning or breaking change detection",
+      "description": "WSDL is hand-maintained with no versioning, no changelog, no breaking change detection. Spec drifts from implementation.",
+      "gap": "No versioning. No breaking change detection. Agent tool bindings break silently.",
+      "recommendation": "Implement API versioning and schema diff detection in CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "wsdl/PurchaseOrderService.wsdl",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_id": "OBS",
+      "title": "No distributed tracing or structured logging",
+      "description": "No tracing (X-Ray, OpenTelemetry), no structured logging, no correlation IDs. Agent-initiated requests cannot be traced or debugged.",
+      "gap": "Complete absence of observability. Cannot trace agent-initiated requests.",
+      "recommendation": "Add OpenTelemetry SDK instrumentation and structured JSON logging with correlation IDs.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days"
       }
     },
     {
       "question_id": "OBS-Q2",
       "category": "Observability",
       "category_id": "OBS",
-      "title": "No Alerting Configuration",
-      "description": "No alerting on error rates or latency. No CloudWatch alarms, no anomaly detection.",
-      "gap": "Service degradation affecting agents goes undetected.",
-      "recommendation": "Configure CloudWatch alarms for error rate and p99 latency.",
+      "title": "No alerting on error rates or latency",
+      "description": "No alerting configuration. No CloudWatch alarms. No monitoring. Service degradation undetected until consumers report failures.",
+      "gap": "No alerting. No error rate or latency monitoring.",
+      "recommendation": "Deploy CloudWatch alarms on error rates and latency with anomaly detection.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -788,7 +635,8 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
-        "safety_impact": false
+        "safety_impact": false,
+        "remediation_timeline": "60-90 days"
       }
     },
     {
@@ -796,9 +644,9 @@
       "category": "Engineering Maturity",
       "category_id": "ENG",
       "title": "No Infrastructure as Code",
-      "description": "No IaC. Infrastructure (JBoss AS 5.1, RHEL 6, Oracle 11g) managed manually. No peer review, no drift detection.",
-      "gap": "No IaC governance. Infrastructure changes manual and unauditable.",
-      "recommendation": "Define all replacement infrastructure as code (CDK or Terraform).",
+      "description": "No IaC exists. Manual infrastructure management. No peer review for infrastructure changes. No drift detection.",
+      "gap": "No IaC governance for agent-facing infrastructure surface.",
+      "recommendation": "Define infrastructure as code (Terraform/CDK) for API gateway, IAM, and network configuration.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
@@ -809,6 +657,49 @@
       },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "90-180 days"
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_id": "API",
+      "title": "Plain string response format requires parsing",
+      "description": "Service returns plain strings ('ACCEPTED:<poNumber>' or 'ERROR:<message>') wrapped in SOAP envelope. No structured JSON.",
+      "gap": "String-based responses require custom parsing logic in agent tools.",
+      "recommendation": "Move to structured JSON responses when modernizing API.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "40"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No identity propagation capability",
+      "description": "No identity propagation \u2014 no authentication exists. No JWT, no token exchange, no user context headers. Cannot distinguish agent-as-self from agent-on-behalf-of-partner.",
+      "gap": "No identity to propagate. Design for propagation when implementing auth.",
+      "recommendation": "Design auth with agent-as-self and agent-on-behalf-of-partner distinction from the start.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
         "safety_impact": false
       }
     },
@@ -816,54 +707,12 @@
       "question_id": "ENG-Q2",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "No CI/CD Pipeline",
-      "description": "No CI/CD. Manual Ant build with hand-run wsgen/wsimport. No automated testing, no contract tests.",
-      "gap": "API changes cannot be caught before production.",
-      "recommendation": "Implement CI/CD pipeline with API contract testing for replacement service.",
-      "severity": "Medium",
+      "title": "No CI/CD pipeline",
+      "description": "No CI/CD pipeline exists. Manual Ant build with hand-run wsgen/wsimport. No automated testing or contract validation.",
+      "gap": "Cannot catch API breaking changes before deployment.",
+      "recommendation": "Implement CI/CD with automated build, test, and API contract validation.",
+      "severity": "Low",
       "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "ENG-Q3",
-      "category": "Engineering Maturity",
-      "category_id": "ENG",
-      "title": "No Rollback Capability",
-      "description": "No automated rollback. Manual WAR deployment only. Cannot quickly revert bad deployments.",
-      "gap": "Recovery from bad deployments is manual and slow.",
-      "recommendation": "Implement blue/green or canary deployment with automatic rollback.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "README.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false
-      }
-    },
-    {
-      "question_id": "ENG-Q4",
-      "category": "Engineering Maturity",
-      "category_id": "ENG",
-      "title": "Zero Test Coverage",
-      "description": "No automated tests. README states: 'No tests; partner onboarding is a manual SOAP-UI session.'",
-      "gap": "No automated validation of API behavior.",
-      "recommendation": "Implement comprehensive API test suites (integration + contract tests) running in CI.",
-      "severity": "Medium",
-      "priority": "P3",
       "effort": "Medium",
       "phase": 3,
       "evidence": {
@@ -871,28 +720,49 @@
         "lines": null
       },
       "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
+        "native_severity": "INFO",
         "safety_impact": false
       }
     },
     {
-      "question_id": "ENG-Q5",
+      "question_id": "ENG-Q3",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "No Encryption at Rest",
-      "description": "No encryption at rest configuration. Oracle 11g with no evidence of TDE or KMS. Partner financial data stored unencrypted.",
-      "gap": "Data at rest not encrypted. Breach exposes all partner order data.",
-      "recommendation": "Use KMS-encrypted managed databases (RDS with encryption) in replacement architecture.",
-      "severity": "Medium",
+      "title": "No rollback capability",
+      "description": "No deployment infrastructure. Manual WAR deployment to JBoss. No blue/green, no canary, no automated rollback.",
+      "gap": "No automated rollback. Recovery depends on manual WAR redeployment.",
+      "recommendation": "Implement blue/green deployment with automated rollback triggers when containerizing.",
+      "severity": "Low",
       "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
+      "effort": "Medium",
+      "phase": 3,
       "evidence": {
-        "file": "src/com/acme/partner/PurchaseOrderService.java",
-        "lines": "21"
+        "file": "README.md",
+        "lines": null
       },
       "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No sandbox/staging environment",
+      "description": "No environment configuration. Hardcoded production DB IP. No staging, sandbox, docker-compose, or seed data for testing.",
+      "gap": "Cannot test agents without risking production data.",
+      "recommendation": "Create containerized local environment with test database and seed data.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "src/com/acme/partner/PurchaseOrderService.java",
+        "lines": "20"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
         "safety_impact": false
       }
     }
@@ -903,28 +773,91 @@
       "category_id": "API",
       "title": "Asynchronous Operation Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no evidence of long-running operations (>30s) in this service."
+      "reason": "Extended question not triggered \u2014 no evidence of operations >30s or long-running workflows."
+    },
+    {
+      "question_id": "API-Q7",
+      "category_id": "API",
+      "title": "Event Emission for State Changes",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question \u2014 evaluated for stateful-crud but service has minimal complexity; single INSERT operation does not warrant event emission evaluation."
+    },
+    {
+      "question_id": "API-Q8",
+      "category_id": "API",
+      "title": "Rate Limit Documentation and Headers",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question \u2014 no rate limiting surface exists to document; STATE-Q5 covers the rate limiting gap."
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category_id": "STATE",
+      "title": "Concurrency Controls",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 though agent_scope is write-enabled and service has persistent state, the single INSERT without any concurrent-access pattern makes this redundant with API-Q4."
     },
     {
       "question_id": "STATE-Q7",
       "category_id": "STATE",
       "title": "Graceful Degradation Signaling",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no P0 priority assigned, no critical path evidence."
+      "reason": "Extended question not triggered \u2014 no P0 priority set, not identified as critical path."
     },
     {
       "question_id": "DATA-Q3",
       "category_id": "DATA",
       "title": "Selective Query Support",
       "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 service has no list/query endpoints with potentially unbounded results."
+      "reason": "Extended question not triggered \u2014 service has no list/query endpoints."
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category_id": "DATA",
+      "title": "Temporal Metadata and Freshness",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 though service has persistent state, no query endpoints exist to return temporal metadata."
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category_id": "DATA",
+      "title": "Data Quality Awareness",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question \u2014 no data quality tooling or metrics present; informational signal suppressed."
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question \u2014 field names in WSDL and code are readable (partnerId, poNumber, amount); informational signal suppressed."
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category_id": "DISC",
+      "title": "Data Catalog / Metadata Layer",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question \u2014 no data catalog or metadata layer; informational signal suppressed."
     },
     {
       "question_id": "OBS-Q3",
       "category_id": "OBS",
       "title": "Business Outcome Metrics",
-      "status": "pass",
-      "reason": "No metrics or telemetry surface of any kind exists \u2014 informational signal, no finding emitted. Informational-absence suppression applied."
+      "status": "not_evaluated_extended",
+      "reason": "Extended question \u2014 no metrics or telemetry of any kind; informational signal suppressed."
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category_id": "ENG",
+      "title": "API Test Coverage",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question \u2014 no tests exist at all; evaluated implicitly by ENG-Q2 finding (no CI/CD)."
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category_id": "ENG",
+      "title": "Encryption at Rest",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 no IaC defines the data store; encryption config is not assessable from this repo alone."
     }
   ],
   "remediation_roadmap": {
@@ -939,65 +872,70 @@
         "phase_name": "Blockers",
         "findings": [
           "API-Q1",
-          "API-Q4",
           "AUTH-Q1",
-          "AUTH-Q6",
+          "API-Q4",
           "STATE-Q1",
-          "DATA-Q1",
-          "DATA-Q2",
+          "AUTH-Q6",
           "AUTH-Q2",
           "AUTH-Q3",
           "AUTH-Q5",
           "AUTH-Q7",
-          "STATE-Q3",
-          "STATE-Q4",
           "STATE-Q5",
-          "HITL-Q1",
-          "HITL-Q2",
-          "DATA-Q4",
+          "DATA-Q1",
+          "DATA-Q2",
           "DATA-Q6"
         ],
-        "summary": "Resolve all 7 BLOCKERs and address critical RISK-SAFETY findings. Focus on machine identity, audit logging, API modernization, and data protection."
+        "summary": "Resolve all 5 BLOCKERs and critical RISK-SAFETY findings. Focus on authentication, API modernization, idempotency, audit logging, and compensation logic."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
         "findings": [
-          "AUTH-Q4",
-          "STATE-Q2",
           "STATE-Q6",
-          "HITL-Q3",
-          "DATA-Q5",
+          "HITL-Q1",
+          "HITL-Q2",
+          "API-Q2",
+          "API-Q3",
+          "STATE-Q2",
+          "STATE-Q4",
+          "DATA-Q4",
           "DISC-Q1",
           "OBS-Q1",
           "OBS-Q2",
-          "ENG-Q1",
-          "ENG-Q2",
-          "ENG-Q3",
-          "ENG-Q5",
-          "API-Q2"
+          "ENG-Q1"
         ],
-        "summary": "Address remaining RISK-SAFETY and RISK-QUALITY findings. Build observability, engineering maturity, and deployment safety."
+        "summary": "Address remaining RISK-SAFETY (transaction limits, HITL) and RISK-QUALITY findings (error handling, observability, input validation, schema versioning)."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
         "findings": [
           "API-Q5",
-          "API-Q7",
-          "API-Q8",
-          "DATA-Q7",
-          "DISC-Q2",
-          "DISC-Q3",
-          "ENG-Q4"
+          "AUTH-Q4",
+          "ENG-Q2",
+          "ENG-Q3",
+          "HITL-Q3"
         ],
-        "summary": "Address INFO-level and remaining RISK-QUALITY findings. Improve agent developer experience and documentation."
+        "summary": "Implement CI/CD, deployment automation, staging environment, and response format improvements."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Modernize to REST API with OpenAPI specification",
+      "action": "Deploy centralized identity and API gateway",
+      "question_ids": [
+        "AUTH-Q1",
+        "AUTH-Q2",
+        "AUTH-Q3",
+        "AUTH-Q7",
+        "STATE-Q5"
+      ],
+      "priority": "P0",
+      "effort": "High",
+      "rationale": "Authentication is the foundational blocker. API Gateway provides identity, scoped permissions, rate limiting, and agent suspension in a single deployment."
+    },
+    {
+      "action": "Modernize API from SOAP to REST with OpenAPI",
       "question_ids": [
         "API-Q1",
         "API-Q2",
@@ -1005,61 +943,48 @@
         "API-Q5"
       ],
       "priority": "P0",
-      "effort": "High",
-      "rationale": "SOAP endpoint is not consumable by agent frameworks. REST with OpenAPI unblocks all downstream agent integration."
-    },
-    {
-      "action": "Deploy centralized identity provider with OAuth2",
-      "question_ids": [
-        "AUTH-Q1",
-        "AUTH-Q2",
-        "AUTH-Q3",
-        "AUTH-Q7"
-      ],
-      "priority": "P0",
-      "effort": "High",
-      "rationale": "No machine identity exists. Cannot scope permissions, enforce action-level auth, or suspend agents without identity infrastructure."
-    },
-    {
-      "action": "Implement immutable audit logging",
-      "question_ids": [
-        "AUTH-Q6"
-      ],
-      "priority": "P0",
       "effort": "Medium",
-      "rationale": "Write-enabled agents must have full audit attribution for compliance and forensics."
+      "rationale": "SOAP cannot be consumed by agent frameworks. REST with OpenAPI enables automatic agent tool generation."
     },
     {
-      "action": "Add idempotency and compensation patterns",
+      "action": "Implement idempotency and compensation logic",
       "question_ids": [
         "API-Q4",
         "STATE-Q1"
       ],
       "priority": "P0",
-      "effort": "Medium",
-      "rationale": "Agent retries create duplicate records. Failed workflows leave partial state. Both are data integrity risks."
+      "effort": "High",
+      "rationale": "Write safety BLOCKERs \u2014 agents retry and may duplicate operations without idempotency. Cannot undo agent errors without compensation."
     },
     {
-      "action": "Migrate credentials to secrets management",
+      "action": "Add structured audit logging with immutable storage",
+      "question_ids": [
+        "AUTH-Q6",
+        "OBS-Q1",
+        "DATA-Q6"
+      ],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Write operations must be auditable for compliance. Logging infrastructure enables both audit trails and operational observability."
+    },
+    {
+      "action": "Remove hardcoded credentials and implement secrets management",
       "question_ids": [
         "AUTH-Q5"
       ],
       "priority": "P1",
       "effort": "Low",
-      "rationale": "Hardcoded credentials in source code are immediately exploitable via prompt injection or agent bugs."
+      "rationale": "Credentials in source code are an immediate security vulnerability. Fastest RISK-SAFETY to remediate."
     },
     {
-      "action": "Deploy API Gateway with rate limiting and throttling",
+      "action": "Implement input validation and fix injection vulnerabilities",
       "question_ids": [
-        "STATE-Q5",
-        "STATE-Q6",
-        "API-Q8"
+        "DATA-Q4"
       ],
       "priority": "P1",
-      "effort": "Low",
-      "rationale": "No protection against runaway agent loops. Machine-speed traffic storms would overwhelm the database."
+      "effort": "Medium",
+      "rationale": "XXE and SQL injection vulnerabilities are exploitable regardless of agent integration. Security fundamentals."
     }
   ],
-  "analysis_type": "ara",
-  "repo_name": "legacy-partner-soap"
+  "analysis_type": "ara"
 }

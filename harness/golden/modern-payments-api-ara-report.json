@@ -1,9 +1,9 @@
 {
+  "repo_name": "modern-payments-api",
+  "analysis_type": "ara",
   "metadata": {
-    "analysis_type": "ara",
-    "analysis_date": "2026-08-12",
+    "analysis_date": "2025-07-15",
     "td_version": "agentic-readiness-analysis",
-    "repo_name": "modern-payments-api",
     "repo_type": "application",
     "repo_type_source": "auto-detected",
     "service_archetype": "stateful-crud",
@@ -14,7 +14,7 @@
     "tech_stack": {
       "language": "Python",
       "loc": 250,
-      "framework": "AWS Lambda + SAM",
+      "framework": "AWS Lambda Powertools + Boto3",
       "architecture": "Serverless (Lambda + API Gateway + DynamoDB)"
     },
     "surface_flags": {
@@ -26,378 +26,291 @@
     }
   },
   "classification": {
-    "tier": "Pilot-Ready",
-    "sub_qualifier": "Pilot-Ready (Safety Concerns)",
-    "blocker_count": 0,
+    "tier": "Remediation Required",
+    "sub_qualifier": null,
+    "blocker_count": 2,
     "risk_safety_count": 6,
-    "risk_quality_count": 7,
+    "risk_quality_count": 4,
     "info_count": 5,
-    "high_count": 0,
-    "medium_count": 13,
+    "high_count": 2,
+    "medium_count": 10,
     "low_count": 5,
-    "rule_matched": "0 BLOCKER, \u22653 RISK-SAFETY \u2192 Pilot-Ready (Safety Concerns)"
+    "rule_matched": "1-2 BLOCKER → Remediation Required"
   },
   "counts": {
-    "total": 18,
-    "high": 0,
-    "medium": 13,
+    "total": 17,
+    "high": 2,
+    "medium": 10,
     "low": 5
   },
   "findings": [
     {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Immutable Audit Logging — Incomplete Principal Logging and No Tamper-Evidence",
+      "description": "The create_charge handler logs client_id but refund_charge omits client_id from structured logs. No tamper-evidence configuration exists: no CloudTrail with log file validation, no CloudWatch log retention policy, no log group deletion protection.",
+      "gap": "Inconsistent principal logging across write operations. No tamper-evidence assurance for audit logs (no CloudTrail, no retention policy, no deletion protection).",
+      "recommendation": "Add client_id to refund_charge log line. Configure CloudTrail with log file validation. Set CloudWatch log retention policy and deletion protection on log groups.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {"file": "src/payments/handlers.py", "lines": "55-65"},
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled requires full audit attribution with tamper-evident storage.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "AUTH-Q6 fired because refund_charge handler omits client_id from logs and no tamper-evidence configuration exists in IaC.",
+        "blocker_remediation": {
+          "immediate": "Add client_id to refund_charge log line in src/payments/handlers.py. Configure CloudWatch log retention policy in infra/template.yaml.",
+          "target_state": "Every write operation logs authenticated principal. CloudTrail with log file validation enabled. Log groups have retention policies and deletion protection.",
+          "estimated_effort": "Low",
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_id": "DATA",
+      "title": "Data Residency and Sovereignty — No Residency Controls for Financial Data",
+      "description": "The payments API stores financial transaction data (charges, refunds, amounts) in DynamoDB without explicit data residency configuration or compliance documentation. No mechanism signals to agent consumers that financial data should not be transmitted cross-region.",
+      "gap": "No data residency controls, documentation, or classification headers. No region-pinning beyond implicit SAM deployment region.",
+      "recommendation": "Document data residency requirements. Add residency metadata to API responses. Constrain deployment region explicitly in IaC.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "infra/template.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled and financial transaction data has no residency controls.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "DATA-Q2 fired because the system stores financial records without explicit residency documentation or controls, and an agent could transmit this data to an LLM in another jurisdiction.",
+        "blocker_remediation": {
+          "immediate": "Document applicable data residency regulations for financial transaction data. Add explicit region constraint to IaC.",
+          "target_state": "Data residency requirements documented, deployment region constrained in IaC, agent-facing responses include data classification metadata.",
+          "estimated_effort": "Medium",
+          "dependencies": ["Requires compliance/legal input"]
+        }
+      }
+    },
+    {
       "question_id": "AUTH-Q4",
       "category": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "Identity Propagation and Delegation",
-      "description": "The system supports machine identity via OAuth2 client credentials with client_id attribution. However, it does not support on-behalf-of flows \u2014 there is no mechanism to distinguish between an agent acting under its own service identity vs. acting on behalf of a specific human user.",
-      "gap": "No identity propagation (JWT token exchange, on-behalf-of flow, X-User-Id headers). A payments service processing charges on behalf of users cannot attribute actions to the originating user through the authorization chain.",
-      "recommendation": "Implement OAuth2 token exchange or on-behalf-of flow via Cognito, adding a user identity claim to the token that the authorizer extracts alongside client_id. Log both actor (agent) and subject (user) in audit records.",
+      "title": "Identity Propagation — No On-Behalf-Of Flow",
+      "description": "The system authenticates machine clients via client_id from OAuth tokens but cannot distinguish between an agent acting autonomously versus acting on behalf of a specific human user. No token exchange or on-behalf-of flow exists.",
+      "gap": "No identity propagation for agent-on-behalf-of-user scenarios. All actions attributed to machine client only.",
+      "recommendation": "Extend the authorizer to support an optional on-behalf-of claim. Log both client_id and delegated user identity.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "High",
+      "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "src/payments/app.py",
-        "lines": "28-32"
-      },
+      "evidence": {"file": "src/payments/authorizer.py", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Require calling services to include user context in request metadata while implementing proper token exchange",
-          "Limit agent to read-only scope (payments:read) until identity propagation is implemented"
-        ]
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Require different Cognito app clients per agent use-case with separate scopes", "Include X-On-Behalf-Of header convention in API spec"]
       }
     },
     {
       "question_id": "STATE-Q3",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "Concurrency Controls",
-      "description": "The idempotency mechanism in _idempotent_put performs a get_item followed by a put_item without a DynamoDB ConditionExpression. Two concurrent requests with the same idempotency key could both pass the existence check and both write, creating a TOCTOU race condition.",
-      "gap": "No DynamoDB conditional writes (ConditionExpression attribute_not_exists(pk)) on the idempotency record. The append-only design prevents data corruption for charge/refund items (each has a unique pk), but the idempotency guarantee has a narrow race window under concurrent agent instances.",
-      "recommendation": "Add a DynamoDB conditional put with attribute_not_exists(pk) on the idempotency record write. Catch ConditionalCheckFailedException and retry the read to return the existing result.",
+      "title": "Concurrency Controls — No Conditional Writes",
+      "description": "The _idempotent_put function uses a get-then-put pattern without DynamoDB conditional expressions. Two concurrent requests with the same idempotency key could both observe no existing record and both execute the write.",
+      "gap": "No ConditionExpression on put_item calls. No optimistic locking mechanism.",
+      "recommendation": "Add ConditionExpression='attribute_not_exists(pk)' to put_item calls. Handle ConditionalCheckFailedException as retry.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Low",
       "phase": 1,
-      "evidence": {
-        "file": "src/payments/app.py",
-        "lines": "43-60"
-      },
+      "evidence": {"file": "src/payments/app.py", "lines": "50-65"},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "7\u201314 days",
-        "compensating_controls": [
-          "Add ConditionExpression attribute_not_exists(pk) to idempotency record put_item",
-          "Limit concurrent agent instances to 1 per client_id during pilot"
-        ]
+        "remediation_timeline": "7–14 days",
+        "compensating_controls": ["Add ConditionExpression to DynamoDB puts", "Use DynamoDB transactions for atomic multi-item writes"]
       }
     },
     {
       "question_id": "STATE-Q5",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "Rate Limiting and Throttling",
-      "description": "No explicit rate limiting configuration in the SAM template. API Gateway applies default account-level throttling (10,000 req/s burst) but no per-client usage plan or per-method throttling is defined.",
-      "gap": "Default API Gateway limits are too generous to protect against a runaway agent loop. No per-client throttling exists.",
-      "recommendation": "Define an AWS::ApiGateway::UsagePlan with per-client rate limits in infra/template.yaml. Associate Usage Plans with API keys mapped to OAuth client_ids.",
+      "title": "Rate Limiting — No Explicit Throttling Configuration",
+      "description": "The SAM template defines an API Gateway but does not configure explicit throttling settings, usage plans, or per-client rate limits. Only default account-level throttling exists.",
+      "gap": "No ThrottlingBurstLimit or ThrottlingRateLimit on API stage. No usage plans.",
+      "recommendation": "Configure API Gateway method settings with explicit throttle limits. Add usage plans for per-client limits.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 1,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": "36-50"
-      },
+      "evidence": {"file": "infra/template.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Add API Gateway Usage Plans with per-API-key throttling",
-          "Deploy WAF with rate-based rules in front of API Gateway"
-        ]
+        "remediation_timeline": "7–14 days",
+        "compensating_controls": ["Configure API Gateway stage-level throttling", "Add WAF rate rule"]
       }
     },
     {
       "question_id": "STATE-Q6",
       "category": "State Management",
       "category_id": "STATE",
-      "title": "Blast Radius and Transaction Limits",
-      "description": "No configurable transaction limits exist. An agent can issue unlimited charges or refunds at machine speed. The only protection is API Gateway's default throttling (traffic rate), which does not cap business-domain impact.",
-      "gap": "No maximum charges per hour, no maximum refund amount per session, no spend caps per agent identity.",
-      "recommendation": "Add configurable per-client transaction limits (max_refunds_per_hour, max_charge_amount_per_session) enforced at the handler level before writing to the ledger.",
+      "title": "Blast Radius — No Transaction Limits",
+      "description": "No configurable business-domain transaction limits exist. An agent could issue unlimited refunds or create unlimited charges per hour without any system-enforced cap.",
+      "gap": "No per-caller transaction limits (max_refunds_per_hour, max_charge_amount_per_session).",
+      "recommendation": "Implement per-client_id transaction counters with configurable limits.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "src/payments/handlers.py",
-        "lines": "38-70"
-      },
+      "evidence": {"file": "src/payments/handlers.py", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Implement per-client_id hourly charge/refund counters in DynamoDB",
-          "Set CloudWatch alarm on refund volume anomalies"
-        ]
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Per-client_id daily/hourly counters in DynamoDB", "Agent-specific usage plans in API Gateway"]
       }
     },
     {
       "question_id": "HITL-Q1",
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
-      "title": "Draft/Pending State",
-      "description": "The Charge schema defines a status enum including 'pending', but the code sets status to 'succeeded' immediately in create_charge. All write operations are committed upon execution with no reviewable intermediate state.",
-      "gap": "No draft/pending workflow exists. An agent creating a charge or refund commits it immediately \u2014 there is no mechanism for human review before finalization.",
-      "recommendation": "Implement a two-step charge flow: create_charge initially writes with status='pending', then a separate confirm_charge endpoint transitions to 'succeeded'. The schema already supports the 'pending' status value.",
+      "title": "Draft/Pending State — No Reviewable Intermediate State",
+      "description": "All write operations execute immediately. create_charge sets status='succeeded' directly. The pending status exists in schema but is never used. No two-step commit pattern.",
+      "gap": "No mechanism for agent-proposed writes awaiting human approval.",
+      "recommendation": "Implement optional pending state for agent-initiated charges with a confirm endpoint.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "src/payments/handlers.py",
-        "lines": "44-50"
-      },
+      "evidence": {"file": "src/payments/handlers.py", "lines": "40-55"},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Implement an orchestration-layer approval gate before calling the payments API",
-          "Limit agent to read-only scope until pending workflow is implemented"
-        ]
+        "remediation_timeline": "30–60 days",
+        "compensating_controls": ["Implement pending state with confirm endpoint", "Use orchestration-layer HITL (Step Functions waitForTaskToken)"]
       }
     },
     {
       "question_id": "HITL-Q2",
       "category": "Human-in-the-Loop",
       "category_id": "HITL",
-      "title": "Configurable Approval Gates",
-      "description": "No configurable approval gates exist. All operations with valid authentication and authorization execute immediately. No operation-level flags to require human approval.",
-      "gap": "No mechanism to configure specific operations (e.g., refunds above a threshold) to require human approval before execution.",
-      "recommendation": "Add configurable approval thresholds for high-value operations. Operations exceeding thresholds write with status='pending_approval' and await a separate approve/reject endpoint call.",
+      "title": "Approval Gates — No Configurable Human Approval",
+      "description": "All operations execute immediately upon authentication and scope verification. No mechanism to require human approval for high-value charges or bulk refunds.",
+      "gap": "No operation-level approval configuration. No threshold-based gates.",
+      "recommendation": "Add configurable amount thresholds that trigger pending state for high-value operations.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {
-        "file": "src/payments/handlers.py",
-        "lines": "38-70"
-      },
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {"file": "src/payments/handlers.py", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Deploy an orchestration layer (Step Functions) with human approval tasks for high-value operations",
-          "Implement amount-based routing at the agent orchestration level"
-        ]
-      }
-    },
-    {
-      "question_id": "API-Q3",
-      "category": "API Surface",
-      "category_id": "API",
-      "title": "Structured Error Responses",
-      "description": "Error responses include a structured Error schema with code, message, and correlation_id fields. HTTP status codes are semantically appropriate (409, 422, 404). However, no explicit retryable boolean or retry category is included.",
-      "gap": "No retryable indicator in error responses. Agents must infer retryability from HTTP status codes alone.",
-      "recommendation": "Add a retryable boolean field to the Error schema. Map: 409\u2192false, 422\u2192false, 404\u2192false, 5xx\u2192true, 429\u2192true.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "openapi/payments.yaml",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "7\u201314 days",
-        "compensating_controls": [
-          "Agent can infer retryability from HTTP status codes",
-          "Document retry semantics per error code in OpenAPI spec"
-        ]
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "Sandbox/Staging Environment",
-      "description": "Tests run offline against DynamoDB Local stub. CI pipeline provides automated testing. RUNBOOK references --config-env prod implying environment separation. No explicit staging environment IaC in the repository.",
-      "gap": "No staging environment definition in the repository. Agents cannot be tested against a production-equivalent environment from this codebase alone.",
-      "recommendation": "Add a samconfig.toml with staging environment configuration and document staging deployment procedure.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "RUNBOOK.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "Use SAM local for agent testing against DynamoDB Local",
-          "Deploy SAM stack to separate AWS account as staging"
-        ]
+        "remediation_timeline": "60–90 days",
+        "compensating_controls": ["Amount-based thresholds returning pending_approval status", "External approval service with Step Functions human task"]
       }
     },
     {
       "question_id": "DISC-Q1",
       "category": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "Schema Versioning and API Contracts",
-      "description": "OpenAPI spec versioned (1.4.0), URL path versioning (/v1/), CI validation. No breaking change detection in pipeline.",
-      "gap": "No automated breaking change detection in CI. An API change removing a field would pass CI without alerting consumers.",
-      "recommendation": "Add an OpenAPI diff step to GitHub Actions workflow (e.g., oasdiff breaking) that fails on backwards-incompatible changes.",
+      "title": "Schema Versioning — No Breaking-Change Detection",
+      "description": "OpenAPI spec is versioned (1.4.0) with URL path versioning (/v1/). Spec validated in CI. No breaking-change detection tooling (no OpenAPI diff, no Pact).",
+      "gap": "No automated breaking-change detection in CI.",
+      "recommendation": "Add oasdiff breaking-change detection to CI pipeline.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": ".github/workflows/ci.yml",
-        "lines": null
-      },
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "7\u201314 days",
-        "compensating_controls": [
-          "Manual review of OpenAPI spec changes in PRs",
-          "Behavioral tests catch implementation regressions"
-        ]
-      }
-    },
-    {
-      "question_id": "OBS-Q2",
-      "category": "Observability",
-      "category_id": "OBS",
-      "title": "Alerting on Error Rates and Latency",
-      "description": "RUNBOOK.md documents CloudWatch alarms (payments-5xx >1%, payments-idempotency-conflict >10/min, payments-ddb-throttle). These alarms are not defined in the SAM template.",
-      "gap": "Alerting configuration not codified in infrastructure-as-code. Alarms may drift or fail to be replicated in new environments.",
-      "recommendation": "Add AWS::CloudWatch::Alarm resources to infra/template.yaml for the three documented alarms.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "RUNBOOK.md",
-        "lines": null
-      },
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "7\u201314 days",
-        "compensating_controls": [
-          "Alarms likely exist in production (documented in RUNBOOK)",
-          "Manual verification against RUNBOOK during deployment"
-        ]
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["Add oasdiff to CI", "Implement Pact consumer-driven contract tests"]
       }
     },
     {
       "question_id": "ENG-Q1",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "Infrastructure Governance for Agent-Facing Surface",
-      "description": "Agent-facing surface fully defined as IaC (SAM template). GitHub Actions CI implies PR-based review. No drift detection configured.",
-      "gap": "No infrastructure drift detection. Manual changes to deployed stack would not be detected.",
-      "recommendation": "Add AWS Config rules or scheduled CloudFormation drift detection.",
+      "title": "Infrastructure Governance — No Peer Review or Drift Detection",
+      "description": "IaC present (SAM template). CI runs on push and pull_request. No explicit branch protection rules, required reviewers, or drift detection configuration.",
+      "gap": "No mandatory peer review for IaC changes. No drift detection.",
+      "recommendation": "Add branch protection requiring review. Enable CloudFormation drift detection.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
+      "evidence": {"file": "infra/template.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "SAM deployments overwrite drift on each deploy",
-          "Manual drift detection via CLI"
-        ]
+        "remediation_timeline": "7–14 days",
+        "compensating_controls": ["Configure branch protection rules", "Schedule CloudFormation drift detection"]
       }
     },
     {
       "question_id": "ENG-Q2",
       "category": "Engineering Maturity",
       "category_id": "ENG",
-      "title": "CI/CD with API Contract Testing",
-      "description": "CI pipeline includes OpenAPI spec validation, linting, type-checking, and pytest. Behavioral contract tests prove idempotency. No breaking change detection or consumer-driven contract testing.",
-      "gap": "No automated detection of API-breaking changes before production.",
-      "recommendation": "Add OpenAPI breaking-change detection step to CI pipeline. Consider Pact for consumer-driven contracts.",
+      "title": "CI/CD Contract Testing — No Breaking-Change Detection",
+      "description": "CI validates OpenAPI spec structure and runs pytest. No consumer-driven contract tests (Pact) and no breaking-change detection comparing spec against previous versions.",
+      "gap": "No API-breaking-change detection. No consumer contract testing.",
+      "recommendation": "Integrate oasdiff or Pact into CI pipeline.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": ".github/workflows/ci.yml",
-        "lines": null
-      },
+      "evidence": {"file": ".github/workflows/ci.yml", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "OpenAPI spec validation catches malformed specs",
-          "Behavioral tests catch implementation regressions"
-        ]
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["Add oasdiff breaking-change detection", "Add Pact provider verification"]
       }
     },
     {
-      "question_id": "ENG-Q4",
-      "category": "Engineering Maturity",
-      "category_id": "ENG",
-      "title": "API Test Coverage",
-      "description": "Three behavioral tests cover idempotent retry, conflict detection, and scope enforcement. Limited test breadth \u2014 no coverage of validation errors, not-found, refund flow, or edge cases.",
-      "gap": "No tests for validation error responses (422), not-found (404), refund flow, or boundary conditions.",
-      "recommendation": "Add test cases for validation errors, GET not-found, refund_charge flow, and missing Idempotency-Key rejection.",
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Sandbox/Staging — No Production-Equivalent Staging Environment",
+      "description": "Tests run against DynamoDB Local stubs. No staging/sandbox environment configuration in IaC. Single-environment SAM template.",
+      "gap": "No production-equivalent staging for agent testing.",
+      "recommendation": "Add multi-environment SAM configuration with staging stack.",
       "severity": "Medium",
-      "priority": "P3",
-      "effort": "Medium",
-      "phase": 3,
-      "evidence": {
-        "file": "tests/test_idempotency.py",
-        "lines": null
-      },
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {"file": "infra/template.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "14\u201330 days",
-        "compensating_controls": [
-          "OpenAPI spec with strict schema validation provides runtime validation",
-          "Type checking (mypy strict) catches type-level errors"
-        ]
+        "remediation_timeline": "14–30 days",
+        "compensating_controls": ["Deploy staging stack via SAM config-env", "Use DynamoDB Local for integration testing"]
       }
     },
     {
       "question_id": "API-Q7",
       "category": "API Surface",
       "category_id": "API",
-      "title": "Event Emission for State Changes",
-      "description": "The system uses an append-only DynamoDB ledger but does not emit events for state changes. No SNS, EventBridge, SQS, or webhook integration exists.",
-      "gap": "State changes only observable via polling GET /charges/{id}.",
-      "recommendation": "Consider adding DynamoDB Streams with EventBridge integration to emit charge.created and refund.created events.",
+      "title": "Event Emission — No Domain Events for State Changes",
+      "description": "Custom CloudWatch metrics published (ChargeCreated) but no domain events emitted via SNS, EventBridge, or webhooks for state changes.",
+      "gap": "No event-driven integration surface for reactive agent patterns.",
+      "recommendation": "Add EventBridge events for charge.created and refund.created.",
       "severity": "Low",
       "priority": "P2",
       "effort": "Medium",
       "phase": 3,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
+      "evidence": {"file": "src/payments/handlers.py", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -407,18 +320,15 @@
       "question_id": "API-Q8",
       "category": "API Surface",
       "category_id": "API",
-      "title": "Rate Limit Documentation and Headers",
-      "description": "No rate limit headers (X-RateLimit-Remaining, Retry-After) returned in API responses. No rate limit documentation in OpenAPI spec.",
-      "gap": "Agents cannot self-throttle based on approaching rate limits.",
-      "recommendation": "Add X-RateLimit-Remaining and X-RateLimit-Limit response headers. Document throttle limits in OpenAPI spec.",
+      "title": "Rate Limit Documentation — No Rate Limit Headers",
+      "description": "No rate limits documented in OpenAPI spec. No rate-limit headers (X-RateLimit-Remaining, Retry-After) in response code.",
+      "gap": "Agents have no visibility into rate-limit budget.",
+      "recommendation": "Document rate limits in OpenAPI spec and add rate-limit response headers.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "openapi/payments.yaml",
-        "lines": null
-      },
+      "evidence": {"file": "openapi/payments.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -428,40 +338,25 @@
       "question_id": "DATA-Q1",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Sensitive Data Classification",
-      "description": "Financial data with proper scoping. Tokenized sources, no raw PAN. API responses exclude sensitive fields. OAuth scopes differentiate access. Only B3 (formal classification metadata) is absent.",
-      "gap": "No formal data classification metadata (sensitivity tags, field-level annotations).",
-      "recommendation": "Add classification tags to DynamoDB table in IaC (DataClassification: Financial-Internal).",
+      "title": "Sensitive Data Classification — No Formal Classification Metadata (B3 Only)",
+      "description": "Financial transaction data handled. B1 (API scoping): CLEAR — sensitive fields excluded from responses. B2 (Access differentiation): CLEAR — OAuth scopes differentiate access. B3 (Classification metadata): absent — no data classification tags on DynamoDB table.",
+      "gap": "No formal data classification metadata (B3 only — aspirational).",
+      "recommendation": "Add data classification tags to LedgerTable in IaC.",
       "severity": "Low",
       "priority": "P0",
       "effort": "Low",
       "phase": 3,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
+      "evidence": {"file": "infra/template.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false,
-        "conditional_resolution": "Resolved to INFO: B1 clear (API responses properly scoped, tokenized data), B2 clear (OAuth scopes differentiate access), only B3 absent (no formal classification metadata).",
+        "conditional_resolution": "Resolved to INFO: B1 CLEAR (sensitive fields excluded from API responses), B2 CLEAR (OAuth scope differentiation), only B3 absent (formal classification metadata).",
         "agent_scope": "write-enabled",
-        "resolution_reasoning": "DATA-Q1 evaluates at B3 INFO because agent-facing APIs properly exclude sensitive fields (tokenized payment source, scoped responses) and access differentiation exists via OAuth scopes. No formal classification metadata is the only gap.",
+        "resolution_reasoning": "DATA-Q1 tiered evaluation: API responses properly exclude the tokenized source field, OAuth scopes differentiate read/write access. Only formal classification metadata is missing (aspirational).",
         "data_q1_subchecks": {
-          "b1": {
-            "fired": false,
-            "severity": null,
-            "reasoning": "API responses return only id, amount, currency, status, created_at. Payment source is tokenized \u2014 raw PAN never accepted. Sensitive fields properly excluded."
-          },
-          "b2": {
-            "fired": false,
-            "severity": null,
-            "reasoning": "OAuth scopes payments:read vs payments:write differentiate access levels. GET endpoint requires only read scope."
-          },
-          "b3": {
-            "fired": true,
-            "severity": "INFO",
-            "reasoning": "No DynamoDB table tags with classification labels, no field-level sensitivity annotations, no PII detection tooling."
-          }
+          "b1": {"fired": false, "severity": null, "reasoning": "Charge responses exclude the source field. No sensitive data (PAN, credentials) in API responses."},
+          "b2": {"fired": false, "severity": null, "reasoning": "OAuth scopes differentiate payments:read vs payments:write access."},
+          "b3": {"fired": true, "severity": "INFO", "reasoning": "No classification tags on DynamoDB table, no field-level sensitivity annotations."}
         }
       }
     },
@@ -469,18 +364,15 @@
       "question_id": "DATA-Q7",
       "category": "Data Accessibility",
       "category_id": "DATA",
-      "title": "Data Quality Awareness",
-      "description": "No data quality scores, completeness metrics, or data profiling for ledger data.",
-      "gap": "No formal data quality monitoring for the payments ledger.",
-      "recommendation": "Consider adding operational metrics for ledger completeness.",
+      "title": "Data Quality — No Quality Metrics",
+      "description": "No data quality metrics, profiling, or completeness monitoring for the payments ledger.",
+      "gap": "No quality scores or freshness SLAs published.",
+      "recommendation": "Publish reconciliation success rate as a CloudWatch metric.",
       "severity": "Low",
       "priority": "P3",
       "effort": "Low",
       "phase": 4,
-      "evidence": {
-        "file": "infra/template.yaml",
-        "lines": null
-      },
+      "evidence": {"file": "infra/template.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -490,18 +382,15 @@
       "question_id": "DISC-Q3",
       "category": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "Data Catalog / Metadata Layer",
-      "description": "No data catalog or metadata layer describes the ledger data semantically. OpenAPI spec documents API contract but no dedicated catalog exists.",
-      "gap": "No machine-discoverable data catalog for stored data.",
-      "recommendation": "Register data model in AWS Glue Data Catalog with semantic descriptions.",
+      "title": "Data Catalog — No Metadata Layer",
+      "description": "No data catalog or metadata layer describes the payments ledger schema semantics. DynamoDB schema documented only implicitly in code.",
+      "gap": "No formal metadata layer for the payments ledger.",
+      "recommendation": "Document DynamoDB schema patterns or register in Glue Data Catalog.",
       "severity": "Low",
       "priority": "P3",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 4,
-      "evidence": {
-        "file": "openapi/payments.yaml",
-        "lines": null
-      },
+      "evidence": {"file": "src/payments/app.py", "lines": null},
       "ara_metadata": {
         "native_severity": "INFO",
         "safety_impact": false
@@ -509,289 +398,104 @@
     }
   ],
   "evaluations": [
-    {
-      "question_id": "API-Q1",
-      "category_id": "API",
-      "title": "Documented API Interface",
-      "status": "pass",
-      "reason": "REST API fully documented via OpenAPI 3.1.0 spec with three endpoints, validated in CI."
-    },
-    {
-      "question_id": "API-Q2",
-      "category_id": "API",
-      "title": "Machine-Readable API Specification",
-      "status": "pass",
-      "reason": "OpenAPI 3.1.0 spec at openapi/payments.yaml, contract-first, validated in CI."
-    },
-    {
-      "question_id": "API-Q4",
-      "category_id": "API",
-      "title": "Idempotent Write Operations",
-      "status": "pass",
-      "reason": "All write endpoints require Idempotency-Key header. Implementation stores keys with hash verification. Contract tests prove the guarantee."
-    },
-    {
-      "question_id": "API-Q5",
-      "category_id": "API",
-      "title": "Structured Response Format",
-      "status": "pass",
-      "reason": "All responses are application/json with well-defined schemas and explicit Content-Type headers."
-    },
-    {
-      "question_id": "API-Q6",
-      "category_id": "API",
-      "title": "Asynchronous Operation Support",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 Lambda timeout is 15s, no long-running workflows detected."
-    },
-    {
-      "question_id": "AUTH-Q1",
-      "category_id": "AUTH",
-      "title": "Machine Identity Authentication",
-      "status": "pass",
-      "reason": "OAuth2 client credentials via Cognito with client_id attribution in Lambda authorizer."
-    },
-    {
-      "question_id": "AUTH-Q2",
-      "category_id": "AUTH",
-      "title": "Scoped Permissions (Least Privilege)",
-      "status": "pass",
-      "reason": "OAuth scopes (payments:read/write) and per-function IAM policies scoped to specific DynamoDB actions."
-    },
-    {
-      "question_id": "AUTH-Q3",
-      "category_id": "AUTH",
-      "title": "Action-Level Authorization",
-      "status": "pass",
-      "reason": "Action-level authorization via OAuth scopes enforced at handler level (_require_scope). Tests verify enforcement."
-    },
-    {
-      "question_id": "AUTH-Q5",
-      "category_id": "AUTH",
-      "title": "Credential Management",
-      "status": "pass",
-      "reason": "No hardcoded credentials. Cognito pool via parameter, table name via env var, runtime JWKS validation."
-    },
-    {
-      "question_id": "AUTH-Q6",
-      "category_id": "AUTH",
-      "title": "Immutable Audit Logging",
-      "status": "pass",
-      "reason": "Authenticated principal (client_id) logged for every write via structured JSON logging. CloudWatch Logs are append-only. X-Ray tracing active."
-    },
-    {
-      "question_id": "AUTH-Q7",
-      "category_id": "AUTH",
-      "title": "Agent Identity Suspension",
-      "status": "pass",
-      "reason": "Cognito app client can be disabled immediately, denying all subsequent token validations."
-    },
-    {
-      "question_id": "STATE-Q1",
-      "category_id": "STATE",
-      "title": "Compensation and Rollback",
-      "status": "pass",
-      "reason": "Append-only ledger with refunds as first-class compensating operations. Nothing hard-deleted. Reversible by design."
-    },
-    {
-      "question_id": "STATE-Q2",
-      "category_id": "STATE",
-      "title": "Queryable Current State",
-      "status": "pass",
-      "reason": "GET /charges/{chargeId} exposes current charge state for agent inspection before action."
-    },
-    {
-      "question_id": "STATE-Q4",
-      "category_id": "STATE",
-      "title": "Circuit Breakers and Resilience",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 service only calls DynamoDB (AWS infrastructure with SDK-managed retry), no external service-to-service dependencies."
-    },
-    {
-      "question_id": "STATE-Q7",
-      "category_id": "STATE",
-      "title": "Graceful Degradation Signaling",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no P0 priority designation or critical path assignment."
-    },
-    {
-      "question_id": "DATA-Q2",
-      "category_id": "DATA",
-      "title": "Data Residency and Sovereignty",
-      "status": "pass",
-      "reason": "Tokenized payment data without PII. No raw PAN stored. Single-region deployment. No evidence of applicable residency constraints for tokenized financial metadata."
-    },
-    {
-      "question_id": "DATA-Q3",
-      "category_id": "DATA",
-      "title": "Selective Query Support",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 only single-resource GET endpoint exists, no list/query endpoints with unbounded results."
-    },
-    {
-      "question_id": "DATA-Q4",
-      "category_id": "DATA",
-      "title": "Input Validation and Schema Enforcement",
-      "status": "pass",
-      "reason": "Strict OpenAPI schema validation (additionalProperties: false, required fields, patterns, min/max) enforced at API Gateway. Structured 422 error response."
-    },
-    {
-      "question_id": "DATA-Q5",
-      "category_id": "DATA",
-      "title": "Temporal Metadata and Freshness",
-      "status": "pass",
-      "reason": "created_at (ISO-8601 UTC) on all entities. Append-only design ensures data is always authoritative. DynamoDB strong consistency."
-    },
-    {
-      "question_id": "DATA-Q6",
-      "category_id": "DATA",
-      "title": "PII Redaction in Logs",
-      "status": "pass",
-      "reason": "Logs contain only operational data (correlation_id, client_id, charge_id). No PII logged. Code explicitly states no secrets are logged."
-    },
-    {
-      "question_id": "DISC-Q2",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
-      "status": "pass",
-      "reason": "All field names are human-readable and semantically meaningful (amount, currency, status, created_at). No legacy abbreviations."
-    },
-    {
-      "question_id": "OBS-Q1",
-      "category_id": "OBS",
-      "title": "Distributed Tracing and Structured Logging",
-      "status": "pass",
-      "reason": "X-Ray active, structured JSON logging via Powertools, X-Correlation-Id propagated and logged."
-    },
-    {
-      "question_id": "OBS-Q3",
-      "category_id": "OBS",
-      "title": "Business Outcome Metrics",
-      "status": "pass",
-      "reason": "ChargeCreated metric published via aws_lambda_powertools Metrics (namespace Payments)."
-    },
-    {
-      "question_id": "ENG-Q3",
-      "category_id": "ENG",
-      "title": "Rollback Capability",
-      "status": "pass",
-      "reason": "SAM deployment with immutable versioned artifacts. Rollback via redeploying previous artifact. Documented in RUNBOOK."
-    },
-    {
-      "question_id": "ENG-Q5",
-      "category_id": "ENG",
-      "title": "Encryption at Rest for Agent-Accessible Data",
-      "status": "pass",
-      "reason": "DynamoDB SSESpecification SSEEnabled: true. Point-in-time recovery enabled."
-    }
+    {"question_id": "API-Q1", "category_id": "API", "title": "Documented API Interface", "status": "pass", "reason": "REST API documented with OpenAPI 3.1.0 spec. Lambda handlers map to operationIds."},
+    {"question_id": "API-Q2", "category_id": "API", "title": "Machine-Readable API Specification", "status": "pass", "reason": "OpenAPI 3.1.0 spec at openapi/payments.yaml, validated in CI."},
+    {"question_id": "API-Q3", "category_id": "API", "title": "Structured Error Responses", "status": "pass", "reason": "Consistent Error schema with code, message, correlation_id. 409/422/404 responses defined."},
+    {"question_id": "API-Q4", "category_id": "API", "title": "Idempotent Write Operations", "status": "pass", "reason": "All write endpoints require Idempotency-Key header. DynamoDB-backed deduplication with TTL."},
+    {"question_id": "API-Q5", "category_id": "API", "title": "Structured Response Format", "status": "pass", "reason": "All responses are structured JSON (application/json). Schemas define typed objects."},
+    {"question_id": "API-Q6", "category_id": "API", "title": "Asynchronous Operation Support", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no operations exceed 30s (Lambda timeout is 15s)."},
+    {"question_id": "AUTH-Q1", "category_id": "AUTH", "title": "Machine Identity Authentication", "status": "pass", "reason": "OAuth2 client-credentials via Cognito. Lambda authorizer validates tokens. Principal attributed by client_id."},
+    {"question_id": "AUTH-Q2", "category_id": "AUTH", "title": "Scoped Permissions", "status": "pass", "reason": "Per-function IAM policies scoped to specific table. OAuth scopes differentiate read/write."},
+    {"question_id": "AUTH-Q3", "category_id": "AUTH", "title": "Action-Level Authorization", "status": "pass", "reason": "OAuth scopes enforce action-level auth. Code checks _require_scope for write operations."},
+    {"question_id": "AUTH-Q5", "category_id": "AUTH", "title": "Credential Management", "status": "pass", "reason": "No hardcoded credentials. Env vars are non-sensitive config. Cognito handles auth. No .env files."},
+    {"question_id": "AUTH-Q7", "category_id": "AUTH", "title": "Agent Identity Suspension", "status": "pass", "reason": "Cognito app clients can be disabled individually without affecting other clients."},
+    {"question_id": "STATE-Q1", "category_id": "STATE", "title": "Compensation and Rollback", "status": "pass", "reason": "Append-only design. Refunds are first-class compensation for charges. Individual operations are atomic."},
+    {"question_id": "STATE-Q2", "category_id": "STATE", "title": "Queryable Current State", "status": "pass", "reason": "GET /charges/{chargeId} defined in OpenAPI spec for state inspection."},
+    {"question_id": "STATE-Q4", "category_id": "STATE", "title": "Circuit Breakers and Resilience", "status": "pass", "reason": "Only dependency is DynamoDB (managed). Boto3 provides automatic retries. Lambda 15s timeout prevents hanging."},
+    {"question_id": "STATE-Q7", "category_id": "STATE", "title": "Graceful Degradation Signaling", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no P0 priority specified and not on critical path."},
+    {"question_id": "DATA-Q3", "category_id": "DATA", "title": "Selective Query Support", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no list/query endpoints with potentially unbounded results (only single-resource GET)."},
+    {"question_id": "DATA-Q4", "category_id": "DATA", "title": "Input Validation and Schema Enforcement", "status": "pass", "reason": "OpenAPI schema with additionalProperties:false, type constraints, minimums, patterns, maxLength. API Gateway validates against spec."},
+    {"question_id": "DATA-Q5", "category_id": "DATA", "title": "Temporal Metadata and Freshness", "status": "pass", "reason": "created_at in ISO 8601 format on all responses. Append-only design. Direct DynamoDB reads (no caching layer)."},
+    {"question_id": "DATA-Q6", "category_id": "DATA", "title": "PII Redaction in Logs", "status": "pass", "reason": "Logs contain only correlation_id, client_id, charge_id, reason (enum). No PII logged."},
+    {"question_id": "DISC-Q2", "category_id": "DISC", "title": "Semantically Meaningful Field Names", "status": "pass", "reason": "All API fields use clear names: amount, currency, status, created_at, charge_id. No legacy abbreviations."},
+    {"question_id": "OBS-Q1", "category_id": "OBS", "title": "Distributed Tracing and Structured Logging", "status": "pass", "reason": "X-Ray tracing active. Structured JSON logs via Powertools Logger. Correlation IDs propagated."},
+    {"question_id": "OBS-Q2", "category_id": "OBS", "title": "Alerting on Error Rates and Latency", "status": "pass", "reason": "CloudWatch alarms documented: payments-5xx, payments-idempotency-conflict, payments-ddb-throttle."},
+    {"question_id": "OBS-Q3", "category_id": "OBS", "title": "Business Outcome Metrics", "status": "pass", "reason": "Custom CloudWatch metrics: ChargeCreated count. Namespace: Payments."},
+    {"question_id": "ENG-Q3", "category_id": "ENG", "title": "Rollback Capability", "status": "pass", "reason": "SAM deploy pins versions. Rollback by redeploying prior artifact. Documented in RUNBOOK."},
+    {"question_id": "ENG-Q4", "category_id": "ENG", "title": "API Test Coverage", "status": "pass", "reason": "3 tests covering idempotency, conflict detection, scope enforcement. OpenAPI validation in CI."},
+    {"question_id": "ENG-Q5", "category_id": "ENG", "title": "Encryption at Rest", "status": "pass", "reason": "DynamoDB SSESpecification: SSEEnabled: true. Point-in-time recovery enabled."}
   ],
   "remediation_roadmap": {
-    "phases": [
-      1,
-      2,
-      3
-    ],
+    "phases": [1, 2, 3, 4],
     "items": [
       {
         "phase": 1,
-        "phase_name": "Safety",
-        "findings": [
-          "STATE-Q3",
-          "STATE-Q5",
-          "HITL-Q1",
-          "HITL-Q2"
-        ],
-        "summary": "Address critical safety controls: concurrency race condition, rate limiting, and human-in-the-loop mechanisms for write operations."
+        "phase_name": "Blockers",
+        "findings": ["AUTH-Q6", "DATA-Q2", "STATE-Q3", "STATE-Q5", "HITL-Q1"],
+        "summary": "Resolve audit logging and data residency blockers. Fix concurrency controls and rate limiting for immediate agent safety."
       },
       {
         "phase": 2,
-        "phase_name": "Safety & Quality",
-        "findings": [
-          "AUTH-Q4",
-          "STATE-Q6",
-          "API-Q3",
-          "HITL-Q3",
-          "DISC-Q1",
-          "OBS-Q2",
-          "ENG-Q1",
-          "ENG-Q2"
-        ],
-        "summary": "Implement identity propagation, transaction limits, error response improvements, staging environment, and engineering governance hardening."
+        "phase_name": "Safety",
+        "findings": ["AUTH-Q4", "STATE-Q6", "HITL-Q2", "DISC-Q1", "ENG-Q1", "ENG-Q2", "HITL-Q3"],
+        "summary": "Address identity propagation, transaction limits, approval gates, and engineering governance for safe pilot expansion."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
-        "findings": [
-          "ENG-Q4",
-          "API-Q7",
-          "API-Q8",
-          "DATA-Q1",
-          "DATA-Q7",
-          "DISC-Q3"
-        ],
-        "summary": "Expand test coverage, add event emission, rate limit headers, data classification metadata, and catalog registration."
+        "findings": ["API-Q7", "API-Q8", "DATA-Q1"],
+        "summary": "Add event emission, rate limit documentation, and data classification for improved agent experience."
+      },
+      {
+        "phase": 4,
+        "phase_name": "Excellence",
+        "findings": ["DATA-Q7", "DISC-Q3"],
+        "summary": "Add data quality metrics and catalog for long-term agent tooling maturity."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Fix idempotency race condition with DynamoDB conditional writes",
-      "question_ids": [
-        "STATE-Q3"
-      ],
-      "priority": "P1",
+      "action": "Fix audit logging completeness and tamper-evidence",
+      "question_ids": ["AUTH-Q6"],
+      "priority": "P0",
       "effort": "Low",
-      "rationale": "Narrow TOCTOU window in idempotency mechanism could allow duplicate charges under concurrent agent load. Single code change resolves."
+      "rationale": "BLOCKER: Incomplete principal logging and no tamper-evidence prevents compliance for write-enabled agent operations."
     },
     {
-      "action": "Deploy per-client API Gateway Usage Plans and throttling",
-      "question_ids": [
-        "STATE-Q5",
-        "API-Q8"
-      ],
+      "action": "Document and enforce data residency controls",
+      "question_ids": ["DATA-Q2"],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "BLOCKER: Financial transaction data requires explicit residency controls before agent integration."
+    },
+    {
+      "action": "Add DynamoDB conditional writes for concurrency safety",
+      "question_ids": ["STATE-Q3"],
+      "priority": "P1",
+      "effort": "Low",
+      "rationale": "Race condition in idempotency check could cause duplicate charges under concurrent agent requests."
+    },
+    {
+      "action": "Configure API Gateway throttling and usage plans",
+      "question_ids": ["STATE-Q5", "API-Q8"],
+      "priority": "P1",
+      "effort": "Low",
+      "rationale": "No rate limiting leaves the service vulnerable to runaway agent loops at machine speed."
+    },
+    {
+      "action": "Implement transaction limits and approval gates",
+      "question_ids": ["STATE-Q6", "HITL-Q1", "HITL-Q2"],
       "priority": "P1",
       "effort": "Medium",
-      "rationale": "Protects against runaway agent loops at machine speed. Enables self-throttling via rate limit headers."
+      "rationale": "No business-domain caps on agent operations. High-value transactions should support human review."
     },
     {
-      "action": "Implement pending/approval workflow for high-value operations",
-      "question_ids": [
-        "HITL-Q1",
-        "HITL-Q2"
-      ],
-      "priority": "P1",
-      "effort": "High",
-      "rationale": "Enables human oversight for agent-initiated payments above configurable thresholds. Schema already supports pending status."
-    },
-    {
-      "action": "Add business transaction limits per agent identity",
-      "question_ids": [
-        "STATE-Q6"
-      ],
-      "priority": "P2",
-      "effort": "Medium",
-      "rationale": "Caps blast radius of agent errors independently of traffic-rate throttling."
-    },
-    {
-      "action": "Add OpenAPI breaking change detection to CI",
-      "question_ids": [
-        "DISC-Q1",
-        "ENG-Q2"
-      ],
+      "action": "Add breaking-change detection to CI",
+      "question_ids": ["DISC-Q1", "ENG-Q2"],
       "priority": "P2",
       "effort": "Low",
-      "rationale": "Prevents silent API contract breakage that would cause agent tool failures."
-    },
-    {
-      "action": "Codify CloudWatch alarms in SAM template",
-      "question_ids": [
-        "OBS-Q2"
-      ],
-      "priority": "P2",
-      "effort": "Low",
-      "rationale": "Ensures alerting is reproducible and version-controlled alongside the service."
+      "rationale": "Agent tool bindings could break silently when OpenAPI spec changes without detection."
     }
-  ],
-  "analysis_type": "ara",
-  "repo_name": "modern-payments-api"
+  ]
 }
