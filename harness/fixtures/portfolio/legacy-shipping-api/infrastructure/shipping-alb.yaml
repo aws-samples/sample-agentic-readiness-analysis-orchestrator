@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Shipping Rate API - internet-facing ALB and rate-card bucket (2019 datacentre exit)'
+
+# Hand-written during the 2019 datacentre exit. Only the edge and the rate-card
+# bucket were ever moved to AWS; the app still runs under `forever` on the single
+# EC2 instance below. See ../k8s/ for containerization artifacts, not yet deployed.
+#
+# TODO(NETSEC-4412, 2019-08): request an ACM cert for shipping.acme-internal.com
+# and add the :443 listener. Blocked on the netsec cert-approval queue. Partner
+# integrations were cut over to the :80 listener below and now depend on it.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC that hosts the shipping-rate-api instance
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Public subnets for the load balancer (two AZs minimum)
+  AppInstanceId:
+    Type: AWS::EC2::Instance::Id
+    Description: The EC2 instance running server.js under forever
+  TargetPort:
+    Type: Number
+    Default: 8080
+    Description: Port server.js listens on
+
+Resources:
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: shipping-rate-api edge - plaintext HTTP from partner networks
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Partner rate lookups (plaintext - see NETSEC-4412)
+
+  ShippingApiLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: shipping-rate-api
+      Scheme: internet-facing
+      Type: application
+      Subnets: !Ref PublicSubnetIds
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+
+  ShippingApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: shipping-rate-api
+      VpcId: !Ref VpcId
+      Port: !Ref TargetPort
+      Protocol: HTTP
+      TargetType: instance
+      Targets:
+        - Id: !Ref AppInstanceId
+          Port: !Ref TargetPort
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /rates
+      Matcher:
+        HttpCode: '200,401'
+
+  # The only listener. No :443, no redirect - the static X-Api-Key header
+  # travels in cleartext across the public internet for the whole path.
+  ShippingApiHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ShippingApiLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ShippingApiTargetGroup
+
+  # Carrier rate cards, dropped here nightly by the partner upload job.
+  RateCardBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'acme-shipping-rate-cards-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+Outputs:
+  AlbDnsName:
+    Value: !Sub 'http://${ShippingApiLoadBalancer.DNSName}/rates'

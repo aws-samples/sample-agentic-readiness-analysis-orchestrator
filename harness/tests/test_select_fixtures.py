@@ -311,6 +311,12 @@ def test_axis_bonus_rewards_the_relevant_axis():
     assert sf.axis_bonus({"has_api": "none"}, {"API"}) == 0
     assert sf.axis_bonus({"has_iac": True}, {"INF"}) == 1
     assert sf.axis_bonus({"has_iac": False}, {"INF"}) == 0
+    # SEC keys off IaC, not auth: SEC-Q1 (CloudTrail) and SEC-Q2 (KMS at rest) are both
+    # gated on IaC flags and read IaC signals, and only SEC-Q3/Q4 are about
+    # authentication. Keyed on auth_present, a SEC edit preferred fixtures that cannot
+    # show the IaC the questions actually read.
+    assert sf.axis_bonus({"has_iac": True}, {"SEC"}) == 1
+    assert sf.axis_bonus({"has_iac": False}, {"SEC"}) == 0
 
 
 def test_axis_bonus_ignores_categories_without_a_hint():
