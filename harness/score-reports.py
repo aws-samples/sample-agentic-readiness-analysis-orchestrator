@@ -906,10 +906,37 @@ def check_ara(rpt: dict) -> list[dict]:
 
 def check_mod(rpt: dict) -> list[dict]:
     out: list[dict] = []
+    findings = rpt.get("findings") or []
     cats = rpt.get("categories") or []
     scores = [c.get("numeric_score") for c in cats
               if isinstance(c.get("numeric_score"), (int, float))]
     overall = rpt.get("overall_score")
+
+    # --- Count reconciliation: classification counts MUST match findings[] ---
+    # The classification object's high/medium/low counts must equal the actual
+    # tally of findings by severity. A mismatch means the report authored the
+    # summary independently of the findings array (the root cause of Issue #1).
+    cls = rpt.get("classification")
+    if isinstance(cls, dict):
+        actual_high = sum(1 for f in findings if f.get("severity") == "High")
+        actual_medium = sum(1 for f in findings if f.get("severity") == "Medium")
+        actual_low = sum(1 for f in findings if f.get("severity") == "Low")
+        for sev_name, key, actual in (
+            ("High", "high_count", actual_high),
+            ("Medium", "medium_count", actual_medium),
+            ("Low", "low_count", actual_low),
+        ):
+            claimed = cls.get(key)
+            if isinstance(claimed, int) and claimed != actual:
+                severity = "critical" if sev_name == "High" else "high"
+                out.append({
+                    "check": "mod_count_findings_mismatch",
+                    "severity": severity,
+                    "detail": f"classification.{key}={claimed} but findings[] has "
+                              f"{actual} {sev_name}-severity entries (delta: "
+                              f"{claimed - actual:+d}); counts must be derived from "
+                              f"findings[], not maintained as a separate tally",
+                })
 
     # overall_score is the EQUALLY-weighted mean of the category scores, regardless of how
     # many questions each category holds.

@@ -312,6 +312,19 @@ def validate_mod(v: Violations, data: dict, strict: bool) -> None:
             if c not in cls:
                 v.err(f"classification missing `{c}`")
 
+        # Count reconciliation: classification counts must match findings[].
+        findings = data.get("findings") or []
+        actual_high = sum(1 for f in findings if isinstance(f, dict) and f.get("severity") == "High")
+        actual_medium = sum(1 for f in findings if isinstance(f, dict) and f.get("severity") == "Medium")
+        actual_low = sum(1 for f in findings if isinstance(f, dict) and f.get("severity") == "Low")
+        for sev, key, actual in (("High", "high_count", actual_high),
+                                 ("Medium", "medium_count", actual_medium),
+                                 ("Low", "low_count", actual_low)):
+            claimed = cls.get(key)
+            if isinstance(claimed, int) and claimed != actual:
+                v.err(f"classification.{key}={claimed} but findings[] has {actual} "
+                      f"{sev}-severity entries (counts must be derived from findings[])")
+
     if "top_gaps" not in data:
         v.err("missing `top_gaps[]`")
 

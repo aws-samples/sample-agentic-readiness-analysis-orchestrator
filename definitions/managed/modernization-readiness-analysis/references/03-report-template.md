@@ -201,7 +201,33 @@ Include relevant links based on triggered pathways. Only include learning materi
 
 If no pathways are triggered, include: "No pathways triggered — no pathway-specific learning materials applicable. Refer to the [AWS SkillBuilder](https://skillbuilder.aws/) catalog for general cloud architecture training."
 
-### Section 9: Evidence Index
+### Section 9: Classification Count Reconciliation (mandatory verification step)
+
+**After emitting all `findings[]` and `evaluations[]`, perform this verification before writing the classification block.**
+
+The classification counts (`high_count`, `medium_count`, `low_count`) MUST be derived by counting the emitted findings array — NOT maintained as a separate running tally. Compute them as follows:
+
+```
+high_count   = count of findings[] where severity == "High"
+medium_count = count of findings[] where severity == "Medium"
+low_count    = count of findings[] where severity == "Low"
+```
+
+Then apply the Classification Table (from `04-output-contract.md`) to the derived `high_count` and `medium_count` to determine the tier and `rule_matched`.
+
+**Why this is mandatory:** The summary counts and the findings array are consumed by different downstream systems (webapp, portfolio TD, customer-facing PDF). If they disagree, the customer sees a header that contradicts the detail — a trust-destroying defect. Maintaining a parallel tally while evaluating questions is the root cause of drift; deriving from the emitted array eliminates it.
+
+**Self-check:** After writing the classification object, verify:
+1. `high_count` equals the number of entries in `findings[]` with `severity == "High"`
+2. `medium_count` equals the number of entries in `findings[]` with `severity == "Medium"`
+3. `low_count` equals the number of entries in `findings[]` with `severity == "Low"`
+4. `high_count + medium_count + low_count` equals `len(findings[])`
+
+If any check fails, recompute from `findings[]` and correct before emitting. Do NOT emit a classification with counts that disagree with the findings array.
+
+Similarly, `overall_score` MUST be recomputed as the mean of the non-N/A category scores AFTER all per-category means are finalized — not carried forward from an intermediate calculation.
+
+### Section 10: Evidence Index
 
 ```markdown
 ## Evidence Index
