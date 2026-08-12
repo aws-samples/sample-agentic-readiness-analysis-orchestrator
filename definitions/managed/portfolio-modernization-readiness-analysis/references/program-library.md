@@ -379,6 +379,33 @@ This library is consumed by two different analyses with different finding vocabu
 - **Inline remediation note:** For simple findings like "missing encryption at rest", the report should first recommend the direct fix (e.g., enable KMS encryption on the resource) in the remediation section. SHIP is recommended when there are **multiple** infrastructure security gaps that suggest a systemic posture problem, not for isolated single-service fixes.
 - **Pairs with:** Well-Architected Review, MAP (if remediation needs funding), Immersion Days (go deeper on specific services).
 
+### AI Security Review `[ARA+MOD]` `Active`
+- **Signal patterns:** The Step 1 discovery scan found AI/agent artifacts — Bedrock or SageMaker SDK imports, Strands, LangChain, Spring AI, a vector-capable store, RAG patterns, an agent-evaluation framework, an MCP server or tool registry, or `AWS::Bedrock::*` / `AWS::BedrockAgentCore::*` resources in IaC. Also relevant when the customer already runs agentic workloads and the accounts hosting them lack AI-aware threat detection.
+- **⚠️ Do NOT key this on the MOD `Move to AI` pathway.** That pathway's primary trigger is the **absence** of AI/agent frameworks (`02-pathways.md` Step 7.7) — it fires to recommend *adopting* AI, so a Triggered `Move to AI` is evidence there is no AI workload to review. The correct signal is the Step 1 discovery scan, which is the single source of truth for what AI artifacts exist; `Move to AI` **Not Triggered** is the state that correlates with an AI workload being present.
+- **DO NOT recommend when:** No AI or agent workload exists anywhere in the portfolio — recommend the AI Assessment for strategy framing instead. Also skip when the customer already enforces Bedrock Guardrails org-wide through an AWS Organizations Bedrock policy AND has GuardDuty AI Protection enabled across every account running AI workloads.
+- **Important distinction:** SHIP = foundational AWS security services (is GuardDuty on? is CloudTrail immutable?). AI Security Review = the AI workload's own security posture (is a guardrail attached to every invocation path? is the agent's execution role scoped? is agent memory partitioned per actor?). ARA Auth dimension = whether a target service can safely serve an agent at all. Three layers, three different questions. Don't conflate them. Note also that AWS Transform's built-in `security` analysis type is CVE and vulnerability scanning via the AWS Security Agent — it does not assess AI-workload configuration posture, so it does not substitute for this program.
+- **What the customer gets:** A review of the AI and agentic workloads against the AWS AI Security Framework — use cases x layers x phases — covering model access control, invocation guardrails, agent identity, tool authorization, memory protection, retrieval authorization, observability, and evaluation. Produces a prioritized remediation roadmap with evidence prompts and remediation-effort estimates.
+- **How to engage:** Talk to your AWS account team about an AI security review, or run the AI Security Readiness Assessment self-service.
+- **Time to value:** 2-3 weeks (Discovery → Evidence Collection → Prioritized Roadmap).
+- **Prerequisite:** None. An existing or in-flight AI/agentic workload makes the output concrete rather than advisory.
+- **Directly resolves these findings:**
+  - "No guardrail on model invocation paths" → Amazon Bedrock Guardrails with a prompt-attack content filter, enforced org-wide via an AWS Organizations **Bedrock policy** (note: automated-reasoning policies are not supported in enforcements)
+  - "Open-ended tool discovery / no tool allow-list" → Amazon Bedrock AgentCore Gateway fronting tools, with AgentCore Policy (Cedar) in default-deny mode
+  - "Over-broad agent execution role" → per-tool IAM roles scoped to resource ARNs with `aws:SourceAccount` / `aws:SourceArn` confused-deputy conditions; continuous audit via IAM Access Analyzer
+  - "No distinct agent identity / no revocation path" → AgentCore Identity workload identities and a token vault protected by a customer-managed key
+  - "Unprotected agent memory" → AgentCore Memory with CMK encryption, per-actor namespaces, PII filtered before write, and a bounded retention period
+  - "Prompts and completions unmanaged in logs" → CloudWatch Logs data-protection policies with CMK-encrypted log groups; **CloudTrail data events** for Bedrock and AgentCore invocations
+  - "No safety evaluation gate on agent releases" → AgentCore Evaluations with safety and tool-correctness evaluators, run in CI and sampled against production traffic
+  - "Unfiltered retrieval from a shared knowledge base" → per-document metadata at ingestion plus a principal-derived retrieval filter on every `Retrieve` / `RetrieveAndGenerate` call
+  - "No AI-aware threat detection" → **GuardDuty AI Protection**, which analyzes CloudTrail data events from Amazon Bedrock, Amazon Bedrock AgentCore, and Amazon SageMaker AI to detect anomalous model invocation, cost harvesting, and direct prompt injection
+- **Prerequisite chain worth naming:** GuardDuty's `Impact:IAMUser/PromptInjection.Direct` finding is generated only when Bedrock Guardrails intervene, and is Bedrock-only. So attaching a guardrail is not merely an application-layer control — it is the **precondition for AWS-side prompt-injection detection**. An unguarded workload is both unprotected and invisible.
+- **Does NOT resolve these ARA findings (recommend EBA or ProServe instead):**
+  - "No machine identity authentication for agents" (ARA `AUTH-Q1`) — that is the target service's auth edge, not the agent platform's
+  - "No human-in-the-loop approval gate" (ARA `HITL-Q1` / `HITL-Q2`) — application workflow design
+  - "Agent orchestration design, prompt engineering, or model selection" — out of scope for every analysis in this repo
+- **Inline remediation note:** For a single isolated gap — one endpoint missing a guardrail — the report should first recommend the direct fix. AI Security Review is recommended when there are **multiple** AI-workload security gaps spanning more than one layer (guardrails plus identity plus memory), which indicates a systemic posture problem rather than an oversight.
+- **Pairs with:** SHIP (foundational AWS security services first), Well-Architected Review (Generative AI Lens), MAP for AI Modernization (if remediation needs funding), Agentic Catalyst Program.
+
 ---
 
 ## SELF-SERVICE TOOLS
@@ -505,4 +532,4 @@ Before finalizing the recommendation list, verify each item:
 
 *Last updated: June 15, 2026*
 *Compiled from public AWS program documentation*
-*Total programs indexed: 42 — Tier 1 detailed: 34 (31 from source + 3 ARA agentic anchors); Tier 2 compact: 8*
+*Total programs indexed: 43 — Tier 1 detailed: 35 (31 from source + 3 ARA agentic anchors + 1 AI security); Tier 2 compact: 8*
