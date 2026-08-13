@@ -85,7 +85,7 @@ AXIS_HINTS = {
     "INF": ("has_iac", True),
     "OPS": ("has_iac", True),
     "AUTH": ("auth_present", None),
-    "SEC": ("auth_present", None),
+    "SEC": ("has_iac", True),      # SEC-Q1/Q2 read IaC; only Q3/Q4 are about auth
     "DATA": ("persistence", None),
 }
 
