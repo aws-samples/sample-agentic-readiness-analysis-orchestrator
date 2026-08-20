@@ -9,20 +9,20 @@ Turn Claude into an orchestrator for running comprehensive analyses across a ser
 
 > Ported from the AWS "orchestrator" Kiro Power (`aws-samples/sample-agentic-readiness-analysis-orchestrator`). Where the original referenced Kiro's `readSteering` action, use the **Read** tool on the files in `references/`; where it referenced `executeBash`, use the **Bash** tool.
 
-> **⚠️ Verified 2026-08-03 against atx 3.9.0 — read this before running anything.**
+> **⚠️ Base doc verified 2026-08-03 against atx 3.9.0; the items marked ✓ (3.10.0) were re-verified 2026-08-20 against atx 3.10.0 — read this before running anything.**
 >
-> **First: check your version correctly.** `atx --version` **lies inside Claude Code** — it prints `2.1.220.613`, which is Builder Toolbox's build number for *claude-code*, inherited via `$TOOLBOX_TOOL_VERSION`. atx resolves `TOOLBOX_TOOL_VERSION || SEG_VERSION || DEV_BUILD`, so the toolbox var wins over its own `SEG_VERSION`. Use one of these instead:
+> **First: check your version correctly.** `atx --version` **lies inside Claude Code** — it prints a `2.1.x` number (e.g. `2.1.235.672`), which is Builder Toolbox's build number for *claude-code*, inherited via `$TOOLBOX_TOOL_VERSION`. atx resolves `TOOLBOX_TOOL_VERSION || SEG_VERSION || DEV_BUILD`, so the toolbox var wins over its own `SEG_VERSION`. Use one of these instead:
 > ```bash
-> env -u TOOLBOX_TOOL_VERSION atx --version      # → Version: 3.9.0
-> ls -la "$(command -v atx)"                     # → .../share/atx/3.9.0/atx
+> env -u TOOLBOX_TOOL_VERSION atx --version      # → Version: 3.10.0
+> ls -la "$(command -v atx)"                     # → .../share/atx/3.10.0/atx
 > ```
-> Any doc or bug report quoting a `2.1.x` "atx version" is quoting the wrong number.
+> Any doc or bug report quoting a `2.1.x` "atx version" is quoting the wrong number. ✓ (3.10.0)
 >
-> - **No server needed.** `atx ct server` still exists but is **hidden and deprecated** — analyses run in-process. It prints its own warning and starts a real daemon on `:8081` that will block your shell, so never invoke it. Use `atx ct status --health` (an in-process check, not a daemon ping). There is also a hidden top-level `--api <url>` defaulting to `http://localhost:8081`; leave it alone.
+> - **No server needed.** `atx ct server` still exists but is **hidden and deprecated** — analyses run in-process. It prints its own warning and starts a real daemon on `:8081` that will block your shell, so never invoke it. Use `atx ct status --health` (an in-process check, not a daemon ping). There is also a hidden top-level `--api <url>` defaulting to `http://localhost:8081`; leave it alone. ✓ (3.10.0 — `atx ct server --help` still resolves to "(deprecated) Start the local API server"; it is not listed in `atx ct --help`.)
 > - **`--wait` DOES exist** on `analysis run`, `remediation create`, and `remediation retry` — registered with `.hideHelp()`, so it appears in neither `--help` nor `atx ct schema`. Earlier revisions of this doc claimed it was removed; that was wrong. Prefer polling in agent workflows (see [Long-running analysis](#agent-behavior-long-running-analysis)) — but that is a *choice*, not a missing flag.
-> - **`analysis list-artifacts` / `get-artifact` are GONE** — 0 occurrences in the shipped bundle; `error: unknown command`. Reports now come from `analysis get --json` → `report_paths`, but that map is **markdown-only**: `.json` and `.html` (and every portfolio artifact) live under `~/.atxct/sources/<src>/<type>/runs/<id>/`, which `report_paths` never mentions. See [Report artifacts](#report-artifacts).
-> - **Region: only `us-east-1` resolves.** A stray `AWS_REGION=us-west-2` makes the definition/credential endpoint NXDOMAIN (`transform-custom.us-west-2.api.aws`). Always `export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1`.
-> - **`atx ct schema` is NOT a complete manifest.** It reports 11 top-level commands and omits the hidden `schedule` and `server` groups plus every hidden flag. The shipped bundle is ground truth; treat `schema` (and `ATXControlTower/docs/cli-reference.md`) as incomplete.
+> - **`analysis list-artifacts` / `get-artifact` are BACK and live as of 3.10.0.** They were absent in 3.9.0 (`error: unknown command`); in 3.10.0 both are registered, appear in `--help`, and reach the live service (a bogus `--id` returns a *server-side* FES validation error with a Request ID, not "not yet available"). Each artifact is one per-repo bundle (`<repo>/artifacts.zip`); `list-artifacts` takes `--id [--repo] [--max-results] [--next-token] [--json]`, `get-artifact` takes `--id --artifact-id [--output] [--force]`. `analysis get --json` → `report_paths` still works and is still **markdown-only** (`.json`/`.html`/portfolio artifacts live under `~/.atxct/sources/<src>/<type>/runs/<id>/`). See [Report artifacts](#report-artifacts). ✓ (3.10.0)
+> - **Region: only `us-east-1` resolves.** A stray `AWS_REGION=us-west-2` makes the definition/credential endpoint NXDOMAIN (`transform-custom.us-west-2.api.aws`). Always `export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1`. ✓ (3.10.0)
+> - **`atx ct schema` is NOT a complete manifest.** It omits hidden commands (e.g. `server`) and every hidden flag. `atx ct --help` lists **12** groups as of 3.10.0 — `schedule` is now surfaced (it was hidden in 3.9.0); only `server` remains hidden. The shipped bundle is ground truth; treat `schema` (and `ATXControlTower/docs/cli-reference.md`) as incomplete. ✓ (3.10.0)
 > - **Zero-findings bug is fixed as of 3.9.0.** On 3.7.0 analyses completed with 0 findings. Verified fixed on 3.9.0: a single-repo ARA produced 43 findings and a MOD 31. If you are on 3.7.0, upgrade. See [Zero-findings bug](#zero-findings-bug-370).
 > - **ARA/MOD findings are never auto-remediable.** Every finding they emit has `fix: null`, and `remediation create --ids` rejects those with `non_remediable=[...]`. Remediation of ARA/MOD output must go through `--transformation-name`. See [Remediation](#remediation).
 
@@ -91,7 +91,7 @@ Do NOT load all of these proactively. Pick the one relevant to the current task 
 | `references/execution-plan.md` | Generating the Execution Plan (EBA) via `atx custom def exec` after ARA+MODA complete — includes the interactive config-generation flow |
 | `references/troubleshooting.md` | Errors: analysis/discovery failures, missing reports, EBA/remediation errors, credentials |
 
-> All four were rewritten against verified 3.9.0 behavior on 2026-08-03: the `atx ct server` start-up steps are gone (replaced by `atx ct status --health`), `list-artifacts`/`get-artifact` are gone (replaced by `analysis get --json` → `report_paths`, with the "`report_paths` is not the whole bundle" caveat), and `troubleshooting.md`'s claim that artifacts are "NOT on the local filesystem" is corrected — they are on local disk. This SKILL.md remains the source of truth for CLI behavior; the references carry the interactive flows and error taxonomies.
+> All four were rewritten against verified 3.9.0 behavior on 2026-08-03: the `atx ct server` start-up steps are gone (replaced by `atx ct status --health`), and `troubleshooting.md`'s claim that artifacts are "NOT on the local filesystem" is corrected — they are on local disk. **Note (3.10.0, 2026-08-20):** the reference files still say `list-artifacts`/`get-artifact` were "removed" — that was true on 3.9.0 but is **no longer true**; both returned in 3.10.0 (see the banner and [Report artifacts](#report-artifacts)). The `analysis get --json` → `report_paths` path still works and is still markdown-only. This SKILL.md remains the source of truth for CLI behavior; the references carry the interactive flows and error taxonomies.
 
 ## Demo harness (scripts re-verified against 3.9.0 on 2026-08-04; local-first)
 
@@ -133,7 +133,7 @@ Key fixes baked into the harness:
 - **Portfolio repos are git-inited on the fly** — a fresh clone of the harness ships the portfolio dirs WITHOUT nested `.git` (they can't live inside the parent repo), and `ct` discovery scans for `.git` subdirs → finds 0. Setup self-heals: `git init -b main` + initial commit for any portfolio dir missing `.git`. Verified: without this loop, discovery finds **zero** of the 10 fixtures.
 - **No server is started** — setup and reset only health-check with `atx ct status --health`. The old `PYENV_VERSION=system atx ct server` startup is gone (see the CLI rules above).
 - **Both analysis waits require `report_paths` non-empty**, not just `status` — otherwise the scripts break out during the portfolio phase and export nothing. Setup also continues past a `failed` ARA when findings exist, instead of discarding a usable 45-minute environment.
-- **Artifact export copies off disk** (`find ~/.atxct/sources -path "*runs/<id>/*"`) — `analysis list-artifacts`/`get-artifact` were removed in 3.9.0 and the old export silently produced nothing.
+- **Artifact export copies off disk** (`find ~/.atxct/sources -path "*runs/<id>/*"`) — chosen because on 3.9.0 `analysis list-artifacts`/`get-artifact` were absent and the old export silently produced nothing. Those commands returned in 3.10.0 (see [Report artifacts](#report-artifacts)), so a future rev could switch to `get-artifact`; the find-off-disk approach still works and captures the full bundle, so the scripts are unchanged for now.
 - **Local remediation requires a CLEAN worktree** — prior analysis runs write `services/<repo>/{ara,mod}-report.{md,json,html}` artifacts INTO local repos (this is also where HTML reports live for local sources!). Remediation fails with "has uncommitted changes" until `services/` is removed. Reset cleans this.
 - Local-source remediation completes with status `pr_open` and creates a local staging branch (`atx-result-staging-*`) — show the diff with `git diff main`.
 - `findings update` (single) instead of `batch-update` — batch fails with `UnknownError` on some IDs.
@@ -168,7 +168,7 @@ atx ct analysis run --type modernization-readiness --source my-portfolio
 atx ct findings count --by severity --json
 atx ct findings list --json
 
-# 6. Retrieve reports — report_paths, NOT the removed get-artifact
+# 6. Retrieve reports — report_paths (markdown view); or analysis get-artifact for the full per-repo bundle (3.10.0+)
 atx ct analysis get --id <analysis-id> --json | jq -r '.report_paths | to_entries[] | "\(.key)\t\(.value.ara // .value.mod)"'
 
 # 7. (Optional) Generate execution plan (see references/execution-plan.md)
@@ -234,7 +234,14 @@ The exact `--type` values accepted on 3.9.0, in the order the CLI lists them:
 
 ## Report artifacts
 
-**`analysis list-artifacts` and `analysis get-artifact` no longer exist** — verified 2026-08-03: `error: unknown command`, and **0 occurrences** across all three shipped bundles. They were never merely hidden here; they are not shipped. (Upstream they are registered `{hidden:true}` pending a read-path launch, with the ops throwing "not yet available".) Delete any code you find that calls them.
+**`analysis list-artifacts` and `analysis get-artifact` are available again as of 3.10.0.** ✓ (re-verified 2026-08-20) They were absent on 3.9.0 (`error: unknown command`, 0 occurrences in the bundle — the read-path launch the earlier note anticipated had not shipped). On 3.10.0 both are registered, documented in `--help`, and wired to the live service:
+
+```bash
+atx ct analysis list-artifacts --id <id> [--repo <repositoryId>] [--max-results <n>] [--next-token <t>] [--json]
+atx ct analysis get-artifact  --id <id> --artifact-id <aid> [--output <file>] [--force]
+```
+
+Each artifact is one **per-repo bundle** (`<repo>/artifacts.zip`), materialized as each repo completes — so a mid-run listing can be partial. A bogus `--id` returns a server-side FES validation error (`analysisId` must match the ULID pattern `((manual:|sched-)?[0-9A-HJKMNP-TV-Z]{26}|…)`), with a Request ID — confirming the call reaches the service rather than a stub. This is the way to get the **full** bundle (`.json`/`.html`/portfolio artifacts), which `report_paths` does not expose.
 
 **Reports are on local disk, and `analysis get --json` tells you where.** `report_paths` maps each repo slug to its report file:
 
@@ -557,14 +564,14 @@ Trade-off: `ct remediation` gives you ct-managed branch/PR creation, `--slots` c
 
 ## Full CLI reference (condensed)
 
-Enumerated live on 3.9.0 (2026-08-03). `atx ct --help` reports **11 groups**; `schedule` and `server` exist but are hidden.
+Enumerated live on 3.9.0 (2026-08-03); group visibility re-checked on 3.10.0 (2026-08-20). `atx ct --help` reports **12 groups** on 3.10.0 (source, discovery, repository, analysis, findings, remediation, setup, status, remote, schedule, mcp, schema). `schedule` is now **surfaced** (it was hidden on 3.9.0); only `server` remains hidden.
 
 **Status:** `atx ct status [--health] [--json]` — in-process; do not start `server`
 **Schema:** `atx ct schema` — JSON manifest, but **incomplete** (omits hidden commands/flags)
 **Sources:** `atx ct source add|list|get|remove|update` (`get`/`update` need `--name`)
 **Discovery:** `atx ct discovery scan --source <name> [--path <override>] [--json]`
 **Repositories:** `atx ct repository list|get|update|delete` (filters: `--source --language --labels --has-workflow --json --next-token`)
-**Analysis:** `atx ct analysis run|get|list|cancel|delete` — **no `list-artifacts`, no `get-artifact`** (removed; use `get --json` → `report_paths`)
+**Analysis:** `atx ct analysis run|get|list|list-artifacts|get-artifact|cancel|delete` — `list-artifacts`/`get-artifact` returned in 3.10.0 (see [Report artifacts](#report-artifacts)); `delete` takes `--id [--cascade-findings]`
 **Findings:** `atx ct findings list|count|get|update|batch-update|delete` — **no `dismiss`** (removed; use `update --status dismissed`)
  · `list` filters: `--repo --source --severity --min-severity --type --status --analysis-id --fix-transform --next-token --json`
  · `--severity` and `--min-severity` are **mutually exclusive**; both take `low|medium|high`
@@ -573,17 +580,15 @@ Enumerated live on 3.9.0 (2026-08-03). `atx ct --help` reports **11 groups**; `s
 **Setup:** `atx ct setup <component> [--status] [--delete]` (e.g. `security-agent`)
 **MCP:** `atx ct mcp [--transport stdio|http] [--port 3100]` — 25 tools
 **Remote:** `atx ct remote analysis|remediation|status|detect|provision|update|credentials|teardown|cancel|network` — see below
-**Schedule** *(hidden)*: `atx ct schedule create|list|get|enable|disable|delete|teardown` — see below
+**Schedule** *(surfaced in 3.10.0)*: `atx ct schedule create|list|get|enable|disable|delete|teardown` — see below
 
 ### Removed commands — delete on sight
 
 | Removed | Replacement |
 |---|---|
-| `analysis list-artifacts` | `analysis get --id <id> --json` → `.report_paths` |
-| `analysis get-artifact` | read the file at the `report_paths` path directly |
 | `findings dismiss` | `findings update --id <id> --status dismissed --reason "..."` |
 
-Verified by direct invocation (`error: unknown command`) — not merely absent from `--help`. Everything else our docs referenced still exists.
+`findings dismiss` was verified absent by direct invocation (`error: unknown command`) — not merely hidden from `--help`. **`analysis list-artifacts` / `get-artifact` are NOT removed as of 3.10.0** — they were absent on 3.9.0 but returned in 3.10.0 (see [Report artifacts](#report-artifacts)); do not delete code that calls them. Everything else our docs referenced still exists.
 
 ### `atx ct remote` — Batch / EC2 execution
 

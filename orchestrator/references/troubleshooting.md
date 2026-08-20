@@ -253,13 +253,15 @@ Two reasons hand-built paths fail here: **`<type>` is the source's analysis root
 
 **Symptom:** `atx ct analysis list-artifacts` or `atx ct analysis get-artifact` fails with `error: unknown command`.
 
-**Cause:** Both subcommands were **removed**. There is no artifact-export API to call — see above, the artifacts are already files on disk.
+**Cause:** You are on **atx 3.9.0 or earlier**, where both subcommands were absent. They **returned in 3.10.0** — check your real version with `env -u TOOLBOX_TOOL_VERSION atx --version` (the plain `atx --version` prints a misleading `2.1.x` toolbox number). On 3.10.0+ these commands exist and reach the live service.
 
-**Fix:** Use `analysis get` to find the paths, then read the files:
-```bash
-atx ct analysis get --id <analysis-id> --json   # → .report_paths
-```
-Then read the files off disk. Remember `report_paths` is markdown-only — for `.json`/`.html` glob `~/.atxct/sources/*/*/runs/<id>/` per the section above.
+**Fix:**
+- **On 3.10.0+:** use them directly — `atx ct analysis list-artifacts --id <id> [--repo <r>] [--json]` then `atx ct analysis get-artifact --id <id> --artifact-id <aid> [--output <file>]`. This is the way to pull the full per-repo bundle.
+- **On 3.9.0 or earlier (or as an always-works fallback):** use `analysis get` to find the paths, then read the files off disk:
+  ```bash
+  atx ct analysis get --id <analysis-id> --json   # → .report_paths
+  ```
+  Remember `report_paths` is markdown-only — for `.json`/`.html` glob `~/.atxct/sources/*/*/runs/<id>/` per the section above.
 
 ### Missing HTML or JSON alongside the markdown
 
@@ -361,7 +363,7 @@ export AWS_REGION=us-east-1
 ```
 Note: `atx ct` commands use the region from your AWS config. `atx custom def exec` may require explicit region setting.
 
-### `atx --version` reports 2.1.x instead of 3.9.0
+### `atx --version` reports 2.1.x instead of the real version (e.g. 3.10.0)
 
 **Symptom:** Inside Claude Code (or any Builder Toolbox-managed shell), `atx --version` prints a `2.1.x` version that doesn't match the installed CLI, which can send you chasing version-specific bugs that don't apply.
 

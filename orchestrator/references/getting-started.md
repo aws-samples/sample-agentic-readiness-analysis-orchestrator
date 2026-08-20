@@ -17,8 +17,9 @@ First-time setup for running portfolio analyses with AWS Transform Continuous Mo
    # If not installed: https://docs.aws.amazon.com/transform/
    ```
    Inside Claude Code a bare `atx --version` misreports Builder Toolbox's version (`2.1.x`), which
-   atx inherits from `$TOOLBOX_TOOL_VERSION`. Unset it to get the real version. Everything in this
-   guide is verified against **atx 3.9.0**.
+   atx inherits from `$TOOLBOX_TOOL_VERSION`. Unset it to get the real version. This guide was
+   verified against **atx 3.9.0**; the currently installed CLI is **3.10.0**, which is compatible
+   and additionally restores the `analysis list-artifacts` / `get-artifact` commands.
 
 3. **ct healthy** — analyses run in-process, so there is no server to start
    ```bash
@@ -124,7 +125,8 @@ gives the user no progress signal for the 5–15 min per repo an analysis takes.
 
 Verified on 3.9.0, `report_paths` lists only the `.md`. The full 4-artifact bundle
 (`.md`, `.json`, `.html`, `.metadata.json`) lives in the source-scoped run tree, which
-`report_paths` never mentions:
+`report_paths` never mentions (on 3.10.0+ you can also pull the bundle with
+`atx ct analysis get-artifact`):
 
 ```bash
 # per-repo and portfolio artifacts for a run

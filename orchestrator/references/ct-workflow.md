@@ -304,7 +304,7 @@ atx ct findings delete --id <id>
 
 ## Step 6: Retrieve Report Artifacts
 
-Reports land as **files on the local filesystem**. There is no artifact-fetch subcommand — `analysis list-artifacts` and `analysis get-artifact` were removed (they now fail with `error: unknown command`). Discover report locations from the analysis record instead.
+Reports land as **files on the local filesystem**, and you can discover their locations from the analysis record. As of **atx 3.10.0** there is also an artifact-fetch subcommand pair — `analysis list-artifacts` / `analysis get-artifact` (they were absent on 3.9.0, which is why the sections below lean on `report_paths` + disk globbing). The `report_paths` route below is still the quickest way to enumerate which repos reported; use `get-artifact` when you need the full per-repo bundle (`.json`/`.html`/portfolio) rather than just the markdown.
 
 ### List report paths for an analysis
 
