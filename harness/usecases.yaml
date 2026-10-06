@@ -291,6 +291,45 @@ fixtures:
         pathways_triggered: [move-to-cloud-native, move-to-modern-devops]
         overall_score_band: Needs Work
 
+  - id: modern-claims-agent
+    path: harness/fixtures/modern/modern-claims-agent
+    axes:
+      language: python
+      era: modern
+      has_iac: true
+      has_api: rpc
+      architecture: service
+      auth_present: false
+      persistence: sql
+    notes: >-
+      Python 3.12 agentic claims-triage service: Bedrock Converse + AgentCore Runtime,
+      Gateway (MCP tools), Memory, and a knowledge base for RAG. THE ONLY FIXTURE WITH AI
+      ARTIFACTS — it exists so the AI-workload security posture the program library
+      describes is reachable at all; before it, `grep -ril bedrock harness/fixtures/`
+      returned 0 and the AI Security Review entry was unexercisable.
+      Deliberate AI-specific gaps, each traceable to a program-library bullet: no guardrail
+      on the invocation path, `bedrock:InvokeModel` on `Resource: '*'`, Gateway
+      `AuthorizerType: NONE`, runtime `NetworkMode: PUBLIC` and directly invocable, all
+      claimants sharing one memory namespace, raw SSN/routing numbers written to memory and
+      logged as prompts at INFO with 10-year retention, unfiltered RAG over the whole claims
+      archive, shell-command actions in the same role as ordinary invoke, and a
+      settlement tool that moves money with no human-in-the-loop in batch mode.
+      Also the only `has_api: rpc` fixture (MCP is JSON-RPC), closing a declared-vocab
+      coverage gap the heatmap flagged.
+    expectations:
+      ara:
+        tier: Not Agent-Integrable
+        must_have_categories: [AUTH, API, HITL, DATA, OBS]
+      mod:
+        tier: Remediation Required
+        must_have_categories: [SEC, APP, OPS]
+        # `Move to AI` must stay Not Triggered: its primary trigger is the ABSENCE of AI
+        # frameworks, and this repo has them. The contextual guard passes (AI intent is
+        # everywhere here), so this fixture is the one that proves the guard and the
+        # primary trigger are evaluated in the right order.
+        pathways_triggered: [move-to-modern-devops]
+        overall_score_band: Needs Work
+
 # ---------------------------------------------------------------------------
 # Portfolio-level expectations — programs (D4) are PORTFOLIO-only, on BOTH ARA and MOD.
 # Pathways/scores at portfolio level are MOD-only. See DESIGN.md §3.
@@ -299,7 +338,10 @@ fixtures:
 portfolio_expectations:
   ara:
     # D4: ARA portfolio recommended_actions[] (acronym/type/status)
-    programs_expected: [AI DLC, AXE, EBA]
+    # AI Security Review is expected only because modern-claims-agent exists — it is the
+    # sole fixture the Step 1 AI-artifact discovery scan can fire on. Remove that fixture
+    # and this expectation must come out with it.
+    programs_expected: [AI DLC, AXE, EBA, AI Security Review]
   mod:
     # D3: portfolio pathways[].portfolio_status == Triggered
     pathways_triggered: [move-to-cloud-native, move-to-open-source, move-to-containers,

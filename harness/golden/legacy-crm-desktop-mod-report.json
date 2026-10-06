@@ -2,16 +2,17 @@
   "analysis_type": "mod",
   "metadata": {
     "repository": "legacy-crm-desktop",
-    "analysis_date": "2026-07-30",
+    "analysis_date": "2025-07-15",
     "td_version": "modernization-readiness-analysis",
     "repo_type": "application",
+    "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source code (VB6 form file with ADODB database connection and Form_Load entry point) present with a dependency on a persistent data store. Classified as application.",
     "service_archetype": "stateful-crud",
-    "archetype_source": "auto-detected",
-    "archetype_justification": "The application connects directly to a Microsoft Access database and performs INSERT operations via ADO. It owns persistent state (customer records) and exposes CRUD operations on business entities. No message queues, no downstream service calls, no event processing detected.",
+    "service_archetype_source": "auto-detected",
+    "archetype_justification": "The application performs CRUD operations \u2014 INSERT statements writing customer data to an Access database. It owns persistent state (the .mdb file). Classified as stateful-crud.",
     "priority": null,
     "tags": [],
     "context": null,
-    "preferences": null,
     "surface_flags": {
       "has_persistent_data_store": true,
       "has_at_rest_data_surface": true,
@@ -19,129 +20,122 @@
       "has_api_surface": false,
       "has_multi_instance_deployment": false,
       "has_iac_provisioning_aws_resources": false
-    },
-    "language": "Visual Basic 6.0",
-    "loc": 45,
-    "framework": "VB6 Forms / ADO"
+    }
   },
-  "overall_score": 1.15,
+  "overall_score": 1.18,
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "category_display": "Application Architecture",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
+      "numeric_score": 1.75,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "numeric_score": 1.17,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
   "classification": {
     "tier": "Remediation Required",
     "high_count": 11,
-    "medium_count": 22,
+    "medium_count": 20,
     "low_count": 0,
     "rule_matched": "2-11 High \u2192 Remediation Required",
     "classification_consistency_check": {
       "status": "divergent",
       "score_band": "Not Ready",
       "count_tier": "Remediation Required",
-      "reason": "Score 1.15 yields Not Ready band (< 1.5) but 11 High findings (< 12 threshold) maps to Remediation Required tier. The divergence occurs because the count-based system only counts core-question score-1 findings as High, while the numeric score reflects all 33 evaluated questions scoring near 1.0. The count-based tier is authoritative."
+      "reason": "Score 1.18 yields Not Ready band but 11 High findings (not \u226512) maps to Remediation Required tier. This divergence occurs because 20 non-core questions scoring 1 produce Medium (not High) findings, depressing the overall score below 1.5 without generating enough High findings to reach the \u226512 threshold for Not Ready tier."
     }
   },
-  "categories": [
-    {
-      "category_id": "INF",
-      "category": "Infrastructure & DevOps",
-      "numeric_score": 1.0,
-      "score_rating": "Not Ready",
-      "severity_status": "Critical",
-      "questions_evaluated": 10,
-      "questions_excluded": 1
-    },
-    {
-      "category_id": "APP",
-      "category": "Application Architecture",
-      "numeric_score": 1.0,
-      "score_rating": "Not Ready",
-      "severity_status": "Critical",
-      "questions_evaluated": 6,
-      "questions_excluded": 0
-    },
-    {
-      "category_id": "DATA",
-      "category": "Data Platform",
-      "numeric_score": 1.75,
-      "score_rating": "Needs Work",
-      "severity_status": "Critical",
-      "questions_evaluated": 4,
-      "questions_excluded": 0
-    },
-    {
-      "category_id": "SEC",
-      "category": "Security Baseline",
-      "numeric_score": 1.0,
-      "score_rating": "Not Ready",
-      "severity_status": "Critical",
-      "questions_evaluated": 6,
-      "questions_excluded": 1
-    },
-    {
-      "category_id": "OPS",
-      "category": "Operations & Observability",
-      "numeric_score": 1.0,
-      "score_rating": "Not Ready",
-      "severity_status": "Critical",
-      "questions_evaluated": 8,
-      "questions_excluded": 1
-    }
-  ],
   "top_gaps": [
     {
       "rank": 1,
-      "question_id": "SEC-Q5",
-      "title": "Secrets Management",
+      "question_id": "APP-Q2",
+      "title": "Monolith vs Microservices",
       "score": 1,
-      "gap": "Database password hardcoded in source code (DB_PW = \"crm2005pw\")",
-      "impact": "Critical security vulnerability; credentials exposed to anyone with repo access"
+      "gap": "Tightly-coupled VB6 monolith with no module boundaries, single shared database, pervasive shared state",
+      "impact": "Prevents independent scaling, team autonomy, and cloud-native deployment"
     },
     {
       "rank": 2,
       "question_id": "INF-Q10",
       "title": "Infrastructure as Code Coverage",
       "score": 1,
-      "gap": "No IaC exists \u2014 all infrastructure is manually provisioned",
-      "impact": "Cannot reproduce environments; no disaster recovery path; no audit trail"
+      "gap": "Zero IaC \u2014 all infrastructure manually created",
+      "impact": "Non-reproducible environment, no disaster recovery, no automation possible"
     },
     {
       "rank": 3,
-      "question_id": "INF-Q2",
-      "title": "Managed Databases",
+      "question_id": "SEC-Q5",
+      "title": "Secrets Management",
       "score": 1,
-      "gap": "All databases self-managed (Access .mdb on file share, SQL Server 2012 on-premises)",
-      "impact": "Monthly data corruption, no failover, manual patching, EOL engines"
+      "gap": "Database password hardcoded in source code",
+      "impact": "Critical security vulnerability \u2014 credentials exposed in version control"
     },
     {
       "rank": 4,
-      "question_id": "APP-Q2",
-      "title": "Monolith vs Microservices",
-      "score": 1,
-      "gap": "Tightly-coupled desktop monolith with no module boundaries",
-      "impact": "Cannot scale independently; single-developer bottleneck; no team autonomy"
-    },
-    {
-      "rank": 5,
       "question_id": "INF-Q11",
       "title": "CI/CD Automation",
       "score": 1,
-      "gap": "No CI/CD pipeline \u2014 compiled on one developer's machine",
-      "impact": "Single point of failure for builds; no quality gates; manual error-prone deployments"
+      "gap": "No CI/CD \u2014 compiled on one developer's machine, deployed by copying EXE",
+      "impact": "No quality gates, no automated testing, single point of failure for releases"
+    },
+    {
+      "rank": 5,
+      "question_id": "INF-Q1",
+      "title": "Managed Compute",
+      "score": 1,
+      "gap": "Win32 desktop EXE running on individual laptops with no managed compute",
+      "impact": "No elasticity, no monitoring, no centralized management of application runtime"
     }
   ],
   "findings": [
     {
       "question_id": "INF-Q1",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Managed Compute \u2014 No cloud compute exists",
-      "description": "All compute is a Win32 desktop EXE (VB6 runtime) running on individual Windows laptops. The server is a single Windows file server hosting an SMB share. No cloud compute, no managed services.",
-      "gap": "No managed compute of any kind. No ECS, EKS, Lambda, Fargate, or EC2.",
-      "recommendation": "Rebuild the application as a web service deployed on managed compute (ECS Fargate or Lambda).",
+      "title": "No managed compute \u2014 desktop EXE on Windows laptops",
+      "description": "All compute runs as a Win32 desktop EXE (VB6 runtime) on individual Windows laptops. No server-side compute, no cloud infrastructure, no managed container orchestration, no serverless functions.",
+      "gap": "No managed compute of any kind. The application has zero cloud presence.",
+      "recommendation": "Re-platform the application as a web-based service deployed on managed compute (ECS Fargate, App Runner, or Lambda). Requires rewriting in a modern language first.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
       "phase": 1,
       "evidence": {
-        "file": "README.md",
+        "file": "frmCustomer.frm",
         "lines": null
       },
       "mod_metadata": {
@@ -154,11 +148,12 @@
     {
       "question_id": "INF-Q2",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Managed Databases \u2014 All databases self-managed",
-      "description": "Primary database is Microsoft Access 2003 (.mdb) on an SMB file share. Reporting database is SQL Server 2012 synced nightly via DTS/SSIS. Both self-managed, on-premises.",
-      "gap": "All databases self-managed with no managed database services. Monthly data corruption from concurrent writes.",
-      "recommendation": "Migrate to Amazon Aurora PostgreSQL. Use AWS DMS for data migration and AWS SCT for schema conversion.",
+      "title": "Self-managed Access database on file share",
+      "description": "Database is a Microsoft Access 2003 .mdb file on a SMB file share with hardcoded password. Monthly corruption events. Nightly DTS/SSIS sync to SQL Server 2012 for reporting.",
+      "gap": "All databases self-managed on file share. No managed services, no automated operations, no failover.",
+      "recommendation": "Migrate to Amazon Aurora (PostgreSQL or MySQL) or RDS. Use AWS DMS for migration. Eliminate Access .mdb and SQL Server reporting tiers.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -177,17 +172,18 @@
     {
       "question_id": "INF-Q3",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Workflow Orchestration \u2014 No orchestration service",
-      "description": "The nightly DTS/SSIS data sync is a multi-step workflow with no dedicated orchestration service. All workflow logic is in the SSIS package \u2014 a proprietary, unversioned construct.",
-      "gap": "No orchestration \u2014 DTS/SSIS nightly sync is hardcoded with no managed orchestration, no retry logic visibility.",
-      "recommendation": "Use AWS Step Functions for the data sync workflow when rebuilding.",
+      "title": "No workflow orchestration",
+      "description": "CRM business workflows (customer lifecycle, sales processes) entirely hardcoded in VB6 form event handlers with On Error Resume Next error suppression.",
+      "gap": "No orchestration \u2014 all workflow logic hardcoded in application code with no error handling strategy.",
+      "recommendation": "When re-platforming, implement AWS Step Functions for multi-step business workflows with explicit error handling and retry policies.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
       "evidence": {
-        "file": "README.md",
+        "file": "frmCustomer.frm",
         "lines": null
       },
       "mod_metadata": {
@@ -200,11 +196,12 @@
     {
       "question_id": "INF-Q4",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Async Messaging and Streaming \u2014 No messaging infrastructure",
-      "description": "No messaging or streaming infrastructure exists. Desktop app writes directly to Access DB synchronously. State changes have no event propagation \u2014 only a nightly batch DTS/SSIS job.",
-      "gap": "No messaging where state changes cross service boundaries. Customer records propagated only via nightly batch causing 24-hour data staleness.",
-      "recommendation": "Introduce EventBridge or SQS for event-driven state propagation when rebuilding.",
+      "title": "No async messaging or streaming",
+      "description": "No messaging or streaming infrastructure. Synchronous database writes with no event emission. Reporting database sync relies on nightly SSIS batch job instead of event-driven replication.",
+      "gap": "No messaging where state changes cross system boundaries \u2014 reporting sync relies on nightly batch instead of real-time events.",
+      "recommendation": "When re-platforming, implement EventBridge or SNS/SQS for domain events to enable real-time data propagation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -223,11 +220,12 @@
     {
       "question_id": "INF-Q5",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Network Security \u2014 No network isolation",
-      "description": "No VPC, no cloud networking, no network segmentation. Database is on an open SMB file share accessible to anyone on the corporate network.",
-      "gap": "No network isolation. Access .mdb accessible to anyone with a mapped drive.",
-      "recommendation": "Deploy database in a private subnet within a VPC when migrating to AWS. Use security groups with least-privilege rules.",
+      "title": "No network security",
+      "description": "No network security configuration. Desktop app connects directly to SMB file share over flat internal network. No VPC, no subnets, no security groups, no network segmentation.",
+      "gap": "No network isolation or segmentation. Database accessible to anyone on the network.",
+      "recommendation": "When migrating to AWS, deploy in VPC with private subnets. Place database in isolated data tier with least-privilege security groups.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -246,11 +244,12 @@
     {
       "question_id": "INF-Q6",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "API Entry Point \u2014 No gateway or load balancer",
-      "description": "No API gateway, no load balancer, no managed entry point. Desktop application connects directly to the database file share.",
+      "title": "No API entry point",
+      "description": "No API entry point exists. Desktop fat-client connects directly to database. No API Gateway, ALB, CloudFront, or service exposure mechanism.",
       "gap": "Services exposed directly with no gateway or load balancer.",
-      "recommendation": "Use API Gateway as the entry point with throttling, request validation, and authentication when rebuilding.",
+      "recommendation": "When re-platforming as web application, front the API with Amazon API Gateway with throttling, authentication, and request validation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -269,14 +268,15 @@
     {
       "question_id": "INF-Q7",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Auto-Scaling \u2014 No scaling capability",
-      "description": "No auto-scaling. Single static file server. Access database cannot handle concurrent writes (monthly corruption).",
+      "title": "No auto-scaling",
+      "description": "No auto-scaling. Static desktop EXE with single file server backend. No elasticity, no capacity management.",
       "gap": "No auto-scaling \u2014 all capacity statically provisioned.",
-      "recommendation": "Configure auto-scaling on both compute and database layers when migrating to managed services.",
+      "recommendation": "When migrating to managed compute, configure auto-scaling on web tier and enable Aurora auto-scaling for read replicas.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
       "evidence": {
         "file": "README.md",
@@ -292,11 +292,12 @@
     {
       "question_id": "INF-Q8",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Backup and Recovery \u2014 No backup configuration",
-      "description": "No backup configuration found. Access .mdb on file share has no documented backup strategy. Monthly corruption with no recovery procedures.",
-      "gap": "No backup configuration; no restore procedure documented.",
-      "recommendation": "Enable automated backups with 7+ day retention and PITR when migrating to Aurora.",
+      "title": "No backup and recovery",
+      "description": "No automated backup configuration. Access .mdb on network share with no backup strategy. Monthly corruption events documented with no mitigation.",
+      "gap": "No backup configuration; no restore procedure; active data corruption occurring monthly.",
+      "recommendation": "Immediate: implement file-level backups. Long-term: migrate to Aurora with automated backups, PITR, and cross-region replication.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -315,11 +316,12 @@
     {
       "question_id": "INF-Q10",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "Infrastructure as Code Coverage \u2014 No IaC exists",
-      "description": "Zero IaC. No Terraform, CloudFormation, CDK, Helm, or any infrastructure-as-code. All infrastructure is manually provisioned.",
-      "gap": "No IaC \u2014 all infrastructure created manually (ClickOps / physical hardware).",
-      "recommendation": "Define all infrastructure in Terraform or AWS CDK when migrating to AWS.",
+      "title": "Zero Infrastructure as Code coverage",
+      "description": "No IaC exists. No Terraform, CloudFormation, CDK, Helm, or any infrastructure-as-code. All infrastructure manually created.",
+      "gap": "No IaC \u2014 all infrastructure created manually (ClickOps). 0% coverage.",
+      "recommendation": "Define all cloud infrastructure in CDK or Terraform from day one. Start with database, networking, and compute as IaC before any application deployment.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -338,11 +340,12 @@
     {
       "question_id": "INF-Q11",
       "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
       "category_id": "INF",
-      "title": "CI/CD Automation \u2014 No pipeline exists",
-      "description": "No CI/CD pipeline. No GitHub Actions, Jenkins, CodeBuild. Application compiled on one developer's machine.",
-      "gap": "No CI/CD \u2014 all deployments manual. Single developer builds and distributes by hand.",
-      "recommendation": "Establish CI/CD pipeline using AWS CodePipeline + CodeBuild for the replacement application.",
+      "title": "No CI/CD automation",
+      "description": "No CI/CD pipeline. Compiled on one developer's machine. Deployed by copying EXE to laptops by hand. No pipeline definitions, no build configurations.",
+      "gap": "No CI/CD \u2014 all deployments manual. Single developer as sole build/release point.",
+      "recommendation": "Establish CI/CD pipeline (GitHub Actions or CodePipeline + CodeBuild) with automated build, test, and deploy stages as first modernization step.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -361,11 +364,12 @@
     {
       "question_id": "APP-Q1",
       "category": "Application Architecture",
+      "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Programming Languages \u2014 VB6 (unsupported, no AWS SDK)",
-      "description": "Visual Basic 6.0 \u2014 unsupported since 2008. No AWS SDK, no cloud-native tooling, no modern framework ecosystem.",
-      "gap": "Language with no AWS SDK and no cloud-native tooling. Cannot integrate with modern AWS services.",
-      "recommendation": "Rewrite in TypeScript/Node.js or Python for cloud-native development with full AWS SDK support.",
+      "title": "VB6 \u2014 no cloud-native tooling",
+      "description": "Written in Visual Basic 6.0 (unsupported since 2008). No AWS SDK, no cloud-native tooling, no modern framework ecosystem. Requires Windows compatibility shims.",
+      "gap": "VB6 has no AWS SDK and no cloud-native tooling. Cannot target any AWS compute platform.",
+      "recommendation": "Rewrite in a modern language with AWS SDK support (TypeScript/Node.js or Python recommended).",
       "severity": "Medium",
       "priority": "P2",
       "effort": "High",
@@ -384,11 +388,12 @@
     {
       "question_id": "APP-Q2",
       "category": "Application Architecture",
+      "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Monolith vs Microservices \u2014 Tightly-coupled monolith",
-      "description": "Tightly-coupled desktop monolith. Single VB6 form handles UI, business logic, and data access. No separation of concerns, no module boundaries.",
+      "title": "Tightly-coupled monolith",
+      "description": "Single VB6 form contains UI, business logic, and data access interleaved in event handlers. No separation of concerns, no modular structure, pervasive shared state.",
       "gap": "Tightly-coupled monolith with no clear module boundaries, pervasive shared state.",
-      "recommendation": "Rebuild with clear separation of concerns. See Decomposition Strategy section.",
+      "recommendation": "Design new application with clear domain boundaries. Identify bounded contexts and implement as separate modules/services. See Decomposition Strategy.",
       "severity": "High",
       "priority": "P1",
       "effort": "High",
@@ -407,11 +412,12 @@
     {
       "question_id": "APP-Q3",
       "category": "Application Architecture",
+      "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Async vs Sync Communication \u2014 All synchronous",
-      "description": "All communication is synchronous ADO calls to Access database. No inter-service communication, no async patterns. State changes not propagated in real-time. Archetype is stateful-crud \u2014 async should be used for cross-service state propagation.",
-      "gap": "All communication synchronous with no async patterns for a stateful-crud service.",
-      "recommendation": "Implement event-driven state propagation using EventBridge or SNS when rebuilding.",
+      "title": "All communication synchronous",
+      "description": "All communication is synchronous. Desktop app makes synchronous ADODB calls. No async patterns, no message queues, no event-driven flows. UI thread blocks on database operations.",
+      "gap": "All communication synchronous with no async patterns for cross-service state propagation.",
+      "recommendation": "When re-platforming, implement async communication for state change propagation (SNS/SQS for domain events). Keep synchronous for user-facing reads.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -430,11 +436,12 @@
     {
       "question_id": "APP-Q4",
       "category": "Application Architecture",
+      "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Long-Running Process Handling \u2014 All synchronous",
-      "description": "All operations synchronous regardless of duration. Nightly DTS/SSIS batch sync has no status polling, no callbacks, no timeout handling. Archetype is stateful-crud \u2014 long-running operations should be async with status polling.",
-      "gap": "All operations synchronous regardless of duration. No async job processing.",
-      "recommendation": "Implement long-running operations as async jobs with Step Functions or SQS workers.",
+      "title": "No async long-running process handling",
+      "description": "All operations synchronous regardless of duration. Database operations execute synchronously on UI thread. On Error Resume Next suppresses timeouts.",
+      "gap": "All operations synchronous regardless of duration \u2014 no background job processing.",
+      "recommendation": "When re-platforming, implement async job processing for operations over 30 seconds (report generation, bulk imports) using SQS + Lambda or Step Functions.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -453,11 +460,12 @@
     {
       "question_id": "APP-Q5",
       "category": "Application Architecture",
+      "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "API Versioning Strategy \u2014 No API exists",
-      "description": "No API exists. Desktop EXE connects directly to database. No REST API, no versioning strategy, no API contract.",
-      "gap": "No versioning \u2014 no API contract exists.",
-      "recommendation": "Implement API versioning from day one when rebuilding as a web service (URL path: /v1/customers).",
+      "title": "No API versioning",
+      "description": "No API exists, therefore no versioning strategy. Desktop client connects directly to database with no API layer.",
+      "gap": "No versioning \u2014 no API surface exists.",
+      "recommendation": "When re-platforming as web service, implement URL path versioning (/v1/customers) from the start.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -476,11 +484,12 @@
     {
       "question_id": "APP-Q6",
       "category": "Application Architecture",
+      "category_display": "Application Architecture",
       "category_id": "APP",
-      "title": "Service Discovery \u2014 All endpoints hardcoded",
-      "description": "All service endpoints hardcoded in source code. Database path S:\\CRM\\sales.mdb is a hardcoded constant.",
-      "gap": "All service endpoints hard-coded. Changing database location requires recompiling the EXE.",
-      "recommendation": "Externalize configuration into environment variables or AWS Systems Manager Parameter Store.",
+      "title": "Hardcoded service endpoints",
+      "description": "Database path hardcoded as compile-time constant: DB_PATH = \"S:\\CRM\\sales.mdb\". No dynamic discovery, no environment-based configuration.",
+      "gap": "All service endpoints hard-coded in application code.",
+      "recommendation": "When re-platforming, externalize endpoints via environment variables or implement AWS Cloud Map for dynamic discovery.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -499,11 +508,12 @@
     {
       "question_id": "DATA-Q1",
       "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
       "category_id": "DATA",
-      "title": "Unstructured Data Storage \u2014 Data on inaccessible file share",
-      "description": "All data stored on a local SMB file share (S:\\CRM\\sales.mdb). No cloud accessibility, no parsing pipeline, no search capability.",
-      "gap": "Data on local file systems and inaccessible storage.",
-      "recommendation": "Migrate structured data to Aurora PostgreSQL. Use S3 for any unstructured documents.",
+      "title": "Data locked on file share",
+      "description": "All data stored on SMB network file share as Access .mdb. Crystal Reports 8.5 for reporting. No managed object storage, no S3, no parsing pipeline. Data locked in proprietary format.",
+      "gap": "Data on local file systems and legacy storage. Inaccessible for modern analytics or AI.",
+      "recommendation": "Migrate structured data to Aurora. Store documents/unstructured data in S3 with lifecycle policies.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -522,11 +532,12 @@
     {
       "question_id": "DATA-Q2",
       "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
       "category_id": "DATA",
-      "title": "Unified Data Access Layer \u2014 Scattered raw ADO calls",
-      "description": "Raw ADO connection management and string-concatenated SQL directly in UI event handlers. No repository pattern, no DAO, no abstraction.",
-      "gap": "Database queries scattered in UI code with no pattern.",
-      "recommendation": "Implement a repository/data access layer pattern with an ORM when rebuilding.",
+      "title": "No data access layer",
+      "description": "Database queries scattered directly in UI event handlers. Raw SQL string construction inline. No repository pattern, no DAO, no ORM, no centralized data access.",
+      "gap": "Database imports and queries scattered across form modules with no pattern.",
+      "recommendation": "When re-platforming, implement repository/DAO pattern or ORM. Centralize all database access with parameterized queries.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -545,17 +556,18 @@
     {
       "question_id": "DATA-Q3",
       "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
       "category_id": "DATA",
-      "title": "Database Engine Version and EOL \u2014 Both engines past EOL",
-      "description": "Access 2003 (EOL 2009) and SQL Server 2012 (EOL July 2022). Both unsupported with no security patches.",
-      "gap": "Engines at or past EOL detected. Both databases unsupported.",
-      "recommendation": "Migrate to Aurora PostgreSQL 15+ as a supported managed engine. Use AWS SCT and DMS.",
+      "title": "Database engines past EOL",
+      "description": "Microsoft Access 2003 with Jet OLEDB 4.0 (support ended 2014). SQL Server 2012 (support ended 2022). Both unpatched with no security updates.",
+      "gap": "Engines at or past EOL. Both Access 2003 and SQL Server 2012 unsupported.",
+      "recommendation": "Migrate to supported engines: Aurora PostgreSQL/MySQL for primary, Aurora or Redshift for reporting.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
       "evidence": {
-        "file": "README.md",
+        "file": "frmCustomer.frm",
         "lines": null
       },
       "mod_metadata": {
@@ -568,14 +580,15 @@
     {
       "question_id": "SEC-Q2",
       "category": "Security Baseline",
+      "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "Encryption at Rest \u2014 No encryption configured",
-      "description": "No encryption at rest. Access .mdb stored unencrypted on SMB file share. Jet OLEDB Database Password is trivially bypassable obfuscation, not encryption.",
-      "gap": "No encryption at rest. Customer data in plaintext on file share.",
-      "recommendation": "Enable encryption at rest with customer-managed KMS key when migrating to Aurora.",
+      "title": "No encryption at rest",
+      "description": "No encryption at rest. Access .mdb has weak file-level password (not encryption). Data stored in plaintext on network file share.",
+      "gap": "No encryption at rest configured. Data in plaintext on file share.",
+      "recommendation": "When migrating to AWS, enable encryption at rest on all data stores using customer-managed KMS keys with rotation policies.",
       "severity": "High",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
       "evidence": {
         "file": "frmCustomer.frm",
@@ -591,11 +604,12 @@
     {
       "question_id": "SEC-Q3",
       "category": "Security Baseline",
+      "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "API Authentication \u2014 No authentication exists",
-      "description": "No authentication layer. Application relies solely on Windows file share permissions. No OAuth2, no JWT, no user-level authentication.",
-      "gap": "No API authentication \u2014 access uncontrolled beyond network file share permissions.",
-      "recommendation": "Implement OAuth2/JWT authentication via Amazon Cognito when rebuilding.",
+      "title": "No API authentication",
+      "description": "No authentication mechanism. Anyone with the EXE can access and modify customer data. Only 'authentication' is possession of the compiled executable.",
+      "gap": "No API authentication \u2014 application open to anyone with the EXE.",
+      "recommendation": "When re-platforming, implement OAuth2/JWT authentication on all API endpoints using Amazon Cognito.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -614,11 +628,12 @@
     {
       "question_id": "SEC-Q4",
       "category": "Security Baseline",
+      "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "Centralized Identity Integration \u2014 No IdP integration",
-      "description": "No centralized identity provider. Application identifies users via Environ(\"USERNAME\") with no authentication, no SSO, no IdP.",
-      "gap": "No authentication at all \u2014 no IdP integration.",
-      "recommendation": "Integrate with Amazon Cognito and enable SSO with organizational identity provider.",
+      "title": "No centralized identity integration",
+      "description": "No identity provider integration. No login flow, no user management, no identity federation. Environ(USERNAME) reads Windows username without validation.",
+      "gap": "No authentication at all \u2014 no external IdP integration.",
+      "recommendation": "When re-platforming, integrate with Amazon Cognito (SAML/OIDC federation to enterprise AD) for SSO with RBAC.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -637,11 +652,12 @@
     {
       "question_id": "SEC-Q5",
       "category": "Security Baseline",
+      "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "Secrets Management \u2014 Plaintext credentials in source code",
-      "description": "Database password hardcoded: Private Const DB_PW As String = \"crm2005pw\" in frmCustomer.frm. Connection string with password compiled into the EXE.",
-      "gap": "Plaintext credentials in source code. Deployment-blocking security issue.",
-      "recommendation": "Rotate password immediately. Store all secrets in AWS Secrets Manager with automated rotation when rebuilding.",
+      "title": "Hardcoded database password in source",
+      "description": "Database password hardcoded as plaintext constant: Private Const DB_PW As String = \"crm2005pw\". Committed to version control, compiled into every EXE copy.",
+      "gap": "Plaintext credentials in source code. Critical security vulnerability.",
+      "recommendation": "Immediate: rotate the database password. When migrating to AWS, store all credentials in Secrets Manager with automated rotation.",
       "severity": "High",
       "priority": "P1",
       "effort": "Low",
@@ -660,11 +676,12 @@
     {
       "question_id": "SEC-Q6",
       "category": "Security Baseline",
+      "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "Compute Hardening and Patching \u2014 No patching strategy",
-      "description": "VB6 runtime is unsupported (no patches available). No vulnerability scanning, no hardened images, no patching process.",
-      "gap": "No patching strategy; no vulnerability scanning. Runtime unsupported.",
-      "recommendation": "Use managed compute (Fargate, Lambda) which handles OS patching automatically when migrating.",
+      "title": "No compute hardening or patching",
+      "description": "No patching strategy. VB6 runtime unsupported. No vulnerability scanning, no hardened images, no SSM integration.",
+      "gap": "No patching strategy; no vulnerability scanning. Unsupported runtime.",
+      "recommendation": "When migrating to AWS, use managed compute (Fargate/Lambda) to eliminate OS patching. Enable Inspector for vulnerability scanning.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
@@ -683,11 +700,12 @@
     {
       "question_id": "SEC-Q7",
       "category": "Security Baseline",
+      "category_display": "Security Baseline",
       "category_id": "SEC",
-      "title": "Application Security Pipeline \u2014 No security scanning",
-      "description": "No security scanning tools. No SAST, DAST, dependency scanning, or container scanning. No CI/CD pipeline exists. SQL injection vulnerability undetected.",
-      "gap": "No security scanning tools configured. Pipeline has no security validation (no pipeline exists).",
-      "recommendation": "Integrate SAST, dependency scanning, and container scanning into CI/CD from day one.",
+      "title": "No application security pipeline",
+      "description": "No security scanning tools. No CI/CD pipeline to integrate scanning into. Known SQL injection vulnerability undetected. No SAST, no DAST, no dependency scanning.",
+      "gap": "No security scanning tools configured. No pipeline exists for security validation.",
+      "recommendation": "When establishing CI/CD, integrate SAST, dependency scanning, and container scanning with security gates blocking on critical findings.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -706,11 +724,12 @@
     {
       "question_id": "OPS-Q1",
       "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Distributed Tracing \u2014 No tracing or observability",
-      "description": "No distributed tracing. On Error Resume Next suppresses all error information. No logging, no telemetry, no trace IDs.",
-      "gap": "No distributed tracing. Errors actively suppressed.",
-      "recommendation": "Instrument with OpenTelemetry and AWS X-Ray from day one when rebuilding.",
+      "title": "No distributed tracing",
+      "description": "No tracing instrumented. No observability of any kind \u2014 no logging framework, no trace IDs, no telemetry. On Error Resume Next suppresses error information.",
+      "gap": "No distributed tracing. Zero observability into application behavior.",
+      "recommendation": "When re-platforming, instrument with AWS X-Ray or OpenTelemetry from the start with trace ID propagation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -729,11 +748,12 @@
     {
       "question_id": "OPS-Q2",
       "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "SLO Definitions \u2014 No SLOs defined",
-      "description": "No SLOs. Monthly data corruption accepted as normal rather than tracked as SLO violation.",
+      "title": "No SLO definitions",
+      "description": "No SLOs defined. No monitoring, no alarms, no error budget tracking. Known reliability issues documented without targets.",
       "gap": "No SLOs \u2014 no formal definition of acceptable service levels.",
-      "recommendation": "Define SLOs for the CRM service (availability, latency, error rate) when rebuilding.",
+      "recommendation": "Define SLOs for re-platformed application covering availability, latency, and error rate. Implement CloudWatch monitoring.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -752,16 +772,20 @@
     {
       "question_id": "OPS-Q3",
       "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Business Metrics \u2014 No metrics of any kind",
-      "description": "No custom metrics. No business metrics, no infrastructure metrics, no CloudWatch integration.",
-      "gap": "No custom metrics \u2014 no visibility into business outcomes or system health.",
-      "recommendation": "Publish business metrics alongside infrastructure metrics to CloudWatch when rebuilding.",
+      "title": "No business metrics",
+      "description": "No custom metrics published. No metrics infrastructure, no dashboards, no business KPI tracking.",
+      "gap": "No custom metrics \u2014 no business outcome tracking.",
+      "recommendation": "When re-platforming, publish business metrics (customers created/day, sales pipeline velocity) alongside infrastructure metrics.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 3,
-      "evidence": null,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -772,11 +796,12 @@
     {
       "question_id": "OPS-Q4",
       "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Anomaly Detection and Alerting \u2014 No alerting",
-      "description": "No alerting configured. No anomaly detection, no static threshold alarms. Failures discovered by users.",
-      "gap": "No alerting configured. System failures discovered by end users.",
-      "recommendation": "Configure CloudWatch alarms on error rates and latency. Enable anomaly detection when rebuilding.",
+      "title": "No anomaly detection or alerting",
+      "description": "No alerting configured. No CloudWatch alarms, no anomaly detection. Database corruption events discovered by users, not automated monitoring.",
+      "gap": "No alerting configured. Failures discovered by users.",
+      "recommendation": "Configure CloudWatch anomaly detection on error rates and latency with PagerDuty/OpsGenie integration.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -795,11 +820,12 @@
     {
       "question_id": "OPS-Q6",
       "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Integration Testing \u2014 No automated tests",
-      "description": "No automated tests of any kind. Zero test coverage. README states 'No tests, no build server.'",
-      "gap": "No integration tests \u2014 no automated tests at all.",
-      "recommendation": "Implement integration tests from day one. Test critical workflows in CI pipeline.",
+      "title": "No integration testing",
+      "description": "No integration tests. No unit tests. No automated tests of any kind. README states: 'No tests, no build server.'",
+      "gap": "No integration tests \u2014 no automated tests at all. Zero test coverage.",
+      "recommendation": "Establish testing strategy from day one: unit tests, integration tests, and end-to-end tests for critical user journeys, run in CI on every commit.",
       "severity": "High",
       "priority": "P1",
       "effort": "Medium",
@@ -816,13 +842,14 @@
       }
     },
     {
-      "question_id": "OPS-Q7",
+      "question_id": "OPS-Q8",
       "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
       "category_id": "OPS",
-      "title": "Incident Response Automation \u2014 No runbooks",
-      "description": "No runbooks, no incident response automation, no self-healing. Monthly data corruption handled ad hoc.",
-      "gap": "No runbooks \u2014 incident response entirely ad hoc.",
-      "recommendation": "Create runbooks for common incidents. Implement automated remediation with SSM Automation.",
+      "title": "No observability ownership",
+      "description": "No observability ownership. No dashboards, no alarms, no SLO definitions, no CODEOWNERS, no team attribution. Zero observability infrastructure.",
+      "gap": "No observability ownership \u2014 monitoring completely absent.",
+      "recommendation": "Establish per-service dashboards and alarms with named team owners. Define CODEOWNERS including observability configs.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
@@ -831,46 +858,6 @@
         "file": "README.md",
         "lines": null
       },
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "OPS-Q8",
-      "category": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Observability Ownership \u2014 No monitoring assets exist",
-      "description": "No observability ownership. No dashboards, no alarms, no CODEOWNERS. Zero monitoring assets to own.",
-      "gap": "No observability ownership \u2014 monitoring does not exist.",
-      "recommendation": "Establish per-service dashboards and alarms with named owners when rebuilding.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 3,
-      "evidence": null,
-      "mod_metadata": {
-        "internal_score": 1,
-        "score_label": "Not Ready",
-        "archetype_calibrated": false,
-        "core_question": false
-      }
-    },
-    {
-      "question_id": "OPS-Q9",
-      "category": "Operations & Observability",
-      "category_id": "OPS",
-      "title": "Resource Tagging Governance \u2014 No AWS resources exist",
-      "description": "No AWS resources exist, therefore no resource tagging. No tagging strategy, no cost allocation.",
-      "gap": "No tags \u2014 no AWS resources exist to tag.",
-      "recommendation": "Implement tagging standard from day one when provisioning AWS infrastructure.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 2,
-      "evidence": null,
       "mod_metadata": {
         "internal_score": 1,
         "score_label": "Not Ready",
@@ -886,7 +873,7 @@
       "title": "High Availability and Fault Isolation",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "Surface-gated: has_deployed_workload=false. No deployed workload requiring HA evaluation."
+      "reason": "has_deployed_workload=false \u2014 no deployed workload to evaluate HA for."
     },
     {
       "question_id": "DATA-Q4",
@@ -894,7 +881,7 @@
       "title": "Stored Procedures and Schema Complexity",
       "status": "pass",
       "score": 4,
-      "reason": "Score 4 \u2014 No stored procedures or proprietary SQL. All SQL is standard INSERT INTO; business logic in application layer."
+      "reason": "Score 4 \u2014 no stored procedures, triggers, or proprietary SQL detected. All business logic in application layer."
     },
     {
       "question_id": "SEC-Q1",
@@ -902,7 +889,7 @@
       "title": "Audit Logging",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "Surface-gated: has_iac_provisioning_aws_resources=false. No IaC exists; CloudTrail evaluation belongs in account-level infrastructure repo."
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS infrastructure to evaluate CloudTrail for."
     },
     {
       "question_id": "OPS-Q5",
@@ -910,7 +897,23 @@
       "title": "Deployment Strategy",
       "status": "not_evaluated_surface_flag",
       "score": null,
-      "reason": "Surface-gated: has_deployed_workload=false. Desktop EXE distributed by manual file copy \u2014 no server-side deployment to assess."
+      "reason": "has_deployed_workload=false \u2014 no deployed workload to evaluate deployment strategy for."
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category_id": "OPS",
+      "title": "Incident Response Automation",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_deployed_workload=false \u2014 no deployed workload to define incident response for."
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category_id": "OPS",
+      "title": "Resource Tagging Governance",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "has_iac_provisioning_aws_resources=false \u2014 no AWS resources to tag."
     }
   ],
   "pathways": [
@@ -925,48 +928,43 @@
         {
           "question_id": "APP-Q2",
           "score": 1,
-          "note": "Tightly-coupled monolith with no module boundaries"
+          "note": "Tightly-coupled monolith \u2014 primary trigger met"
         },
         {
           "question_id": "INF-Q1",
           "score": 1,
-          "note": "No cloud compute \u2014 desktop Win32 EXE"
+          "note": "No managed compute \u2014 supporting trigger met"
         },
         {
           "question_id": "APP-Q3",
           "score": 1,
-          "note": "All communication synchronous"
+          "note": "All synchronous \u2014 supporting trigger met"
         },
         {
           "question_id": "APP-Q4",
           "score": 1,
-          "note": "All operations synchronous regardless of duration"
+          "note": "No async long-running handling \u2014 supporting trigger met"
         }
       ],
       "detail": {
-        "current_state": "Tightly-coupled VB6 desktop monolith with no module boundaries, no cloud compute, all-synchronous communication.",
         "recommended_services": [
           "Lambda",
           "API Gateway",
           "Step Functions",
           "EventBridge",
           "ECS",
-          "EKS",
-          "DynamoDB",
-          "Aurora"
-        ],
-        "patterns": [
-          "Strangler Fig",
-          "Anti-corruption Layer",
-          "Event Sourcing",
-          "Saga"
+          "EKS"
         ],
         "immediate_actions": [
-          "Select target language and framework",
-          "Define service boundaries for the new application",
-          "Begin Strangler Fig with parallel web application"
+          "Identify bounded contexts for decomposition",
+          "Re-platform in modern language",
+          "Design event-driven architecture"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CMK2J48MVN"
         ]
-      }
+      },
+      "not_triggered_reason": null
     },
     {
       "id": "move-to-containers",
@@ -974,29 +972,31 @@
       "status": "Triggered",
       "priority": "Medium",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q1=1 < 3; no container definitions found; compute is not Lambda/Fargate/ECS",
+      "key_trigger_criteria": "INF-Q1=1 < 3, no container definitions found; compute is desktop EXE (not Lambda/Fargate/ECS)",
       "triggering_questions": [
         {
           "question_id": "INF-Q1",
           "score": 1,
-          "note": "No cloud compute \u2014 desktop Win32 EXE on laptops"
+          "note": "No managed compute, no containerization \u2014 primary trigger met"
         }
       ],
       "detail": {
-        "current_state": "Win32 desktop EXE distributed by manual file copy. No server-side compute beyond file server.",
         "recommended_services": [
           "ECS",
           "Fargate",
           "ECR",
           "App Runner"
         ],
-        "migration_approach": "Refactor-then-containerize \u2014 VB6 cannot be containerized; new application built container-first",
         "immediate_actions": [
-          "Design container architecture for the replacement application",
-          "Set up ECR registry",
-          "Create Dockerfile for new service"
+          "Re-platform application in modern language first",
+          "Containerize re-platformed web application"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/CDA8Y4JRRR",
+          "https://skillbuilder.aws/learning-plan/GNYBZ9X9EM"
         ]
-      }
+      },
+      "not_triggered_reason": null
     },
     {
       "id": "move-to-open-source",
@@ -1004,16 +1004,16 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "DATA-Q4=4 (no stored procedures/proprietary SQL); primary trigger not met (DATA-Q4 not < 3)",
+      "key_trigger_criteria": "DATA-Q4=4 (\u22653) \u2014 no stored procedures coupling logic to commercial DB engine",
       "triggering_questions": [
         {
           "question_id": "DATA-Q4",
           "score": 4,
-          "note": "DATA-Q4=4 meets threshold; no proprietary SQL coupling detected"
+          "note": "DATA-Q4=4 meets threshold; no stored procedure coupling to commercial engine"
         }
       ],
       "detail": null,
-      "not_triggered_reason": "No stored procedures or proprietary SQL constructs detected. While commercial database engines exist (SQL Server 2012, Access), the application uses standard SQL only \u2014 migration to open-source engines (PostgreSQL) is straightforward without needing the Move to Open Source pathway's stored procedure extraction guidance."
+      "not_triggered_reason": "DATA-Q4 scores 4 (no stored procedures or proprietary SQL). While commercial engines are used (Access, SQL Server), business logic is entirely in the application layer \u2014 database migration does not require stored procedure extraction."
     },
     {
       "id": "move-to-managed-databases",
@@ -1021,63 +1021,53 @@
       "status": "Triggered",
       "priority": "High",
       "effort": "Medium",
-      "key_trigger_criteria": "INF-Q2=1 < 3 (primary); DATA-Q3=1 < 3 (supporting \u2014 EOL engines)",
+      "key_trigger_criteria": "INF-Q2=1 < 3 (primary); DATA-Q3=1 < 3 (supporting \u2014 engines past EOL)",
       "triggering_questions": [
         {
           "question_id": "INF-Q2",
           "score": 1,
-          "note": "All databases self-managed (Access .mdb, SQL Server 2012)"
+          "note": "All databases self-managed \u2014 primary trigger met"
         },
         {
           "question_id": "DATA-Q3",
           "score": 1,
-          "note": "Both engines past EOL (Access 2003, SQL Server 2012)"
+          "note": "Engines past EOL \u2014 supporting trigger met"
         }
       ],
       "detail": {
-        "current_state": "Access 2003 on SMB file share (EOL 2009) and SQL Server 2012 on-premises (EOL 2022). Self-managed with monthly corruption.",
         "recommended_services": [
-          "Aurora PostgreSQL",
+          "Aurora",
           "RDS",
           "DynamoDB",
-          "AWS DMS",
-          "AWS SCT"
+          "DMS"
         ],
         "immediate_actions": [
-          "Assess Access schema for Aurora PostgreSQL migration",
-          "Use AWS SCT for schema conversion",
-          "Plan DMS migration with minimal downtime"
+          "Migrate Access .mdb to Aurora PostgreSQL/MySQL",
+          "Retire SQL Server 2012 reporting database"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/VNJ8FZ3ZRC",
+          "https://skillbuilder.aws/learn/ND246G8Y3W"
         ]
-      }
+      },
+      "not_triggered_reason": null
     },
     {
       "id": "move-to-managed-analytics",
       "name": "Move to Managed Analytics",
-      "status": "Triggered",
-      "priority": "Medium",
-      "effort": "Medium",
-      "key_trigger_criteria": "INF-Q4=1 < 3 (primary); DTS/SSIS nightly sync is data processing workload evidence",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "Guard blocked: no streaming, ETL, or data processing workloads found in repository",
       "triggering_questions": [
         {
           "question_id": "INF-Q4",
           "score": 1,
-          "note": "No managed messaging; nightly batch DTS/SSIS is only data processing"
+          "note": "INF-Q4=1 < 3 but contextual guard blocks \u2014 no data processing workloads in repo"
         }
       ],
-      "detail": {
-        "current_state": "Nightly DTS/SSIS batch sync from Access to SQL Server 2012. Crystal Reports 8.5 for reporting (unsupported).",
-        "recommended_services": [
-          "AWS Glue",
-          "Amazon QuickSight",
-          "Amazon Athena",
-          "Amazon S3"
-        ],
-        "immediate_actions": [
-          "Replace DTS/SSIS with AWS Glue ETL job",
-          "Replace Crystal Reports with Amazon QuickSight",
-          "Set up S3 data lake for reporting data"
-        ]
-      }
+      "detail": null,
+      "not_triggered_reason": "No streaming, ETL, data pipeline, or analytics artifacts found during discovery. The nightly SSIS sync is mentioned in README but has no in-repo configuration. The application has no data processing responsibilities."
     },
     {
       "id": "move-to-modern-devops",
@@ -1090,34 +1080,38 @@
         {
           "question_id": "INF-Q10",
           "score": 1,
-          "note": "No IaC exists \u2014 all infrastructure manually provisioned"
+          "note": "Zero IaC coverage \u2014 primary trigger met"
         },
         {
           "question_id": "INF-Q11",
           "score": 1,
-          "note": "No CI/CD \u2014 compiled on one developer's machine"
+          "note": "No CI/CD \u2014 primary trigger met"
         },
         {
           "question_id": "OPS-Q6",
           "score": 1,
-          "note": "No automated tests of any kind"
+          "note": "No tests \u2014 supporting trigger met"
         }
       ],
       "detail": {
-        "current_state": "Zero IaC, zero CI/CD, zero automated testing. Single developer builds manually.",
         "recommended_services": [
-          "CodePipeline",
           "CodeBuild",
+          "CodePipeline",
           "CodeDeploy",
-          "CDK",
-          "CloudFormation"
+          "CloudFormation",
+          "CDK"
         ],
         "immediate_actions": [
-          "Set up CodeCommit or GitHub repository with branch protection",
-          "Create CodePipeline with build, test, and deploy stages",
-          "Define infrastructure in CDK or Terraform"
+          "Establish CI/CD pipeline",
+          "Define IaC for cloud infrastructure",
+          "Add automated testing"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
         ]
-      }
+      },
+      "not_triggered_reason": null
     },
     {
       "id": "move-to-ai",
@@ -1125,45 +1119,22 @@
       "status": "Not Triggered",
       "priority": null,
       "effort": null,
-      "key_trigger_criteria": "No AI/agent intent detected in portfolio or service context",
+      "key_trigger_criteria": "No AI/agent intent evidenced in the repository (no AI-related signal terms in dependencies, source, configuration, IaC, or documentation)",
       "triggering_questions": [],
       "detail": null,
-      "not_triggered_reason": "No AI/agent intent detected in portfolio or service context. No context field was provided in additionalPlanContext containing AI-related signal terms."
+      "not_triggered_reason": "No AI/agent intent evidenced in the repository. No AI-related signal terms found in dependencies, source code, configuration, or documentation."
     }
   ],
   "decomposition_strategy": {
-    "recommended_approach": "Strangler Fig (Parallel Track)",
-    "rationale": "VB6 is end-of-life with no incremental modernization path. The desktop app must be replaced with a new cloud-native web application built in parallel.",
+    "recommended_approach": "Conditional / Adaptive (with full re-platform prerequisite)",
+    "rationale": "VB6 has no cloud-native tooling, no AWS SDK, and is a desktop fat-client. Cannot be incrementally decomposed via Strangler Fig without web front-end. Requires re-platform first.",
     "patterns": [
       "Anti-corruption Layer",
-      "Saga Pattern",
-      "Event Sourcing",
-      "Hexagonal Architecture"
+      "Strangler Fig",
+      "Hexagonal Architecture",
+      "Saga Pattern"
     ],
-    "effort_estimate": "6-12 months for full replacement given small feature set"
-  },
-  "filter_vocab": {
-    "categories": [
-      "Infrastructure & DevOps",
-      "Application Architecture",
-      "Data Platform",
-      "Security Baseline",
-      "Operations & Observability"
-    ],
-    "severities": [
-      "High",
-      "Medium",
-      "Low"
-    ],
-    "priorities": [
-      "P1",
-      "P2"
-    ],
-    "phases": [
-      1,
-      2,
-      3
-    ]
+    "effort_estimate": "High \u2014 12-18 months for full re-platform with phased service extraction"
   },
   "repo_name": "legacy-crm-desktop"
 }

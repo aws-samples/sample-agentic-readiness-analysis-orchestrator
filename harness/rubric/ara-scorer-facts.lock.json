@@ -1,0 +1,419 @@
+{
+  "analysis": "ara",
+  "facts": {
+    "calibrations": {
+      "API-Q2": [
+        "If `has_http_rpc_surface` is `false`, the system exposes no callable API surface — there is nothing for a machine-readable spec to describe. Record as INFO with the rationale `\"No HTTP/RPC surface — machine-readable spec is not applicable.\"` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. For libraries, API contracts are expressed via package manifests and typed exports (TypeScript declarations, Python type hints, Go interfaces), which DISC-Q1 evaluates — not as OpenAPI specs."
+      ],
+      "API-Q3": [
+        "If `has_http_rpc_surface` is `false`, there are no API responses to structure — record as INFO with the rationale `\"No HTTP/RPC surface — structured error responses are not applicable.\"` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. Libraries communicate failure via typed exceptions, error-return conventions, or Result types — which DISC-Q1 evaluates."
+      ],
+      "AUTH-Q4": [
+        "For `stateless-utility` and `data-gateway` archetypes, downgrade to INFO — stateless services returning public/reference data are not affected by caller identity, and data gateways typically serve as read-only query layers where identity context has minimal security impact."
+      ],
+      "AUTH-Q6": [
+        "The conditional above determines severity only when the system has an agent-invocable surface. If the repo was classified as `dev-library-application` via Step 1.5, or if `has_auth_surface` is `false` AND `has_write_operations` is `false`, record as INFO with the rationale `\"System does not execute agent-invoked write operations — audit logging is a consumer responsibility. The library/utility is called by applications that own the audit context.\"`"
+      ],
+      "AUTH-Q7": [
+        "If the repo was classified as `dev-library-application` via Step 1.5, or if `has_auth_surface` is `false` AND `has_write_operations` is `false`, record as INFO with the rationale `\"System does not issue or enforce agent identities — suspension is a consumer responsibility. Libraries and utilities are invoked by applications that own identity lifecycle.\"` Applications with write operations retain RISK-SAFETY even without an auth surface, because suspension capability matters for any system that can mutate state."
+      ],
+      "DATA-Q1": [
+        "For `stateless-utility` archetype (regardless of Stage A result): record as INFO. Stateless utilities operate on transient or public/reference data by definition; if they appear to handle sensitive data, the archetype classification should be revisited — recommend reclassifying before flagging DATA-Q1."
+      ],
+      "DATA-Q2": [
+        "If `has_persistent_data_store` is `false` AND `has_logging_of_user_data` is `false`, the system holds no data subject to residency constraints — record as INFO with the rationale `\"No persistent data store and no user-data logging — residency requirements do not apply.\"` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. The conditional BLOCKER severity above applies only when at least one of those surface flags is `true`.",
+        "For `stateless-utility` archetype, record as INFO — stateless utilities handle transient or public/reference data by archetype definition."
+      ],
+      "DATA-Q5": [
+        "For `stateless-utility` archetypes, downgrade to INFO — stateless services with static/reference data have fixed temporal characteristics that don't change at runtime."
+      ],
+      "DATA-Q6": [
+        "If `has_logging_of_user_data` is `false` AND `has_persistent_data_store` is `false`, the system has no pipeline where user PII could enter logs — record as INFO with the rationale `\"System does not log user data and holds no user data — PII-in-logs risk is not applicable.\"` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. Libraries and utilities whose only logging is internal diagnostic output (no user-submitted content) fall in the INFO bucket.",
+        "For `stateless-utility` archetype, record as INFO — stateless utilities do not handle user PII."
+      ],
+      "ENG-Q1": [
+        "If the repo was classified as `dev-library-application` via Step 1.5, or if `has_http_rpc_surface` is `false` AND `has_auth_surface` is `false`, record as INFO. Libraries, CLIs, and formatters do not own the IaC for API gateways, IAM roles, or networking — their consumers do. The library's engineering governance is its own build/release pipeline, which ENG-Q2/Q3 cover."
+      ],
+      "ENG-Q2": [
+        "If `has_http_rpc_surface` is `false`, there are no APIs to contract-test — record as INFO with the rationale `\"No HTTP/RPC surface — API contract testing is not applicable. Library contract stability is evaluated by DISC-Q1 (schema/typed-export versioning).\"` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO — library build pipelines validate package contracts (semver, typed exports), not API contracts."
+      ],
+      "ENG-Q3": [
+        "If `has_http_rpc_surface` is `false`, there is no deployed surface to roll back — record as INFO with the rationale `\"No deployed HTTP/RPC surface — deployment rollback is a consumer concern. Library rollback is handled via package version pinning by consumers.\"` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO."
+      ],
+      "HITL-Q3": [
+        "If the repo was classified as `dev-library-application` via Step 1.5, or if `has_http_rpc_surface` is `false` AND `has_persistent_data_store` is `false`, record as INFO. Libraries, CLIs, and scaffolds do not own staging environments — their consumers do. Requiring a library to maintain its own staging is a category error."
+      ],
+      "OBS-Q1": [
+        "If the repo was classified as `dev-library-application` via Step 1.5, or if `has_http_rpc_surface` is `false` AND there is no agent-initiated request path to trace, record as INFO with the rationale `\"Library/utility — tracing and correlation are consumer concerns. The library's obligation is to propagate trace context if provided, which DISC-Q1 evaluates.\"` Libraries that ship OpenTelemetry hooks or accept a logger instance satisfy the instrumentation concern without owning the trace pipeline."
+      ],
+      "OBS-Q2": [
+        "If the repo was classified as `dev-library-application` via Step 1.5, or if `has_http_rpc_surface` is `false`, record as INFO with the rationale `\"Library/utility — alerting on error rates and latency is a consumer concern. Libraries expose error and timing signals via return values, exceptions, or structured metrics; consumers decide the alert thresholds.\"`"
+      ],
+      "STATE-Q1": [
+        "If `has_write_operations` is `false` AND `has_http_rpc_surface` is `false`, the system has no write path that would need compensation — record as INFO with the rationale `\"System exposes no write operations — compensation logic is not applicable.\"` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. The conditional BLOCKER severity above applies only when the system actually has multi-step write workflows.",
+        "For `stateless-utility` archetype, record as INFO — stateless utilities have no multi-step write sequences."
+      ],
+      "STATE-Q5": [
+        "If `has_http_rpc_surface` is `false`, there is no API layer to enforce rate limits at — record as INFO with the rationale `\"System exposes no HTTP/RPC surface — API-layer rate limiting is not applicable.\"` If the repo was classified as `dev-library-application` via Step 1.5, record as INFO. Libraries invoked by consuming applications inherit the consumer's rate limiting, not their own.",
+        "For `stateless-utility` archetype without a persistent API surface, record as INFO."
+      ]
+    },
+    "extended": {
+      "API-Q5": "Always evaluated as INFO",
+      "API-Q6": "Service has operations >30s OR long-running workflows",
+      "API-Q7": "Service has state changes (stateful-crud, orchestrator)",
+      "API-Q8": "Always evaluated as INFO",
+      "DATA-Q3": "Service has list/query endpoints with potentially unbounded results",
+      "DATA-Q5": "Service has persistent state (stateful-crud, data-gateway, orchestrator)",
+      "DATA-Q7": "Always evaluated as INFO",
+      "DISC-Q2": "Always evaluated as INFO",
+      "DISC-Q3": "Always evaluated as INFO",
+      "ENG-Q4": "Always evaluated (but INFO for stateless-utility)",
+      "ENG-Q5": "Service has persistent data stores",
+      "HITL-Q1": "agent_scope is write-enabled",
+      "HITL-Q2": "agent_scope is write-enabled",
+      "OBS-Q3": "Always evaluated as INFO",
+      "STATE-Q2": "Service has persistent state (stateful-crud, data-gateway, orchestrator)",
+      "STATE-Q3": "agent_scope is write-enabled AND service has persistent state",
+      "STATE-Q4": "Service has external dependencies (calls other services or external APIs)",
+      "STATE-Q7": "Service is P0 priority OR is on the critical path"
+    },
+    "n_questions": 43,
+    "na_map": {
+      "application": [],
+      "deployment-config": [
+        "API-Q1",
+        "API-Q2",
+        "API-Q3",
+        "API-Q4",
+        "API-Q5",
+        "API-Q6",
+        "API-Q7",
+        "API-Q8",
+        "AUTH-Q4",
+        "AUTH-Q5",
+        "AUTH-Q6",
+        "AUTH-Q7",
+        "STATE-Q1",
+        "STATE-Q2",
+        "STATE-Q3",
+        "STATE-Q4",
+        "STATE-Q5",
+        "STATE-Q6",
+        "STATE-Q7",
+        "HITL-Q1",
+        "HITL-Q2",
+        "HITL-Q3",
+        "DATA-Q1",
+        "DATA-Q2",
+        "DATA-Q3",
+        "DATA-Q4",
+        "DATA-Q5",
+        "DATA-Q6",
+        "DATA-Q7",
+        "DISC-Q1",
+        "DISC-Q2",
+        "DISC-Q3",
+        "OBS-Q1",
+        "OBS-Q2",
+        "OBS-Q3"
+      ],
+      "infrastructure-only": [
+        "API-Q1",
+        "API-Q2",
+        "API-Q3",
+        "API-Q4",
+        "API-Q5",
+        "API-Q6",
+        "API-Q7",
+        "API-Q8",
+        "AUTH-Q4",
+        "STATE-Q1",
+        "STATE-Q2",
+        "STATE-Q3",
+        "STATE-Q4",
+        "STATE-Q5",
+        "STATE-Q6",
+        "STATE-Q7",
+        "HITL-Q1",
+        "HITL-Q2",
+        "HITL-Q3",
+        "DATA-Q1",
+        "DATA-Q2",
+        "DATA-Q3",
+        "DATA-Q4",
+        "DATA-Q5",
+        "DATA-Q6",
+        "DATA-Q7",
+        "DISC-Q1",
+        "DISC-Q2",
+        "DISC-Q3"
+      ],
+      "library": [
+        "ENG-Q1",
+        "ENG-Q2",
+        "ENG-Q3",
+        "ENG-Q4",
+        "ENG-Q5"
+      ],
+      "monorepo": []
+    },
+    "questions": {
+      "API-Q1": {
+        "conditional": false,
+        "severity": "BLOCKER",
+        "title": "Documented API Interface"
+      },
+      "API-Q2": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Machine-Readable API Specification"
+      },
+      "API-Q3": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Structured Error Responses"
+      },
+      "API-Q4": {
+        "conditional": true,
+        "severity": "BLOCKER",
+        "title": "Idempotent Write Operations"
+      },
+      "API-Q5": {
+        "conditional": false,
+        "severity": "INFO",
+        "title": "Structured Response Format"
+      },
+      "API-Q6": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Asynchronous Operation Support"
+      },
+      "API-Q7": {
+        "conditional": false,
+        "severity": "INFO",
+        "title": "Event Emission for State Changes"
+      },
+      "API-Q8": {
+        "conditional": false,
+        "severity": "INFO",
+        "title": "Rate Limit Documentation and Headers"
+      },
+      "AUTH-Q1": {
+        "conditional": false,
+        "severity": "BLOCKER",
+        "title": "Machine Identity Authentication"
+      },
+      "AUTH-Q2": {
+        "conditional": false,
+        "severity": "RISK-SAFETY",
+        "title": "Scoped Permissions (Least Privilege)"
+      },
+      "AUTH-Q3": {
+        "conditional": false,
+        "severity": "RISK-SAFETY",
+        "title": "Action-Level Authorization"
+      },
+      "AUTH-Q4": {
+        "conditional": false,
+        "severity": "RISK-SAFETY",
+        "title": "Identity Propagation and Delegation"
+      },
+      "AUTH-Q5": {
+        "conditional": false,
+        "severity": "RISK-SAFETY",
+        "title": "Credential Management"
+      },
+      "AUTH-Q6": {
+        "conditional": true,
+        "severity": "BLOCKER",
+        "title": "Immutable Audit Logging"
+      },
+      "AUTH-Q7": {
+        "conditional": false,
+        "severity": "RISK-SAFETY",
+        "title": "Agent Identity Suspension"
+      },
+      "DATA-Q1": {
+        "conditional": true,
+        "severity": "BLOCKER",
+        "title": "Sensitive Data Classification"
+      },
+      "DATA-Q2": {
+        "conditional": true,
+        "severity": "BLOCKER",
+        "title": "Data Residency and Sovereignty"
+      },
+      "DATA-Q3": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Selective Query Support"
+      },
+      "DATA-Q4": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Input Validation and Schema Enforcement"
+      },
+      "DATA-Q5": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Temporal Metadata and Freshness"
+      },
+      "DATA-Q6": {
+        "conditional": false,
+        "severity": "RISK-SAFETY",
+        "title": "PII Redaction in Logs"
+      },
+      "DATA-Q7": {
+        "conditional": false,
+        "severity": "INFO",
+        "title": "Data Quality Awareness"
+      },
+      "DISC-Q1": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Schema Versioning and API Contracts"
+      },
+      "DISC-Q2": {
+        "conditional": false,
+        "severity": "INFO",
+        "title": "Semantically Meaningful Field Names"
+      },
+      "DISC-Q3": {
+        "conditional": false,
+        "severity": "INFO",
+        "title": "Data Catalog / Metadata Layer"
+      },
+      "ENG-Q1": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Infrastructure Governance for Agent-Facing Surface"
+      },
+      "ENG-Q2": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "CI/CD with API Contract Testing"
+      },
+      "ENG-Q3": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Rollback Capability"
+      },
+      "ENG-Q4": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "API Test Coverage"
+      },
+      "ENG-Q5": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Encryption at Rest for Agent-Accessible Data"
+      },
+      "HITL-Q1": {
+        "conditional": true,
+        "severity": "RISK-SAFETY",
+        "title": "Draft/Pending State"
+      },
+      "HITL-Q2": {
+        "conditional": true,
+        "severity": "RISK-SAFETY",
+        "title": "Configurable Approval Gates"
+      },
+      "HITL-Q3": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Sandbox/Staging Environment"
+      },
+      "OBS-Q1": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Distributed Tracing and Structured Logging"
+      },
+      "OBS-Q2": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Alerting on Error Rates and Latency"
+      },
+      "OBS-Q3": {
+        "conditional": false,
+        "severity": "INFO",
+        "title": "Business Outcome Metrics"
+      },
+      "STATE-Q1": {
+        "conditional": true,
+        "severity": "BLOCKER",
+        "title": "Compensation and Rollback"
+      },
+      "STATE-Q2": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Queryable Current State"
+      },
+      "STATE-Q3": {
+        "conditional": true,
+        "severity": "RISK-SAFETY",
+        "title": "Concurrency Controls"
+      },
+      "STATE-Q4": {
+        "conditional": false,
+        "severity": "RISK-SAFETY",
+        "title": "Circuit Breakers and Resilience"
+      },
+      "STATE-Q5": {
+        "conditional": false,
+        "severity": "RISK-SAFETY",
+        "title": "Rate Limiting and Throttling"
+      },
+      "STATE-Q6": {
+        "conditional": true,
+        "severity": "RISK-SAFETY",
+        "title": "Blast Radius and Transaction Limits"
+      },
+      "STATE-Q7": {
+        "conditional": false,
+        "severity": "RISK-QUALITY",
+        "title": "Graceful Degradation Signaling"
+      }
+    },
+    "scope_severities": {
+      "API-Q4": {
+        "read-only": "INFO",
+        "write-enabled": "BLOCKER"
+      },
+      "AUTH-Q6": {
+        "read-only": "RISK-SAFETY",
+        "write-enabled": "BLOCKER"
+      },
+      "DATA-Q1": {
+        "read-only": "RISK-SAFETY",
+        "write-enabled": "BLOCKER"
+      },
+      "DATA-Q2": {
+        "read-only": "RISK-SAFETY",
+        "write-enabled": "BLOCKER"
+      },
+      "HITL-Q1": {
+        "read-only": "INFO",
+        "write-enabled": "RISK"
+      },
+      "HITL-Q2": {
+        "read-only": "INFO",
+        "write-enabled": "RISK"
+      },
+      "STATE-Q1": {
+        "read-only": "RISK-SAFETY",
+        "write-enabled": "BLOCKER"
+      },
+      "STATE-Q3": {
+        "read-only": "INFO",
+        "write-enabled": "RISK"
+      },
+      "STATE-Q6": {
+        "read-only": "INFO",
+        "write-enabled": "RISK"
+      }
+    },
+    "tier_ladder": "  - blocker_count 0 AND risk_safety_count 0    -> Agent-Ready\n  - blocker_count 0 AND risk_safety_count 1-2  -> Pilot-Ready\n  - blocker_count 0 AND risk_safety_count >= 3 -> Pilot-Ready (Safety Concerns)\n  - blocker_count 1-2 (any risk_safety_count)  -> Remediation Required\n  - blocker_count >= 3 (any risk_safety_count) -> Not Agent-Integrable"
+  },
+  "fingerprint": "4c416490f19d064b601b42d26439fe5664ea95a3ddfcd3df897d700d8c3693e1"
+}

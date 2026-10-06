@@ -8,6 +8,7 @@ tests assert the parse is complete and fail loudly when it is not.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -19,11 +20,51 @@ sys.path.insert(0, str(REPO / "harness"))
 import skill_table as st  # noqa: E402
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# THE ONE NUMBER TO CHANGE when you add or remove a question.
+#   ADD a question    → bump the count (43 → 44).
+#   REMOVE a question → decrement it (44 → 43).
+# in the SAME MR as the TD edit (definitions/managed/<td>/references/*.md).
+#
+# It is hand-typed ON PURPOSE — independent of parse_questions(). That independence
+# is the whole tripwire: everything downstream DERIVES its count from the parse
+# (skill_table.EXPECTED_QUESTIONS), so only this literal can catch an ACCIDENTAL
+# parse drift (a broken `#### <ID>: <title> — SEVERITY` heading, a hyphen where an
+# em-dash belongs, a duplicated row) that the parser would otherwise accept silently.
+#
+# If this test fails but you did NOT resize the rubric, do NOT just bump the number —
+# your heading drifted; fix it (four `#`, em-dash `—`). See docs/contributing/README.md.
+EXPECTED_QUESTION_COUNTS = {"ara": 43, "mod": 37}
+
+
 def test_the_severity_table_is_parsed_from_the_td_not_transcribed():
+    """THE question-count tripwire — and the ONLY place a rubric-size change is acknowledged.
+
+    EXPECTED_QUESTIONS is derived from parse_questions (skill_table.py), so every consumer's
+    count follows the TD automatically — adding or removing a question needs NO code edit.
+    That convenience is safe only because this one test still pins the parsed count to a
+    literal: an ACCIDENTAL parse drift (a broken `####` heading, a hyphen where an em-dash
+    belongs, a duplicated row) changes len(parse_questions) but not the literal, so it fails
+    HERE, loudly. Without this literal the derivation would be circular and a silently
+    dropped question would redefine "complete" as the wrong number with nothing to catch it.
+
+    So: if you INTENTIONALLY added or removed a question, the single value to update is the
+    module-level EXPECTED_QUESTION_COUNTS above (bump for add, decrement for remove), in the
+    same MR as the TD edit. If you did NOT, a failure here means the parse broke — fix the
+    heading, do not just change the number.
+    """
     ara, mod = st.parse_questions("ara"), st.parse_questions("mod")
-    assert len(ara) == st.EXPECTED_QUESTIONS["ara"] == 43
+    _hint = ("If you added/removed a question this was intentional — update "
+             "EXPECTED_QUESTION_COUNTS at the top of this file. If not, the parse drifted: "
+             "fix the `#### <ID>: <title> — SEVERITY` heading (four #, em-dash), don't just "
+             "change the number.")
+    assert len(ara) == EXPECTED_QUESTION_COUNTS["ara"], (
+        f"ARA parse yielded {len(ara)} questions, expected {EXPECTED_QUESTION_COUNTS['ara']}. {_hint}")
     # A naive heading grep returns 38 for MOD — INF-Q1 "Managed Compute" appears twice.
-    assert len(mod) == st.EXPECTED_QUESTIONS["mod"] == 37
+    assert len(mod) == EXPECTED_QUESTION_COUNTS["mod"], (
+        f"MOD parse yielded {len(mod)} questions, expected {EXPECTED_QUESTION_COUNTS['mod']}. {_hint}")
+    # EXPECTED_QUESTIONS must mirror the parse it is derived from (guards a bad refactor).
+    assert st.EXPECTED_QUESTIONS == {"ara": len(ara), "mod": len(mod)}
 
 
 def test_auth_q5_is_risk_safety_which_is_the_whole_point():
@@ -242,9 +283,36 @@ def test_extended_parses_all_18_with_triggers():
 def test_mod_surface_gates_and_archetype_rubrics():
     gates = st.parse_mod_surface_gates()
     assert set(gates) == {"INF-Q2", "SEC-Q2", "INF-Q8", "INF-Q9",
-                          "OPS-Q2", "SEC-Q1", "OPS-Q5"}
+                          "OPS-Q2", "SEC-Q1", "OPS-Q5", "OPS-Q7", "OPS-Q9"}
     assert gates["INF-Q2"]["flag"] == "has_persistent_data_store"
+    assert gates["OPS-Q7"]["flag"] == "has_deployed_workload"
+    assert gates["OPS-Q9"]["flag"] == "has_iac_provisioning_aws_resources"
     assert st.parse_mod_archetype_calibrated() == ["INF-Q3", "INF-Q4", "APP-Q3", "APP-Q4"]
+
+
+def test_mod_scorer_prompt_lists_every_td_surface_gate():
+    """The pinned MOD benchmarking scorer prompt must name every gated question the TD defines.
+
+    The prompt is a hand-maintained snapshot the *external* benchmark grader scores against —
+    the one rubric-derived artifact that does NOT read the TD at runtime. When a gate was added
+    to SKILL.md but not the prompt (INF-Q8/Q9 was omitted for exactly this reason), the external
+    grader flagged correct "Not Evaluated" markings as defects — the single most frequent
+    false-defect across the ZG external-repo benchmark. This guard fails loudly on that drift so
+    it is caught in CI, not months later in a benchmark batch. The harness's own grader is
+    unaffected: it parses the gates from the TD (parse_mod_surface_gates) on every run.
+    """
+    prompt = (REPO / "harness" / "rubric" / "mod-scorer-prompt.md").read_text(encoding="utf-8")
+    # Scope the check to the SURFACE GATES section only. Every gated qid is ALSO named in the
+    # question-bank enumeration elsewhere in the prompt, so a naive `qid in prompt` would pass
+    # even with the gate bullet deleted — the exact drift we are guarding against.
+    m = re.search(r"^\s*1\. SURFACE GATES\b(.*?)^\s*2\. ARCHETYPE", prompt, re.M | re.S)
+    assert m, "could not locate the '1. SURFACE GATES' section in the MOD scorer prompt"
+    gate_section = m.group(1)
+    gated = set(st.parse_mod_surface_gates())
+    missing = sorted(q for q in gated if q not in gate_section)
+    assert not missing, (
+        f"MOD scorer prompt §1 SURFACE GATES is missing gate(s) the TD defines: {missing}. "
+        f"Sync harness/rubric/mod-scorer-prompt.md §1 with SKILL.md Step 1.6.")
 
 
 def test_na_map_expands_ranges_and_inverts_the_except_row():

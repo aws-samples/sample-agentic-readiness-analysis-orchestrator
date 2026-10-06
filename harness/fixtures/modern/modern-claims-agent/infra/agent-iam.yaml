@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Claims triage agent - execution roles
+
+Resources:
+
+  # One role shared by the runtime and the tool Lambda. Keeps the deploy simple.
+  ClaimsAgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: claims-agent-execution
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - bedrock-agentcore.amazonaws.com
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: claims-agent-inline
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Model access. Left open on resource so we can switch models per
+              # environment without a template change.
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                  - bedrock:Converse
+                  - bedrock:ConverseStream
+                Resource: '*'
+
+              # Knowledge base retrieval.
+              - Effect: Allow
+                Action:
+                  - bedrock:Retrieve
+                  - bedrock:RetrieveAndGenerate
+                Resource: '*'
+
+              # Memory.
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:CreateEvent
+                  - bedrock-agentcore:RetrieveMemoryRecords
+                  - bedrock-agentcore:ListEvents
+                Resource: '*'
+
+              # Runtime invoke + the interactive session commands, so on-call can attach
+              # to a live session when a triage run goes wrong.
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:InvokeAgentRuntime
+                  - bedrock-agentcore:InvokeAgentRuntimeCommand
+                  - bedrock-agentcore:InvokeAgentRuntimeCommandShell
+                Resource: '*'
+
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: '*'
+
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  ClaimsGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: claims-gateway-execution
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: claims-gateway-inline
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: '*'
+
+Outputs:
+  AgentRoleArn:
+    Value: !GetAtt ClaimsAgentRole.Arn
+  GatewayRoleArn:
+    Value: !GetAtt ClaimsGatewayRole.Arn

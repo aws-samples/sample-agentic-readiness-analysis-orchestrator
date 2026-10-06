@@ -26,14 +26,6 @@ Source of truth for the **Agentic Readiness Analysis (ARA)** / **Modernization R
 │   └── references/                 # getting-started, ct-workflow, execution-plan, troubleshooting
 ├── tools/
 │   └── bpmn-analyzer/              # deterministic BPMN preprocessor (BAO input; Python)
-├── scripts/
-│   └── publish-td.sh               # Publish a TD folder to the ATX registry
-├── demo-scripts/                    # Full demo harness (setup, reset, live-discovery)
-│   ├── 00-full-setup.sh            # Bake env: source + discovery + ARA + MODA + export (~45 min)
-│   ├── 00-push-repos.sh            # [remote mode only] push the pre-baked repos to a GitHub org
-│   ├── 01-live-discovery-push.sh   # Live beat: new repo appears (3 → 4)
-│   ├── 02-reset-live-discovery.sh  # Reset for rehearsal
-│   └── 99-full-reset.sh            # Nuke everything
 ├── harness/                         # change-impact harness — advisory, never blocks a merge
 │   ├── DESIGN.md                    # scored dimensions + the reasoning behind each step
 │   ├── usecases.yaml                # fixture matrix + coverage axes + expectations
@@ -72,94 +64,11 @@ Custom TDs run via `atx custom def exec` (not `atx ct analysis run`) because the
 | [`portfolio-bpmn-opportunity-analysis`](definitions/custom/portfolio-bpmn-opportunity-analysis/SKILL.md) | Aggregates per-repo BAO reports into a portfolio opportunity view | Auto-discovers per-repo BAO reports (no config required) | `atx custom def exec -n portfolio-bpmn-opportunity-analysis -p . -x -t` |
 | [`bridge-analysis`](definitions/custom/bridge-analysis/SKILL.md) | Cross-references portfolio ARA + MOD — shared remediation, modernization dividend, dedup | Portfolio ARA report + portfolio MOD report paths + `portfolio_name` | `atx custom def exec -n bridge-analysis -p . -g file://bridge-config.yaml -x -t` |
 
-The EBA TD is the richest — it needs human planning inputs the agent can't infer from code (team size, timeline, budget), documented in full below. The other three take only file-path pointers (or auto-discover their inputs).
+The EBA TD is the richest — it needs at least one portfolio report (ARA-only, MODA-only, or both; both gets cross-dependency detection) plus human planning inputs the agent can't infer from code. The other three take only file-path pointers or auto-discover their inputs.
 
-**Input requirements — at least ONE portfolio report must exist** (ARA-only, MODA-only, or both; when both exist the plan covers both dimensions with cross-dependency detection):
+`ct` writes per-repo artifacts into the repo working trees; portfolio output lands only in the source-scoped run tree. The authoritative location of every report is the `report_paths` map on the analysis record (`atx ct analysis get --id <id> --json`), which has sharp edges — markdown-only paths, portfolio `.json`/`.html` in exactly one place, removed `list-artifacts`/`get-artifact` subcommands. [`orchestrator/SKILL.md`](orchestrator/SKILL.md) has the full three-location table and current commands.
 
-```
-<workspace>/
-├── portfolio-agentic-readiness-analysis/
-│   └── <portfolio>-ara-portfolio-report.json     ← from ct portfolio ARA analysis (optional*)
-├── portfolio-modernization-readiness-analysis/
-│   └── <portfolio>-mod-portfolio-report.json     ← from ct portfolio MODA analysis (optional*)
-└── services/<repo-name>/
-    ├── agentic-readiness-analysis/<repo>-ara-report.json       ← per-repo ARA (optional drill-down)
-    └── modernization-readiness-analysis/<repo>-mod-report.json ← per-repo MODA (optional drill-down)
-```
-
-_*At least one of the two portfolio reports is required — the TD terminates with an error if neither is found. Per-repo reports are read only when deeper granularity is needed._
-
-On **local sources**, `ct` writes these artifacts directly into the repo working trees during analysis. Either way, the authoritative location of every report is the `report_paths` map on the analysis record:
-
-```bash
-# List every report this analysis produced (repo slug -> absolute path)
-atx ct analysis get --id <analysis-id> --json | jq -r '.report_paths | to_entries[] | "\(.key)\t\(.value.ara // .value.mod)"'
-
-# Copy one into place
-cp "$(atx ct analysis get --id <ara-id> --json | jq -r '.report_paths["<src>::<repo>"].ara')" \
-   services/<repo>/agentic-readiness-analysis/<repo>-ara-report.json
-```
-
-⚠️ **`report_paths` is markdown-only.** It points into `~/.atxct/shared/analyses/<id>/artifacts/<source>__<repo>/` (portfolio output in sibling `_portfolio_ara` / `_portfolio_mod` dirs), which holds essentially only `.md`. The **complete** bundle — including the `.json` the EBA TD consumes and the browser-openable `.html` — lives in the source-scoped run tree, and for portfolio reports that is the *only* copy:
-
-```bash
-# Portfolio bundle: .md .json .html .metadata.json — html/json exist here and nowhere else
-ls ~/.atxct/sources/*/*/runs/<analysis-id>/portfolio-*/*-analysis/
-
-# Every artifact of a run (glob — the path segment is the SOURCE's analysis root, not the
-# run's type, and per-repo dirs are slug-mangled <source>-<repo>-<16hex>)
-find ~/.atxct/sources -path "*runs/<analysis-id>/*" -type f
-```
-
-Working trees receive **per-repo** bundles only — never portfolio output. See [`orchestrator/SKILL.md`](orchestrator/SKILL.md) for the full three-location table.
-
-> **`atx ct analysis list-artifacts` and `get-artifact` no longer exist** (verified 2026-08-03 on atx 3.9.0 — `error: unknown command`, zero occurrences in the shipped CLI bundle). Any script still calling them must move to `analysis get --json` → `report_paths`.
-
-**Running the EBA TD** (requires at least one portfolio report — ARA and/or MODA):
-
-```bash
-atx custom def exec -n eba-execution-plan-generator -p . -g file://atx-config-exec-plan.yaml -x -t
-```
-
-**The `-g` config (`additionalPlanContext`)** provides the execution constraints that shape how the roadmap is sequenced and phased. These are human inputs the TD cannot infer from code:
-
-```yaml
-# atx-config-exec-plan.yaml
-additionalPlanContext: |
-  portfolio_name: "my-platform"
-  team_size: 8                          # engineers/teams available
-  timeline_constraint: "12 months"      # total modernization timeline
-  budget_constraint: "$1.2M"            # including training + infra
-  parallel_capacity: 3                  # how many services modernized simultaneously
-  compliance_requirements:              # hard deadlines (optional)
-    - "SOC2 audit by 2026-03"
-    - "PCI-DSS renewal Q4"
-  sequencing_overrides:                 # business-priority ordering (optional)
-    - "payments-service must complete first"
-  service_inventory:                    # auto-populated from ct data
-    - name: "payments-service"
-      path: "/path/to/payments-service"
-      priority: "P0"
-      tags: ["java", "spring-boot"]
-      findings_summary: {high: 4, medium: 12, low: 3}
-  dependency_overrides:                 # inferred from cross-service findings
-    - source: "payments-service"
-      target: "user-service"
-      type: "sync"
-```
-
-| Field | Required | Source |
-|---|---|---|
-| `team_size` | Yes | Human input |
-| `timeline_constraint` | Yes | Human input |
-| `budget_constraint` | No | Human input |
-| `parallel_capacity` | No | Human input |
-| `compliance_requirements` | No | Human input |
-| `sequencing_overrides` | No | Human input |
-| `service_inventory[]` | Yes | Auto-populated from `atx ct repository list` + `findings list` |
-| `dependency_overrides[]` | No | Auto-inferred from cross-service findings |
-
-The orchestrator skill ([`orchestrator/references/execution-plan.md`](orchestrator/references/execution-plan.md)) has the full interactive flow for generating this config with an agent. See also [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml).
+The EBA `-g` config (`additionalPlanContext`) carries the execution constraints — team size and timeline (required), plus optional budget, parallel capacity, compliance deadlines, and sequencing overrides. See [`examples/atx-config-exec-plan.yaml`](examples/atx-config-exec-plan.yaml) for the annotated template and [`orchestrator/references/execution-plan.md`](orchestrator/references/execution-plan.md) for the flow that generates it.
 
 ### `orchestrator/` — the agent skill
 
@@ -178,19 +87,6 @@ diff -q orchestrator/SKILL.md ~/.claude/skills/ara-moda-orchestrator/SKILL.md \
 
 The skill carries the verified `atx ct` behavior — which commands were removed, when a run is genuinely finished, and where reports actually land. Those are the places an agent working from the CLI's own help text gets it wrong, usually in ways that look like success.
 
-### `scripts/publish-td.sh` — publishing TDs
-
-Publishes a TD folder to the ATX registry. The TD name is derived from the folder basename; the description is extracted from the SKILL.md frontmatter (or the first heading of `transformation_definition.md`).
-
-```bash
-# Publish
-./scripts/publish-td.sh definitions/custom/eba-execution-plan-generator
-
-# Save as draft
-./scripts/publish-td.sh definitions/managed/portfolio-agentic-readiness-analysis --draft
-```
-
-Requires the `atx` CLI and `AWS_REGION=us-east-1` (or a supported region).
 
 ### `harness/` — the change-impact harness
 
@@ -205,7 +101,7 @@ not a gate. The only LLM call is the judge, spent once at the very end; the run/
 a deterministic `git diff`, not a model.
 
 Fixtures live under `harness/fixtures/`: `portfolio/` holds the 10 synthetic legacy repos (also
-the source the demo scripts discover), `monolith/` is a PHP fixture for local runs. The
+the source the fixture runs discover), `monolith/` is a PHP fixture for local runs. The
 committed baseline each MR diffs against — a full set of per-repo ARA/MOD reports and portfolio
 roll-ups — is `harness/golden/`. See [`harness/README.md`](harness/README.md) for the pipeline
 diagram and setup, and [`harness/DESIGN.md`](harness/DESIGN.md) for the scored dimensions and
@@ -220,12 +116,11 @@ the reasoning behind each step.
 
 ## Quickstart
 
-Prerequisites: AWS credentials (`aws sts get-caller-identity`), the ATX CLI (`curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash`), Node.js 22+, and the `AWSTransformCustomFullAccess` managed policy.
+Prerequisites: AWS credentials (`aws sts get-caller-identity`), the ATX CLI (see the [official install docs](https://docs.aws.amazon.com/transform/)), Node.js 22+, and the `AWSTransformCustomFullAccess` managed policy.
 
 ```bash
-# Check the CLI version. NOTE: inside Claude Code a bare `atx --version` reports
-# Builder Toolbox's claude-code build (2.1.x), not atx's — strip the inherited var.
-env -u TOOLBOX_TOOL_VERSION atx --version     # → 3.9.0
+# Check the CLI version (needs ≥ 3.9.0)
+atx --version
 
 # Region: only us-east-1 resolves for the definition/credential endpoint
 export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1
@@ -258,7 +153,28 @@ The [`orchestrator/SKILL.md`](orchestrator/SKILL.md) skill walks an agent throug
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Use the GitHub issue templates to report bugs or suggest enhancements.
+**Anyone can add, remove, or edit a question or rubric value.** The full front-door guide is
+[`docs/contributing/`](docs/contributing/README.md) — TD anatomy, a use-case matrix of what
+passes/fails and why, and the invariants that break silently. The 30-second version:
+
+| If you… | Follow-up |
+|---|---|
+| **Edit** a question (re-score, reword, change scope/severity/pathway) | nothing extra — the harness reads the TD at runtime; state your intent and trust the judge |
+| **Add** a question | bump the one count literal **and** refresh the golden baseline (the golden can't answer a new question) |
+| **Remove** a question | just decrement the one count literal (the golden still covers the smaller rubric) |
+
+Validate before you push — the same suite the MR pipeline runs, fully offline (no AWS, no `atx`):
+
+```bash
+pip install -r harness/requirements.txt
+python3 -m pytest harness/tests/ -q
+```
+
+Don't rely on the MR validator as your first check — it's the *last* step. For how to refresh the
+golden (locally, or hands-off via CI on your own branch) see
+[the golden-baseline section](docs/contributing/README.md#refreshing-the-golden-baseline--two-ways).
+For repo-level PR mechanics see [CONTRIBUTING.md](CONTRIBUTING.md). To report a bug or suggest an
+enhancement, use the issue templates — on GitHub (`aws-samples`) or the internal GitLab mirror.
 
 ## Security
 

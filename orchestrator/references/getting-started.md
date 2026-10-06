@@ -13,12 +13,13 @@ First-time setup for running portfolio analyses with AWS Transform Continuous Mo
 
 2. **AWS Transform CLI** installed and up-to-date
    ```bash
-   env -u TOOLBOX_TOOL_VERSION atx --version   # NOT a bare `atx --version` — see below
+   readlink -f "$(command -v atx)"   # .../atx/<version>/atx — the real version
+   atx update --check                # is a newer one available?
    # If not installed: https://docs.aws.amazon.com/transform/
    ```
-   Inside Claude Code a bare `atx --version` misreports Builder Toolbox's version (`2.1.x`), which
-   atx inherits from `$TOOLBOX_TOOL_VERSION`. Unset it to get the real version. Everything in this
-   guide is verified against **atx 3.9.0**.
+   ⚠️ `atx --version` can report the version of whatever tool manager installed `atx` rather than
+   `atx` itself, so resolve the install path instead. Upgrade with `atx update` — it preserves
+   registered sources, repos, analyses, and findings.
 
 3. **ct healthy** — analyses run in-process, so there is no server to start
    ```bash
@@ -56,7 +57,7 @@ Run 'aws sts get-caller-identity' to diagnose. Common fixes:
 ### Step 0.1: ATX CLI Available
 
 ```bash
-env -u TOOLBOX_TOOL_VERSION atx --version
+atx --version
 ```
 
 If `atx: command not found`, point the user to https://docs.aws.amazon.com/transform/ for installation.
@@ -69,7 +70,7 @@ atx ct status --health
 
 This is an in-process check, not a ping against a daemon. There is nothing to start first.
 
-**Never run `atx ct server`.** It still exists but is hidden and deprecated: it starts a real daemon
+**Never run `atx ct server`.** It is deprecated: it starts a real daemon
 that blocks the shell until killed, and no `atx ct` command needs it.
 
 ### Step 0.3: Verify Source Connectivity
@@ -78,7 +79,7 @@ that blocks the shell until killed, and no `atx ct` command needs it.
 atx ct source list
 ```
 
-If no sources are configured, guide the user through `atx ct source add` (see POWER.md "Source Providers").
+If no sources are configured, guide the user through `atx ct source add` (see `../SKILL.md` "Source providers").
 
 If a source shows `SETUP_REQUIRED` → credentials are not configured on this machine. Re-add the source.
 If a source shows `AUTH_REQUIRED` → token is invalid or expired. Re-add with a fresh token.
@@ -117,14 +118,15 @@ atx ct findings list --json
 atx ct analysis get --id <analysis-id> --json | jq -r '.report_paths | to_entries[] | "\(.key)\t\(.value.ara // .value.mod)"'
 ```
 
-`analysis run` does accept a hidden `--wait`, but prefer polling in agent workflows — a blocking call
+`analysis run` accepts `--wait`, but prefer polling in agent workflows — a blocking call
 gives the user no progress signal for the 5–15 min per repo an analysis takes.
 
 ### Important: `report_paths` Is Markdown-Only
 
-Verified on 3.9.0, `report_paths` lists only the `.md`. The full 4-artifact bundle
+`report_paths` lists only the `.md`. The full 4-artifact bundle
 (`.md`, `.json`, `.html`, `.metadata.json`) lives in the source-scoped run tree, which
-`report_paths` never mentions:
+`report_paths` never mentions (you can also pull the bundle with
+`atx ct analysis get-artifact`):
 
 ```bash
 # per-repo and portfolio artifacts for a run
@@ -201,4 +203,4 @@ For EC2 or Batch setup, ask the agent: "Set up an EC2 instance for continuous mo
 | Report artifacts | on-disk artifact store + repo working tree | Per-repo and portfolio reports (located via `analysis get --json` → `report_paths`) |
 | Execution Plan (EBA) | `atx custom def exec` | Reads report artifacts, generates execution roadmap |
 
-The Power is a thin orchestrator. All analysis logic lives in `ct` itself and the transformation definitions it executes.
+The orchestrator ([`../SKILL.md`](../SKILL.md)) is a thin coordination layer. All analysis logic lives in `ct` itself and the transformation definitions it executes.

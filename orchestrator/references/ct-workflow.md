@@ -55,7 +55,7 @@ The end-to-end workflow for running analyses using AWS Transform Continuous Mode
 └─────────────────────┘
 ```
 
-There is no step for starting a server: `atx ct` analyses run **in-process**. `atx ct server` is hidden and deprecated, and starts a daemon on `:8081` that blocks the shell — never invoke it. Pre-flight with `atx ct status --health`.
+There is no step for starting a server: `atx ct` analyses run **in-process**. `atx ct server` is deprecated and starts a daemon that blocks the shell — never invoke it. Pre-flight with `atx ct status --health`.
 
 ---
 
@@ -172,7 +172,7 @@ atx ct analysis get --id <analysis-id> --json \
 atx ct analysis run --type agentic-readiness --source my-portfolio --wait
 ```
 
-`--wait` does exist on `analysis run` (and on `remediation create` / `remediation retry`), though it is hidden from `--help`. It blocks until the analysis completes (or fails). Suitable for scripts but NOT recommended for agent workflows — it holds the execution slot for 5–30 minutes with no intermediate feedback.
+`--wait` is available on `analysis run`, `remediation create`, and `remediation retry`. It blocks until the analysis completes (or fails). Suitable for scripts but NOT recommended for agent workflows — it holds the execution slot for 5–30 minutes with no intermediate feedback.
 
 ### Targeting specific repos
 
@@ -183,7 +183,7 @@ atx ct analysis run --type agentic-readiness --repo my-portfolio::my-app --sourc
 ### What happens internally
 
 1. ct queues analysis jobs for each discovered repo
-2. Per-repo analyses run **concurrently** — verified on 3.9.0, an 11-repo ARA had 8 repos in flight within ~2 minutes. Wall-clock is therefore roughly the slowest repo plus the portfolio phase, not the sum of the repos.
+2. Per-repo analyses run **concurrently** — an 11-repo ARA had 8 repos in flight within ~2 minutes. Wall-clock is therefore roughly the slowest repo plus the portfolio phase, not the sum of the repos.
 3. Portfolio-level aggregation runs automatically as a **second phase of the same `analysis run`** once the per-repo reports land — you do not launch it separately. Each portfolio TD needs **≥ 2 discovered reports**: a single-repo run produces no portfolio report and logs `runPortfolioAra: no portfolio ARA report found for <name>`. Aggregation is per-run, so separate single-repo runs do **not** accumulate into a portfolio — scan the whole portfolio in one run.
 4. Report artifacts are recorded in `report_paths` and written into the repo working trees (see Step 6). `report_paths` is populated in the **final** record update, after the portfolio phase — which is why it doubles as the terminal signal `status` cannot provide.
 5. Findings are generated and stored in the ct findings database
@@ -304,7 +304,7 @@ atx ct findings delete --id <id>
 
 ## Step 6: Retrieve Report Artifacts
 
-Reports land as **files on the local filesystem**. There is no artifact-fetch subcommand — `analysis list-artifacts` and `analysis get-artifact` were removed (they now fail with `error: unknown command`). Discover report locations from the analysis record instead.
+Reports land as **files on the local filesystem**, and you can discover their locations from the analysis record. There is also an artifact-fetch pair, `analysis list-artifacts` / `analysis get-artifact`. `report_paths` is the quickest way to enumerate which repos reported; use `get-artifact` when you need the full per-repo bundle (`.json`/`.html`/portfolio) rather than just the markdown.
 
 ### List report paths for an analysis
 
@@ -316,7 +316,7 @@ Keys are repo slugs (plus the portfolio entries); values are paths you read dire
 
 ### `report_paths` is markdown-only — three trees, different contents
 
-**Verified on 3.9.0.** File counts from one 11-repo ARA run:
+File counts from one 11-repo ARA run:
 
 | Location | md | json | html | meta |
 |---|---|---|---|---|
@@ -400,9 +400,9 @@ atx ct remediation status --id <remediation-id>
 atx ct remediation retry --id <remediation-id>
 ```
 
-> **Verified 2026-08 on 3.9.0: ARA and MODA findings are assessment-only.** Every finding has `fix: null` and no `fix-transform` field — so mode (a) has nothing to bind to, and `remediation create --ids` rejects the whole batch, reporting them as `non_remediable`. To auto-remediate an assessment finding (e.g. "not containerized"), author your own TD and use mode (b) `--transformation-name`. See **"Authoring a custom remediation TD"** in `SKILL.md`. Mode (a) is for analysis types whose findings ship a bound fix transform (e.g. certain tech-debt/upgrade transforms).
+> **ARA and MODA findings are assessment-only.** Every finding has `fix: null` and no `fix-transform` field — so mode (a) has nothing to bind to, and `remediation create --ids` rejects the whole batch, reporting them as `non_remediable`. To auto-remediate an assessment finding (e.g. "not containerized"), author your own TD and use mode (b) `--transformation-name`. See **"Authoring a custom remediation TD"** in `SKILL.md`. Mode (a) is for analysis types whose findings ship a bound fix transform (e.g. certain tech-debt/upgrade transforms).
 
-`--local` runs the ATX transform in-process against the checked-out working tree rather than delegating to the provider; useful for local sources. `-g/--configuration` is valid only alongside `--transformation-name`. `remediation create` and `remediation retry` also accept the hidden `--wait`; prefer polling `remediation status --id <id>` in agent workflows.
+`--local` runs the ATX transform in-process against the checked-out working tree rather than delegating to the provider; useful for local sources. `-g/--configuration` is valid only alongside `--transformation-name`. `remediation create` and `remediation retry` also accept `--wait`; prefer polling `remediation status --id <id>` in agent workflows.
 
 Remediation creates branches and PRs/MRs depending on source provider:
 - GitHub → Pull Request
@@ -410,11 +410,11 @@ Remediation creates branches and PRs/MRs depending on source provider:
 - Bitbucket → Pull Request
 - Local → local branch (no PR)
 
-This PR-opening happens **server-side** and is independent of any local `git push` (relevant on Amazon-managed machines where Code Defender blocks pushes to unapproved public repos).
+This PR-opening happens **server-side** and is independent of any local `git push` .
 
 ## Teardown / fresh environment (reverse-order deletion)
 
-Resetting the account for a clean demo requires deleting in **reverse dependency order** — verified 2026-07:
+Resetting the account requires deleting in **reverse dependency order**:
 
 ```bash
 # 1. Delete analyses (optionally cascade their findings)
@@ -454,4 +454,3 @@ atx ct analysis run --type agentic-readiness --source my-portfolio \
 
 (`--telemetry` composes with `--wait` too, but agent runs should launch and poll.)
 
-`client=zerodebt` is always included automatically.

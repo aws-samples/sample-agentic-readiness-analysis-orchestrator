@@ -43,6 +43,13 @@ Resources:
         Authorizers:
           OAuth2Authorizer:
             FunctionArn: !GetAtt AuthorizerFunction.Arn
+      # Callers reach the API only through the custom domain, which terminates TLS 1.2+
+      # with an ACM certificate. The raw execute-api endpoint is not published.
+      Domain:
+        DomainName: !Ref ApiDomainName
+        CertificateArn: !Ref ApiCertificateArn
+        EndpointConfiguration: REGIONAL
+        SecurityPolicy: TLS_1_2
       DefinitionBody:
         Fn::Transform:
           Name: AWS::Include
@@ -77,6 +84,52 @@ Resources:
             Path: /charges/{chargeId}/refunds
             Method: post
 
+  # Settlement receipts. KMS-encrypted at rest and reachable only over TLS — the bucket
+  # policy denies any request that arrives without it, and any TLS below 1.2.
+  ReceiptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  ReceiptsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ReceiptsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyNonTlsRequests
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ReceiptsBucket.Arn
+              - !Sub '${ReceiptsBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Sid: DenyOutdatedTlsVersions
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ReceiptsBucket.Arn
+              - !Sub '${ReceiptsBucket.Arn}/*'
+            Condition:
+              NumericLessThan:
+                's3:TlsVersion': '1.2'
+
   AuthorizerFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -92,6 +145,18 @@ Parameters:
     Type: String
     Description: Cognito user pool that issues client-credentials tokens.
 
+  ApiDomainName:
+    Type: String
+    Description: Custom domain clients call, e.g. payments.example.com.
+
+  ApiCertificateArn:
+    Type: String
+    Description: >-
+      ACM certificate for ApiDomainName. Regional API Gateway custom domains require
+      the certificate in this stack's region.
+    AllowedPattern: '^arn:aws[a-zA-Z-]*:acm:[a-z0-9-]+:\d{12}:certificate/.+$'
+
 Outputs:
   ApiUrl:
-    Value: !Sub 'https://${PaymentsApi}.execute-api.${AWS::Region}.amazonaws.com/v1'
+    Description: Public HTTPS endpoint (TLS 1.2 minimum, ACM certificate).
+    Value: !Sub 'https://${ApiDomainName}/v1'

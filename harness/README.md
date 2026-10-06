@@ -1,3 +1,4 @@
+<!-- Contributing to a rubric? Start at ../docs/contributing/README.md — this is the operator guide for the harness itself. -->
 # Change-Impact Harness — Operator Guide
 
 ```mermaid
@@ -75,7 +76,7 @@ The contributor's stated intent is reported as supporting evidence, but does **n
 the measurement: a change can be described perfectly and still degrade the analysis. See
 [`DESIGN.md` §6.1](./DESIGN.md) for the calibration ladder.
 
-> **Automation is GitLab-only.** All CI runs on `gitlab.aws.dev`, where AWS access
+> **Automation is GitLab-only.** All CI runs on the internal GitLab instance, where AWS access
 > is granted via the **AWS Credential Vendor** (see below). GitHub stays open for
 > issues and PRs but runs no automation.
 
@@ -84,17 +85,22 @@ the measurement: a change can be described perfectly and still degrade the analy
 The `atx` (AWS Transform) step needs AWS access on the GitLab runner.
 
 > **Why not OIDC?** On the *public* GitLab, the usual pattern is an IAM OIDC
-> provider that trusts the instance. That does **not** work on the internal
-> `gitlab.aws.dev`: AWS IAM cannot reach the private instance to verify the
-> `id_token`, so OIDC is not an option here.
+> provider that trusts the instance. That does **not** work on a private GitLab
+> instance: AWS IAM cannot reach it to verify the `id_token`, so OIDC is not an
+> option here.
 
 Instead we use the **AWS Credential Vendor**, which is built into the **shared
 runner fleet**. The runners' jump role
-`arn:aws:iam::979517299116:role/gitlab-runners-prod` assumes a role **you** create
-in your own AWS account, gated by GitLab principal tags. The runner then injects
-temporary `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` into
-the job automatically — there is nothing to exchange in `before_script`, and no
-static keys are stored. Two constraints:
+`arn:aws:iam::<GITLAB_RUNNER_FLEET_ACCOUNT>:role/gitlab-runners-prod` assumes a role **you** create
+in your own AWS account, gated by GitLab principal tags.
+
+> ‼ **`<GITLAB_RUNNER_FLEET_ACCOUNT>` is a placeholder.** Substitute the real id from your
+> credential-provider documentation when you write your trust policy. Do not commit the literal —
+> a 12-digit account id in any tracked file fails the publication scan by design.
+
+The runner then injects temporary `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` /
+`AWS_SESSION_TOKEN` into the job automatically — there is nothing to exchange in
+`before_script`, and no static keys are stored. Two constraints:
 
 - It **only works on the shared runner fleet** (already the case here). Do **not** add
   `tags: [shared]` — there is no GitLab tag by that name; untagged jobs are picked up by
@@ -107,7 +113,7 @@ static keys are stored. Two constraints:
 Create a role whose **trust policy** lets the shared-runner jump role assume it,
 scoped to *this* GitLab group + project via principal tags. Replace `<GROUP>` and
 `<PROJECT>` with this project's path segments — for
-`gitlab.aws.dev/agentic-readiness-assessment/agentic-readiness-assessment` that is
+the internal GitLab project path that is
 group `agentic-readiness-assessment`, project `agentic-readiness-assessment`:
 
 ```json
@@ -117,7 +123,7 @@ group `agentic-readiness-assessment`, project `agentic-readiness-assessment`:
     {
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::979517299116:role/gitlab-runners-prod"
+        "AWS": "arn:aws:iam::<GITLAB_RUNNER_FLEET_ACCOUNT>:role/gitlab-runners-prod"
       },
       "Action": [
         "sts:AssumeRole",
@@ -153,7 +159,7 @@ write/delete on unrelated resources, no `AdministratorAccess`. Attach it with
 
 ### 3. Add the GitLab CI variables
 
-Click-path (GitLab project on `gitlab.aws.dev`): **Settings → CI/CD → Variables →
+Click-path (the internal GitLab project): **Settings → CI/CD → Variables →
 Add variable**.
 
 Exactly **one** variable has to be created here:

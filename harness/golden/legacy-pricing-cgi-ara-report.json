@@ -1,19 +1,19 @@
 {
+  "analysis_type": "ara",
+  "repo_name": "legacy-pricing-cgi",
   "metadata": {
-    "analysis_type": "ara",
-    "analysis_date": "2026-07-30",
-    "td_version": "agentic-readiness-analysis",
-    "repo_name": "legacy-pricing-cgi",
-    "repo_type": "application",
-    "agent_scope": "read-only",
-    "service_archetype": "stateless-utility",
-    "archetype_detection": "auto-detected",
-    "archetype_justification": "Read-only CGI binary that looks up prices from a static flat file. No database connections, no cache writes, no user-specific state, no write operations.",
-    "context": "Legacy C++ CGI pricing engine reading product prices from a flat file, served via Apache httpd on Kubernetes",
+    "analysis_date": "2025-07-18",
+    "analyzed_by": "AWS Transform Custom — Agentic Readiness Analysis",
     "portfolio_name": "legacy-pricing-cgi",
+    "repo_type": "application",
+    "repo_type_source": "auto-detected",
+    "service_archetype": "stateless-utility",
+    "service_archetype_source": "auto-detected",
+    "agent_scope": "read-only",
+    "agent_scope_source": "inferred",
     "tech_stack": {
       "language": "C++",
-      "loc": 65,
+      "loc": 62,
       "framework": "Apache CGI (mod_cgi)",
       "architecture": "Monolithic CGI binary"
     },
@@ -29,695 +29,661 @@
     "tier": "Remediation Required",
     "sub_qualifier": null,
     "blocker_count": 2,
-    "risk_safety_count": 3,
+    "risk_safety_count": 4,
     "risk_quality_count": 10,
-    "info_count": 16,
+    "info_count": 11,
     "high_count": 2,
-    "medium_count": 13,
-    "low_count": 16,
-    "rule_matched": "1-2 BLOCKER \u2192 Remediation Required"
+    "medium_count": 14,
+    "low_count": 11,
+    "rule_matched": "1-2 BLOCKER → Remediation Required"
   },
   "counts": {
-    "total": 31,
+    "total": 27,
     "high": 2,
-    "medium": 13,
-    "low": 16,
-    "blocker": 2,
-    "risk_safety": 3,
-    "risk_quality": 10,
-    "info": 16,
-    "na": 0,
-    "not_evaluated": 11,
-    "pass": 1
+    "medium": 14,
+    "low": 11
   },
   "findings": [
     {
       "question_id": "API-Q1",
       "category": "API Surface",
+      "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Structured API \u2014 HTML-Only CGI Response",
-      "description": "The application exposes an HTTP CGI endpoint at /cgi-bin/pricing.cgi accepting query parameters sku and qty. The response format is text/html \u2014 raw HTML markup, not a structured machine-readable format. No API documentation exists. An agent would need to parse HTML output to extract pricing data.",
-      "gap": "No structured (JSON/XML) API response format. HTML output requires scraping for programmatic integration. No API documentation.",
-      "recommendation": "Add a JSON response mode triggered by an Accept: application/json header or format=json query parameter. Document the endpoint contract in an OpenAPI specification.",
+      "title": "No structured API interface — CGI returns HTML only",
+      "description": "The application exposes an HTTP CGI endpoint (/cgi-bin/pricing.cgi?sku=X&qty=Y) returning unstructured HTML. Agent integration requires HTML parsing — effectively UI automation.",
+      "gap": "No REST API, no structured responses. Agent integration requires scraping.",
+      "recommendation": "Add a JSON response mode (Accept: application/json or format=json query parameter) returning structured JSON.",
       "severity": "High",
       "priority": "P0",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 1,
-      "evidence": {
-        "file": "pricing.cpp",
-        "lines": "53-62"
-      },
+      "evidence": {"file": "pricing.cpp", "lines": "52-62"},
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Add JSON response mode with format=json query parameter",
+          "target_state": "Documented REST endpoint returning structured JSON with proper HTTP status codes",
+          "estimated_effort": "Low",
+          "dependencies": []
+        }
       }
     },
     {
       "question_id": "AUTH-Q1",
       "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Machine Identity Authentication",
-      "description": "Zero authentication mechanism exists at any layer. Any network-reachable client can call /cgi-bin/pricing.cgi without presenting credentials. No OAuth2, no API keys, no mTLS, no JWT verification, no API Gateway authorizer.",
-      "gap": "No machine identity authentication. No principal attribution for audit. Cannot distinguish which agent or caller made a request.",
-      "recommendation": "Deploy an API Gateway in front of the service that requires API key or OAuth2 client credentials before forwarding requests.",
+      "title": "No machine identity authentication — endpoint completely open",
+      "description": "The CGI endpoint has no authentication mechanism. No API keys, no OAuth, no mTLS. Any network-reachable client can call the endpoint without identification.",
+      "gap": "No machine identity authentication. Cannot attribute requests to a specific agent principal.",
+      "recommendation": "Deploy API Gateway with API key or OAuth2 client credentials authentication with principal attribution in audit logs.",
       "severity": "High",
       "priority": "P0",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "pricing.cpp",
-        "lines": "1-62"
-      },
+      "evidence": {"file": "pricing.cpp", "lines": null},
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true
+        "safety_impact": true,
+        "blocker_remediation": {
+          "immediate": "Deploy API Gateway or ingress controller with API key authentication",
+          "target_state": "API Gateway with OAuth2 client credentials flow and per-caller attribution in audit logs",
+          "estimated_effort": "Medium",
+          "dependencies": []
+        }
       }
     },
     {
       "question_id": "AUTH-Q2",
       "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Scoped Permissions Model",
-      "description": "No authorization model exists. Since there is no authentication, there is no mechanism to scope permissions. All callers have identical, unrestricted access to all pricing data.",
-      "gap": "No permission scoping mechanism \u2014 cannot differentiate agent access levels.",
-      "recommendation": "After implementing authentication (AUTH-Q1), define tiered access via API Gateway usage plans.",
+      "title": "No scoped permissions — all callers have identical access",
+      "description": "No authorization model exists. The endpoint is completely open — all callers have identical unrestricted access.",
+      "gap": "No RBAC, no IAM policies, no API key scoping. Cannot differentiate access levels.",
+      "recommendation": "Introduce API Gateway with usage plans that scope per-caller access.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "pricing.cpp",
-        "lines": "1-62"
-      },
+      "evidence": {"file": "pricing.cpp", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Kubernetes NetworkPolicy to restrict which pods can reach this service",
-          "API Gateway usage plans for tiered access"
-        ]
+        "compensating_controls": ["Deploy API Gateway with usage plans and API keys to scope access per consumer", "Use Kubernetes NetworkPolicy to restrict which pods can reach the service"],
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "AUTH-Q3",
       "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
-      "title": "No Action-Level Authorization",
-      "description": "No action-level authorization exists. No RBAC, ABAC, or method-level controls at any layer.",
-      "gap": "Cannot restrict actions per caller identity.",
-      "recommendation": "Implement method-level auth at API Gateway (reject non-GET methods). Plan for future write controls.",
+      "title": "No action-level authorization framework",
+      "description": "No action-level authorization exists. No ABAC, no RBAC, no permission checks of any kind.",
+      "gap": "No framework to enforce fine-grained permissions.",
+      "recommendation": "Implement alongside AUTH-Q2 — API Gateway resource policies can enforce action-level controls.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "k8s/service.yaml",
-        "lines": "1-45"
-      },
+      "evidence": {"file": "pricing.cpp", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "60\u201390 days",
-        "compensating_controls": [
-          "Service is currently read-only \u2014 no destructive actions possible",
-          "API Gateway method-level authorization when write endpoints are added"
-        ]
+        "compensating_controls": ["Application is currently read-only, limiting blast radius", "API Gateway method-level authorization can be added at infrastructure layer"],
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No audit logging — requests are unattributable",
+      "description": "No audit logging exists. The CGI binary writes no logs. No immutable log storage, no principal attribution, no log retention configuration.",
+      "gap": "No CloudTrail, no structured access logs, no immutable log storage.",
+      "recommendation": "Configure Apache access log forwarding to CloudWatch Logs with retention policy. Route logs to S3 with Object Lock.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {"file": "pricing.cpp", "lines": null},
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, audit logging important but not deployment blocker",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, so audit logging is RISK-SAFETY rather than BLOCKER.",
+        "compensating_controls": ["Enable Apache access logging with request details, forward to CloudWatch Logs", "Deploy API Gateway with CloudWatch logging enabled"],
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "STATE-Q5",
       "category": "State Management",
+      "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Rate Limiting Configured",
-      "description": "No rate limiting is configured at any layer. No API Gateway throttling, no WAF rules, no Ingress rate annotations, no application-level rate limiting. A runaway agent loop could send unlimited requests.",
-      "gap": "No rate limiting at the API layer. Agent traffic storms could overwhelm the service.",
-      "recommendation": "Add an Ingress resource with rate-limiting annotations, or deploy an API Gateway with throttling configuration.",
+      "title": "No rate limiting at any layer",
+      "description": "No rate limiting exists. The CGI endpoint accepts unlimited requests. No API Gateway throttling, no WAF rules, no application-level rate limiting.",
+      "gap": "No rate limiting at the API layer. A runaway agent loop could overwhelm the service.",
+      "recommendation": "Deploy API Gateway or Ingress controller with rate limiting.",
       "severity": "Medium",
       "priority": "P1",
-      "effort": "Low",
+      "effort": "Medium",
       "phase": 1,
-      "evidence": {
-        "file": "k8s/deployment.yaml",
-        "lines": "1-55"
-      },
+      "evidence": {"file": "k8s/deployment.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Kubernetes resource limits (CPU: 500m, Memory: 128Mi) provide implicit backpressure",
-          "Kubernetes Ingress with rate-limiting annotations"
-        ]
+        "compensating_controls": ["Kubernetes resource limits (CPU: 500m, memory: 128Mi) provide basic DoS protection", "Add Ingress controller with rate-limiting annotations"],
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "API-Q2",
       "category": "API Surface",
+      "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Machine-Readable API Specification",
-      "description": "No OpenAPI, AsyncAPI, GraphQL schema, Smithy model, or any machine-readable API specification exists in the repository.",
-      "gap": "No machine-readable specification for agent tool generation.",
-      "recommendation": "Create an openapi.yaml documenting the pricing endpoint: query parameters, response schema, and error cases.",
+      "title": "No machine-readable API specification",
+      "description": "No OpenAPI, AsyncAPI, GraphQL schema, or Smithy model exists. Agent tool generation requires manual work.",
+      "gap": "No machine-readable spec to auto-generate agent tool definitions.",
+      "recommendation": "Create an OpenAPI 3.0 specification documenting the pricing endpoint.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": null,
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "Manually author tool definition from code inspection",
-          "Use API Gateway OpenAPI export if deployed"
-        ]
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "API-Q3",
       "category": "API Surface",
+      "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Structured Error Responses",
-      "description": "All responses are HTTP 200 with HTML. Unknown SKU returns $0.00 with no error indication. No structured error codes, no retryable/terminal categorization.",
-      "gap": "No error codes, no distinction between success and failure, no structured error body.",
-      "recommendation": "Implement HTTP status codes (404, 400) and structured JSON error responses with error_code, message, and retryable fields.",
+      "title": "No structured error responses — all requests return HTTP 200",
+      "description": "Always returns HTTP 200 with HTML. No error codes, no structured error bodies. If SKU is not found, returns $0.00 — indistinguishable from a free item.",
+      "gap": "Agents cannot distinguish error conditions from success.",
+      "recommendation": "Implement structured JSON errors with appropriate HTTP status codes.",
       "severity": "Medium",
       "priority": "P2",
-      "effort": "Medium",
+      "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "pricing.cpp",
-        "lines": "53-62"
-      },
+      "evidence": {"file": "pricing.cpp", "lines": "52-62"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "API Gateway can intercept and structure error responses",
-          "Thin proxy layer for response transformation"
-        ]
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "DATA-Q4",
       "category": "Data Accessibility",
+      "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Input Validation \u2014 Buffer Overflow Risk",
-      "description": "Zero input validation. parse_query uses strcpy without bounds checking \u2014 SKU parameter can overflow 64-byte buffer. qty parsed with atoi (no range validation). Buffer overflow vulnerabilities confirmed in README.",
-      "gap": "No input validation at any layer. Malformed input accepted without validation or structured rejection.",
-      "recommendation": "Deploy API Gateway with request validation (SKU: max 64 chars alphanumeric, qty: positive integer 1-10000). Long-term: rewrite with safe string handling.",
+      "title": "No input validation — buffer overflow vulnerabilities",
+      "description": "No input validation. Uses strcpy without bounds checking on user-controlled QUERY_STRING. Buffer overflow possible. No structured validation error responses.",
+      "gap": "Malformed agent input can crash the process or corrupt memory.",
+      "recommendation": "Replace strcpy with strncpy or std::string. Add input validation with structured error responses.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "pricing.cpp",
-        "lines": "17-24"
-      },
+      "evidence": {"file": "pricing.cpp", "lines": "16-22"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "WAF with request parameter validation rules",
-          "API Gateway request validators for parameter constraints"
-        ]
+        "remediation_timeline": "60–90 days"
       }
     },
     {
       "question_id": "DISC-Q1",
       "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No Schema Versioning or API Contracts",
-      "description": "No schema versioning, no API versioning, no contract testing. The endpoint URL has no version prefix. No changelog, no breaking change detection.",
-      "gap": "No versioning strategy. Agent tool bindings would break silently on any change.",
-      "recommendation": "Version the API (e.g., /v1/pricing) and document the response contract. Add changelog.",
+      "title": "No schema versioning or API contracts",
+      "description": "No schema versioning, no API contracts, no changelog, no breaking change detection. No version identifier in URL or response.",
+      "gap": "Changes to the endpoint silently break consumers.",
+      "recommendation": "Introduce API versioning and OpenAPI spec with CI validation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "pricing.cpp",
-        "lines": "1-62"
-      },
+      "evidence": {"file": "pricing.cpp", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60 days",
-        "compensating_controls": [
-          "Service is simple (one endpoint, two parameters) \u2014 changes are infrequent",
-          "Pin agent tool definitions to current behavior"
-        ]
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "OBS-Q1",
       "category": "Observability",
+      "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No Distributed Tracing or Structured Logging",
-      "description": "No distributed tracing (no X-Ray, no OpenTelemetry). No structured logging \u2014 CGI binary produces no logs. Apache produces unstructured access logs. No correlation IDs.",
-      "gap": "Cannot trace agent-initiated requests through the system.",
-      "recommendation": "Deploy Envoy or OTEL collector sidecar for request traces and structured JSON logs.",
+      "title": "No distributed tracing or structured logging",
+      "description": "No tracing (no X-Ray, no OpenTelemetry). No structured logging. No correlation IDs. Agent-initiated requests are completely opaque.",
+      "gap": "Zero observability into request processing. Cannot debug agent-initiated failures.",
+      "recommendation": "Add structured JSON logging and OpenTelemetry instrumentation.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "k8s/deployment.yaml",
-        "lines": "1-55"
-      },
+      "evidence": {"file": "pricing.cpp", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Apache access logs provide basic request-level visibility",
-          "Envoy sidecar for trace injection and structured logs"
-        ]
+        "remediation_timeline": "60–90 days"
       }
     },
     {
       "question_id": "OBS-Q2",
       "category": "Observability",
+      "category_display": "Observability",
       "category_id": "OBS",
-      "title": "No Alerting on Error Rates or Latency",
-      "description": "No alerting configuration. No CloudWatch alarms, no Prometheus rules. Kubernetes probes provide health but no alerting thresholds.",
-      "gap": "Service degradation affecting agents would go undetected.",
-      "recommendation": "Deploy Prometheus with alerting rules or CloudWatch Container Insights with alarms.",
+      "title": "No alerting on error rates or latency",
+      "description": "No alerting configuration. No CloudWatch alarms, no Prometheus alerts. Service degradation affecting agents would go undetected.",
+      "gap": "No alerting thresholds for the pricing endpoint.",
+      "recommendation": "Deploy Prometheus with ServiceMonitor and alerting rules for HTTP 5xx and P99 latency.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {
-        "file": "k8s/deployment.yaml",
-        "lines": "36-55"
-      },
+      "evidence": {"file": "k8s/deployment.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "Kubernetes liveness/readiness probes restart unhealthy pods",
-          "Manual monitoring via kubectl"
-        ]
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "ENG-Q1",
       "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "IaC Without Review Gates or Drift Detection",
-      "description": "Kubernetes manifests in k8s/ define the deployment infrastructure as code. However, no peer review enforcement, no drift detection, no automated plan review. Manifests manually applied via kubectl.",
-      "gap": "IaC exists but lacks peer review gates and drift reconciliation.",
-      "recommendation": "Adopt GitOps (ArgoCD or Flux) to enforce PR review and drift reconciliation.",
+      "title": "Partial IaC — no peer review or drift detection",
+      "description": "Kubernetes manifests exist providing partial IaC. No CI/CD pipeline enforcing peer review on infrastructure changes, no drift detection. Legacy scp deployment target still present.",
+      "gap": "IaC exists but lacks automated plan review, peer review enforcement, and drift detection.",
+      "recommendation": "Adopt GitOps (ArgoCD/Flux) for PR-based review. Remove legacy scp deployment path.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "k8s/deployment.yaml",
-        "lines": "1-55"
-      },
+      "evidence": {"file": "Makefile", "lines": "11"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "K8s manifests provide declarative state",
-          "kubectl diff can detect drift"
-        ]
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "ENG-Q2",
       "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "No CI/CD Pipeline",
-      "description": "No CI/CD pipeline exists. Makefile defines install target as manual SCP. No GitHub Actions, GitLab CI, Jenkins, or CodeBuild. No contract testing.",
-      "gap": "No automated build, test, or contract validation before deployment.",
-      "recommendation": "Create CI pipeline (GitHub Actions or CodeBuild) with Docker build, smoke test, and ECR push.",
+      "title": "No CI/CD pipeline",
+      "description": "No CI/CD pipeline exists. No GitHub Actions, no GitLab CI, no Jenkinsfile. The README states no one can reproduce the build. Changes cannot be validated automatically.",
+      "gap": "No pipeline to catch API-breaking changes before deployment.",
+      "recommendation": "Create CI pipeline that builds Docker image and runs smoke tests.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {
-        "file": "Makefile",
-        "lines": "1-14"
-      },
+      "evidence": {"file": "README.md", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Dockerfile enables reproducible builds",
-          "Health check endpoint for manual validation"
-        ]
+        "remediation_timeline": "60–90 days"
       }
     },
     {
       "question_id": "ENG-Q3",
       "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
       "category_id": "ENG",
-      "title": "Manual Rollback Only",
-      "description": "Kubernetes Deployment supports manual rollback via kubectl rollout undo. No automated rollback triggers, no canary deployment, no traffic shifting.",
-      "gap": "No automated rollback on failure. Manual operator intervention required.",
-      "recommendation": "Add Flagger or equivalent for metrics-based automated rollback.",
+      "title": "Basic Kubernetes rollback only — no automated triggers",
+      "description": "Kubernetes Deployment supports kubectl rollout undo for basic rollback. No automated rollback triggers, no canary deployment, no traffic shifting.",
+      "gap": "No automated rollback on error rate spikes. Manual intervention required.",
+      "recommendation": "Add Argo Rollouts or Flagger for automated canary with rollback.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
-      "phase": 2,
-      "evidence": {
-        "file": "k8s/deployment.yaml",
-        "lines": "1-55"
-      },
+      "phase": 3,
+      "evidence": {"file": "k8s/deployment.yaml", "lines": null},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30\u201360 days",
-        "compensating_controls": [
-          "Kubernetes Deployment history preserves previous ReplicaSets",
-          "kubectl rollout undo provides fast manual recovery"
-        ]
+        "remediation_timeline": "30–60 days"
       }
     },
     {
       "question_id": "HITL-Q3",
       "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
       "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment configuration. Dockerfile enables local container builds but no staging environment definition, no seed data, no environment separation.",
+      "title": "No staging environment — Docker provides minimal local testing only",
+      "description": "Dockerfile enables local container execution with a single sample SKU. No dedicated staging environment with production-equivalent data.",
       "gap": "No production-equivalent staging environment for agent testing.",
-      "recommendation": "Create staging namespace with test pricing rules and Kustomize overlays for environment separation.",
+      "recommendation": "Create staging k8s namespace with production-equivalent pricing rules data.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
-      "phase": 2,
-      "evidence": {
-        "file": "k8s/namespace.yaml",
-        "lines": "1-7"
-      },
+      "phase": 3,
+      "evidence": {"file": "Dockerfile", "lines": "46"},
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30 days",
-        "compensating_controls": [
-          "Docker build/run locally as minimal testing",
-          "Deploy same manifests to separate namespace"
-        ]
+        "remediation_timeline": "30–60 days"
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No write operations — idempotency not applicable",
+      "description": "The application has no write operations. All requests are read-only price lookups. Idempotency is not applicable.",
+      "gap": "N/A for current read-only scope.",
+      "recommendation": "Implement idempotency keys if write operations are added in the future.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "pricing.cpp", "lines": "35-48"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: agent_scope=read-only, no write operations exist",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Read-only agents do not execute write operations, and no write endpoints exist in this application."
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Response format is HTML — not ideal for agent consumption",
+      "description": "API returns Content-Type: text/html with HTML-formatted responses. LLMs can parse HTML but this adds complexity and fragility.",
+      "gap": "Agent tools must include HTML parsing logic. JSON would enable direct tool consumption.",
+      "recommendation": "Add a JSON response mode via Accept header or format query parameter.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "pricing.cpp", "lines": "52"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No rate limit documentation or headers",
+      "description": "No rate limit documentation. No X-RateLimit-Remaining or Retry-After headers. Agents have no visibility into throttling limits.",
+      "gap": "Agents cannot self-throttle without rate limit headers.",
+      "recommendation": "Include standard rate limit headers when rate limiting is implemented.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "pricing.cpp", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No identity propagation — downgraded for stateless-utility",
+      "description": "No identity propagation mechanisms. No JWT parsing, no token exchange. Downgraded to INFO for stateless-utility archetype serving public pricing data.",
+      "gap": "No user context propagation.",
+      "recommendation": "Implement if user-specific pricing is introduced.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "pricing.cpp", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No agent identities to suspend",
+      "description": "No auth surface and no write operations. No identities exist to suspend.",
+      "gap": "Suspension becomes relevant when machine identity is implemented.",
+      "recommendation": "Ensure chosen identity mechanism supports per-identity revocation.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "k8s/service.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No write operations — compensation/rollback not applicable",
+      "description": "No write operations exist. Compensation/rollback is not applicable for this stateless-utility.",
+      "gap": "Not applicable.",
+      "recommendation": "No action required unless write operations are introduced.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "pricing.cpp", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: stateless-utility with no write operations",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Stateless-utility archetype with no write operations — compensation/rollback has no applicable surface."
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "Read-only application — transaction limits not applicable",
+      "description": "Application is read-only. No records modified, no spend triggered. Transaction limits not applicable.",
+      "gap": "Not applicable for read-only scope.",
+      "recommendation": "No action required for current read-only scope.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "pricing.cpp", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Public pricing data — not a sensitive data target",
+      "description": "Stage A = No. System handles public product pricing data (SKU codes and prices from flat file). Not PII, PHI, financial records, or credentials.",
+      "gap": "None — data is public/reference-grade.",
+      "recommendation": "No action required unless user-specific pricing is introduced.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "pricing.cpp", "lines": "33-45"},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: Stage A = No, system handles public reference data only",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "Pricing data is public/reference-grade (SKU|PRICE pairs). Not a data-handling target for sensitive data.",
+        "data_q1_subchecks": {
+          "b1": {"fired": false, "severity": null, "reasoning": "Stage A = No, skipped."},
+          "b2": {"fired": false, "severity": null, "reasoning": "Stage A = No, skipped."},
+          "b3": {"fired": false, "severity": null, "reasoning": "Stage A = No, skipped."}
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "No persistent data store — residency not applicable",
+      "description": "No persistent data store and no user-data logging. Static reference pricing data with no residency requirements.",
+      "gap": "Not applicable.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "k8s/configmap.yaml", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false,
+        "conditional_resolution": "Resolved to INFO: no persistent data store and no user-data logging — residency not applicable",
+        "agent_scope": "read-only",
+        "resolution_reasoning": "System holds no persistent user data. Pricing rules are static reference data in a flat file."
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "No user data or PII handled — log redaction not applicable",
+      "description": "System does not log user data and holds no PII. Stateless-utility archetype does not handle user PII.",
+      "gap": "Not applicable.",
+      "recommendation": "No action required.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "pricing.cpp", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "No automated tests — INFO for stateless-utility",
+      "description": "No automated tests exist. README states correctness is validated by spot-checking output. Evaluated as INFO for stateless-utility archetype.",
+      "gap": "No test coverage for agent-consumed endpoint.",
+      "recommendation": "Add basic smoke tests validating price lookups for known SKUs.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 4,
+      "evidence": {"file": "README.md", "lines": null},
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
       }
     }
   ],
   "evaluations": [
-    {
-      "question_id": "API-Q4",
-      "category_id": "API",
-      "title": "Idempotent Write Operations",
-      "status": "pass",
-      "reason": "agent_scope is read-only \u2014 no write operations to evaluate. Service is inherently idempotent (GET-based price lookups)."
-    },
-    {
-      "question_id": "API-Q5",
-      "category_id": "API",
-      "title": "Structured Response Format",
-      "status": "pass",
-      "reason": "Evaluated as INFO finding \u2014 response format is HTML. Finding emitted."
-    },
-    {
-      "question_id": "API-Q6",
-      "category_id": "API",
-      "title": "Asynchronous Operation Support",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no operations >30s or long-running workflows."
-    },
-    {
-      "question_id": "API-Q7",
-      "category_id": "API",
-      "title": "Event Emission for State Changes",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 stateless-utility with no state changes."
-    },
-    {
-      "question_id": "API-Q8",
-      "category_id": "API",
-      "title": "Rate Limit Documentation and Headers",
-      "status": "pass",
-      "reason": "Evaluated as INFO finding \u2014 no rate limit headers. Finding emitted."
-    },
-    {
-      "question_id": "AUTH-Q4",
-      "category_id": "AUTH",
-      "title": "Identity Propagation and Delegation",
-      "status": "pass",
-      "reason": "Downgraded to INFO per archetype calibration (stateless-utility). Finding emitted."
-    },
-    {
-      "question_id": "AUTH-Q5",
-      "category_id": "AUTH",
-      "title": "Credential Management",
-      "status": "pass",
-      "reason": "Application uses no credentials. No credentials to mismanage. No finding emitted."
-    },
-    {
-      "question_id": "AUTH-Q6",
-      "category_id": "AUTH",
-      "title": "Immutable Audit Logging",
-      "status": "pass",
-      "reason": "has_auth_surface=false AND has_write_operations=false \u2014 evaluated as INFO. Finding emitted."
-    },
-    {
-      "question_id": "AUTH-Q7",
-      "category_id": "AUTH",
-      "title": "Agent Identity Suspension",
-      "status": "pass",
-      "reason": "has_auth_surface=false \u2014 evaluated as INFO. Finding emitted."
-    },
-    {
-      "question_id": "STATE-Q1",
-      "category_id": "STATE",
-      "title": "Compensation and Rollback",
-      "status": "pass",
-      "reason": "Archetype calibration: stateless-utility with no multi-step write sequences \u2014 INFO. Finding emitted."
-    },
-    {
-      "question_id": "STATE-Q2",
-      "category_id": "STATE",
-      "title": "Queryable Current State",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no persistent state."
-    },
-    {
-      "question_id": "STATE-Q3",
-      "category_id": "STATE",
-      "title": "Concurrency Controls",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 agent_scope is read-only AND no persistent state."
-    },
-    {
-      "question_id": "STATE-Q4",
-      "category_id": "STATE",
-      "title": "Circuit Breakers and Resilience",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no external dependencies."
-    },
-    {
-      "question_id": "STATE-Q6",
-      "category_id": "STATE",
-      "title": "Blast Radius and Transaction Limits",
-      "status": "pass",
-      "reason": "agent_scope is read-only \u2014 evaluated as INFO. Finding emitted."
-    },
-    {
-      "question_id": "STATE-Q7",
-      "category_id": "STATE",
-      "title": "Graceful Degradation Signaling",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no priority defined, not on critical path."
-    },
-    {
-      "question_id": "HITL-Q1",
-      "category_id": "HITL",
-      "title": "Draft/Pending State",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 agent_scope is read-only."
-    },
-    {
-      "question_id": "HITL-Q2",
-      "category_id": "HITL",
-      "title": "Configurable Approval Gates",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 agent_scope is read-only."
-    },
-    {
-      "question_id": "DATA-Q1",
-      "category_id": "DATA",
-      "title": "Sensitive Data Classification",
-      "status": "pass",
-      "reason": "Archetype calibration: stateless-utility with public/reference data \u2014 INFO. Finding emitted."
-    },
-    {
-      "question_id": "DATA-Q2",
-      "category_id": "DATA",
-      "title": "Data Residency and Sovereignty",
-      "status": "pass",
-      "reason": "has_persistent_data_store=false AND has_logging_of_user_data=false \u2014 INFO. Finding emitted."
-    },
-    {
-      "question_id": "DATA-Q3",
-      "category_id": "DATA",
-      "title": "Selective Query Support",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 single-item lookup, no unbounded result sets."
-    },
-    {
-      "question_id": "DATA-Q5",
-      "category_id": "DATA",
-      "title": "Temporal Metadata and Freshness",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no persistent state."
-    },
-    {
-      "question_id": "DATA-Q6",
-      "category_id": "DATA",
-      "title": "PII Redaction in Logs",
-      "status": "pass",
-      "reason": "has_logging_of_user_data=false AND has_persistent_data_store=false \u2014 INFO. Finding emitted."
-    },
-    {
-      "question_id": "DATA-Q7",
-      "category_id": "DATA",
-      "title": "Data Quality Awareness",
-      "status": "pass",
-      "reason": "Evaluated as INFO. Finding emitted."
-    },
-    {
-      "question_id": "DISC-Q2",
-      "category_id": "DISC",
-      "title": "Semantically Meaningful Field Names",
-      "status": "pass",
-      "reason": "Evaluated as INFO. Parameters are semantically clear. Finding emitted."
-    },
-    {
-      "question_id": "DISC-Q3",
-      "category_id": "DISC",
-      "title": "Data Catalog / Metadata Layer",
-      "status": "pass",
-      "reason": "Evaluated as INFO. No data catalog. Finding emitted."
-    },
-    {
-      "question_id": "OBS-Q3",
-      "category_id": "OBS",
-      "title": "Business Outcome Metrics",
-      "status": "pass",
-      "reason": "Evaluated as INFO. No business metrics. Finding emitted."
-    },
-    {
-      "question_id": "ENG-Q4",
-      "category_id": "ENG",
-      "title": "API Test Coverage",
-      "status": "pass",
-      "reason": "Evaluated as INFO per archetype calibration (stateless-utility). Finding emitted."
-    },
-    {
-      "question_id": "ENG-Q5",
-      "category_id": "ENG",
-      "title": "Encryption at Rest",
-      "status": "not_evaluated_extended",
-      "reason": "Extended question not triggered \u2014 no persistent data stores."
-    }
+    {"question_id": "AUTH-Q5", "category_id": "AUTH", "title": "Credential Management", "status": "pass", "reason": "Application uses no credentials. Reads from local flat file with no external service connections."},
+    {"question_id": "DATA-Q7", "category_id": "DATA", "title": "Data Quality Awareness", "status": "pass", "reason": "No persistent data store and no data-quality tooling — informational signal, no finding emitted."},
+    {"question_id": "DISC-Q2", "category_id": "DISC", "title": "Semantically Meaningful Field Names", "status": "pass", "reason": "Query parameters (sku, qty) and response fields are semantically clear and human-readable."},
+    {"question_id": "DISC-Q3", "category_id": "DISC", "title": "Data Catalog / Metadata Layer", "status": "pass", "reason": "No persistent data store and no metadata/catalog surface — informational signal, no finding emitted."},
+    {"question_id": "OBS-Q3", "category_id": "OBS", "title": "Business Outcome Metrics", "status": "pass", "reason": "No metrics or telemetry surface — informational signal, no finding emitted."},
+    {"question_id": "API-Q6", "category_id": "API", "title": "Asynchronous Operation Support", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no long-running operations detected for stateless-utility."},
+    {"question_id": "API-Q7", "category_id": "API", "title": "Event Emission for State Changes", "status": "not_evaluated_extended", "reason": "Extended question not triggered — stateless-utility has no state changes."},
+    {"question_id": "STATE-Q2", "category_id": "STATE", "title": "Queryable Current State", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no persistent state (stateless-utility)."},
+    {"question_id": "STATE-Q3", "category_id": "STATE", "title": "Concurrency Controls", "status": "not_evaluated_extended", "reason": "Extended question not triggered — agent_scope is read-only AND no persistent state."},
+    {"question_id": "STATE-Q4", "category_id": "STATE", "title": "Circuit Breakers and Resilience", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no external dependencies (reads local file only)."},
+    {"question_id": "STATE-Q7", "category_id": "STATE", "title": "Graceful Degradation Signaling", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no P0 priority or critical path designation."},
+    {"question_id": "HITL-Q1", "category_id": "HITL", "title": "Draft/Pending State", "status": "not_evaluated_extended", "reason": "Extended question not triggered — agent_scope is read-only."},
+    {"question_id": "HITL-Q2", "category_id": "HITL", "title": "Configurable Approval Gates", "status": "not_evaluated_extended", "reason": "Extended question not triggered — agent_scope is read-only."},
+    {"question_id": "DATA-Q3", "category_id": "DATA", "title": "Selective Query Support", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no list/query endpoints with unbounded results."},
+    {"question_id": "DATA-Q5", "category_id": "DATA", "title": "Temporal Metadata and Freshness", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no persistent state (stateless-utility)."},
+    {"question_id": "ENG-Q5", "category_id": "ENG", "title": "Encryption at Rest", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no persistent data stores."}
   ],
   "remediation_roadmap": {
-    "phases": [
-      1,
-      2,
-      3
-    ],
+    "phases": [1, 2, 3],
     "items": [
       {
         "phase": 1,
         "phase_name": "Blockers",
-        "findings": [
-          "API-Q1",
-          "AUTH-Q1",
-          "AUTH-Q2",
-          "AUTH-Q3",
-          "STATE-Q5"
-        ],
-        "summary": "Resolve BLOCKERs (structured API, machine identity) and critical RISK-SAFETY findings (scoped permissions, rate limiting) to unblock any agent integration."
+        "findings": ["API-Q1", "AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q6", "STATE-Q5"],
+        "summary": "Resolve both BLOCKERs (API interface and machine identity) and address critical safety risks (scoped permissions, audit logging, rate limiting) to unblock a scoped pilot."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
-        "findings": [
-          "API-Q2",
-          "API-Q3",
-          "DATA-Q4",
-          "DISC-Q1",
-          "OBS-Q1",
-          "OBS-Q2",
-          "ENG-Q1",
-          "ENG-Q2",
-          "ENG-Q3",
-          "HITL-Q3"
-        ],
-        "summary": "Address RISK-QUALITY findings to improve agent effectiveness: API documentation, error handling, observability, and engineering maturity."
+        "findings": ["API-Q2", "API-Q3", "DATA-Q4", "DISC-Q1", "OBS-Q1", "OBS-Q2", "ENG-Q1", "ENG-Q2"],
+        "summary": "Improve API quality (spec, errors, validation), establish observability (tracing, alerting), and formalize infrastructure governance and CI/CD."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
-        "findings": [],
-        "summary": "Address INFO findings as capacity allows for long-term agent architecture optimization."
+        "findings": ["ENG-Q3", "HITL-Q3"],
+        "summary": "Enhance deployment maturity with automated rollback and establish a staging environment for agent testing."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Deploy API Gateway with JSON response transformation and authentication",
-      "question_ids": [
-        "API-Q1",
-        "AUTH-Q1",
-        "AUTH-Q2",
-        "AUTH-Q3",
-        "STATE-Q5",
-        "API-Q8"
-      ],
+      "action": "Add JSON API response mode to CGI endpoint",
+      "question_ids": ["API-Q1", "API-Q3", "API-Q5"],
+      "priority": "P0",
+      "effort": "Low",
+      "rationale": "Unblocks agent tool binding by providing structured, machine-readable responses instead of HTML."
+    },
+    {
+      "action": "Deploy API Gateway with authentication and rate limiting",
+      "question_ids": ["AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q6", "STATE-Q5", "API-Q8"],
       "priority": "P0",
       "effort": "Medium",
-      "rationale": "An API Gateway addresses 5 findings simultaneously: adds structured JSON responses (API-Q1), machine identity via API keys (AUTH-Q1), scoped permissions via usage plans (AUTH-Q2, AUTH-Q3), rate limiting (STATE-Q5), and rate limit headers (API-Q8). This is the single highest-leverage remediation."
+      "rationale": "Resolves identity BLOCKER and multiple safety risks in a single infrastructure change. API Gateway provides auth, scoping, audit logging, and throttling."
     },
     {
-      "action": "Create OpenAPI specification and implement contract testing",
-      "question_ids": [
-        "API-Q2",
-        "DISC-Q1",
-        "ENG-Q2"
-      ],
-      "priority": "P1",
+      "action": "Create OpenAPI specification",
+      "question_ids": ["API-Q2", "DISC-Q1"],
+      "priority": "P2",
       "effort": "Low",
-      "rationale": "A machine-readable API spec enables automated agent tool generation and contract testing in CI."
+      "rationale": "Enables automated agent tool generation and establishes an API contract for breaking change detection."
     },
     {
-      "action": "Deploy observability stack (tracing sidecar and alerting)",
-      "question_ids": [
-        "OBS-Q1",
-        "OBS-Q2"
-      ],
+      "action": "Establish CI/CD pipeline with GitOps deployment",
+      "question_ids": ["ENG-Q1", "ENG-Q2", "ENG-Q3"],
       "priority": "P2",
       "effort": "Medium",
-      "rationale": "Tracing and alerting are required to diagnose agent-initiated request failures and detect degradation."
+      "rationale": "Enables automated testing, infrastructure review, and deployment rollback capabilities."
     },
     {
-      "action": "Adopt GitOps for deployment governance",
-      "question_ids": [
-        "ENG-Q1",
-        "ENG-Q3"
-      ],
+      "action": "Add observability stack (tracing, logging, alerting)",
+      "question_ids": ["OBS-Q1", "OBS-Q2"],
       "priority": "P2",
       "effort": "Medium",
-      "rationale": "GitOps adds peer review enforcement, drift detection, and automated rollback \u2014 closing infrastructure governance gaps."
+      "rationale": "Makes agent-initiated requests debuggable and enables detection of service degradation."
     }
-  ],
-  "analysis_type": "ara",
-  "repo_name": "legacy-pricing-cgi"
+  ]
 }

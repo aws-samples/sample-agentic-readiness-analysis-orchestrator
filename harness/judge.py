@@ -7,6 +7,16 @@ contributor's stated intent (the MR description / --intent) and asks an LLM:
 **is this change GOOD FOR THE ANALYSIS?** The verdict is ADVISORY — it is posted as an
 MR comment and NEVER fails the pipeline (see .gitlab-ci.yml `allow_failure: true`).
 
+SCOPE — this judge only runs on a CHANGE MR (a TD/rubric or fixture edit). It is NOT run
+on a re-baseline MR: should-run.sh SKIPs a golden-only diff (is_baseline), so harness:impact
+never produces an impact.json for the judge to consume. That gate is deliberate — on a
+re-baseline the reports were re-rolled from the UNCHANGED rubric, so every tier/blocker
+movement is draw-vs-draw nondeterminism, and _enforce_safety_floor below would turn it into
+a false SAFETY HOLD. The re-baseline is validated numerically instead, by the ratchet in
+score-reports.py (--update-baseline --ratchet) inside harness:rebaseline-gather. So do NOT
+add "rebaseline-aware" branches here; the judge is only ever handed a real intent-bearing
+change, which is what its intent-match and safety-floor logic assume.
+
 WHAT THE SCORE MEASURES (unified with the scorer — see below):
   score = the freshly-generated report's ACCURACY on the SAME 0-1 scale as the
           committed baseline (groundedness vs the fixture SOURCE).
@@ -178,6 +188,13 @@ def summarize_impact(impact: dict) -> dict:
             # can still hit it, and silence is the failure mode that cost us the most.
             "unbaselined": list(cov.get("unbaselined") or []),
             "unbaselined_count": len(cov.get("unbaselined") or []),
+            # Portfolio reports the differ deliberately did NOT compare on this scoped run
+            # (the rollup aggregates fewer apps than the golden baseline, so the delta is a
+            # mechanical artifact, not an effect of the edit). The judge must not read an
+            # absent portfolio delta as "portfolio unchanged" — portfolio quality is only
+            # assessed on a full sweep. Empty on --scope all.
+            "portfolio_skipped": list(cov.get("portfolio_skipped") or []),
+            "portfolio_skipped_count": len(cov.get("portfolio_skipped") or []),
         },
         # Deterministic, rubric-arithmetic findings from the differ. Carried through
         # VERBATIM and never summarised away: these are the facts the judge is forbidden
@@ -197,6 +214,19 @@ def summarize_impact(impact: dict) -> dict:
             _note_dimension(key, d, f"portfolio-{analysis}", moved, summary["highlights"])
 
     summary["dimensions_moved"] = sorted(moved)
+
+    # D4 program identifiers that actually moved (added or removed) across every scope. The
+    # program-scope note uses this to tell an EXACT in-scope program move apart from a
+    # shared-prefix sibling: an edit to "MAP" must never be credited with moving "MAP AI".
+    program_moves: set[str] = set()
+    scoped = list((impact.get("portfolio") or {}).values()) \
+        + list((impact.get("per_repo") or {}).values())
+    for entry in scoped:
+        for key, d in entry.items():
+            if _dim_of(key) == "D4" and isinstance(d, dict):
+                program_moves.update(d.get("added") or [])
+                program_moves.update(d.get("removed") or [])
+    summary["moved_programs"] = sorted(program_moves)
     return summary
 
 
@@ -433,7 +463,7 @@ def _coverage_note(impact_summary: dict) -> str:
             )
     if not cov.get("partial"):
         return prefix + "coverage: FULL — every baseline report was re-analyzed.\n"
-    return prefix + (
+    note = prefix + (
         f"coverage: PARTIAL — {cov.get('compared')} of {cov.get('baseline_total')} baseline "
         f"reports were re-analyzed ({cov.get('not_analyzed_count')} not analyzed).\n"
         "  The harness deliberately runs only the fixtures that exercise the edited\n"
@@ -442,6 +472,21 @@ def _coverage_note(impact_summary: dict) -> str:
         "  say so in the rationale; suggest a full sweep (harness:full) if the edit looks\n"
         "  broader than the fixtures covered.\n"
     )
+    # A scoped run's portfolio rollup aggregates only the analyzed apps, so its delta
+    # against the full-set golden is a mechanical artifact (distribution collapse, phantom
+    # removed findings, program/pathway churn). The differ SKIPS it on partial runs; tell
+    # the judge so it neither reports "portfolio unchanged" nor invents concerns about a
+    # comparison that was never made.
+    if cov.get("portfolio_skipped_count"):
+        note += (
+            f"  portfolio comparison SKIPPED ({cov.get('portfolio_skipped_count')} portfolio "
+            "report(s)): a scoped rollup aggregates fewer apps than the baseline, so its\n"
+            "  tier distribution, programs and pathways would shift for purely mechanical\n"
+            "  reasons. Do NOT raise concerns about portfolio distribution/programs/pathways\n"
+            "  here, and do NOT claim the portfolio is unchanged — portfolio roadmap and\n"
+            "  program quality are validated only on a full sweep (harness:full).\n"
+        )
+    return note
 
 
 # The noise rule is UNCONDITIONAL and the limits on it are unconditional too. Only the
@@ -528,6 +573,104 @@ def _scope_note(edited_questions: list[str]) -> str:
         "  * A reclassification changes a finding's SEVERITY CLASS, so the finding count\n"
         "    barely moves. Do not expect added/removed findings from one.\n"
     )
+
+
+def _norm_program(s: str) -> str:
+    """Casefolded, whitespace-collapsed program identifier for whole-token comparison."""
+    return " ".join(str(s).split()).casefold()
+
+
+def _leading_acronym(s: str) -> str:
+    """The leading whitespace token if it is acronym-ish (short, all-caps, has a letter),
+    else ''. This is the shared root behind a family like 'MAP' / 'MAP AI'."""
+    parts = str(s).split()
+    head = parts[0] if parts else ""
+    return head if (0 < len(head) <= 8 and head == head.upper()
+                    and any(c.isalpha() for c in head)) else ""
+
+
+def _collision_roots(changed_programs: list[str]) -> set[str]:
+    """Edited tokens that are THEMSELVES a standalone acronym (e.g. 'MAP') — the only tokens
+    that can legitimately prefix a sibling. A multi-word label like 'AWS Modernization
+    Assurance' is NOT a root, or every 'AWS ...' program would be flagged a sibling of every
+    other. select-fixtures never emits a bare 'AWS', so a real root is always a true acronym."""
+    return {p.strip() for p in changed_programs if _leading_acronym(p) == p.strip()}
+
+
+def _classify_program_move(moved: str, edited_norm: set[str], roots: set[str]) -> str:
+    """'in_scope' iff the moved program identifier equals an edited one as a WHOLE token
+    (never by prefix); 'prefix_sibling' iff it only shares an acronym root with an edited
+    entry (a DIFFERENT program — e.g. 'MAP AI' when 'MAP' was edited); else 'out_of_scope'."""
+    if _norm_program(moved) in edited_norm:
+        return "in_scope"
+    if roots and _leading_acronym(moved) in roots:
+        return "prefix_sibling"
+    return "out_of_scope"
+
+
+def _program_scope_note(changed_programs: list[str],
+                        moved_programs: Optional[list[str]] = None) -> str:
+    """Tell the judge which programs' library entries the MR edited — the D4 analogue of
+    _scope_note. Only non-empty on a portfolio-TD MR that touched program-library.md.
+
+    WHY THIS IS SEPARATE FROM THE COVERAGE NOTE: on a normal scoped run the portfolio rollup
+    aggregates fewer apps than the baseline, so its program delta is a mechanical artifact
+    and the coverage note tells the judge to ignore it. A program-library edit is the
+    exception the harness engineers around: run-fixtures.sh backfills the golden per-repo
+    reports so the rollup spans the FULL app set, making the D4 delta a real comparison. This
+    note flips the judge from "ignore program churn" to "score program churn as the signal".
+
+    WHOLE-TOKEN MATCHING: programs are matched by whole-token equality, never by prefix. The
+    catalog carries families that share a leading acronym — "MAP (Migration Acceleration
+    Program)" and "MAP for AI Modernization" (which a report may abbreviate "MAP AI"). An
+    edit to one must not be credited with moving the other, so we (a) instruct the judge in
+    those terms and (b) pre-classify the programs that actually moved, naming any that merely
+    share a prefix with an edited entry as OUT of scope.
+    """
+    if not changed_programs:
+        return ""
+    edited_norm = {_norm_program(p) for p in changed_programs}
+    roots = _collision_roots(changed_programs)
+    edited_lines = "".join(f"  - {p}\n" for p in changed_programs)
+
+    siblings = sorted({
+        m for m in (moved_programs or [])
+        if _classify_program_move(m, edited_norm, roots) == "prefix_sibling"
+    })
+
+    note = (
+        "\n## Program scope (from the program-library.md diff — authoritative)\n"
+        "programs whose library entry the MR edited (match these as WHOLE tokens):\n"
+        + edited_lines +
+        "The program library is the catalog the PORTFOLIO recommendation step draws from. A\n"
+        "program-library edit can move ONLY which programs the portfolio recommends and the\n"
+        "`trigger_reason` it cites — it cannot change any per-repo report.\n"
+        "IMPORTANT — how to score this:\n"
+        "  * Match program identifiers as WHOLE tokens, NOT by prefix. A shared leading word\n"
+        "    is NOT a match: 'MAP' ≠ 'MAP AI' ≠ 'MAP-AI' — 'MAP' (Migration Acceleration\n"
+        "    Program) and 'MAP for AI Modernization' are DIFFERENT programs. Score a\n"
+        "    program's movement as in-scope ONLY if its identifier EXACTLY equals one of the\n"
+        "    edited identifiers above.\n"
+        "  * This run rolled the portfolio up over the FULL baseline app set (the harness\n"
+        "    backfills the golden per-repo reports), so the D4 program delta is a real,\n"
+        "    apples-to-apples comparison — NOT the mechanical scoped-subset artifact the\n"
+        "    coverage note warns about. Weigh it as SIGNAL.\n"
+        "  * Judge whether the program movement is GROUNDED and matches intent: does each\n"
+        "    added/removed program correspond to an edited entry above, and is its\n"
+        "    `trigger_reason` consistent with the library's stated trigger and status? A\n"
+        "    program set to `Retiring` should STOP being recommended; a newly-added or newly\n"
+        "    eligible program should appear only where its trigger is actually met.\n"
+        "  * Program churn on entries NOT listed above is out of edit scope — treat it as\n"
+        "    portfolio run-to-run variance, not a regression.\n"
+    )
+    if siblings:
+        note += (
+            "  * NOTE (computed by the differ): the delta moved "
+            f"{', '.join(siblings)}, which share an acronym prefix with an edited entry but\n"
+            "    are NOT the edited program. Do NOT attribute their movement to this edit or\n"
+            "    ground a verdict in it.\n"
+        )
+    return note
 
 
 def _alerts_note(impact_summary: dict) -> str:
@@ -618,9 +761,38 @@ def _accuracy_note(compare: Optional[dict]) -> str:
         # threshold_basis says whether the band is real measured variance (2*stddev over N
         # runs) or the fallback floor. The judge must know which: a floor-based band at n=1
         # is a placeholder, and an "improvement" that only clears a placeholder is weak.
+        stale = "  ⚠ STALE-BASELINE" if u.get("baseline_stale") else ""
+        floor = "  ✗ BELOW-QUALITY-FLOOR" if u.get("below_quality_floor") else ""
         lines.append(f"  [{u['verdict']:<12}] {u['repo']} ({str(u['analysis']).upper()}) "
                      f"{u['baseline']} -> {u['score']} (delta {u['delta']:+}, "
-                     f"threshold {u['threshold']} — {u.get('threshold_basis', 'n/a')})")
+                     f"threshold {u['threshold']} — {u.get('threshold_basis', 'n/a')}){stale}{floor}")
+    if s.get("stale"):
+        # The exact loan-calculator failure class: a baseline generated from an OLD TD is
+        # compared against a report from the CURRENT TD, so the delta measures the TD CHANGE
+        # THAT ALREADY MERGED, not this MR. It reads identically to a real regression. The
+        # judge must NOT weigh a stale-baseline delta as a regression.
+        lines.append(
+            f"\n  ⚠ STALE BASELINE — {s['stale']} unit(s): {', '.join(s.get('stale_units') or [])}.\n"
+            f"  These baseline rows predate the TD now on {compare.get('base_ref', 'the base branch')}, so\n"
+            "  their delta compares a CURRENT-TD report to an OLD-TD score — it reflects a TD\n"
+            "  change that ALREADY MERGED, not this MR. Treat any 'regressed'/'improved' verdict\n"
+            "  on a STALE unit as ADVISORY ONLY: do NOT count it as a regression caused by this\n"
+            "  change, and DO raise a concern that these fixtures need a re-baseline. Base your\n"
+            "  accuracy judgement on the NON-stale units.")
+    if s.get("low_quality"):
+        # Absolute floor, independent of the delta. A report can be 'within-noise' vs its
+        # baseline and STILL sit below the floor if the baseline itself was mediocre. This is
+        # the 'is it good enough?' gate the delta cannot answer.
+        floor_val = compare.get("quality_floor")
+        floor_str = f"{floor_val:.2f}" if isinstance(floor_val, (int, float)) else "the quality floor"
+        lines.append(
+            f"\n  ✗ BELOW QUALITY FLOOR — {s['low_quality']} report(s) score under {floor_str} in\n"
+            f"  ABSOLUTE terms: {', '.join(s.get('low_quality_units') or [])}. This is a SEPARATE\n"
+            "  axis from improve/regress: a report can hold steady against a mediocre baseline\n"
+            "  and still be too ungrounded to trust. A report below the floor is a quality\n"
+            "  problem on its OWN, even with a within-noise delta — you MUST NOT return LGTM\n"
+            "  while any report sits below the floor. Weigh it as at least a needs-work signal\n"
+            "  and name the offending fixture(s) in a concern.")
     lines.append(
         "Weigh a CONFIRMED accuracy regression heavily: it means the reports became less "
         "true of the source, which is the outcome this harness exists to prevent. Weigh a "
@@ -633,7 +805,8 @@ def _accuracy_note(compare: Optional[dict]) -> str:
 
 def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
                       edited_questions: Optional[list[str]] = None,
-                      compare: Optional[dict] = None) -> str:
+                      compare: Optional[dict] = None,
+                      changed_programs: Optional[list[str]] = None) -> str:
     return (
         "## Contributor intent\n"
         f"What: {intent.get('what') or '(none stated)'}\n"
@@ -641,6 +814,7 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
         f"Expected impact: {intent.get('expected_impact') or '(none stated)'}\n"
         f"Rubric edited directly in the AWS Transform service: {intent.get('edited_in_service')}\n"
         + _scope_note(edited_questions or [])
+        + _program_scope_note(changed_programs or [], impact_summary.get("moved_programs"))
         + "\n## Observed delta (from the deterministic differ)\n"
         f"no_op: {impact_summary['no_op']}\n"
         f"changed_tds: {impact_summary['changed_tds']}\n"
@@ -658,7 +832,8 @@ def build_user_prompt(intent: dict, impact_summary: dict, diff_text: str,
 def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
                        model: str,
                        edited_questions: Optional[list[str]] = None,
-                       compare: Optional[dict] = None) -> Optional[dict]:
+                       compare: Optional[dict] = None,
+                       changed_programs: Optional[list[str]] = None) -> Optional[dict]:
     """Call Bedrock; return a parsed verdict dict, or None if unavailable/failed."""
     try:
         import boto3  # noqa: PLC0415
@@ -673,7 +848,8 @@ def judge_with_bedrock(intent: dict, impact_summary: dict, diff_text: str,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user",
                           "content": build_user_prompt(intent, impact_summary, diff_text,
-                                                       edited_questions, compare)}],
+                                                       edited_questions, compare,
+                                                       changed_programs)}],
         }
         resp = client.invoke_model(modelId=model, body=json.dumps(body))
         payload = json.loads(resp["body"].read())
@@ -962,6 +1138,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     # nondeterminism (noise), which for a one-question edit is the larger of the two.
     ap.add_argument("--edited-questions", default="",
                     help="comma-separated question ids the change edited (scope signal)")
+    # The programs whose program-library.md entry the MR edited (comma-separated, e.g.
+    # "MAP,EBA"). run-fixtures.sh extracts these via select-fixtures.py --emit-changed-programs
+    # on a portfolio-TD MR. They are the D4 analogue of --edited-questions: on such an MR the
+    # rollup is backfilled to the full app set, so the program delta is real and this tells
+    # the judge to score it as signal rather than dismiss it as a scoped-subset artifact.
+    ap.add_argument("--changed-programs", default="",
+                    help="comma-separated program identifiers whose library entry changed")
     # The accuracy-vs-baseline comparison written by `score-reports.py --compare-baseline`.
     # This is the judge's only PAST DATA: it re-scores each report's groundedness against the
     # fixture source and diffs it against the committed baseline, with a per-fixture noise
@@ -991,6 +1174,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                         if q.strip()]
     if edited_questions:
         impact_summary["edited_questions"] = edited_questions
+    # Program identifiers are free-form labels (e.g. "MAP", "AI DLC", "Migration Evaluator"),
+    # so unlike question ids they are NOT upper-cased — that would corrupt the mixed-case names.
+    changed_programs = [p.strip() for p in args.changed_programs.split(",") if p.strip()]
+    if changed_programs:
+        impact_summary["changed_programs"] = changed_programs
 
     compare = None
     if args.compare and args.compare.exists():
@@ -1005,7 +1193,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     verdict = None
     if not args.no_llm:
         verdict = judge_with_bedrock(intent, impact_summary, diff_text, args.model,
-                                     edited_questions, compare)
+                                     edited_questions, compare, changed_programs)
         if verdict is not None:
             verdict["_engine"] = "bedrock"
     if verdict is None:

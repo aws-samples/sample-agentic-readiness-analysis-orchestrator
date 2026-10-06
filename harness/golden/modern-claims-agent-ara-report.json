@@ -1,0 +1,1104 @@
+{
+  "metadata": {
+    "analysis_type": "ara",
+    "analysis_date": "2025-07-21",
+    "td_version": "agentic-readiness-analysis",
+    "repo_name": "modern-claims-agent",
+    "repo_type": "application",
+    "repo_type_source": "auto-detected",
+    "service_archetype": "orchestrator",
+    "service_archetype_source": "auto-detected",
+    "agent_scope": "write-enabled",
+    "agent_scope_source": "inferred",
+    "portfolio_name": "modern-claims-agent",
+    "tech_stack": {
+      "language": "Python",
+      "loc": 250,
+      "framework": "Amazon Bedrock AgentCore",
+      "architecture": "Agent orchestrator (MCP Gateway + Runtime + Memory)"
+    },
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_http_rpc_surface": true,
+      "has_auth_surface": false,
+      "has_write_operations": true,
+      "has_logging_of_user_data": true
+    }
+  },
+  "classification": {
+    "tier": "Not Agent-Integrable",
+    "sub_qualifier": null,
+    "blocker_count": 6,
+    "risk_safety_count": 11,
+    "risk_quality_count": 15,
+    "info_count": 5,
+    "high_count": 6,
+    "medium_count": 26,
+    "low_count": 5,
+    "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
+  },
+  "counts": {
+    "total": 37,
+    "high": 6,
+    "medium": 26,
+    "low": 5
+  },
+  "findings": [
+    {
+      "question_id": "AUTH-Q1",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Machine Identity Authentication \u2014 Gateway Unauthenticated",
+      "description": "The AgentCore Gateway (primary MCP tool surface) has AuthorizerType: NONE. Any caller that can reach the endpoint can invoke any tool including settlement_writer which moves money. No principal attribution exists in logs.",
+      "gap": "No machine identity authentication on the agent-facing MCP Gateway. No principal attribution in audit logs.",
+      "recommendation": "Add an IAM or Lambda authorizer to the AgentCore Gateway that validates caller identity and propagates the principal to downstream logs.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": "31-35"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Non-Idempotent Settlement Writer",
+      "description": "settlement_writer performs UPDATE + INSERT with no idempotency protection. Duplicate calls create duplicate payment_queue rows and release duplicate payments.",
+      "gap": "Non-idempotent write operation on a financial transaction. Agent retries or LLM non-determinism will cause duplicate payments.",
+      "recommendation": "Add a unique constraint on (claim_id) in payment_queue and use INSERT ON CONFLICT DO NOTHING or check claim status before writing.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "75-89"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND settlement_writer is non-idempotent",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "settlement_writer performs financial writes (UPDATE claims, INSERT payment_queue) with no idempotency key or unique constraint. Agent retries create duplicate payments.",
+        "blocker_remediation": {
+          "immediate": "Add unique constraint on (claim_id) in payment_queue",
+          "target_state": "Duplicate settlement_writer calls produce exactly one payment",
+          "estimated_effort": "Low",
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "question_id": "AUTH-Q6",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Mutable Audit Logs Without Principal Attribution",
+      "description": "CloudWatch logs exist with 10-year retention but are mutable, record no authenticated principal (Gateway has no auth), and have no tamper-evident storage. No CloudTrail for API-level auditing.",
+      "gap": "No immutable, tamper-evident audit trail attributing write operations to specific agent identities.",
+      "recommendation": "Export CloudWatch logs to S3 with Object Lock. Add CloudTrail. Include principal identity from Gateway auth in every log entry.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": "71-76"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND audit logs are mutable without principal attribution",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "Write-enabled agent settles claims and releases payments. Audit logs do not record which agent or user initiated the action, and logs can be deleted."
+      }
+    },
+    {
+      "question_id": "STATE-Q1",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No Compensation or Rollback for Settlements",
+      "description": "settlement_writer commits immediately with no compensation or undo mechanism. Batch mode processes up to 500 claims with manual-only rollback.",
+      "gap": "No automated compensation or rollback for agent-initiated write operations.",
+      "recommendation": "Implement two-phase settlement: write with status PENDING_SETTLEMENT, then a separate confirmation step. Add automated reversal endpoint.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "75-89"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no compensation exists for financial writes",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "settlement_writer commits settlements and releases payments with no undo. Batch mode processes 500 claims with manual-only rollback per docs/batch-mode.md."
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Sensitive PII Returned Unfiltered in Tool Responses",
+      "description": "Agent-facing tool responses return sensitive PII unfiltered: load_claim returns claimant_ssn, payment_history returns routing_no and account_last4. No access control differentiation. No data classification metadata.",
+      "gap": "B1: Agent-facing APIs return PII/financial data (SSN, bank routing numbers) unfiltered. B2: No access control differentiation. B3: No classification metadata.",
+      "recommendation": "Remove claimant_ssn from load_claim response. Remove routing_no from payment_history. Create separately-authorized endpoints for sensitive field access.",
+      "severity": "High",
+      "priority": "P0",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "43-55"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND B1 fired (sensitive fields unfiltered in API responses)",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "load_claim returns claimant_ssn in every response. payment_history returns routing_no. These fields are sent to the LLM in the prompt, stored in memory, and logged to CloudWatch \u2014 all unnecessary for the triage decision.",
+        "data_q1_subchecks": {
+          "b1": {
+            "fired": true,
+            "severity": "BLOCKER",
+            "reasoning": "claimant_ssn and routing_no returned in general tool responses with no filtering"
+          },
+          "b2": {
+            "fired": true,
+            "severity": "RISK-SAFETY",
+            "reasoning": "No access control at all \u2014 Gateway AuthorizerType NONE, all tools exposed to all callers"
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No formal data classification metadata, no PII annotations, no Macie integration"
+          }
+        }
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "No Data Residency Controls for Regulated PII",
+      "description": "Regulated PII (SSN, financial data) transmitted to Bedrock model with no explicit residency controls. MODEL_ID configurable via env var. Memory stores raw PII. No SCPs, VPC endpoints, or compliance documentation.",
+      "gap": "No documented or enforced data residency controls for regulated PII transmitted to LLM and stored in memory.",
+      "recommendation": "Document data residency requirements. Add VPC endpoints for Bedrock. Add SCP preventing cross-region invocations. Restrict MODEL_ID to approved in-region models.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": "21-22"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND regulated PII has no residency enforcement",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "System transmits SSN, financial data, and bank routing numbers to Bedrock model. MODEL_ID is configurable and could be changed to cross-region. No VPC endpoint or SCP enforces in-region processing."
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "All IAM Policies Use Wildcard Resources",
+      "description": "All IAM policy statements use Resource: '*'. Single shared role (claims-agent-execution) for Runtime and Lambda. A tool compromise gets model and memory permissions.",
+      "gap": "No mechanism to scope agent permissions. All permissions wildcard. Single shared role across components.",
+      "recommendation": "Split into separate roles per component. Replace Resource: '*' with specific resource ARNs.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/agent-iam.yaml",
+        "lines": "20-56"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Action-Level Authorization on Tools",
+      "description": "All tools exposed to all callers without filtering. settlement_writer (moves money) accessible to same callers as policy_lookup (read-only). No per-caller tool allow-list.",
+      "gap": "Cannot restrict agents to read-only tools. No mechanism to differentiate read vs write access.",
+      "recommendation": "Implement per-caller tool allow-list in Gateway configuration. Separate read-only tools from write tools.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "92-98"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Identity Propagation \u2014 Unverified actor_id",
+      "description": "No identity propagation. Gateway is unauthenticated so no identity to propagate. actor_id defaults to 'adjuster-pool' \u2014 an unverified caller-supplied string.",
+      "gap": "Cannot distinguish agent-as-self from agent-on-behalf-of-user. No verified identity flow.",
+      "recommendation": "Propagate authenticated principal from Gateway authorizer as actor_id. Reject mismatched identities.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": "76"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days"
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Agent Identity Suspension Mechanism",
+      "description": "No mechanism to suspend individual agent identities. Gateway unauthenticated. Runtime accepts any account principal. Only option is deleting entire stack.",
+      "gap": "Cannot isolate a misbehaving agent without taking down the entire platform.",
+      "recommendation": "Implement per-identity revocation after adding Gateway authentication.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": "31-35"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No Concurrency Controls on Settlements",
+      "description": "No optimistic locking, version fields, or SELECT FOR UPDATE. settlement_writer performs bare UPDATE/INSERT with no conflict detection.",
+      "gap": "Race conditions possible under concurrent agent instances. Same claim can be settled multiple times.",
+      "recommendation": "Add WHERE status = 'OPEN' condition to UPDATE. Verify rows affected = 1 before INSERT.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "75-89"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No Circuit Breakers or Resilience Patterns",
+      "description": "No circuit breakers, retry logic, or timeout configuration on any of 5 external dependencies (Bedrock, SecretsManager, PostgreSQL, Knowledge Base, Memory).",
+      "gap": "Single dependency failure cascades through entire triage operation. No resilience patterns.",
+      "recommendation": "Configure explicit timeouts on all clients. Add retry with exponential backoff. Consider circuit breaker for database.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "16-24"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No Rate Limiting on Gateway or Runtime",
+      "description": "No rate limiting or throttling configured. PUBLIC network mode with no traffic controls. No WAF, no API Gateway usage plan, no application-level throttling.",
+      "gap": "No protection against agent traffic storms or runaway loops.",
+      "recommendation": "Add WAF rate rule or API Gateway throttling to the Gateway. Configure per-caller limits.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": "24-29"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No Transaction Limits \u2014 Unbounded Blast Radius",
+      "description": "No dollar ceiling on settlements. No per-run claim count limit. Batch mode bypasses UI threshold. Agent can settle unlimited amounts with no cap.",
+      "gap": "Unbounded blast radius. No dollar ceiling, no claim count limit, no per-session caps.",
+      "recommendation": "Add configurable limits: max settlement amount, max settlements per run, max spend per hour. Enforce in tool code.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "docs/batch-mode.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Draft/Pending State for Settlements",
+      "description": "settlement_writer commits directly to SETTLED status and releases payment immediately. No intermediate state for human review. Batch mode has no approval step.",
+      "gap": "No reviewable intermediate state. All writes immediately committed and payment released.",
+      "recommendation": "Implement PENDING_REVIEW status. Separate settlement recommendation from settlement execution.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "75-89"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "Approval Gates Exist Only in UI \u2014 Bypassed by Batch",
+      "description": "Auto-approve threshold check exists only in adjuster UI. Batch mode bypasses all approvals. No configurable operation-level approval flags in application code.",
+      "gap": "No application-layer approval gates. Safety checks are UI-only and bypassed by programmatic access.",
+      "recommendation": "Move auto-approve threshold into settlement_writer. Route high-value settlements to human review queue.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "docs/batch-mode.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q6",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "PII Logged Unredacted with 10-Year Retention",
+      "description": "agent.py logs full prompts and completions including claimant SSNs, bank routing numbers, and financial data. CloudWatch retention is 10 years. No redaction, no data-protection policy.",
+      "gap": "PII (SSN, bank routing numbers, financial data) logged unredacted with long retention.",
+      "recommendation": "Add PII redaction to logging pipeline. Mask SSN and bank number patterns. Add data-protection policy to log group.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": "63"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Machine-Readable API Specification",
+      "description": "No OpenAPI, AsyncAPI, or Smithy specification. Tool schemas advertised to model have empty inputSchema with no parameter documentation.",
+      "gap": "No machine-readable spec. Agent tool generation requires manual work.",
+      "recommendation": "Define complete JSON schemas for tool inputs in _tool_specs(). Consider generating MCP tool manifest.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": "35-45"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Structured Error Responses",
+      "description": "No error handling in tool functions. Null results crash with TypeError. No error codes, retryable indicators, or consistent error format.",
+      "gap": "No structured error responses. Agent cannot distinguish retriable from terminal errors.",
+      "recommendation": "Add try/except wrappers returning structured error dicts with code, message, and retryable fields.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "43-55"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "API-Q6",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Async Pattern for Long-Running Operations",
+      "description": "All operations synchronous. Lambda timeout 60s. Batch mode processes 500 claims sequentially with no job status API or polling.",
+      "gap": "No async support for potentially long-running operations.",
+      "recommendation": "Implement job submission pattern for batch mode with status polling endpoint.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": "62"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Sandbox/Staging Environment",
+      "description": "No staging environment configuration. No docker-compose, no seed data, no synthetic data generators. Tests are fully mocked.",
+      "gap": "No safe environment to test agent behavior before production.",
+      "recommendation": "Create staging environment with synthetic claims data and docker-compose for local development.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "tests/test_tools.py",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Unbounded Results from payment_history",
+      "description": "payment_history returns all payments for a policy with no LIMIT, pagination, or filtering. Could overwhelm LLM context window.",
+      "gap": "Unbounded result set from payment_history. No pagination parameters.",
+      "recommendation": "Add LIMIT and OFFSET parameters. Default to recent N payments.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "60-72"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "7\u201314 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "No Input Validation Beyond Parameterized SQL",
+      "description": "No type checking, format validation, or business rule enforcement on tool inputs. Parameterized queries prevent injection but don't validate business logic.",
+      "gap": "No systematic validation at API boundary. No business rule enforcement.",
+      "recommendation": "Add type, format, and business rule validation (e.g., amount > 0, claim_id format check).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "43-89"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "DATA-Q5",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "Incomplete Temporal Metadata",
+      "description": "Minimal timestamps. Claims lack created_at/updated_at. Memory events have null timestamps. No freshness signaling.",
+      "gap": "Incomplete temporal metadata on claims. No freshness signaling mechanism.",
+      "recommendation": "Add timestamps to claims queries. Pass actual timestamps to memory. Add freshness indicators.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/memory.py",
+        "lines": "33"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "DISC-Q1",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Schema Versioning or Contract Testing",
+      "description": "No versioned schemas, no OpenAPI spec, no breaking change detection, no CI pipeline. Tool schemas have empty properties.",
+      "gap": "Tool interface changes break agent bindings silently. No contract enforcement.",
+      "recommendation": "Define versioned JSON schemas for tools. Add contract tests. Integrate into CI.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": "35-45"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "No Distributed Tracing or Structured Logging",
+      "description": "No X-Ray or OpenTelemetry. Plain text logging format. No correlation IDs. Cannot reconstruct end-to-end agent sessions.",
+      "gap": "Cannot reconstruct agent sessions across Gateway, Runtime, and Memory.",
+      "recommendation": "Add OpenTelemetry instrumentation. Switch to JSON logging. Add correlation_id field.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": "14"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "No Alerting Configuration",
+      "description": "No CloudWatch alarms for error rates, latency, or anomalies. Only a log group exists. Agent degradation goes undetected.",
+      "gap": "No alerting on agent-facing surface. Degradation undetected.",
+      "recommendation": "Add CloudWatch alarms for Lambda errors, duration, Bedrock failures, and DB connection failures.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "IaC Exists but Lacks Review and Drift Detection",
+      "description": "CloudFormation templates define infrastructure but no peer review enforcement, no drift detection, and deploy role accessible without MFA.",
+      "gap": "Missing review requirements and drift detection on IaC changes.",
+      "recommendation": "Add branch protection for infra/ changes. Enable AWS Config drift detection. Require MFA on deploy role.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-iam.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "No CI/CD Pipeline or Contract Testing",
+      "description": "No CI/CD configuration in repository. No contract tests. Releases promoted on unit tests only. No pre-deployment safety evaluation.",
+      "gap": "No automated pipeline. No contract validation before production.",
+      "recommendation": "Implement CI/CD with contract tests and safety evaluation gate.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docs/security-review-TODO.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "No Rollback Capability \u2014 Mutable Container Tag",
+      "description": "No blue/green, canary, or automatic rollback. Container image referenced as :latest in IaC (mutable tag).",
+      "gap": "No automated rollback. Mutable container tag prevents reliable version pinning.",
+      "recommendation": "Pin container to immutable digest. Implement blue/green with rollback triggers.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": "27"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q4",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "Minimal Test Coverage \u2014 Happy Path Only",
+      "description": "2 unit tests (happy path, mocked DB). No error cases, adversarial inputs, integration tests, or contract tests. Not connected to CI.",
+      "gap": "Insufficient test coverage for agent-facing tools.",
+      "recommendation": "Add error, edge case, and integration tests. Connect to CI pipeline.",
+      "severity": "Medium",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "tests/test_tools.py",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "30\u201360 days"
+      }
+    },
+    {
+      "question_id": "ENG-Q5",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "No Explicit Encryption at Rest Configuration",
+      "description": "No KMS keys in IaC. Log group storing PII has no explicit encryption. Relies on service defaults.",
+      "gap": "No explicit encryption at rest for PII data stores.",
+      "recommendation": "Add customer-managed KMS keys for log group and data stores.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": "71-76"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "14\u201330 days"
+      }
+    },
+    {
+      "question_id": "API-Q7",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Event Emission for State Changes",
+      "description": "No event publishing on settlement or payment release. No SNS/EventBridge integration. Downstream systems must poll database.",
+      "gap": "State changes not externally observable without DB polling.",
+      "recommendation": "Publish settlement events to EventBridge.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": "75-89"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q8",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Rate Limit Documentation or Headers",
+      "description": "No rate limit documentation or response headers on the Gateway. Agents cannot self-throttle.",
+      "gap": "No visibility into traffic limits for agent callers.",
+      "recommendation": "Add X-RateLimit-Remaining and Retry-After headers when throttling is implemented.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "No Data Quality Metrics",
+      "description": "No data quality metrics, profiling, or completeness monitoring for claims data or knowledge base corpus.",
+      "gap": "No awareness of data completeness or quality.",
+      "recommendation": "Add data profiling. Establish freshness SLA for knowledge base ingestion.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Data Catalog or Metadata Layer",
+      "description": "No data catalog, Glue catalog, or data dictionary. Schema only implicit from SQL queries in tools.py.",
+      "gap": "Data model undocumented beyond source code.",
+      "recommendation": "Document claims database schema in structured format.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "No Business Outcome Metrics",
+      "description": "No custom CloudWatch metrics for settlement rates, amounts, accuracy, or throughput. Cannot measure agent recommendation quality.",
+      "gap": "Cannot detect systematic over- or under-settlement.",
+      "recommendation": "Publish settlement metrics. Create agent quality dashboard.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "API-Q1",
+      "category_id": "API",
+      "title": "Documented API Interface",
+      "status": "pass",
+      "reason": "System exposes documented MCP tool interface via AgentCore Gateway with REGISTRY-defined tools."
+    },
+    {
+      "question_id": "API-Q5",
+      "category_id": "API",
+      "title": "Structured Response Format",
+      "status": "pass",
+      "reason": "All tools return structured JSON-serializable dicts. Agent loop serializes with json.dumps."
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category_id": "AUTH",
+      "title": "Credential Management",
+      "status": "pass",
+      "reason": "Database credentials managed through AWS Secrets Manager. KB_ID in SSM Parameter Store. No hardcoded credentials."
+    },
+    {
+      "question_id": "STATE-Q2",
+      "category_id": "STATE",
+      "title": "Queryable Current State",
+      "status": "pass",
+      "reason": "load_claim and policy_lookup provide queryable current state via database queries."
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category_id": "STATE",
+      "title": "Graceful Degradation Signaling",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 service is not P0 priority and not confirmed on critical path."
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category_id": "DISC",
+      "title": "Semantically Meaningful Field Names",
+      "status": "pass",
+      "reason": "All field names are human-readable and semantically meaningful (claim_id, claimant_name, coverage_limit, etc.)."
+    }
+  ],
+  "remediation_roadmap": {
+    "phases": [
+      1,
+      2,
+      3
+    ],
+    "items": [
+      {
+        "phase": 1,
+        "phase_name": "Blockers",
+        "findings": [
+          "AUTH-Q1",
+          "API-Q4",
+          "AUTH-Q6",
+          "STATE-Q1",
+          "DATA-Q1",
+          "DATA-Q2",
+          "AUTH-Q2",
+          "AUTH-Q3",
+          "AUTH-Q7",
+          "STATE-Q3",
+          "STATE-Q4",
+          "STATE-Q5",
+          "STATE-Q6",
+          "HITL-Q1",
+          "HITL-Q2",
+          "DATA-Q6"
+        ],
+        "summary": "Resolve all 6 BLOCKERs (identity, idempotency, audit, rollback, data scoping, residency) and address critical RISK-SAFETY findings to enable scoped pilot evaluation."
+      },
+      {
+        "phase": 2,
+        "phase_name": "Safety",
+        "findings": [
+          "AUTH-Q4",
+          "API-Q2",
+          "API-Q3",
+          "API-Q6",
+          "HITL-Q3",
+          "DATA-Q3",
+          "DATA-Q4",
+          "DATA-Q5",
+          "DISC-Q1",
+          "OBS-Q1",
+          "OBS-Q2",
+          "ENG-Q1",
+          "ENG-Q2",
+          "ENG-Q3",
+          "ENG-Q5"
+        ],
+        "summary": "Address remaining RISK-QUALITY findings to improve agent effectiveness: structured errors, observability, schema contracts, and deployment maturity."
+      },
+      {
+        "phase": 3,
+        "phase_name": "Quality",
+        "findings": [
+          "API-Q7",
+          "API-Q8",
+          "DATA-Q7",
+          "DISC-Q3",
+          "OBS-Q3",
+          "ENG-Q4"
+        ],
+        "summary": "Implement INFO-level improvements: event emission, rate limit headers, data quality metrics, catalog, business metrics, expanded test coverage."
+      }
+    ]
+  },
+  "recommended_actions": [
+    {
+      "action": "Deploy Gateway Authentication and Identity Framework",
+      "question_ids": [
+        "AUTH-Q1",
+        "AUTH-Q2",
+        "AUTH-Q3",
+        "AUTH-Q4",
+        "AUTH-Q6",
+        "AUTH-Q7"
+      ],
+      "priority": "P0",
+      "effort": "High",
+      "rationale": "Identity is the foundation \u2014 scoped permissions, audit logging, tool allow-lists, and suspension all depend on authenticated principals at the Gateway."
+    },
+    {
+      "action": "Implement Data Protection Controls",
+      "question_ids": [
+        "DATA-Q1",
+        "DATA-Q2",
+        "DATA-Q6"
+      ],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Remove PII from tool responses, add data residency enforcement, and implement log redaction to address 3 findings including 2 BLOCKERs."
+    },
+    {
+      "action": "Add Write Safety Controls",
+      "question_ids": [
+        "API-Q4",
+        "STATE-Q1",
+        "STATE-Q3",
+        "STATE-Q6",
+        "HITL-Q1",
+        "HITL-Q2"
+      ],
+      "priority": "P0",
+      "effort": "High",
+      "rationale": "settlement_writer needs idempotency, compensation, concurrency controls, transaction limits, and approval gates to safely handle financial operations."
+    },
+    {
+      "action": "Implement Observability and Resilience",
+      "question_ids": [
+        "OBS-Q1",
+        "OBS-Q2",
+        "STATE-Q4",
+        "STATE-Q5"
+      ],
+      "priority": "P1",
+      "effort": "Medium",
+      "rationale": "Add distributed tracing, alerting, circuit breakers, and rate limiting to make the system debuggable and resilient under agent load."
+    },
+    {
+      "action": "Establish CI/CD and Testing Pipeline",
+      "question_ids": [
+        "ENG-Q2",
+        "ENG-Q3",
+        "ENG-Q4",
+        "DISC-Q1"
+      ],
+      "priority": "P2",
+      "effort": "Medium",
+      "rationale": "Build deployment pipeline with contract testing, rollback capability, and expanded test coverage to prevent agent-breaking changes."
+    }
+  ],
+  "analysis_type": "ara",
+  "repo_name": "modern-claims-agent"
+}

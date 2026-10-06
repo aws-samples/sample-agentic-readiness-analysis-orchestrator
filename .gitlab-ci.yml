@@ -3,7 +3,7 @@
 #
 # AUTOMATION IS GITLAB-ONLY. GitHub carries NO Actions/workflows — it stays open
 # for issues/PRs and mirrors content both ways, but runs nothing. All analysis
-# runs here on gitlab.aws.dev.
+# runs here on the internal GitLab instance.
 #
 # AWS AUTH = AWS CREDENTIAL VENDOR (no long-lived credentials, no OIDC).
 # OIDC is NOT available on the internal GitLab instance: AWS IAM cannot reach the
@@ -169,6 +169,33 @@ harness:auth-check:
   script:
     - |
       if [ -z "${AWS_CREDS_TARGET_ROLE:-}" ]; then
+        # A FORK merge request runs in the fork's OWN project, which cannot see this
+        # parent-project CI/CD variable — that is GitLab's secret firewall, not a
+        # misconfiguration a contributor can fix. Detect that case (source project id
+        # differs from the target project id), explain how to get the full harness, and
+        # pass GREEN so a fork contributor is not greeted by a red pipeline.
+        if [ -n "${CI_MERGE_REQUEST_SOURCE_PROJECT_ID:-}" ] && \
+           [ "${CI_MERGE_REQUEST_SOURCE_PROJECT_ID:-}" != "${CI_MERGE_REQUEST_PROJECT_ID:-}" ]; then
+          echo "NOTE: this merge request is from a FORK, so the AWS credential-vendor role"
+          echo "      (AWS_CREDS_TARGET_ROLE) is intentionally not available here — GitLab does"
+          echo "      not hand a fork's pipeline the parent project's secrets. This is expected;"
+          echo "      it is NOT a failure you can fix from the fork."
+          echo ""
+          echo "      The offline contract tests still ran (see harness:contract-tests) and are"
+          echo "      the quality gate. The FULL change-impact analysis (atx re-run + judge"
+          echo "      verdict) needs those credentials, so it WAITS for a project DEVELOPER to"
+          echo "      trigger it in the parent project:"
+          echo "          MR  ->  Pipelines tab  ->  Run pipeline   (accept the one-time warning)"
+          echo ""
+          echo "      Anyone can request Developer access to run it themselves — with that access"
+          echo "      you can press Run pipeline on your own MR, or push your branch directly to"
+          echo "      this repo (no fork) and the whole harness runs automatically. See"
+          echo "      CONTRIBUTING.md -> 'Opening from a GitLab fork'."
+          exit 0
+        fi
+        # NOT a fork: the variable really should be here. Fail loudly — this is exactly
+        # the misconfiguration auth-check exists to catch (Protected var on an unprotected
+        # branch, a Masked/Hidden var the vendor cannot read, or the var simply unset).
         echo "FAIL: AWS_CREDS_TARGET_ROLE is unset — the variable is not reaching this job." >&2
         echo "      (Is it Protected while the branch is not? Is the branch tag/name matched?)" >&2
         exit 1
@@ -293,7 +320,12 @@ harness:comment-check:
       }
       JSON
       echo "--- posting ---"
-      harness/post-mr-comment.sh verdict.json
+      # `|| true`: on a web pipeline there is no MR, so post-mr-comment.sh takes its
+      # print-instead-of-post path and exit 1 (by design, so the harness:full caller can
+      # fall back to `cat verdict.json`). That exit code is NOT this job's assertion — the
+      # verify step below is (see the note there). Without this guard every web-triggered
+      # pipeline (e.g. a rebaseline run) red-fails comment-check on the no-MR no-op.
+      harness/post-mr-comment.sh verdict.json || true
     # post-mr-comment.sh is advisory and exits 0 even on a failed POST, so its exit code
     # cannot be the assertion. Re-read the MR's notes and confirm ours is actually there —
     # otherwise this job would go green while posting nothing, which is the exact failure
@@ -385,13 +417,30 @@ harness:contract-tests:
 harness:impact:
   stage: analyze
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # Gate on the credential-vendor role actually being present in THIS pipeline. A fork's
+    # detached MR pipeline runs in the fork and cannot see this parent-project variable, so
+    # this job is simply NOT created there — no red "impact" a fork contributor can't fix.
+    # It appears the instant the MR is run in the parent project (MR -> Pipelines -> Run
+    # pipeline), where the vend resolves. Internal same-project MRs always have it, so they
+    # are unaffected. (A truthy bare "$VAR" rule = defined and non-empty.)
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $AWS_CREDS_TARGET_ROLE'
   # A single (fixture, analysis) unit costs ~108 agent-min, and HARNESS_JOBS runs the
   # MR's 2 units concurrently — so wall-clock is ~one unit, ~2h with install + judge.
   # GitLab's 1h DEFAULT would kill every MR run mid-sweep, discarding the analysis and
   # reporting nothing. 3h leaves headroom for a slow unit without letting a wedged atx
   # exec burn a runner all day.
   timeout: 3h
+  # Self-heal from a sister-runner death, NOT from our own failures. A single unit costs
+  # ~100-130 agent-min, so a runner reclaim/eviction at (say) the portfolio stage discards
+  # a ~2h sweep and reports nothing. Retry ONLY the infra classes: runner_system_failure
+  # (pod killed / "system failure: aborted") and stuck_or_timeout_failure. A real script,
+  # contract, or rubric fault is script_failure — NOT listed here — so it never silently
+  # re-runs and never hides a genuine defect behind a second attempt.
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
   script:
     # GATE (deterministic, no LLM): exit cleanly as a SKIP when the whole diff is
     # denylisted (docs / license / images / DESIGN.md). Permissive by default (§5).
@@ -411,6 +460,80 @@ harness:impact:
       SEV_BASE="${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:+origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
       python3 harness/skill_table.py --base "${SEV_BASE:-origin/main}" -o changed-severity.json || echo '{}' > changed-severity.json
     - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" --changed-severity changed-severity.json -o impact.json
+    # SCORE + JUDGE + REPORT run in the SEPARATE harness:judge job (stage: judge), NOT
+    # here. WHY THE SPLIT: the AWS creds are vended by the shared runner's pre-clone
+    # script and, because the runner assumes our role via ROLE CHAINING, AWS hard-caps
+    # that session at 1 HOUR regardless of the role's MaxSessionDuration. A single
+    # (fixture, analysis) unit's atx exec can eat most of that hour, so the Bedrock
+    # scoring/judge step that used to run here failed with ExpiredTokenException and the
+    # verdict silently degraded to the offline heuristic. Moving score/judge into its own
+    # job gives THAT job its own fresh pre-clone vend (a new 1h token), and scoring is a
+    # few seconds of Bedrock calls, so it comfortably fits. This job just produces the
+    # report tree + impact.json and hands them off as artifacts.
+  artifacts:
+    when: always
+    paths:
+      # The whole "after" tree: the freshly-generated reports the scorer re-scores, plus
+      # edited-questions.txt (judge input) and the per-unit atx logs (spinner already
+      # stripped at write time; the only record of what atx did, since the job log
+      # carries just our concise markers so it can't hit the 4 MB cap again).
+      # Literal path, NOT $AFTER_DIR: artifact globs are resolved by the runner, and a
+      # silently-unexpanded variable here would just drop the artifact with no error.
+      - harness/after/
+      - impact.json
+      - changed-severity.json   # which questions' severity the MR edited (differ gate input)
+    expire_in: 30 days
+  allow_failure: true   # advisory — never blocks the MR
+
+# -----------------------------------------------------------------------------
+# Entry 1b — harness:judge   (auto on MR; consumes harness:impact's artifacts)
+# SCORE the freshly-generated reports for accuracy against the fixture source and
+# classify each against the committed baseline, then run the LLM judge and post the
+# advisory MR comment. Split out of harness:impact so it gets its OWN fresh credential
+# vend: the impact job's atx execs can burn most of the chained-role session's hard 1h
+# cap, leaving the Bedrock steps to die with ExpiredTokenException. This job starts
+# fresh, needs no atx/Node (only boto3 + awscli), and finishes in seconds.
+# -----------------------------------------------------------------------------
+harness:judge:
+  stage: judge
+  rules:
+    # Same gate as harness:impact: the judge has no impact.json to score without it and
+    # calls Bedrock itself, so it needs the same creds. Skipped on a fork's detached
+    # pipeline; runs when the MR is executed in the parent project. Keeping the two rules
+    # identical means the `needs` below is always satisfiable.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $AWS_CREDS_TARGET_ROLE'
+  needs:
+    # optional: harness:impact shares this job's rule so it is normally present, but mark
+    # the dependency optional so a future rule change can never turn a missing upstream
+    # job into a pipeline-creation (YAML) error.
+    - job: harness:impact
+      artifacts: true
+      optional: true
+  # If harness:impact SKIPPED (denylisted diff) it produced no impact.json. Nothing to
+  # judge — exit cleanly rather than erroring on the missing input.
+  before_script:
+    # No atx CLI, no Node: this job only re-scores JSON and calls Bedrock. Install just
+    # git (for score-reports' repo-relative paths), curl (post-mr-comment.sh POSTs the
+    # verdict to the GitLab API with it — without it the note silently fails HTTP 000),
+    # awscli (identity check) and the Python deps (boto3 for the Bedrock call).
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git curl ca-certificates
+    - pip install --quiet --cache-dir "$PIP_CACHE_DIR" awscli
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+    # The pre-clone Credential Vendor has ALREADY vended a FRESH token into this job (see
+    # the default before_script note). Confirm it so a missing/rejected role fails loudly.
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    - |
+      if [ -n "${AWS_CREDS_TARGET_ROLE:-}" ]; then
+        aws sts get-caller-identity >/dev/null 2>&1 \
+          && echo "AWS Credential Vendor: fresh creds vended for role ${AWS_CREDS_TARGET_ROLE}" \
+          || echo "WARN: creds not usable — scoring/judge will degrade to heuristic." >&2
+      fi
+  script:
+    - |
+      if [ ! -f impact.json ]; then
+        echo "no impact.json from harness:impact (diff was denylisted, or the analyze job skipped) — nothing to judge."
+        exit 0
+      fi
     # SCORE (accuracy anchor): re-score the freshly-generated reports for groundedness
     # against the fixture SOURCE and classify each against the committed baseline
     # (improved / regressed / within-noise, with a per-fixture noise threshold). This is
@@ -427,23 +550,17 @@ harness:impact:
     - |
       EDITED=""
       [ -f "$AFTER_DIR/edited-questions.txt" ] && EDITED="$(cat "$AFTER_DIR/edited-questions.txt")"
+      PROGRAMS=""
+      [ -f "$AFTER_DIR/changed-programs.txt" ] && PROGRAMS="$(cat "$AFTER_DIR/changed-programs.txt")"
       harness/judge.py --impact impact.json --intent "$CI_MERGE_REQUEST_DESCRIPTION" \
-        --edited-questions "$EDITED" --compare compare.json > verdict.json
+        --edited-questions "$EDITED" --changed-programs "$PROGRAMS" --compare compare.json > verdict.json
     # REPORT: advisory MR comment (never blocks).
     - harness/post-mr-comment.sh verdict.json
   artifacts:
     when: always
     paths:
-      - impact.json
       - verdict.json
       - compare.json   # accuracy-vs-baseline anchor the judge scored against
-      - changed-severity.json   # which questions' severity the MR edited (differ gate input)
-      # Per-unit atx logs (spinner already stripped at write time). These are the
-      # only record of what atx actually did — the job log deliberately carries just
-      # our concise markers so it can't hit the 4 MB cap again.
-      # Literal path, NOT $AFTER_DIR: artifact globs are resolved by the runner, and a
-      # silently-unexpanded variable here would just drop the artifact with no error.
-      - harness/after/_logs/
     expire_in: 30 days
   allow_failure: true   # advisory — never blocks the MR
 
@@ -461,6 +578,11 @@ harness:impact:
 harness:full:
   stage: analyze
   rules:
+    # Stand down on a re-baseline web run: harness:rebaseline (below) does the sweep AND
+    # writes the baseline there, so without this guard a REBASELINE=true web pipeline fires
+    # BOTH jobs — two multi-hour full sweeps, one of them pure redundant compute.
+    - if: '$CI_PIPELINE_SOURCE == "web" && $REBASELINE == "true"'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "web"'
   timeout: 12h           # default job timeout (1h) cannot fit a full sweep
   variables:
@@ -485,3 +607,459 @@ harness:full:
       - harness/after/_logs/   # literal — see note on harness:impact
     expire_in: 30 days
   allow_failure: true   # advisory — never blocks
+
+# -----------------------------------------------------------------------------
+# Entry 3 — re-baseline   (scheduled weekly, or web-triggered reset)
+# Keeps the committed baseline (harness/golden/ report trees + the accuracy
+# baseline) FRESH so it never rots into the silent-stale trap the staleness
+# guard exists to catch. Runs a full sweep against merged main, then proposes
+# the refreshed baseline as an MR — the golden is reviewed like any change, not
+# pushed silently to protected main.
+#
+# WHY IT IS SHARDED (harness:rebaseline-shard x N  ->  harness:rebaseline-gather):
+#   The AWS Credential Vendor assumes our role via ROLE CHAINING, which AWS
+#   hard-caps at 1 HOUR regardless of MaxSessionDuration. A full sweep is 28 units
+#   (14 fixtures x 2 analyses) at ~110-130 agent-min each; even at RUN_JOBS=6 that
+#   is ~2h wall-clock — so ONE job physically cannot finish before its own creds
+#   expire. The first RESET run proved it: 21/28 units passed, then every later
+#   exec died "security token expired", and the portfolio + golden write never ran.
+#   The fix mirrors the harness:impact -> harness:judge split already in this file:
+#   fan the per-repo sweep out across N PARALLEL shard jobs (GitLab `parallel:`),
+#   each with its OWN fresh 1h vend and a disjoint ~1/N slice of the fixtures
+#   (--shard $CI_NODE_INDEX/$CI_NODE_TOTAL) — each slice finishes well under the
+#   hour. A single gather job (its own fresh vend) then runs the portfolio rollup
+#   over the merged slices, writes golden, ratchet-checks, and opens the MR.
+#
+#   Shards deliberately do NOT --write-golden: a shard only holds its own slice, so
+#   if it wrote golden it would carry the OLD committed baseline for every file it
+#   did not freshen, and GitLab's artifact MERGE across the N parallel instances
+#   could keep an old copy over a fresh one. Instead each shard uploads only its
+#   slice under harness/after/, the gather job merges them (disjoint => clean
+#   union), and ONLY the gather writes golden from the merged set.
+#
+# TWO MODES, chosen by REBASELINE_RESET (set on the gather):
+#   - "false" (DEFAULT, scheduled): --ratchet. Adopt same-or-better numbers
+#     freely; REFUSE (exit 3) if any fixture regressed beyond noise or fell below
+#     the quality floor, so a degraded merge cannot silently enshrine itself as
+#     the new "good" baseline. The scheduled cron runs this mode.
+#   - "true" (web only): NO ratchet. For deliberately RESETTING a baseline that is
+#     known-bad (e.g. the stale read-only loan-calculator golden, whose number is
+#     high but WRONG — the correct new report reads as a "regression" against it,
+#     so the ratchet would refuse it). A human triggers this and reviews the MR.
+#
+# Schedule it in Settings -> CI/CD -> Pipeline schedules (weekly, on main). The
+# rules gate on $CI_PIPELINE_SOURCE == "schedule" so ONLY the cron (or a manual
+# web run with REBASELINE=true) triggers it — never an MR or a normal push.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Entry 2b — harness:portfolio-benchmark   (manual, web-triggered only)
+# Full portfolio-level benchmark: runs per-repo ARA+MOD on all fixtures to produce
+# the per-repo reports the portfolio TDs consume, then runs the two portfolio TDs
+# over those reports, diffs against golden, scores, and judges. Use this when a
+# portfolio TD changes and you want to exercise the full aggregation pipeline.
+#
+# WHY SEPARATE FROM harness:full: a portfolio benchmark REQUIRES per-repo reports as
+# input (the portfolio TDs discover *-ara-report.json / *-mod-report.json in the
+# source tree). harness:full already supports this via --scope all (which auto-runs
+# portfolio when portfolio TDs changed), but this job makes it explicit and allows
+# running ONLY the portfolio stage when per-repo reports are already available.
+# -----------------------------------------------------------------------------
+harness:portfolio-benchmark:
+  stage: analyze
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $PORTFOLIO_BENCHMARK == "true"'
+  timeout: 12h
+  variables:
+    PORTFOLIO_BENCHMARK: "true"
+    CHANGED_TD: ""       # "ara" or "mod" to restrict; empty = both
+    RUN_JOBS: "6"
+    PORTFOLIO_ONLY: "false"  # set "true" to skip per-repo (assumes reports exist in AFTER_DIR)
+  script:
+    # Stage 1: per-repo sweep (produces the reports the portfolio TDs need as input)
+    # Skip if PORTFOLIO_ONLY=true (operator has pre-existing per-repo reports from an earlier run)
+    - |
+      if [ "$PORTFOLIO_ONLY" = "true" ]; then
+        echo "PORTFOLIO_ONLY=true — skipping per-repo sweep (expects reports in $AFTER_DIR)"
+        REPORT_COUNT="$(find "$AFTER_DIR" -maxdepth 1 -name '*-report.json' ! -name '*portfolio*' 2>/dev/null | wc -l | tr -d ' ')"
+        if [ "$REPORT_COUNT" -lt 2 ]; then
+          echo "ERROR: PORTFOLIO_ONLY requires >= 2 per-repo reports in $AFTER_DIR, found $REPORT_COUNT" >&2
+          exit 1
+        fi
+      else
+        harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --no-portfolio --validate --jobs "$RUN_JOBS"
+      fi
+    # Stage 2: portfolio rollup over the per-repo reports
+    - harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --portfolio-only --validate --jobs "$RUN_JOBS"
+    # Stage 3: diff + score + judge
+    - harness/diff-reports.py --baseline harness/golden --after "$AFTER_DIR" -o impact.json
+    - harness/score-reports.py --trees "$AFTER_DIR" --compare-out compare.json || true
+    - harness/judge.py --impact impact.json --intent "Portfolio benchmark run (web-triggered)" --compare compare.json > verdict.json
+    - harness/post-mr-comment.sh verdict.json || cat verdict.json
+  artifacts:
+    when: always
+    paths:
+      - harness/after/
+      - impact.json
+      - verdict.json
+      - compare.json
+    expire_in: 30 days
+  allow_failure: true   # advisory — never blocks
+
+harness:rebaseline-shard:
+  stage: analyze
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $REBASELINE == "true"'
+  # Fan the per-repo sweep out across 4 jobs. Each is a SEPARATE GitLab job with its own
+  # pre-clone credential vend (fresh 1h), and runs the disjoint slice CI_NODE_INDEX/of/4.
+  # 14 fixtures / 4 => 4/4/3/3 fixtures => ~6-8 units per shard: comfortably under the hour.
+  # Bump this number if the fixture set grows enough that a slice again approaches ~45 min.
+  parallel: 4
+  # A shard's slice is ~6-8 units; 3h is generous headroom over the ~30-40 min it should
+  # take, without letting a wedged atx exec burn a runner all day.
+  timeout: 3h
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  variables:
+    CHANGED_TD: ""       # restrict to one TD's analysis (ara|mod); empty = both
+    RUN_JOBS: "6"        # concurrent atx execs WITHIN this shard — see harness:full
+    REBASELINE: "true"   # web pipelines must opt in; schedule sets source=schedule
+    REBASELINE_RESET: "false"  # "true" (web only) bypasses the ratchet in the GATHER job
+  before_script:
+    # Inherit the default before_script (Node + atx + AWS vend). No git identity needed —
+    # a shard never commits; it only produces reports the gather job commits.
+    - !reference [default, before_script]
+  script:
+    # Refuse a RESET on a scheduled pipeline — it bypasses the ratchet, so it must only ever
+    # be a deliberate human web-trigger. Checked here too (not just the gather) so an unattended
+    # cron misconfigured with REBASELINE_RESET=true fails FAST, before burning any atx minutes.
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "schedule" ] && [ "$REBASELINE_RESET" = "true" ]; then
+        echo "REBASELINE_RESET=true is not allowed on a scheduled pipeline — it bypasses the" >&2
+        echo "ratchet safety. Trigger a web pipeline with REBASELINE=true REBASELINE_RESET=true." >&2
+        exit 1
+      fi
+    # This shard's disjoint slice of the full sweep. --shard implies --no-portfolio (the
+    # rollup needs EVERY per-repo report, so it runs once in the gather job). NO --write-golden:
+    # each shard uploads only its slice under harness/after/ and the gather writes golden from
+    # the merged set (see the header note on the artifact-merge hazard). --validate contract-
+    # checks each report as it lands.
+    - harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --shard "$CI_NODE_INDEX/$CI_NODE_TOTAL" --validate --jobs "$RUN_JOBS"
+  artifacts:
+    when: always
+    paths:
+      # This shard's per-repo report slice + its per-unit atx logs. The gather job's `needs`
+      # merges all N shards' harness/after/ into one dir; slices are disjoint so it is a clean
+      # union with no old-baseline contamination.
+      - harness/after/
+    expire_in: 30 days
+  allow_failure: true   # advisory — a shard death must SURFACE (gather flags the gap), not block
+
+harness:rebaseline-gather:
+  stage: judge   # runs AFTER all shards (analyze stage) complete
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $REBASELINE == "true"'
+  # Merges every shard's slice (all N parallel instances) into one harness/after/ tree.
+  needs:
+    - job: harness:rebaseline-shard
+      artifacts: true
+  # Portfolio rollup (2 execs) + score + MR = well under the fresh 1h vend, but give headroom
+  # for a slow portfolio exec.
+  timeout: 3h
+  variables:
+    CHANGED_TD: ""             # must match the shards' value (ara|mod narrowing); empty = both
+    RUN_JOBS: "6"
+    REBASELINE: "true"
+    REBASELINE_RESET: "false"  # "true" (web only) bypasses the ratchet for a known-bad reset
+  before_script:
+    # Inherit the default before_script (Node + atx + AWS vend — atx is needed for the
+    # portfolio exec), then add git identity for the branch commit below.
+    - !reference [default, before_script]
+    - git config user.email "harness-bot@noreply.aws.dev"
+    - git config user.name "harness re-baseline bot"
+    # pytest is NOT in the default before_script (only awscli is). The self-test step below
+    # runs the offline suite against the freshly written golden, so install the harness deps.
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+  script:
+    # Same fast RESET-on-schedule guard as the shards (defense in depth: this is where the
+    # ratchet is actually bypassed).
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "schedule" ] && [ "$REBASELINE_RESET" = "true" ]; then
+        echo "REBASELINE_RESET=true is not allowed on a scheduled pipeline — it bypasses the" >&2
+        echo "ratchet safety. Trigger a web pipeline with REBASELINE=true REBASELINE_RESET=true." >&2
+        exit 1
+      fi
+    # COMPLETENESS CHECK: the shards' merged slices should cover every fixture. A shard that
+    # died (allow_failure) drops its slice, and --write-golden below would then leave those
+    # fixtures on the STALE committed baseline while refreshing the rest — a silent partial
+    # rebaseline, the exact rot this job exists to prevent. We can't cheaply fail (allow_failure
+    # + a dead shard is a real possibility), so surface it LOUDLY and flag the MR as PARTIAL.
+    - |
+      REPORTS="$(find harness/after -maxdepth 1 -name '*-report.json' ! -name '*portfolio*' 2>/dev/null | wc -l | tr -d ' ')"
+      FIXTURES="$(python3 -c 'import yaml; print(len(yaml.safe_load(open("harness/usecases.yaml")).get("fixtures",[])))')"
+      # 2 reports (ara+mod) per fixture unless --td narrowed to one analysis.
+      case "${CHANGED_TD:-}" in ara|mod|*readiness-analysis) EXPECT="$FIXTURES" ;; *) EXPECT="$((FIXTURES * 2))" ;; esac
+      echo "gather: merged ${REPORTS} per-repo report(s) from the shards; expected ${EXPECT}."
+      PARTIAL=""
+      if [ "$REPORTS" -lt "$EXPECT" ]; then
+        echo "⚠ PARTIAL SWEEP: a shard likely died — ${REPORTS}/${EXPECT} per-repo reports present." >&2
+        echo "  golden will be refreshed only for the fixtures that ARE present; the rest keep the" >&2
+        echo "  committed baseline. The MR is flagged PARTIAL so a reviewer knows not to trust it as" >&2
+        echo "  a full re-baseline. Re-run the pipeline to get the missing shard(s)." >&2
+        PARTIAL=" [PARTIAL]"
+      fi
+      echo "$PARTIAL" > .rebaseline-partial   # consumed by the MR title/body below
+    # PORTFOLIO ROLLUP over the merged per-repo slices, then --write-golden to refresh the
+    # golden tree from EVERYTHING now in harness/after (all per-repo slices + the fresh
+    # portfolio reports). --portfolio-only skips stage 1 (already done by the shards) and the
+    # clobber guard (the merged slices ARE its input, not an accidental re-run).
+    - harness/run-fixtures.sh --scope all --td "$CHANGED_TD" --portfolio-only --write-golden --validate --jobs "$RUN_JOBS"
+    # SELF-TEST the refreshed golden BEFORE proposing it. Several tests are coupled to golden's
+    # content — they deep-copy real reports and assert on per-repo counts, tiers, and the
+    # discovered repo set. A rebaseline that changes those (e.g. the 2026-08-11 reset moved
+    # loan-calculator write-enabled and added the modern-* fixtures) left main red until the
+    # tests were repaired by hand. Running the suite HERE, against the just-written golden,
+    # turns that silent post-merge breakage into a loud pre-merge failure in the same job that
+    # produced the baseline. A PARTIAL sweep is exempt: its golden is deliberately incomplete,
+    # so a coverage-count failure would be expected noise, not the drift we're guarding.
+    - |
+      if [ -n "$(cat .rebaseline-partial 2>/dev/null || echo '')" ]; then
+        echo "self-test: SKIPPED on a PARTIAL sweep (golden is intentionally incomplete)."
+      else
+        echo "self-test: running the offline suite against the freshly written golden…"
+        set +e
+        python3 -m pytest harness/tests/ -q
+        RC=$?
+        set -e
+        if [ "$RC" != "0" ]; then
+          echo "✗ SELF-TEST FAILED: the refreshed golden breaks the committed test suite." >&2
+          echo "  This is drift between the fixture-coupled tests and the new baseline — the" >&2
+          echo "  same class that left main red after the 2026-08-11 reset. The baseline is NOT" >&2
+          echo "  proposed. Reproduce locally, update the coupled tests to match the new golden," >&2
+          echo "  and land the test change and the rebaseline together in one MR." >&2
+          exit "$RC"
+        fi
+      fi
+    # Refresh the accuracy baseline from the refreshed golden. --ratchet unless this is a reset:
+    # it refuses (exit 3) on a regression/below-floor sweep, leaving the committed baseline
+    # untouched so we alert instead of enshrining a degradation. --compare-out captures the
+    # comparison even on refusal for the alert.
+    - |
+      RATCHET="--ratchet"
+      [ "$REBASELINE_RESET" = "true" ] && RATCHET="" && echo "RESET mode: ratchet DISABLED (human-reviewed reset)."
+      set +e
+      # -o writes the FULL per-report results (LLM rationale + the deterministic offline
+      # checks); --compare-out writes the score deltas. The digest below joins the two. Both
+      # are written on the clean AND the ratchet-refused (rc=3) path, so the digest renders
+      # either way.
+      harness/score-reports.py --trees harness/golden --update-baseline $RATCHET \
+        --compare-out rebaseline-compare.json -o rebaseline-results.json
+      RC=$?
+      set -e
+      # Render the whole-picture digest NOW, while both JSONs exist — a refused ratchet exits
+      # just below before any later step runs, and that is exactly the case a reviewer most
+      # needs the synthesis for. Guarded on the compare file (a hard crash may write neither).
+      # Advisory: a render failure must not fail the re-baseline.
+      if [ -f rebaseline-compare.json ]; then
+        python3 harness/rebaseline-digest.py --compare rebaseline-compare.json \
+          --results rebaseline-results.json --out rebaseline-digest.md \
+          --reset "$REBASELINE_RESET" --partial "$(cat .rebaseline-partial 2>/dev/null || true)" \
+          || echo "WARN: digest render failed (non-fatal)." >&2
+        echo "----- re-baseline digest -----"; cat rebaseline-digest.md 2>/dev/null || true
+        echo "------------------------------"
+      fi
+      if [ "$RC" = "3" ]; then
+        echo "✗ RATCHET refused: the fresh sweep is worse than the committed baseline (see above)." >&2
+        echo "  The baseline was NOT changed. A merged change may have degraded the analysis." >&2
+        echo "  Investigate, then re-baseline deliberately with a web run + REBASELINE_RESET=true." >&2
+        exit 3
+      elif [ "$RC" != "0" ]; then
+        echo "score-reports.py failed (rc=$RC)" >&2; exit "$RC"
+      fi
+    # Nothing to propose if the sweep reproduced the committed baseline byte-for-byte.
+    - |
+      if git diff --quiet -- harness/golden harness/golden-accuracy-baseline.json; then
+        echo "re-baseline reproduced the committed golden exactly — nothing to propose."
+        exit 0
+      fi
+    # Propose the refreshed baseline as an MR (reviewed, never a silent push to main).
+    # Needs HARNESS_MR_TOKEN (api scope, can push + open MRs); degrade to artifact-only.
+    - |
+      PARTIAL="$(cat .rebaseline-partial 2>/dev/null || echo '')"
+      BR="rebaseline/$(date +%Y%m%d)-${CI_PIPELINE_ID}"
+      # WHERE the refresh MR lands. A SCHEDULE (the weekly auto-rebaseline) always targets main —
+      # that is the maintained baseline. But a CONTRIBUTOR who added a question can't merge to main
+      # directly: their rubric edit lives on a feature branch, and its MR is red until the golden
+      # answers the new question. So when a human triggers a web rebaseline ON their own branch, the
+      # refresh MR targets THAT branch, not main — they merge the golden into their feature branch and
+      # their original rubric MR goes green. This is the "I can't run atx locally" path (see
+      # docs/contributing). Schedules and web runs on main keep targeting main.
+      TARGET="main"
+      if [ "$CI_PIPELINE_SOURCE" = "web" ] && [ "$CI_COMMIT_REF_NAME" != "main" ]; then
+        TARGET="$CI_COMMIT_REF_NAME"
+        echo "web rebaseline on branch '$TARGET' — the refresh MR will target that branch, not main."
+      fi
+      if [ -z "${HARNESS_MR_TOKEN:-}" ]; then
+        echo "no HARNESS_MR_TOKEN — cannot open an MR. The refreshed baseline is attached as" >&2
+        echo "an artifact; download it and open the MR by hand." >&2
+        exit 0
+      fi
+      git checkout -b "$BR"
+      git add harness/golden harness/golden-accuracy-baseline.json
+      git commit -m "chore(harness): re-baseline ($(date +%Y-%m-%d)) → ${TARGET}${PARTIAL}" \
+                 -m "Automated by harness:rebaseline-gather (pipeline ${CI_PIPELINE_ID}, source ${CI_PIPELINE_SOURCE}, reset=${REBASELINE_RESET}, target ${TARGET}). Sharded sweep across ${CI_NODE_TOTAL:-N} shards. Ratchet-checked unless reset. Review the score deltas in rebaseline-compare.json before merging.${PARTIAL:+ WARNING: PARTIAL sweep — a shard dropped its slice; some fixtures kept the stale baseline. Do NOT merge as a full re-baseline; re-run first.}"
+      git push "https://oauth2:${HARNESS_MR_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
+               "$BR" -o merge_request.create -o "merge_request.target=${TARGET}" \
+               -o merge_request.title="chore(harness): re-baseline $(date +%Y-%m-%d) → ${TARGET}${PARTIAL}" \
+               -o merge_request.remove_source_branch
+      echo "pushed $BR and opened an MR to ${TARGET}."
+      # Post the whole-picture digest as a note on the MR just opened. `-o merge_request.create`
+      # does not return the IID, so look it up by source branch. Advisory: a failed lookup/POST
+      # must never fail the re-baseline — the digest is also attached as a job artifact.
+      if [ -f rebaseline-digest.md ]; then
+        IID="$(curl -sS --max-time 30 --header "PRIVATE-TOKEN: ${HARNESS_MR_TOKEN}" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests?source_branch=${BR}&state=opened" \
+          | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["iid"] if d else "")' 2>/dev/null || true)"
+        if [ -n "$IID" ]; then
+          curl -sS --max-time 30 --header "PRIVATE-TOKEN: ${HARNESS_MR_TOKEN}" \
+            --data-urlencode "body@rebaseline-digest.md" \
+            "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${IID}/notes" >/dev/null \
+            && echo "posted the whole-picture digest to MR !${IID}." \
+            || echo "WARN: could not post the digest note to MR !${IID} (MR still opened; digest is an artifact)." >&2
+        else
+          echo "WARN: could not resolve the MR IID for ${BR} — digest not posted (see the job artifact)." >&2
+        fi
+      fi
+  artifacts:
+    when: always
+    paths:
+      - rebaseline-compare.json          # score deltas vs the outgoing baseline
+      - rebaseline-results.json          # full per-report results (rationale + failed checks)
+      - rebaseline-digest.md             # the whole-picture reviewer digest (also posted to the MR)
+      - harness/golden/                  # the refreshed report trees (for hand-review)
+      - harness/golden-accuracy-baseline.json
+      - harness/after/_logs/
+    expire_in: 30 days
+  allow_failure: true   # a refused ratchet (exit 3) must SURFACE, not block other work
+
+# -----------------------------------------------------------------------------
+# harness:scorer-sync   (auto on any MR that touches the TD or the sync sources)
+# Regenerate the EXTERNAL Benchmark scorer prompts from the TD and COMMIT THEM BACK
+# to the MR branch, so a contributor who edits a severity/count/tier never has to
+# remember to run `scorer-prompt-sync.py --write` by hand.
+#
+# WHY A COMMIT-BACK AND NOT JUST A RED GATE
+# harness:contract-tests already runs test_committed_prompts_are_in_sync_with_the_td
+# on every MR — that is the drift *detector*. It fails red when the TD moved but the
+# prompt didn't, telling the contributor to run --write. This job is the *fixer*: it
+# runs --write for them and pushes the result onto their branch, turning that red into
+# a green with no manual step (offline, seconds — pure TD parse + render).
+#
+# THE ONE THING THIS MUST NOT DO is silently swallow the "re-publish to Benchmark" signal.
+# Regenerating the in-repo .md is only half the job — the Benchmark platform serves a COPY
+# of that prompt, and nothing here can push to it. So when this job commits a change it
+# shouts (job log + a persistent MR note + the commit message) that a human MUST re-publish
+# the regenerated prompt to Benchmark. The committed file is the record; the note is the nag.
+#
+# LOOP SAFETY: the bot's commit touches only harness/rubric/*-scorer-prompt.md and
+# *-scorer-facts.lock.json. Neither is in this job's `changes:` trigger (which watches the
+# TD + the derivation sources), so the auto-commit does NOT re-run this job. It also cannot
+# re-trigger the expensive harness:impact sweep — should-run.sh denylists both paths.
+# -----------------------------------------------------------------------------
+harness:scorer-sync:
+  stage: test
+  rules:
+    # Only when something that FEEDS derive_facts changed: the two managed TDs (SKILL.md +
+    # references/) or the derivation code itself. Deliberately excludes the generated
+    # prompt .md and the lock .json, so the bot's own commit-back never re-triggers this job.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - definitions/managed/agentic-readiness-analysis/**/*
+        - definitions/managed/modernization-readiness-analysis/**/*
+        - definitions/managed/portfolio-agentic-readiness-analysis/**/*
+        - definitions/managed/portfolio-modernization-readiness-analysis/**/*
+        - harness/skill_table.py
+        - harness/score-reports.py
+        - harness/scorer-prompt-sync.py
+  before_script:
+    # Offline: no atx, no Node, no AWS vend. git (to commit + push back) + curl (to post the
+    # re-publish MR note) + the harness Python deps (skill_table parses the TD with PyYAML).
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git curl ca-certificates
+    - if [ -f harness/requirements.txt ]; then pip install --quiet --cache-dir "$PIP_CACHE_DIR" -r harness/requirements.txt; fi
+    - git config user.email "harness-bot@noreply.aws.dev"
+    - git config user.name "harness scorer-sync bot"
+  script:
+    # A fork MR runs in the fork's project, and HARNESS_MR_TOKEN cannot push to a fork
+    # branch. There is nothing to commit back to, so leave the (already-red) contract-test
+    # as the fork contributor's signal to run --write themselves, and exit cleanly.
+    - |
+      if [ -n "${CI_MERGE_REQUEST_SOURCE_PROJECT_ID:-}" ] \
+         && [ "${CI_MERGE_REQUEST_SOURCE_PROJECT_ID}" != "${CI_PROJECT_ID}" ]; then
+        echo "fork MR (source project ${CI_MERGE_REQUEST_SOURCE_PROJECT_ID} != ${CI_PROJECT_ID}) —" >&2
+        echo "cannot push a commit back to a fork branch. Run 'python3 harness/scorer-prompt-sync.py" >&2
+        echo "--write' locally, commit, and re-publish the prompt to Benchmark." >&2
+        exit 0
+      fi
+    # Work on the SOURCE-branch tip, not the detached merge-result HEAD, so what we regenerate
+    # and push is exactly the contributor's branch content (no target-branch bleed-in).
+    - |
+      SRC="${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-$CI_COMMIT_REF_NAME}"
+      git fetch --quiet origin "$SRC"
+      git checkout -B "$SRC" "origin/$SRC"
+    # Regenerate the GEN blocks + rewrite the facts-lock from the live TD.
+    - python3 harness/scorer-prompt-sync.py --write
+    # Commit back ONLY if --write actually changed something. If the contributor already ran
+    # --write (or the TD edit didn't touch a baked-in fact), there is nothing to do — same
+    # "reproduced byte-for-byte, nothing to propose" guard the rebaseline job uses.
+    - |
+      RUBRIC="harness/rubric/ara-scorer-prompt.md harness/rubric/mod-scorer-prompt.md \
+              harness/rubric/ara-scorer-facts.lock.json harness/rubric/mod-scorer-facts.lock.json"
+      if git diff --quiet -- $RUBRIC; then
+        echo "scorer prompts already in sync with the TD — nothing to commit."
+        exit 0
+      fi
+      echo "=============================================================================="
+      echo "TD drift regenerated the EXTERNAL Benchmark scorer prompt(s):"
+      git --no-pager diff --stat -- $RUBRIC
+      echo "=============================================================================="
+      if [ -z "${HARNESS_MR_TOKEN:-}" ]; then
+        echo "✗ no HARNESS_MR_TOKEN — cannot push the regenerated prompt back to the branch." >&2
+        echo "  Run 'python3 harness/scorer-prompt-sync.py --write', commit, and re-publish to" >&2
+        echo "  Benchmark by hand. (Settings -> CI/CD -> Variables: a Project Access Token with" >&2
+        echo "  'api' scope, Reporter or above, Masked ok, Protected OFF.)" >&2
+        exit 1
+      fi
+      SRC="${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME:-$CI_COMMIT_REF_NAME}"
+      git add $RUBRIC
+      git commit -m "chore(harness): auto-sync Benchmark scorer prompt to the TD" \
+        -m "Regenerated by harness:scorer-sync (pipeline ${CI_PIPELINE_ID}) because this MR moved a TD fact the external scorer bakes in. ACTION REQUIRED: the Benchmark platform serves a COPY of this prompt — re-publish the regenerated harness/rubric/*-scorer-prompt.md there, or the benchmark scorer stays stale."
+      git push "https://oauth2:${HARNESS_MR_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
+               "HEAD:${SRC}"
+      echo "pushed the regenerated scorer prompt onto ${SRC}."
+    # LOUD, PERSISTENT nag: the commit fixed the in-repo copy, but a human still has to
+    # re-publish to Benchmark. An MR note survives after the job log scrolls away. Advisory —
+    # a failed POST must not fail the job (the commit is already the durable record).
+    - |
+      if [ -n "${CI_MERGE_REQUEST_IID:-}" ] && [ -n "${HARNESS_MR_TOKEN:-}" ]; then
+        # printf keeps every source line indented (so the YAML block scalar stays intact)
+        # while emitting real newlines, so the rendered markdown has no stray code-block
+        # indentation. Blank "" args are the paragraph breaks.
+        BODY="$(printf '%s\n' \
+          "⚠️ **Scorer prompt auto-synced to the TD — action required.**" \
+          "" \
+          "This MR moved a TD fact that the **external Benchmark scorer prompt** bakes in, so \`harness:scorer-sync\` regenerated \`harness/rubric/*-scorer-prompt.md\` (+ the facts-lock) and committed it to this branch." \
+          "" \
+          "**The in-repo copy is now correct, but the Benchmark platform still serves the OLD prompt.** Before/after merge, re-publish the regenerated prompt to Benchmark, or the benchmark scorer keeps grading against stale rubric facts. This note is the only signal that a re-publish is owed — it is not automated.")"
+        curl -sS --max-time 30 \
+          --header "PRIVATE-TOKEN: ${HARNESS_MR_TOKEN}" \
+          --data-urlencode "body=${BODY}" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" \
+          >/dev/null && echo "posted the re-publish reminder to MR !${CI_MERGE_REQUEST_IID}." \
+          || echo "WARN: could not post the re-publish MR note (the commit still landed)." >&2
+      fi
+  allow_failure: true   # advisory — mirrors the rest of the harness; never blocks a merge

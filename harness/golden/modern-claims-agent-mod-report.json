@@ -1,0 +1,1067 @@
+{
+  "analysis_type": "mod",
+  "metadata": {
+    "repository": "modern-claims-agent",
+    "analysis_date": "2026-08-21",
+    "td_version": "modernization-readiness-analysis",
+    "repo_type": "application",
+    "repo_type_source": "auto-detected",
+    "repo_type_justification": "Application source code with entry point (agent.py main function), dependency manifest (requirements.txt), CloudFormation IaC provisioning AWS resources (AgentCore Runtime, Lambda, IAM), and container reference in IaC.",
+    "service_archetype": "stateful-crud",
+    "archetype_source": "auto-detected",
+    "archetype_justification": "PostgreSQL database connections with write operations (settlement_writer updates claims table and inserts into payment_queue), CRUD endpoints for claim/policy data. The AI/LLM layer is a processing mechanism over owned persistent state, not a multi-service orchestration pattern.",
+    "priority": null,
+    "tags": [],
+    "context": null,
+    "surface_flags": {
+      "has_persistent_data_store": true,
+      "has_at_rest_data_surface": true,
+      "has_deployed_workload": true,
+      "has_api_surface": true,
+      "has_multi_instance_deployment": false,
+      "has_iac_provisioning_aws_resources": true
+    }
+  },
+  "overall_score": 2.12,
+  "categories": [
+    {
+      "category_id": "INF",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "numeric_score": 2.27,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "APP",
+      "category": "Application Architecture",
+      "category_display": "Application Architecture",
+      "numeric_score": 2.5,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "DATA",
+      "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
+      "numeric_score": 3.0,
+      "score_rating": "Partial",
+      "severity_status": "Needs Work"
+    },
+    {
+      "category_id": "SEC",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "numeric_score": 1.83,
+      "score_rating": "Needs Work",
+      "severity_status": "Critical"
+    },
+    {
+      "category_id": "OPS",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "numeric_score": 1.0,
+      "score_rating": "Not Ready",
+      "severity_status": "Critical"
+    }
+  ],
+  "classification": {
+    "tier": "Remediation Required",
+    "high_count": 4,
+    "medium_count": 20,
+    "low_count": 8,
+    "rule_matched": "2-11 High \u2192 Remediation Required",
+    "classification_consistency_check": "consistent"
+  },
+  "top_gaps": [
+    {
+      "question_id": "INF-Q5",
+      "title": "Network Security",
+      "score": 1,
+      "gap": "PUBLIC network mode, no VPC, no security groups, no network segmentation for PII-handling service",
+      "impact": "Critical security exposure \u2014 claims data including SSN and bank routing numbers traverses a publicly accessible endpoint"
+    },
+    {
+      "question_id": "INF-Q11",
+      "title": "CI/CD Automation",
+      "score": 1,
+      "gap": "No CI/CD pipeline configuration in the repository",
+      "impact": "Manual deployments prevent consistent quality gates and block safe deployment strategies"
+    },
+    {
+      "question_id": "OPS-Q5",
+      "title": "Deployment Strategy",
+      "score": 1,
+      "gap": "No deployment strategy \u2014 direct to production releases",
+      "impact": "Regressions reach all users simultaneously with no rollback mechanism"
+    },
+    {
+      "question_id": "OPS-Q6",
+      "title": "Integration Testing",
+      "score": 1,
+      "gap": "Only mocked unit tests; no integration or agent evaluation tests",
+      "impact": "Cannot validate end-to-end claim triage correctness before production"
+    },
+    {
+      "question_id": "OPS-Q1",
+      "title": "Distributed Tracing",
+      "score": 1,
+      "gap": "No tracing instrumentation; cannot reconstruct agent sessions",
+      "impact": "Impossible to diagnose or audit agent decisions when adjusters dispute recommendations"
+    }
+  ],
+  "findings": [
+    {
+      "question_id": "INF-Q2",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "Managed Databases \u2014 configuration not fully visible",
+      "description": "The claims database is accessed via Secrets Manager using psycopg2 (PostgreSQL). The database is not provisioned in this repo. Cannot confirm Multi-AZ or automated failover.",
+      "gap": "Database provisioning not visible \u2014 cannot confirm Multi-AZ, automated failover, or engine configuration.",
+      "recommendation": "Ensure the claims database is provisioned as RDS Aurora PostgreSQL with Multi-AZ and automated failover.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q3",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "Workflow Orchestration \u2014 multi-step operations hardcoded",
+      "description": "Claims triage workflow and batch processing (500 claims) are implemented entirely in application code with no dedicated workflow orchestration service.",
+      "gap": "Multi-step operations lack dedicated orchestration. No error recovery, retry, or partial-failure handling at the workflow level.",
+      "recommendation": "Adopt AWS Step Functions for batch processing workflow with built-in retry and partial-failure recovery.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q4",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "Async Messaging \u2014 database-as-queue anti-pattern",
+      "description": "No managed messaging infrastructure. The settlement_writer writes to a payment_queue database table for cross-service state propagation rather than using SQS/SNS/EventBridge.",
+      "gap": "Cross-service state changes use a database table rather than managed messaging. No event emission when claims are settled.",
+      "recommendation": "Replace payment_queue table pattern with SQS or EventBridge for payment release events.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q5",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "Network Security \u2014 PUBLIC network mode with no segmentation",
+      "description": "AgentCore Runtime configured with NetworkMode: PUBLIC. No VPC, private subnets, or security groups. IAM policies use Resource: '*'. Any principal in the account can invoke the runtime directly.",
+      "gap": "No network segmentation. Public endpoint for a service handling PII (SSN, bank routing numbers).",
+      "recommendation": "Switch AgentCore Runtime to PRIVATE network mode. Restrict runtime invocation to the gateway role only. Apply least-privilege Resource constraints.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q6",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "API Entry Point \u2014 gateway lacks security controls",
+      "description": "AgentCore Gateway exists but AuthorizerType: NONE means no authentication, throttling, or request validation at the gateway layer.",
+      "gap": "Gateway provides routing but no security controls.",
+      "recommendation": "Configure gateway authorization and throttling. Implement per-tool access control for sensitive tools.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q7",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "Auto-Scaling \u2014 no explicit concurrency configuration",
+      "description": "Lambda and AgentCore Runtime auto-scale by design but no explicit concurrency limits or reserved concurrency configured.",
+      "gap": "No explicit concurrency limits. Batch mode could exhaust downstream database connections.",
+      "recommendation": "Configure Lambda reserved concurrency to prevent database connection exhaustion.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q8",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "Backup and Recovery \u2014 no backup configuration",
+      "description": "No backup configuration found. Database provisioned externally. Batch mode rollback is documented as manual.",
+      "gap": "No backup strategy for any data store. No point-in-time recovery. Manual rollback only.",
+      "recommendation": "Ensure external claims database has automated backups with PITR. Add AWS Backup plan. Document and test restore procedures.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q9",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "High Availability \u2014 database HA unconfirmed",
+      "description": "Lambda and AgentCore Runtime are inherently multi-AZ. Database Multi-AZ cannot be confirmed from this repo.",
+      "gap": "Cannot confirm database Multi-AZ from this repo.",
+      "recommendation": "Verify the external claims database is configured with Multi-AZ failover.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "INF-Q10",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "IaC Coverage \u2014 database and operational resources not in IaC",
+      "description": "CloudFormation covers compute, IAM, logging, and agent infrastructure. Database and knowledge base referenced via SSM but not provisioned here. No operational resources (alarms, dashboards).",
+      "gap": "Database and knowledge base IaC not in this repo. No operational resources defined.",
+      "recommendation": "Document database/KB ownership. Add CloudWatch alarms and operational resources to IaC.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "INF-Q11",
+      "category": "Infrastructure & DevOps",
+      "category_display": "Infrastructure, Platform, and DevOps",
+      "category_id": "INF",
+      "title": "CI/CD Automation \u2014 no pipeline configuration",
+      "description": "No CI/CD pipeline configuration exists in the repository. No .github/workflows/, buildspec.yml, or Jenkinsfile. External CI referenced in security review but not version-controlled.",
+      "gap": "No version-controlled pipeline. Deployments are not automated from this repo.",
+      "recommendation": "Add pipeline definition covering lint, test, security scan, agent evaluation, CloudFormation deploy, and post-deploy verification.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "tests/test_tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "APP-Q3",
+      "category": "Application Architecture",
+      "category_display": "Application Architecture",
+      "category_id": "APP",
+      "title": "Async vs Sync \u2014 all communication synchronous",
+      "description": "All communication is synchronous. Settlement_writer creates cross-service state via database INSERT without event emission. Archetype: stateful-crud \u2014 async patterns would benefit cross-service state propagation.",
+      "gap": "State changes affecting downstream systems communicated via database table polling rather than async messaging.",
+      "recommendation": "Emit settlement events asynchronously (EventBridge or SNS) when claims are settled.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q4",
+      "category": "Application Architecture",
+      "category_display": "Application Architecture",
+      "category_id": "APP",
+      "title": "Long-Running Process Handling \u2014 batch mode lacks async patterns",
+      "description": "Batch mode processes 500 claims sequentially without status polling, callbacks, or checkpointing. Individual claims may exceed 30 seconds (LLM inference + tools).",
+      "gap": "Batch processing is long-running with no async job handling, progress reporting, or resume-from-failure capability.",
+      "recommendation": "Implement batch processing as Step Functions Map state with per-claim iterations and checkpoint state.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docs/batch-mode.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": true,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q5",
+      "category": "Application Architecture",
+      "category_display": "Application Architecture",
+      "category_id": "APP",
+      "title": "API Versioning \u2014 no versioning strategy",
+      "description": "No API versioning strategy. MCP tools exposed without version identifiers. Tool schemas have no versioning.",
+      "gap": "Breaking changes to tool schemas would immediately affect all consumers with no migration path.",
+      "recommendation": "Add version identifiers to MCP tool schemas. Consider versioned tool names or version negotiation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "APP-Q6",
+      "category": "Application Architecture",
+      "category_display": "Application Architecture",
+      "category_id": "APP",
+      "title": "Service Discovery \u2014 deploy-time resolution only",
+      "description": "Endpoints configured via environment variables and SSM Parameter Store references. Resolved at deploy time, not runtime.",
+      "gap": "No dynamic service discovery. No service registry or mesh.",
+      "recommendation": "SSM-based configuration is adequate for current complexity. Consider AWS Cloud Map if the platform grows.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q1",
+      "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
+      "category_id": "DATA",
+      "title": "Unstructured Data \u2014 no document parsing pipeline",
+      "description": "Prior-claims corpus stored in Bedrock Knowledge Base backed by OpenSearch Serverless. No document parsing pipeline for incoming claim attachments.",
+      "gap": "No parsing pipeline (Textract, Tika) for unstructured claim documents.",
+      "recommendation": "Add S3 ingestion path with Textract for document parsing if claim submissions include attachments.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/retrieval.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "DATA-Q2",
+      "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
+      "category_id": "DATA",
+      "title": "Unified Data Access \u2014 per-source modules but no connection pooling",
+      "description": "Data access organized into dedicated modules (tools.py, retrieval.py, memory.py). Each creates connections per invocation without pooling.",
+      "gap": "No connection pooling. New database connection per invocation risks exhaustion under load.",
+      "recommendation": "Add connection pooling (psycopg2 pool or RDS Proxy) to avoid connection exhaustion.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category": "Data Platform",
+      "category_display": "Data Platform Modernization",
+      "category_id": "DATA",
+      "title": "Database Engine Version \u2014 not tracked in this repo",
+      "description": "PostgreSQL engine version not pinned anywhere in this repository. Database provisioned externally. No version-update procedure documented.",
+      "gap": "Database engine version not tracked. Cannot confirm EOL status.",
+      "recommendation": "Document required PostgreSQL engine version. Establish version-update procedure.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "requirements.txt",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q2",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Encryption at Rest \u2014 AWS-managed only, no customer KMS",
+      "description": "All data stores use AWS-managed default encryption. No customer-managed KMS keys configured for PII-containing log groups or data stores.",
+      "gap": "No customer-managed KMS keys. CloudWatch Logs containing full prompts with PII lack explicit encryption configuration.",
+      "recommendation": "Add customer-managed KMS keys for CloudWatch Log Group containing PII. Configure key rotation.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q3",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "category_id": "SEC",
+      "title": "API Authentication \u2014 gateway completely unauthenticated",
+      "description": "AgentCore Gateway has AuthorizerType: NONE. No per-request authentication. Any network-reachable caller can invoke any tool including settlement_writer.",
+      "gap": "No per-request authentication on the primary API surface. settlement_writer (moves money) accessible without auth.",
+      "recommendation": "Add IAM authorization or custom authorizer to gateway. Implement per-tool authorization for sensitive tools.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q4",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Centralized Identity \u2014 no IdP integration",
+      "description": "No identity provider integration. No Cognito, OIDC, or SAML. Actor_id is a freeform string defaulting to 'adjuster-pool' with no identity verification.",
+      "gap": "No centralized identity. Cannot attribute agent actions to specific adjusters.",
+      "recommendation": "Integrate with corporate IdP. Map adjuster identities to actor_id.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q5",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Secrets Management \u2014 no rotation configured",
+      "description": "Database credentials in Secrets Manager. No plaintext credentials. No automated rotation evidence.",
+      "gap": "No evidence of automated rotation on database secret.",
+      "recommendation": "Configure automated rotation using Secrets Manager PostgreSQL rotation support.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 3,
+        "score_label": "Partial",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "SEC-Q6",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Compute Hardening \u2014 no vulnerability scanning",
+      "description": "Lambda auto-patched, container image pinned to digest. No vulnerability scanning tools configured. No Dependabot or Renovate.",
+      "gap": "No vulnerability scanning on container image or Python dependencies.",
+      "recommendation": "Enable ECR image scanning. Add Dependabot or Renovate for dependency updates.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "requirements.txt",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 2,
+        "score_label": "Needs Work",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "SEC-Q7",
+      "category": "Security Baseline",
+      "category_display": "Security Baseline",
+      "category_id": "SEC",
+      "title": "Application Security Pipeline \u2014 no security scanning",
+      "description": "No SAST, DAST, dependency scanning, or container scanning configured. No Dependabot or Snyk. Releases promoted on unit tests only.",
+      "gap": "No automated security validation in the release process.",
+      "recommendation": "Add pip-audit, Semgrep/Bandit for Python SAST, and container scanning to CI/CD pipeline.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "tests/test_tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q1",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Distributed Tracing \u2014 no tracing instrumentation",
+      "description": "No OpenTelemetry, X-Ray, or trace ID propagation. Cannot reconstruct end-to-end agent sessions across gateway, runtime, and memory.",
+      "gap": "Cannot trace requests across service boundaries. Cannot audit settlement decisions.",
+      "recommendation": "Instrument with OpenTelemetry or X-Ray. Propagate trace IDs. Correlate traces with claim_id.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "requirements.txt",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q2",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "SLO Definitions \u2014 no SLOs defined",
+      "description": "No SLO definitions. No CloudWatch alarms. No latency or availability targets.",
+      "gap": "No formal service level objectives for claim triage.",
+      "recommendation": "Define SLOs for triage latency, settlement accuracy, and availability.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q3",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Business Metrics \u2014 no custom metrics",
+      "description": "No custom metrics published. Only stdout logging. No business metrics for claims processed, settlement amounts, or approval rates.",
+      "gap": "Cannot track business outcomes. Only infrastructure-level metrics available.",
+      "recommendation": "Publish custom CloudWatch metrics for claims_triaged_count, settlement_amount, adjuster_override_rate.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "src/claims_agent/agent.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q4",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Anomaly Detection \u2014 no alerting configured",
+      "description": "No CloudWatch Alarms. No anomaly detection. No PagerDuty/OpsGenie integration.",
+      "gap": "No detection of anomalous settlements, unusual volumes, or tool failures.",
+      "recommendation": "Add CloudWatch Alarms for errors, settlement amount thresholds, and latency anomalies.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q5",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Deployment Strategy \u2014 direct to production",
+      "description": "No deployment strategy configuration. No CodeDeploy, canary, or blue/green. Releases promoted on unit tests only.",
+      "gap": "Deployments go directly to production with no staged rollout.",
+      "recommendation": "Implement Lambda aliases with weighted traffic shifting. Use blue/green for AgentCore Runtime.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q6",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Integration Testing \u2014 only mocked unit tests",
+      "description": "Only 2 mocked unit tests exist. No integration tests for agent workflows. No agent evaluation framework. Security review notes 'No eval gate.'",
+      "gap": "Cannot validate settlement recommendations, edge cases, or prompt injection resistance before deployment.",
+      "recommendation": "Build agent evaluation suite with golden-set claims, adversarial inputs, and tool-correctness tests. Run in CI as deployment gate.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "High",
+      "phase": 1,
+      "evidence": {
+        "file": "tests/test_tools.py",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": true
+      }
+    },
+    {
+      "question_id": "OPS-Q7",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Incident Response \u2014 entirely ad hoc",
+      "description": "No runbooks or automation. Batch mode rollback is manual. No escalation path for incorrect agent recommendations.",
+      "gap": "Incident response entirely ad hoc. No automated rollback for bad settlements.",
+      "recommendation": "Create runbooks for batch rollback, agent misbehavior, and model degradation. Implement as SSM Automation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "docs/batch-mode.md",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q8",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Observability Ownership \u2014 no ownership model",
+      "description": "CloudWatch LogGroup defined but no dashboards, alarms with owners, CODEOWNERS, or team attribution.",
+      "gap": "No ownership model for observability. No designated monitor for agent health.",
+      "recommendation": "Add CODEOWNERS. Create service dashboard with named owner. Define on-call rotation.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    },
+    {
+      "question_id": "OPS-Q9",
+      "category": "Operations & Observability",
+      "category_display": "Operations & Observability",
+      "category_id": "OPS",
+      "title": "Resource Tagging \u2014 no tags on any resource",
+      "description": "No tags on any CloudFormation resources. No default tags. No tagging standard.",
+      "gap": "Cannot attribute costs. Cannot identify ownership during incidents. No environment tags.",
+      "recommendation": "Add consistent tags: Service, Team, Environment, CostCenter to all resources.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "infra/agent-runtime.yaml",
+        "lines": null
+      },
+      "mod_metadata": {
+        "internal_score": 1,
+        "score_label": "Not Ready",
+        "archetype_calibrated": false,
+        "core_question": false
+      }
+    }
+  ],
+  "evaluations": [
+    {
+      "question_id": "INF-Q1",
+      "category_id": "INF",
+      "title": "Managed Compute",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 all compute on managed services (AgentCore Runtime, Lambda). No EC2."
+    },
+    {
+      "question_id": "APP-Q1",
+      "category_id": "APP",
+      "title": "Programming Languages",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 Python 3.12 with modern boto3, langchain-aws, opensearch-py."
+    },
+    {
+      "question_id": "APP-Q2",
+      "category_id": "APP",
+      "title": "Monolith vs Microservices",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 well-structured single-purpose microservice with clean module boundaries."
+    },
+    {
+      "question_id": "DATA-Q4",
+      "category_id": "DATA",
+      "title": "Stored Procedures and Schema Complexity",
+      "status": "pass",
+      "score": 4,
+      "reason": "Score 4 \u2014 no stored procedures; all SQL is standard DML; business logic in application layer."
+    },
+    {
+      "question_id": "SEC-Q1",
+      "category_id": "SEC",
+      "title": "Audit Logging",
+      "status": "not_evaluated_surface_flag",
+      "score": null,
+      "reason": "Application-level IaC only \u2014 CloudTrail is an account-level concern belonging in foundation infrastructure repo."
+    }
+  ],
+  "pathways": [
+    {
+      "id": "move-to-cloud-native",
+      "name": "Move to Cloud Native",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "APP-Q2 = 4 \u2014 application is already a well-structured single service with clean module boundaries.",
+      "triggering_questions": [
+        {
+          "question_id": "APP-Q2",
+          "score": 4,
+          "note": "APP-Q2 = 4 meets threshold; primary trigger not met"
+        }
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-containers",
+      "name": "Move to Containers",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q1 = 4 \u2014 compute already on managed services (AgentCore Runtime, Lambda).",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q1",
+          "score": 4,
+          "note": "INF-Q1 = 4 meets threshold; compute already managed"
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "Workload already runs on AgentCore Runtime (managed container service) and Lambda; container pathway does not apply."
+    },
+    {
+      "id": "move-to-open-source",
+      "name": "Move to Open Source",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "DATA-Q4 = 4 \u2014 no stored procedures or proprietary SQL detected. PostgreSQL is already open source.",
+      "triggering_questions": [
+        {
+          "question_id": "DATA-Q4",
+          "score": 4,
+          "note": "DATA-Q4 = 4 meets threshold; no proprietary SQL"
+        }
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-databases",
+      "name": "Move to Managed Databases",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "INF-Q2 = 3 \u2014 database appears managed (Secrets Manager access pattern, no self-hosted evidence).",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q2",
+          "score": 3,
+          "note": "INF-Q2 = 3 meets threshold; database likely managed"
+        }
+      ],
+      "detail": null
+    },
+    {
+      "id": "move-to-managed-analytics",
+      "name": "Move to Managed Analytics",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "No data processing workloads (streaming, ETL, pipelines) exist in this repo.",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q4",
+          "score": 2,
+          "note": "INF-Q4 < 3 but contextual guard blocks: no streaming/ETL/analytics workloads found"
+        }
+      ],
+      "detail": null,
+      "not_triggered_reason": "No data processing workloads (streaming, ETL, pipelines, analytics) found in this repository. The service processes claims via LLM inference, not data pipelines."
+    },
+    {
+      "id": "move-to-modern-devops",
+      "name": "Move to Modern DevOps",
+      "status": "Triggered",
+      "priority": "High",
+      "effort": "Medium",
+      "key_trigger_criteria": "INF-Q11 = 1 (no CI/CD automation); supporting: OPS-Q5 = 1 (no deployment strategy), OPS-Q6 = 1 (no integration testing).",
+      "triggering_questions": [
+        {
+          "question_id": "INF-Q11",
+          "score": 1,
+          "note": "Primary trigger: no CI/CD pipeline configuration"
+        },
+        {
+          "question_id": "OPS-Q5",
+          "score": 1,
+          "note": "Supporting: direct-to-production deployment"
+        },
+        {
+          "question_id": "OPS-Q6",
+          "score": 1,
+          "note": "Supporting: no integration tests in CI"
+        }
+      ],
+      "detail": {
+        "current_state": "No version-controlled CI/CD pipeline. Deployments manual. Unit tests only (2 mocked tests). No agent evaluation gate.",
+        "recommended_services": [
+          "AWS CodeBuild",
+          "AWS CodePipeline",
+          "AWS CodeDeploy",
+          "CloudFormation",
+          "X-Ray",
+          "CloudWatch Synthetics"
+        ],
+        "immediate_actions": [
+          "Add buildspec.yml with lint, test, security scan, and deploy stages",
+          "Build agent evaluation test suite as deployment gate",
+          "Configure CodeDeploy with canary traffic shifting for Lambda"
+        ],
+        "learning_materials": [
+          "https://skillbuilder.aws/learning-plan/1FGEQKGPQD",
+          "https://skillbuilder.aws/learn/R4B13K95YQ"
+        ]
+      }
+    },
+    {
+      "id": "move-to-ai",
+      "name": "Move to AI",
+      "status": "Not Triggered",
+      "priority": null,
+      "effort": null,
+      "key_trigger_criteria": "AI/agent frameworks already in use: Bedrock SDK (boto3 bedrock-runtime), LangChain (langchain-aws), OpenSearch Serverless vector store, RAG via Bedrock Knowledge Base, AgentCore Runtime and Memory.",
+      "triggering_questions": [],
+      "detail": null,
+      "not_triggered_reason": "AI/agent frameworks are already comprehensively adopted: Bedrock for model inference, Knowledge Base for RAG, AgentCore for runtime and memory, langchain-aws for agent patterns."
+    }
+  ],
+  "decomposition_strategy": null,
+  "repo_name": "modern-claims-agent"
+}

@@ -10,7 +10,7 @@ Common errors and their resolutions when running the orchestrator. Read this whe
 
 **Symptom:** A command failed and you're tempted to run `atx ct server` (an older note or doc may have told you to).
 
-**Cause (verified 2026-08, atx 3.9.0):** No server is needed. `atx ct` analyses run **in-process** — the CLI does the work itself. `atx ct server` is a hidden/deprecated command that starts a daemon and **blocks the shell** until killed; in an automated flow it will hang the session outright.
+**Cause:** No server is needed. `atx ct` analyses run **in-process** — the CLI does the work itself. `atx ct server` is a hidden/deprecated command that starts a daemon and **blocks the shell** until killed; in an automated flow it will hang the session outright.
 
 **Fix:** Never invoke `atx ct server`. Health-check with:
 ```bash
@@ -95,7 +95,7 @@ atx ct source remove --name <name>
 2. If stuck > 40 minutes, cancel: `atx ct analysis cancel --id <id>`
 3. Re-run: `atx ct analysis run --type <type> --source <name>`
 
-Note on `--wait`: it **does** exist on `analysis run` — it's just hidden from `--help` (registered with `.hideHelp()`), so its absence from the help text is not evidence it was removed. In agent workflows prefer explicit polling of `atx ct analysis get --id <id> --json` over `--wait`, so you keep control of the timeout and can report progress.
+Note on `--wait`: it **does** exist on `analysis run` — it's just hidden from `--help`, so its absence from the help text is not evidence it was removed. In agent workflows prefer explicit polling of `atx ct analysis get --id <id> --json` over `--wait`, so you keep control of the timeout and can report progress.
 
 ### `status: complete` but no reports, no findings, no portfolio summary
 
@@ -136,7 +136,7 @@ PersistFindingsError: Failed to persist finding portfolio::my-portfolio::API::<h
   failed to satisfy constraint: Member must not be null
 ```
 
-**Cause — a service-side bug, not your configuration.** Portfolio *cross-cutting* findings span several repos by definition, so they carry no single `repositoryId`; the persist API rejects null. Any ≥2-repo run whose portfolio phase emits a cross-cutting blocker hits this. **Reproduced on two consecutive 11-repo ARA runs** — re-running does not avoid it.
+**Cause:** portfolio *cross-cutting* findings span several repos by definition, so they carry no single `repositoryId`. If you hit this, re-running will not avoid it — read the artifacts instead, which are already complete.
 
 **What survives:** everything except the cross-cutting findings. The log says so explicitly — `persisted 473/473 findings before failing; preserving them in the local record` — and the full 4-artifact portfolio bundle (including the `.html` and the `.json` the EBA TD consumes) is already on disk, because the report is written *before* the persist step. The cross-cutting findings are still readable in `portfolio_ara_summary.cross_cutting_blockers` on the analysis record and in the portfolio report itself; they are only missing from the findings store.
 
@@ -156,23 +156,11 @@ Note the run's `status` after this is **not deterministic** — see the entry ab
 
 **Symptom:** Analysis reaches `complete`, report artifacts **are** written (`report_paths` non-empty), but the findings count is 0. If `report_paths` is empty, see the entry above first — the run is probably still going.
 
-**Cause (atx 3.7.0 bug):** the report parser fell back to markdown scraping whenever `categories` was emitted as a JSON array, and silently extracted nothing. **Fixed in 3.9.0** — verified 43 findings on an ARA and 31 on a MOD run.
-
-**Fix:** upgrade the CLI. There is **no `atx update` subcommand** — re-run the installer:
-```bash
-curl -fsSL https://transform-cli.awsstatic.com/install.sh | bash
-```
-Upgrading in place preserves your registered sources, repos, and prior analyses — you do not need to re-register or re-run anything.
-
-Verify the version (see "`atx --version` misreports inside Claude Code" below):
-```bash
-env -u TOOLBOX_TOOL_VERSION atx --version
-```
-
-If you are already on 3.9.0+, then consider the benign causes:
-- Repos are already fully compliant
-- Analysis type doesn't apply (e.g., security requires security agent setup)
-- Repos were not properly discovered (check `atx ct repository list`)
+**Causes to check, in order:**
+- Repos were not properly discovered — confirm with `atx ct repository list`.
+- The analysis type doesn't apply (e.g. `security` requires `atx ct setup security-agent`).
+- The repos really are compliant for that analysis type.
+- Your CLI is old. Upgrade with `atx update`, then re-run. Upgrading preserves registered sources, repos, and prior analyses.
 
 ### Configuration flag not accepted
 
@@ -186,13 +174,15 @@ If you are already on 3.9.0+, then consider the benign causes:
 
 **Symptom:** `atx ct schedule create --expression "<cron>"` fails on the unknown option.
 
-**Cause:** `--expression` (and cron syntax generally) was **removed in 3.8.0**. Schedules now take a fixed set of recurrence keywords.
+**Cause:** Schedules take a fixed set of recurrence keywords, not cron syntax.
 
-**Fix:** Use `--recurrence`, which is now required:
+**Fix:** Use `--recurrence`, which is required, along with `--name` and `--mode`:
 ```bash
-atx ct schedule create --type agentic-readiness --source <name> --recurrence daily
+atx ct schedule create --name nightly-ara --mode aws-managed --recurrence daily \
+    --type agentic-readiness --sources <name> --execution-role <arn>
 # also: --recurrence weekly:MONDAY   |   --recurrence monthly:1
 ```
+`--execution-role` is required for `--mode aws-managed`; `--mode ec2|batch` needs `--stack-name` instead. The fire time is not configurable to the minute.
 
 ### Portfolio aggregation says "fewer than 2 valid reports"
 
@@ -210,7 +200,7 @@ Without `--repo`, ct runs analysis on ALL discovered repos.
 
 **Symptom:** A portfolio TD phase errors out saying it found no portfolio report to work from.
 
-**Cause (verified 2026-08, atx 3.9.0):** This is **not a bug** if you ran against a single repo. Both portfolio TDs require **>= 2 discovered per-repo reports** to aggregate, and aggregation is **per-run** — a run only sees the reports produced within itself. Two separate single-repo runs do **not** accumulate into a 2-report portfolio.
+**Cause:** This is **not a bug** if you ran against a single repo. Both portfolio TDs require **>= 2 discovered per-repo reports** to aggregate, and aggregation is **per-run** — a run only sees the reports produced within itself. Two separate single-repo runs do **not** accumulate into a 2-report portfolio.
 
 Additionally, the `bridge_summary` phase needs **both** a portfolio ARA report **and** a portfolio MOD report present. Having only one of the two is enough to fail it, even with 2+ repos.
 
@@ -224,7 +214,7 @@ Additionally, the `bridge_summary` phase needs **both** a portfolio ARA report *
 
 **Symptom:** After analysis completes you don't know where to look, or `find . -name "*report*"` from the wrong directory returns nothing.
 
-**Cause (verified 2026-08, atx 3.9.0):** Reports **ARE** on the local filesystem — in **three** places with different contents. `report_paths` points at the thinnest one. File counts from one 11-repo ARA run:
+**Cause:** Reports **ARE** on the local filesystem — in **three** places with different contents. `report_paths` points at the thinnest one. File counts from one 11-repo ARA run:
 
 | Location | md | json | html | meta |
 |---|---|---|---|---|
@@ -249,17 +239,19 @@ atx ct analysis get --id <analysis-id> --json   # → .report_paths (markdown-on
 
 Two reasons hand-built paths fail here: **`<type>` is the source's analysis root, not the run's type** — a `modernization-readiness` run writes under `sources/<src>/agentic-readiness/runs/<id>/` — and per-repo dirs are slug-mangled `<source>-<repo>-<16hex>` (sha256 prefix), not the `<source>__<repo>` form used in `shared/analyses/`.
 
-### `list-artifacts` / `get-artifact` return "unknown command"
+### Pulling the full per-repo bundle
 
-**Symptom:** `atx ct analysis list-artifacts` or `atx ct analysis get-artifact` fails with `error: unknown command`.
+`report_paths` is **markdown-only**. To get the complete bundle (`.json`, `.html`, portfolio artifacts), either fetch the stored artifact or read the run tree off disk:
 
-**Cause:** Both subcommands were **removed**. There is no artifact-export API to call — see above, the artifacts are already files on disk.
-
-**Fix:** Use `analysis get` to find the paths, then read the files:
 ```bash
-atx ct analysis get --id <analysis-id> --json   # → .report_paths
+atx ct analysis list-artifacts --id <id> [--repo <r>] [--json]
+atx ct analysis get-artifact  --id <id> --artifact-id <aid> [--output <file>]
+
+# Always-works fallback — glob the run tree (see the section above):
+ls ~/.atxct/sources/*/*/runs/<id>/portfolio-*/*-analysis/
 ```
-Then read the files off disk. Remember `report_paths` is markdown-only — for `.json`/`.html` glob `~/.atxct/sources/*/*/runs/<id>/` per the section above.
+
+Artifacts materialize per-repo as each repo completes, so a mid-run listing can be partial.
 
 ### Missing HTML or JSON alongside the markdown
 
@@ -361,19 +353,6 @@ export AWS_REGION=us-east-1
 ```
 Note: `atx ct` commands use the region from your AWS config. `atx custom def exec` may require explicit region setting.
 
-### `atx --version` reports 2.1.x instead of 3.9.0
-
-**Symptom:** Inside Claude Code (or any Builder Toolbox-managed shell), `atx --version` prints a `2.1.x` version that doesn't match the installed CLI, which can send you chasing version-specific bugs that don't apply.
-
-**Cause:** `atx` is shimmed by Builder Toolbox, and an inherited `$TOOLBOX_TOOL_VERSION` makes it report Toolbox's own version rather than the real `atx` version.
-
-**Fix:** Unset it for the call:
-```bash
-env -u TOOLBOX_TOOL_VERSION atx --version
-```
-
----
-
 ## Remediation Issues
 
 ### Permission errors during remediation
@@ -405,7 +384,7 @@ git -C <repo-path> merge <branch-name>
 
 **Symptom:** `remediation create` refuses to run because the target repo's working tree is dirty.
 
-**Cause (verified 2026-08, atx 3.9.0):** A repo that is **currently being analyzed** *is* dirty, by design — `ct` rewrites the report bundle in that repo's working tree in place as the analysis progresses.
+**Cause:** A repo that is **currently being analyzed** *is* dirty, by design — `ct` rewrites the report bundle in that repo's working tree in place as the analysis progresses.
 
 **Fix:** Wait for the analysis to reach `complete`, then retry. Alternatively, test remediation against an isolated copy of the repo registered as its own source.
 
@@ -428,62 +407,6 @@ atx ct remediation create --repo <src>::<repo> --source <src> \
   --transformation-name <your-td> --name "..."
 ```
 See "Authoring a custom remediation TD" in `SKILL.md`.
-
-### "Transformation 'X' not found in the registry. Did you mean …?"
-
-**Symptom:** `remediation create --transformation-name <your-td>` fails with *"Transformation '<your-td>' not found in the registry. Did you mean … ?"*
-
-**Cause:** Usually the name genuinely isn't published in the account/region you're running in — check that first, since TD names aren't stable identifiers: `custom def publish` adds one, `custom def delete` removes it permanently, drafts (`save-draft`) expire after ~30 days, and the registry is shared and churns (**802 TDs across many owners on 2026-08-04**).
-
-**The other cause — and the one that wastes a day: you published to a different namespace than remediation reads.** The registry is **tenanted by authentication mode**. One endpoint (`transform-custom.<region>.api.aws`), two separate namespaces, and a TD in one is a 404 in the other. So `custom def get` saying *"retrieved successfully"* is **not** proof the name resolves for remediation.
-
-The CLI selects the mode from the environment (3.9.0, `AuthenticationManager.isAWSMode`):
-
-| `MIDWAY` | Mode |
-|---|---|
-| `false` | **AWS credentials** |
-| `true` | the alternate identity mode |
-| unset | depends on whether `TOOLBOX_TOOL_VERSION` is set in the environment |
-
-The `ct remediation` worker subprocess **always** runs in AWS-credentials mode. So if `custom def publish` defaults the other way in your environment, the TD lands in a namespace remediation never reads. Confirm it in the debug log:
-
-```bash
-grep -E "MIDWAY|authentication|getTransformationPackageUrl (succeeded|failed)" ~/.aws/atx/logs/debug*.log | tail -20
-```
-
-A publish/`get` that logs a *different* authentication line than the remediation's `MIDWAY=false detected, using AWS credentials` is this bug. The server-side error is explicit — `ResourceNotFoundException`, *"The transformation package doesn't exist, if the transformation package is saved as a draft please publish it"* — which reads like a draft problem but here means wrong namespace.
-
-**Fix:** publish and verify with `MIDWAY=false`, so both sides use the namespace remediation reads.
-
-```bash
-export MIDWAY=false
-./scripts/publish-td.sh definitions/custom/<your-td>
-cd "$(mktemp -d)" && MIDWAY=false atx custom def get -n <your-td>   # now authoritative
-```
-
-Publishing to one namespace does **not** backfill the other — re-publish, don't wait. Verified 2026-08-04 on 3.9.0: an identical `remediation create` failed before and reached `Analyzing <repo> with <your-td>…` after.
-
-To see the split rather than guess:
-
-```bash
-cd "$(mktemp -d)"
-              atx custom def get -n <your-td>   # whatever your environment defaults to
-MIDWAY=false  atx custom def get -n <your-td>   # AWS credentials — what remediation uses
-```
-
-Don't trust the *"Did you mean …?"* list either: it's a Levenshtein match over names the *remediation* side can see, so it suggests neighbors from a namespace your `custom def` may not be reading.
-
-Ruled out by experiment before the auth mode was found — don't re-debug these: **schema** (a byte-identical workshop `SKILL.md` failed too), **identity**, **propagation delay** (30+ min), **publish tooling** (raw `atx custom def publish`), **account** (three), **region**.
-
-If it still won't resolve, run the TD locally — same TD, no registry round-trip, changes left uncommitted for you to commit or PR (match the mode you published in):
-
-```bash
-AWS_REGION=us-east-1 atx custom def exec -n <your-td> -p <abs-repo-path> -x -t
-```
-
-Prefer `get -n <name>` over grepping `atx custom def list`: the list wraps long names across lines and invites substring false positives, and its managed/user split is a section header rather than a per-row field.
-
----
 
 ## Custom TD (`atx custom def`) Issues
 
@@ -533,16 +456,6 @@ atx ct findings batch-update --ids <csv> --status dismissed --reason "..."
 
 ---
 
-## Publishing to Public GitHub Blocked (Amazon-managed machines)
-
-**Symptom:** `git push` / `gh repo create --push` to a public GitHub repo is blocked: "Code Defender detected a push to an unapproved public repository." The empty repo is created but the push is rejected.
-
-**Cause:** Amazon Code Defender DLP control on managed machines.
-
-**Fix:** Do NOT attempt to bypass it. Options: have the user push from their own approved terminal, use a private/approved repo, or keep the ct source local. Note `ct remediation` opens PRs server-side — that path is independent of a local push.
-
----
-
 ## General Debugging
 
 ### Check overall system status
@@ -567,6 +480,8 @@ Per-run state and artifacts also persist under `~/.atxct/shared/analyses/<analys
 
 ### Confirm which CLI you're actually running
 
+`atx --version` can report the version of whatever tool manager installed `atx` rather than `atx` itself. Resolve the real one from the install path:
+
 ```bash
-env -u TOOLBOX_TOOL_VERSION atx --version   # plain `atx --version` misreports as 2.1.x
+readlink -f "$(command -v atx)"    # .../atx/<version>/atx
 ```

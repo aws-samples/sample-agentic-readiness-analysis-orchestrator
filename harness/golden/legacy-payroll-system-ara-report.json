@@ -1,20 +1,24 @@
 {
-  "analysis_type": "ara",
-  "repo_name": "legacy-payroll-system",
   "metadata": {
-    "analysis_date": "2026-07-30",
+    "analysis_type": "ara",
+    "analysis_date": "2026-08-21",
     "td_version": "agentic-readiness-analysis",
+    "repo_name": "legacy-payroll-system",
+    "portfolio_name": null,
     "repo_type": "application",
+    "repo_type_source": "auto-detected",
     "service_archetype": "stateful-crud",
-    "archetype_source": "auto-detected",
-    "archetype_justification": "The system owns persistent state in DB2, performs write operations (payroll output files), and manages employee entity lifecycle through batch processing.",
-    "agent_scope": "read-only",
-    "portfolio_name": "legacy-payroll-system",
+    "service_archetype_source": "auto-detected",
+    "agent_scope": "write-enabled",
+    "agent_scope_source": "inferred",
+    "priority": null,
+    "tags": null,
+    "context": null,
     "tech_stack": {
       "language": "COBOL",
-      "loc": 60,
+      "loc": 65,
       "framework": "Enterprise COBOL 4.2 / JCL",
-      "architecture": "Mainframe batch (z/OS + DB2 + CA-7 scheduler)"
+      "architecture": "Mainframe batch (z/OS) with EC2 file gateway"
     },
     "surface_flags": {
       "has_persistent_data_store": true,
@@ -25,558 +29,1171 @@
     }
   },
   "classification": {
-    "tier": "Remediation Required",
+    "tier": "Not Agent-Integrable",
     "sub_qualifier": null,
-    "blocker_count": 2,
-    "risk_safety_count": 10,
+    "blocker_count": 7,
+    "risk_safety_count": 11,
     "risk_quality_count": 9,
-    "info_count": 21,
-    "high_count": 2,
-    "medium_count": 19,
-    "low_count": 21,
-    "rule_matched": "1-2 BLOCKER → Remediation Required"
+    "info_count": 12,
+    "high_count": 7,
+    "medium_count": 20,
+    "low_count": 12,
+    "rule_matched": "\u22653 BLOCKER \u2192 Not Agent-Integrable"
   },
   "counts": {
-    "total": 42,
-    "high": 2,
-    "medium": 19,
-    "low": 21,
-    "blocker": 2,
-    "risk_safety": 10,
-    "risk_quality": 9,
-    "info": 21,
-    "na": 0,
-    "not_evaluated": 1
+    "total": 39,
+    "high": 7,
+    "medium": 20,
+    "low": 12
   },
   "findings": [
     {
       "question_id": "API-Q1",
       "category": "API Surface",
+      "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Documented API Interface",
-      "description": "The system exposes no documented REST, GraphQL, or AsyncAPI interface. Integration requires batch file exchange via plaintext FTP and JCL job submission on z/OS. There are no HTTP endpoints, no RPC interfaces, and no programmatic integration points accessible to an agent.",
-      "gap": "No API exists. The only integration mechanism is FTP of fixed-width files and direct mainframe job submission via JCL/CA-7 scheduling.",
-      "recommendation": "Build a REST API layer wrapping payroll operations (trigger run, query status, retrieve results) with OpenAPI documentation.",
+      "title": "No API Interface \u2014 Batch File Exchange Only",
+      "description": "The application exposes no REST, GraphQL, or AsyncAPI interface. All integration is via fixed-width flat files transferred over plaintext FTP between the z/OS mainframe and an EC2 gateway.",
+      "gap": "No machine-callable API exists. Integration requires direct file-system access to mainframe datasets or FTP file pickup on the EC2 gateway.",
+      "recommendation": "Design a REST API wrapper exposing payroll operations as documented endpoints with OpenAPI specification.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "1-18"},
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "14-21"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true
+      }
+    },
+    {
+      "question_id": "API-Q4",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Idempotency Controls on Write Operations",
+      "description": "The batch payroll process writes output sequentially with no idempotency controls. Re-execution produces duplicate output via new GDG generation.",
+      "gap": "No idempotency keys, no deduplication checks, no conditional write logic.",
+      "recommendation": "Add a pay-period/cycle-number check to prevent duplicate execution for the same pay period.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "8-12"
+      },
       "ara_metadata": {
         "native_severity": "BLOCKER",
         "safety_impact": true,
-        "blocker_remediation": {
-          "immediate": "Design a REST API layer that wraps payroll operations.",
-          "target_state": "A documented REST or event-driven API with OpenAPI specification that agents can bind to.",
-          "estimated_effort": "High",
-          "dependencies": ["Requires re-platforming from mainframe COBOL to a modern runtime"]
-        }
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND batch writes have no idempotency protection.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "The system performs write operations (payroll output generation, FTP transfer) that would produce duplicates if triggered multiple times for the same pay period."
       }
     },
     {
       "question_id": "AUTH-Q1",
       "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Machine Identity Authentication",
-      "description": "The system has no machine identity authentication mechanism. The only credential is a hardcoded FTP username/password (payroll/PayR0ll2003!) in the JCL file. There is no OAuth2, no API key authentication, no mTLS, no service account model, and no principal attribution.",
-      "gap": "No machine identity authentication exists. The single hardcoded FTP credential cannot distinguish callers, cannot be scoped, and cannot be attributed in audit logs.",
-      "recommendation": "Implement service account authentication with unique identities per caller. Replace FTP with SFTP using key-based authentication with distinct keys per integration partner.",
+      "description": "No machine identity authentication exists. The only credential is a hardcoded plaintext FTP username/password in JCL with no caller attribution.",
+      "gap": "No mechanism for an agent to authenticate with a unique, attributable machine identity.",
+      "recommendation": "Deploy centralized identity provider with per-agent service accounts. Replace FTP with SFTP using IAM-attributed credentials.",
       "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "14-15"},
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "16-17"
+      },
       "ara_metadata": {
         "native_severity": "BLOCKER",
-        "safety_impact": true,
-        "blocker_remediation": {
-          "immediate": "Implement service account authentication with unique per-agent identities.",
-          "target_state": "OAuth2 client credentials or API key authentication with principal attribution.",
-          "estimated_effort": "High",
-          "dependencies": ["Depends on API-Q1 (building an API surface)"]
-        }
-      }
-    },
-    {
-      "question_id": "AUTH-Q2",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Scoped Permissions",
-      "description": "The system has no authorization model. A single hardcoded FTP credential provides unrestricted access to the payroll output files. There are no IAM policies, no role definitions, no permission scoping of any kind.",
-      "gap": "No mechanism exists to create scoped permissions for different callers. All access uses the same credential with full read/write to the FTP directory.",
-      "recommendation": "Implement RBAC with per-agent scoped permissions as part of the new API layer.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "14-15"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "90-180 days",
-        "compensating_controls": ["Network-level access restriction (firewall rules limiting FTP source IPs)", "Manual operational review of file access patterns"]
-      }
-    },
-    {
-      "question_id": "AUTH-Q3",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Action-Level Authorization",
-      "description": "No action-level authorization exists. The system cannot differentiate between read and write access — the FTP credential allows both uploading and downloading files.",
-      "gap": "No fine-grained RBAC, no ABAC policies, no action-level checks.",
-      "recommendation": "Build action-level authorization into the new API layer with method-level permissions.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "High",
-      "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "14-18"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "90-180 days",
-        "compensating_controls": ["FTP directory permissions (read-only vs read-write at OS level)", "Operational procedures limiting credential distribution"]
-      }
-    },
-    {
-      "question_id": "AUTH-Q4",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "No Identity Propagation",
-      "description": "No identity propagation exists. The system has no concept of caller identity beyond the single shared FTP credential. There is no JWT, no OAuth token exchange, no on-behalf-of flow.",
-      "gap": "No identity propagation mechanism. The batch job runs under a single z/OS job identity regardless of who initiated it.",
-      "recommendation": "Implement identity-aware API with token-based authentication that carries caller context through the processing pipeline.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "High",
-      "phase": 2,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "1-18"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "90-180 days",
-        "compensating_controls": ["Manual job submission log review", "Operational procedures documenting who initiates payroll runs"]
-      }
-    },
-    {
-      "question_id": "AUTH-Q5",
-      "category": "Authentication & Authorization",
-      "category_id": "AUTH",
-      "title": "Hardcoded Plaintext Credentials",
-      "description": "Credentials are hardcoded in plaintext directly in the JCL source file: FTP username 'payroll' and password 'PayR0ll2003!'. No secrets management system, no rotation. The credential has been static since at least 2003.",
-      "gap": "No secrets management. Credentials embedded in source code committed to git. No rotation capability.",
-      "recommendation": "Immediately rotate the exposed credential. Move credentials to AWS Secrets Manager or z/OS RACF credential vault with automated rotation.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Low",
-      "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "15"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30-60 days",
-        "compensating_controls": ["Restrict git repository access", "Network segmentation limiting FTP access"]
+        "safety_impact": true
       }
     },
     {
       "question_id": "AUTH-Q6",
       "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
       "category_id": "AUTH",
       "title": "No Immutable Audit Logging",
-      "description": "No immutable audit logging exists. JES job output (SYSOUT) captures batch execution but is not immutable, not attributable to a specific caller, and not stored in a tamper-evident manner.",
-      "gap": "No audit trail identifying who initiated payroll processing or accessed output files. JES spool output is transient and overwritable.",
-      "recommendation": "Implement immutable audit logging (CloudTrail for AWS components, SMF records retention for z/OS) with principal attribution.",
-      "severity": "Medium",
+      "description": "No audit logging exists. No CloudTrail, no immutable log storage, no principal attribution for write operations.",
+      "gap": "Write operations leave no tamper-evident audit trail. Cannot prove compliance or conduct forensics.",
+      "recommendation": "Enable CloudTrail for EC2 gateway. Implement structured audit logging with caller identity. Store logs in S3 with Object Lock.",
+      "severity": "High",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "1-2"},
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": null
+      },
       "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
+        "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
-        "agent_scope": "read-only",
-        "resolution_reasoning": "Under read-only scope, audit logging is important but not a deployment blocker.",
-        "remediation_timeline": "60-90 days",
-        "compensating_controls": ["JES spool retention policies", "CA-7 schedule audit trail (limited)"]
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no audit logging exists.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "Write-enabled agents executing payroll operations must have full audit attribution for compliance (SOX, financial controls)."
       }
     },
     {
       "question_id": "STATE-Q1",
       "category": "State Management",
+      "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Compensation or Rollback",
-      "description": "No compensation or rollback mechanism exists for the payroll batch process. If the job fails mid-run, there is no mechanism to identify which records were processed, roll back partial output, or resume from the failure point.",
-      "gap": "No saga pattern, no compensating transactions, no checkpoint/restart capability, no idempotency controls.",
-      "recommendation": "Implement checkpoint/restart with compensation logic. Add record-level tracking to identify partial runs.",
-      "severity": "Medium",
+      "title": "No Compensation or Rollback Capability",
+      "description": "No compensation or rollback capability exists. Sequential batch processing with no checkpoint/restart logic.",
+      "gap": "No saga pattern, no compensating transactions, no undo endpoints, no checkpoint/restart.",
+      "recommendation": "Implement checkpoint/restart logic and multi-step compensation for the batch workflow.",
+      "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
-      "evidence": {"file": "src/PAYRUN.cbl", "lines": "37-53"},
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "42-57"
+      },
       "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
+        "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
-        "agent_scope": "read-only",
-        "resolution_reasoning": "Under read-only scope, compensation capability is relevant for system maturity but not a deployment blocker.",
-        "remediation_timeline": "90-120 days",
-        "compensating_controls": ["Manual re-run of entire batch", "GDG versioning on output dataset allows reverting to previous generation"]
-      }
-    },
-    {
-      "question_id": "STATE-Q4",
-      "category": "State Management",
-      "category_id": "STATE",
-      "title": "No Circuit Breakers or Resilience",
-      "description": "No circuit breakers, retry logic, or timeout configurations exist for external dependency calls. The FTP step has no timeout, no retry on failure, and no fallback behavior.",
-      "gap": "No resilience patterns for external calls. Single point of failure on FTP connection to EC2 gateway.",
-      "recommendation": "Add JCL condition codes with retry logic for the FTP step. Implement timeout configuration and fallback.",
-      "severity": "Medium",
-      "priority": "P1",
-      "effort": "Medium",
-      "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "12-18"},
-      "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
-        "safety_impact": true,
-        "remediation_timeline": "30-60 days",
-        "compensating_controls": ["CA-7 automatic job restart (if configured)", "Manual operator intervention for failed FTP steps"]
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND no rollback exists for multi-step batch operations.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "The batch performs sequential write operations (calculate, write file, FTP transfer) that cannot be undone if a step fails mid-sequence."
       }
     },
     {
       "question_id": "DATA-Q1",
       "category": "Data Accessibility",
+      "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Sensitive Data Access Controls",
-      "description": "The system stores and processes highly sensitive PII: Social Security Numbers (EMP-SSN) and bank account numbers (EMP-ACCT). There is no access control differentiation — the single FTP credential provides access to all data including SSNs and bank accounts.",
-      "gap": "B1: No API surface to evaluate response scoping. B2: No access control differentiation — single credential grants access to all sensitive data. B3: No formal classification metadata.",
-      "recommendation": "Implement tiered access controls separating sensitive from non-sensitive data. SSNs and bank accounts should only be accessible via separately-authorized, audited endpoints.",
-      "severity": "Medium",
+      "title": "Sensitive Data Unscoped in Agent-Facing Output",
+      "description": "System processes SSNs and bank accounts. All sensitive data output unscoped in flat files. No access control differentiation.",
+      "gap": "B1: Sensitive fields in output without filtering. B2: No access differentiation. B3: No classification metadata.",
+      "recommendation": "Implement field-level filtering. Create separately-authorized endpoints for sensitive data access.",
+      "severity": "High",
       "priority": "P0",
       "effort": "High",
       "phase": 1,
-      "evidence": {"file": "src/PAYRUN.cbl", "lines": "21-26"},
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "25-27"
+      },
       "ara_metadata": {
-        "native_severity": "RISK-SAFETY",
+        "native_severity": "BLOCKER",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only, B2 fired (no access control differentiation)",
-        "agent_scope": "read-only",
-        "resolution_reasoning": "Under read-only scope, B1 evaluates to RISK-SAFETY rather than BLOCKER. B2 fired because the single FTP credential provides undifferentiated access to all data including SSNs.",
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND B1 fires \u2014 sensitive fields (SSN, bank accounts) output unscoped.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "Agent-facing output contains SSN and bank account numbers without any field-level filtering or scoping. B1 fires at BLOCKER severity under write-enabled scope.",
         "data_q1_subchecks": {
-          "b1": {"fired": false, "severity": null, "reasoning": "No HTTP/RPC surface — no API responses to evaluate for field scoping."},
-          "b2": {"fired": true, "severity": "RISK-SAFETY", "reasoning": "Single FTP credential grants access to all data with no differentiation between sensitive and non-sensitive."},
-          "b3": {"fired": true, "severity": "INFO", "reasoning": "No formal data classification metadata exists."}
-        },
-        "remediation_timeline": "90-120 days",
-        "compensating_controls": ["Network segmentation limiting who can reach the FTP endpoint", "Operational procedures for handling payroll output files"]
+          "b1": {
+            "fired": true,
+            "severity": "BLOCKER",
+            "reasoning": "EMP-SSN and EMP-ACCT included in unfiltered output records accessible via FTP."
+          },
+          "b2": {
+            "fired": true,
+            "severity": "RISK-SAFETY",
+            "reasoning": "Single FTP credential grants access to all data \u2014 no scope differentiation."
+          },
+          "b3": {
+            "fired": true,
+            "severity": "INFO",
+            "reasoning": "No formal data classification metadata exists."
+          }
+        }
       }
     },
     {
       "question_id": "DATA-Q2",
       "category": "Data Accessibility",
+      "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Data Residency Controls",
-      "description": "The system processes SSNs (US PII subject to federal and state regulations) and transfers them via plaintext FTP to an EC2 instance. No data residency controls, no encryption in transit.",
-      "gap": "No data residency documentation. No encryption in transit. Plaintext FTP of regulated PII data.",
-      "recommendation": "Replace plaintext FTP with SFTP or TLS-encrypted transfer. Document data residency requirements for SSN data.",
+      "title": "No Data Residency Controls \u2014 Plaintext FTP of PII",
+      "description": "SSNs and bank accounts transmitted via plaintext FTP to EC2 with no encryption in transit, no residency controls, no sovereignty policies.",
+      "gap": "No data residency enforcement, no encryption in transit, no cross-region movement controls.",
+      "recommendation": "Replace FTP with SFTP or AWS Transfer Family. Implement region-pinning controls and data classification policies.",
+      "severity": "High",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "14-21"
+      },
+      "ara_metadata": {
+        "native_severity": "BLOCKER",
+        "safety_impact": true,
+        "conditional_resolution": "Resolved to BLOCKER: agent_scope=write-enabled AND PII transmitted without encryption or residency controls.",
+        "agent_scope": "write-enabled",
+        "resolution_reasoning": "SSN and bank account data transmitted via plaintext FTP \u2014 no technical controls prevent cross-region data movement to LLM providers."
+      }
+    },
+    {
+      "question_id": "AUTH-Q2",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Scoped Permissions Model",
+      "description": "No authorization model supports scoped permissions. Single shared FTP credential grants unrestricted access.",
+      "gap": "No mechanism to scope agent permissions to specific resources or actions.",
+      "recommendation": "Implement IAM roles with least-privilege policies for any agent-facing surface.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "12-18"},
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "16-17"
+      },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "conditional_resolution": "Resolved to RISK-SAFETY: agent_scope=read-only",
-        "agent_scope": "read-only",
-        "resolution_reasoning": "Under read-only scope, data residency is relevant but not a deployment blocker.",
-        "remediation_timeline": "30-60 days",
-        "compensating_controls": ["Network isolation (assuming EC2 is in same region/VPC)", "Restrict data access to authorized personnel only"]
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Restrict network access via security groups",
+          "Implement API layer with IAM scoped permissions"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q3",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Action-Level Authorization",
+      "description": "No action-level authorization exists. No differentiation between read/write/delete permissions.",
+      "gap": "No ABAC, no fine-grained RBAC, no permission matrices.",
+      "recommendation": "Implement action-level authorization when building the API surface.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "API Gateway with method-level authorization",
+          "IAM policies with explicit action-level allow/deny"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q4",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Identity Propagation or Delegation",
+      "description": "No identity propagation. No JWT, no OAuth flows, no caller context. Cannot distinguish agent-as-self from agent-on-behalf-of-user.",
+      "gap": "No mechanism to propagate caller identity through operations.",
+      "recommendation": "Design token-based identity propagation into the API modernization plan.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "90\u2013120 days",
+        "compensating_controls": [
+          "Log triggering identity externally",
+          "Implement token-based identity in new API wrapper"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q5",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "Hardcoded Plaintext Credentials",
+      "description": "FTP credentials hardcoded in plaintext in JCL: username payroll, password PayR0ll2003!. No secrets management, no rotation.",
+      "gap": "Credentials embedded in source code. No Secrets Manager, no Vault, no rotation.",
+      "recommendation": "Migrate credentials to AWS Secrets Manager. Replace FTP with SFTP using IAM-based authentication.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "16-17"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Move credentials to RACF or Secrets Manager",
+          "Restrict repository access"
+        ]
+      }
+    },
+    {
+      "question_id": "AUTH-Q7",
+      "category": "Authentication & Authorization",
+      "category_display": "Authentication & Authorization",
+      "category_id": "AUTH",
+      "title": "No Agent Identity Suspension Mechanism",
+      "description": "No mechanism to suspend individual agent identities. Single shared credential with no per-agent revocation.",
+      "gap": "Cannot isolate a misbehaving agent without disrupting all consumers.",
+      "recommendation": "Implement per-agent identities with individual revocation capability.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "16-17"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Implement per-agent API keys in new API surface",
+          "Use IAM with per-agent roles"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q3",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No Concurrency Controls",
+      "description": "No concurrency controls. Sequential file access with no locking. Concurrent execution produces duplicated/corrupted results.",
+      "gap": "No optimistic locking, no ETags, no version fields, no conflict detection.",
+      "recommendation": "Implement mutex/lock mechanism. Add optimistic locking in modernized API.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "42-57"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "CA-7 schedule prevents concurrent execution",
+          "Add lock file or semaphore mechanism"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q4",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No Circuit Breakers or Resilience Patterns",
+      "description": "No circuit breakers, retry logic, or timeout configurations. FTP transfer has no timeout or retry on failure.",
+      "gap": "External dependency failure causes unhandled hang or crash.",
+      "recommendation": "Add timeout and retry logic for FTP transfer. Implement health-check validation before transfer.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "14-21"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "JCL COND CODE checks provide basic failure detection",
+          "Add JCL TIME parameter for execution timeout"
+        ]
+      }
+    },
+    {
+      "question_id": "STATE-Q6",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No Blast Radius or Transaction Limits",
+      "description": "No configurable limits on operations. Batch processes ALL employee records unconditionally with no maximum count or spend limits.",
+      "gap": "No per-agent transaction limits, no maximum records per run, no configurable blast radius.",
+      "recommendation": "Add configurable record count limits and dry-run mode for agent-initiated executions.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "44"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Add record count validation that aborts above threshold",
+          "Implement dry-run mode"
+        ]
       }
     },
     {
       "question_id": "DATA-Q6",
       "category": "Data Accessibility",
+      "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No PII Redaction in Logs",
-      "description": "No PII redaction controls exist. The FTP step transmits SSNs and bank accounts in plaintext where network logging or FTP server logs could capture them. No log scrubbing or PII masking.",
-      "gap": "No PII redaction mechanism. No log filtering. Plaintext transmission of PII-containing files creates log exposure risk.",
-      "recommendation": "Implement PII masking for logging. Replace plaintext FTP with encrypted transfer to eliminate network-level PII exposure.",
+      "title": "No PII Redaction in Logs or Diagnostic Output",
+      "description": "No PII redaction capability. SSNs and bank accounts in working storage exposed in abend dumps. No log scrubbing or masking.",
+      "gap": "No log scrubbing, no PII masking. System abends expose PII in diagnostic output.",
+      "recommendation": "Implement PII masking in all logging and error output when building modernized interface.",
       "severity": "Medium",
       "priority": "P1",
       "effort": "Medium",
       "phase": 1,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "12-18"},
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "25-27"
+      },
       "ara_metadata": {
         "native_severity": "RISK-SAFETY",
         "safety_impact": true,
-        "remediation_timeline": "30-60 days",
-        "compensating_controls": ["Network encryption (VPN/TLS) for the FTP path", "Disable FTP server detailed logging"]
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Restrict access to SYSOUT and dumps",
+          "Implement PII masking in new API/logging layer"
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q1",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Draft/Pending State for Write Operations",
+      "description": "No draft or pending state. Batch runs to completion immediately with no human review step.",
+      "gap": "All write operations immediately committed. No reviewable intermediate state.",
+      "recommendation": "Introduce two-phase execution: preview/summary for review, then commit after approval.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "5-12"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Pre-validation summary for human review",
+          "Staging output area requiring manual promotion"
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q2",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Configurable Approval Gates",
+      "description": "No configurable approval gates. CA-7 triggers automatically with no human confirmation required.",
+      "gap": "No approval mechanism for high-risk operations.",
+      "recommendation": "Add configurable approval gate for agent-initiated payroll runs using Step Functions with human approval task.",
+      "severity": "Medium",
+      "priority": "P1",
+      "effort": "Medium",
+      "phase": 1,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "1-3"
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-SAFETY",
+        "safety_impact": true,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Require manual CA-7 job release for agent-triggered runs",
+          "Implement approval workflow in new API layer"
+        ]
       }
     },
     {
       "question_id": "API-Q6",
       "category": "API Surface",
+      "category_display": "API & Tooling",
       "category_id": "API",
-      "title": "No Asynchronous Operation Support",
-      "description": "The payroll batch job runs 5-7 hours with no async patterns — no job submission API, no polling endpoint, no webhook callback, no status query mechanism.",
-      "gap": "No programmatic async operation support for long-running batch.",
-      "recommendation": "Implement a job status API with submission, polling, and completion notification capabilities.",
+      "title": "No Async Support for Long-Running Batch (5-7 Hours)",
+      "description": "5-7 hour batch with no async patterns \u2014 no job submission API, no polling, no callbacks.",
+      "gap": "No asynchronous operation support for a long-running process.",
+      "recommendation": "Implement job submission with status polling endpoint. Consider Step Functions for batch lifecycle.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "README.md", "lines": "1-20"},
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60-90 days",
-        "compensating_controls": ["CA-7 job scheduling provides completion notification (to operators only)", "Check for output file presence as crude status indicator"]
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Monitor JCL job completion via z/OS events",
+          "Implement status file on EC2 gateway"
+        ]
       }
     },
     {
       "question_id": "STATE-Q2",
       "category": "State Management",
+      "category_display": "State & Memory",
       "category_id": "STATE",
-      "title": "No Queryable Current State",
-      "description": "The application does not expose its state in any queryable form. No API to check payroll run status or inspect state of a run in progress.",
-      "gap": "No queryable state endpoints. State locked inside DB2 tables and sequential files.",
-      "recommendation": "Build read APIs exposing payroll run status and results.",
+      "title": "No Queryable State Interface",
+      "description": "No queryable interface. Employee and payroll state locked in DB2 and z/OS datasets with no API access.",
+      "gap": "Agent cannot inspect state before taking action.",
+      "recommendation": "Build read-only API for querying employee payroll state.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "src/PAYRUN.cbl", "lines": "37-53"},
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "12-15"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60-90 days",
-        "compensating_controls": ["Direct DB2 query access (requires mainframe credentials)", "Check GDG generation count for latest output"]
-      }
-    },
-    {
-      "question_id": "DATA-Q3",
-      "category": "Data Accessibility",
-      "category_id": "DATA",
-      "title": "No Selective Query Support",
-      "description": "The system processes all employee records sequentially with no filtering, pagination, or selective query capability.",
-      "gap": "No pagination, no filtering, no sorting, no selective retrieval.",
-      "recommendation": "Implement filtered/paginated query APIs as part of the re-platform.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {"file": "src/PAYRUN.cbl", "lines": "39"},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60-90 days",
-        "compensating_controls": ["Post-processing filtering of output files", "DB2 queries for selective data access"]
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Expose read-only query on EC2 gateway for recent output",
+          "Implement DB2 query API"
+        ]
       }
     },
     {
       "question_id": "DATA-Q4",
       "category": "Data Accessibility",
+      "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Input Validation",
-      "description": "No input validation exists. The COBOL program performs arithmetic on raw input fields without validating data types, ranges, or business rules.",
-      "gap": "No input validation at any boundary. No schema enforcement. No structured error responses.",
-      "recommendation": "Add input validation with structured error reporting. Validate SSN format, rate ranges, hours worked bounds.",
+      "title": "No Input Validation or Schema Enforcement",
+      "description": "No input validation at API boundary. COBOL reads fixed-format records without validation. Malformed records processed silently.",
+      "gap": "No validation, no schema enforcement, no structured error responses for invalid input.",
+      "recommendation": "Implement request validation with structured error responses in the new API. Add pre-execution data quality checks.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "src/PAYRUN.cbl", "lines": "41-43"},
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "55-56"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60-90 days",
-        "compensating_controls": ["DB2 column constraints may enforce some data types upstream", "Manual data quality checks before batch submission"]
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Pre-processing validation of master file",
+          "Input validation in new API wrapper"
+        ]
       }
     },
     {
       "question_id": "DATA-Q5",
       "category": "Data Accessibility",
+      "category_display": "Data Access",
       "category_id": "DATA",
-      "title": "No Temporal Metadata",
-      "description": "No temporal metadata exists in the data model or output files. No created_at/updated_at fields, no timezone handling, no data freshness indicators.",
-      "gap": "No timestamps in data records. No freshness signaling.",
-      "recommendation": "Add temporal metadata (pay period dates, processing timestamp, data effective date) to output records.",
+      "title": "No Temporal Metadata in Output",
+      "description": "No timestamps in output records. No freshness signals. Agent cannot determine data currency.",
+      "gap": "No temporal metadata, no freshness indicators, no timezone handling.",
+      "recommendation": "Add processing timestamps and pay period dates to all output.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {"file": "src/PAYRUN.cbl", "lines": "45-49"},
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "48-52"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30-60 days",
-        "compensating_controls": ["GDG generation naming provides implicit chronological ordering", "CA-7 job schedule provides execution timestamps"]
-      }
-    },
-    {
-      "question_id": "HITL-Q3",
-      "category": "Human-in-the-Loop",
-      "category_id": "HITL",
-      "title": "No Sandbox/Staging Environment",
-      "description": "No sandbox or staging environment exists. Changes validated in a shared QA region only, which lacks production data shapes.",
-      "gap": "No dedicated staging/sandbox. Shared QA region with no production-equivalent data.",
-      "recommendation": "Create an isolated staging environment with representative anonymized data.",
-      "severity": "Medium",
-      "priority": "P2",
-      "effort": "Medium",
-      "phase": 2,
-      "evidence": {"file": "README.md", "lines": "17"},
-      "ara_metadata": {
-        "native_severity": "RISK-QUALITY",
-        "safety_impact": false,
-        "remediation_timeline": "60-90 days",
-        "compensating_controls": ["Shared QA region provides basic testing", "Manual validation procedures before production runs"]
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Use GDG generation number as proxy temporal metadata",
+          "Add header/trailer record with timestamp"
+        ]
       }
     },
     {
       "question_id": "DISC-Q1",
       "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
       "category_id": "DISC",
-      "title": "No Schema Versioning",
-      "description": "No schema versioning exists. The fixed-width file format (120-byte records) is undocumented beyond COBOL PICTURE clauses. No schema registry, no version numbering, no breaking change detection.",
-      "gap": "No schema documentation beyond COBOL source. No versioning. No breaking change detection.",
-      "recommendation": "Document the fixed-width file format as a versioned schema. Implement format version headers.",
+      "title": "No Schema Versioning or API Contracts",
+      "description": "No schema versioning. Fixed-width format defined implicitly by COBOL with no formal schema, no versioning, no changelog.",
+      "gap": "No schema documentation, no versioning, no breaking change detection.",
+      "recommendation": "Document record layout formally. Add version identifier. Implement contract tests.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Low",
       "phase": 2,
-      "evidence": {"file": "src/PAYRUN.cbl", "lines": "17-26"},
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "17-27"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "30-60 days",
-        "compensating_controls": ["COBOL PICTURE clauses serve as implicit schema definition", "Manual coordination with downstream consumers"]
+        "remediation_timeline": "30\u201360 days",
+        "compensating_controls": [
+          "Document current record layout as formal schema",
+          "Add header record with format version"
+        ]
+      }
+    },
+    {
+      "question_id": "HITL-Q3",
+      "category": "Human-in-the-Loop",
+      "category_display": "Human-in-the-Loop",
+      "category_id": "HITL",
+      "title": "No Sandbox/Staging Environment",
+      "description": "No dedicated sandbox. Changes validated in shared QA region only. No isolation for agent testing.",
+      "gap": "No isolated test environment for agent behavior validation.",
+      "recommendation": "Establish dedicated sandbox with synthetic payroll data (no real PII).",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Restrict agent testing to shared QA with monitoring",
+          "Create minimal test dataset"
+        ]
       }
     },
     {
       "question_id": "ENG-Q4",
       "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
       "category_id": "ENG",
       "title": "Zero Automated Test Coverage",
-      "description": "Zero automated tests exist. Manual validation only in shared QA region. No unit tests, integration tests, regression tests, or CI pipeline.",
-      "gap": "No automated testing of any kind. No CI pipeline.",
-      "recommendation": "Implement automated tests starting with core payroll calculation logic.",
+      "description": "No automated tests. README states 'No automated tests.' No test files, no CI pipeline.",
+      "gap": "Zero test coverage. No regression detection.",
+      "recommendation": "Create test baseline with golden file comparisons. Build automated tests.",
       "severity": "Medium",
       "priority": "P3",
       "effort": "Medium",
       "phase": 3,
-      "evidence": {"file": "README.md", "lines": "17"},
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60-90 days",
-        "compensating_controls": ["Manual validation in shared QA region", "Operational review of batch output"]
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Document expected input/output pairs",
+          "Create basic test harness"
+        ]
       }
     },
     {
       "question_id": "ENG-Q5",
       "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
       "category_id": "ENG",
       "title": "No Encryption at Rest",
-      "description": "No encryption at rest is configured. Employee data including SSNs and bank account numbers is stored in DB2 tables and sequential files with no encryption.",
-      "gap": "No KMS, no encryption configuration for sensitive PII data.",
-      "recommendation": "Enable DB2 native encryption for PII tables. Encrypt output files at rest on EC2 gateway.",
+      "description": "No encryption at rest. DB2 v10 (end of support), z/OS datasets, and EC2 files store sensitive data unencrypted.",
+      "gap": "Sensitive data (SSN, bank accounts) stored without encryption. No KMS.",
+      "recommendation": "Encrypt data at rest: upgrade DB2, enable z/OS dataset encryption, ensure EC2 EBS uses KMS.",
+      "severity": "Medium",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "RISK-QUALITY",
+        "safety_impact": false,
+        "remediation_timeline": "90\u2013120 days",
+        "compensating_controls": [
+          "Ensure EC2 EBS volume uses KMS encryption",
+          "Restrict physical access to mainframe"
+        ]
+      }
+    },
+    {
+      "question_id": "OBS-Q1",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "No Distributed Tracing or Structured Logging",
+      "description": "No tracing or structured logging. Only unstructured JCL SYSOUT. No trace IDs, no correlation IDs.",
+      "gap": "Cannot reconstruct batch execution from logs.",
+      "recommendation": "Implement OpenTelemetry tracing and structured JSON logging in modernized system.",
       "severity": "Medium",
       "priority": "P2",
       "effort": "Medium",
       "phase": 2,
-      "evidence": {"file": "jcl/PAYRUN.jcl", "lines": "6-10"},
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": "13"
+      },
       "ara_metadata": {
         "native_severity": "RISK-QUALITY",
         "safety_impact": false,
-        "remediation_timeline": "60-90 days",
-        "compensating_controls": ["Physical security of mainframe data center", "z/OS RACF access controls on datasets"]
+        "remediation_timeline": "60\u201390 days",
+        "compensating_controls": [
+          "Use JCL job number as basic correlation ID",
+          "Implement structured logging in new API layer"
+        ]
+      }
+    },
+    {
+      "question_id": "API-Q2",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Machine-Readable API Specification",
+      "description": "No HTTP/RPC surface \u2014 machine-readable spec is not applicable. System operates via batch file exchange.",
+      "gap": "No API surface exists to describe with a machine-readable spec.",
+      "recommendation": "Generate OpenAPI spec as part of the API modernization effort.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q3",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Structured Error Responses",
+      "description": "No HTTP/RPC surface \u2014 structured error responses are not applicable. Batch signals failure via JCL return codes.",
+      "gap": "No API error responses exist.",
+      "recommendation": "Design structured error format as part of API modernization.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q5",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "Fixed-Width Flat File Response Format",
+      "description": "Output is fixed-width 120-byte flat file records requiring positional parsing with no self-describing schema.",
+      "gap": "Non-standard format not directly consumable by agents or LLMs.",
+      "recommendation": "Implement JSON serialization in the modernized API layer.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "29"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "API-Q7",
+      "category": "API Surface",
+      "category_display": "API & Tooling",
+      "category_id": "API",
+      "title": "No Event Emission Capability",
+      "description": "No event emission. No webhooks, no SNS/EventBridge, no Kafka. State changes not signaled.",
+      "gap": "State changes invisible to downstream consumers.",
+      "recommendation": "Publish events to EventBridge for payroll completion when modernizing.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "STATE-Q5",
+      "category": "State Management",
+      "category_display": "State & Memory",
+      "category_id": "STATE",
+      "title": "No API-Layer Rate Limiting",
+      "description": "No HTTP/RPC surface \u2014 API-layer rate limiting is not applicable. Batch scheduled by CA-7.",
+      "gap": "No API surface to apply rate limiting.",
+      "recommendation": "Include API Gateway throttling when building agent-facing interface.",
+      "severity": "Low",
+      "priority": "P1",
+      "effort": "Low",
+      "phase": 2,
+      "evidence": {
+        "file": "jcl/PAYRUN.jcl",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "OBS-Q2",
+      "category": "Observability",
+      "category_display": "Observability",
+      "category_id": "OBS",
+      "title": "No Alerting Configuration",
+      "description": "No HTTP/RPC surface \u2014 alerting on API error rates is not applicable. No CloudWatch alarms exist.",
+      "gap": "No alerting for batch failures or performance degradation.",
+      "recommendation": "Configure alerting when building the API surface.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q1",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "No Infrastructure as Code",
+      "description": "No HTTP/RPC and no auth surface \u2014 IaC governance for agent-facing surface not applicable. No IaC exists.",
+      "gap": "No IaC. Infrastructure managed manually.",
+      "recommendation": "Define infrastructure as code when building agent-facing components.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "High",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q2",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "No CI/CD Pipeline",
+      "description": "No HTTP/RPC surface \u2014 API contract testing not applicable. No CI/CD pipeline exists.",
+      "gap": "No automated build or deployment process.",
+      "recommendation": "Establish CI/CD pipeline with contract tests as part of modernization.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "ENG-Q3",
+      "category": "Engineering Maturity",
+      "category_display": "Engineering Practices",
+      "category_id": "ENG",
+      "title": "No Deployment Rollback Capability",
+      "description": "No HTTP/RPC surface \u2014 deployment rollback not applicable. No deployment pipeline. Manual mainframe recompilation required.",
+      "gap": "No automated rollback mechanism.",
+      "recommendation": "Include rollback capability in modernization architecture.",
+      "severity": "Low",
+      "priority": "P2",
+      "effort": "Medium",
+      "phase": 2,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "4"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DATA-Q7",
+      "category": "Data Accessibility",
+      "category_display": "Data Access",
+      "category_id": "DATA",
+      "title": "No Data Quality Metrics",
+      "description": "No data quality metrics or monitoring. Tax tables updated manually with no completeness tracking.",
+      "gap": "No data quality awareness. Stale data processed silently.",
+      "recommendation": "Implement data quality checks before batch execution.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "README.md",
+        "lines": null
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q2",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "Legacy Abbreviated Field Names",
+      "description": "Field names use abbreviated mainframe conventions: EMP-RATE, WS-FICA, EMP-SSN. Partially interpretable but require domain knowledge.",
+      "gap": "No data dictionary mapping legacy codes to semantic names.",
+      "recommendation": "Create data dictionary for agent tool definitions.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Low",
+      "phase": 3,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "17-27"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
+      }
+    },
+    {
+      "question_id": "DISC-Q3",
+      "category": "Discovery & Documentation",
+      "category_display": "Discovery & Documentation",
+      "category_id": "DISC",
+      "title": "No Data Catalog or Metadata Layer",
+      "description": "No data catalog. Only implicit schema in COBOL FD section serves as documentation.",
+      "gap": "No metadata layer describing data semantics.",
+      "recommendation": "Create metadata catalog. Consider AWS Glue Data Catalog for modernized layer.",
+      "severity": "Low",
+      "priority": "P3",
+      "effort": "Medium",
+      "phase": 3,
+      "evidence": {
+        "file": "src/PAYRUN.cbl",
+        "lines": "17-29"
+      },
+      "ara_metadata": {
+        "native_severity": "INFO",
+        "safety_impact": false
       }
     }
   ],
   "evaluations": [
-    {"question_id": "API-Q2", "category_id": "API", "title": "Machine-Readable API Specification", "status": "pass", "reason": "INFO downgrade: has_http_rpc_surface is false — no callable API surface to document."},
-    {"question_id": "API-Q3", "category_id": "API", "title": "Structured Error Responses", "status": "pass", "reason": "INFO downgrade: has_http_rpc_surface is false — no API responses to structure."},
-    {"question_id": "API-Q4", "category_id": "API", "title": "Idempotent Write Operations", "status": "pass", "reason": "INFO: agent_scope is read-only — idempotency is informational only."},
-    {"question_id": "API-Q5", "category_id": "API", "title": "Structured Response Format", "status": "pass", "reason": "INFO: Output is fixed-width flat file. Informational for agent design."},
-    {"question_id": "API-Q7", "category_id": "API", "title": "Event Emission for State Changes", "status": "pass", "reason": "INFO: No event emission capability. Informational for agent architecture."},
-    {"question_id": "API-Q8", "category_id": "API", "title": "Rate Limit Documentation and Headers", "status": "pass", "reason": "INFO: No API surface to rate-limit."},
-    {"question_id": "AUTH-Q7", "category_id": "AUTH", "title": "Agent Identity Suspension", "status": "pass", "reason": "INFO downgrade: has_auth_surface is false — suspension is a consumer responsibility."},
-    {"question_id": "STATE-Q3", "category_id": "STATE", "title": "Concurrency Controls", "status": "pass", "reason": "INFO: agent_scope is read-only — concurrency controls informational only."},
-    {"question_id": "STATE-Q5", "category_id": "STATE", "title": "Rate Limiting and Throttling", "status": "pass", "reason": "INFO downgrade: has_http_rpc_surface is false — API-layer rate limiting not applicable."},
-    {"question_id": "STATE-Q6", "category_id": "STATE", "title": "Blast Radius and Transaction Limits", "status": "pass", "reason": "INFO: agent_scope is read-only — transaction limits informational only."},
-    {"question_id": "STATE-Q7", "category_id": "STATE", "title": "Graceful Degradation Signaling", "status": "not_evaluated_extended", "reason": "Extended question not triggered — no P0 priority provided and service is not on critical path."},
-    {"question_id": "HITL-Q1", "category_id": "HITL", "title": "Draft/Pending State", "status": "pass", "reason": "INFO: agent_scope is read-only — draft/pending state informational only."},
-    {"question_id": "HITL-Q2", "category_id": "HITL", "title": "Configurable Approval Gates", "status": "pass", "reason": "INFO: agent_scope is read-only — approval gates informational only."},
-    {"question_id": "DATA-Q7", "category_id": "DATA", "title": "Data Quality Awareness", "status": "pass", "reason": "INFO: No data quality metrics. Outdated FICA wage base."},
-    {"question_id": "DISC-Q2", "category_id": "DISC", "title": "Semantically Meaningful Field Names", "status": "pass", "reason": "INFO: COBOL abbreviation conventions — reasonably interpretable."},
-    {"question_id": "DISC-Q3", "category_id": "DISC", "title": "Data Catalog / Metadata Layer", "status": "pass", "reason": "INFO: No data catalog exists."},
-    {"question_id": "OBS-Q1", "category_id": "OBS", "title": "Distributed Tracing and Structured Logging", "status": "pass", "reason": "INFO downgrade: has_http_rpc_surface is false — no agent-initiated request path to trace."},
-    {"question_id": "OBS-Q2", "category_id": "OBS", "title": "Alerting on Error Rates and Latency", "status": "pass", "reason": "INFO downgrade: has_http_rpc_surface is false — alerting is a consumer concern."},
-    {"question_id": "OBS-Q3", "category_id": "OBS", "title": "Business Outcome Metrics", "status": "pass", "reason": "INFO: No business outcome metrics published."},
-    {"question_id": "ENG-Q1", "category_id": "ENG", "title": "Infrastructure Governance", "status": "pass", "reason": "INFO downgrade: has_http_rpc_surface is false AND has_auth_surface is false."},
-    {"question_id": "ENG-Q2", "category_id": "ENG", "title": "CI/CD with API Contract Testing", "status": "pass", "reason": "INFO downgrade: has_http_rpc_surface is false — API contract testing not applicable."},
-    {"question_id": "ENG-Q3", "category_id": "ENG", "title": "Rollback Capability", "status": "pass", "reason": "INFO downgrade: has_http_rpc_surface is false — deployment rollback is a consumer concern."}
+    {
+      "question_id": "API-Q8",
+      "category_id": "API",
+      "title": "Rate Limit Documentation and Headers",
+      "status": "pass",
+      "reason": "No API/HTTP surface exists \u2014 informational signal, no finding emitted. Suppressed via Informational-Absence Suppression."
+    },
+    {
+      "question_id": "OBS-Q3",
+      "category_id": "OBS",
+      "title": "Business Outcome Metrics",
+      "status": "pass",
+      "reason": "System emits no metrics or telemetry of any kind \u2014 informational signal, no finding emitted. Suppressed via Informational-Absence Suppression."
+    },
+    {
+      "question_id": "STATE-Q7",
+      "category_id": "STATE",
+      "title": "Graceful Degradation Signaling",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 service priority not specified as P0 and critical path status not confirmed."
+    },
+    {
+      "question_id": "DATA-Q3",
+      "category_id": "DATA",
+      "title": "Selective Query Support",
+      "status": "not_evaluated_extended",
+      "reason": "Extended question not triggered \u2014 no list/query endpoints exist (batch-only system with no API surface)."
+    }
   ],
   "remediation_roadmap": {
-    "phases": [1, 2, 3],
+    "phases": [
+      1,
+      2,
+      3
+    ],
     "items": [
       {
         "phase": 1,
         "phase_name": "Blockers",
-        "findings": ["API-Q1", "AUTH-Q1", "AUTH-Q2", "AUTH-Q3", "AUTH-Q5", "AUTH-Q6", "STATE-Q1", "STATE-Q4", "DATA-Q1", "DATA-Q2", "DATA-Q6"],
-        "summary": "Resolve the 2 BLOCKERs (no API, no machine identity) and address critical RISK-SAFETY findings including credential exposure, missing audit logging, and PII protection gaps."
+        "findings": [
+          "API-Q1",
+          "API-Q4",
+          "AUTH-Q1",
+          "AUTH-Q6",
+          "STATE-Q1",
+          "DATA-Q1",
+          "DATA-Q2",
+          "AUTH-Q2",
+          "AUTH-Q3",
+          "AUTH-Q5",
+          "AUTH-Q7",
+          "STATE-Q3",
+          "STATE-Q4",
+          "DATA-Q6",
+          "HITL-Q1",
+          "HITL-Q2"
+        ],
+        "summary": "Resolve all 7 BLOCKERs and critical RISK-SAFETY findings. Establish API surface, machine identity, audit logging, data scoping, and encryption in transit. This is foundational \u2014 no agent integration can proceed until these are addressed."
       },
       {
         "phase": 2,
         "phase_name": "Safety",
-        "findings": ["AUTH-Q4", "API-Q6", "STATE-Q2", "DATA-Q3", "DATA-Q4", "DATA-Q5", "HITL-Q3", "DISC-Q1", "ENG-Q5"],
-        "summary": "Address remaining RISK-SAFETY and higher-priority RISK-QUALITY findings including identity propagation, async support, query capabilities, and encryption at rest."
+        "findings": [
+          "AUTH-Q4",
+          "STATE-Q6",
+          "API-Q6",
+          "STATE-Q2",
+          "DATA-Q4",
+          "DATA-Q5",
+          "DISC-Q1",
+          "HITL-Q3",
+          "ENG-Q5",
+          "OBS-Q1",
+          "API-Q2",
+          "API-Q3",
+          "STATE-Q5",
+          "ENG-Q1",
+          "ENG-Q2",
+          "ENG-Q3",
+          "OBS-Q2"
+        ],
+        "summary": "Address remaining RISK-SAFETY (identity propagation, blast radius limits) and RISK-QUALITY findings. Build out observability, schema documentation, async patterns, and infrastructure governance."
       },
       {
         "phase": 3,
         "phase_name": "Quality",
-        "findings": ["ENG-Q4"],
-        "summary": "Address lower-priority RISK-QUALITY findings including automated test coverage."
+        "findings": [
+          "ENG-Q4",
+          "API-Q5",
+          "API-Q7",
+          "DATA-Q7",
+          "DISC-Q2",
+          "DISC-Q3"
+        ],
+        "summary": "Address quality improvements: automated testing, response format modernization, event emission, data quality metrics, data catalog, and field naming improvements."
       }
     ]
   },
   "recommended_actions": [
     {
-      "action": "Re-platform to modern API-based architecture",
-      "question_ids": ["API-Q1", "AUTH-Q1", "AUTH-Q2", "AUTH-Q3"],
+      "action": "Build REST API wrapper with OpenAPI specification",
+      "question_ids": [
+        "API-Q1",
+        "API-Q2",
+        "API-Q3",
+        "API-Q4",
+        "API-Q6"
+      ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "The fundamental blocker is that no API or identity surface exists. A complete re-platform from mainframe COBOL batch to a modern API-based service is required before any agent integration is possible."
+      "rationale": "No agent integration is possible without a machine-callable API. This is the foundational dependency for all other remediation."
     },
     {
-      "action": "Rotate and secure exposed credentials immediately",
-      "question_ids": ["AUTH-Q5"],
+      "action": "Deploy centralized identity provider with per-agent credentials",
+      "question_ids": [
+        "AUTH-Q1",
+        "AUTH-Q2",
+        "AUTH-Q3",
+        "AUTH-Q5",
+        "AUTH-Q7"
+      ],
       "priority": "P0",
-      "effort": "Low",
-      "rationale": "The FTP password PayR0ll2003! is committed to source control in plaintext. This is an immediate security risk independent of agent readiness."
+      "effort": "High",
+      "rationale": "Machine identity is the prerequisite for audit logging, scoped permissions, and agent suspension \u2014 all currently missing."
     },
     {
-      "action": "Replace plaintext FTP with encrypted transfer",
-      "question_ids": ["DATA-Q2", "DATA-Q6"],
-      "priority": "P1",
-      "effort": "Low",
-      "rationale": "SSNs and bank account numbers are transmitted via plaintext FTP. Migrating to SFTP or TLS-encrypted transfer addresses data residency and PII exposure risks with minimal effort."
-    },
-    {
-      "action": "Implement immutable audit logging",
-      "question_ids": ["AUTH-Q6"],
-      "priority": "P1",
+      "action": "Replace plaintext FTP with encrypted transfer (SFTP/AWS Transfer Family)",
+      "question_ids": [
+        "DATA-Q2",
+        "AUTH-Q5"
+      ],
+      "priority": "P0",
       "effort": "Medium",
-      "rationale": "No audit trail exists for payroll operations. Immutable logging is required for compliance and agent accountability."
+      "rationale": "SSN and bank account data transmitted in cleartext is a compliance violation. Encrypted transfer with IAM credentials addresses both data residency and credential management."
     },
     {
-      "action": "Deploy centralized identity provider",
-      "question_ids": ["AUTH-Q1", "AUTH-Q4", "AUTH-Q7"],
+      "action": "Implement audit logging with CloudTrail and immutable storage",
+      "question_ids": [
+        "AUTH-Q6"
+      ],
+      "priority": "P0",
+      "effort": "Medium",
+      "rationale": "Write-enabled agent operations on financial data require immutable audit trails for SOX compliance."
+    },
+    {
+      "action": "Implement data scoping and field-level access controls",
+      "question_ids": [
+        "DATA-Q1",
+        "DATA-Q6"
+      ],
       "priority": "P0",
       "effort": "High",
-      "rationale": "Machine identity is the foundation for all agent authorization. Without it, no other security control can be enforced."
+      "rationale": "Agent-facing responses must exclude SSN and bank account fields unless explicitly authorized through separate scoped endpoints."
     }
-  ]
+  ],
+  "analysis_type": "ara",
+  "repo_name": "legacy-payroll-system"
 }

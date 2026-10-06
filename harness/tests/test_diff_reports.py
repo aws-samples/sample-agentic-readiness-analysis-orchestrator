@@ -2,15 +2,23 @@
 """
 Tests for diff-reports.py — the ATX-free core of the harness.
 
-Strategy: load REAL reports from the committed harness/golden/ baseline, deep-copy them
-into synthetic before/after pairs, mutate the "after" to simulate the kind of change a TD
-edit would produce, and assert the differ reports exactly the right dimension moved.
+Strategy: for the D1-D5 diff mechanics, load REAL reports from the committed harness/golden/
+baseline, deep-copy them into before/after pairs, mutate the "after" to simulate the kind of
+change a TD edit would produce, and assert the differ reports exactly the right dimension
+moved. These mutate GENERICALLY (the first finding, the first category) and never assert an
+absolute baseline value, so a rebaseline that changes golden's content can't break them.
 
-golden/ IS the differ's real-world input (the same tree an MR diffs against), so testing
-the differ against it keeps the tests and the harness reading one dataset — no separate
-sample corpus to drift. golden/ is a flat directory (all *-report.json in one folder), so
-load_tree(GOLDEN) picks up ARA + MOD + portfolio together; where a test needs one analysis
-in isolation it filters the loaded tree by key rather than by subdirectory.
+golden/ IS the differ's real-world input (the same tree an MR diffs against), so testing the
+mechanics against it keeps the tests and the harness reading one dataset — no separate sample
+corpus to drift. golden/ is a flat directory (all *-report.json in one folder), so
+load_tree(GOLDEN) picks up ARA + MOD + portfolio together; where a test needs one analysis in
+isolation it filters the loaded tree by key rather than by subdirectory.
+
+The ONE axis that does NOT run on golden is the safety-alert block: those tests assert the
+tier arithmetic at one exact blocker-count boundary, and a live baseline drifts off that
+boundary on every rebaseline (it broke this block twice). They run on `_synthetic_ara_tree()`
+instead — a full-rubric report built from the TD's own question list, pinned at the boundary.
+See the "safety alerts" section header for the rationale.
 
 Run:  python3 -m pytest harness/tests/ -q
   or: python3 harness/tests/test_diff_reports.py     (no pytest needed — has a fallback runner)
@@ -418,6 +426,80 @@ def test_full_run_is_not_marked_partial():
     assert cov["compared"] == len(full)
 
 
+def _narrow_portfolio(report: dict, n: int) -> dict:
+    """A portfolio rollup that aggregated only `n` apps (as a scoped MR without the
+    golden-per-repo backfill would produce)."""
+    r = copy.deepcopy(report)
+    if isinstance(r.get("repositories"), list):
+        r["repositories"] = r["repositories"][:n]
+    r.setdefault("metadata", {})["services_analyzed"] = n
+    return r
+
+
+def test_narrow_scoped_rollup_skips_the_portfolio_comparison():
+    # A scoped rollup over FEWER apps than the golden must NOT be diffed against the
+    # full-set golden portfolio: that delta is a mechanical artifact of aggregating fewer
+    # apps, not an effect of the edit. The differ skips it and records why. The skip is now
+    # decided by APP COUNT (after < golden), not merely by "the per-repo run was scoped".
+    full = dr.load_tree(GOLDEN)
+    after = _subset(full, 2)  # 2 repos ...
+    pf_key = ("ara", "portfolio", "harness-portfolio")
+    after[pf_key] = _narrow_portfolio(full[pf_key], 2)  # ... plus a 2-app rollup
+    impact = dr.build_impact(full, after)
+    assert impact["portfolio"] == {}, "narrow scoped rollup must not be diffed"
+    assert "ara/portfolio/harness-portfolio" in impact["coverage"]["portfolio_skipped"]
+    # And it must not leak back in as a moved TD.
+    assert "portfolio-agentic-readiness-analysis" not in impact["changed_tds"]
+
+
+def test_full_set_rollup_on_a_scoped_run_is_compared_categorically():
+    # The program-verification path: a portfolio-TD (program-library) MR re-analyzes ~0
+    # per-repo but rolls the portfolio up over the golden per-repo reports, so the rollup
+    # aggregates the FULL app set. That rollup IS comparable even though the per-repo run
+    # was scoped — the program membership diff is finally apples-to-apples. Only the
+    # categorical dims (D4 programs, D3 pathways) are surfaced; D1/D2/D5 stay off a sweep.
+    full = dr.load_tree(GOLDEN)
+    after = _subset(full, 2)  # per-repo run stays scoped (2 repos) ...
+    for pf_key in (("ara", "portfolio", "harness-portfolio"),
+                   ("mod", "portfolio", "harness-portfolio")):
+        after[pf_key] = copy.deepcopy(full[pf_key])  # ... full-set rollup (all 14 apps)
+    impact = dr.build_impact(full, after)
+    assert impact["coverage"]["portfolio_skipped"] == [], "full-set rollup must be compared"
+    assert "D4_programs" in impact["portfolio"]["ara"]
+    # Categorical-only: the noisy numeric/distribution dims are NOT computed off a scoped run.
+    assert "D2_distribution" not in impact["portfolio"]["ara"]
+    assert "D5_portfolio_score" not in impact["portfolio"]["mod"]
+    # Identical rollup => no program movement => not a changed TD (a clean no-op verdict).
+    assert "portfolio-agentic-readiness-analysis" not in impact["changed_tds"]
+
+
+def test_full_set_rollup_detects_a_program_membership_change():
+    # Drop a triggered program from the after rollup: on a scoped per-repo run, the full-set
+    # rollup comparison must still catch it as a removed program and flag the portfolio TD.
+    full = dr.load_tree(GOLDEN)
+    after = _subset(full, 2)
+    pf_key = ("ara", "portfolio", "harness-portfolio")
+    after[pf_key] = copy.deepcopy(full[pf_key])
+    actions = after[pf_key].get("recommended_actions") or []
+    assert actions, "fixture precondition: golden ARA portfolio recommends programs"
+    dropped = actions[0].get("acronym")
+    after[pf_key]["recommended_actions"] = actions[1:]
+    impact = dr.build_impact(full, after)
+    assert impact["no_op"] is False
+    assert dropped in impact["portfolio"]["ara"]["D4_programs"]["removed"]
+    assert "portfolio-agentic-readiness-analysis" in impact["changed_tds"]
+
+
+def test_full_run_does_compare_the_portfolio():
+    # The skip is scoped-only: on a full sweep the portfolio IS rolled up over the whole
+    # fixture set, so the comparison is valid and must happen (that's where portfolio
+    # roadmap/program quality is validated — see DESIGN.md §10a).
+    full = dr.load_tree(GOLDEN)
+    impact = dr.build_impact(full, copy.deepcopy(full))
+    assert impact["coverage"]["portfolio_skipped"] == []
+    assert "ara" in impact["portfolio"] and "mod" in impact["portfolio"]
+
+
 def test_real_drift_inside_a_partial_run_is_still_detected():
     # The narrowing must not cost sensitivity: drop one finding from the ONE report we
     # analyzed and the differ must still flag it, and only the TD it belongs to.
@@ -449,13 +531,115 @@ def test_report_absent_from_golden_is_unbaselined_not_added():
 
 
 # --- safety alerts (the MR !14 tier regression) ---------------------------------------
-# These reproduce the exact delta the judge waved through: AUTH-Q5 dropping from BLOCKER to
-# RISK-SAFETY in legacy-loan-calculator, taking blocker_count 3 -> 2 with it and relaxing
-# the tier from Not Agent-Integrable to Remediation Required. AUTH-Q5 was outside the edit
-# scope, so the noise rule swallowed it. The alerts must fire regardless of scope, because
-# the tier move is rubric arithmetic, not variance.
+# These reproduce the exact delta the judge waved through: a blocker dropping to RISK-SAFETY,
+# taking blocker_count 3 -> 2 with it and relaxing the tier from Not Agent-Integrable to
+# Remediation Required, while the downgraded question was outside the edit scope so the noise
+# rule swallowed it. The alerts must fire regardless of scope, because the tier move is rubric
+# arithmetic, not variance.
+#
+# WHY A SYNTHETIC FIXTURE AND NOT golden/. These tests assert the *mechanics* of the tier
+# arithmetic at one exact boundary: a lost BLOCKER crossing the `>=3 -> 1-2` line that
+# separates `Not Agent-Integrable` from `Remediation Required`. golden/ is a live baseline —
+# the 2026-08-11 rebaseline reclassified loan-calculator write-enabled and took its
+# blocker_count from 3 to 7, nowhere near the boundary, which is exactly what broke this whole
+# block (twice). A boundary these tests OWN must be built here, not inherited from whatever a
+# rebaseline left behind. So `_synthetic_ara_tree()` constructs a full-rubric report pinned at
+# the boundary, and the mutation helpers move it from there. golden/ still backs the D1-D5
+# mechanics tests above (they mutate generically and never assert an absolute baseline value),
+# so the harness and its tests still read one real dataset for everything except this one axis.
 
-LOAN_ARA = ("ara", "repo", "legacy-loan-calculator")
+# The synthetic per-repo ARA report key. Named to match the (analysis, scope, key) tuple
+# load_tree() would produce; the repo name is arbitrary — nothing reads golden/ for it.
+LOAN_ARA = ("ara", "repo", "synthetic-boundary-repo")
+
+# Questions the safety tests move, and the role each plays. Chosen from the TD's own severity
+# table (asserted below), never hardcoded severities the TD might later change:
+#   API-Q1   documented UNCONDITIONAL BLOCKER  -> a genuine relaxation when downgraded
+#   AUTH-Q1  documented UNCONDITIONAL BLOCKER  -> the 3rd blocker holding the boundary
+#   AUTH-Q5  documented RISK-SAFETY, seeded as an over-escalated BLOCKER -> its downgrade is
+#            an over-escalation CORRECTION, not a relaxation
+#   DATA-Q1  seeded RISK-SAFETY               -> the stricter / risk-safety-downgrade tests
+_BLOCKER_QIDS = ("API-Q1", "AUTH-Q1")
+_OVER_ESCALATED_QID = "AUTH-Q5"       # TD documents RISK-SAFETY; seeded BLOCKER on purpose
+_RISK_SAFETY_QID = "DATA-Q1"
+
+
+def _synthetic_ara_report() -> dict:
+    """A full-rubric per-repo ARA report pinned at the 3-blocker tier boundary.
+
+    Built from the TD's own question list (`skill_table.parse_questions`), so the answered
+    count equals whatever the rubric currently defines — a question added or removed changes
+    the count here automatically, with no 43 literal to update. Every question id appears
+    exactly once across findings/evaluations (the differ reads their UNION as coverage), and
+    the classification counters are computed from the seeded severities so the report is
+    internally consistent the way a real one is: blocker_count == the number of BLOCKER
+    findings, tier == the rule the counts imply.
+    """
+    import skill_table as st
+    qids = sorted(st.parse_questions("ara"))
+    # Guard the roles this fixture depends on against a future rubric edit, loudly.
+    documented = {q: str(e.get("severity") or "").strip().upper()
+                  for q, e in st.parse_questions("ara").items()}
+    for b in _BLOCKER_QIDS:
+        assert documented.get(b) == "BLOCKER" and not st.parse_questions("ara")[b].get("conditional"), \
+            f"fixture precondition: {b} must be a documented unconditional BLOCKER"
+    assert documented.get(_OVER_ESCALATED_QID) == "RISK-SAFETY", \
+        f"fixture precondition: {_OVER_ESCALATED_QID} must be documented RISK-SAFETY"
+
+    seed = {**{b: "BLOCKER" for b in _BLOCKER_QIDS},
+            _OVER_ESCALATED_QID: "BLOCKER",       # over-escalated on purpose
+            _RISK_SAFETY_QID: "RISK-SAFETY"}
+    findings, evaluations = [], []
+    for qid in qids:
+        cat = qid.rsplit("-", 1)[0]
+        # A question that flagged goes in findings (with a native_severity); one that passed
+        # goes in evaluations. Split so the two arrays stay disjoint and their union == rubric.
+        if qid in seed:
+            findings.append({"question_id": qid, "category_id": cat,
+                             "title": f"synthetic {qid}", "severity": "High",
+                             "ara_metadata": {"native_severity": seed[qid]}})
+        else:
+            evaluations.append({"question_id": qid, "category_id": cat,
+                                "status": "pass", "reason": "synthetic evaluation"})
+    blocker_count = sum(1 for s in seed.values() if s == "BLOCKER")
+    risk_safety_count = sum(1 for s in seed.values() if s == "RISK-SAFETY")
+    return {
+        "analysis_type": "agentic-readiness",
+        "repo_name": LOAN_ARA[2],
+        "findings": findings,
+        "evaluations": evaluations,
+        "classification": {
+            "tier": "Not Agent-Integrable",          # >=3 BLOCKER
+            "blocker_count": blocker_count,           # == 3 by construction
+            "risk_safety_count": risk_safety_count,
+            "risk_quality_count": 0,
+            "info_count": 0,
+            "rule_matched": ">=3 BLOCKER -> Not Agent-Integrable",
+        },
+    }
+
+
+def _synthetic_mod_report() -> dict:
+    """A minimal per-repo MOD report for the MOD-exemption test.
+
+    MOD carries no BLOCKER class or agent tier, so the safety gate never inspects its findings
+    — only its classification.tier moves. Pinned to `Remediation Required` (a value that IS in
+    the ARA tier rank) so `test_mod_is_exempt_from_safety_alerts` proves the exemption keeps it
+    quiet, not an unrecognised tier name.
+    """
+    return {
+        "analysis_type": "modernization-readiness",
+        "repo_name": LOAN_ARA[2],
+        "findings": [],
+        "classification": {"tier": "Remediation Required",
+                           "high_count": 3, "medium_count": 5, "low_count": 0},
+    }
+
+
+def _synthetic_ara_tree() -> dict:
+    """The `before` tree the safety tests diff against: one ARA + one MOD per-repo report."""
+    return {LOAN_ARA: _synthetic_ara_report(),
+            ("mod", "repo", LOAN_ARA[2]): _synthetic_mod_report()}
 
 
 def _downgrade_a_blocker(tree: dict, qid: str = "API-Q1",
@@ -463,13 +647,14 @@ def _downgrade_a_blocker(tree: dict, qid: str = "API-Q1",
     """Mutate an 'after' tree the way MR !14's delta did: one BLOCKER reclassified.
 
     Defaults to API-Q1, which the TD documents as an UNCONDITIONAL BLOCKER — so downgrading
-    it is a genuine safety relaxation that MUST still hold. (AUTH-Q5, the previous default,
-    is documented RISK-SAFETY, so downgrading IT is an over-escalation correction, not a
-    relaxation — that case has its own tests below.)
+    it is a genuine safety relaxation that MUST still hold. (AUTH-Q5, seeded by the synthetic
+    fixture as an over-escalated BLOCKER, is documented RISK-SAFETY, so downgrading IT is an
+    over-escalation correction, not a relaxation — that case has its own tests below.)
 
     Also decrements the classification counters and re-applies the rubric's own tier rule,
     because in a real report those move together — a test that changed only the finding
-    would be asserting against a state the analysis agent can never produce.
+    would be asserting against a state the analysis agent can never produce. Expects a tree
+    from _synthetic_ara_tree() so the counters sit at the 3-blocker boundary.
     """
     rpt = tree[LOAN_ARA]
     for f in rpt["findings"]:
@@ -477,7 +662,7 @@ def _downgrade_a_blocker(tree: dict, qid: str = "API-Q1",
             f["ara_metadata"]["native_severity"] = to
             break
     else:
-        raise AssertionError(f"fixture precondition: {qid} not in the loan-calculator report")
+        raise AssertionError(f"fixture precondition: {qid} not in the synthetic report")
     c = rpt["classification"]
     c["blocker_count"] -= 1
     c["risk_safety_count"] += 1
@@ -487,7 +672,7 @@ def _downgrade_a_blocker(tree: dict, qid: str = "API-Q1",
 
 
 def test_lost_blocker_raises_all_three_alerts():
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     before = copy.deepcopy(full)
     after = _downgrade_a_blocker(copy.deepcopy(full))
     impact = dr.build_impact(before, after)
@@ -499,7 +684,7 @@ def test_lost_blocker_raises_all_three_alerts():
 def test_alerts_attribute_the_tier_move_to_the_lost_blocker():
     # The whole point: a reader must not have to rediscover that "blocker lost" and "tier
     # relaxed" are one event. The tier alert names the cause.
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     after = _downgrade_a_blocker(copy.deepcopy(full))
     impact = dr.build_impact(copy.deepcopy(full), after)
     tier_alert = [a for a in impact["safety_alerts"] if a["kind"] == "tier_relaxed"][0]
@@ -512,14 +697,14 @@ def test_alerts_attribute_the_tier_move_to_the_lost_blocker():
 def test_a_clean_rerun_raises_no_alerts():
     # The guard is worthless if it cries on an identity diff — that is how a real alert
     # gets trained away.
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     impact = dr.build_impact(full, copy.deepcopy(full))
     assert impact["safety_alerts"] == []
 
 
 def test_getting_stricter_is_not_a_safety_alert():
     """Direction matters. A question GAINING a blocker is the rubric tightening."""
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     after = copy.deepcopy(full)
     rpt = after[LOAN_ARA]
     for f in rpt["findings"]:
@@ -531,7 +716,7 @@ def test_getting_stricter_is_not_a_safety_alert():
     impact = dr.build_impact(copy.deepcopy(full), after)
     # Precondition: the differ DID see the reseverity, so silence below is the direction
     # check doing its job and not the mutation failing to register.
-    res = impact["per_repo"]["legacy-loan-calculator"]["D1_ara_findings"]["reseveritied"]
+    res = impact["per_repo"][LOAN_ARA[2]]["D1_ara_findings"]["reseveritied"]
     assert [r["question_id"] for r in res] == ["DATA-Q1"]
     assert impact["safety_alerts"] == [], \
         f"a stricter rubric must not alert: {impact['safety_alerts']}"
@@ -543,7 +728,7 @@ def test_correcting_an_over_escalation_does_not_hold():
     is an IMPROVEMENT: it must raise NO tier-material alert, even though blocker_count and
     the tier both move — the same mechanical movement that, for a real blocker, WOULD hold.
     """
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
     impact = dr.build_impact(copy.deepcopy(full), after)
     alerts = impact["safety_alerts"]
@@ -560,7 +745,7 @@ def test_a_real_lost_blocker_still_holds_alongside_a_correction():
     """A downgrade of a GENUINE blocker (API-Q1) must still hold even when an over-escalation
     correction (AUTH-Q5) happens in the same delta — the correction must not launder the
     real relaxation."""
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     after = copy.deepcopy(full)
     _downgrade_a_blocker(after, qid="API-Q1")     # genuine relaxation
     _downgrade_a_blocker(after, qid="AUTH-Q5")    # over-escalation correction
@@ -579,7 +764,7 @@ def test_a_severity_edit_in_the_same_mr_defeats_the_correction_exemption():
     stable table' no longer holds — the downgrade must alert as a REAL relaxation instead of
     being waved through as `over_escalation_corrected`.
     """
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
 
     # Without the gate (no MR touched AUTH-Q5's row): a correction, nothing tier-material.
@@ -600,7 +785,7 @@ def test_a_severity_edit_in_the_same_mr_defeats_the_correction_exemption():
 def test_a_severity_edit_to_an_unrelated_question_leaves_the_correction_intact():
     """The gate must be surgical: editing some OTHER question's row does not turn AUTH-Q5's
     genuine over-escalation correction into a false relaxation alert."""
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     after = _downgrade_a_blocker(copy.deepcopy(full), qid="AUTH-Q5")
     gated = dr.build_impact(copy.deepcopy(full), after,
                             changed_severity_qids={"ara": {"API-Q2"}})
@@ -616,8 +801,10 @@ def test_mod_is_exempt_from_safety_alerts():
     ("Remediation Required" -> "Pilot-Ready" are both ranked), so the exemption is what
     keeps this quiet rather than the tier name simply being unrecognised.
     """
-    full = dr.load_tree(GOLDEN)
-    key = ("mod", "repo", "legacy-loan-calculator")
+    full = _synthetic_ara_tree()
+    key = ("mod", "repo", LOAN_ARA[2])
+    # The synthetic MOD report is pinned to "Remediation Required", a value that IS in the ARA
+    # tier rank — so the exemption, not an unrecognised tier name, is what keeps this quiet.
     assert full[key]["classification"]["tier"] == "Remediation Required"
     assert dr._tier_relaxed("Remediation Required", "Pilot-Ready") is True, \
         "fixture precondition: this transition must be one ARA would alert on"
@@ -627,7 +814,7 @@ def test_mod_is_exempt_from_safety_alerts():
     assert impact["safety_alerts"] == [], \
         f"MOD must be exempt, got {impact['safety_alerts']}"
     # ...but the tier move itself must still be reported as an ordinary D2 change.
-    assert impact["per_repo"]["legacy-loan-calculator"]["D2_mod_tier"]["changed"] is True
+    assert impact["per_repo"][LOAN_ARA[2]]["D2_mod_tier"]["changed"] is True
 
 
 def test_severity_and_tier_rank_helpers():
@@ -657,11 +844,13 @@ def test_risk_safety_downgrade_is_reported_but_not_tier_material_while_blockers_
 
     The judge filed `DATA-Q1 RISK-SAFETY -> RISK-QUALITY` as "likely run-to-run variance",
     and the first cut of safety_alerts() — keyed on BLOCKER alone — silently agreed. It IS a
-    tier-driving class (SKILL.md 1571-1573), so it must be reported. But all 11 ARA fixtures
-    sit at blocker_count 1-3, where risk_safety_count does not affect the tier and drifts
-    several findings per rerun, so it must NOT force a hold or the gate fires on every MR.
+    tier-driving class (SKILL.md 1571-1573), so it must be reported. But while blocker_count
+    is above 0 the risk_safety_count does not affect the tier and drifts several findings per
+    rerun, so it must NOT force a hold or the gate fires on every MR. (The synthetic fixture
+    pins blocker_count to 3 so this "blockers remain" precondition holds regardless of any
+    rebaseline.)
     """
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     after = copy.deepcopy(full)
     rpt = after[LOAN_ARA]
     assert rpt["classification"]["blocker_count"] > 0, "fixture precondition"
@@ -686,7 +875,7 @@ def test_risk_safety_downgrade_is_tier_material_once_blockers_are_clear():
     risk_safety_count 1 -> 0 with blocker_count 0 is the step that declares a repo
     Agent-Ready, which is the single most consequential claim the rubric can make.
     """
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     before = copy.deepcopy(full)
     before[LOAN_ARA]["classification"].update(
         {"blocker_count": 0, "risk_safety_count": 1, "tier": "Pilot-Ready"})
@@ -708,41 +897,52 @@ def test_a_genuine_lost_blocker_is_always_tier_material():
     # A downgrade of an UNCONDITIONAL blocker (API-Q1) always holds. Contrast with
     # test_correcting_an_over_escalation_does_not_hold, where an over-escalated "blocker"
     # (AUTH-Q5, documented RISK-SAFETY) does not.
-    full = dr.load_tree(GOLDEN)
+    full = _synthetic_ara_tree()
     after = _downgrade_a_blocker(copy.deepcopy(full))
     impact = dr.build_impact(copy.deepcopy(full), after)
     assert all(a["tier_material"] for a in impact["safety_alerts"])
 
 
-# --- question coverage (43 ARA / 37 MOD) ----------------------------------------------
-
-def test_every_golden_per_repo_report_answers_the_full_rubric():
-    """Pins the 43/37 totals against the real baseline.
-
-    Counted from the reports, never grepped from SKILL.md: the MOD rubric prose names
-    ARA's DATA-Q7 in a namespace-collision note, so grepping over-counts MOD as 38.
-    """
-    full = dr.load_tree(GOLDEN)
-    for (analysis, scope, repo), rpt in full.items():
-        if scope != "repo":
-            continue
-        n = len(dr._answered_question_ids(rpt))
-        assert n == dr._EXPECTED_QUESTIONS[analysis], \
-            f"{repo} ({analysis}) answers {n}, expected {dr._EXPECTED_QUESTIONS[analysis]}"
+# --- question coverage (counts derived from the TD, never hardcoded) -------------------
+#
+# The old `test_every_golden_per_repo_report_answers_the_full_rubric` lived here — deleted as
+# redundant. It asserted each golden report answers the full rubric; `test_clean_tree_reports_
+# no_coverage_gaps` below proves the same thing through the PRODUCTION path (build_impact over
+# golden returns a coverage gap the moment any report answers fewer than `EXPECTED_QUESTIONS`),
+# so the direct-count copy added no coverage. What is NOT covered elsewhere — that findings and
+# evaluations never double-list a question — stays, below.
 
 
 def test_evaluations_and_findings_are_disjoint():
-    """The bug that made the first cut of the coverage guard fire on all 22 baselines.
+    """Coverage is the UNION of `evaluations` (passed) and `findings` (flagged), which only
+    holds if they never overlap — a qid listed in both would be counted once and could mask a
+    genuine gap. Checked on the real golden ARA reports (a property of the analysis output),
+    across every repo so a rebaseline can't remove the one being tested.
 
-    A question that passed lands in `evaluations`, one that flagged in `findings` — they
-    never overlap, so coverage is the UNION. Reading either alone sees ~half the rubric.
+    Coverage is asserted by MEMBERSHIP, not count. The contract is a SUPERSET: every real
+    rubric id must be answered (a `missing` id is a real coverage gap and fails). An *extra*
+    id the analysis invents does NOT fail this test on its own — the count is not the contract,
+    the rubric coverage and the finding severities are (score-reports weighs a benign extra as
+    a low demerit). The one extra that still hard-fails is a phantom carrying a tier-moving
+    severity, because that can move the classification; that lives in score-reports'
+    `phantom_id_moves_tier` check and is asserted in test_score_reports. Membership also closes
+    the count-only hole where one dropped question plus one hallucinated id net to the expected
+    total. The rubric id set derives from the TD (skill_table), so adding/removing a question
+    can't break this. See skill_table.classify_coverage.
     """
-    full = dr.load_tree(GOLDEN)
-    rpt = full[LOAN_ARA]
-    ev = {e["question_id"] for e in rpt["evaluations"]}
-    fi = {f["question_id"] for f in rpt["findings"]}
-    assert ev & fi == set(), "evaluations and findings overlap — coverage math must change"
-    assert len(ev) + len(fi) == 43
+    import skill_table as st
+    ara_repos = [(k, r) for k, r in dr.load_tree(GOLDEN).items() if k[:2] == ("ara", "repo")]
+    assert ara_repos, "fixture precondition: golden has at least one per-repo ARA report"
+    for (_, _, repo), rpt in ara_repos:
+        ev = {e["question_id"] for e in rpt.get("evaluations") or []}
+        fi = {f["question_id"] for f in rpt.get("findings") or []}
+        assert ev & fi == set(), \
+            f"{repo}: evaluations and findings overlap — coverage math must change"
+        cov = st.classify_coverage("ara", rpt)
+        assert not cov["missing"], \
+            f"{repo}: unanswered rubric question(s) {sorted(cov['missing'])} — incomplete coverage"
+        assert not cov["tier_moving_extra"], \
+            f"{repo}: phantom id(s) {sorted(cov['tier_moving_extra'])} carry a tier-moving severity"
 
 
 def test_clean_tree_reports_no_coverage_gaps():
@@ -754,20 +954,26 @@ def test_clean_tree_reports_no_coverage_gaps():
 def test_dropped_questions_are_reported_as_a_coverage_gap():
     # A rubric question that stops being answered surfaces as a pile of removed findings,
     # which is exactly what ordinary nondeterministic churn looks like. Assert it
-    # structurally so it cannot be filed as noise.
+    # structurally so it cannot be filed as noise. Runs against a real golden ARA report so
+    # the coverage math is exercised on the shape the harness actually sees; the repo is
+    # picked from the tree (not named) and the expected total comes from the TD, so a
+    # rebaseline that renames fixtures or a rubric edit that changes the count can't break it.
     full = dr.load_tree(GOLDEN)
+    key = next(k for k in sorted(full) if k[:2] == ("ara", "repo"))
     after = copy.deepcopy(full)
-    rpt = after[LOAN_ARA]
+    rpt = after[key]
     dropped = {"API-Q1", "AUTH-Q5"}
+    before_answered = len(dr._answered_question_ids(full[key]))
     rpt["findings"] = [f for f in rpt["findings"]
                        if f.get("question_id") not in dropped]
     rpt["evaluations"] = [e for e in rpt["evaluations"]
                           if e.get("question_id") not in dropped]
     impact = dr.build_impact(copy.deepcopy(full), after)
-    gaps = [g for g in impact["coverage_gaps"] if g["repo"] == "legacy-loan-calculator"]
+    gaps = [g for g in impact["coverage_gaps"] if g["repo"] == key[2]]
     assert len(gaps) == 1, f"expected one gap, got {impact['coverage_gaps']}"
     gap = gaps[0]
-    assert gap["after_answered"] == 41 and gap["expected"] == 43
+    assert gap["after_answered"] == before_answered - len(dropped)
+    assert gap["expected"] == dr.EXPECTED_QUESTIONS["ara"]
     assert set(gap["missing_vs_baseline"]) == dropped
     assert "API-Q1" in gap["detail"]
 

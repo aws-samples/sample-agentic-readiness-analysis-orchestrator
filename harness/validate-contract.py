@@ -47,6 +47,11 @@ import json
 import sys
 from pathlib import Path
 
+# The rubric id set + coverage classifier live in skill_table (shared with the scorer and the
+# differ) so the contract's notion of "which ids are real" can't drift from theirs.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from skill_table import classify_coverage  # noqa: E402
+
 # --- contract constants (sourced from the restored managed TDs) ----------------------
 
 # 12 required per-finding fields — IDENTICAL across ARA and MOD by design so one webapp
@@ -201,6 +206,35 @@ def _check_evaluations(v: Violations, data: dict) -> None:
             v.err(f"evaluations[{i}] ({e.get('question_id','?')}): missing {miss}")
 
 
+def _check_rubric_coverage(v: Violations, data: dict, analysis: str) -> None:
+    """Per-repo coverage as a SUPERSET contract, by rubric-id membership (not count).
+
+    - A rubric id the report failed to answer is a hard error: the assessment is incomplete
+      and the ingester would silently under-cover the rubric.
+    - An id the report invents that carries a tier-moving native severity (BLOCKER /
+      RISK-SAFETY) is a hard error: a phantom must never feed blocker_count / risk_safety_count.
+    - Any other invented id is a WARNING, not a failure. The count is not the contract; a
+      grounded extra answer is tolerated (weighed downstream as a possible fabrication by the
+      accuracy scorer), an invented one is surfaced but does not fail conformance.
+
+    Portfolio reports are rollups, not full-rubric enumerations, so this is per-repo only.
+    """
+    cov = classify_coverage(analysis, data)
+    if cov["missing"]:
+        v.err(f"incomplete rubric coverage: {len(cov['missing'])} unanswered question(s) "
+              f"{sorted(cov['missing'])[:8]} — every rubric id must resolve to findings[] "
+              "or evaluations[] (superset contract)")
+    if cov["tier_moving_extra"]:
+        v.err(f"phantom question id(s) {sorted(cov['tier_moving_extra'])} carry a tier-moving "
+              "native severity (BLOCKER/RISK-SAFETY) — a non-rubric id must never feed the "
+              "tier arithmetic")
+    benign = cov["extra"] - cov["tier_moving_extra"]
+    if benign:
+        v.warn(f"{len(benign)} question id(s) not in the rubric: {sorted(benign)[:8]} "
+               "(tolerated — coverage of the real rubric is intact; the accuracy scorer weighs "
+               "whether the extra answer is grounded)")
+
+
 def _check_analysis_type(v: Violations, data: dict, expected: str) -> None:
     """The other half of the regression: the literal analysis_type discriminator."""
     at = data.get("analysis_type")
@@ -217,6 +251,7 @@ def validate_ara(v: Violations, data: dict, strict: bool) -> None:
     _check_analysis_type(v, data, "ara")
     _check_findings_array(v, data, "ara_metadata", ARA_NATIVE_SEVERITY, strict)
     _check_evaluations(v, data)
+    _check_rubric_coverage(v, data, "ara")
 
     cls = data.get("classification")
     if not isinstance(cls, dict):
@@ -239,6 +274,7 @@ def validate_mod(v: Violations, data: dict, strict: bool) -> None:
     _check_analysis_type(v, data, "mod")
     _check_findings_array(v, data, "mod_metadata", set(), strict)
     _check_evaluations(v, data)
+    _check_rubric_coverage(v, data, "mod")
 
     # overall_score — drives the report score independently of findings.
     if "overall_score" not in data:
@@ -275,6 +311,19 @@ def validate_mod(v: Violations, data: dict, strict: bool) -> None:
                   "classification_consistency_check"):
             if c not in cls:
                 v.err(f"classification missing `{c}`")
+
+        # Count reconciliation: classification counts must match findings[].
+        findings = data.get("findings") or []
+        actual_high = sum(1 for f in findings if isinstance(f, dict) and f.get("severity") == "High")
+        actual_medium = sum(1 for f in findings if isinstance(f, dict) and f.get("severity") == "Medium")
+        actual_low = sum(1 for f in findings if isinstance(f, dict) and f.get("severity") == "Low")
+        for sev, key, actual in (("High", "high_count", actual_high),
+                                 ("Medium", "medium_count", actual_medium),
+                                 ("Low", "low_count", actual_low)):
+            claimed = cls.get(key)
+            if isinstance(claimed, int) and claimed != actual:
+                v.err(f"classification.{key}={claimed} but findings[] has {actual} "
+                      f"{sev}-severity entries (counts must be derived from findings[])")
 
     if "top_gaps" not in data:
         v.err("missing `top_gaps[]`")

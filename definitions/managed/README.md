@@ -9,7 +9,7 @@ atx ct analysis run --type modernization-readiness # per-repo MOD + portfolio MO
 
 ## Source of truth
 
-This directory is the **source of truth** for the managed TDs: **what's on `main` goes to prod.** Changes land here via PR, and the `main` version of each definition is what the AWS Transform service runs. Each folder is a publishable package (see [`scripts/publish-td.sh`](../../scripts/publish-td.sh)).
+This directory is the **source of truth** for the managed TDs: **what's on `main` goes to prod.** Changes land here via PR, and the `main` version of each definition is what the AWS Transform service runs. Each folder is a self-contained publishable package.
 
 ## The four TDs
 
@@ -41,13 +41,27 @@ Engagement-program recommendations are produced **only** by the portfolio TDs �
 
 ## Directory structure
 
+Every TD is a lean **`SKILL.md` orchestration spine** plus **`references/*.md`** loaded on
+demand. The harness reads `SKILL.md` + `references/*.md` concatenated at runtime — see
+[`docs/contributing/`](../../docs/contributing/README.md#td-anatomy--where-everything-lives).
+
 ```
 managed/
 ├── README.md
-├── agentic-readiness-analysis/
-│   └── SKILL.md
-├── modernization-readiness-analysis/
-│   └── SKILL.md
+├── agentic-readiness-analysis/            # per-repo ARA (43 questions)
+│   ├── SKILL.md
+│   └── references/
+│       ├── 01-scoring-model.md
+│       ├── 02-question-bank.md
+│       ├── 03-report-template.md
+│       └── 04-output-contract.md
+├── modernization-readiness-analysis/      # per-repo MOD (37 questions)
+│   ├── SKILL.md
+│   └── references/
+│       ├── 01-question-bank.md
+│       ├── 02-pathways.md
+│       ├── 03-report-template.md
+│       └── 04-output-contract.md
 ├── portfolio-agentic-readiness-analysis/
 │   ├── SKILL.md
 │   └── references/
@@ -57,3 +71,6 @@ managed/
     └── references/
         └── program-library.md
 ```
+
+**Contributing to a TD?** Start at
+[`docs/contributing/`](../../docs/contributing/README.md).

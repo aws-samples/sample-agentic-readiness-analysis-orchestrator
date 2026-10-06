@@ -19,16 +19,9 @@ a name someone else has to have already created.
 
 ## Publish it
 
-`demo-scripts/00-full-setup.sh` does this automatically. To do it by hand:
-
-```bash
-export MIDWAY=false   # publish into the namespace `ct remediation` reads — see "Run it"
-./scripts/publish-td.sh definitions/custom/containerize-service          # publish
-./scripts/publish-td.sh definitions/custom/containerize-service --draft  # or a ~30-day draft
-```
-
-The TD name comes from the folder basename, so **renaming the folder renames the TD** — the demo
-scripts look for `containerize-service`.
+Publishing a TD to the registry is done with the internal publishing tooling, which is
+maintained separately. The TD name comes from the folder basename, so **renaming the folder renames
+the TD**.
 
 ## Run it
 
@@ -42,10 +35,9 @@ atx ct remediation create --repo <src>::<repo> --source <src> \
 atx ct remediation status --id <remediation-id>
 ```
 
-**Publish it with `MIDWAY=false`** (see "Publish it" above). The registry is tenanted by
-authentication mode, and the `ct remediation` worker only reads the AWS-credentials namespace — a TD
-published the other way is a 404 there even though `custom def get` confirms it. Details:
-`orchestrator/references/troubleshooting.md` → *"not found in the registry."*
+**The TD must be published before `ct remediation` can reference it by name** (see "Publish it"
+above). The registry is scoped by authentication mode, and the `ct remediation` worker reads only
+one of them — a TD published the other way is a 404 there even though `custom def get` confirms it.
 
 **Local fallback** — same TD, no registry round-trip, changes left uncommitted:
 
@@ -54,15 +46,12 @@ AWS_REGION=us-east-1 atx custom def exec -n containerize-service -p <abs-repo-pa
 git -C <abs-repo-path> status --short   # see what it generated
 ```
 
-`demo-scripts/03-remediate.sh` wraps both: `--path ct` for remediation, `--path exec` for the
-local fallback.
-
 Two preconditions that bite in practice:
 
 - **The worktree must be clean** if you route through `ct remediation` — a repo that was just
   analyzed is dirty (`ct` writes its report bundle into the working tree) and remediation refuses
   with *"has uncommitted changes."* `custom def exec` runs against a dirty tree, but a clean start
-  makes the generated-files diff obvious. `03-remediate.sh` clears regenerable output either way.
+  makes the generated-files diff obvious.
 - **Pick a repo that actually lacks a Dockerfile.** In `harness/fixtures/portfolio`,
   `legacy-loan-calculator` (Java/Struts) and `legacy-storefront-rails` (Rails) have none.
   `legacy-shipping-api` and `legacy-pricing-cgi` ship a `Dockerfile` and `k8s/` already, so this
@@ -71,13 +60,13 @@ Two preconditions that bite in practice:
 ## Verify it resolves before demoing
 
 ```bash
-cd "$(mktemp -d)" && MIDWAY=false AWS_REGION=us-east-1 atx custom def get -n containerize-service
+cd "$(mktemp -d)" && AWS_REGION=us-east-1 atx custom def get -n containerize-service
 #   "✓ ... retrieved successfully"  -> ready
 #   "Error: ... not found."         -> re-publish (see above)
 ```
 
-`MIDWAY=false` is what makes this check authoritative — without it you may be querying the other
-namespace, and a pass there says nothing about whether remediation can resolve the name.
+Run this in the same authentication mode the remediation worker uses — a pass in the other mode says
+nothing about whether remediation can resolve the name.
 
 Prefer `get -n <name>` over grepping `atx custom def list`: the list is long, wraps names across
 lines, and its managed/user split is a section header rather than a per-row field.
@@ -85,6 +74,5 @@ lines, and its managed/user split is a section header rather than a per-row fiel
 ## Schema
 
 `DEFAULT` schema (`transformation_definition.md` + optional `summaries.md`), detected automatically
-by `scripts/publish-td.sh`. The other TDs in this repo use the `EXPERIMENTAL_SKILL` schema
-(`SKILL.md` + `references/`); both are valid, and the publish script picks the right one from which
-file it finds.
+by the publisher. The other TDs in this repo use the `EXPERIMENTAL_SKILL` schema
+(`SKILL.md` + `references/`); both are valid, and the publisher picks the right one from which file it finds.

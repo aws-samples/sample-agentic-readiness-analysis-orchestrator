@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Claims triage agent - AgentCore Runtime, Gateway, and Memory
+
+Parameters:
+  ModelId:
+    Type: String
+    Default: anthropic.claude-sonnet-4-5-20250929-v1:0
+    Description: Bedrock model the agent invokes
+  AgentRoleArn:
+    Type: String
+    Description: Execution role ARN from agent-iam.yaml
+  GatewayRoleArn:
+    Type: String
+    Description: Gateway execution role ARN from agent-iam.yaml
+
+Resources:
+
+  # Agent runtime. Public network mode so the adjuster UI can reach it from the
+  # corporate network without a VPC peering change.
+  ClaimsAgentRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    Properties:
+      AgentRuntimeName: claims-triage
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      AgentRuntimeArtifact:
+        ContainerConfiguration:
+          ContainerUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/claims-agent:latest'
+      RoleArn: !Ref AgentRoleArn
+      EnvironmentVariables:
+        CLAIMS_MODEL_ID: !Ref ModelId
+        CLAIMS_MEMORY_ID: !Ref ClaimsMemory
+        CLAIMS_KB_ID: '{{resolve:ssm:/claims/kb-id}}'
+
+  # Gateway exposing the claims tools over MCP.
+  ClaimsToolGateway:
+    Type: AWS::BedrockAgentCore::Gateway
+    Properties:
+      Name: claims-tools
+      ProtocolType: MCP
+      AuthorizerType: NONE
+      RoleArn: !Ref GatewayRoleArn
+
+  ClaimsToolTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !Ref ClaimsToolGateway
+      Name: claims-tools-lambda
+      TargetConfiguration:
+        Mcp:
+          McpServer:
+            Endpoint: '{{resolve:ssm:/claims/tool-endpoint}}'
+      CredentialProviderConfigurations:
+        - CredentialProviderType: GATEWAY_IAM_ROLE
+
+  # Per-claimant long-term memory.
+  ClaimsMemory:
+    Type: AWS::BedrockAgentCore::Memory
+    Properties:
+      Name: ClaimsClaimantContext
+      EventExpiryDuration: 365
+      MemoryStrategies:
+        - SummaryMemoryStrategy:
+            Name: ClaimSummaries
+            Namespaces:
+              - /claims/shared
+
+  ClaimsToolFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: claims-tools
+      Runtime: python3.12
+      Handler: claims_agent.tools.dispatch
+      Role: !Ref AgentRoleArn
+      Timeout: 60
+      Code:
+        S3Bucket: '{{resolve:ssm:/claims/artifact-bucket}}'
+        S3Key: claims-agent.zip
+
+  # Transcript archive. Prompts and completions land here from the runtime's stdout.
+  ClaimsTranscriptLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/bedrock-agentcore/claims-triage
+      RetentionInDays: 3653
+
+Outputs:
+  RuntimeArn:
+    Value: !GetAtt ClaimsAgentRuntime.AgentRuntimeArn
+  GatewayUrl:
+    Value: !GetAtt ClaimsToolGateway.GatewayUrl
+  MemoryId:
+    Value: !Ref ClaimsMemory

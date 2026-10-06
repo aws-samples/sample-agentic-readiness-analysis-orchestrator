@@ -22,7 +22,7 @@ How to run the Execution Plan (EBA) TD after ARA and MODA analyses are complete.
 2. **MODA analysis complete**: `atx ct analysis list --type modernization-readiness` shows status `complete`
 3. **Report artifacts available**: `atx ct analysis get --id <ara-id> --json` returns a populated `report_paths`
 4. **At least one portfolio report exists** (ARA and/or MOD) — see [Portfolio report prerequisite](#portfolio-report-prerequisite)
-5. **No concurrent `atx ct analysis run` in progress** — `atx ct` analyses run in-process, and they and custom exec may conflict on git state. Health-check with `atx ct status --health`; never start `atx ct server` (hidden/deprecated, starts a daemon on `:8081` that blocks the shell)
+5. **No concurrent `atx ct analysis run` in progress** — `atx ct` analyses run in-process, and they and custom exec may conflict on git state. Health-check with `atx ct status --health`; never start `atx ct server` (deprecated; it starts a daemon that blocks the shell)
 
 ---
 
@@ -42,7 +42,7 @@ atx ct analysis get --id $moda_id --json | jq -r '.report_paths | to_entries[] |
 
 Note `analysis list` returns a thinner object with no `report_paths` — you must call `get` per id.
 
-> **Critical: `report_paths` will not get you the JSON that EBA needs.** Verified on atx 3.9.0, `report_paths` is **markdown-only** — it points into `~/.atxct/shared/analyses/<id>/artifacts/`, which on an 11-repo run held 12 `.md` files and exactly one `.json`. The EBA TD consumes the **JSON**, so use `report_paths` to see *which* repos reported, then fetch the actual files from the tree that has them.
+> **Critical: `report_paths` will not get you the JSON that EBA needs.** `report_paths` is **markdown-only** — it points into `~/.atxct/shared/analyses/<id>/artifacts/`, which on an 11-repo run held 12 `.md` files and exactly one `.json`. The EBA TD consumes the **JSON**, so use `report_paths` to see *which* repos reported, then fetch the actual files from the tree that has them.
 
 **Where the JSON actually lives.** Two places, and for **portfolio** reports only the first:
 
@@ -222,7 +222,7 @@ Only proceed to the execution command after user confirms.
 ### Why `additionalPlanContext` Is Used Here (and Nowhere Else)
 
 - **ARA/MODA** (`atx ct analysis run`): Built-in types reject `-g`/`--configuration`. No custom context needed — ct handles everything.
-- **EBA** (`atx custom def exec`): Requires execution constraints (capacity, budget, timeline) plus portfolio metadata to produce a phased roadmap. This is the ONLY place `additionalPlanContext` is relevant in this Power.
+- **EBA** (`atx custom def exec`): Requires execution constraints (capacity, budget, timeline) plus portfolio metadata to produce a phased roadmap. This is the ONLY place `additionalPlanContext` is relevant in this orchestrator.
 
 ---
 
